@@ -573,6 +573,10 @@ impl<'a> PerlLexer<'a> {
                 return Some(token);
             }
 
+            if let Some(token) = self.try_version_string() {
+                return Some(token);
+            }
+
             if let Some(token) = self.try_identifier_or_keyword() {
                 return Some(token);
             }
@@ -1320,6 +1324,60 @@ impl<'a> PerlLexer<'a> {
 
         Some(Token {
             token_type: TokenType::Number(Arc::from(text)),
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
+    }
+
+    fn try_version_string(&mut self) -> Option<Token> {
+        let start = self.position;
+        let bytes = self.input_bytes;
+
+        if self.position + 1 >= bytes.len()
+            || bytes[self.position] != b'v'
+            || !bytes[self.position + 1].is_ascii_digit()
+        {
+            return None;
+        }
+
+        let mut pos = self.position + 1;
+        let mut saw_dot = false;
+
+        while pos < bytes.len() && (bytes[pos].is_ascii_digit() || bytes[pos] == b'_') {
+            pos += 1;
+        }
+
+        while pos < bytes.len() && bytes[pos] == b'.' {
+            if pos + 1 >= bytes.len() || !bytes[pos + 1].is_ascii_digit() {
+                break;
+            }
+
+            saw_dot = true;
+            pos += 1;
+
+            while pos < bytes.len() && (bytes[pos].is_ascii_digit() || bytes[pos] == b'_') {
+                pos += 1;
+            }
+        }
+
+        if pos < bytes.len() {
+            let next = bytes[pos];
+            if next.is_ascii_alphabetic() || next == b'_' {
+                return None;
+            }
+        }
+
+        if !saw_dot && pos == start + 1 {
+            return None;
+        }
+
+        self.position = pos;
+        let text = &self.input[start..self.position];
+        self.mode = LexerMode::ExpectOperator;
+
+        Some(Token {
+            token_type: TokenType::Version(Arc::from(text)),
             text: Arc::from(text),
             start,
             end: self.position,
@@ -3299,6 +3357,35 @@ mod tests {
         lexer.next_token(); // 2
         let token = lexer.next_token().ok_or("Expected exponent operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "**"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_version_strings() -> TestResult {
+        let mut lexer = PerlLexer::new("use v5.36.0; use v5;");
+
+        let token = lexer.next_token().ok_or("Expected first use keyword")?;
+        assert_eq!(token.token_type, TokenType::Keyword(Arc::from("use")));
+
+        let token = lexer.next_token().ok_or("Expected dotted version token")?;
+        assert_eq!(token.token_type, TokenType::Version(Arc::from("v5.36.0")));
+
+        let token = lexer.next_token().ok_or("Expected semicolon token")?;
+        assert_eq!(token.token_type, TokenType::Semicolon);
+
+        let token = lexer.next_token().ok_or("Expected second use keyword")?;
+        assert_eq!(token.token_type, TokenType::Keyword(Arc::from("use")));
+
+        let token = lexer.next_token().ok_or("Expected compact version token")?;
+        assert_eq!(token.token_type, TokenType::Version(Arc::from("v5")));
+        Ok(())
+    }
+
+    #[test]
+    fn test_version_string_does_not_consume_identifiers() -> TestResult {
+        let mut lexer = PerlLexer::new("v5alpha");
+        let token = lexer.next_token().ok_or("Expected identifier token")?;
+        assert_eq!(token.token_type, TokenType::Identifier(Arc::from("v5alpha")));
         Ok(())
     }
 }
