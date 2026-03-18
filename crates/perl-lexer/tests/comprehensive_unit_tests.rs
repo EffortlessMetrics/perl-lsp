@@ -729,6 +729,50 @@ fn string_concat_and_repeat() -> R {
     // Repeat
     let toks = significant("$a x 3");
     assert!(toks.len() >= 3);
+    assert!(
+        matches!(toks.get(1).map(|token| &token.token_type), Some(TokenType::Operator(op)) if &**op == "x"),
+        "repeat operator should be tokenized as an operator: {toks:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn word_operators_are_tokenized_as_operators_in_expression_context() -> R {
+    let cases = [
+        ("$a eq $b", "eq"),
+        ("$a ne $b", "ne"),
+        ("$a lt $b", "lt"),
+        ("$a gt $b", "gt"),
+        ("$a le $b", "le"),
+        ("$a ge $b", "ge"),
+        ("$a cmp $b", "cmp"),
+        ("$a and $b", "and"),
+        ("$a or $b", "or"),
+        ("$a xor $b", "xor"),
+        ("not $a", "not"),
+    ];
+
+    for (input, op) in cases {
+        let toks = significant(input);
+        let operator = toks
+            .iter()
+            .find(|token| matches!(&token.token_type, TokenType::Operator(found) if &**found == op))
+            .ok_or_else(|| format!("expected operator '{op}' in tokens for '{input}': {toks:?}"))?;
+        assert_eq!(operator.text.as_ref(), op, "operator text should be preserved for '{input}'");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn bareword_x_remains_identifier_when_term_is_expected() -> R {
+    let toks = significant("sub x { x }");
+    let bareword_x = toks
+        .iter()
+        .find(|token| matches!(&token.token_type, TokenType::Identifier(name) if &**name == "x"))
+        .ok_or_else(|| format!("expected bareword identifier 'x': {toks:?}"))?;
+
+    assert_eq!(bareword_x.text.as_ref(), "x");
     Ok(())
 }
 

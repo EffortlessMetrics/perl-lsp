@@ -1840,7 +1840,12 @@ impl<'a> PerlLexer<'a> {
                 }
             }
 
-            let token_type = if is_keyword(text) {
+            let token_type = if (self.mode == LexerMode::ExpectOperator && is_infix_word_operator(text))
+                || text == "not"
+            {
+                self.mode = LexerMode::ExpectTerm;
+                TokenType::Operator(Arc::from(text))
+            } else if is_keyword(text) {
                 // Check for special keywords that affect lexer mode
                 match text {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
@@ -3074,6 +3079,14 @@ fn is_keyword(word: &str) -> bool {
     // Fast length-based rejection for most cases.
     // Lexer keywords are currently bounded to 1..=9 characters.
     matches!(word.len(), 1..=9) && is_lexer_keyword(word)
+}
+
+#[inline(always)]
+fn is_infix_word_operator(word: &str) -> bool {
+    matches!(
+        word,
+        "eq" | "ne" | "lt" | "gt" | "le" | "ge" | "cmp" | "x" | "and" | "or" | "xor"
+    )
 }
 
 /// Fast lookup table for compound operator second characters
