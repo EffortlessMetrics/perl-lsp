@@ -1810,6 +1810,7 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
+ "perl-lsp-type-hierarchy",
  "perl-lsp-uri",
  "perl-module-path",
  "perl-module-reference",
@@ -2095,6 +2096,7 @@ version = "0.11.0"
 dependencies = [
  "lsp-types",
  "perl-lsp-document-links",
+ "perl-lsp-type-hierarchy",
  "perl-lsp-workspace-symbols",
  "perl-parser-core",
  "perl-position-tracking",
@@ -2206,6 +2208,17 @@ version = "0.11.0"
 dependencies = [
  "perl-content-length-framing",
  "perl-lsp-protocol",
+ "serde_json",
+]
+
+[[package]]
+name = "perl-lsp-type-hierarchy"
+version = "0.11.0"
+dependencies = [
+ "perl-parser-core",
+ "perl-position-tracking",
+ "perl-tdd-support",
+ "serde",
  "serde_json",
 ]
 
