@@ -22,11 +22,11 @@ mod tests {
         assert!(result.is_err(), "Expected parse failure for: {}", input);
     }
 
-    fn assert_parse_fails_or_parses_leniently(input: &str) {
-        let result = PerlParser::parse(Rule::program, input);
-        if let Ok(mut parsed) = result {
-            assert!(parsed.next().is_some(), "Expected parser output for lenient parse: {}", input);
-        }
+    fn assert_currently_parses_leniently(input: &str) {
+        let mut parsed = PerlParser::parse(Rule::program, input).unwrap_or_else(|err| {
+            panic!("Expected current parser to accept known lenient gap: {input}\nError: {err:?}")
+        });
+        assert!(parsed.next().is_some(), "Expected parser output for known lenient gap: {}", input);
     }
 
     #[test]
@@ -427,15 +427,24 @@ mod tests {
             // Invalid references
             r#"my $ref = \"#,
             r#"my $ref = \;"#,
+            r#"my $x = $a &&& $b;"#,
         ];
 
         for case in strict_failure_cases {
             assert_parse_fails(case);
         }
+    }
 
-        assert_parse_fails_or_parses_leniently(r#"my $x = 2 *** 3;"#);
-        assert_parse_fails_or_parses_leniently(r#"my $x = $a &&& $b;"#);
-        assert_parse_fails_or_parses_leniently(r#"my $str = "Missing ${bracket";"#);
-        assert_parse_fails_or_parses_leniently(r#"my $str = "Missing @{bracket";"#);
+    #[test]
+    fn test_known_lenient_parse_gaps() {
+        let lenient_gap_cases = vec![
+            r#"my $x = 2 *** 3;"#,
+            r#"my $str = "Missing ${bracket";"#,
+            r#"my $str = "Missing @{bracket";"#,
+        ];
+
+        for case in lenient_gap_cases {
+            assert_currently_parses_leniently(case);
+        }
     }
 }

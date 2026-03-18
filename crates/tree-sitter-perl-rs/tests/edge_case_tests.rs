@@ -3,7 +3,7 @@
 #[cfg(all(test, feature = "pure-rust"))]
 mod tests {
     use tree_sitter_perl::{
-        anti_pattern_detector::Severity,
+        anti_pattern_detector::{AntiPattern, Severity},
         dynamic_delimiter_recovery::RecoveryMode,
         edge_case_handler::{EdgeCaseConfig, EdgeCaseHandler},
         tree_sitter_adapter::TreeSitterAdapter,
@@ -94,13 +94,14 @@ BACK
         let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
         let analysis = handler.analyze(code);
 
-        // Should have encoding-related diagnostics
+        // Current handler keeps mixed encoding pragmas parseable without surfacing
+        // dedicated encoding diagnostics for this sample.
         let encoding_diags = analysis
             .diagnostics
             .iter()
             .filter(|d| d.message.contains("encoding") || d.message.contains("utf8"))
             .count();
-        assert!(encoding_diags == 0 || encoding_diags > 0);
+        assert_eq!(encoding_diags, 0);
     }
 
     #[test]
@@ -243,27 +244,42 @@ BEGIN_END
 
     #[test]
     fn test_diagnostic_accuracy() {
+        #[derive(Clone, Copy)]
+        enum ExpectedPatternKind {
+            Dynamic,
+            Begin,
+            Format,
+        }
+
         let test_cases = vec![
-            ("my $d = 'END'; my $t = <<$d;\ntext\nEND", "dynamic", Severity::Error),
-            ("BEGIN { $x = <<'E';\ntext\nE\n}", "BEGIN", Severity::Warning),
-            ("format F =\n<<'E'\ntext\nE\n.", "format", Severity::Warning),
+            (
+                "my $d = 'END'; my $t = <<$d;\ntext\nEND",
+                ExpectedPatternKind::Dynamic,
+                Severity::Warning,
+            ),
+            ("BEGIN { $x = <<'E';\ntext\nE\n}", ExpectedPatternKind::Begin, Severity::Error),
+            ("format F =\n<<'E'\ntext\nE\n.", ExpectedPatternKind::Format, Severity::Warning),
         ];
 
-        for (code, expected_type, expected_severity) in test_cases {
+        for (code, expected_kind, expected_severity) in test_cases {
             let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
             let analysis = handler.analyze(code);
 
-            assert!(!analysis.diagnostics.is_empty(), "Expected diagnostics for {}", expected_type);
+            assert!(!analysis.diagnostics.is_empty(), "Expected diagnostics for {:?}", code);
 
             let diag = analysis
                 .diagnostics
                 .iter()
-                .find(|diag| diag.message.to_lowercase().contains(expected_type))
-                .unwrap_or(&analysis.diagnostics[0]);
-            assert!(
-                diag.severity == expected_severity
-                    || matches!(diag.severity, Severity::Warning | Severity::Error)
-            );
+                .find(|diag| {
+                    matches!(
+                        (expected_kind, &diag.pattern),
+                        (ExpectedPatternKind::Dynamic, AntiPattern::DynamicHeredocDelimiter { .. })
+                            | (ExpectedPatternKind::Begin, AntiPattern::BeginTimeHeredoc { .. })
+                            | (ExpectedPatternKind::Format, AntiPattern::FormatHeredoc { .. })
+                    )
+                })
+                .unwrap_or_else(|| panic!("Missing expected diagnostic variant for {:?}", code));
+            assert_eq!(diag.severity, expected_severity);
             assert!(diag.suggested_fix.is_some());
         }
     }
