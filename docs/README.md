@@ -77,6 +77,7 @@ Process, metrics, and project health.
 - [Milestones](project/MILESTONES.md) — GitHub milestones
 - [Lessons](project/LESSONS.md) — What went wrong
 - [Casebook](project/CASEBOOK.md) — What went right
+- [Codebase Curiosities](project/CODEBASE_CURIOSITIES.md) — Source-grounded architecture learnings and oddities
 - [CI](project/CI.md) — Continuous integration setup
 - [CI Test Lanes](project/CI_TEST_LANES.md) — Test lane configuration
 
