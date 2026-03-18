@@ -37,7 +37,7 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 # 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
 ```
 
-New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
+New to language servers? Start with the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough, then use the editor-specific setup guides in [docs/EDITORS](docs/EDITORS/) and the [Troubleshooting guide](docs/how-to/TROUBLESHOOTING.md) if your client does not attach cleanly.
 
 <details>
 <summary><strong>Neovim / Emacs setup</strong></summary>
@@ -203,13 +203,15 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 
 | Resource | Description |
 |----------|-------------|
-| **[Getting Started](docs/tutorials/GETTING_STARTED.md)** | **Installation, editor setup, and first-run walkthrough** |
+| **[Getting Started](docs/tutorials/GETTING_STARTED.md)** | **Installation, health checks, and first-run walkthrough** |
+| [docs/](docs/README.md) | Documentation hub organized by tutorials, how-to guides, reference, and explanation |
+| [Editor setup guides](docs/EDITORS/) | VS Code, Neovim, Emacs, Helix, Sublime Text, and coc.nvim setup |
+| [Troubleshooting guide](docs/how-to/TROUBLESHOOTING.md) | Common startup, indexing, and editor integration problems |
+| [Configuration reference](docs/reference/CONFIG.md) | All supported LSP settings and limits |
 | [Book](book/) | Comprehensive user and developer guide |
-| [docs/](docs/README.md) | Documentation index |
 | [features.toml](features.toml) | Canonical LSP feature catalog |
 | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | Live project metrics |
 | [ROADMAP.md](ROADMAP.md) | Version milestones and planning |
-| [Getting Started](docs/tutorials/GETTING_STARTED.md) | Installation and first steps |
 | [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
 

@@ -45,18 +45,24 @@ perl-lsp --version
 
 # Quick health check
 perl-lsp --health
-# Should output: ok <installed-version>
-
-# Optional: show feature/profile information
-perl-lsp --info
-
-# Optional: validate a Perl file from the CLI
-perl-lsp --check script.pl
+# Should output: ok <version>
 ```
 
-If `--version` and `--health` work but your editor still cannot connect, jump to [Troubleshooting](../how-to/TROUBLESHOOTING.md).
+## First-Run Checklist
+
+Use this checklist before opening your editor:
+
+1. Install `perl-lsp` using one of the commands above.
+2. Verify the binary is on your `PATH` with `which perl-lsp`.
+3. Run `perl-lsp --health` and confirm it prints `ok <version>`.
+4. Configure your editor to launch `perl-lsp --stdio`.
+5. Open a Perl file inside a project folder so workspace indexing can discover related modules.
+
+If one of those steps fails, jump to the [Troubleshooting](../how-to/TROUBLESHOOTING.md) section before spending time debugging editor settings.
 
 ## Quick Editor Setup
+
+For deeper editor-specific instructions, screenshots, and configuration options, see the dedicated guides in [`docs/EDITORS`](../EDITORS/).
 
 ### VS Code
 
@@ -248,7 +254,7 @@ For project-specific settings, the server reads configuration from your editor's
 }
 ```
 
-See [CONFIG.md](../reference/CONFIG.md) for all configuration options, including workspace paths, inlay hints, test-runner settings, and resource limits.
+See [CONFIG.md](../reference/CONFIG.md) for all configuration options.
 
 ## Troubleshooting
 
@@ -349,14 +355,16 @@ For the full troubleshooting guide including DAP debugging, parser edge cases, a
 
 ## Next Steps
 
-- **[EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md)** - Detailed editor configurations
-- **[INSTALLATION.md](../how-to/INSTALLATION.md)** - Platform-specific installation and verification steps
+- **[VS Code setup](../EDITORS/VS_CODE_SETUP.md)** - Extension workflow, settings, and logs
+- **[Neovim setup](../EDITORS/NEOVIM_SETUP.md)** - `nvim-lspconfig`, root detection, and diagnostics tips
+- **[Emacs setup](../EDITORS/EMACS_SETUP.md)** - `eglot`, `lsp-mode`, and troubleshooting notes
+- **[Helix setup](../EDITORS/HELIX_SETUP.md)** - `languages.toml` examples and known caveats
+- **[Editor setup overview](../how-to/EDITOR_SETUP.md)** - Cross-editor configuration patterns
 - **[CONFIG.md](../reference/CONFIG.md)** - All configuration options
 - **[LSP_FEATURES.md](../reference/LSP_FEATURES.md)** - Complete feature documentation
 - **[FAQ.md](../reference/FAQ.md)** - Frequently asked questions
-- **[Documentation Index](../INDEX.md)** - Documentation front door and routing guide
 
 ## Getting Help
 
 - **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
-- **Documentation**: [docs/INDEX.md](../INDEX.md)
+- **Documentation hub**: [docs/README.md](../README.md)
