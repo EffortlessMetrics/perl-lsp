@@ -14,6 +14,7 @@
 use crate::protocol::JsonRpcRequest;
 use crate::transport::log_response;
 use std::sync::Arc;
+use tokio::task::JoinSet;
 
 use super::LspServer;
 
@@ -74,8 +75,10 @@ pub(crate) fn classify(method: &str) -> RequestClass {
 ///
 /// - **Mutation worker**: Single exclusive worker processes lifecycle and mutation
 ///   requests one at a time (sequential drain from a bounded `mpsc` channel).
-/// - **Read pool**: Fixed number of workers (`READ_WORKERS`) process read-only
-///   requests concurrently via `spawn_blocking` (CPU-bound handlers).
+/// - **Read lane**: A lightweight dispatcher receives read-only requests and
+///   fans them out into bounded concurrent `spawn_blocking` tasks. This avoids
+///   a contended async mutex around the receiver while preserving the same
+///   `READ_WORKERS` concurrency cap.
 ///
 /// The ingress loop (`serve_async`) only reads, classifies, and enqueues.
 /// Heavy work never blocks the message reader.
@@ -88,7 +91,7 @@ pub(crate) fn classify(method: &str) -> RequestClass {
 pub(crate) struct Scheduler {
     /// Channel for mutation/lifecycle work (single exclusive worker drains this).
     mutation_tx: tokio::sync::mpsc::Sender<JsonRpcRequest>,
-    /// Channel for read-only work (N workers drain this).
+    /// Channel for read-only work (bounded concurrent dispatcher drains this).
     read_tx: tokio::sync::mpsc::Sender<JsonRpcRequest>,
     /// Join handles for background workers (used for shutdown drain).
     workers: Vec<tokio::task::JoinHandle<()>>,
@@ -115,13 +118,10 @@ impl Scheduler {
         // requests one at a time, preserving ordering guarantees.
         workers.push(tokio::spawn(Self::mutation_worker(mutation_rx, Arc::clone(&server))));
 
-        // Read pool: N workers share a single receiver via Arc<Mutex<>>.
-        // Each worker competes for the next item (work-stealing pattern).
-        let shared_rx = Arc::new(tokio::sync::Mutex::new(read_rx));
-        for _ in 0..READ_WORKERS {
-            workers
-                .push(tokio::spawn(Self::read_worker(Arc::clone(&shared_rx), Arc::clone(&server))));
-        }
+        // Read lane: one async dispatcher keeps receiving work and fans it out
+        // into bounded concurrent tasks. This removes the receiver mutex from
+        // the hot path while still enforcing the READ_WORKERS cap.
+        workers.push(tokio::spawn(Self::read_dispatcher(read_rx, Arc::clone(&server))));
 
         Self { mutation_tx, read_tx, workers }
     }
@@ -180,36 +180,55 @@ impl Scheduler {
         }
     }
 
-    /// Read pool worker.
+    /// Read-only dispatcher with bounded concurrent task fan-out.
     ///
-    /// Multiple instances share a single receiver via `Arc<tokio::sync::Mutex<>>`.
-    /// Each worker competes for the next item, runs the handler on the blocking
-    /// thread pool, and sends the response via the outbound channel.
-    async fn read_worker(
-        rx: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<JsonRpcRequest>>>,
+    /// A single async receiver avoids the previous receiver mutex hot spot. Each
+    /// incoming request acquires a semaphore permit before being launched onto
+    /// the blocking pool, preserving the same `READ_WORKERS` upper bound. When
+    /// the channel closes, the dispatcher waits for all in-flight tasks to drain.
+    async fn read_dispatcher(
+        mut rx: tokio::sync::mpsc::Receiver<JsonRpcRequest>,
         server: Arc<LspServer>,
     ) {
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(READ_WORKERS));
+        let mut in_flight = JoinSet::new();
+        let mut channel_open = true;
+
         loop {
-            // Hold the receiver lock only long enough to get the next item.
-            let request = {
-                let mut guard = rx.lock().await;
-                guard.recv().await
-            };
+            tokio::select! {
+                biased;
 
-            let request = match request {
-                Some(r) => r,
-                None => break, // channel closed — all senders dropped
-            };
+                Some(joined) = in_flight.join_next(), if !in_flight.is_empty() => {
+                    if let Err(error) = joined {
+                        eprintln!("Read dispatcher task failed: {error}");
+                    }
+                }
 
-            let srv = Arc::clone(&server);
-            let outbound = server.outbound.clone();
+                maybe_request = rx.recv(), if channel_open => {
+                    match maybe_request {
+                        Some(request) => {
+                            let permit = match Arc::clone(&semaphore).acquire_owned().await {
+                                Ok(permit) => permit,
+                                Err(_) => break,
+                            };
+                            let srv = Arc::clone(&server);
+                            let outbound = server.outbound.clone();
 
-            // Run CPU-bound handler on blocking thread pool.
-            let result = tokio::task::spawn_blocking(move || srv.handle_request(request)).await;
+                            in_flight.spawn(async move {
+                                let _permit = permit;
+                                let result = tokio::task::spawn_blocking(move || srv.handle_request(request)).await;
 
-            if let Ok(Some(response)) = result {
-                log_response(&response);
-                let _ = outbound.send_response(response);
+                                if let Ok(Some(response)) = result {
+                                    log_response(&response);
+                                    let _ = outbound.send_response(response);
+                                }
+                            });
+                        }
+                        None => channel_open = false,
+                    }
+                }
+
+                else => break,
             }
         }
     }
