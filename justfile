@@ -848,50 +848,11 @@ roadmap-gate:
 
 # Show codebase health metrics
 health:
-    @echo "📊 Codebase Health Scoreboard"
-    @echo "=============================="
-    @echo ""
-    @echo "📝 Ignored Tests by Crate:"
-    @echo "  perl-parser: $(grep -r '#\[ignore' crates/perl-parser/tests/ 2>/dev/null | wc -l || echo 0)"
-    @echo "  perl-lsp:    $(grep -r '#\[ignore' crates/perl-lsp/tests/ 2>/dev/null | wc -l || echo 0)"
-    @echo "  perl-lexer:  $(grep -r '#\[ignore' crates/perl-lexer/tests/ 2>/dev/null | wc -l || echo 0)"
-    @echo "  perl-dap:    $(grep -r '#\[ignore' crates/perl-dap/tests/ 2>/dev/null | wc -l || echo 0)"
-    @echo ""
-    @echo "⚠️  Unwrap/Expect Count (potential panic sites):"
-    @echo "  .unwrap():  $(grep -r '\.unwrap()' crates/*/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo "  .expect(:   $(grep -r '\.expect(' crates/*/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo ""
-    @echo "🖨️  Debug Print Count (should use tracing):"
-    @echo "  println!:   $(grep -r 'println!' crates/*/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo "  eprintln!:  $(grep -r 'eprintln!' crates/*/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo ""
-    @echo "📦 Public Items in perl-parser (API surface):"
-    @echo "  pub fn:     $(grep -r '^[[:space:]]*pub fn' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo "  pub struct: $(grep -r '^[[:space:]]*pub struct' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo "  pub enum:   $(grep -r '^[[:space:]]*pub enum' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo ""
-    @echo "🔧 LSP Crate Size (crates/perl-lsp/src/):"
-    @echo "  Lines:      $(find crates/perl-lsp/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
-    @echo ""
-    @echo "🧹 Dead Code Metrics:"
-    @echo "  Unused deps: $(cargo machete 2>&1 | grep -c 'Cargo.toml:' || echo 0) crates affected"
-    @echo "  Dead code allows: $(grep -r '#\[allow(dead_code)\]' crates --include='*.rs' 2>/dev/null | wc -l || echo 0)"
-    @echo ""
-    @echo "💡 Run 'just health-detail' for file-by-file breakdown"
+    python3 scripts/devex-health.py
 
 # Detailed health metrics with file breakdown
 health-detail:
-    @echo "📊 Detailed Health Metrics"
-    @echo "=========================="
-    @echo ""
-    @echo "🔴 Top 10 files with most .unwrap() calls:"
-    @grep -r '\.unwrap()' crates/*/src/ --include='*.rs' -c 2>/dev/null | sort -t: -k2 -nr | head -10 || echo "  None found"
-    @echo ""
-    @echo "🟡 Top 10 files with most eprintln! calls:"
-    @grep -r 'eprintln!' crates/*/src/ --include='*.rs' -c 2>/dev/null | sort -t: -k2 -nr | head -10 || echo "  None found"
-    @echo ""
-    @echo "📁 Largest source files (by lines):"
-    @find crates/*/src -name '*.rs' -exec wc -l {} \; 2>/dev/null | sort -nr | head -10 || echo "  None found"
+    python3 scripts/devex-health.py --detail
 
 # Show ignored test counts (categorised summary with baseline delta)
 ignored-tests:
