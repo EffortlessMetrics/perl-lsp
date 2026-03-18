@@ -76,6 +76,7 @@ Process, metrics, and project health.
 - [Roadmap](project/ROADMAP.md) — Milestones and release planning
 - [Milestones](project/MILESTONES.md) — GitHub milestones
 - [Lessons](project/LESSONS.md) — What went wrong
+- [Codebase Field Notes](project/CODEBASE_FIELD_NOTES.md) — Source-driven curiosities and learnings
 - [Casebook](project/CASEBOOK.md) — What went right
 - [CI](project/CI.md) — Continuous integration setup
 - [CI Test Lanes](project/CI_TEST_LANES.md) — Test lane configuration
