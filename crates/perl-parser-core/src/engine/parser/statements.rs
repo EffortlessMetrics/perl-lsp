@@ -714,6 +714,10 @@ impl<'a> Parser<'a> {
                                 while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                     self.consume_token()?; // consume comma or fat arrow
 
+                                    if self.is_at_statement_end() {
+                                        break;
+                                    }
+
                                     // Check if we hit a statement modifier
                                     match self.peek_kind() {
                                         Some(TokenKind::If)

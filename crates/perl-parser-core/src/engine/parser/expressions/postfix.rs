@@ -174,7 +174,9 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        Some(TokenKind::Identifier | TokenKind::Method) => {
+                        Some(kind)
+                            if kind == TokenKind::Identifier || Self::is_keyword_token(kind) =>
+                        {
                             // Check for ->$#* (postfix last-index dereference, Perl 5.20+).
                             // The lexer produces Identifier("$#") for `$#` when no array
                             // name follows, so we handle it here before the method-call path.
