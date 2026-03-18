@@ -9,6 +9,10 @@
    npm install -g @vscode/vsce
    ```
 4. **Publisher account** on Visual Studio Marketplace
+5. **Open VSX personal access token** if you also publish to Open VSX:
+   ```bash
+   npm install -g ovsx
+   ```
 
 ## Build Process
 
@@ -84,18 +88,31 @@ If you haven't already:
 2. Create a publisher ID (e.g., "tree-sitter-perl")
 3. Get a Personal Access Token from Azure DevOps
 
-### 6. Login to vsce
+### 6. Create or Verify the Open VSX Namespace
+
+Open VSX uses the `publisher` field in `package.json` as the namespace. Before the first Open VSX publish, create that namespace:
+
+```bash
+ovsx create-namespace EffortlessMetrics
+```
+
+If you're using the repository workflow, this step is automated whenever `OVSX_PAT` is configured. For self-hosted registries, set `OVSX_REGISTRY_URL` to override the default `https://open-vsx.org`.
+
+### 7. Login to vsce
 
 ```bash
 vsce login <publisher-id>
 # Enter your Personal Access Token when prompted
 ```
 
-### 7. Publish
+### 8. Publish
 
 ```bash
 # Publish to marketplace (already logged in via vsce)
 npm run publish
+
+# Publish the packaged VSIX to Open VSX
+ovsx publish perl-lsp-rs-*.vsix
 
 # Or with version bump
 vsce publish minor  # 0.5.0 -> 0.6.0

@@ -25,6 +25,7 @@ jobs:
     env:
       VSCE_PAT: ${{ secrets.VSCE_PAT }}
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      OVSX_REGISTRY_URL: ${{ vars.OVSX_REGISTRY_URL }}
 
     steps:
       - name: Checkout
@@ -83,7 +84,21 @@ jobs:
         if: ${{ env.OVSX_PAT != '' }}
         working-directory: vscode-extension
         run: |
-          ovsx publish "${{ env.VSIX_FILE }}" --pat "$OVSX_PAT"
+          REGISTRY_ARGS=()
+          if [ -n "${OVSX_REGISTRY_URL}" ]; then
+            REGISTRY_ARGS+=(--registryUrl "${OVSX_REGISTRY_URL}")
+          fi
+
+          NAMESPACE=$(node -p "require('./package.json').publisher")
+          REGISTRY_ROOT="${OVSX_REGISTRY_URL:-https://open-vsx.org}"
+          if curl --fail --silent --show-error "${REGISTRY_ROOT%/}/api/${NAMESPACE}" >/dev/null; then
+            echo "Open VSX namespace ${NAMESPACE} already exists."
+          else
+            echo "Open VSX namespace ${NAMESPACE} not found. Creating it before publish."
+            ovsx create-namespace "${NAMESPACE}" --pat "$OVSX_PAT" "${REGISTRY_ARGS[@]}"
+          fi
+
+          ovsx publish --packagePath "${{ env.VSIX_FILE }}" --pat "$OVSX_PAT" "${REGISTRY_ARGS[@]}"
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
