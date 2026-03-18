@@ -2678,6 +2678,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-workspace-cache"
+version = "0.11.0"
+dependencies = [
+ "parking_lot",
+]
+
+[[package]]
 name = "perl-workspace-discovery"
 version = "0.11.0"
 dependencies = [
@@ -2716,6 +2723,7 @@ dependencies = [
  "perl-symbol-types",
  "perl-tdd-support",
  "perl-uri",
+ "perl-workspace-cache",
  "perl-workspace-index-slo",
  "perl-workspace-index-state-machine",
  "serde",

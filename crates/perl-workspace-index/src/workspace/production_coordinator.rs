@@ -39,7 +39,7 @@
 //! # }
 //! ```
 
-use super::cache::{BoundedLruCache, CombinedWorkspaceCacheConfig};
+use super::cache::{BoundedLruCache, CacheStats, CombinedWorkspaceCacheConfig};
 use super::slo::{OperationResult, OperationType, SloConfig, SloTracker};
 use super::state_machine::{IndexState, IndexStateMachine, InvalidationReason, TransitionResult};
 use super::workspace_index::{IndexResourceLimits, WorkspaceIndex};
@@ -131,7 +131,7 @@ impl WorkspaceCacheManager {
     }
 
     /// Get combined cache statistics.
-    pub fn stats(&self) -> HashMap<String, super::cache::CacheStats> {
+    pub fn stats(&self) -> HashMap<String, CacheStats> {
         let mut stats = HashMap::new();
         stats.insert("ast".to_string(), self.ast_cache.stats());
         stats.insert("symbol".to_string(), self.symbol_cache.stats());

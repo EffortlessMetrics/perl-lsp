@@ -13,7 +13,7 @@ Workspace-wide symbol indexing and cross-file navigation for Perl LSP tooling.
 - **`IndexStateMachine`** -- lifecycle state machine (Idle, Initializing, Building, Ready, Degraded, Error)
 - **`ProductionIndexCoordinator`** -- production coordinator integrating bounded LRU caches and SLO monitoring
 - **`SloTracker`** -- service-level objective tracking with P50/P95/P99 latency percentiles
-- **`BoundedLruCache`** -- generic bounded LRU cache with configurable size and TTL
+- **`BoundedLruCache`** -- generic bounded LRU cache with configurable size and TTL, re-exported from `perl-workspace-cache`
 
 ## Features
 

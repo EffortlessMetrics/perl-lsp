@@ -18,6 +18,7 @@ members = [
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
     "crates/perl-workspace-index",
+    "crates/perl-workspace-cache",
     "crates/perl-workspace-index-state-machine",
     "crates/perl-workspace-index-slo",
     "crates/perl-refactoring",
@@ -137,6 +138,7 @@ allow = [
     "perl-builtins",
     "perl-builtins-phf",
     "perl-content-length-framing",
+    "perl-workspace-cache",
     "perl-percentile",
     "perl-subprocess-runtime",
     "perl-lsp-protocol",
@@ -385,6 +387,7 @@ perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.
 
 # Tier 3: Two-level dependencies
 perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.11.0" }
+perl-workspace-cache = { path = "crates/perl-workspace-cache", version = "0.11.0" }
 perl-workspace-index-state-machine = { path = "crates/perl-workspace-index-state-machine", version = "0.11.0" }
 perl-workspace-index-slo = { path = "crates/perl-workspace-index-slo", version = "0.11.0" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.11.0" }

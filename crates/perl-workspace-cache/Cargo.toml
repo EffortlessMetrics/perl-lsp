@@ -1,0 +1,23 @@
+[package]
+name = "perl-workspace-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "SRP microcrate for bounded workspace caches and cache sizing heuristics"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-cache"
+keywords = ["perl", "workspace", "cache", "lru", "memory"]
+categories = ["caching", "development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+parking_lot = "0.12.5"
+
+[lints]
+workspace = true

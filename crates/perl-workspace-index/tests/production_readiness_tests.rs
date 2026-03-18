@@ -237,8 +237,10 @@ fn test_cache_memory_limit() {
     // First insert should succeed
     assert!(cache.insert_with_size("key1".to_string(), "value1".to_string(), 10));
 
-    // Second insert should fail due to memory limit
-    assert!(!cache.insert_with_size("key2".to_string(), "value2".to_string(), 15));
+    // Second insert should evict the first entry to stay under the memory limit.
+    assert!(cache.insert_with_size("key2".to_string(), "value2".to_string(), 15));
+    assert_eq!(cache.get(&"key1".to_string()), None);
+    assert_eq!(cache.get(&"key2".to_string()), Some("value2".to_string()));
 }
 
 #[test]

@@ -44,7 +44,7 @@ cargo bench -p perl-workspace-index --features workspace  # Benchmarks
 | `src/workspace/workspace_index.rs` | Core `WorkspaceIndex` with dual indexing, `IndexState`, `IndexPhase`, resource limits, early-exit handling |
 | `src/workspace/document_store.rs` | Thread-safe `DocumentStore` and `Document` with URI normalization |
 | `src/workspace/state_machine.rs` | Enhanced `IndexStateMachine` with 8 states (Idle, Initializing, Building, Updating, Invalidating, Ready, Degraded, Error) and guarded transitions |
-| `src/workspace/cache.rs` | `BoundedLruCache<K,V>` with LRU eviction, TTL, `EstimateSize` trait, and typed cache configs |
+| `src/workspace/cache.rs` | Re-export shim for the `perl-workspace-cache` microcrate |
 | `src/workspace/production_coordinator.rs` | `ProductionIndexCoordinator` integrating state machine, caches, SLO tracker |
 | `src/workspace/slo.rs` | `SloTracker` with per-operation latency percentiles and SLO compliance checks |
 | `src/workspace/workspace_rename.rs` | Deprecated stub (renamed to `perl-lsp` crate) |
