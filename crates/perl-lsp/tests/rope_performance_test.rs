@@ -1,7 +1,7 @@
 use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
 use perl_lsp::textdoc::{Doc, PosEnc, apply_changes, byte_to_lsp_pos, lsp_pos_to_byte};
 use ropey::Rope;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Integration test for Rope performance characteristics
 #[test]
@@ -10,18 +10,20 @@ fn rope_performance_characteristics() {
     println!("Testing Rope insertion performance...");
     let large_content = "x".repeat(100_000);
 
-    let start = Instant::now();
     let mut rope = Rope::from_str(&large_content);
+    let start = Instant::now();
     rope.insert(50_000, " INSERTED TEXT ");
     let rope_duration = start.elapsed();
+    let rope_budget = Duration::from_millis(5);
 
     println!("Rope insertion in large doc: {:?}", rope_duration);
 
     // Rope should handle large insertions efficiently (under 5ms)
     assert!(
-        rope_duration.as_millis() < 5,
-        "Rope insertion took {} ms, expected < 5ms",
-        rope_duration.as_millis()
+        rope_duration <= rope_budget,
+        "Rope insertion took {:?}, expected <= {:?}",
+        rope_duration,
+        rope_budget
     );
 
     // Test 2: Position conversion performance
@@ -40,14 +42,16 @@ fn rope_performance_characteristics() {
         let _back_to_pos = byte_to_lsp_pos(&rope, byte_offset, PosEnc::Utf16);
     }
     let conversion_duration = start.elapsed();
+    let conversion_budget = Duration::from_millis(10);
 
     println!("100 position conversions: {:?}", conversion_duration);
 
     // Position conversions should be fast (under 10ms for 100 conversions)
     assert!(
-        conversion_duration.as_millis() < 10,
-        "Position conversions took {} ms, expected < 10ms",
-        conversion_duration.as_millis()
+        conversion_duration <= conversion_budget,
+        "Position conversions took {:?}, expected <= {:?}",
+        conversion_duration,
+        conversion_budget
     );
 
     // Test 3: Incremental edit performance (realistic LSP scenario)
@@ -75,14 +79,16 @@ fn rope_performance_characteristics() {
     let start = Instant::now();
     apply_changes(&mut doc, &edits, PosEnc::Utf16);
     let edit_duration = start.elapsed();
+    let edit_budget = Duration::from_millis(2);
 
     println!("Multiple incremental edits: {:?}", edit_duration);
 
     // Incremental edits should be very fast (under 2ms)
     assert!(
-        edit_duration.as_millis() < 2,
-        "Incremental edits took {} ms, expected < 2ms",
-        edit_duration.as_millis()
+        edit_duration <= edit_budget,
+        "Incremental edits took {:?}, expected <= {:?}",
+        edit_duration,
+        edit_budget
     );
 
     println!("✅ All Rope performance characteristics meet requirements");

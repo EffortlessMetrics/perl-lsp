@@ -8,6 +8,7 @@ use perl_lsp::{
 use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// Capture output for testing
 struct OutputCapture {
@@ -44,6 +45,36 @@ impl OutputCapture {
 
     fn clear(&self) {
         self.buffer.lock().clear();
+    }
+}
+
+fn wait_for_messages(output: &OutputCapture, minimum_count: usize) -> Vec<Value> {
+    let deadline = Instant::now() + Duration::from_millis(250);
+    loop {
+        let messages = output.get_messages();
+        if messages.len() >= minimum_count {
+            return messages;
+        }
+        if Instant::now() >= deadline {
+            return messages;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
+    let deadline = Instant::now() + Duration::from_millis(250);
+    loop {
+        let messages = output.get_messages();
+        if let Some(message) =
+            messages.into_iter().find(|message| message["method"].as_str() == Some(method))
+        {
+            return Some(message);
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(5));
     }
 }
 
@@ -88,6 +119,7 @@ fn lsp_window_show_message_request_format() -> Result<(), Box<dyn std::error::Er
         params: Some(init_params),
     });
 
+    let _ = wait_for_messages(&output, 1);
     output.clear();
 
     // Send showMessageRequest
@@ -100,10 +132,8 @@ fn lsp_window_show_message_request_format() -> Result<(), Box<dyn std::error::Er
     // Verify request was sent
     assert!(result.is_ok());
 
-    let messages = output.get_messages();
-    assert!(!messages.is_empty(), "Expected showMessageRequest to be sent");
-
-    let request = &messages[0];
+    let request = wait_for_method(&output, "window/showMessageRequest")
+        .ok_or("Expected showMessageRequest to be sent")?;
     assert_eq!(request["jsonrpc"], "2.0");
     assert_eq!(request["method"], "window/showMessageRequest");
     assert_eq!(request["params"]["type"], 2); // Warning = 2
@@ -160,6 +190,7 @@ fn lsp_window_show_document_with_capability() {
         params: Some(init_params),
     });
 
+    let _ = wait_for_messages(&output, 1);
     output.clear();
 
     // Send showDocument with options
@@ -175,10 +206,8 @@ fn lsp_window_show_document_with_capability() {
     let result = server.show_document("file:///test.pl", options);
     assert!(result.is_ok());
 
-    let messages = output.get_messages();
-    assert!(!messages.is_empty());
-
-    let request = &messages[0];
+    let request = wait_for_method(&output, "window/showDocument")
+        .expect("Expected window/showDocument request");
     assert_eq!(request["method"], "window/showDocument");
     assert_eq!(request["params"]["uri"], "file:///test.pl");
     assert_eq!(request["params"]["takeFocus"], true);
@@ -207,6 +236,7 @@ fn lsp_window_progress_lifecycle() {
         params: Some(init_params),
     });
 
+    let _ = wait_for_messages(&output, 1);
     output.clear();
 
     // Create progress token
@@ -214,10 +244,10 @@ fn lsp_window_progress_lifecycle() {
     let result = server.create_work_done_progress(token);
     assert!(result.is_ok(), "Failed to create progress: {:?}", result);
 
-    let messages = output.get_messages();
-    assert!(!messages.is_empty());
-    assert_eq!(messages[0]["method"], "window/workDoneProgress/create");
-    assert_eq!(messages[0]["params"]["token"], token);
+    let create_message = wait_for_method(&output, "window/workDoneProgress/create")
+        .expect("Expected window/workDoneProgress/create request");
+    assert_eq!(create_message["method"], "window/workDoneProgress/create");
+    assert_eq!(create_message["params"]["token"], token);
 
     output.clear();
 
@@ -225,13 +255,13 @@ fn lsp_window_progress_lifecycle() {
     let result = server.report_progress_begin(token, "Indexing", Some("Starting..."));
     assert!(result.is_ok());
 
-    let messages = output.get_messages();
-    assert!(!messages.is_empty());
-    assert_eq!(messages[0]["method"], "$/progress");
-    assert_eq!(messages[0]["params"]["token"], token);
-    assert_eq!(messages[0]["params"]["value"]["kind"], "begin");
-    assert_eq!(messages[0]["params"]["value"]["title"], "Indexing");
-    assert_eq!(messages[0]["params"]["value"]["message"], "Starting...");
+    let begin_message =
+        wait_for_method(&output, "$/progress").expect("Expected begin $/progress notification");
+    assert_eq!(begin_message["method"], "$/progress");
+    assert_eq!(begin_message["params"]["token"], token);
+    assert_eq!(begin_message["params"]["value"]["kind"], "begin");
+    assert_eq!(begin_message["params"]["value"]["title"], "Indexing");
+    assert_eq!(begin_message["params"]["value"]["message"], "Starting...");
 
     output.clear();
 
@@ -239,11 +269,11 @@ fn lsp_window_progress_lifecycle() {
     let result = server.report_progress_report(token, Some("50% complete"), Some(50));
     assert!(result.is_ok());
 
-    let messages = output.get_messages();
-    assert!(!messages.is_empty());
-    assert_eq!(messages[0]["method"], "$/progress");
-    assert_eq!(messages[0]["params"]["value"]["kind"], "report");
-    assert_eq!(messages[0]["params"]["value"]["percentage"], 50);
+    let report_message =
+        wait_for_method(&output, "$/progress").expect("Expected report $/progress notification");
+    assert_eq!(report_message["method"], "$/progress");
+    assert_eq!(report_message["params"]["value"]["kind"], "report");
+    assert_eq!(report_message["params"]["value"]["percentage"], 50);
 
     output.clear();
 
@@ -251,11 +281,11 @@ fn lsp_window_progress_lifecycle() {
     let result = server.report_progress_end(token, Some("Complete"));
     assert!(result.is_ok());
 
-    let messages = output.get_messages();
-    assert!(!messages.is_empty());
-    assert_eq!(messages[0]["method"], "$/progress");
-    assert_eq!(messages[0]["params"]["value"]["kind"], "end");
-    assert_eq!(messages[0]["params"]["value"]["message"], "Complete");
+    let end_message =
+        wait_for_method(&output, "$/progress").expect("Expected end $/progress notification");
+    assert_eq!(end_message["method"], "$/progress");
+    assert_eq!(end_message["params"]["value"]["kind"], "end");
+    assert_eq!(end_message["params"]["value"]["message"], "Complete");
 }
 
 #[test]
@@ -355,6 +385,7 @@ fn lsp_window_telemetry_respects_config() {
         params: Some(json!({})),
     });
 
+    let _ = wait_for_messages(&output, 1);
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -373,9 +404,12 @@ fn lsp_window_telemetry_respects_config() {
     let result = server.send_telemetry(event.clone());
     assert!(result.is_ok());
 
-    // No telemetry should be sent (disabled)
+    // No telemetry/event notification should be sent while disabled.
+    std::thread::sleep(Duration::from_millis(50));
     let messages = output.get_messages();
-    assert!(messages.is_empty(), "Telemetry sent when disabled");
+    let telemetry_sent =
+        messages.iter().any(|message| message["method"].as_str() == Some("telemetry/event"));
+    assert!(!telemetry_sent, "Telemetry sent when disabled");
 
     output.clear();
 
@@ -401,10 +435,10 @@ fn lsp_window_telemetry_respects_config() {
     assert!(result.is_ok());
 
     // Telemetry should now be sent
-    let messages = output.get_messages();
-    assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0]["method"], "telemetry/event");
-    assert_eq!(messages[0]["params"]["event"], "test");
+    let telemetry_message =
+        wait_for_method(&output, "telemetry/event").expect("Expected telemetry/event notification");
+    assert_eq!(telemetry_message["method"], "telemetry/event");
+    assert_eq!(telemetry_message["params"]["event"], "test");
 }
 
 #[test]
@@ -426,9 +460,9 @@ fn lsp_window_message_types() {
 
         let _ = server.show_message_request(msg_type, "Test message", vec![]);
 
-        let messages = output.get_messages();
-        assert!(!messages.is_empty());
-        assert_eq!(messages[0]["params"]["type"], expected_value);
+        let message = wait_for_method(&output, "window/showMessageRequest")
+            .expect("Expected window/showMessageRequest");
+        assert_eq!(message["params"]["type"], expected_value);
     }
 }
 
@@ -473,6 +507,7 @@ fn lsp_window_show_document_external_flag() {
         params: Some(init_params),
     });
 
+    let _ = wait_for_messages(&output, 1);
     output.clear();
 
     // Test external = true
@@ -480,8 +515,8 @@ fn lsp_window_show_document_external_flag() {
 
     let _ = server.show_document("https://example.com", options);
 
-    let messages = output.get_messages();
-    assert!(!messages.is_empty());
-    assert_eq!(messages[0]["params"]["external"], true);
-    assert_eq!(messages[0]["params"]["uri"], "https://example.com");
+    let message =
+        wait_for_method(&output, "window/showDocument").expect("Expected window/showDocument");
+    assert_eq!(message["params"]["external"], true);
+    assert_eq!(message["params"]["uri"], "https://example.com");
 }

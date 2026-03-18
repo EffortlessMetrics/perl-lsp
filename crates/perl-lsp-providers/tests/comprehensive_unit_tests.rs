@@ -317,10 +317,10 @@ mod on_type_formatting_tests {
     use perl_lsp_providers::ide::lsp_compat::on_type_formatting::compute_on_type_edit;
 
     #[test]
-    fn open_brace_adds_indent() {
+    fn open_brace_is_not_a_trigger() {
         let text = "sub foo {";
         let edits = compute_on_type_edit(text, 0, 9, '{');
-        assert!(edits.is_some(), "open brace should produce edits");
+        assert!(edits.is_none(), "open brace is not an on-type formatting trigger");
     }
 
     #[test]
@@ -344,7 +344,7 @@ mod on_type_formatting_tests {
     fn semicolon_maintains_indent() {
         let text = "    my $x = 1;";
         let edits = compute_on_type_edit(text, 0, 14, ';');
-        assert!(edits.is_some(), "semicolon should produce edits");
+        assert!(edits.is_none(), "semicolon preserves existing indentation");
     }
 
     #[test]

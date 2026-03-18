@@ -13,7 +13,11 @@
 
 use crate::protocol::JsonRpcRequest;
 use crate::transport::log_response;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
+use tokio::sync::Notify;
 
 use super::LspServer;
 
@@ -87,11 +91,17 @@ pub(crate) fn classify(method: &str) -> RequestClass {
 /// be aborted — they run to completion. This is cooperative shutdown.
 pub(crate) struct Scheduler {
     /// Channel for mutation/lifecycle work (single exclusive worker drains this).
-    mutation_tx: tokio::sync::mpsc::Sender<JsonRpcRequest>,
+    mutation_tx: tokio::sync::mpsc::Sender<QueuedMutation>,
     /// Channel for read-only work (N workers drain this).
-    read_tx: tokio::sync::mpsc::Sender<JsonRpcRequest>,
+    read_tx: tokio::sync::mpsc::Sender<QueuedRead>,
     /// Join handles for background workers (used for shutdown drain).
     workers: Vec<tokio::task::JoinHandle<()>>,
+    /// Monotonic sequence assigned to mutations/lifecycle requests at ingress.
+    mutation_seq_next: Arc<AtomicU64>,
+    /// Highest mutation sequence that has completed processing.
+    mutation_seq_done: Arc<AtomicU64>,
+    /// Wakes read workers waiting for earlier mutations to finish.
+    mutation_notify: Arc<Notify>,
 }
 
 /// Bounded channel capacity for both mutation and read queues.
@@ -99,6 +109,18 @@ const QUEUE_CAPACITY: usize = 64;
 
 /// Number of concurrent read-pool workers.
 const READ_WORKERS: usize = 4;
+
+/// Mutation/lifecycle request tagged with its ingress-order sequence number.
+struct QueuedMutation {
+    request: JsonRpcRequest,
+    seq: u64,
+}
+
+/// Read-only request tagged with the latest mutation sequence observed at ingress.
+struct QueuedRead {
+    request: JsonRpcRequest,
+    wait_for_seq: u64,
+}
 
 impl Scheduler {
     /// Create a new scheduler and spawn worker tasks.
@@ -108,36 +130,60 @@ impl Scheduler {
     pub fn new(server: Arc<LspServer>) -> Self {
         let (mutation_tx, mutation_rx) = tokio::sync::mpsc::channel(QUEUE_CAPACITY);
         let (read_tx, read_rx) = tokio::sync::mpsc::channel(QUEUE_CAPACITY);
+        let mutation_seq_next = Arc::new(AtomicU64::new(0));
+        let mutation_seq_done = Arc::new(AtomicU64::new(0));
+        let mutation_notify = Arc::new(Notify::new());
 
         let mut workers = Vec::with_capacity(1 + READ_WORKERS);
 
         // Single exclusive mutation worker — processes lifecycle and mutation
         // requests one at a time, preserving ordering guarantees.
-        workers.push(tokio::spawn(Self::mutation_worker(mutation_rx, Arc::clone(&server))));
+        workers.push(tokio::spawn(Self::mutation_worker(
+            mutation_rx,
+            Arc::clone(&server),
+            Arc::clone(&mutation_seq_done),
+            Arc::clone(&mutation_notify),
+        )));
 
         // Read pool: N workers share a single receiver via Arc<Mutex<>>.
         // Each worker competes for the next item (work-stealing pattern).
         let shared_rx = Arc::new(tokio::sync::Mutex::new(read_rx));
         for _ in 0..READ_WORKERS {
-            workers
-                .push(tokio::spawn(Self::read_worker(Arc::clone(&shared_rx), Arc::clone(&server))));
+            workers.push(tokio::spawn(Self::read_worker(
+                Arc::clone(&shared_rx),
+                Arc::clone(&server),
+                Arc::clone(&mutation_seq_done),
+                Arc::clone(&mutation_notify),
+            )));
         }
 
-        Self { mutation_tx, read_tx, workers }
+        Self {
+            mutation_tx,
+            read_tx,
+            workers,
+            mutation_seq_next,
+            mutation_seq_done,
+            mutation_notify,
+        }
     }
 
     /// Send a mutation or lifecycle request to the exclusive worker.
     ///
     /// Returns `Err(())` if the mutation worker has exited (channel closed).
     pub async fn send_mutation(&self, request: JsonRpcRequest) -> Result<(), ()> {
-        self.mutation_tx.send(request).await.map_err(|_| ())
+        let seq = self.mutation_seq_next.fetch_add(1, Ordering::SeqCst) + 1;
+        self.mutation_tx.send(QueuedMutation { request, seq }).await.map_err(|_| {
+            self.mutation_seq_done.store(seq, Ordering::SeqCst);
+            self.mutation_notify.notify_waiters();
+        })
     }
 
     /// Send a read-only request to the read pool.
     ///
     /// Returns `Err(())` if all read workers have exited (channel closed).
     pub async fn send_read(&self, request: JsonRpcRequest) -> Result<(), ()> {
-        self.read_tx.send(request).await.map_err(|_| ())
+        let wait_for_seq = self.mutation_seq_next.load(Ordering::SeqCst);
+        self.read_tx.send(QueuedRead { request, wait_for_seq }).await.map_err(|_| ())
     }
 
     /// Shut down all workers by dropping senders and awaiting completion.
@@ -162,14 +208,21 @@ impl Scheduler {
     /// blocking thread pool via `spawn_blocking`. This ensures lifecycle and
     /// document-mutation requests never overlap.
     async fn mutation_worker(
-        mut rx: tokio::sync::mpsc::Receiver<JsonRpcRequest>,
+        mut rx: tokio::sync::mpsc::Receiver<QueuedMutation>,
         server: Arc<LspServer>,
+        mutation_seq_done: Arc<AtomicU64>,
+        mutation_notify: Arc<Notify>,
     ) {
-        while let Some(request) = rx.recv().await {
+        while let Some(queued) = rx.recv().await {
             // Run on blocking thread: handlers are CPU-bound and use
             // parking_lot locks which must not block the tokio runtime.
             let srv = Arc::clone(&server);
-            let result = tokio::task::spawn_blocking(move || srv.handle_request(request)).await;
+            let result =
+                tokio::task::spawn_blocking(move || srv.handle_request(queued.request)).await;
+
+            // Reads that were enqueued after this mutation can proceed once state is updated.
+            mutation_seq_done.store(queued.seq, Ordering::SeqCst);
+            mutation_notify.notify_waiters();
 
             if let Ok(Some(response)) = result {
                 log_response(&response);
@@ -186,26 +239,33 @@ impl Scheduler {
     /// Each worker competes for the next item, runs the handler on the blocking
     /// thread pool, and sends the response via the outbound channel.
     async fn read_worker(
-        rx: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<JsonRpcRequest>>>,
+        rx: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<QueuedRead>>>,
         server: Arc<LspServer>,
+        mutation_seq_done: Arc<AtomicU64>,
+        mutation_notify: Arc<Notify>,
     ) {
         loop {
             // Hold the receiver lock only long enough to get the next item.
-            let request = {
+            let queued = {
                 let mut guard = rx.lock().await;
                 guard.recv().await
             };
 
-            let request = match request {
+            let queued = match queued {
                 Some(r) => r,
                 None => break, // channel closed — all senders dropped
             };
+
+            while mutation_seq_done.load(Ordering::SeqCst) < queued.wait_for_seq {
+                mutation_notify.notified().await;
+            }
 
             let srv = Arc::clone(&server);
             let outbound = server.outbound.clone();
 
             // Run CPU-bound handler on blocking thread pool.
-            let result = tokio::task::spawn_blocking(move || srv.handle_request(request)).await;
+            let result =
+                tokio::task::spawn_blocking(move || srv.handle_request(queued.request)).await;
 
             if let Ok(Some(response)) = result {
                 log_response(&response);

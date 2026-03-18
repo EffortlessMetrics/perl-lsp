@@ -14,11 +14,14 @@ fn test_workspace_excludes_documented_crates() {
     let workspace_root =
         must_some(Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(|p| p.parent()));
 
-    // Expected exclusions as documented in Cargo.toml
-    // Note: tree-sitter-perl-c was removed from the repo; only check dirs that exist
-    let expected_exclusions = vec!["tree-sitter-perl", "fuzz", "archive"];
+    // Expected live exclusions as documented in Cargo.toml.
+    // Optional exclusions like `archive/` or removed directories like
+    // `crates/tree-sitter-perl-c` may remain listed without existing in every
+    // checkout, so this existence check only covers the directories that are
+    // intentionally present in the current repository layout.
+    let expected_live_exclusions = vec!["tree-sitter-perl", "fuzz"];
 
-    for excluded in expected_exclusions {
+    for excluded in expected_live_exclusions {
         let excluded_path = workspace_root.join(excluded);
         assert!(
             excluded_path.exists(),
