@@ -16,9 +16,48 @@ pub use perl_lsp_feature_governance::{
     to_json_for_profile,
 };
 use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
+use std::io;
+use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};
 
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
+
+/// Logging mode for CLI binaries that use shared startup plumbing.
+#[derive(Debug, Clone)]
+pub enum LoggingMode {
+    /// Logging disabled by default unless enabled by CLI or `RUST_LOG`.
+    Off,
+    /// Logging enabled with the provided fallback directive when `RUST_LOG` is unset.
+    On {
+        /// Fallback directive used when `RUST_LOG` is unavailable or invalid.
+        default_directive: String,
+    },
+}
+
+impl LoggingMode {
+    /// Build a logging mode from a simple enabled/disabled flag.
+    pub fn from_flag(enabled: bool, default_directive: impl Into<String>) -> Self {
+        if enabled { Self::On { default_directive: default_directive.into() } } else { Self::Off }
+    }
+}
+
+/// Initialize stderr tracing for a CLI binary.
+///
+/// When logging is disabled, this still honors `RUST_LOG` so operators can turn
+/// on diagnostics without changing CLI flags. Invalid directives fall back to a
+/// safe default.
+pub fn init_stderr_tracing(mode: &LoggingMode) {
+    let default_directive = match mode {
+        LoggingMode::Off => "warn",
+        LoggingMode::On { default_directive } => default_directive.as_str(),
+    };
+
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(default_directive))
+        .unwrap_or_else(|_| EnvFilter::new("warn"));
+
+    let _ = tracing_fmt().with_env_filter(filter).with_writer(io::stderr).try_init();
+}
 
 /// Transport options shared by server binaries.
 #[derive(Args, Debug, Clone)]

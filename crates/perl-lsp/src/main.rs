@@ -10,8 +10,9 @@
 #![deny(clippy::option_env_unwrap)]
 use perl_lsp::LspServer;
 use perl_lsp_launcher::{
-    LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
-    parse_args, port_in_use_message, shell_completion,
+    LaunchAction, LaunchConfig, LoggingMode, TransportMode, format_health_output,
+    format_info_output, help_text, init_stderr_tracing, parse_args, port_in_use_message,
+    shell_completion,
 };
 use std::env;
 use std::process;
@@ -159,13 +160,13 @@ fn is_terminal_stdout() -> bool {
 }
 
 fn run_server(launch_config: LaunchConfig) {
+    init_stderr_tracing(&LoggingMode::from_flag(launch_config.enable_logging, "info"));
+
     if launch_config.enable_logging {
-        eprintln!("Perl Language Server starting...");
-        eprintln!("Mode: {}", launch_config.transport.label());
+        tracing::info!(transport = %launch_config.transport.label(), feature_profile = %launch_config.feature_profile.as_str(), "Perl Language Server starting");
         if let Some(port) = launch_config.transport.port() {
-            eprintln!("Port: {port}");
+            tracing::info!(port, "Configured TCP listener port");
         }
-        eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
     }
 
     match launch_config.transport {
@@ -222,30 +223,30 @@ fn run_server(launch_config: LaunchConfig) {
                         process::exit(1);
                     }
                 };
-                eprintln!("Perl LSP listening on {}", local_addr);
+                tracing::info!(local_addr = %local_addr, "Perl LSP listening");
 
                 loop {
                     match listener.accept().await {
                         Ok((stream, peer_addr)) => {
-                            eprintln!("Accepted connection from {peer_addr}");
+                            tracing::info!(peer_addr = %peer_addr, "Accepted LSP connection");
                             tokio::spawn(async move {
                                 let std_stream = match stream.into_std() {
                                     Ok(std_stream) => std_stream,
                                     Err(error) => {
-                                        eprintln!("Failed to convert stream to std: {error}");
+                                        tracing::error!(%error, "Failed to convert stream to std");
                                         return;
                                     }
                                 };
 
                                 if let Err(e) = std_stream.set_nonblocking(false) {
-                                    eprintln!("Failed to set blocking mode: {}", e);
+                                    tracing::error!(error = %e, "Failed to set blocking mode");
                                     return;
                                 }
 
                                 let writer = match std_stream.try_clone() {
                                     Ok(w) => w,
                                     Err(e) => {
-                                        eprintln!("Failed to clone stream: {e}");
+                                        tracing::error!(error = %e, "Failed to clone stream");
                                         return;
                                     }
                                 };
@@ -270,7 +271,7 @@ fn run_server(launch_config: LaunchConfig) {
                             });
                         }
                         Err(e) => {
-                            eprintln!("Failed to accept: {e}");
+                            tracing::error!(error = %e, "Failed to accept incoming LSP connection");
                             sleep(Duration::from_millis(100)).await;
                         }
                     }

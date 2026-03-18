@@ -18,6 +18,7 @@ include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 [dependencies]
 clap = { version = "4.5.60", features = ["derive"] }
 perl-lsp-feature-governance = { workspace = true }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 [features]
 lsp-ga-lock = ["perl-lsp-feature-governance/lsp-ga-lock"]

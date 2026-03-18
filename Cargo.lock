@@ -1593,7 +1593,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "winapi",
 ]
 
@@ -2080,6 +2079,7 @@ dependencies = [
  "clap",
  "perl-lsp-feature-governance",
  "perl-tdd-support",
+ "tracing-subscriber",
 ]
 
 [[package]]
