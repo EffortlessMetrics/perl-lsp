@@ -1,6 +1,9 @@
 use insta::assert_yaml_snapshot;
 use perl_lsp::features::map::feature_ids_from_caps;
 use perl_lsp::features::{advertised_features, compliance_percent};
+use perl_lsp_feature_governance::{
+    FeatureProfile, catalog_advertised_feature_ids, feature_ids_from_flags, flags_for_profile,
+};
 use serde_json::json;
 
 mod support;
@@ -32,10 +35,31 @@ fn test_advertised_features_match_capabilities() -> Result<(), Box<dyn std::erro
     // whether perltidy is installed in CI), so keep the snapshot focused on
     // deterministic capability coverage.
 
+    let profile_snapshots: Vec<_> =
+        [FeatureProfile::GaLock, FeatureProfile::Production, FeatureProfile::All]
+            .into_iter()
+            .map(|profile| {
+                let mut from_flags = feature_ids_from_flags(&flags_for_profile(profile));
+                from_flags.sort();
+
+                let mut from_profile_catalog = catalog_advertised_feature_ids(profile);
+                from_profile_catalog.sort();
+
+                json!({
+                    "profile": profile.as_str(),
+                    "catalog": from_profile_catalog,
+                    "flags": from_flags,
+                })
+            })
+            .collect();
+
     // Create snapshot data
     let snapshot_data = json!({
-        "catalog": from_catalog,
-        "caps": from_caps,
+        "runtime": {
+            "catalog": from_catalog,
+            "caps": from_caps,
+        },
+        "profiles": profile_snapshots,
     });
 
     // Assert with insta snapshot
