@@ -748,13 +748,14 @@ impl CompletionProvider {
         context: &CompletionContext,
         is_cancelled: &dyn Fn() -> bool,
     ) {
-        let callbacks = file_path::FilePathCallbacks::default();
-        file_path::add_file_completions_with_callbacks(
-            completions,
-            context,
-            &callbacks,
+        completions.extend(file_path::complete_file_paths(
+            &file_path::FileCompletionContext::new(
+                context.prefix.clone(),
+                context.prefix_start,
+                context.position,
+            ),
             is_cancelled,
-        );
+        ));
     }
 
     /// Add file path completions with cancellation support

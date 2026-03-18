@@ -52,6 +52,7 @@ members = [
     "crates/perl-lsp-document-links",
     "crates/perl-lsp-workspace-symbols",
     "crates/perl-lsp-completion",
+    "crates/perl-lsp-file-completion",
     "crates/perl-lsp-completion-item",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-folding",
@@ -180,6 +181,7 @@ allow = [
     "perl-lsp-code-actions",
     "perl-lsp-folding",
     "perl-lsp-completion",
+    "perl-lsp-file-completion",
     "perl-lsp-completion-item",
     "perl-lsp-inlay-hints",
 
@@ -378,6 +380,7 @@ perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.11.0" 
 perl-lsp-workspace-symbols = { path = "crates/perl-lsp-workspace-symbols", version = "0.11.0" }
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.11.0" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.11.0" }
+perl-lsp-file-completion = { path = "crates/perl-lsp-file-completion", version = "0.11.0" }
 perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.11.0" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.11.0" }
 perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.11.0" }
