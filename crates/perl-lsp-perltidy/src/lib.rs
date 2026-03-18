@@ -1,7 +1,13 @@
-//! Perltidy integration for code formatting
+//! Perltidy integration for code formatting.
 //!
-//! This module provides integration with perltidy for automatic code formatting
-//! and beautification of Perl code.
+//! This microcrate owns the `perltidy` formatting workflow: configuration,
+//! subprocess invocation, caching, range formatting, and a built-in fallback.
+
+#![deny(unsafe_code)]
+#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
 
 use perl_subprocess_runtime::SubprocessRuntime;
 use serde::{Deserialize, Serialize};
@@ -9,30 +15,30 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-/// Configuration for perltidy
+/// Configuration for perltidy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerlTidyConfig {
-    /// Maximum line length
+    /// Maximum line length.
     pub maximum_line_length: Option<u32>,
-    /// Indent size (spaces)
+    /// Indent size (spaces).
     pub indent_columns: Option<u32>,
-    /// Use tabs instead of spaces
+    /// Use tabs instead of spaces.
     pub tabs: Option<bool>,
-    /// Opening brace on same line
+    /// Opening brace on same line.
     pub opening_brace_on_new_line: Option<bool>,
-    /// Cuddled else
+    /// Cuddled else.
     pub cuddled_else: Option<bool>,
-    /// Space after keyword
+    /// Space after keyword.
     pub space_after_keyword: Option<bool>,
-    /// Add trailing commas
+    /// Add trailing commas.
     pub add_trailing_commas: Option<bool>,
-    /// Vertical alignment
+    /// Vertical alignment.
     pub vertical_alignment: Option<bool>,
-    /// Block comment indentation
+    /// Block comment indentation.
     pub block_comment_indentation: Option<u32>,
-    /// Custom perltidyrc file path
+    /// Custom perltidyrc file path.
     pub profile: Option<String>,
-    /// Additional command line arguments
+    /// Additional command line arguments.
     pub extra_args: Vec<String>,
 }
 
@@ -55,7 +61,7 @@ impl Default for PerlTidyConfig {
 }
 
 impl PerlTidyConfig {
-    /// Create a config for PBP (Perl Best Practices) style
+    /// Create a config for PBP (Perl Best Practices) style.
     pub fn pbp() -> Self {
         Self {
             maximum_line_length: Some(78),
@@ -72,7 +78,7 @@ impl PerlTidyConfig {
         }
     }
 
-    /// Create a config for GNU style
+    /// Create a config for GNU style.
     pub fn gnu() -> Self {
         Self {
             maximum_line_length: Some(79),
@@ -89,22 +95,21 @@ impl PerlTidyConfig {
         }
     }
 
-    /// Convert to perltidy command line arguments
-    fn to_args(&self) -> Vec<String> {
+    /// Convert the configuration to perltidy command line arguments.
+    pub fn to_args(&self) -> Vec<String> {
         let mut args = Vec::new();
 
         if let Some(profile) = &self.profile {
-            args.push(format!("--profile={}", profile));
-            // If using a profile, don't add other options
+            args.push(format!("--profile={profile}"));
             return args;
         }
 
         if let Some(len) = self.maximum_line_length {
-            args.push(format!("--maximum-line-length={}", len));
+            args.push(format!("--maximum-line-length={len}"));
         }
 
         if let Some(indent) = self.indent_columns {
-            args.push(format!("--indent-columns={}", indent));
+            args.push(format!("--indent-columns={indent}"));
         }
 
         if let Some(tabs) = self.tabs {
@@ -156,23 +161,18 @@ impl PerlTidyConfig {
         }
 
         if let Some(indent) = self.block_comment_indentation {
-            args.push(format!("--block-comment-indentation={}", indent));
+            args.push(format!("--block-comment-indentation={indent}"));
         }
 
-        // Add extra args
         args.extend(self.extra_args.clone());
-
         args
     }
 }
 
-/// Perltidy formatter
+/// Perltidy formatter.
 pub struct PerlTidyFormatter {
-    /// Configuration settings for perltidy invocation.
     config: PerlTidyConfig,
-    /// Cache mapping source code to formatted output.
     cache: HashMap<String, String>,
-    /// Subprocess runtime for executing perltidy
     runtime: Arc<dyn SubprocessRuntime>,
 }
 
@@ -189,21 +189,16 @@ impl PerlTidyFormatter {
         Self::new(config, Arc::new(OsSubprocessRuntime::new()))
     }
 
-    /// Format Perl code
+    /// Format Perl code.
     pub fn format(&mut self, code: &str) -> Result<String, String> {
-        // Check cache
         if let Some(cached) = self.cache.get(code) {
             return Ok(cached.clone());
         }
 
-        // Build argument list
-        let mut args: Vec<String> = self.config.to_args();
-        args.push("-st".to_string()); // Output to stdout
+        let mut args = self.config.to_args();
+        args.push("-st".to_string());
+        let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-        // Convert to &str slice for the runtime
-        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-
-        // Run perltidy via the runtime
         let output = self
             .runtime
             .run_command("perltidy", &args_refs, Some(code.as_bytes()))
@@ -214,30 +209,20 @@ impl PerlTidyFormatter {
         }
 
         let formatted = String::from_utf8(output.stdout)
-            .map_err(|e| format!("Invalid UTF-8 from perltidy: {}", e))?;
-
-        // Cache result
+            .map_err(|e| format!("Invalid UTF-8 from perltidy: {e}"))?;
         self.cache.insert(code.to_string(), formatted.clone());
-
         Ok(formatted)
     }
 
-    /// Format a file in place
+    /// Format a file in place.
     pub fn format_file(&self, file_path: &Path) -> Result<(), String> {
-        // Build argument list
-        let mut args: Vec<String> = self.config.to_args();
-        // SECURITY: Add `--` to prevent argument injection via filenames starting with `-`
-        // (e.g., a file named `-rf` would otherwise be interpreted as a flag)
+        let mut args = self.config.to_args();
         args.push("--".to_string());
         args.push(file_path.to_string_lossy().into_owned());
+        let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-        // Convert to &str slice for the runtime
-        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-
-        // Run perltidy via the runtime
         let output =
             self.runtime.run_command("perltidy", &args_refs, None).map_err(|e| e.message)?;
-
         if !output.success() {
             return Err(format!("Perltidy failed: {}", output.stderr_lossy()));
         }
@@ -245,43 +230,31 @@ impl PerlTidyFormatter {
         Ok(())
     }
 
-    /// Clear cache
+    /// Clear cached format results.
     pub fn clear_cache(&mut self) {
         self.cache.clear();
     }
 
-    /// Format a range of code
+    /// Format a range of code by line number.
     pub fn format_range(
         &mut self,
         code: &str,
         start_line: u32,
         end_line: u32,
     ) -> Result<String, String> {
-        // Split code into lines
         let lines: Vec<&str> = code.lines().collect();
-
         if start_line as usize >= lines.len() || end_line as usize >= lines.len() {
             return Err("Line range out of bounds".to_string());
         }
 
-        // Extract the range to format
         let range_code = lines[start_line as usize..=end_line as usize].join("\n");
-
-        // Format the range
         let formatted_range = self.format(&range_code)?;
 
-        // Reconstruct the full code
         let mut result = Vec::new();
-
-        // Add lines before range
         if start_line > 0 {
             result.extend_from_slice(&lines[0..start_line as usize]);
         }
-
-        // Add formatted range
         result.extend(formatted_range.lines());
-
-        // Add lines after range
         if (end_line as usize) < lines.len() - 1 {
             result.extend_from_slice(&lines[(end_line as usize + 1)..]);
         }
@@ -289,26 +262,23 @@ impl PerlTidyFormatter {
         Ok(result.join("\n"))
     }
 
-    /// Get formatting suggestions without applying them
+    /// Get formatting suggestions without applying them.
     pub fn get_suggestions(&mut self, code: &str) -> Result<Vec<FormatSuggestion>, String> {
         let formatted = self.format(code)?;
-
         if formatted == code {
             return Ok(Vec::new());
         }
 
-        // Compare original and formatted to generate suggestions
-        let mut suggestions = Vec::new();
-
         let orig_lines: Vec<&str> = code.lines().collect();
         let fmt_lines: Vec<&str> = formatted.lines().collect();
+        let mut suggestions = Vec::new();
 
         for (i, (orig, fmt)) in orig_lines.iter().zip(fmt_lines.iter()).enumerate() {
             if orig != fmt {
                 suggestions.push(FormatSuggestion {
                     line: i as u32,
-                    original: orig.to_string(),
-                    formatted: fmt.to_string(),
+                    original: (*orig).to_string(),
+                    formatted: (*fmt).to_string(),
                     description: "Line formatting change".to_string(),
                 });
             }
@@ -318,7 +288,7 @@ impl PerlTidyFormatter {
     }
 }
 
-/// A formatting suggestion
+/// A formatting suggestion.
 #[derive(Debug, Clone)]
 pub struct FormatSuggestion {
     /// Zero-based line number where the change applies.
@@ -331,9 +301,8 @@ pub struct FormatSuggestion {
     pub description: String,
 }
 
-/// Built-in formatter for when perltidy is not available
+/// Built-in formatter for when perltidy is not available.
 pub struct BuiltInFormatter {
-    /// Configuration settings controlling formatting behavior.
     config: PerlTidyConfig,
 }
 
@@ -343,7 +312,7 @@ impl BuiltInFormatter {
         Self { config }
     }
 
-    /// Basic formatting without perltidy
+    /// Basic formatting without perltidy.
     pub fn format(&self, code: &str) -> String {
         let mut result = String::new();
         let mut indent_level: i32 = 0;
@@ -355,13 +324,10 @@ impl BuiltInFormatter {
 
         for line in code.lines() {
             let trimmed = line.trim();
-
-            // Decrease indent for closing braces
             if trimmed.starts_with('}') || trimmed.starts_with(')') || trimmed.starts_with(']') {
                 indent_level = indent_level.saturating_sub(1);
             }
 
-            // Add indentation
             if !trimmed.is_empty() {
                 for _ in 0..indent_level {
                     result.push_str(&indent_str);
@@ -370,7 +336,6 @@ impl BuiltInFormatter {
             }
             result.push('\n');
 
-            // Increase indent for opening braces
             if trimmed.ends_with('{') || trimmed.ends_with('(') || trimmed.ends_with('[') {
                 indent_level += 1;
             }
@@ -386,7 +351,7 @@ mod tests {
     use perl_tdd_support::{must, must_some};
 
     #[test]
-    fn test_config_to_args() {
+    fn config_to_args_includes_default_flags() {
         let config = PerlTidyConfig::default();
         let args = config.to_args();
 
@@ -396,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pbp_config() {
+    fn pbp_config_emits_best_practices_flag() {
         let config = PerlTidyConfig::pbp();
         let args = config.to_args();
 
@@ -405,29 +370,23 @@ mod tests {
     }
 
     #[test]
-    fn test_builtin_formatter() {
-        let config = PerlTidyConfig::default();
-        let formatter = BuiltInFormatter::new(config);
+    fn builtin_formatter_indents_block_contents() {
+        let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+        let formatted = formatter.format("if ($x) {\nprint $x;\n}\n");
 
-        let code = "if ($x) {\nprint $x;\n}\n";
-        let formatted = formatter.format(code);
-
-        assert!(formatted.contains("    print")); // Should be indented
+        assert!(formatted.contains("    print"));
     }
 
     #[test]
-    fn test_formatter_with_mock_runtime() {
+    fn formatter_uses_runtime_and_caches_results() {
         use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::success(b"my $x = 1;\n".to_vec()));
 
-        let config = PerlTidyConfig::default();
-        let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
-
-        let result = formatter.format("my $x=1;");
-        assert!(result.is_ok());
-        assert_eq!(must(result), "my $x = 1;\n");
+        let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime.clone());
+        assert_eq!(must(formatter.format("my $x=1;")), "my $x = 1;\n");
+        assert_eq!(must(formatter.format("my $x=1;")), "my $x = 1;\n");
 
         let invocations = runtime.invocations();
         assert_eq!(invocations.len(), 1);
@@ -436,69 +395,34 @@ mod tests {
     }
 
     #[test]
-    fn test_formatter_caching() {
-        use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
-
-        let runtime = Arc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::success(b"formatted\n".to_vec()));
-
-        let config = PerlTidyConfig::default();
-        let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
-
-        // First call should invoke runtime
-        let result1 = formatter.format("original");
-        assert!(result1.is_ok());
-
-        // Second call should use cache, not invoke runtime again
-        let result2 = formatter.format("original");
-        assert!(result2.is_ok());
-        assert_eq!(must(result1), must(result2));
-
-        // Only one invocation should have occurred
-        assert_eq!(runtime.invocations().len(), 1);
-    }
-
-    #[test]
-    fn test_formatter_error_handling() {
+    fn formatter_surfaces_runtime_failures() {
         use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::failure(b"syntax error".to_vec(), 1));
 
-        let config = PerlTidyConfig::default();
-        let mut formatter = PerlTidyFormatter::new(config, runtime);
-
-        let result = formatter.format("invalid code");
-        match result {
-            Err(e) => assert!(format!("{:?}", e).contains("syntax error")),
+        let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
+        match formatter.format("invalid code") {
+            Err(err) => assert!(err.contains("syntax error")),
             Ok(_) => {
-                must(Err::<(), _>("Expected error, got Ok"));
+                must(Err::<(), _>("Expected perltidy error"));
             }
         }
     }
 
     #[test]
-    fn test_format_file_with_mock_runtime() {
+    fn format_file_uses_argument_separator_for_security() {
         use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
-        runtime.add_response(MockResponse::success(b"".to_vec()));
+        runtime.add_response(MockResponse::success(Vec::new()));
 
-        let config = PerlTidyConfig::default();
-        let formatter = PerlTidyFormatter::new(config, runtime.clone());
-
-        let result = formatter.format_file(Path::new("test.pl"));
-        assert!(result.is_ok());
+        let formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime.clone());
+        assert!(formatter.format_file(Path::new("test.pl")).is_ok());
 
         let invocations = runtime.invocations();
-        assert_eq!(invocations.len(), 1);
-        assert_eq!(invocations[0].program, "perltidy");
-
-        // Ensure argument separator is used for security
-        assert!(invocations[0].args.contains(&"--".to_string()));
-        // Ensure the separator comes before the file path
-        let sep_pos = must_some(invocations[0].args.iter().position(|a| a == "--"));
-        let file_pos = must_some(invocations[0].args.iter().position(|a| a == "test.pl"));
-        assert!(sep_pos < file_pos, "-- separator must come before file path");
+        let sep_pos = must_some(invocations[0].args.iter().position(|arg| arg == "--"));
+        let file_pos = must_some(invocations[0].args.iter().position(|arg| arg == "test.pl"));
+        assert!(sep_pos < file_pos);
     }
 }

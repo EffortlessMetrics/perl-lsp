@@ -33,6 +33,7 @@ members = [
     "crates/perl-lsp-performance",
     "crates/perl-lsp-critic-parser",
     "crates/perl-subprocess-runtime",
+    "crates/perl-lsp-perltidy",
     "crates/perl-lsp-formatting",
     "crates/perl-lsp-diagnostic-types",
     "crates/perl-lsp-diagnostics",
@@ -139,6 +140,7 @@ allow = [
     "perl-content-length-framing",
     "perl-percentile",
     "perl-subprocess-runtime",
+    "perl-lsp-perltidy",
     "perl-lsp-protocol",
     "perl-lsp-symbol-query",
     "perl-keywords",
@@ -319,6 +321,7 @@ perl-source-editing = { path = "crates/perl-source-editing", version = "0.11.0" 
 perl-line-index = { path = "crates/perl-line-index", version = "0.11.0" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.11.0" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.11.0" }
+perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.11.0" }
 perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.11.0" }
 perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.11.0" }
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.11.0" }
