@@ -28,7 +28,7 @@ cargo test --workspace --lib          # Run all tests
 
 ## Crate Structure
 
-116 workspace members across 121 crate directories (see `Cargo.toml`). Key crates:
+128 workspace members across 129 crate directories (see `cargo metadata --no-deps`). Key crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
@@ -127,13 +127,14 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 | LSP server binary | `crates/perl-lsp/src/` |
 | DAP server | `crates/perl-dap/src/` |
 | Tests | `crates/*/tests/` |
-| Test corpus | `test_corpus/` |
+| Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
 | VSCode extension | `vscode-extension/` |
 | Documentation | `docs/` |
 | Features catalog | `features.toml` |
 | CI config | `.ci/` |
 | Build tooling | `xtask/` |
-| Skills/commands | `.claude/commands/` |
+| Skills | `.claude/skills/` |
+| Slash commands | `.claude/commands/` |
 | Swarm ops | `.ops-perl-lsp/` |
 
 ## Architecture Patterns
