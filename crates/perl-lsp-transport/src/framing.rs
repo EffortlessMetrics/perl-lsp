@@ -781,4 +781,433 @@ mod tests {
         assert_eq!(parsed["error"]["data"]["detail"], "missing field");
         Ok(())
     }
+
+    // ── body_preview (private helper) ────────────────────────────────
+
+    #[test]
+    fn body_preview_short_input_no_truncation() {
+        let input = b"hello world";
+        let result = super::body_preview(input);
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn body_preview_truncates_long_input() {
+        let input = vec![b'a'; 200];
+        let result = super::body_preview(&input);
+        // Should be truncated to LOG_PREVIEW_MAX_BYTES (160) plus ellipsis
+        assert!(result.ends_with('\u{2026}'));
+        // The visible portion is 160 'a' chars + 1 ellipsis
+        assert_eq!(result.len(), super::LOG_PREVIEW_MAX_BYTES + '\u{2026}'.len_utf8());
+    }
+
+    #[test]
+    fn body_preview_replaces_newlines() {
+        let input = b"line1\r\nline2\nline3";
+        let result = super::body_preview(input);
+        assert_eq!(result, "line1\\n\\nline2\\nline3");
+    }
+
+    #[test]
+    fn body_preview_empty_input() {
+        let input = b"";
+        let result = super::body_preview(input);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn body_preview_exactly_at_max_bytes() {
+        let input = vec![b'z'; super::LOG_PREVIEW_MAX_BYTES];
+        let result = super::body_preview(&input);
+        // Exactly at the limit: no truncation marker
+        assert!(!result.contains('\u{2026}'));
+        assert_eq!(result.len(), super::LOG_PREVIEW_MAX_BYTES);
+    }
+
+    #[test]
+    fn body_preview_one_byte_over_max() {
+        let input = vec![b'z'; super::LOG_PREVIEW_MAX_BYTES + 1];
+        let result = super::body_preview(&input);
+        assert!(result.ends_with('\u{2026}'));
+    }
+
+    // ── read_message: Content-Length edge cases ──────────────────────
+
+    #[test]
+    fn read_message_zero_content_length_returns_none() -> io::Result<()> {
+        // Content-Length: 0 means empty body, which is not valid JSON-RPC
+        let frame = b"Content-Length: 0\r\n\r\n";
+        let mut reader = BufReader::new(Cursor::new(frame.to_vec()));
+        assert!(read_message(&mut reader)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_content_length_with_leading_spaces() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":{}}"#;
+        let mut frame = format!("Content-Length:   {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_content_length_with_trailing_spaces() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":{}}"#;
+        let mut frame = format!("Content-Length: {}   \r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        // Trailing spaces after the number should be trimmed
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_negative_content_length_returns_none() -> io::Result<()> {
+        let payload = b"Content-Length: -1\r\n\r\n";
+        let mut reader = BufReader::new(Cursor::new(payload.to_vec()));
+        assert!(read_message(&mut reader)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_content_length_last_among_headers() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":{}}"#;
+        let mut frame =
+            format!("X-Custom-A: foo\r\nX-Custom-B: bar\r\nContent-Length: {}\r\n\r\n", body.len())
+                .into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_mixed_case_content_length() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":{}}"#;
+        let mut frame = format!("CONTENT-LENGTH: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_empty_method_string() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1,"method":"","params":{}}"#;
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "");
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_array_params() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1,"method":"test","params":[1,2,3]}"#;
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        let params = req
+            .params
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+        assert!(params.is_array());
+        assert_eq!(params.as_array().map(|a| a.len()), Some(3));
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_missing_params_field() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        assert!(req.params.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_float_id() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":1.5,"method":"test","params":{}}"#;
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.id, Some(serde_json::json!(1.5)));
+        Ok(())
+    }
+
+    #[test]
+    fn read_message_null_id() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":null,"method":"test","params":{}}"#;
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        // serde_json deserializes `"id": null` as None for Option<Value>
+        assert!(req.id.is_none());
+        Ok(())
+    }
+
+    // ── stateful reader: incremental delivery ───────────────────────
+
+    #[test]
+    fn stateful_reader_byte_at_a_time() -> io::Result<()> {
+        let full_frame = framed_request(1, "incremental");
+        // Feed one byte at a time via a reader that yields 1 byte per read call
+        struct OneByteReader {
+            data: Vec<u8>,
+            pos: usize,
+        }
+        impl io::Read for OneByteReader {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if self.pos >= self.data.len() {
+                    return Ok(0);
+                }
+                buf[0] = self.data[self.pos];
+                self.pos += 1;
+                Ok(1)
+            }
+        }
+        let mut source = OneByteReader { data: full_frame, pos: 0 };
+        let mut reader = ContentLengthMessageReader::new();
+
+        let req = reader
+            .read_next(&mut source)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "incremental");
+        assert_eq!(req.id, Some(serde_json::json!(1)));
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_large_message() -> io::Result<()> {
+        let big_value = "y".repeat(100_000);
+        let body = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"big","params":{{"data":"{}"}}}}"#,
+            big_value
+        );
+        let mut payload = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        payload.extend_from_slice(body.as_bytes());
+
+        let mut cursor = Cursor::new(payload);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let req = reader
+            .read_next(&mut cursor)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "big");
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_multiple_malformed_then_valid() -> io::Result<()> {
+        // Three malformed frames followed by one valid frame
+        let bad1 = b"invalid json 1";
+        let bad2 = b"invalid json 2";
+        let bad3 = b"{not valid}";
+        let mut payload = Vec::new();
+        for bad in [bad1.as_slice(), bad2.as_slice(), bad3.as_slice()] {
+            payload.extend_from_slice(format!("Content-Length: {}\r\n\r\n", bad.len()).as_bytes());
+            payload.extend_from_slice(bad);
+        }
+        payload.extend(framed_request(1, "finally_valid"));
+
+        let mut cursor = Cursor::new(payload);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let req = reader
+            .read_next(&mut cursor)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "finally_valid");
+        Ok(())
+    }
+
+    // ── write_message: additional serialization cases ────────────────
+
+    #[test]
+    fn write_message_unicode_in_result() -> io::Result<()> {
+        let response = JsonRpcResponse::success(
+            Some(serde_json::json!(1)),
+            serde_json::json!({"text": "cafe\u{0301} \u{1f980}"}),
+        );
+        let mut buf = Vec::new();
+        write_message(&mut buf, &response)?;
+
+        let output =
+            String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let header_end = output
+            .find("\r\n\r\n")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no separator"))?;
+        let header = &output[..header_end];
+        let claimed_len: usize = header
+            .strip_prefix("Content-Length: ")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no Content-Length prefix"))?
+            .parse()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let actual_body = &output[header_end + 4..];
+        // Content-Length must match byte length, not char count
+        assert_eq!(claimed_len, actual_body.len());
+
+        let parsed: serde_json::Value = serde_json::from_str(actual_body)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        assert!(parsed["result"]["text"].is_string());
+        Ok(())
+    }
+
+    #[test]
+    fn write_message_deeply_nested_result() -> io::Result<()> {
+        // Build a deeply nested JSON value
+        let mut value = serde_json::json!("leaf");
+        for _ in 0..50 {
+            value = serde_json::json!({"nested": value});
+        }
+        let response = JsonRpcResponse::success(Some(serde_json::json!(1)), value);
+        let mut buf = Vec::new();
+        write_message(&mut buf, &response)?;
+
+        let output =
+            String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let header_end = output
+            .find("\r\n\r\n")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no separator"))?;
+        let header = &output[..header_end];
+        let claimed_len: usize = header
+            .strip_prefix("Content-Length: ")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no Content-Length prefix"))?
+            .parse()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let actual_body = &output[header_end + 4..];
+        assert_eq!(claimed_len, actual_body.len());
+
+        // Verify the JSON is parseable
+        let _parsed: serde_json::Value = serde_json::from_str(actual_body)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        Ok(())
+    }
+
+    // ── write_notification: additional cases ─────────────────────────
+
+    #[test]
+    fn write_notification_array_params() -> io::Result<()> {
+        let mut buf = Vec::new();
+        write_notification(&mut buf, "test/array", serde_json::json!([1, "two", 3]))?;
+
+        let output =
+            String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let body_start = output
+            .find("\r\n\r\n")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no separator"))?
+            + 4;
+        let parsed: serde_json::Value = serde_json::from_str(&output[body_start..])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        assert_eq!(parsed["method"], "test/array");
+        assert!(parsed["params"].is_array());
+        assert_eq!(parsed["params"][1], "two");
+        Ok(())
+    }
+
+    #[test]
+    fn write_notification_unicode_method_and_params() -> io::Result<()> {
+        let mut buf = Vec::new();
+        write_notification(
+            &mut buf,
+            "custom/notify",
+            serde_json::json!({"msg": "\u{1f600} emoji test \u{00e9}"}),
+        )?;
+
+        let output =
+            String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let header_end = output
+            .find("\r\n\r\n")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no separator"))?;
+        let header = &output[..header_end];
+        let claimed_len: usize = header
+            .strip_prefix("Content-Length: ")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no Content-Length prefix"))?
+            .parse()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let actual_body = &output[header_end + 4..];
+        assert_eq!(claimed_len, actual_body.len());
+        Ok(())
+    }
+
+    // ── frame re-export ─────────────────────────────────────────────
+
+    #[test]
+    fn frame_produces_correct_content_length_header() {
+        let body = b"hello world";
+        let framed = super::frame(body);
+        let output = String::from_utf8_lossy(&framed);
+        assert!(output.starts_with("Content-Length: 11\r\n\r\n"));
+        assert!(output.ends_with("hello world"));
+    }
+
+    #[test]
+    fn frame_empty_body() {
+        let framed = super::frame(b"");
+        let output = String::from_utf8_lossy(&framed);
+        assert_eq!(output.as_ref(), "Content-Length: 0\r\n\r\n");
+    }
+
+    #[test]
+    fn frame_body_length_matches_header() {
+        let body = b"{\"jsonrpc\":\"2.0\"}";
+        let framed = super::frame(body);
+        let output = String::from_utf8_lossy(&framed);
+        let header_end = output.find("\r\n\r\n").map(|p| p + 4);
+        if let Some(end) = header_end {
+            let actual_body = &framed[end..];
+            assert_eq!(actual_body, body);
+            assert_eq!(actual_body.len(), body.len());
+        }
+    }
+
+    // ── log_response: covers all JSON-RPC error code families ───────
+
+    #[test]
+    fn log_response_standard_error_codes() {
+        let codes = [-32700, -32600, -32601, -32602, -32603, -32800, -32802];
+        for code in codes {
+            let err = JsonRpcError::new(code, "test error");
+            let response = JsonRpcResponse::error(Some(serde_json::json!(1)), err);
+            log_response(&response);
+        }
+    }
+
+    #[test]
+    fn log_response_with_large_result() {
+        let big_data = serde_json::json!({"data": "x".repeat(10_000)});
+        let response = JsonRpcResponse::success(Some(serde_json::json!(1)), big_data);
+        log_response(&response);
+    }
 }
