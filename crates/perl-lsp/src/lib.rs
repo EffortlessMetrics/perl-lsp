@@ -11,6 +11,12 @@
 //!
 //! ## Running the Server
 //!
+//! For the best first-run experience, install the binary, confirm `perl-lsp --health` succeeds,
+//! and open a project folder in your editor so workspace indexing can discover related files.
+//! If your Perl modules live outside `lib/`, configure editor-side include paths before testing
+//! go-to-definition across files.
+//!
+//!
 //! The simplest way to start the server is via the binary:
 //!
 //! ```bash

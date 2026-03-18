@@ -9,7 +9,12 @@ Standalone **Language Server Protocol (LSP) server for Perl**, providing IDE fea
 
 ```bash
 cargo install perl-lsp
+perl-lsp --health
 ```
+
+## First-Time Check
+
+After installing, verify the binary is on your `PATH`, then open a Perl project folder in your editor instead of a single loose file. For most cross-file features, add custom module directories with `perl.workspace.includePaths` if your code does not live under `lib/`.
 
 ## Usage
 

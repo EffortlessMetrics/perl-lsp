@@ -30,14 +30,44 @@ cargo install perl-lsp
 
 # 2. Verify the install
 perl-lsp --health  # should print: ok X.Y.Z
+perl-lsp --version
 
-# 3. Configure your editor (VS Code)
+# 3. Configure your editor (VS Code example)
 code --install-extension effortlessmetrics.perl-lsp-rs
 
-# 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
+# 4. Open a Perl project and a .pl or .pm file
 ```
 
-New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
+### First-Run Checklist
+
+If this is your first time using a language server for Perl, aim for this quick win:
+
+- Install `perl-lsp` and confirm `perl-lsp --health` returns `ok ...`.
+- Open a folder, not just a single file, so workspace indexing and cross-file navigation can start immediately.
+- Make sure your project roots are discoverable (`.git`, `cpanfile`, `Makefile.PL`, or `dist.ini` help editors pick the workspace root).
+- If your modules live outside `lib/`, add them via `perl.workspace.includePaths`.
+- Open a Perl file and test three actions: hover on `print`, go to definition on a local variable, and trigger completion after typing `$`.
+
+### 60-Second Smoke Test
+
+Create a file like this and open it in your editor:
+
+```perl
+use strict;
+use warnings;
+
+my $name = 'world';
+print $name;
+```
+
+You should see:
+
+- Hover docs on `print`
+- Completion for `$name` after typing `$na`
+- Go-to-definition from `$name` on line 5 back to line 4
+- Diagnostics if you intentionally break the file
+
+New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a first-day checklist, a copy/paste smoke test, and troubleshooting tips.
 
 <details>
 <summary><strong>Neovim / Emacs setup</strong></summary>

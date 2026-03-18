@@ -1,6 +1,6 @@
 # Getting Started with perl-lsp
 
-This guide gets you from zero to a working Perl language server in your editor.
+This guide gets you from zero to a working Perl language server in your editor, with the fastest path to a successful first run.
 
 ## What is a Language Server?
 
@@ -48,16 +48,51 @@ perl-lsp --health
 # Should output: ok 0.12.0
 ```
 
+## First-Run Success Checklist
+
+Before configuring keybindings or advanced settings, make sure the basics are in place:
+
+1. **Open a folder or project root**, not just an individual file. This lets perl-lsp build a workspace index for definitions, references, and symbols.
+2. **Verify the workspace root is recognizable**. Editors usually pick roots from markers like `.git`, `cpanfile`, `Makefile.PL`, or `dist.ini`.
+3. **Keep Perl modules in discoverable paths** such as `lib/`, or add custom directories with `perl.workspace.includePaths`.
+4. **Test with a tiny known-good file first** so you can separate install problems from project-specific issues.
+5. **Expect some features to depend on the editor UI**. The server may be healthy even if you still need to map keys or install an editor extension.
+
+## 60-Second Smoke Test
+
+Create `hello.pl` with the following contents:
+
+```perl
+use strict;
+use warnings;
+
+my $name = 'world';
+print $name;
+```
+
+Then confirm this sequence inside your editor:
+
+1. Open `hello.pl` inside a folder workspace.
+2. Hover over `print` and confirm documentation appears.
+3. Type `$na` on a new line and confirm `$name` appears in completion results.
+4. Jump to definition on `$name` in `print $name;` and confirm the cursor moves to `my $name = 'world';`.
+5. Introduce a syntax error, such as deleting the semicolon, and confirm a diagnostic appears.
+
+If those five checks pass, your first-time setup is working. From there you can add include paths, formatting, debugger support, and editor-specific keybindings.
+
 ## Quick Editor Setup
 
 ### VS Code
+
+This is the fastest path for most users because the extension wires up the server automatically.
 
 1. Install the extension:
    ```bash
    code --install-extension EffortlessMetrics.perl-lsp-rs
    ```
 
-2. Open a `.pl` or `.pm` file - the server starts automatically.
+2. Open a project folder, then open a `.pl` or `.pm` file - the server starts automatically.
+3. If nothing happens, open the VS Code Output panel and select the `perl-lsp` channel.
 
 ### Neovim
 
@@ -101,7 +136,7 @@ lspconfig.perl_lsp.setup({
 })
 ```
 
-**Verify it works**: open a `.pl` file and run `:LspInfo` -- you should see `perl_lsp` attached.
+**Verify it works**: open a `.pl` file and run `:LspInfo` -- you should see `perl_lsp` attached. If the server does not attach, confirm the filetype is `perl` with `:set filetype?`.
 
 ### Emacs (with eglot, Emacs 29+)
 
@@ -110,7 +145,7 @@ lspconfig.perl_lsp.setup({
              '((cperl-mode perl-mode) . ("perl-lsp" "--stdio")))
 ```
 
-Then run `M-x eglot` in a Perl buffer.
+Then run `M-x eglot` in a Perl buffer. If eglot prompts for a server command, use `perl-lsp --stdio`.
 
 ### Helix
 
@@ -240,6 +275,8 @@ For project-specific settings, the server reads configuration from your editor's
 }
 ```
 
+Common first-day setting: if your modules are not under `lib/`, add those directories to `includePaths` so definition lookup and diagnostics can find them early.
+
 See [CONFIG.md](../reference/CONFIG.md) for all configuration options.
 
 ## Troubleshooting
@@ -247,6 +284,8 @@ See [CONFIG.md](../reference/CONFIG.md) for all configuration options.
 Quick fixes for the most common first-run problems. For the full guide, see [TROUBLESHOOTING.md](../how-to/TROUBLESHOOTING.md).
 
 ### "Binary not found" after install
+
+This is the single most common first-run problem.
 
 `cargo install` places the binary in `~/.cargo/bin/`. If your shell cannot find `perl-lsp`, that directory is not on your `PATH`.
 
