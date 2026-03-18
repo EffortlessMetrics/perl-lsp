@@ -19,6 +19,9 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::time::{Duration, sleep};
+use tracing::{debug, error, info, warn};
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::format::FmtSpan;
 
 /// Spawn a blocking reader thread that reads LSP messages from `reader` and
 /// forwards them to `tx`. The thread exits when the channel closes or the
@@ -35,14 +38,55 @@ fn spawn_reader_thread<R: std::io::Read + Send + 'static>(
             match msg_reader.read_next(&mut buf_reader) {
                 Ok(Some(request)) => {
                     if tx.blocking_send(request).is_err() {
+                        debug!("reader thread exiting because dispatch channel closed");
                         break;
                     }
                 }
-                Ok(None) => break, // EOF
-                Err(_) => break,
+                Ok(None) => {
+                    debug!("reader thread reached EOF");
+                    break;
+                }
+                Err(error) => {
+                    warn!(%error, "reader thread stopped after transport read error");
+                    break;
+                }
             }
         }
     });
+}
+
+fn init_logging(config: LaunchConfig) {
+    if !config.enable_logging {
+        return;
+    }
+
+    let transport_label = config.transport.label();
+    let default_directive = "perl_lsp=info,perl_lsp::runtime=debug,perl_lsp::dispatch=debug,perl_lsp::server=debug,perl_lsp_main=info";
+    let env_filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(default_directive))
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr)
+        .with_target(true)
+        .with_thread_ids(true)
+        .with_span_events(FmtSpan::CLOSE)
+        .with_ansi(false)
+        .finish();
+
+    if tracing::subscriber::set_global_default(subscriber).is_err() {
+        eprintln!("logging already initialized; continuing with existing subscriber");
+        return;
+    }
+
+    info!(
+        transport = transport_label,
+        port = config.transport.port(),
+        feature_profile = config.feature_profile.as_str(),
+        rust_log = env::var("RUST_LOG").ok().as_deref().unwrap_or("<default>"),
+        "Perl Language Server starting"
+    );
 }
 
 fn main() {
@@ -159,22 +203,20 @@ fn is_terminal_stdout() -> bool {
 }
 
 fn run_server(launch_config: LaunchConfig) {
-    if launch_config.enable_logging {
-        eprintln!("Perl Language Server starting...");
-        eprintln!("Mode: {}", launch_config.transport.label());
-        if let Some(port) = launch_config.transport.port() {
-            eprintln!("Port: {port}");
-        }
-        eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
-    }
+    init_logging(launch_config.clone());
 
     match launch_config.transport {
         TransportMode::Stdio => {
+            info!(
+                feature_profile = launch_config.feature_profile.as_str(),
+                "starting stdio server"
+            );
             // Stdio uses the same async dispatch path as TCP: a blocking reader
             // thread feeds an mpsc channel into serve_async().
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
+                    error!(error = %e, "failed to create Tokio runtime");
                     eprintln!("Failed to create Tokio runtime: {e}");
                     process::exit(1);
                 }
@@ -190,6 +232,7 @@ fn run_server(launch_config: LaunchConfig) {
 
                 // Same async dispatch path as TCP
                 server.serve_async(rx).await;
+                info!("stdio server exited cleanly");
             });
         }
         TransportMode::Socket { port } => {
@@ -198,6 +241,7 @@ fn run_server(launch_config: LaunchConfig) {
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
+                    error!(error = %e, "failed to create Tokio runtime");
                     eprintln!("Failed to create Tokio runtime: {e}");
                     process::exit(1);
                 }
@@ -208,8 +252,10 @@ fn run_server(launch_config: LaunchConfig) {
                     Ok(l) => l,
                     Err(e) => {
                         if e.kind() == std::io::ErrorKind::AddrInUse {
+                            error!(port, "socket bind failed because address is already in use");
                             eprintln!("{}", port_in_use_message(port));
                         } else {
+                            error!(address = %addr, error = %e, "failed to bind TCP listener");
                             eprintln!("Failed to bind to {addr}: {e}");
                         }
                         process::exit(1);
@@ -218,26 +264,30 @@ fn run_server(launch_config: LaunchConfig) {
                 let local_addr = match listener.local_addr() {
                     Ok(a) => a,
                     Err(e) => {
+                        error!(error = %e, "failed to get local listener address");
                         eprintln!("Failed to get local address: {e}");
                         process::exit(1);
                     }
                 };
+                info!(address = %local_addr, "Perl LSP listening");
                 eprintln!("Perl LSP listening on {}", local_addr);
 
                 loop {
                     match listener.accept().await {
                         Ok((stream, peer_addr)) => {
-                            eprintln!("Accepted connection from {peer_addr}");
+                            info!(%peer_addr, "accepted socket connection");
                             tokio::spawn(async move {
                                 let std_stream = match stream.into_std() {
                                     Ok(std_stream) => std_stream,
                                     Err(error) => {
+                                        error!(%error, %peer_addr, "failed to convert stream to std socket");
                                         eprintln!("Failed to convert stream to std: {error}");
                                         return;
                                     }
                                 };
 
                                 if let Err(e) = std_stream.set_nonblocking(false) {
+                                    error!(error = %e, %peer_addr, "failed to switch socket into blocking mode");
                                     eprintln!("Failed to set blocking mode: {}", e);
                                     return;
                                 }
@@ -245,6 +295,7 @@ fn run_server(launch_config: LaunchConfig) {
                                 let writer = match std_stream.try_clone() {
                                     Ok(w) => w,
                                     Err(e) => {
+                                        error!(error = %e, %peer_addr, "failed to clone socket stream");
                                         eprintln!("Failed to clone stream: {e}");
                                         return;
                                     }
@@ -258,19 +309,18 @@ fn run_server(launch_config: LaunchConfig) {
 
                                 // Create server, wrap in Arc for concurrent async dispatch
                                 let server = Arc::new(LspServer::with_output_and_feature_profile(
-                                    output, profile,
+                                    output,
+                                    profile,
                                 ));
-
-                                // Spawn a blocking reader thread that feeds an async channel
                                 let (tx, rx) = tokio::sync::mpsc::channel(64);
                                 spawn_reader_thread(reader, tx);
-
-                                // Run async serve loop with concurrent dispatch
                                 server.serve_async(rx).await;
+                                info!(%peer_addr, "socket session ended");
                             });
                         }
                         Err(e) => {
-                            eprintln!("Failed to accept: {e}");
+                            warn!(error = %e, "accept failed; retrying after backoff");
+                            eprintln!("Accept failed: {e}");
                             sleep(Duration::from_millis(100)).await;
                         }
                     }
