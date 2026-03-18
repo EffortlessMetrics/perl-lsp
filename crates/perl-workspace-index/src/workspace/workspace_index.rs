@@ -1213,7 +1213,7 @@ impl WorkspaceIndex {
             files.insert(key.clone(), file_index);
         }
 
-        // Update global symbol map
+        // Update global symbol map (dual indexing: both qualified and bare names)
         {
             let files = self.files.read();
             if let Some(file_index) = files.get(&key) {
@@ -1221,9 +1221,8 @@ impl WorkspaceIndex {
                 for symbol in &file_index.symbols {
                     if let Some(ref qname) = symbol.qualified_name {
                         symbols.insert(qname.clone(), uri_str.clone());
-                    } else {
-                        symbols.insert(symbol.name.clone(), uri_str.clone());
                     }
+                    symbols.insert(symbol.name.clone(), uri_str.clone());
                 }
             }
         }
@@ -1259,14 +1258,13 @@ impl WorkspaceIndex {
         // Remove file index
         let mut files = self.files.write();
         if let Some(file_index) = files.remove(&key) {
-            // Remove from global symbol map
+            // Remove from global symbol map (dual indexing: both qualified and bare names)
             let mut symbols = self.symbols.write();
             for symbol in file_index.symbols {
                 if let Some(ref qname) = symbol.qualified_name {
                     symbols.remove(qname);
-                } else {
-                    symbols.remove(&symbol.name);
                 }
+                symbols.remove(&symbol.name);
             }
         }
     }
@@ -1522,20 +1520,22 @@ impl WorkspaceIndex {
     /// let _def = index.find_definition("MyPackage::example");
     /// ```
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
-        let files = self.files.read();
-        println!(
-            "find_definition DEBUG: index has {} files, looking for {}",
-            files.len(),
-            symbol_name
-        );
+        // O(1) lookup via the global symbol map instead of scanning all files
+        let uri_str = {
+            let symbols = self.symbols.read();
+            symbols.get(symbol_name).cloned()
+        };
 
-        for (_uri_key, file_index) in files.iter() {
-            for symbol in &file_index.symbols {
-                if symbol.name == symbol_name
-                    || symbol.qualified_name.as_deref() == Some(symbol_name)
-                {
-                    return Some(Location { uri: symbol.uri.clone(), range: symbol.range });
-                }
+        let uri_str = uri_str?;
+        let file_key = DocumentStore::uri_key(&uri_str);
+
+        let files = self.files.read();
+        let file_index = files.get(&file_key)?;
+
+        // Search only the single file's symbols for the matching definition
+        for symbol in &file_index.symbols {
+            if symbol.name == symbol_name || symbol.qualified_name.as_deref() == Some(symbol_name) {
+                return Some(Location { uri: symbol.uri.clone(), range: symbol.range });
             }
         }
 
