@@ -1576,6 +1576,7 @@ dependencies = [
  "perl-content-length-framing",
  "perl-dap-breakpoint",
  "perl-dap-command-args",
+ "perl-dap-config",
  "perl-dap-eval",
  "perl-dap-platform",
  "perl-dap-security",
@@ -1611,6 +1612,15 @@ dependencies = [
 [[package]]
 name = "perl-dap-command-args"
 version = "0.11.0"
+
+[[package]]
+name = "perl-dap-config"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "perl-dap-eval"

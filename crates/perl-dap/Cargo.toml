@@ -53,6 +53,7 @@ clap = { version = "4.5.60", features = ["derive"] }
 
 perl-dap-breakpoint = { workspace = true }
 perl-dap-eval = { workspace = true }
+perl-dap-config = { workspace = true }
 perl-dap-platform = { workspace = true }
 perl-dap-command-args = { workspace = true }
 perl-dap-variables = { workspace = true }
