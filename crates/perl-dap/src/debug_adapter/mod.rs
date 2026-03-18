@@ -33,6 +33,7 @@ use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use perl_dap_eval::SafeEvaluator;
 use perl_dap_stack::{PerlStackParser, is_internal_frame_name_and_path};
+use perl_dap_types::{Source, StackFrame, Variable};
 use perl_dap_variables::{
     PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
 };
@@ -506,46 +507,6 @@ pub enum DapMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         body: Option<Value>,
     },
-}
-
-/// Stack frame information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct StackFrame {
-    id: i32,
-    name: String,
-    source: Source,
-    line: i32,
-    column: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    end_line: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    end_column: Option<i32>,
-}
-
-/// Source file information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Source {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-    path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    source_reference: Option<i32>,
-}
-
-/// Variable information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Variable {
-    name: String,
-    value: String,
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    type_: Option<String>,
-    variables_reference: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    named_variables: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    indexed_variables: Option<i32>,
 }
 
 impl Default for DebugAdapter {
