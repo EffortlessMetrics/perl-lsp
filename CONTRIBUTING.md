@@ -589,7 +589,7 @@ The full release pipeline requires the following repository secrets. Configure t
 | `DOCKER_USERNAME` | Push container images to Docker Hub (optional -- GHCR works without secrets) | [Docker Hub Account Settings](https://hub.docker.com/settings/general) |
 | `DOCKER_PASSWORD` | Docker Hub authentication (optional -- GHCR works without secrets) | Same Docker Hub account; use an access token rather than your password |
 
-> **Note:** `DOCKER_USERNAME` and `DOCKER_PASSWORD` are only needed if you publish to Docker Hub. GitHub Container Registry (GHCR) uses the built-in `GITHUB_TOKEN` and requires no additional secrets. The extension publish workflow now auto-creates the Open VSX namespace named by `vscode-extension/package.json`'s `publisher` field when it does not already exist.
+> **Note:** `DOCKER_USERNAME` and `DOCKER_PASSWORD` are only needed if you publish to Docker Hub. GitHub Container Registry (GHCR) uses the built-in `GITHUB_TOKEN` and requires no additional secrets. The extension publish workflow now validates that the Open VSX namespace named by `vscode-extension/package.json`'s `publisher` field already exists and fails fast with the exact `ovsx create-namespace` command when it does not.
 
 #### 4. Post-Release Tasks
 

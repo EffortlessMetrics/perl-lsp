@@ -80,7 +80,7 @@ jobs:
         run: |
           vsce publish --pat "$VSCE_PAT" --packagePath "${{ env.VSIX_FILE }}"
 
-      - name: Publish to Open VSX
+      - name: Validate and publish to Open VSX
         if: ${{ env.OVSX_PAT != '' }}
         working-directory: vscode-extension
         run: |
@@ -94,8 +94,9 @@ jobs:
           if curl --fail --silent --show-error "${REGISTRY_ROOT%/}/api/${NAMESPACE}" >/dev/null; then
             echo "Open VSX namespace ${NAMESPACE} already exists."
           else
-            echo "Open VSX namespace ${NAMESPACE} not found. Creating it before publish."
-            ovsx create-namespace "${NAMESPACE}" --pat "$OVSX_PAT" "${REGISTRY_ARGS[@]}"
+            echo "::error::Open VSX namespace ${NAMESPACE} was not found at ${REGISTRY_ROOT}."
+            echo "::error::Create the namespace first with: ovsx create-namespace ${NAMESPACE} ${OVSX_REGISTRY_URL:+--registryUrl ${OVSX_REGISTRY_URL}}"
+            exit 1
           fi
 
           ovsx publish --packagePath "${{ env.VSIX_FILE }}" --pat "$OVSX_PAT" "${REGISTRY_ARGS[@]}"

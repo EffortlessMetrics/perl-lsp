@@ -96,7 +96,7 @@ Open VSX uses the `publisher` field in `package.json` as the namespace. Before t
 ovsx create-namespace EffortlessMetrics
 ```
 
-If you're using the repository workflow, this step is automated whenever `OVSX_PAT` is configured. For self-hosted registries, set `OVSX_REGISTRY_URL` to override the default `https://open-vsx.org`.
+If you're using the repository workflow, this step is validated automatically whenever `OVSX_PAT` is configured. The workflow will fail fast and print the exact `ovsx create-namespace` command if the namespace does not exist yet. For self-hosted registries, set `OVSX_REGISTRY_URL` to override the default `https://open-vsx.org`.
 
 ### 7. Login to vsce
 
