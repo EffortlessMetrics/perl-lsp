@@ -5,7 +5,7 @@
 
 use perl_lsp::protocol::capabilities::{BuildFlags, capabilities_json};
 use perl_tdd_support::must;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::Path;
 
 /// Snapshot of production capabilities (v0.8.5)
@@ -14,6 +14,12 @@ const PRODUCTION_CAPABILITIES_SNAPSHOT: &str =
 
 /// Snapshot of GA-lock capabilities
 const GA_LOCK_CAPABILITIES_SNAPSHOT: &str = include_str!("snapshots/ga_lock_capabilities.json");
+
+/// Snapshot of all feature-enabled capabilities used for contract coverage.
+const ALL_CAPABILITIES_SNAPSHOT: &str = include_str!("snapshots/all_capabilities.json");
+
+/// Snapshot of feature ids emitted by each capability profile.
+const FEATURE_IDS_SNAPSHOT: &str = include_str!("snapshots/capability_profile_feature_ids.json");
 
 #[test]
 fn test_production_capabilities_snapshot() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,6 +37,46 @@ fn test_production_capabilities_snapshot() -> Result<(), Box<dyn std::error::Err
             1. Update the changelog\n\
             2. Validate regeneration with: cargo test -p perl-lsp --test lsp_capabilities_snapshot regenerate_snapshots\n\
             3. Commit the new snapshot\n\n\
+            Expected:\n{}\n\n\
+            Actual:\n{}",
+            expected_pretty, actual_pretty
+        )));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_all_capabilities_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+    let actual = capabilities_json(BuildFlags::all());
+    let expected: Value = serde_json::from_str(ALL_CAPABILITIES_SNAPSHOT)?;
+
+    if actual != expected {
+        let actual_pretty = serde_json::to_string_pretty(&actual)?;
+        let expected_pretty = serde_json::to_string_pretty(&expected)?;
+
+        must(Err::<(), _>(format!(
+            "All-capabilities snapshot has changed!\n\
+            Expected:\n{}\n\n\
+            Actual:\n{}",
+            expected_pretty, actual_pretty
+        )));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_capability_profile_feature_ids_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+    let actual = capability_profile_feature_ids();
+    let expected: Value = serde_json::from_str(FEATURE_IDS_SNAPSHOT)?;
+
+    if actual != expected {
+        let actual_pretty = serde_json::to_string_pretty(&actual)?;
+        let expected_pretty = serde_json::to_string_pretty(&expected)?;
+
+        must(Err::<(), _>(format!(
+            "Capability profile feature IDs changed!\n\
             Expected:\n{}\n\n\
             Actual:\n{}",
             expected_pretty, actual_pretty
@@ -61,6 +107,14 @@ fn test_ga_lock_capabilities_snapshot() -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
+fn capability_profile_feature_ids() -> Value {
+    json!({
+        "production": BuildFlags::production().to_feature_ids(),
+        "ga_lock": BuildFlags::ga_lock().to_feature_ids(),
+        "all": BuildFlags::all().to_feature_ids(),
+    })
+}
+
 fn write_snapshots(snapshots_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     use std::fs;
     fs::create_dir_all(snapshots_dir)?;
@@ -74,6 +128,15 @@ fn write_snapshots(snapshots_dir: &Path) -> Result<(), Box<dyn std::error::Error
     let ga_lock_caps = capabilities_json(BuildFlags::ga_lock());
     let ga_lock_json = serde_json::to_string_pretty(&ga_lock_caps)?;
     fs::write(snapshots_dir.join("ga_lock_capabilities.json"), ga_lock_json)?;
+
+    // Generate all-features snapshot
+    let all_caps = capabilities_json(BuildFlags::all());
+    let all_json = serde_json::to_string_pretty(&all_caps)?;
+    fs::write(snapshots_dir.join("all_capabilities.json"), all_json)?;
+
+    // Generate feature-id coverage snapshot
+    let feature_ids_json = serde_json::to_string_pretty(&capability_profile_feature_ids())?;
+    fs::write(snapshots_dir.join("capability_profile_feature_ids.json"), feature_ids_json)?;
 
     Ok(())
 }
@@ -89,6 +152,9 @@ fn regenerate_snapshots() -> Result<(), Box<dyn std::error::Error>> {
     let generated_production =
         fs::read_to_string(temp_dir.path().join("production_capabilities.json"))?;
     let generated_ga_lock = fs::read_to_string(temp_dir.path().join("ga_lock_capabilities.json"))?;
+    let generated_all = fs::read_to_string(temp_dir.path().join("all_capabilities.json"))?;
+    let generated_feature_ids =
+        fs::read_to_string(temp_dir.path().join("capability_profile_feature_ids.json"))?;
 
     let expected_production = serde_json::to_string_pretty(&serde_json::from_str::<Value>(
         PRODUCTION_CAPABILITIES_SNAPSHOT,
@@ -96,6 +162,10 @@ fn regenerate_snapshots() -> Result<(), Box<dyn std::error::Error>> {
     let expected_ga_lock = serde_json::to_string_pretty(&serde_json::from_str::<Value>(
         GA_LOCK_CAPABILITIES_SNAPSHOT,
     )?)?;
+    let expected_all =
+        serde_json::to_string_pretty(&serde_json::from_str::<Value>(ALL_CAPABILITIES_SNAPSHOT)?)?;
+    let expected_feature_ids =
+        serde_json::to_string_pretty(&serde_json::from_str::<Value>(FEATURE_IDS_SNAPSHOT)?)?;
 
     assert_eq!(
         generated_production, expected_production,
@@ -104,6 +174,14 @@ fn regenerate_snapshots() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         generated_ga_lock, expected_ga_lock,
         "regenerated ga-lock snapshot should match checked-in snapshot"
+    );
+    assert_eq!(
+        generated_all, expected_all,
+        "regenerated all-capabilities snapshot should match checked-in snapshot"
+    );
+    assert_eq!(
+        generated_feature_ids, expected_feature_ids,
+        "regenerated feature-id snapshot should match checked-in snapshot"
     );
 
     Ok(())
