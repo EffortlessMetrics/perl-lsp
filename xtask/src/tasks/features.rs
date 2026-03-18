@@ -179,6 +179,47 @@ fn replace_fence(content: &str, tag: &str, new_body: &str) -> Result<String> {
     Ok(result)
 }
 
+fn snapshot_caps_from_content(content: &str) -> Result<Option<BTreeSet<String>>> {
+    let Some(yaml_start) = content.find("---\n") else {
+        return Ok(None);
+    };
+
+    let yaml_content = &content[yaml_start + 4..];
+    let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(yaml_content)?;
+    let caps = yaml.get("caps").and_then(|value| value.as_sequence()).map(|caps| {
+        caps.iter().filter_map(|value| value.as_str().map(String::from)).collect::<BTreeSet<_>>()
+    });
+
+    Ok(caps)
+}
+
+fn compare_snapshot_caps(
+    catalog_advertised: &BTreeSet<String>,
+    snapshot_caps: &BTreeSet<String>,
+) -> (Vec<String>, Vec<String>) {
+    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
+
+    let missing_in_caps = catalog_advertised.difference(snapshot_caps).collect::<Vec<_>>();
+    let extra_in_caps = snapshot_caps.difference(catalog_advertised).collect::<Vec<_>>();
+
+    if !missing_in_caps.is_empty() {
+        errors.push(format!(
+            "Features advertised in catalog but not in capabilities: {}",
+            missing_in_caps.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+        ));
+    }
+
+    if !extra_in_caps.is_empty() {
+        warnings.push(format!(
+            "Features in capabilities but not advertised in catalog: {}",
+            extra_in_caps.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+        ));
+    }
+
+    (warnings, errors)
+}
+
 fn verify_features() -> Result<()> {
     println!("🔍 Verifying features match capabilities...");
 
@@ -216,57 +257,25 @@ fn verify_features() -> Result<()> {
         test_dir.join("snapshots/lsp_features_snapshot_test__advertised_vs_caps.snap");
     if snapshot_path.exists() {
         match fs::read_to_string(&snapshot_path) {
-            Ok(content) => {
-                if let Some(yaml_start) = content.find("---\n") {
-                    let yaml_content = &content[yaml_start + 4..];
-                    match serde_yaml_ng::from_str::<serde_yaml_ng::Value>(yaml_content) {
-                        Ok(yaml) => {
-                            let catalog_advertised: BTreeSet<String> = catalog
-                                .advertised_feature_ids()
-                                .into_iter()
-                                .map(String::from)
-                                .collect();
+            Ok(content) => match snapshot_caps_from_content(&content) {
+                Ok(Some(snapshot_caps)) => {
+                    let catalog_advertised: BTreeSet<String> =
+                        catalog.advertised_feature_ids().into_iter().map(String::from).collect();
+                    let (snapshot_warnings, snapshot_errors) =
+                        compare_snapshot_caps(&catalog_advertised, &snapshot_caps);
 
-                            if let Some(caps) = yaml.get("caps").and_then(|v| v.as_sequence()) {
-                                let caps_set: BTreeSet<String> = caps
-                                    .iter()
-                                    .filter_map(|value| value.as_str().map(String::from))
-                                    .collect();
-                                let missing_in_caps =
-                                    catalog_advertised.difference(&caps_set).collect::<Vec<_>>();
-                                let extra_in_caps =
-                                    caps_set.difference(&catalog_advertised).collect::<Vec<_>>();
-
-                                if !missing_in_caps.is_empty() {
-                                    errors.push(format!(
-                                        "Features advertised in catalog but not in capabilities: {}",
-                                        missing_in_caps.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
-                                    ));
-                                }
-
-                                if !extra_in_caps.is_empty() {
-                                    warnings.push(format!(
-                                        "Features in capabilities but not advertised in catalog: {}",
-                                        extra_in_caps.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
-                                    ));
-                                }
-
-                                if missing_in_caps.is_empty() && extra_in_caps.is_empty() {
-                                    println!("📋 Snapshot comparison: ✅ Perfect match");
-                                }
-                            } else {
-                                warnings
-                                    .push("Could not find 'caps' array in snapshot".to_string());
-                            }
-                        }
-                        Err(error) => {
-                            warnings.push(format!("Failed to parse snapshot YAML: {error}"));
-                        }
+                    if snapshot_warnings.is_empty() && snapshot_errors.is_empty() {
+                        println!("📋 Snapshot comparison: ✅ Perfect match");
                     }
-                } else {
+
+                    warnings.extend(snapshot_warnings);
+                    errors.extend(snapshot_errors);
+                }
+                Ok(None) => {
                     warnings.push("Snapshot file doesn't contain valid YAML section".to_string());
                 }
-            }
+                Err(error) => warnings.push(format!("Failed to parse snapshot YAML: {error}")),
+            },
             Err(error) => warnings.push(format!("Failed to read snapshot file: {error}")),
         }
     } else {
@@ -375,4 +384,83 @@ fn generate_report() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compare_snapshot_caps, ensure_fence, replace_fence, snapshot_caps_from_content};
+    use color_eyre::eyre::Result;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn snapshot_caps_from_content_extracts_caps_array() -> Result<()> {
+        let content = "header\n---\ncaps:\n  - lsp.hover\n  - lsp.definition\n";
+        let caps = snapshot_caps_from_content(content)?;
+
+        assert_eq!(
+            caps,
+            Some(BTreeSet::from(["lsp.definition".to_string(), "lsp.hover".to_string()]))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_caps_from_content_returns_none_without_yaml_delimiter() -> Result<()> {
+        let content = "caps:\n  - lsp.hover\n";
+        assert_eq!(snapshot_caps_from_content(content)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_caps_from_content_returns_none_without_caps_key() -> Result<()> {
+        let content = "header\n---\nprofiles:\n  - all\n";
+        assert_eq!(snapshot_caps_from_content(content)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn compare_snapshot_caps_reports_missing_and_extra_features() {
+        let catalog = BTreeSet::from(["lsp.hover".to_string(), "lsp.definition".to_string()]);
+        let snapshot = BTreeSet::from(["lsp.hover".to_string(), "lsp.rename".to_string()]);
+
+        let (warnings, errors) = compare_snapshot_caps(&catalog, &snapshot);
+
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("lsp.definition"));
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("lsp.rename"));
+    }
+
+    #[test]
+    fn compare_snapshot_caps_accepts_perfect_match() {
+        let catalog = BTreeSet::from(["lsp.hover".to_string()]);
+        let snapshot = BTreeSet::from(["lsp.hover".to_string()]);
+
+        let (warnings, errors) = compare_snapshot_caps(&catalog, &snapshot);
+
+        assert!(warnings.is_empty());
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn ensure_fence_requires_both_markers() {
+        let content = "<!-- BEGIN: COMPLIANCE_TABLE -->\nbody\n";
+        let error = ensure_fence(content, "COMPLIANCE_TABLE").expect_err("missing end marker");
+        assert!(error.to_string().contains("Missing documentation fence"));
+    }
+
+    #[test]
+    fn replace_fence_replaces_only_tagged_section() -> Result<()> {
+        let content = "before\n<!-- BEGIN: COMPLIANCE_TABLE -->\nold\n<!-- END: COMPLIANCE_TABLE -->\nafter\n";
+        let replaced = replace_fence(content, "COMPLIANCE_TABLE", "new\n")?;
+
+        assert!(replaced.contains("before"));
+        assert!(replaced.contains("after"));
+        assert!(
+            replaced
+                .contains("<!-- BEGIN: COMPLIANCE_TABLE -->\nnew\n<!-- END: COMPLIANCE_TABLE -->")
+        );
+        assert!(!replaced.contains("\nold\n"));
+        Ok(())
+    }
 }
