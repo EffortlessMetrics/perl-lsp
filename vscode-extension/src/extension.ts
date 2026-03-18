@@ -16,6 +16,8 @@ import { BinaryDownloader } from './downloader';
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
+const WELCOME_STATE_KEY = 'perl-lsp.welcome.dismissed';
+const GETTING_STARTED_URL = 'https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/tutorials/GETTING_STARTED.md';
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -24,20 +26,26 @@ export async function activate(context: vscode.ExtensionContext) {
     const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
         outputChannel.show();
     });
-    context.subscriptions.push(showOutputCommand);
+    const gettingStartedCommand = vscode.commands.registerCommand('perl-lsp.gettingStarted', async () => {
+        await vscode.env.openExternal(vscode.Uri.parse(GETTING_STARTED_URL));
+    });
+    context.subscriptions.push(showOutputCommand, gettingStartedCommand);
     
     // Get the path to perl-lsp
     const serverPath = await getServerPath(context);
     if (!serverPath) {
         vscode.window.showErrorMessage(
-            'Perl Language Server (perl-lsp) not found.',
+            'Perl Language Server (perl-lsp) could not be located or downloaded.',
             'Install (cargo install perl-lsp)',
+            'Open Getting Started',
             'Open Settings'
         ).then((choice: string | undefined) => {
             if (choice === 'Install (cargo install perl-lsp)') {
                 vscode.window.showInformationMessage(
                     'Run in your terminal: cargo install perl-lsp\nThen reload VS Code.'
                 );
+            } else if (choice === 'Open Getting Started') {
+                vscode.commands.executeCommand('perl-lsp.gettingStarted');
             } else if (choice === 'Open Settings') {
                 vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
             }
@@ -129,6 +137,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Start the client
     await client.start();
+    await maybeShowWelcome(context);
     
     // Initialize test adapter
     testAdapter = new PerlTestAdapter(client);
@@ -242,6 +251,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+            { label: '$(book) Getting Started', detail: 'Open setup and first-run guide', command: 'perl-lsp.gettingStarted' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
@@ -333,6 +343,28 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
+}
+
+async function maybeShowWelcome(context: vscode.ExtensionContext): Promise<void> {
+    const dismissed = context.globalState.get<boolean>(WELCOME_STATE_KEY, false);
+    if (dismissed) {
+        return;
+    }
+
+    const selection = await vscode.window.showInformationMessage(
+        'Perl LSP is ready. Open a .pl, .pm, or .t file to start getting completions, diagnostics, hover, and navigation.',
+        'Open Getting Started',
+        'Show Output',
+        "Don't Show Again"
+    );
+
+    if (selection === 'Open Getting Started') {
+        await vscode.commands.executeCommand('perl-lsp.gettingStarted');
+    } else if (selection === 'Show Output') {
+        outputChannel.show();
+    } else if (selection === "Don't Show Again") {
+        await context.globalState.update(WELCOME_STATE_KEY, true);
+    }
 }
 
 /**

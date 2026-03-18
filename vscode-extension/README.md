@@ -55,6 +55,14 @@ The extension automatically downloads the correct language server for your platf
 - macOS (Intel, Apple Silicon)
 - Linux (x64, ARM64)
 
+### First-run checklist
+
+1. Install the extension from the Marketplace.
+2. Open any `.pl`, `.pm`, or `.t` file.
+3. Wait for the **Perl LSP** status item to switch to a check mark.
+4. If you want a guided setup, run **`Perl: Open Getting Started Guide`** from the Command Palette.
+5. If startup fails, run **`Perl: Show Output Channel`** to see download and health-check logs.
+
 Manual installation options:
 ```bash
 # Homebrew (macOS/Linux)

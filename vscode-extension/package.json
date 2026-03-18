@@ -304,6 +304,12 @@
         "icon": "$(output)"
       },
       {
+        "command": "perl-lsp.gettingStarted",
+        "title": "Open Getting Started Guide",
+        "category": "Perl",
+        "icon": "$(book)"
+      },
+      {
         "command": "perl-lsp.showStatusMenu",
         "title": "Show Status Menu",
         "category": "Perl",
@@ -335,6 +341,9 @@
         {
           "command": "perl-lsp.showStatusMenu",
           "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.gettingStarted"
         },
         {
           "command": "perl-lsp.organizeImports",
