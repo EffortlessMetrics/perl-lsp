@@ -328,18 +328,11 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     // Parse first body (search pattern)
     let (search, rest1) = extract_delimited_content(content, delimiter, closing);
 
-    // For paired delimiters, skip whitespace and expect new delimiter
+    // For paired delimiters, skip whitespace and allow any paired opening delimiter for the
+    // replacement list. Perl accepts forms like tr[abc]{xyz} in addition to tr[abc][xyz].
     let rest2_owned;
     let rest2 = if is_paired {
-        let trimmed = rest1.trim_start();
-        // For paired delimiters like tr{search}{replace}, we expect another opening delimiter
-        if trimmed.starts_with(delimiter) {
-            // Keep the delimiter - don't strip it since extract_delimited_content expects it
-            trimmed
-        } else {
-            // If no second delimiter found, the replacement is empty
-            ""
-        }
+        rest1.trim_start()
     } else {
         rest2_owned = format!("{}{}", delimiter, rest1);
         &rest2_owned
@@ -375,7 +368,12 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
 
         (body, &rest1[end_pos..])
     } else if is_paired {
-        extract_delimited_content(rest2, delimiter, closing)
+        if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
+            let repl_closing = get_closing_delimiter(repl_delimiter);
+            extract_delimited_content(rest2, repl_delimiter, repl_closing)
+        } else {
+            (String::new(), rest2)
+        }
     } else {
         (String::new(), rest1)
     };

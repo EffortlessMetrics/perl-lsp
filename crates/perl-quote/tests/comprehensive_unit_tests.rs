@@ -535,6 +535,20 @@ fn tr_braces_delimiter() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn tr_mixed_paired_delimiters() -> Result<(), Box<dyn std::error::Error>> {
+    let (search, repl, mods) = extract_transliteration_parts("tr[a-z]{A-Z}dr");
+    assert_eq!(search, "a-z");
+    assert_eq!(repl, "A-Z");
+    assert_eq!(mods, "dr");
+
+    let (search, repl, mods) = extract_transliteration_parts("y(foo)<bar>r");
+    assert_eq!(search, "foo");
+    assert_eq!(repl, "bar");
+    assert_eq!(mods, "r");
+    Ok(())
+}
+
+#[test]
 fn tr_empty_search_and_replacement() -> Result<(), Box<dyn std::error::Error>> {
     let (search, repl, mods) = extract_transliteration_parts("tr///");
     assert_eq!(search, "");
