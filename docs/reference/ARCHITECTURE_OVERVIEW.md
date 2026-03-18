@@ -25,6 +25,23 @@
   - `src/lib.rs`: Parser implementation
   - Published as `perl-parser-pest` on crates.io (marked legacy)
 
+### Recent Microcrates
+
+The following microcrates were extracted to enforce single-responsibility boundaries:
+
+| Crate | Purpose | Family |
+|-------|---------|--------|
+| `perl-ast-v2` | Incremental parsing AST node definitions | Core |
+| `perl-dap-config` | Launch/attach configuration parsing and validation | DAP |
+| `perl-lsp-code-actions` | LSP code actions provider (extracted from `perl-lsp-providers`) | LSP |
+| `perl-lsp-critic-parser` | Perl::Critic output line parsing (extracted from diagnostics) | LSP |
+| `perl-lsp-perltidy` | Perltidy-based formatting integration (extracted from formatting) | LSP |
+| `perl-lsp-type-hierarchy` | Type hierarchy navigation | LSP |
+| `perl-workspace-index-monitoring` | Monitoring, limits, and lifecycle instrumentation for workspace indexing | Workspace |
+| `perl-ts-statement-tracker` | Statement boundary and heredoc context tracking | Tree-sitter |
+
+The `perl-lsp-code-actions`, `perl-lsp-critic-parser`, and `perl-lsp-perltidy` extractions are part of a broader modularization effort that split monolithic LSP providers into focused microcrates -- each owning a single concern (code actions, Perl::Critic parsing, and perltidy integration respectively).
+
 ### Internal/Unpublished
 - **`/tree-sitter-perl/`**: Original C implementation (benchmarking only)
 - **`/crates/tree-sitter-perl-rs/`**: Tree-sitter integration with unified scanner architecture
@@ -119,6 +136,8 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 ### Development Locations
 - **LSP Binary & CLI**: `/crates/perl-lsp/` - for changes to the command-line interface or server startup.
 - **LSP Feature Logic**: `/crates/perl-parser/` - for all core LSP features (diagnostics, completion, etc.). This is where most LSP development happens.
+- **LSP Microcrates**: `/crates/perl-lsp-*/` - for focused LSP features (code actions, formatting, type hierarchy, critic parsing, etc.).
+- **DAP Components**: `/crates/perl-dap-*/` - for debug adapter features (config, breakpoints, eval, etc.).
 - **Parser Core**: `/crates/perl-parser/` - for changes to the parsing engine itself.
 - **Lexer**: `/crates/perl-lexer/` - for tokenization improvements.
 - **Test Corpus**: `/crates/perl-corpus/` - for adding new test cases.
