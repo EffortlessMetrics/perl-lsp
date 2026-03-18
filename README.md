@@ -37,6 +37,38 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 # 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
 ```
 
+### First-Run Checklist
+
+Use this when you are installing `perl-lsp` for the first time:
+
+- [ ] `perl-lsp --health` prints `ok ...`
+- [ ] `which perl-lsp` points to the binary you just installed
+- [ ] Your editor is configured to launch `perl-lsp --stdio`
+- [ ] Opening a `.pl`, `.pm`, or `.t` file attaches the language server
+- [ ] Hover, completion, and diagnostics work in a test file
+
+### 30-Second Smoke Test
+
+If you want a fast confidence check before touching your real project, paste this into a new file named `hello.pl`:
+
+```perl
+use strict;
+use warnings;
+
+my $name = "world";
+prin "Hello, $name\n";
+```
+
+On first open you should see all of the following:
+
+1. A diagnostic on `prin` because Perl's built-in is `print`.
+2. Completion suggesting `print` when your cursor is after `prin`.
+3. Hover documentation when your cursor is on `use warnings` or `print` after fixing the typo.
+
+If that works, your first-time setup is complete.
+
+> **Tip:** if `perl-lsp` works in your terminal but not in your editor, launch the editor from the same shell once (`code .`, `nvim`, `hx`, etc.). Desktop launchers often do not inherit your Cargo `PATH`.
+
 New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
 
 <details>

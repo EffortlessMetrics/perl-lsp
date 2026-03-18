@@ -46,7 +46,46 @@ perl-lsp --version
 # Quick health check
 perl-lsp --health
 # Should output: ok 0.12.0
+
+# Confirm the editor will be able to find the same binary
+which perl-lsp
 ```
+
+If `which perl-lsp` prints nothing, add Cargo's bin directory to your `PATH` before configuring your editor:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+## First-Run Success Checklist
+
+Before you spend time debugging editor-specific settings, make sure these basics are true:
+
+- `perl-lsp --health` returns `ok ...`
+- `which perl-lsp` resolves to the binary you installed
+- Your editor launches `perl-lsp --stdio`
+- The file is detected as Perl (`.pl`, `.pm`, or `.t` is the easiest path)
+- Opening a test file shows at least one diagnostic, one completion, and one hover result
+
+## 30-Second Smoke Test
+
+Create a file named `hello.pl` with this content:
+
+```perl
+use strict;
+use warnings;
+
+my $name = "world";
+prin "Hello, $name\n";
+```
+
+What to expect on first open:
+
+1. **A diagnostic** under `prin`, because the built-in is `print`.
+2. **A completion suggestion** for `print` when your cursor is after `prin`.
+3. **A hover card** for `print`, `warnings`, or `$name` once the server is attached.
+
+This tiny file gives you a quick end-to-end signal that installation, editor startup, parsing, diagnostics, and completion are all wired correctly.
 
 ## Quick Editor Setup
 
@@ -58,6 +97,11 @@ perl-lsp --health
    ```
 
 2. Open a `.pl` or `.pm` file - the server starts automatically.
+
+3. If VS Code says the server cannot be found, launch VS Code once from a shell where `which perl-lsp` works:
+   ```bash
+   code .
+   ```
 
 ### Neovim
 
@@ -128,7 +172,7 @@ args = ["--stdio"]
 
 ## Your First 5 Minutes
 
-Once installed, open any Perl file and try these features. Each heading describes what you will see in your editor.
+Once installed, open any Perl file and try these features. If you want the most predictable first-run experience, use the `hello.pl` smoke-test file above before opening a large existing codebase. Each heading describes what you will see in your editor.
 
 ### 1. Real-Time Diagnostics
 
