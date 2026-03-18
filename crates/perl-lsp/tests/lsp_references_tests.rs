@@ -19,7 +19,7 @@
 //!
 //! Related Documentation:
 //! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#find-references
-//! - crates/perl-lsp-navigation/src/references.rs
+//! - crates/perl-lsp-references/src/lib.rs
 
 mod support;
 

@@ -1,0 +1,27 @@
+[package]
+name = "perl-lsp-references"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Standalone SRP microcrate for same-file Perl LSP reference lookup"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-references"
+keywords = ["perl", "lsp", "references", "navigation", "ide"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-qualified-name = { workspace = true }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true
