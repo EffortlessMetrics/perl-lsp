@@ -1016,41 +1016,41 @@ fn capabilities_signature_help_disabled() {
 }
 
 // ============================================================================
-// Capabilities — always-on features
+// Capabilities — core feature flags
 // ============================================================================
 
 #[test]
-fn capabilities_always_has_hover() {
+fn capabilities_production_has_hover() {
     let caps = capabilities_for(BuildFlags::production());
     assert!(caps.hover_provider.is_some());
 }
 
 #[test]
-fn capabilities_always_has_completion() {
+fn capabilities_production_has_completion() {
     let caps = capabilities_for(BuildFlags::production());
     assert!(caps.completion_provider.is_some());
 }
 
 #[test]
-fn capabilities_always_has_definition() {
+fn capabilities_production_has_definition() {
     let caps = capabilities_for(BuildFlags::production());
     assert!(caps.definition_provider.is_some());
 }
 
 #[test]
-fn capabilities_always_has_references() {
+fn capabilities_production_has_references() {
     let caps = capabilities_for(BuildFlags::production());
     assert!(caps.references_provider.is_some());
 }
 
 #[test]
-fn capabilities_always_has_document_symbol() {
+fn capabilities_production_has_document_symbol() {
     let caps = capabilities_for(BuildFlags::production());
     assert!(caps.document_symbol_provider.is_some());
 }
 
 #[test]
-fn capabilities_always_has_folding_range() {
+fn capabilities_production_has_folding_range() {
     let caps = capabilities_for(BuildFlags::production());
     assert!(caps.folding_range_provider.is_some());
 }
@@ -1059,6 +1059,19 @@ fn capabilities_always_has_folding_range() {
 fn capabilities_always_has_text_document_sync() {
     let caps = capabilities_for(BuildFlags::production());
     assert!(caps.text_document_sync.is_some());
+}
+
+#[test]
+fn capabilities_default_omits_flagged_core_features() {
+    let caps = capabilities_for(BuildFlags::default());
+    assert!(caps.text_document_sync.is_some());
+    assert!(caps.hover_provider.is_none());
+    assert!(caps.completion_provider.is_none());
+    assert!(caps.definition_provider.is_none());
+    assert!(caps.references_provider.is_none());
+    assert!(caps.document_symbol_provider.is_none());
+    assert!(caps.workspace_symbol_provider.is_none());
+    assert!(caps.folding_range_provider.is_none());
 }
 
 // ============================================================================

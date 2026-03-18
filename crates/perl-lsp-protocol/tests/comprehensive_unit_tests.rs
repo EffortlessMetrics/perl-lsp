@@ -587,8 +587,7 @@ fn req_range_empty_params() {
 #[test]
 fn capabilities_for_production_has_core_features() {
     let caps = capabilities::capabilities_for(perl_lsp_feature_flags::BuildFlags::production());
-    // Always-on: text document sync, hover, completion, definition, references,
-    // document symbols, workspace symbols, folding range
+    // Production profile enables the core advertised navigation/editing surface.
     assert!(caps.text_document_sync.is_some());
     assert!(caps.hover_provider.is_some());
     assert!(caps.completion_provider.is_some());
@@ -638,10 +637,15 @@ fn capabilities_for_minimal_flags_omits_conditional() {
     // Default derives all-false for bool fields
     let flags = perl_lsp_feature_flags::BuildFlags::default();
     let caps = capabilities::capabilities_for(flags);
-    // Core always-on
+    // Only text sync is unconditional; feature-gated providers should stay off.
     assert!(caps.text_document_sync.is_some());
-    assert!(caps.hover_provider.is_some());
-    assert!(caps.completion_provider.is_some());
+    assert!(caps.hover_provider.is_none());
+    assert!(caps.completion_provider.is_none());
+    assert!(caps.definition_provider.is_none());
+    assert!(caps.references_provider.is_none());
+    assert!(caps.document_symbol_provider.is_none());
+    assert!(caps.workspace_symbol_provider.is_none());
+    assert!(caps.folding_range_provider.is_none());
     // Conditional should be off
     assert!(caps.document_highlight_provider.is_none());
     assert!(caps.signature_help_provider.is_none());
