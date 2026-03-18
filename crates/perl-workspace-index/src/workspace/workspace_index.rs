@@ -1131,18 +1131,19 @@ impl WorkspaceIndex {
     ) -> Option<(Location, String)> {
         for file_index in files.values() {
             if let Some(filter) = uri_filter
-                && file_index
-                    .symbols
-                    .first()
-                    .is_some_and(|symbol| symbol.uri != filter)
+                && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
             {
                 continue;
             }
 
             for symbol in &file_index.symbols {
-                if symbol.name == symbol_name || symbol.qualified_name.as_deref() == Some(symbol_name)
+                if symbol.name == symbol_name
+                    || symbol.qualified_name.as_deref() == Some(symbol_name)
                 {
-                    return Some((Location { uri: symbol.uri.clone(), range: symbol.range }, symbol.uri.clone()));
+                    return Some((
+                        Location { uri: symbol.uri.clone(), range: symbol.range },
+                        symbol.uri.clone(),
+                    ));
                 }
             }
         }
@@ -1552,7 +1553,8 @@ impl WorkspaceIndex {
 
         let files = self.files.read();
         if let Some(ref uri_str) = cached_uri
-            && let Some((location, _uri)) = Self::find_definition_in_files(&files, symbol_name, Some(uri_str))
+            && let Some((location, _uri)) =
+                Self::find_definition_in_files(&files, symbol_name, Some(uri_str))
         {
             return Some(location);
         }
