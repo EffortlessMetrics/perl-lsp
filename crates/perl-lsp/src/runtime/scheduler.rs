@@ -17,7 +17,8 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
+use tokio::task::JoinSet;
 
 use super::LspServer;
 
@@ -78,8 +79,9 @@ pub(crate) fn classify(method: &str) -> RequestClass {
 ///
 /// - **Mutation worker**: Single exclusive worker processes lifecycle and mutation
 ///   requests one at a time (sequential drain from a bounded `mpsc` channel).
-/// - **Read pool**: Fixed number of workers (`READ_WORKERS`) process read-only
-///   requests concurrently via `spawn_blocking` (CPU-bound handlers).
+/// - **Read dispatcher**: A single dispatcher drains the read queue and launches
+///   read-only work onto the blocking pool, capped by a semaphore. This avoids
+///   receiver-lock contention while still bounding concurrency.
 ///
 /// The ingress loop (`serve_async`) only reads, classifies, and enqueues.
 /// Heavy work never blocks the message reader.
@@ -92,7 +94,7 @@ pub(crate) fn classify(method: &str) -> RequestClass {
 pub(crate) struct Scheduler {
     /// Channel for mutation/lifecycle work (single exclusive worker drains this).
     mutation_tx: tokio::sync::mpsc::Sender<QueuedMutation>,
-    /// Channel for read-only work (N workers drain this).
+    /// Channel for read-only work (dispatcher drains this).
     read_tx: tokio::sync::mpsc::Sender<QueuedRead>,
     /// Join handles for background workers (used for shutdown drain).
     workers: Vec<tokio::task::JoinHandle<()>>,
@@ -125,7 +127,7 @@ struct QueuedRead {
 impl Scheduler {
     /// Create a new scheduler and spawn worker tasks.
     ///
-    /// Spawns one exclusive mutation worker and `READ_WORKERS` read-pool workers.
+    /// Spawns one exclusive mutation worker and one read dispatcher.
     /// All workers use `spawn_blocking` for CPU-bound handler execution.
     pub fn new(server: Arc<LspServer>) -> Self {
         let (mutation_tx, mutation_rx) = tokio::sync::mpsc::channel(QUEUE_CAPACITY);
@@ -134,28 +136,24 @@ impl Scheduler {
         let mutation_seq_done = Arc::new(AtomicU64::new(0));
         let mutation_notify = Arc::new(Notify::new());
 
-        let mut workers = Vec::with_capacity(1 + READ_WORKERS);
-
-        // Single exclusive mutation worker — processes lifecycle and mutation
-        // requests one at a time, preserving ordering guarantees.
-        workers.push(tokio::spawn(Self::mutation_worker(
-            mutation_rx,
-            Arc::clone(&server),
-            Arc::clone(&mutation_seq_done),
-            Arc::clone(&mutation_notify),
-        )));
-
-        // Read pool: N workers share a single receiver via Arc<Mutex<>>.
-        // Each worker competes for the next item (work-stealing pattern).
-        let shared_rx = Arc::new(tokio::sync::Mutex::new(read_rx));
-        for _ in 0..READ_WORKERS {
-            workers.push(tokio::spawn(Self::read_worker(
-                Arc::clone(&shared_rx),
+        let workers = vec![
+            // Single exclusive mutation worker — processes lifecycle and mutation
+            // requests one at a time, preserving ordering guarantees.
+            tokio::spawn(Self::mutation_worker(
+                mutation_rx,
                 Arc::clone(&server),
                 Arc::clone(&mutation_seq_done),
                 Arc::clone(&mutation_notify),
-            )));
-        }
+            )),
+            // Single dispatcher drains the read queue and fans work out to the
+            // blocking pool, capped by a semaphore instead of a receiver mutex.
+            tokio::spawn(Self::read_dispatcher(
+                read_rx,
+                Arc::clone(&server),
+                Arc::clone(&mutation_seq_done),
+                Arc::clone(&mutation_notify),
+            )),
+        ];
 
         Self {
             mutation_tx,
@@ -233,45 +231,58 @@ impl Scheduler {
         }
     }
 
-    /// Read pool worker.
+    /// Read queue dispatcher.
     ///
-    /// Multiple instances share a single receiver via `Arc<tokio::sync::Mutex<>>`.
-    /// Each worker competes for the next item, runs the handler on the blocking
-    /// thread pool, and sends the response via the outbound channel.
-    async fn read_worker(
-        rx: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<QueuedRead>>>,
+    /// Drains the read-only queue, launching each request onto the blocking
+    /// pool while a semaphore enforces the desired concurrency limit. This
+    /// avoids serializing workers on a shared receiver mutex. Each spawned
+    /// task waits for preceding mutations to complete before executing.
+    async fn read_dispatcher(
+        mut rx: tokio::sync::mpsc::Receiver<QueuedRead>,
         server: Arc<LspServer>,
         mutation_seq_done: Arc<AtomicU64>,
         mutation_notify: Arc<Notify>,
     ) {
-        loop {
-            // Hold the receiver lock only long enough to get the next item.
-            let queued = {
-                let mut guard = rx.lock().await;
-                guard.recv().await
-            };
+        let permits = Arc::new(Semaphore::new(READ_WORKERS));
+        let mut in_flight = JoinSet::new();
 
-            let queued = match queued {
-                Some(r) => r,
-                None => break, // channel closed — all senders dropped
+        while let Some(queued) = rx.recv().await {
+            let permit = match Arc::clone(&permits).acquire_owned().await {
+                Ok(permit) => permit,
+                Err(_) => break,
             };
-
-            while mutation_seq_done.load(Ordering::SeqCst) < queued.wait_for_seq {
-                mutation_notify.notified().await;
-            }
 
             let srv = Arc::clone(&server);
             let outbound = server.outbound.clone();
+            let seq_done = Arc::clone(&mutation_seq_done);
+            let notify = Arc::clone(&mutation_notify);
+            let wait_for = queued.wait_for_seq;
 
-            // Run CPU-bound handler on blocking thread pool.
-            let result =
-                tokio::task::spawn_blocking(move || srv.handle_request(queued.request)).await;
+            in_flight.spawn(async move {
+                let _permit = permit;
 
-            if let Ok(Some(response)) = result {
-                log_response(&response);
-                let _ = outbound.send_response(response);
+                // Wait for all mutations that were enqueued before this read.
+                while seq_done.load(Ordering::SeqCst) < wait_for {
+                    notify.notified().await;
+                }
+
+                let result =
+                    tokio::task::spawn_blocking(move || srv.handle_request(queued.request)).await;
+
+                if let Ok(Some(response)) = result {
+                    log_response(&response);
+                    let _ = outbound.send_response(response);
+                }
+            });
+
+            while in_flight.len() >= READ_WORKERS {
+                if in_flight.join_next().await.is_none() {
+                    break;
+                }
             }
         }
+
+        while in_flight.join_next().await.is_some() {}
     }
 }
 
