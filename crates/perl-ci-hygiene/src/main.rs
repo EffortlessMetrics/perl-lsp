@@ -962,7 +962,7 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
 
     let files = vec![
         repo_root.join("test_corpus/simple.pl"),
-        repo_root.join("test_corpus/low_frequency_nodekinds.rs"),
+        repo_root.join("test_corpus/low_frequency_nodekinds.pl"),
         repo_root.join("test_corpus/parser_stress_cases.pl"),
         repo_root.join("test_corpus/performance_stress_scenarios.pl"),
         repo_root.join("test_corpus/basic_constructs.pl"),
