@@ -623,12 +623,15 @@ gates:
 
   - name: lsp_tier_b
     tier: merge_gate
-    description: "LSP core behavior: definitions, completion, security (2-5 min)"
+    description: "LSP core behavior: definitions, completion, color handling, code lens, inline completion, security (2-5 min)"
     required: true
     command: >-
       env RUST_TEST_THREADS=2
       cargo test -p perl-lsp
       --test semantic_definition --test lsp_completion_tests
+      --test lsp_color_tests
+      --test lsp_code_lens_tests
+      --test lsp_inline_completion_tests
       --test lsp_unhappy_paths --test lsp_code_actions_test
       --test execute_command_security_tests --test lsp_behavioral_tests
       --test lsp_workspace_index_e2e

@@ -599,6 +599,12 @@ ci-lsp-microcrates:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-providers --locked --test microcrate_reexports_compatibility -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --locked --test lsp_color_tests -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --locked --test lsp_code_lens_tests -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --locked --test lsp_inline_completion_tests -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test --locked -p perl-feature-catalog \
                    -p perl-lsp-feature-ids \
                    -p perl-lsp-feature-profile \
