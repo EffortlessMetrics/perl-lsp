@@ -48,6 +48,10 @@ impl LspServer {
                     let analyzer =
                         crate::semantic::SemanticAnalyzer::analyze_with_source(ast, &doc.text);
 
+                    // Run type inference for variable type info
+                    let mut type_engine = crate::type_inference::TypeInferenceEngine::new();
+                    let _ = type_engine.infer(ast);
+
                     // Try to find the symbol at this position, checking references first
                     // This allows hover on variable usages to show the variable's definition info
                     if let Some(symbol_info) = analyzer.find_definition(offset) {
@@ -60,18 +64,20 @@ impl LspServer {
                             crate::symbol::SymbolKind::Variable(VarKind::Array) => "Array Variable",
                             crate::symbol::SymbolKind::Variable(VarKind::Hash) => "Hash Variable",
                             crate::symbol::SymbolKind::Subroutine => "Subroutine",
+                            crate::symbol::SymbolKind::Method => "Method",
                             crate::symbol::SymbolKind::Package => "Package",
+                            crate::symbol::SymbolKind::Class => "Class",
+                            crate::symbol::SymbolKind::Role => "Role",
                             crate::symbol::SymbolKind::Constant => "Constant",
+                            crate::symbol::SymbolKind::Import => "Import",
+                            crate::symbol::SymbolKind::Export => "Export",
                             crate::symbol::SymbolKind::Label => "Label",
                             crate::symbol::SymbolKind::Format => "Format",
-                            _ => "Symbol",
                         };
 
-                        // For subroutines, try to extract parameter info for a
-                        // richer signature display
-                        let display_name = if symbol_info.kind
-                            == crate::symbol::SymbolKind::Subroutine
-                        {
+                        // For subroutines/methods, try to extract parameter info
+                        // for a richer signature display
+                        let display_name = if symbol_info.kind.is_callable() {
                             let mut params = Vec::new();
                             if let Some(sub_node) =
                                 self.find_subroutine_definition(ast, &symbol_info.name)
@@ -101,38 +107,52 @@ impl LspServer {
                             format!("{}{}", sigil, symbol_info.name)
                         };
 
-                        // Add declaration type if available
-                        let decl_info = symbol_info
-                            .declaration
-                            .as_ref()
-                            .map(|d| format!("\n**Declaration**: `{}`", d))
-                            .unwrap_or_default();
+                        // Build sections for rich hover content
+                        let mut sections = Vec::new();
 
-                        // Include synthesized framework metadata (for example:
-                        // `is=ro`, `isa=Str`) when available.
-                        let attrs_info = if symbol_info.attributes.is_empty() {
-                            String::new()
-                        } else {
-                            format!("\n**Attributes**: {}", symbol_info.attributes.join(", "))
-                        };
+                        // Section 1: Kind + code block with signature/name
+                        sections
+                            .push(format!("**{}**\n\n```perl\n{}\n```", kind_str, display_name));
 
-                        // Add documentation if available
-                        let doc_info = symbol_info
-                            .documentation
-                            .as_ref()
-                            .map(|d| format!("\n\n{}", d))
-                            .unwrap_or_default();
+                        // Section 2: Type info for variables
+                        if symbol_info.kind.is_variable() {
+                            if let Some(t) = type_engine.get_type_at(&symbol_info.name) {
+                                let type_str = format_perl_type(&t);
+                                if type_str != "Any" {
+                                    sections.push(format!("**Type**: `{}`", type_str));
+                                }
+                            }
+                        }
+
+                        // Section 3: Module path for imported/qualified symbols
+                        if symbol_info.qualified_name != symbol_info.name
+                            && !symbol_info.qualified_name.is_empty()
+                        {
+                            sections.push(format!("**Module**: `{}`", symbol_info.qualified_name));
+                        }
+
+                        // Section 4: Declaration keyword (my/our/local/state)
+                        if let Some(d) = &symbol_info.declaration {
+                            sections.push(format!("**Declaration**: `{}`", d));
+                        }
+
+                        // Section 5: Framework attributes (is=ro, isa=Str, etc.)
+                        if !symbol_info.attributes.is_empty() {
+                            sections.push(format!(
+                                "**Attributes**: {}",
+                                symbol_info.attributes.join(", ")
+                            ));
+                        }
+
+                        // Section 6: POD/comment documentation
+                        if let Some(d) = &symbol_info.documentation {
+                            sections.push(format!("---\n\n{}", d));
+                        }
 
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
-                                "value": format!("**{}**\n\n`{}`{}{}{}",
-                                    kind_str,
-                                    display_name,
-                                    decl_info,
-                                    attrs_info,
-                                    doc_info
-                                ),
+                                "value": sections.join("\n\n"),
                             },
                         })));
                     }
@@ -150,7 +170,7 @@ impl LspServer {
                                 "contents": {
                                     "kind": "markdown",
                                     "value": format!(
-                                        "**Built-in Function**\n\n```\n{}\n```\n\n{}",
+                                        "**Built-in Function**\n\n```perl\n{}\n```\n\n{}",
                                         builtin_doc.signature,
                                         builtin_doc.description
                                     ),
@@ -810,5 +830,38 @@ impl LspServer {
         } else {
             None
         }
+    }
+}
+
+/// Format a `PerlType` into a human-readable string for hover display
+fn format_perl_type(ty: &crate::type_inference::PerlType) -> String {
+    use crate::type_inference::{PerlType, ScalarType};
+    match ty {
+        PerlType::Scalar(ScalarType::String) => "String".to_string(),
+        PerlType::Scalar(ScalarType::Integer) => "Int".to_string(),
+        PerlType::Scalar(ScalarType::Float) => "Num".to_string(),
+        PerlType::Scalar(ScalarType::Boolean) => "Bool".to_string(),
+        PerlType::Scalar(ScalarType::Undef) => "Undef".to_string(),
+        PerlType::Scalar(ScalarType::Mixed) => "Scalar".to_string(),
+        PerlType::Array(inner) => format!("Array[{}]", format_perl_type(inner)),
+        PerlType::Hash { value, .. } => format!("Hash[{}]", format_perl_type(value)),
+        PerlType::Reference(inner) => format!("Ref[{}]", format_perl_type(inner)),
+        PerlType::Subroutine { params, returns } => {
+            let p: Vec<String> = params.iter().map(|t| format_perl_type(t)).collect();
+            let r: Vec<String> = returns.iter().map(|t| format_perl_type(t)).collect();
+            if r.is_empty() {
+                format!("Sub({})", p.join(", "))
+            } else {
+                format!("Sub({}) -> {}", p.join(", "), r.join(", "))
+            }
+        }
+        PerlType::Object(class) => class.clone(),
+        PerlType::Glob => "Glob".to_string(),
+        PerlType::Union(types) => {
+            let parts: Vec<String> = types.iter().map(|t| format_perl_type(t)).collect();
+            parts.join(" | ")
+        }
+        PerlType::Any => "Any".to_string(),
+        PerlType::Void => "Void".to_string(),
     }
 }
