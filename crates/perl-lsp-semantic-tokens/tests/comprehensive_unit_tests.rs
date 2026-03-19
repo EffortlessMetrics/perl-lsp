@@ -118,7 +118,7 @@ fn legend_token_type_count() {
 #[test]
 fn legend_modifier_count() {
     let leg = legend();
-    assert_eq!(leg.modifiers.len(), 7, "expected 7 modifiers");
+    assert_eq!(leg.modifiers.len(), 8, "expected 8 modifiers");
 }
 
 #[test]
