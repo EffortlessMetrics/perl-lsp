@@ -89,3 +89,81 @@ fn test_use_constant_ternary_with_nested_fat_arrows() {
         "(use constant (MAP 1 ? { foo => 'a' } : { bar => 'b' }))",
     );
 }
+
+// --- Tests for issue #1895: ternary with variable/expression conditions ---
+
+#[test]
+fn test_use_constant_ternary_variable_condition() {
+    // Variable as ternary condition — the core issue #1895 pattern
+    let source = r#"use constant FOO => $bar ? 1 : 0;"#;
+    let ast = parse(source);
+    let sexp = ast.to_sexp();
+    for marker in &["(error ", "(Error ", "(ERROR ", "MissingExpression", "MissingStatement"] {
+        assert!(
+            !sexp.contains(marker),
+            "Parse produced error for variable ternary:\n{}\nSexp: {}",
+            source,
+            sexp,
+        );
+    }
+}
+
+#[test]
+fn test_use_constant_ternary_env_hash_condition() {
+    let source = r#"use constant MODE => $ENV{DEBUG} ? 'debug' : 'release';"#;
+    let ast = parse(source);
+    let sexp = ast.to_sexp();
+    for marker in &["(error ", "(Error ", "(ERROR ", "MissingExpression", "MissingStatement"] {
+        assert!(
+            !sexp.contains(marker),
+            "Parse produced error for ENV ternary:\n{}\nSexp: {}",
+            source,
+            sexp,
+        );
+    }
+}
+
+#[test]
+fn test_use_constant_ternary_perl_version_condition() {
+    let source = r#"use constant HAS_FEATURE => $] >= 5.010 ? 1 : 0;"#;
+    let ast = parse(source);
+    let sexp = ast.to_sexp();
+    for marker in &["(error ", "(Error ", "(ERROR ", "MissingExpression", "MissingStatement"] {
+        assert!(
+            !sexp.contains(marker),
+            "Parse produced error for version ternary:\n{}\nSexp: {}",
+            source,
+            sexp,
+        );
+    }
+}
+
+#[test]
+fn test_use_constant_ternary_eval_condition() {
+    let source = r#"use constant CAN_DO => eval { require Some::Module; 1 } ? 1 : 0;"#;
+    let ast = parse(source);
+    let sexp = ast.to_sexp();
+    for marker in &["(error ", "(Error ", "(ERROR ", "MissingExpression", "MissingStatement"] {
+        assert!(
+            !sexp.contains(marker),
+            "Parse produced error for eval ternary:\n{}\nSexp: {}",
+            source,
+            sexp,
+        );
+    }
+}
+
+#[test]
+fn test_use_constant_ternary_defined_or_condition() {
+    let source = r#"use constant VAL => defined($x) ? $x : 'default';"#;
+    let ast = parse(source);
+    let sexp = ast.to_sexp();
+    for marker in &["(error ", "(Error ", "(ERROR ", "MissingExpression", "MissingStatement"] {
+        assert!(
+            !sexp.contains(marker),
+            "Parse produced error for defined-or ternary:\n{}\nSexp: {}",
+            source,
+            sexp,
+        );
+    }
+}

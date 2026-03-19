@@ -956,7 +956,10 @@ impl<'a> Parser<'a> {
             let kind = self.peek_kind();
             let at_top_level = paren_depth == 0 && bracket_depth == 0 && brace_depth == 0;
 
-            if Self::is_statement_terminator(kind) {
+            // Only treat semicolons as terminators at the top level — inside
+            // nested braces/parens/brackets (e.g. `eval { ...; ... }`) the
+            // semicolons are part of the inner expression and must be consumed.
+            if at_top_level && Self::is_statement_terminator(kind) {
                 break;
             }
 
