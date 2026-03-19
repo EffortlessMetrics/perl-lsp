@@ -29,7 +29,15 @@ url = "2.5.8"
 default = []
 
 [dev-dependencies]
+criterion = "0.8.1"
+perl-parser-core = { workspace = true }
 perl-tdd-support = { workspace = true }
+perl-workspace-index = { workspace = true }
+url = "2.5.8"
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "completion_benchmark"
+harness = false
