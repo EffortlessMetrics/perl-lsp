@@ -1,47 +1,25 @@
-# Enhancement Builder Prompt Template
+# Enhancement Builder Template
 
-Use this when spawning a worktree worker to add a new feature or enhancement.
+Use this template when a scout has identified an existing feature to enhance.
 
-## Template
+## Prerequisites
+- Scout spec with exact file paths, function signatures, and verify command
+- Associated GitHub issue number
 
-```
-Invoke /coding-standards.
+## Task List (copy and customize)
 
-Goal: Implement <ENHANCEMENT_DESCRIPTION>.
-
-## Context
-- Issue: <ISSUE_NUMBER_OR_LINK>
-- Crate: <PRIMARY_CRATE>
-- Target files: <FILE_SURFACE>
-- Entry point: <WHERE_THE_NEW_CODE_WILL_BE_CALLED_FROM>
-
-## Task List
-1. <STEP_1 — e.g., "Add the new type/struct in src/types.rs">
-   Skill: /coding-standards
-2. <STEP_2 — e.g., "Implement the core logic in src/handler.rs">
-   Skill: /coding-standards
-3. <STEP_3 — e.g., "Wire it into the entry point at src/main.rs:handle_request()">
-   Skill: /coding-standards
-4. Add tests for the new functionality
-   Skill: /verify-build <CRATE>
-5. Run `python3 scripts/update-current-status.py && just status-check` if tests were added
-
-## Decision Budget
-Make at most 3 judgment calls on your own. If you face a 4th ambiguous
-decision, stop and report back to the coordinator with options.
-
-## Wiring Check
-Before marking complete, verify the new code is reachable:
-- The new function/method is called from an existing entry point
-- The call chain is: entry point -> ... -> your new code
-- grep for the function name to confirm at least one call site exists
+1. Invoke /coding-standards
+2. Read [EXACT FILE FROM SCOUT SPEC] — understand current implementation
+3. Read [EXACT TEST FILE FROM SCOUT SPEC] — understand test patterns
+4. Modify [EXACT FUNCTION] to [EXACT CHANGE FROM SCOUT SPEC]
+5. Add/update tests in [EXACT TEST FILE]
+6. Run: python3 scripts/update-current-status.py (if tests added)
+7. Verify: [EXACT VERIFY COMMAND FROM SCOUT SPEC]
+8. Commit: "[conventional commit message] (#ISSUE)"
+9. Create draft PR
 
 ## Rules
-- Do NOT rebase. Only fix code and verify locally.
-- Do NOT expand scope beyond the declared task list
-- Do NOT add code that is not wired to an entry point
-- If the enhancement requires changes to 3+ crates, stop and report back
-
-## Verification
-cargo fmt --all && cargo clippy -p <CRATE> --tests -- -D warnings && cargo test -p <CRATE>
-```
+- Do NOT rebase onto master (merge queue handles this)
+- Do NOT make changes beyond the scout spec scope
+- Maximum 3 implicit decisions — everything else should be in the spec
+- If the spec is unclear, STOP and report back instead of guessing
