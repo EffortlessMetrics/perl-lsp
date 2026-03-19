@@ -21,6 +21,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 - Contributors: [../CONTRIBUTING.md](../CONTRIBUTING.md)
 - Current project posture: [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md)
 - Active milestone: [project/ROADMAP.md](project/ROADMAP.md)
+- Historical analyses and launch material: [articles/README.md](articles/README.md)
 
 ## Tutorials
 
@@ -71,6 +72,15 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 - [project/CI.md](project/CI.md)
 - [project/CI_TEST_LANES.md](project/CI_TEST_LANES.md)
 
+## Historical Analyses
+
+- [articles/README.md](articles/README.md)
+- [articles/FIVE_ERAS.md](articles/FIVE_ERAS.md)
+- [articles/SWARM_METHODOLOGY.md](articles/SWARM_METHODOLOGY.md)
+- [articles/ZERO_PANIC.md](articles/ZERO_PANIC.md)
+- [articles/PARSING_PERL.md](articles/PARSING_PERL.md)
+- [articles/CURIOSITIES.md](articles/CURIOSITIES.md)
+
 ## Strategic Docs
 
 - [STRATEGIC_DOCUMENTATION.md](STRATEGIC_DOCUMENTATION.md)
@@ -84,6 +94,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 | --- | --- |
 | [adr/](adr/) | Architecture Decision Records |
 | [archive/](archive/) | Historical docs |
+| [articles/](articles/) | Historical analyses plus article research notes |
 | [benchmarks/](benchmarks/) | Benchmark docs |
 | [ci/](ci/) | CI-specific docs |
 | [design/](design/) | Design notes |

@@ -125,13 +125,14 @@ Use `TeamCreate` then spawn 5 teammates. Each teammate's spawn prompt includes:
 4. Task tool reminders
 5. Metrics mandate
 
-The coordinator contract lives in `.claude/agents/README.md`. The archived
-roster, including specialist workers, lives under
-`.claude/agents/archive/agent-roster.json` and is summarized in
+The coordinator contract lives in `.claude/agents/README.md`. The swarm roster,
+including specialist workers, is summarized in
 `.claude/agents/AGENT_CATALOG.md`. The persistent coordinator names are `scout`,
 `builder`, `reviewer`, `ops`, and `improver`. The catalog records who usually
 spawns each tracked worker, where it hands work next, and which slash
-entrypoints it should invoke first.
+entrypoints it should invoke first. The agent files carry the role framing and
+todo shape, while the mechanical substep instructions stay in skills so agents
+can load them when they become relevant mid-run.
 
 See `templates/teammate-prompt-template.md` for the standard prompt format.
 See `reference/team-structure.md` for full team layout and spawn prompts.

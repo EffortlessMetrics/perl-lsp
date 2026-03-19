@@ -14,8 +14,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = ROOT / ".claude" / "agents"
-ARCHIVE_DIR = AGENTS_DIR / "archive"
-ROSTER_PATH = ARCHIVE_DIR / "agent-roster.json"
+ROSTER_PATH = AGENTS_DIR / "agent-roster.json"
 COMMANDS_DIR = ROOT / ".claude" / "commands"
 SKILLS_DIR = ROOT / ".claude" / "skills"
 
@@ -108,9 +107,13 @@ def main() -> None:
     if not isinstance(agents, list) or not agents:
         fail("agents must be a non-empty array")
 
-    archived_files = {path.name for path in ARCHIVE_DIR.glob("*.md")}
-    if not archived_files:
-        fail(f"no archived agent definition files found in {ARCHIVE_DIR}")
+    agent_files = {
+        path.name
+        for path in AGENTS_DIR.glob("*.md")
+        if path.name not in {"README.md", "AGENT_CATALOG.md"}
+    }
+    if not agent_files:
+        fail(f"no agent definition files found in {AGENTS_DIR}")
 
     seen_names: set[str] = set()
     seen_files: set[str] = set()
@@ -148,7 +151,7 @@ def main() -> None:
         seen_files.add(agent_file)
         roster_files.add(agent_file)
 
-        agent_path = ARCHIVE_DIR / agent_file
+        agent_path = AGENTS_DIR / agent_file
         if not agent_path.exists():
             fail(f"{name}.file does not exist: {agent_file}")
 
@@ -172,7 +175,7 @@ def main() -> None:
             f"{agent_file} frontmatter.description",
         )
         if frontmatter_description != description:
-            fail(f"{agent_file} description does not match archived agent-roster.json")
+            fail(f"{agent_file} description does not match agent-roster.json")
 
         skills = frontmatter.get("skills")
         if skills is not None:
@@ -187,13 +190,13 @@ def main() -> None:
             if not entrypoint_exists(entrypoint):
                 fail(f"{name}.first_entrypoints references missing command/skill: {entrypoint}")
 
-    if roster_files != archived_files:
+    if roster_files != agent_files:
         fail(
-            "archived agent-roster.json file set does not match archived .claude/agents surface: "
-            f"roster={sorted(roster_files)} archive={sorted(archived_files)}"
+            "agent-roster.json file set does not match .claude/agents surface: "
+            f"roster={sorted(roster_files)} agents={sorted(agent_files)}"
         )
 
-    print(f"Validated {len(agents)} archived agents in {ROSTER_PATH}")
+    print(f"Validated {len(agents)} agents in {ROSTER_PATH}")
 
 
 if __name__ == "__main__":

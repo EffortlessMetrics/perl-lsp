@@ -20,8 +20,9 @@ Discover the codebase structure and generate domain-specific agent definitions. 
 2. **Identifies** natural domains (package families, layers, feature areas)
 3. **Generates or refreshes** 3-5 agent files per domain: fix, test, scout, explorer
 4. **Customizes** the repo-local tracked agent roster with codebase-specific details
-5. **Creates or refreshes** `.claude/agents/AGENT_CATALOG.md` and `.claude/agents/archive/agent-roster.json`
-   for orchestrator and validation reference
+5. **Creates or refreshes** `.claude/agents/AGENT_CATALOG.md` and the
+   machine-readable roster contract alongside the active agent definitions for
+   orchestrator and validation reference
 6. **Preserves the shared contract**: todo or task discipline, first slash entrypoints, and flow-integration metadata
 
 ## Process
@@ -32,11 +33,14 @@ Launch the `bootstrapper` agent:
 Agent(
   subagent_type: "bootstrapper",
   prompt: "Discover this codebase and generate domain-specific agents. $ARGUMENTS.
-Write agents to .claude/agents/archive/.
-Treat existing files in .claude/agents/archive/ as part of the archived swarm roster, not disposable scratch output.
+Write agents to .claude/agents/.
+Treat existing files in .claude/agents/ as part of the live swarm roster, not
+disposable scratch output.
 Update the canonical coordinator and worker roster only when the pattern is reusable.
-Create or refresh .claude/agents/AGENT_CATALOG.md and .claude/agents/archive/agent-roster.json.
+Create or refresh .claude/agents/AGENT_CATALOG.md and .claude/agents/agent-roster.json.
 Ensure every generated or refreshed agent says who usually spawns it, where it hands work next, and which slash entrypoints it should invoke first.
+Keep mechanical substep instructions in skills or commands, and have the agent
+todo list call those skills when the relevant step becomes active.
 Target ~25-35 domain agents.",
   mode: "auto"
 )
@@ -44,9 +48,9 @@ Target ~25-35 domain agents.",
 
 ## After Bootstrap
 
-1. Review generated agents in `.claude/agents/archive/`
+1. Review generated agents in `.claude/agents/`
 2. Check `AGENT_CATALOG.md` for the full inventory
-3. Validate `archive/agent-roster.json` with `python3 scripts/validate_swarm_agent_roster.py`
+3. Validate `agent-roster.json` with `python3 scripts/validate_swarm_agent_roster.py`
 4. Verify any `$PLACEHOLDER` values were filled in
 5. Test with `/swarm all` to start the swarm
 
