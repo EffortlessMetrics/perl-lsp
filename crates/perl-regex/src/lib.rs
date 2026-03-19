@@ -2,6 +2,9 @@
 //!
 //! This module provides tools to validate Perl regular expressions
 //! and detect potential security or performance issues like catastrophic backtracking.
+//! Also provides human-readable regex explanations for IDE hover tooltips.
+
+pub mod explainer;
 
 use thiserror::Error;
 

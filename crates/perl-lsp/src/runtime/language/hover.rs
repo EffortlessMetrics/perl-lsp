@@ -137,6 +137,10 @@ impl LspServer {
                         })));
                     }
 
+                    // Check if cursor is on a regex literal and show explanation
+                    if let Some(regex_hover) = self.try_regex_hover(ast, offset) {
+                        return Ok(Some(regex_hover));
+                    }
                     // Fall back to simple token display, with builtin docs
                     let hover_text = self.get_token_at_position(&doc.text, offset);
 
@@ -600,6 +604,206 @@ impl LspServer {
             }
             _ => {}
         }
+    }
+
+    /// Try to produce a hover response for a regex literal at the given offset.
+    fn try_regex_hover(&self, ast: &Node, offset: usize) -> Option<Value> {
+        let (kind_label, pattern, replacement, modifiers) =
+            self.find_regex_at_offset(ast, offset)?;
+
+        let explanation = perl_regex::explainer::explain_regex(&pattern, &modifiers)?;
+
+        let mut hover = format!("**{}**\n\n```perl\n", kind_label);
+
+        if kind_label == "Substitution" {
+            hover.push_str(&format!(
+                "s/{}/{}/{}",
+                pattern,
+                replacement.as_deref().unwrap_or(""),
+                modifiers
+            ));
+        } else {
+            hover.push_str(&format!("/{}/{}", pattern, modifiers));
+        }
+
+        hover.push_str("\n```\n\n**Regex Breakdown**:\n\n");
+        hover.push_str(&explanation);
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": hover,
+            },
+        }))
+    }
+
+    /// Walk the AST to find a regex-related node at the given offset.
+    fn find_regex_at_offset(
+        &self,
+        node: &Node,
+        offset: usize,
+    ) -> Option<(&'static str, String, Option<String>, String)> {
+        if offset < node.location.start || offset >= node.location.end {
+            return None;
+        }
+
+        match &node.kind {
+            NodeKind::Regex { pattern, replacement, modifiers, .. } => {
+                return Some(("Regex", pattern.clone(), replacement.clone(), modifiers.clone()));
+            }
+            NodeKind::Match { pattern, modifiers, .. } => {
+                return Some(("Match", pattern.clone(), None, modifiers.clone()));
+            }
+            NodeKind::Substitution { pattern, replacement, modifiers, .. } => {
+                return Some((
+                    "Substitution",
+                    pattern.clone(),
+                    Some(replacement.clone()),
+                    modifiers.clone(),
+                ));
+            }
+            _ => {}
+        }
+
+        self.visit_children_for_regex(node, offset)
+    }
+
+    /// Recurse into node children looking for regex nodes.
+    fn visit_children_for_regex(
+        &self,
+        node: &Node,
+        offset: usize,
+    ) -> Option<(&'static str, String, Option<String>, String)> {
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    if let Some(found) = self.find_regex_at_offset(stmt, offset) {
+                        return Some(found);
+                    }
+                }
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                return self.find_regex_at_offset(expression, offset);
+            }
+            NodeKind::VariableDeclaration { initializer, .. } => {
+                if let Some(init) = initializer {
+                    return self.find_regex_at_offset(init, offset);
+                }
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                if let Some(found) = self.find_regex_at_offset(lhs, offset) {
+                    return Some(found);
+                }
+                return self.find_regex_at_offset(rhs, offset);
+            }
+            NodeKind::Binary { left, right, .. } => {
+                if let Some(found) = self.find_regex_at_offset(left, offset) {
+                    return Some(found);
+                }
+                return self.find_regex_at_offset(right, offset);
+            }
+            NodeKind::Unary { operand, .. } => {
+                return self.find_regex_at_offset(operand, offset);
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                if let Some(found) = self.find_regex_at_offset(condition, offset) {
+                    return Some(found);
+                }
+                if let Some(found) = self.find_regex_at_offset(then_branch, offset) {
+                    return Some(found);
+                }
+                for (cond, branch) in elsif_branches {
+                    if let Some(found) = self.find_regex_at_offset(cond, offset) {
+                        return Some(found);
+                    }
+                    if let Some(found) = self.find_regex_at_offset(branch, offset) {
+                        return Some(found);
+                    }
+                }
+                if let Some(eb) = else_branch {
+                    return self.find_regex_at_offset(eb, offset);
+                }
+            }
+            NodeKind::While { condition, body, .. } | NodeKind::Until { condition, body, .. } => {
+                if let Some(found) = self.find_regex_at_offset(condition, offset) {
+                    return Some(found);
+                }
+                return self.find_regex_at_offset(body, offset);
+            }
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(i) = init {
+                    if let Some(found) = self.find_regex_at_offset(i, offset) {
+                        return Some(found);
+                    }
+                }
+                if let Some(c) = condition {
+                    if let Some(found) = self.find_regex_at_offset(c, offset) {
+                        return Some(found);
+                    }
+                }
+                if let Some(u) = update {
+                    if let Some(found) = self.find_regex_at_offset(u, offset) {
+                        return Some(found);
+                    }
+                }
+                return self.find_regex_at_offset(body, offset);
+            }
+            NodeKind::Foreach { list, body, .. } => {
+                if let Some(found) = self.find_regex_at_offset(list, offset) {
+                    return Some(found);
+                }
+                return self.find_regex_at_offset(body, offset);
+            }
+            NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
+                return self.find_regex_at_offset(body, offset);
+            }
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    if let Some(found) = self.find_regex_at_offset(arg, offset) {
+                        return Some(found);
+                    }
+                }
+            }
+            NodeKind::MethodCall { object, args, .. } => {
+                if let Some(found) = self.find_regex_at_offset(object, offset) {
+                    return Some(found);
+                }
+                for arg in args {
+                    if let Some(found) = self.find_regex_at_offset(arg, offset) {
+                        return Some(found);
+                    }
+                }
+            }
+            NodeKind::Return { value } => {
+                if let Some(v) = value {
+                    return self.find_regex_at_offset(v, offset);
+                }
+            }
+            NodeKind::Ternary { condition, then_expr, else_expr } => {
+                if let Some(found) = self.find_regex_at_offset(condition, offset) {
+                    return Some(found);
+                }
+                if let Some(found) = self.find_regex_at_offset(then_expr, offset) {
+                    return Some(found);
+                }
+                return self.find_regex_at_offset(else_expr, offset);
+            }
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                if let Some(found) = self.find_regex_at_offset(statement, offset) {
+                    return Some(found);
+                }
+                return self.find_regex_at_offset(condition, offset);
+            }
+            NodeKind::ArrayLiteral { elements } | NodeKind::HashLiteral { elements } => {
+                for elem in elements {
+                    if let Some(found) = self.find_regex_at_offset(elem, offset) {
+                        return Some(found);
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
     }
 
     /// Get function signature for built-in Perl functions
