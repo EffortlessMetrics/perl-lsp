@@ -11,8 +11,8 @@
 use perl_lsp::LspServer;
 use perl_lsp_launcher::{
     LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
-    init_logging, log_server_startup, parse_args, port_in_use_message, shell_completion,
-    should_enable_logging,
+    init_logging, log_server_startup, logging_filter, parse_args, port_in_use_message,
+    shell_completion, should_enable_logging,
 };
 use std::env;
 use std::process;
@@ -165,7 +165,11 @@ fn is_terminal_stdout() -> bool {
 fn run_server(launch_config: LaunchConfig) {
     let logging_enabled = should_enable_logging(launch_config.enable_logging);
     if logging_enabled {
-        init_logging("info");
+        init_logging(&logging_filter(
+            launch_config.enable_logging,
+            "perl_lsp=info,perl_lsp_launcher=info,info",
+            "warn",
+        ));
         log_server_startup(
             "perl-lsp",
             launch_config.transport,

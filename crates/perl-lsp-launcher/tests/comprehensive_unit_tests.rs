@@ -6,10 +6,24 @@
 
 use perl_lsp_launcher::{
     DEFAULT_LSP_PORT, FeatureProfile, LaunchConfig, LaunchParseError, TransportMode,
-    catalog_advertised_feature_ids, help_text, parse_args, should_enable_logging,
+    catalog_advertised_feature_ids, help_text, logging_filter, parse_args, should_enable_logging,
     to_json_for_profile,
 };
 use perl_tdd_support::must;
+
+fn with_env_var<T>(key: &str, value: Option<&str>, f: impl FnOnce() -> T) -> T {
+    let previous = std::env::var_os(key);
+    match value {
+        Some(value) => unsafe { std::env::set_var(key, value) },
+        None => unsafe { std::env::remove_var(key) },
+    }
+    let result = f();
+    match previous {
+        Some(value) => unsafe { std::env::set_var(key, value) },
+        None => unsafe { std::env::remove_var(key) },
+    }
+    result
+}
 
 // ---------------------------------------------------------------------------
 // Module: TransportMode unit behavior
@@ -115,32 +129,53 @@ fn should_enable_logging_honors_explicit_flag() {
 
 #[test]
 fn should_enable_logging_uses_rust_log_environment() {
-    let key = "RUST_LOG";
-    let previous = std::env::var_os(key);
-    unsafe {
-        std::env::set_var(key, "debug");
-    }
-    let enabled = should_enable_logging(false);
-    match previous {
-        Some(value) => unsafe { std::env::set_var(key, value) },
-        None => unsafe { std::env::remove_var(key) },
-    }
+    let enabled = with_env_var("RUST_LOG", Some("debug"), || should_enable_logging(false));
+    assert!(enabled);
+}
+
+#[test]
+fn should_enable_logging_uses_perl_lsp_log_environment() {
+    let enabled =
+        with_env_var("PERL_LSP_LOG", Some("perl_lsp=debug"), || should_enable_logging(false));
     assert!(enabled);
 }
 
 #[test]
 fn should_enable_logging_is_false_without_flag_or_env() {
-    let key = "RUST_LOG";
-    let previous = std::env::var_os(key);
-    unsafe {
-        std::env::remove_var(key);
-    }
-    let enabled = should_enable_logging(false);
-    match previous {
-        Some(value) => unsafe { std::env::set_var(key, value) },
-        None => unsafe { std::env::remove_var(key) },
-    }
+    let enabled = with_env_var("PERL_LSP_LOG", None, || {
+        with_env_var("RUST_LOG", None, || should_enable_logging(false))
+    });
     assert!(!enabled);
+}
+
+#[test]
+fn logging_filter_uses_implicit_default_without_env() {
+    let filter = with_env_var("PERL_LSP_LOG", None, || {
+        with_env_var("RUST_LOG", None, || {
+            logging_filter(false, "perl_lsp=info,perl_lsp_launcher=info,info", "warn")
+        })
+    });
+    assert_eq!(filter, "warn");
+}
+
+#[test]
+fn logging_filter_uses_explicit_default_without_env() {
+    let filter = with_env_var("PERL_LSP_LOG", None, || {
+        with_env_var("RUST_LOG", None, || {
+            logging_filter(true, "perl_lsp=info,perl_lsp_launcher=info,info", "warn")
+        })
+    });
+    assert_eq!(filter, "perl_lsp=info,perl_lsp_launcher=info,info");
+}
+
+#[test]
+fn logging_filter_prefers_perl_lsp_log_over_rust_log() {
+    let filter = with_env_var("RUST_LOG", Some("warn"), || {
+        with_env_var("PERL_LSP_LOG", Some("perl_lsp=trace"), || {
+            logging_filter(false, "perl_lsp=info,perl_lsp_launcher=info,info", "warn")
+        })
+    });
+    assert_eq!(filter, "perl_lsp=trace");
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@
 use std::error::Error;
 use std::fmt;
 use std::io;
+use std::io::IsTerminal;
 use std::sync::Once;
 
 use clap::{Args, Parser};
@@ -27,11 +28,35 @@ pub const DEFAULT_LSP_PORT: u16 = 9257;
 
 /// Returns whether runtime logging should be enabled.
 ///
-/// Logging activates when the CLI explicitly requests it or when `RUST_LOG`
-/// is already set in the environment, which keeps environment-driven tracing
-/// behavior consistent across binaries.
+/// Logging activates when the CLI explicitly requests it or when
+/// `PERL_LSP_LOG`/`RUST_LOG` is already set in the environment, which keeps
+/// environment-driven tracing behavior consistent with the historical Perl LSP
+/// binary contract.
 pub fn should_enable_logging(explicit_flag: bool) -> bool {
-    explicit_flag || std::env::var_os("RUST_LOG").is_some()
+    explicit_flag || logging_env_directive().is_some()
+}
+
+fn logging_env_directive() -> Option<String> {
+    std::env::var("PERL_LSP_LOG").ok().or_else(|| std::env::var("RUST_LOG").ok())
+}
+
+/// Resolve the effective tracing filter for the current process.
+///
+/// Environment overrides take precedence; otherwise the returned filter uses
+/// `explicit_default_filter` when logging was requested explicitly and
+/// `implicit_default_filter` when logging is only enabled via default behavior.
+pub fn logging_filter(
+    explicit_flag: bool,
+    explicit_default_filter: &str,
+    implicit_default_filter: &str,
+) -> String {
+    logging_env_directive().unwrap_or_else(|| {
+        if explicit_flag {
+            explicit_default_filter.to_string()
+        } else {
+            implicit_default_filter.to_string()
+        }
+    })
 }
 
 /// Initialize stderr-based tracing once for the current process.
@@ -43,10 +68,12 @@ pub fn init_logging(default_filter: &str) {
             .or_else(|_| EnvFilter::try_new(default_filter))
             .unwrap_or_else(|_| EnvFilter::new("info"));
 
+        let use_ansi = std::env::var("NO_COLOR").is_err() && io::stderr().is_terminal();
         let _ = tracing_fmt()
             .with_env_filter(filter)
             .with_writer(io::stderr)
-            .with_target(false)
+            .with_ansi(use_ansi)
+            .with_target(true)
             .try_init();
     });
 }
