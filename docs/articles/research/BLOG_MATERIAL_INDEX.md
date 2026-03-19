@@ -15,6 +15,7 @@ Supplemental archaeology note:
 - `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
 - `CASEBOOK_FORENSICS_ARCHAEOLOGY.md` — how casebook exhibits, dossier scripts, lessons, and specialist auditors turned postmortems into a reusable evidence pipeline
 - `INSTRUCTION_SURFACE_ARCHAEOLOGY.md` — how prompt-like orchestration guides, project doctrine docs, `.claude`, and `AGENTS.md` became a committed instruction layer
+- `ISSUE_FAMILY_GENEALOGY_ARCHAEOLOGY.md` — how recurring issue families preserve discovery, bridge fixes, implementation PRs, and later learning/article artifacts as recoverable lineages
 - `LEARNING_LOOP_ARCHAEOLOGY.md` — how lessons, forensics, casebook exhibits, swarm-state, and GitHub crosslinks form one durable learning loop
 - `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-oriented bridge era where shipping discipline was strong but maintainer integration was still expensive
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
@@ -32,10 +33,12 @@ Supplemental archaeology note:
 - `REVIEW_LABEL_ARCHAEOLOGY.md` — how the canonical Q3 swarm used GitHub labels as a review state machine with intake, lanes, gates, and merge readiness alongside `issue-to-draft` / `draft-to-pr` / `pr-to-merge`
 - `REVIEWER_ECOLOGY_ARCHAEOLOGY.md` — how the repo layered human review, bot review, AI-reviewing-AI, and later gate/receipt enforcement instead of keeping review in one place
 - `PR_REVIEW_RECEIPT_ARCHAEOLOGY.md` — how PRs themselves became governance artifacts through labels, receipts, check runs, comments, and review repair
+- `RECEIPT_SURFACE_EVOLUTION_ARCHAEOLOGY.md` — how PR-body receipt bundles, PR templates, issue `#210`, and typed gate receipts formed a layered proof surface instead of one flat “receipt” concept
 - `PR_REVIEW_LOOP_ARCHAEOLOGY.md` — how review cleanup, follow-up PRs, and post-batch repair show up as named first-class work
 - `PR_SLICE_SIZE_ARCHAEOLOGY.md` — how the PR archive favors small bounded slices while still using deliberate large campaign PRs
 - `PROVENANCE_RECEIPTS_ARCHAEOLOGY.md` — how proof moved from prose claims into receipt schemas, evidence docs, and forensics templates
 - `RECEIPTS_LIE_ARCHAEOLOGY.md` — how PR `#209` became the original scar story showing that receipts can be technically true yet still operationally weak
+- `REVIEWER_NETWORK_ARCHAEOLOGY.md` — how reviewer identities themselves act as workflow-era signals, from human-led mixed review to machine-dense review lanes and later thinner gate-era threads
 - `QUEUE_BOTTLENECK_ARCHAEOLOGY.md` — how the merge queue, CI throughput, and issue overflow became the real bottlenecks at swarm scale
 - `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
 - `VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md` — how corpus gates, helper coverage, parser test helpers, and benchmark baselines were hardened after proof surfaces proved incomplete

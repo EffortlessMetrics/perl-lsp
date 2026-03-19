@@ -50,6 +50,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md](research/GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md) — how issue `#210` turned proof governance into gate harnesses, receipt schemas, status checks, and later audit prompts
 - [research/CASEBOOK_FORENSICS_ARCHAEOLOGY.md](research/CASEBOOK_FORENSICS_ARCHAEOLOGY.md) — how casebook exhibits, PR dossiers, lessons, and specialist auditors became a reusable scar-story memory system
 - [research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md](research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md) — how receipts, provenance schemas, and forensics turned proof into structured artifacts
+- [research/RECEIPT_SURFACE_EVOLUTION_ARCHAEOLOGY.md](research/RECEIPT_SURFACE_EVOLUTION_ARCHAEOLOGY.md) — how PR-body receipt bundles, PR templates, issue `#210`, and typed gate receipts formed a layered proof surface instead of one flat “receipt” concept
 - [research/RECEIPTS_LIE_ARCHAEOLOGY.md](research/RECEIPTS_LIE_ARCHAEOLOGY.md) — how PR `#209` and later validator repairs taught the repo that proof artifacts need governance too
 - [research/TRUSTED_CHANGE_ARCHAEOLOGY.md](research/TRUSTED_CHANGE_ARCHAEOLOGY.md) — how the repo industrialized trust through gates, receipts, drift checks, and durable lessons
 - [research/VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md](research/VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md) — how the repo kept repairing helpers, gates, baselines, and assertions when the measurement surface itself proved incomplete
@@ -63,10 +64,12 @@ These documents intentionally preserve dated observations and period-specific me
 ### GitHub PR Ledger Archaeology
 
 - [research/PR_BRANCH_NAMING_ARCHAEOLOGY.md](research/PR_BRANCH_NAMING_ARCHAEOLOGY.md) — how head branches and PR titles reflect changing workflow eras
+- [research/ISSUE_FAMILY_GENEALOGY_ARCHAEOLOGY.md](research/ISSUE_FAMILY_GENEALOGY_ARCHAEOLOGY.md) — how recurring issue families preserve discovery, bridge fixes, implementation PRs, and later learning/article artifacts as recoverable lineages
 - [research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md](research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md) — how issues and PRs evolved into a shared delivery ledger for fixes, closures, learning reports, and article evidence
 - [research/PR_LIFECYCLE_ARCHAEOLOGY.md](research/PR_LIFECYCLE_ARCHAEOLOGY.md) — how drafts, merges, closures, and disposal became part of the operating model
 - [research/REVIEW_LABEL_ARCHAEOLOGY.md](research/REVIEW_LABEL_ARCHAEOLOGY.md) — how the canonical Q3 swarm encoded review stages, gates, lanes, and merge readiness directly in GitHub labels alongside the three-phase `issue-to-draft` / `draft-to-pr` / `pr-to-merge` flow
 - [research/REVIEWER_ECOLOGY_ARCHAEOLOGY.md](research/REVIEWER_ECOLOGY_ARCHAEOLOGY.md) — how the repo layered human review, bot review, AI-reviewing-AI, and later gate/receipt enforcement instead of keeping review in one place
+- [research/REVIEWER_NETWORK_ARCHAEOLOGY.md](research/REVIEWER_NETWORK_ARCHAEOLOGY.md) — how reviewer identities themselves act as workflow-era signals, from human-led mixed review to machine-dense review lanes and later thinner gate-era threads
 - [research/PR_REVIEW_RECEIPT_ARCHAEOLOGY.md](research/PR_REVIEW_RECEIPT_ARCHAEOLOGY.md) — how labels, receipts, check runs, comments, and cleanup follow-ups turned PRs into governance artifacts
 - [research/PR_REVIEW_LOOP_ARCHAEOLOGY.md](research/PR_REVIEW_LOOP_ARCHAEOLOGY.md) — how cleanup passes, follow-up PRs, and review repair became explicit and normal
 - [research/PR_SLICE_SIZE_ARCHAEOLOGY.md](research/PR_SLICE_SIZE_ARCHAEOLOGY.md) — how the PR archive balances many small bounded slices with a smaller number of deliberate umbrella changes
