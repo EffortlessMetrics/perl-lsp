@@ -4,6 +4,8 @@
 
 use super::*;
 use crate::protocol::invalid_params;
+use crate::state::DegradationTier;
+use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 
@@ -24,6 +26,48 @@ impl LspServer {
             let version = i32::try_from(version_i64).unwrap_or(0);
 
             eprintln!("Document opened: {}", uri);
+
+            // Large file guard: skip parsing for oversized files
+            let file_size = text.len();
+            let size_limit = crate::state::max_file_size_bytes();
+            if file_size > size_limit {
+                eprintln!(
+                    "WARNING: Skipping parse for {} ({} bytes exceeds {} byte limit)",
+                    uri, file_size, size_limit
+                );
+
+                // Store document state without AST
+                let rope = ropey::Rope::from_str(text);
+                let line_starts = LineStartsCache::new_rope(&rope);
+                let normalized_uri = self.normalize_uri_key(uri);
+                self.documents.lock().insert(
+                    normalized_uri.clone(),
+                    DocumentState {
+                        rope,
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: Arc::new(AtomicU32::new(0)),
+                        degradation_tier: DegradationTier::Minimal,
+                    },
+                );
+
+                // Publish empty diagnostics
+                if let Err(e) = self.notify(
+                    "textDocument/publishDiagnostics",
+                    json!({
+                        "uri": uri,
+                        "diagnostics": []
+                    }),
+                ) {
+                    eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
+                }
+
+                return Ok(());
+            }
 
             // Notify coordinator of pending change (tracks parse storm)
             #[cfg(feature = "workspace")]
@@ -67,6 +111,9 @@ impl LspServer {
             let rope = ropey::Rope::from_str(text);
             let line_starts = LineStartsCache::new_rope(&rope);
 
+            // Compute degradation tier before moving errors
+            let degradation_tier = DegradationTier::from_parse_result(&ast_arc, &errors);
+
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
             self.documents.lock().insert(
@@ -80,6 +127,7 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: Arc::new(AtomicU32::new(0)),
+                    degradation_tier,
                 },
             );
 
@@ -185,6 +233,7 @@ impl LspServer {
                         parent_map: ParentMap::default(),
                         line_starts: LineStartsCache::new(""),
                         generation: Arc::new(AtomicU32::new(0)),
+                        degradation_tier: DegradationTier::Minimal,
                     });
 
                 // Increment generation counter for this change
@@ -220,6 +269,46 @@ impl LspServer {
 
                 let text = doc.rope.to_string();
                 eprintln!("Document changed: {} (version {})", uri, version);
+
+                // Large file guard: skip parsing for oversized files
+                let file_size = text.len();
+                let size_limit = crate::state::max_file_size_bytes();
+                if file_size > size_limit {
+                    eprintln!(
+                        "WARNING: Skipping parse for {} ({} bytes exceeds {} byte limit)",
+                        uri, file_size, size_limit
+                    );
+
+                    // Update document state without AST
+                    let line_starts = LineStartsCache::new_rope(&doc.rope);
+                    let normalized_uri = self.normalize_uri_key(uri);
+                    doc_state = DocumentState {
+                        rope: doc.rope.clone(),
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: doc_state.generation.clone(),
+                        degradation_tier: DegradationTier::Minimal,
+                    };
+                    documents.insert(normalized_uri.clone(), doc_state);
+                    drop(documents);
+
+                    // Publish empty diagnostics
+                    if let Err(e) = self.notify(
+                        "textDocument/publishDiagnostics",
+                        json!({
+                            "uri": uri,
+                            "diagnostics": []
+                        }),
+                    ) {
+                        eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
+                    }
+
+                    return Ok(());
+                }
 
                 // Notify coordinator of pending change (tracks parse storm)
                 #[cfg(feature = "workspace")]
@@ -262,6 +351,9 @@ impl LspServer {
                 // Build line starts cache for O(log n) position conversion
                 let line_starts = LineStartsCache::new_rope(&doc.rope);
 
+                // Compute degradation tier before moving errors
+                let degradation_tier = DegradationTier::from_parse_result(&ast_arc, &errors);
+
                 // Update document state with properly updated content
                 doc_state = DocumentState {
                     rope: doc.rope.clone(),
@@ -272,6 +364,7 @@ impl LspServer {
                     parent_map,
                     line_starts,
                     generation: doc_state.generation.clone(), // Preserve the generation counter
+                    degradation_tier,
                 };
 
                 // Check if a newer change arrived while we were parsing

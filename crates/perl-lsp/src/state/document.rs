@@ -9,6 +9,136 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+/// Degradation tier for a document, indicating what level of LSP functionality
+/// is available based on parse success.
+///
+/// Features should check the tier before attempting operations that require
+/// a valid or partial AST. The tier is computed after each parse attempt and
+/// stored alongside the document state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DegradationTier {
+    /// Parse failed completely -- no AST available. Only basic text-based
+    /// features are provided (word completion, bracket matching, folding
+    /// via brace counting, text-based symbol extraction).
+    Minimal,
+    /// Parse produced errors but also produced a partial AST. Best-effort
+    /// completions, navigation, and diagnostics are available from whatever
+    /// parsed successfully.
+    Partial,
+    /// Parse succeeded without errors. All features are available.
+    Full,
+}
+
+impl DegradationTier {
+    /// Compute the degradation tier from parse results.
+    ///
+    /// - `Full`: AST present and no parse errors
+    /// - `Partial`: AST present but parse errors exist
+    /// - `Minimal`: No AST (parse failed completely)
+    pub fn from_parse_result(
+        ast: &Option<Arc<perl_parser::ast::Node>>,
+        parse_errors: &[perl_parser::error::ParseError],
+    ) -> Self {
+        match ast {
+            Some(_) if parse_errors.is_empty() => DegradationTier::Full,
+            Some(_) => DegradationTier::Partial,
+            None => DegradationTier::Minimal,
+        }
+    }
+
+    /// Whether AST-based features (hover, go-to-definition, semantic
+    /// tokens, etc.) should be attempted at this tier.
+    pub fn has_ast(self) -> bool {
+        matches!(self, DegradationTier::Full | DegradationTier::Partial)
+    }
+
+    /// Whether full semantic analysis (unused variable detection, type
+    /// inference) should be attempted. Only reliable at `Full`.
+    pub fn has_full_semantics(self) -> bool {
+        matches!(self, DegradationTier::Full)
+    }
+
+    /// Human-readable label for diagnostics and logging.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DegradationTier::Full => "full",
+            DegradationTier::Partial => "partial",
+            DegradationTier::Minimal => "minimal",
+        }
+    }
+}
+
+impl std::fmt::Display for DegradationTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Degradation tier for a document, indicating what level of LSP functionality
+/// is available based on parse success.
+///
+/// Features should check the tier before attempting operations that require
+/// a valid or partial AST. The tier is computed after each parse attempt and
+/// stored alongside the document state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DegradationTier {
+    /// Parse failed completely -- no AST available. Only basic text-based
+    /// features are provided (word completion, bracket matching, folding
+    /// via brace counting, text-based symbol extraction).
+    Minimal,
+    /// Parse produced errors but also produced a partial AST. Best-effort
+    /// completions, navigation, and diagnostics are available from whatever
+    /// parsed successfully.
+    Partial,
+    /// Parse succeeded without errors. All features are available.
+    Full,
+}
+
+impl DegradationTier {
+    /// Compute the degradation tier from parse results.
+    ///
+    /// - `Full`: AST present and no parse errors
+    /// - `Partial`: AST present but parse errors exist
+    /// - `Minimal`: No AST (parse failed completely)
+    pub fn from_parse_result(
+        ast: &Option<Arc<perl_parser::ast::Node>>,
+        parse_errors: &[perl_parser::error::ParseError],
+    ) -> Self {
+        match ast {
+            Some(_) if parse_errors.is_empty() => DegradationTier::Full,
+            Some(_) => DegradationTier::Partial,
+            None => DegradationTier::Minimal,
+        }
+    }
+
+    /// Whether AST-based features (hover, go-to-definition, semantic
+    /// tokens, etc.) should be attempted at this tier.
+    pub fn has_ast(self) -> bool {
+        matches!(self, DegradationTier::Full | DegradationTier::Partial)
+    }
+
+    /// Whether full semantic analysis (unused variable detection, type
+    /// inference) should be attempted. Only reliable at `Full`.
+    pub fn has_full_semantics(self) -> bool {
+        matches!(self, DegradationTier::Full)
+    }
+
+    /// Human-readable label for diagnostics and logging.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DegradationTier::Full => "full",
+            DegradationTier::Partial => "partial",
+            DegradationTier::Minimal => "minimal",
+        }
+    }
+}
+
+impl std::fmt::Display for DegradationTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Document state with Rope-based content management for efficient LSP operations
 ///
 /// This structure maintains both a Rope for efficient edits and a cached String
@@ -61,6 +191,12 @@ pub struct DocumentState {
 
     /// Generation counter for race condition prevention in concurrent access
     pub generation: Arc<AtomicU32>,
+
+    /// Current degradation tier based on the most recent parse attempt.
+    ///
+    /// Computed from `ast` and `parse_errors` after each parse. Feature
+    /// providers should check this before attempting AST-dependent operations.
+    pub degradation_tier: DegradationTier,
 }
 
 impl DocumentState {
@@ -79,6 +215,7 @@ impl DocumentState {
             parent_map: ParentMap::default(),
             line_starts,
             generation: Arc::new(AtomicU32::new(0)),
+            degradation_tier: DegradationTier::Minimal,
         }
     }
 
@@ -92,6 +229,7 @@ impl DocumentState {
         self.parent_map = ParentMap::default();
         self.line_starts = LineStartsCache::new(content);
         self.generation.fetch_add(1, Ordering::SeqCst);
+        self.degradation_tier = DegradationTier::Minimal;
     }
 
     /// Get the current generation number
@@ -129,6 +267,7 @@ impl DocumentState {
         self.parent_map = ParentMap::default();
         self.line_starts = LineStartsCache::new(&self.text);
         self.generation.fetch_add(1, Ordering::SeqCst);
+        self.degradation_tier = DegradationTier::Minimal;
     }
 
     /// Convert LSP position (line, character) to rope char index

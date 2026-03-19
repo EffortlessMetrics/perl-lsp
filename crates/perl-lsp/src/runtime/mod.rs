@@ -3,6 +3,7 @@
 //! This module provides a complete Language Server Protocol implementation
 //! that can be used with any LSP-compatible editor.
 
+pub(crate) mod cache;
 mod client_requests;
 mod constructors;
 mod diagnostics;
@@ -199,6 +200,8 @@ pub struct LspServer {
     trace_level: Arc<Mutex<String>>,
     /// Runtime feature profile selected by launch arguments or compiled default.
     feature_profile: FeatureProfile,
+    /// LRU cache for hover and goto-definition results
+    result_cache: cache::LspResultCache,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
@@ -420,6 +423,7 @@ mod tests {
                 parent_map: ParentMap::default(),
                 line_starts,
                 generation: Arc::new(AtomicU32::new(0)),
+                degradation_tier: crate::state::DegradationTier::Minimal,
             },
         );
 
