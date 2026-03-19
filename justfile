@@ -1608,6 +1608,10 @@ cpan-corpus-check:
 cpan-corpus-ratchet:
     cargo run -p xtask -- cpan-corpus ratchet
 
+# Show CPAN corpus progress toward 100% coverage
+cpan-corpus-status:
+    cargo run -p xtask -- cpan-corpus status
+
 # Tier C: full suite (nightly, all integration tests)
 lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."

@@ -634,6 +634,9 @@ enum CpanCorpusCommand {
         #[arg(long)]
         install_dir: Option<PathBuf>,
     },
+
+    /// Show progress toward 100% CPAN corpus coverage
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -785,6 +788,7 @@ fn main() -> Result<()> {
                     config.verbose = verbose;
                     cpan_corpus::ratchet(&config)
                 }
+                CpanCorpusCommand::Status => cpan_corpus::status(&config),
             }
         }
         Commands::Receipts { tests_only, docs_only, output_dir, test_threads } => {

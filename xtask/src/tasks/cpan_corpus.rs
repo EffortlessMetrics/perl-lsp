@@ -497,6 +497,123 @@ pub fn ratchet(config: &CpanCorpusConfig) -> Result<()> {
 }
 
 // --------------------------------------------------------------------------
+// status
+// --------------------------------------------------------------------------
+
+/// Show progress toward 100% CPAN corpus coverage using committed artifacts.
+///
+/// Reads the baseline JSON and manifest without requiring the corpus to be
+/// installed, so it works in CI and in fresh checkouts.
+pub fn status(config: &CpanCorpusConfig) -> Result<()> {
+    let baseline_path = PathBuf::from(CPAN_BASELINE_PATH);
+    let dist_list_count =
+        if config.dist_list.exists() { read_dist_list(&config.dist_list)?.len() } else { 0 };
+    let manifest_count = if config.manifest.exists() {
+        parser_corpus_sweep::parse_manifest(&config.manifest)?.len()
+    } else {
+        0
+    };
+
+    println!("=== CPAN Corpus Status ===\n");
+    println!("Distribution list: {}", config.dist_list.display());
+    if dist_list_count > 0 {
+        println!("  Distributions tracked: {dist_list_count}");
+    } else {
+        println!("  (not fetched yet -- run `just cpan-corpus-fetch`)");
+    }
+    println!();
+
+    if baseline_path.exists() {
+        let report_json = fs::read_to_string(&baseline_path)
+            .with_context(|| format!("Failed to read baseline: {}", baseline_path.display()))?;
+        let report: parser_corpus_sweep::SweepReport = serde_json::from_str(&report_json)
+            .with_context(|| format!("Failed to parse baseline: {}", baseline_path.display()))?;
+        let total = report.total_files;
+        let clean = report.clean_files;
+        let errors = report.files_with_errors;
+        let unreadable = report.files_unreadable;
+        let pct = if total > 0 { (clean as f64 / total as f64) * 100.0 } else { 0.0 };
+
+        println!("Baseline: {}", baseline_path.display());
+        println!("  Commit:      {}", report.commit);
+        println!("  Timestamp:   {}", report.timestamp);
+        println!("  Total files: {total}");
+        println!("  Clean:       {clean} ({pct:.1}%)");
+        println!("  Errors:      {errors}");
+        println!("  Unreadable:  {unreadable}");
+        println!("  Error nodes: {}", report.total_error_nodes);
+        println!();
+
+        let target_pct = 90.0_f64;
+        let bar_width = 40;
+        let filled = ((pct / 100.0) * bar_width as f64).round() as usize;
+        let target_mark = ((target_pct / 100.0) * bar_width as f64).round() as usize;
+        let mut bar = String::with_capacity(bar_width);
+        for i in 0..bar_width {
+            if i < filled {
+                bar.push('#');
+            } else if i == target_mark {
+                bar.push('|');
+            } else {
+                bar.push('.');
+            }
+        }
+        println!("  Progress: [{bar}] {pct:.1}% (target: {target_pct:.0}%)");
+        let remaining = if pct < target_pct {
+            let target_clean = ((target_pct / 100.0) * total as f64).ceil() as usize;
+            target_clean.saturating_sub(clean)
+        } else {
+            0
+        };
+        if remaining > 0 {
+            println!("  Files needed to reach {target_pct:.0}%: {remaining}");
+        } else {
+            println!("  Target reached!");
+        }
+        if !report.first_error_buckets.is_empty() {
+            println!();
+            println!("  Top error buckets:");
+            let mut buckets: Vec<_> = report.first_error_buckets.iter().collect();
+            buckets.sort_by(|a, b| b.1.cmp(a.1));
+            for (bucket, count) in buckets.iter().take(10) {
+                println!("    {count:>5}  {bucket}");
+            }
+            let shown: usize = buckets.iter().take(10).map(|(_, c)| **c).sum();
+            let total_bucket: usize = buckets.iter().map(|(_, c)| **c).sum();
+            if total_bucket > shown {
+                println!(
+                    "    ... and {} more in {} other buckets",
+                    total_bucket - shown,
+                    buckets.len() - 10
+                );
+            }
+        }
+    } else {
+        println!("Baseline: (not established -- run `just cpan-corpus-baseline-update`)");
+    }
+    println!();
+    println!("Known-clean manifest: {}", config.manifest.display());
+    if manifest_count > 0 {
+        println!("  Modules: {manifest_count}");
+    } else {
+        println!("  (empty -- run `just cpan-corpus-ratchet` to seed)");
+    }
+    let lib_perl5 = config.install_dir.join("lib/perl5");
+    println!();
+    if lib_perl5.exists() {
+        let pm_count = walkdir::WalkDir::new(&lib_perl5)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "pm"))
+            .count();
+        println!("Local install: {} ({pm_count} .pm files)", lib_perl5.display());
+    } else {
+        println!("Local install: (not installed -- run `just cpan-corpus-install`)");
+    }
+    Ok(())
+}
+
+// --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
 

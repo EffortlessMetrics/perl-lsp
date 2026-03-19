@@ -180,8 +180,27 @@ added there, `just cpan-corpus-check` verifies it continues to parse cleanly.
 Promotion into the merge-gated common corpus remains a separate, deliberate step
 for a smaller curated subset.
 
----
 
+### Step 6: Check Coverage Status
+
+```bash
+just cpan-corpus-status
+```
+
+Reads the committed baseline JSON and manifest to show a progress summary
+without requiring the corpus to be installed locally. Displays:
+
+- Distribution list count
+- Baseline metrics (total files, clean rate, error count)
+- ASCII progress bar toward the 90% target
+- Top 10 error buckets
+- Known-clean manifest size
+- Local install status (if present)
+
+This command works in CI and in fresh checkouts because it reads committed
+artifacts, not the installed corpus.
+
+---
 ## Wave-Based Fix Plan
 
 Parser improvements follow the wave structure defined in
@@ -267,8 +286,8 @@ The CPAN corpus effort tracks four metrics:
 |------|--------|-------------|------|
 | Tier B (merge) | Common corpus | Strict zero-error | Every PR |
 | Tier B (merge) | System corpus | Ratchet (5 metrics) | Every PR |
-| Nightly / manual | CPAN full corpus | Ratchet (5 metrics) | Scheduled or on-demand |
-| Nightly / manual | CPAN known-clean manifest | Strict zero-error | Scheduled or on-demand |
+| Nightly (ci-nightly.yml) | CPAN full corpus | Ratchet (5 metrics) | Every night at 3am UTC |
+| Nightly (ci-nightly.yml) | CPAN known-clean manifest | Strict zero-error | Every night at 3am UTC |
 
 The CPAN corpus sweep is deliberately excluded from the merge gate. The top 1000
 distributions represent a large install and a multi-minute parse sweep -- too slow

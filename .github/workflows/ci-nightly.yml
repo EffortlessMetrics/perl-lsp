@@ -406,3 +406,61 @@ jobs:
           fuzz/artifacts/
           fuzz/corpus/
         retention-days: 30
+
+  # ============================================================================
+  # CPAN Corpus Sweep (nightly)
+  # ============================================================================
+
+  cpan-corpus:
+    name: CPAN Top-1000 Corpus Sweep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-cpan-corpus-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      - name: Install Perl and cpanm
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq perl cpanminus
+
+      - name: Cache CPAN install
+        uses: actions/cache@v4
+        with:
+          path: target/cpan-corpus
+          key: cpan-corpus-${{ hashFiles('.ci/cpan-top-1000-distributions.txt') }}
+          restore-keys: cpan-corpus-
+
+      - name: Install CPAN distributions
+        run: cargo run -p xtask -- cpan-corpus install
+
+      - name: Run corpus sweep
+        run: cargo run -p xtask -- cpan-corpus sweep --output target/cpan-corpus-nightly.json
+
+      - name: Show corpus status
+        run: cargo run -p xtask -- cpan-corpus status
+
+      - name: Check against baseline (ratchet)
+        continue-on-error: true
+        run: cargo run -p xtask -- cpan-corpus sweep --enforce
+
+      - name: Upload sweep report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cpan-corpus-report-${{ github.sha }}
+          path: target/cpan-corpus-nightly.json
+          retention-days: 30
