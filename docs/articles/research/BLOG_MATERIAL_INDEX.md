@@ -3,9 +3,23 @@
 
 Two comprehensive scout reports are ready for blog article development:
 
+GitHub namespace note: issues and pull requests share the same ticket number line in this repo. Verified GraphQL totals on 2026-03-19 are `1,883` PRs and `347` issues.
+
 Supplemental archaeology note:
+- `ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md` — the intentional slowdown that built the parser, quality gates, and architectural surfaces later swarms depended on
+- `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
+- `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
+- `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
+- `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
+- `PR_REVIEW_LOOP_ARCHAEOLOGY.md` — how review cleanup, follow-up PRs, and post-batch repair show up as named first-class work
+- `PR_SLICE_SIZE_ARCHAEOLOGY.md` — how the PR archive favors small bounded slices while still using deliberate large campaign PRs
+- `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
+- `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm
 - `SWARM_SURFACE_EVOLUTION.md` — the Jan→Mar 2026 transition where commands predate skills, then hooks and swarm-state turn the current control plane on
+- `SWARM_STATE_ARCHAEOLOGY.md` — how `swarm-state` became a layered institutional-memory ledger instead of transient coordination notes
+- `JULES_LANE_ARCHAEOLOGY.md` — how Bolt, Sentinel, and Palette acted as proto-specialist lanes before the current swarm model
+- `MERGE_DISCIPLINE_ARCHAEOLOGY.md` — how merge governance evolved from flow packs into commands, skills, queue pacing, and stateful reporting
 
 ---
 
@@ -33,8 +47,8 @@ Supplemental archaeology note:
 
 ### Key Numbers
 - **546,283** lines of Rust
-- **2,214** total PRs created
-- **2,213** total issues filed
+- **1,883** total PRs created
+- **347** total issues filed
 - **100** agents in single session
 - **425** commits in 24 hours (peak)
 - **80%** CPAN corpus clean

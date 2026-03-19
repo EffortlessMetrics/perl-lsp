@@ -14,12 +14,35 @@ These documents intentionally preserve dated observations and period-specific me
 
 ## Research and Source Material
 
-- [research/BLOG_MATERIAL_INDEX.md](research/BLOG_MATERIAL_INDEX.md) — scout-generated map of article angles and evidence
+### Era and Workflow Archaeology
+
+- [research/ERA_TIMELINE.md](research/ERA_TIMELINE.md) — era-by-era timeline and velocity notes
+- [research/ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md](research/ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md) — the intentional late-2025 to early-2026 slowdown that built parser, architecture, and quality foundations
+- [research/COPILOT_FLEET_ARCHAEOLOGY.md](research/COPILOT_FLEET_ARCHAEOLOGY.md) — the February 27 to March 5, 2026 Copilot CLI firehose and its attribution boundary
+- [research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md](research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md) — March 11 to 19, 2026 as a mixed-tool period of short Claude swarm bursts plus Codex waves
+- [research/Q3_SWARM_PR_ARCHAEOLOGY.md](research/Q3_SWARM_PR_ARCHAEOLOGY.md) — how late Q3 2025 becomes a PR-heavy Claude swarm rather than a mostly direct coding stream
+
+### Control Plane and Process Archaeology
+
 - [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
+- [research/JULES_LANE_ARCHAEOLOGY.md](research/JULES_LANE_ARCHAEOLOGY.md) — January 2026 Bolt/Sentinel/Palette lanes as proto-specialists
+- [research/MERGE_DISCIPLINE_ARCHAEOLOGY.md](research/MERGE_DISCIPLINE_ARCHAEOLOGY.md) — PR governance from Q3 flow packs to `green-merge`, `review-pr`, and `triage-prs`
+- [research/SWARM_STATE_ARCHAEOLOGY.md](research/SWARM_STATE_ARCHAEOLOGY.md) — how `.claude/swarm-state/` became the committed memory ledger for the current swarm
+- [research/SWARM_SURFACE_EVOLUTION.md](research/SWARM_SURFACE_EVOLUTION.md) — Jan→Mar 2026 transition from commands to the current skills/hooks/swarm-state control plane
+
+### GitHub PR Ledger Archaeology
+
+- [research/PR_BRANCH_NAMING_ARCHAEOLOGY.md](research/PR_BRANCH_NAMING_ARCHAEOLOGY.md) — how head branches and PR titles reflect changing workflow eras
+- [research/PR_LIFECYCLE_ARCHAEOLOGY.md](research/PR_LIFECYCLE_ARCHAEOLOGY.md) — how drafts, merges, closures, and disposal became part of the operating model
+- [research/PR_REVIEW_LOOP_ARCHAEOLOGY.md](research/PR_REVIEW_LOOP_ARCHAEOLOGY.md) — how cleanup passes, follow-up PRs, and review repair became explicit and normal
+- [research/PR_SLICE_SIZE_ARCHAEOLOGY.md](research/PR_SLICE_SIZE_ARCHAEOLOGY.md) — how the PR archive balances many small bounded slices with a smaller number of deliberate umbrella changes
+- [research/PR_WAVE_ARCHAEOLOGY.md](research/PR_WAVE_ARCHAEOLOGY.md) — how the repository moves in bursty PR waves rather than a smooth stream
+
+### Research Maps and Source Drafts
+
+- [research/BLOG_MATERIAL_INDEX.md](research/BLOG_MATERIAL_INDEX.md) — scout-generated map of article angles and evidence
 - [research/DEVELOPMENT_ARCHAEOLOGY.md](research/DEVELOPMENT_ARCHAEOLOGY.md) — development-history archaeology and launch-story findings
 - [research/DOCUMENTATION_SUMMARY.md](research/DOCUMENTATION_SUMMARY.md) — packaging summary for the article set
-- [research/ERA_TIMELINE.md](research/ERA_TIMELINE.md) — era-by-era timeline and velocity notes
-- [research/SWARM_SURFACE_EVOLUTION.md](research/SWARM_SURFACE_EVOLUTION.md) — Jan→Mar 2026 transition from commands to the current skills/hooks/swarm-state control plane
 - [research/SCOUT_SUMMARY.md](research/SCOUT_SUMMARY.md) — summary of the scout output delivered during the session
 - [research/TESTING_INFRASTRUCTURE_GAPS_SCOUT.md](research/TESTING_INFRASTRUCTURE_GAPS_SCOUT.md) — testing-gap research that fed related follow-up work
 - [research/five_eras_swarm_methodology.md](research/five_eras_swarm_methodology.md) — source draft behind the five-eras analysis
@@ -32,5 +55,6 @@ These documents intentionally preserve dated observations and period-specific me
 - [../project/AGENTIC_DEVELOPMENT.md](../project/AGENTIC_DEVELOPMENT.md) — earlier case-study framing for AI-assisted development
 - [../project/AGENTIC_SWARM_ERA.md](../project/AGENTIC_SWARM_ERA.md) — earlier write-up focused on the swarm era
 - [../project/CODEBASE_CURIOSITIES.md](../project/CODEBASE_CURIOSITIES.md) — current-tree curiosity tour
+- [../project/JULES_BOT_ANALYSIS.md](../project/JULES_BOT_ANALYSIS.md) — earlier analysis of the January 2026 draft-PR bridge
 - [../project/PARSING_PERL.md](../project/PARSING_PERL.md) — existing parser deep dive in the project-docs track
 - [../project/QUALITY_INFRASTRUCTURE.md](../project/QUALITY_INFRASTRUCTURE.md) — broader quality and security infrastructure documentation
