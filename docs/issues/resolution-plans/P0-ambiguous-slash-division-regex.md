@@ -38,7 +38,7 @@ pub enum LexerMode {
 |-----|----------|-------------|
 | Edge case coverage | Low | Unusual Perl idioms may not parse correctly |
 | Performance validation | Low | Need to verify no hang on pathological input |
-| Documentation | Low | ADR for mode-aware lexer needs completion |
+| Fuzz/property testing | Low | Randomized slash-heavy inputs would broaden regression coverage |
 
 ### Test Coverage Status
 
@@ -64,11 +64,7 @@ The ambiguous slash issue is **fully implemented** with comprehensive test cover
 
 ### Remaining Tasks
 
-1. **Complete ADR Documentation**
-   - Location: [`docs/adr/0014-mode-aware-lexer.md`](../../adr/0014-mode-aware-lexer.md)
-   - Action: Document the design decision and implementation details
-
-2. **Add Fuzz Testing**
+1. **Add Fuzz Testing**
    - Add property-based tests for slash disambiguation
    - Test with randomly generated Perl code containing slashes
 
@@ -102,7 +98,7 @@ None - implementation is complete.
 
 ## Conclusion
 
-**Status: COMPLETE** - No further implementation required. The mode-aware lexer provides comprehensive protection against ambiguous slash parsing issues. Remaining work is documentation-only.
+**Status: COMPLETE** - No further implementation required. The mode-aware lexer provides comprehensive protection against ambiguous slash parsing issues. The remaining work is optional additional regression hardening.
 
 ## References
 

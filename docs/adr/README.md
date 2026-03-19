@@ -58,6 +58,43 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0036](0036-generated-feature-catalog-contracts.md) | Accepted | 2026-03-18 | Generated Feature Catalog Contracts | Build-time compilation of `features.toml` into generated Rust contracts for runtime, CI, and reporting |
 | [ADR-0037](0037-guaranteed-valid-uri-fallbacks.md) | Accepted | 2026-03-18 | Guaranteed-Valid Synthetic URI Fallbacks | Malformed boundary URIs degrade to stable synthetic URIs instead of failing requests or panicking |
 
+
+## Topic Guide
+
+Use these clusters when you need ADRs for a specific subsystem instead of scanning the full index.
+
+### Parser and Lexer
+
+- [ADR-0001](0001-substitution-operator-parsing-architecture.md) - Substitution operator parsing architecture and delimiter/modifier support.
+- [ADR-0014](0014-mode-aware-lexer.md) - Slash disambiguation via lexer modes.
+- [ADR-0023](0023-include-macro-architecture.md) - `include!`-based parser composition for tight internal coupling.
+- [ADR-0024](0024-fifo-heredoc-queue.md) - FIFO heredoc collection for single-pass parsing.
+
+### LSP Runtime, Documents, and Indexing
+
+- [ADR-0020](0020-rope-document-management.md) - Rope-backed document model for efficient edits and offset conversion.
+- [ADR-0021](0021-lsp-capability-contract.md) - Capability advertisement contract and `lsp-ga-lock` release mode.
+- [ADR-0022](0022-scope-analyzer-hash-context.md) - Hash-key context detection for strict-mode analysis.
+- [ADR-0025](0025-dual-document-representation.md) - Dual Rope + String representation for editor and parser workloads.
+- [ADR-0026](0026-lifecycle-index-routing.md) - Lifecycle-aware request routing while indexes build or degrade.
+- [ADR-0031](0031-async-runtime-concurrent-dispatch.md) - Concurrent request dispatch and bounded worker pool.
+- [ADR-0034](0034-custom-lsp-runtime.md) - Custom runtime stack instead of framework adoption.
+
+### DAP and Editor Integrations
+
+- [ADR-0011](0011-dap-bridge-mode-architecture.md) - DAP bridge architecture.
+- [ADR-0019](0019-security-first-dap.md) - Security model for debug flows.
+- [ADR-0027](0027-dap-bridge-native.md) - Phased bridge-to-native debugger strategy.
+- [ADR-004](ADR_004_EXECUTE_COMMAND_CODE_ACTIONS.md) - Execute-command and code-action integration plan.
+
+### Workspace, Release, and Delivery
+
+- [ADR-0015](0015-supply-chain-security.md) - SBOM and provenance policy for releases.
+- [ADR-0017](0017-workspace-exclusion-strategy.md) - Excluding C-dependent crates from the default workspace path.
+- [ADR-0030](0030-receipt-gate-system.md) - Receipt-based CI gate verification and audit trail.
+- [ADR-0032](0032-skill-scoping-and-hook-enforcement.md) - Skill scoping and swarm hook policy.
+- [ADR-0033](0033-worktree-first-disposable-workers.md) - Worktree-first disposable worker execution model.
+
 ## About ADRs
 
 Architecture Decision Records (ADRs) capture important architectural decisions along with their context and consequences. Each ADR includes:
