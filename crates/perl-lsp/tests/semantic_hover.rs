@@ -461,3 +461,71 @@ my $circumference = 2 * PI * $radius;
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod module_hover_tests {
+    use crate::common::test_utils::TestServerBuilder;
+    use serde_json::Value;
+    use std::fs;
+
+    fn hover_content(resp: &Value) -> Option<String> {
+        let result = resp.get("result")?;
+        if result.is_null() {
+            return None;
+        }
+        let contents = result.get("contents")?;
+        let value = contents.get("value")?.as_str()?;
+        Some(value.to_string())
+    }
+
+    #[test]
+    fn hover_on_use_statement_module_found() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let module_dir = workspace.join("lib").join("My");
+        fs::create_dir_all(&module_dir)?;
+        fs::write(module_dir.join("Module.pm"), "package My::Module; 1;")?;
+
+        let workspace_path = workspace.to_str().ok_or("non-UTF-8 workspace path")?;
+        let server = TestServerBuilder::new().with_workspace(workspace_path).build();
+
+        let code = "use My::Module;\nmy $x = 1;\n";
+        let uri = "file:///test.pl";
+        server.open_document(uri, code);
+
+        // Hover on "My::Module" (line 0, on the module name)
+        let response = server.get_hover(uri, 0, 5);
+        let content = hover_content(&response).ok_or("expected hover content for use statement")?;
+
+        assert!(content.contains("My::Module"), "hover should show module name, got: {content}");
+        assert!(
+            content.contains("Resolved"),
+            "hover should show resolved path for found module, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn hover_on_use_statement_module_not_found() -> Result<(), Box<dyn std::error::Error>> {
+        let server = TestServerBuilder::new().build();
+
+        let code = "use Nonexistent::Module;\nmy $x = 1;\n";
+        let uri = "file:///test.pl";
+        server.open_document(uri, code);
+
+        // Hover on "Nonexistent::Module"
+        let response = server.get_hover(uri, 0, 5);
+        let content = hover_content(&response).ok_or("expected hover content for use statement")?;
+
+        assert!(
+            content.contains("Nonexistent::Module"),
+            "hover should show module name, got: {content}"
+        );
+        assert!(
+            content.contains("Not found"),
+            "hover should indicate module not found, got: {content}"
+        );
+        assert!(content.contains("Search paths"), "hover should show search paths, got: {content}");
+        Ok(())
+    }
+}

@@ -6,6 +6,19 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 
+/// Intermediate result from phase-1 hover extraction (under document lock).
+///
+/// The document lock must be released before calling module resolution to avoid
+/// deadlock, so we extract what we need first and resolve afterwards.
+enum HoverExtracted {
+    /// Hover content fully built (symbol, builtin, or token hover).
+    Complete(Value),
+    /// A `use Module` was found; module name needs resolution without lock.
+    UseModule(String),
+    /// Nothing hoverable at this position.
+    None,
+}
+
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display
     ///
@@ -38,138 +51,238 @@ impl LspServer {
                 params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
             self.ensure_latest(uri, req_version)?;
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ast) = &doc.ast {
-                    let offset = self.pos16_to_offset(doc, line, character);
+            // Phase 1: Extract hover info under document lock
+            let extracted = {
+                let documents = self.documents_guard();
+                if let Some(doc) = self.get_document(&documents, uri) {
+                    if let Some(ast) = &doc.ast {
+                        let offset = self.pos16_to_offset(doc, line, character);
 
-                    // Use SemanticAnalyzer for type information
-                    // Pass the source text to enable proper symbol resolution
-                    let analyzer =
-                        crate::semantic::SemanticAnalyzer::analyze_with_source(ast, &doc.text);
-
-                    // Try to find the symbol at this position, checking references first
-                    // This allows hover on variable usages to show the variable's definition info
-                    if let Some(symbol_info) = analyzer.find_definition(offset) {
-                        // Get symbol kind as string
-                        use crate::symbol::VarKind;
-                        let kind_str = match symbol_info.kind {
-                            crate::symbol::SymbolKind::Variable(VarKind::Scalar) => {
-                                "Scalar Variable"
-                            }
-                            crate::symbol::SymbolKind::Variable(VarKind::Array) => "Array Variable",
-                            crate::symbol::SymbolKind::Variable(VarKind::Hash) => "Hash Variable",
-                            crate::symbol::SymbolKind::Subroutine => "Subroutine",
-                            crate::symbol::SymbolKind::Package => "Package",
-                            crate::symbol::SymbolKind::Constant => "Constant",
-                            crate::symbol::SymbolKind::Label => "Label",
-                            crate::symbol::SymbolKind::Format => "Format",
-                            _ => "Symbol",
-                        };
-
-                        // For subroutines, try to extract parameter info for a
-                        // richer signature display
-                        let display_name = if symbol_info.kind
-                            == crate::symbol::SymbolKind::Subroutine
-                        {
-                            let mut params = Vec::new();
-                            if let Some(sub_node) =
-                                self.find_subroutine_definition(ast, &symbol_info.name)
-                            {
-                                if let NodeKind::Subroutine { signature: sub_sig, body, .. } =
-                                    &sub_node.kind
-                                {
-                                    if let Some(sig) = sub_sig {
-                                        if let NodeKind::Signature { parameters } = &sig.kind {
-                                            for param in parameters {
-                                                self.extract_signature_params(param, &mut params);
-                                            }
-                                        }
-                                    } else {
-                                        self.extract_params_from_body(body, &mut params);
-                                    }
-                                }
-                            }
-                            if params.is_empty() {
-                                format!("sub {}", symbol_info.name)
-                            } else {
-                                format!("sub {}({})", symbol_info.name, params.join(", "))
-                            }
+                        // Check for `use Module` at this offset first
+                        if let Some(module_name) = Self::find_use_module_at_offset(ast, offset) {
+                            HoverExtracted::UseModule(module_name)
                         } else {
-                            // Add sigil if applicable
-                            let sigil = symbol_info.kind.sigil().unwrap_or("");
-                            format!("{}{}", sigil, symbol_info.name)
-                        };
-
-                        // Add declaration type if available
-                        let decl_info = symbol_info
-                            .declaration
-                            .as_ref()
-                            .map(|d| format!("\n**Declaration**: `{}`", d))
-                            .unwrap_or_default();
-
-                        // Include synthesized framework metadata (for example:
-                        // `is=ro`, `isa=Str`) when available.
-                        let attrs_info = if symbol_info.attributes.is_empty() {
-                            String::new()
-                        } else {
-                            format!("\n**Attributes**: {}", symbol_info.attributes.join(", "))
-                        };
-
-                        // Add documentation if available
-                        let doc_info = symbol_info
-                            .documentation
-                            .as_ref()
-                            .map(|d| format!("\n\n{}", d))
-                            .unwrap_or_default();
-
-                        return Ok(Some(json!({
-                            "contents": {
-                                "kind": "markdown",
-                                "value": format!("**{}**\n\n`{}`{}{}{}",
-                                    kind_str,
-                                    display_name,
-                                    decl_info,
-                                    attrs_info,
-                                    doc_info
-                                ),
-                            },
-                        })));
-                    }
-
-                    // Fall back to simple token display, with builtin docs
-                    let hover_text = self.get_token_at_position(&doc.text, offset);
-
-                    if !hover_text.is_empty() {
-                        // Strip sigil to check for builtin name
-                        let bare = hover_text.trim_start_matches(['$', '@', '%']);
-                        // Check if this is a builtin function and show rich docs
-                        if let Some(builtin_doc) = crate::semantic::get_builtin_documentation(bare)
-                        {
-                            return Ok(Some(json!({
-                                "contents": {
-                                    "kind": "markdown",
-                                    "value": format!(
-                                        "**Built-in Function**\n\n```\n{}\n```\n\n{}",
-                                        builtin_doc.signature,
-                                        builtin_doc.description
-                                    ),
-                                },
-                            })));
+                            self.extract_symbol_hover(ast, &doc.text, offset)
                         }
-
-                        return Ok(Some(json!({
-                            "contents": {
-                                "kind": "markdown",
-                                "value": format!("**Perl**: `{}`", hover_text),
-                            },
-                        })));
+                    } else {
+                        HoverExtracted::None
                     }
+                } else {
+                    HoverExtracted::None
                 }
+            };
+            // Document lock released here
+
+            // Phase 2: Resolve module or return pre-built hover
+            match extracted {
+                HoverExtracted::Complete(value) => return Ok(Some(value)),
+                HoverExtracted::UseModule(module_name) => {
+                    return Ok(Some(self.build_module_hover(&module_name)));
+                }
+                HoverExtracted::None => {}
             }
         }
 
         Ok(Some(json!(null)))
+    }
+
+    /// Extract hover information from semantic analysis (called under document lock)
+    fn extract_symbol_hover(&self, ast: &Node, text: &str, offset: usize) -> HoverExtracted {
+        let analyzer = crate::semantic::SemanticAnalyzer::analyze_with_source(ast, text);
+
+        if let Some(symbol_info) = analyzer.find_definition(offset) {
+            use crate::symbol::VarKind;
+            let kind_str = match symbol_info.kind {
+                crate::symbol::SymbolKind::Variable(VarKind::Scalar) => "Scalar Variable",
+                crate::symbol::SymbolKind::Variable(VarKind::Array) => "Array Variable",
+                crate::symbol::SymbolKind::Variable(VarKind::Hash) => "Hash Variable",
+                crate::symbol::SymbolKind::Subroutine => "Subroutine",
+                crate::symbol::SymbolKind::Package => "Package",
+                crate::symbol::SymbolKind::Constant => "Constant",
+                crate::symbol::SymbolKind::Label => "Label",
+                crate::symbol::SymbolKind::Format => "Format",
+                _ => "Symbol",
+            };
+
+            let display_name = if symbol_info.kind == crate::symbol::SymbolKind::Subroutine {
+                let mut params = Vec::new();
+                if let Some(sub_node) = self.find_subroutine_definition(ast, &symbol_info.name) {
+                    if let NodeKind::Subroutine { signature: sub_sig, body, .. } = &sub_node.kind {
+                        if let Some(sig) = sub_sig {
+                            if let NodeKind::Signature { parameters } = &sig.kind {
+                                for param in parameters {
+                                    self.extract_signature_params(param, &mut params);
+                                }
+                            }
+                        } else {
+                            self.extract_params_from_body(body, &mut params);
+                        }
+                    }
+                }
+                if params.is_empty() {
+                    format!("sub {}", symbol_info.name)
+                } else {
+                    format!("sub {}({})", symbol_info.name, params.join(", "))
+                }
+            } else {
+                let sigil = symbol_info.kind.sigil().unwrap_or("");
+                format!("{}{}", sigil, symbol_info.name)
+            };
+
+            let decl_info = symbol_info
+                .declaration
+                .as_ref()
+                .map(|d| format!("\n**Declaration**: `{}`", d))
+                .unwrap_or_default();
+
+            let attrs_info = if symbol_info.attributes.is_empty() {
+                String::new()
+            } else {
+                format!("\n**Attributes**: {}", symbol_info.attributes.join(", "))
+            };
+
+            let doc_info = symbol_info
+                .documentation
+                .as_ref()
+                .map(|d| format!("\n\n{}", d))
+                .unwrap_or_default();
+
+            return HoverExtracted::Complete(json!({
+                "contents": {
+                    "kind": "markdown",
+                    "value": format!("**{}**\n\n`{}`{}{}{}",
+                        kind_str,
+                        display_name,
+                        decl_info,
+                        attrs_info,
+                        doc_info
+                    ),
+                },
+            }));
+        }
+
+        // Fall back to simple token display, with builtin docs
+        let hover_text = self.get_token_at_position(text, offset);
+
+        if !hover_text.is_empty() {
+            let bare = hover_text.trim_start_matches(['$', '@', '%']);
+            if let Some(builtin_doc) = crate::semantic::get_builtin_documentation(bare) {
+                return HoverExtracted::Complete(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Built-in Function**\n\n```\n{}\n```\n\n{}",
+                            builtin_doc.signature,
+                            builtin_doc.description
+                        ),
+                    },
+                }));
+            }
+
+            return HoverExtracted::Complete(json!({
+                "contents": {
+                    "kind": "markdown",
+                    "value": format!("**Perl**: `{}`", hover_text),
+                },
+            }));
+        }
+
+        HoverExtracted::None
+    }
+
+    /// Walk the AST to find a `use Module` node whose location spans `offset`.
+    fn find_use_module_at_offset(node: &Node, offset: usize) -> Option<String> {
+        if offset < node.location.start || offset > node.location.end {
+            return None;
+        }
+
+        if let NodeKind::Use { module, .. } = &node.kind {
+            if !module.is_empty() {
+                return Some(module.clone());
+            }
+        }
+
+        // Recurse into container nodes
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for stmt in statements {
+                    if let Some(m) = Self::find_use_module_at_offset(stmt, offset) {
+                        return Some(m);
+                    }
+                }
+            }
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    if let Some(m) = Self::find_use_module_at_offset(b, offset) {
+                        return Some(m);
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    /// Build a hover response for a `use Module` statement.
+    ///
+    /// Tries URI-based resolution first, then filesystem-based resolution.
+    /// Shows resolved path on success, or "Not found" with search paths on failure.
+    fn build_module_hover(&self, module_name: &str) -> Value {
+        // Try URI resolution (handles open docs + workspace folders)
+        if let Some(uri) = self.resolve_module_to_path(module_name) {
+            let display_path = uri.strip_prefix("file://").unwrap_or(&uri);
+            return json!({
+                "contents": {
+                    "kind": "markdown",
+                    "value": format!(
+                        "**{}**\n\nResolved: `{}`\n\n[Go to module]({})",
+                        module_name, display_path, uri
+                    ),
+                },
+            });
+        }
+
+        // Try filesystem resolution as fallback
+        if let Some(path) = self.resolve_module_path(module_name) {
+            let display = path.display();
+            if let Ok(file_uri) = url::Url::from_file_path(&path) {
+                return json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**{}**\n\nResolved: `{}`\n\n[Go to module]({})",
+                            module_name, display, file_uri
+                        ),
+                    },
+                });
+            }
+            return json!({
+                "contents": {
+                    "kind": "markdown",
+                    "value": format!(
+                        "**{}**\n\nResolved: `{}`",
+                        module_name, display
+                    ),
+                },
+            });
+        }
+
+        // Not found — show search paths
+        let include_paths = {
+            let config = self.workspace_config.lock();
+            config.include_paths.join(", ")
+        };
+
+        json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**{}**\n\nNot found in workspace\n\nSearch paths: {}",
+                    module_name, include_paths
+                ),
+            },
+        })
     }
 
     /// Handle textDocument/hover request with cancellation support
