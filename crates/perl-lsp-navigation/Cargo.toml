@@ -33,7 +33,13 @@ lsp-compat = []  # Enable LSP-specific functionality
 slow_tests = []  # Enable slow/expensive tests
 
 [dev-dependencies]
+criterion = "0.8.1"
+perl-parser-core = { workspace = true }
 perl-tdd-support = { workspace = true }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "navigation_benchmark"
+harness = false

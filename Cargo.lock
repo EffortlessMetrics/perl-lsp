@@ -1924,6 +1924,7 @@ dependencies = [
 name = "perl-lsp-completion"
 version = "0.11.0"
 dependencies = [
+ "criterion",
  "perl-keywords",
  "perl-lsp-completion-item",
  "perl-lsp-file-completion",
@@ -2147,6 +2148,7 @@ dependencies = [
 name = "perl-lsp-navigation"
 version = "0.11.0"
 dependencies = [
+ "criterion",
  "lsp-types",
  "perl-lsp-document-links",
  "perl-lsp-type-hierarchy",
