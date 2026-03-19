@@ -2,7 +2,14 @@
   "//": "Team configuration for internal Perl LSP deployment",
   "//": "Copy this file to your workspace .vscode/settings.json",
   "//": "and customize the paths for your environment",
-  
+
+  "//": "Exclude directories that confuse rust-analyzer (agent worktrees, archived code, fuzz harnesses)",
+  "rust-analyzer.files.excludeDirs": [
+    ".claude/worktrees",
+    "archive",
+    "fuzz"
+  ],
+
   "perl-lsp.serverPath": "/path/to/your/perl-lsp",
   "perl-lsp.autoDownload": false,
   "perl-lsp.downloadBaseUrl": "",
