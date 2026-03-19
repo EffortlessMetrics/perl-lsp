@@ -85,7 +85,8 @@ pub fn format_inline_value(name: &str, raw_value: &str) -> String {
         _ => {
             let trimmed = raw_value.trim();
             if trimmed.len() > 60 {
-                format!("{name} = {}...", &trimmed[..57])
+                let preview: String = trimmed.chars().take(57).collect();
+                format!("{name} = {}...", preview)
             } else {
                 format!("{name} = {trimmed}")
             }
@@ -298,5 +299,18 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$x = ?");
+    }
+
+    #[test]
+    fn test_scalar_truncation_uses_char_boundaries() {
+        let source = "my $name = 1;";
+        let long_value = "é".repeat(80);
+        let mut rv = HashMap::new();
+        rv.insert("$name".to_string(), long_value);
+
+        let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
+        assert_eq!(values.len(), 1);
+        assert!(values[0].text.starts_with("$name = "));
+        assert!(values[0].text.ends_with("..."));
     }
 }
