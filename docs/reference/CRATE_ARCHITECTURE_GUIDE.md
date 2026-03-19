@@ -581,9 +581,8 @@ directories.
 
 The current swarm runtime is defined by:
 
-- `.claude/agents/` — canonical tracked agent surface, with the active roster
-  and any compatibility material explicitly marked in
-  `AGENT_CATALOG.md`
+- `.claude/agents/archive/` — archived agent definitions and the machine-readable
+  roster snapshot
 - `.claude/skills/` — main skill layer for swarm control and core worker procedures
 - `.claude/commands/` — slash entrypoints that currently live as command files
 - `.claude/settings.json` — shared permissions and hook enforcement
@@ -591,9 +590,9 @@ The current swarm runtime is defined by:
 
 See [../../.claude/README.md](../../.claude/README.md) for the live control
 plane contract, [../../.claude/agents/README.md](../../.claude/agents/README.md)
-for the roster contract,
+for the archived roster contract,
 [../../.claude/agents/AGENT_CATALOG.md](../../.claude/agents/AGENT_CATALOG.md)
-for the active-versus-compatibility inventory and routing metadata,
+for the archived inventory summary and routing metadata,
 [SKILL_AND_AGENT_DESIGN.md](SKILL_AND_AGENT_DESIGN.md) for the boundary model,
 and
 [../adr/0033-worktree-first-disposable-workers.md](../adr/0033-worktree-first-disposable-workers.md)
@@ -611,18 +610,18 @@ The repo now treats:
 
 The live coordinator model is intentionally small: `scout`, `builder`,
 `reviewer`, `ops`, and `improver` are the persistent lanes that route work.
-The broader tracked roster in `.claude/agents/` also includes reusable workers
-and specialist workers that those coordinators spawn on demand. Those workers
-carry narrow task context, while isolated worktrees remain the default write
-boundary for PR-shaped changes.
+The broader archived roster in `.claude/agents/archive/` also includes reusable
+workers and specialist workers that those coordinators spawn on demand. Those
+workers carry narrow task context, while isolated worktrees remain the default
+write boundary for PR-shaped changes.
 
 ### Historical Note (*Diataxis: Explanation* - older generations)
 
 Older agent generations (`.claude/agents2` through `.claude/agents6`) remain
 useful as donor material and operator history, but they are not the current
 runtime contract for this repository. Compatibility-only donor files now live
-under `.claude/agents-compat/`, leaving `.claude/agents/` as the active
-tracked roster.
+under `.claude/agents-compat/`, leaving `.claude/agents/archive/` as the
+archived tracked roster.
 
 ## Development Guidelines
 

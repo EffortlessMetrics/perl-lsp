@@ -475,7 +475,7 @@ Thin coordinator teammates + thick subagent fanout + worktree isolation:
 
 | What | Where |
 |------|-------|
-| Agent definitions (50) | `.claude/agents/` |
+| Archived agent definitions (50) | `.claude/agents/archive/` |
 | Swarm protocol | `/swarm-protocol` skill |
 | Coding standards | `/coding-standards` skill |
 | Handoff files | `.ops-perl-lsp/handoffs/` |

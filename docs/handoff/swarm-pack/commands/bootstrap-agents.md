@@ -19,7 +19,7 @@ Discover the codebase structure and generate domain-specific agent definitions. 
 2. **Identifies** natural domains (package families, layers, feature areas)
 3. **Generates** 3-5 agent files per domain: fix, test, scout, explorer
 4. **Customizes** the imported starter agents with repo-specific details
-5. **Creates** `.claude/agents/AGENT_CATALOG.md` for orchestrator reference
+5. **Creates** `.claude/agents/AGENT_CATALOG.md` and archived agent roster files for orchestrator reference
 
 ## Process
 
@@ -29,9 +29,9 @@ Launch the `bootstrapper` agent:
 Agent(
   subagent_type: "bootstrapper",
   prompt: "Discover this codebase and generate domain-specific agents. $ARGUMENTS.
-Write agents to .claude/agents/.
+Write agents to .claude/agents/archive/.
 Update the repo-local coordinator and worker roster when the pattern is reusable.
-Create .claude/agents/AGENT_CATALOG.md.
+Create .claude/agents/AGENT_CATALOG.md and .claude/agents/archive/agent-roster.json.
 Target ~25-35 domain agents.",
   mode: "auto"
 )
@@ -39,7 +39,7 @@ Target ~25-35 domain agents.",
 
 ## After Bootstrap
 
-1. Review generated agents in `.claude/agents/`
+1. Review generated agents in `.claude/agents/archive/`
 2. Check `AGENT_CATALOG.md` for the full inventory
 3. Verify any `$PLACEHOLDER` values were filled in
 4. Test with `/swarm all` to start the swarm

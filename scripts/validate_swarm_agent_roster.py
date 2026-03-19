@@ -14,8 +14,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = ROOT / ".claude" / "agents"
-ROSTER_PATH = AGENTS_DIR / "agent-roster.json"
-CATALOG_PATH = AGENTS_DIR / "AGENT_CATALOG.md"
+ARCHIVE_DIR = AGENTS_DIR / "archive"
+ROSTER_PATH = ARCHIVE_DIR / "agent-roster.json"
 COMMANDS_DIR = ROOT / ".claude" / "commands"
 SKILLS_DIR = ROOT / ".claude" / "skills"
 
@@ -41,7 +41,6 @@ ALLOWED_CATEGORIES = {
     "review",
     "scout",
 }
-ACTIVE_AGENT_EXCLUDES = {"README.md", "AGENT_CATALOG.md"}
 NAME_RE = re.compile(r"^[a-z0-9-]+$")
 
 
@@ -90,18 +89,6 @@ def load_frontmatter(path: Path) -> dict[str, object]:
     return data
 
 
-def catalog_files() -> set[str]:
-    files: set[str] = set()
-    for line in CATALOG_PATH.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("| `"):
-            continue
-        matches = re.findall(r"`([^`]+\.md)`", line)
-        if len(matches) != 1:
-            fail(f"could not uniquely determine catalog file from line: {line}")
-        files.add(matches[0])
-    return files
-
-
 def entrypoint_exists(entrypoint: str) -> bool:
     name = entrypoint.removeprefix("/")
     return (COMMANDS_DIR / f"{name}.md").exists() or (SKILLS_DIR / name / "SKILL.md").exists()
@@ -121,13 +108,9 @@ def main() -> None:
     if not isinstance(agents, list) or not agents:
         fail("agents must be a non-empty array")
 
-    active_files = {path.name for path in AGENTS_DIR.glob("*.md") if path.name not in ACTIVE_AGENT_EXCLUDES}
-    catalog_file_set = catalog_files()
-    if catalog_file_set != active_files:
-        fail(
-            "AGENT_CATALOG.md file set does not match active .claude/agents surface: "
-            f"catalog={sorted(catalog_file_set)} active={sorted(active_files)}"
-        )
+    archived_files = {path.name for path in ARCHIVE_DIR.glob("*.md")}
+    if not archived_files:
+        fail(f"no archived agent definition files found in {ARCHIVE_DIR}")
 
     seen_names: set[str] = set()
     seen_files: set[str] = set()
@@ -165,7 +148,7 @@ def main() -> None:
         seen_files.add(agent_file)
         roster_files.add(agent_file)
 
-        agent_path = AGENTS_DIR / agent_file
+        agent_path = ARCHIVE_DIR / agent_file
         if not agent_path.exists():
             fail(f"{name}.file does not exist: {agent_file}")
 
@@ -189,7 +172,7 @@ def main() -> None:
             f"{agent_file} frontmatter.description",
         )
         if frontmatter_description != description:
-            fail(f"{agent_file} description does not match agent-roster.json")
+            fail(f"{agent_file} description does not match archived agent-roster.json")
 
         skills = frontmatter.get("skills")
         if skills is not None:
@@ -204,13 +187,13 @@ def main() -> None:
             if not entrypoint_exists(entrypoint):
                 fail(f"{name}.first_entrypoints references missing command/skill: {entrypoint}")
 
-    if roster_files != active_files:
+    if roster_files != archived_files:
         fail(
-            "agent-roster.json file set does not match active .claude/agents surface: "
-            f"roster={sorted(roster_files)} active={sorted(active_files)}"
+            "archived agent-roster.json file set does not match archived .claude/agents surface: "
+            f"roster={sorted(roster_files)} archive={sorted(archived_files)}"
         )
 
-    print(f"Validated {len(agents)} agents in {ROSTER_PATH}")
+    print(f"Validated {len(agents)} archived agents in {ROSTER_PATH}")
 
 
 if __name__ == "__main__":
