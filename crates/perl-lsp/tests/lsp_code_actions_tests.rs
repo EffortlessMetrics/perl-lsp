@@ -349,6 +349,99 @@ print $undefined_var;
     Ok(())
 }
 
+/// Test quick fixes preserve associated diagnostics in the LSP response
+#[test]
+fn test_quickfix_actions_include_associated_diagnostics() -> Result<(), Box<dyn std::error::Error>>
+{
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+use strict;
+use warnings;
+
+print $undefined_var;
+"#
+                }
+            }
+        }),
+    );
+
+    let diag_response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 69,
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+    let reported_diagnostics =
+        diag_response["result"]["items"].as_array().ok_or("Expected diagnostics result items")?;
+    let reported_diagnostic = reported_diagnostics
+        .iter()
+        .find(|diagnostic| {
+            matches!(
+                diagnostic["code"].as_str(),
+                Some("undeclared-variable" | "undefined-variable")
+            )
+        })
+        .ok_or("Expected undefined-variable style diagnostic in pull diagnostics")?;
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 70,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": { "uri": uri },
+                "range": {
+                    "start": { "line": 4, "character": 6 },
+                    "end": { "line": 4, "character": 20 }
+                },
+                "context": {
+                    "diagnostics": diag_response["result"]["items"].clone()
+                }
+            }
+        }),
+    );
+
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let declare_action = actions
+        .iter()
+        .find(|action| action["title"].as_str() == Some("Declare '$undefined_var' with 'my'"))
+        .ok_or("Expected quick fix for undefined variable")?;
+
+    let diagnostics = declare_action["diagnostics"]
+        .as_array()
+        .ok_or("Expected quick fix to include associated diagnostics")?;
+    assert_eq!(diagnostics.len(), 1);
+
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic["range"], reported_diagnostic["range"]);
+    assert_eq!(diagnostic["severity"], reported_diagnostic["severity"]);
+    assert_eq!(diagnostic["code"], reported_diagnostic["code"]);
+    assert_eq!(diagnostic["source"], reported_diagnostic["source"]);
+    assert_eq!(diagnostic["message"], reported_diagnostic["message"]);
+
+    shutdown_and_exit(&server);
+    Ok(())
+}
+
 /// Test extract subroutine refactoring
 #[test]
 fn test_extract_subroutine() -> Result<(), Box<dyn std::error::Error>> {

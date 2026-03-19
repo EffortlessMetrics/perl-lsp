@@ -102,7 +102,41 @@ impl LspServer {
                 })];
                 changes.insert(uri.to_string(), edits);
 
-                code_actions.push(json!({
+                let associated_diagnostics: Vec<Value> = action
+                    .diagnostic_id
+                    .as_deref()
+                    .zip(action.diagnostic_range)
+                    .into_iter()
+                    .filter_map(|(code, range)| {
+                        diagnostics.iter().find(|diagnostic| {
+                            diagnostic.code.as_deref() == Some(code) && diagnostic.range == range
+                        })
+                    })
+                    .map(|diagnostic| {
+                        let (diag_start_line, diag_start_char) =
+                            self.offset_to_pos16(doc, diagnostic.range.0);
+                        let (diag_end_line, diag_end_char) =
+                            self.offset_to_pos16(doc, diagnostic.range.1);
+
+                        json!({
+                            "range": {
+                                "start": {"line": diag_start_line, "character": diag_start_char},
+                                "end": {"line": diag_end_line, "character": diag_end_char},
+                            },
+                            "severity": match diagnostic.severity {
+                                crate::features::diagnostics::DiagnosticSeverity::Error => 1,
+                                crate::features::diagnostics::DiagnosticSeverity::Warning => 2,
+                                crate::features::diagnostics::DiagnosticSeverity::Information => 3,
+                                crate::features::diagnostics::DiagnosticSeverity::Hint => 4,
+                            },
+                            "code": diagnostic.code.clone(),
+                            "source": "perl-lsp",
+                            "message": diagnostic.message.clone(),
+                        })
+                    })
+                    .collect();
+
+                let mut action_json = json!({
                     "title": action.title,
                     "kind": match action.kind {
                         InternalCodeActionKindV2::QuickFix => "quickfix",
@@ -114,7 +148,18 @@ impl LspServer {
                     "edit": {
                         "changes": changes,
                     },
-                }));
+                });
+
+                if let Some(action_object) = action_json.as_object_mut() {
+                    if !associated_diagnostics.is_empty() {
+                        action_object.insert(
+                            "diagnostics".to_string(),
+                            Value::Array(associated_diagnostics),
+                        );
+                    }
+                }
+
+                code_actions.push(action_json);
             }
 
             // Get refactorings from the original provider (AST-based)
