@@ -155,10 +155,11 @@ impl LspServer {
             };
 
             eprintln!(
-                "Publishing {} diagnostics for {} (version {})",
+                "Publishing {} diagnostics for {} (version {}, tier: {})",
                 lsp_diagnostics.len(),
                 normalized_uri,
-                doc.version
+                doc.version,
+                doc.degradation_tier
             );
 
             // Only publish if client doesn't support pull diagnostics

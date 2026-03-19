@@ -1069,6 +1069,19 @@ bench-alert-check:
     @echo "🔍 Checking for critical regressions..."
     @python3 ./benchmarks/scripts/alert.py --check
 
+
+# Run all performance benchmarks and save baseline for 0.12.0
+perf-baseline:
+    @echo "Running performance baseline benchmarks..."
+    cargo bench -p perl-parser --bench parser_benchmark --locked
+    cargo bench -p perl-lexer --bench lexer_benchmarks --locked
+    cargo bench -p perl-lsp-completion --bench completion_benchmark --locked
+    cargo bench -p perl-lsp-navigation --bench navigation_benchmark --locked
+    cargo bench -p perl-workspace-index --bench workspace_index_benchmark --locked
+    cargo bench -p perl-lsp --bench rope_performance_benchmark --locked
+    cargo bench -p perl-lsp-tooling --bench cache_benchmark --locked
+    @echo "Baseline complete. See docs/project/PERFORMANCE_BASELINES.md"
+
 # ============================================================================
 # Code Coverage (Issue #276)
 # ============================================================================

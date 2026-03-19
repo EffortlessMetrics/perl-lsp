@@ -1,0 +1,8 @@
+# rust-analyzer configuration for non-VSCode editors (Neovim, Helix, Zed, etc.)
+#
+# Excludes directories that contain duplicate crate roots and confuse
+# rust-analyzer: agent worktrees, archived legacy code, and fuzz harnesses.
+# See also .vscode/settings.json for the VSCode equivalent.
+
+[files]
+excludeDirs = [".claude/worktrees", "archive", "fuzz"]

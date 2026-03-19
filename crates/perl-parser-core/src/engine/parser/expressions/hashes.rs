@@ -92,15 +92,22 @@ impl<'a> Parser<'a> {
             self.tokens.next()?; // consume }
             let end = self.previous_position();
 
-            // Check if the expression is an array literal that should be a hash
-            // This happens when parse_comma creates an array from key => value pairs
-            if let NodeKind::ArrayLiteral { elements } = &first_expr.kind {
-                // Check if this looks like hash pairs (even number of elements)
-                if elements.len() % 2 == 0 && !elements.is_empty() {
-                    // Convert array elements to hash pairs
-                    let mut pairs = Vec::new();
-                    for i in (0..elements.len()).step_by(2) {
-                        pairs.push((elements[i].clone(), elements[i + 1].clone()));
+            // Destructure first_expr to consume its kind by move, avoiding clones
+            let Node { kind: first_kind, location: first_loc } = first_expr;
+
+            match first_kind {
+                // Array literal that should be a hash: convert pairs via move
+                // This happens when parse_comma creates an array from key => value pairs
+                NodeKind::ArrayLiteral { elements }
+                    if elements.len() % 2 == 0 && !elements.is_empty() =>
+                {
+                    let mut pairs = Vec::with_capacity(elements.len() / 2);
+                    let mut iter = elements.into_iter();
+                    while let Some(key) = iter.next() {
+                        // Safety: len is even and non-zero, so values are always paired
+                        if let Some(value) = iter.next() {
+                            pairs.push((key, value));
+                        }
                     }
 
                     self.exit_recursion();
@@ -109,21 +116,24 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end },
                     ));
                 }
-            }
 
-            // If the expression is already a HashLiteral, return it directly
-            // This happens when parse_comma creates a HashLiteral from key => value pairs
-            if matches!(first_expr.kind, NodeKind::HashLiteral { .. }) {
-                self.exit_recursion();
-                return Ok(first_expr);
-            }
+                // Already a HashLiteral — return it directly
+                // This happens when parse_comma creates a HashLiteral from key => value pairs
+                kind @ NodeKind::HashLiteral { .. } => {
+                    self.exit_recursion();
+                    return Ok(Node::new(kind, first_loc));
+                }
 
-            // Otherwise it's a block with a single expression
-            self.exit_recursion();
-            return Ok(Node::new(
-                NodeKind::Block { statements: vec![first_expr] },
-                SourceLocation { start, end },
-            ));
+                // Otherwise it's a block with a single expression
+                other_kind => {
+                    let expr_node = Node::new(other_kind, first_loc);
+                    self.exit_recursion();
+                    return Ok(Node::new(
+                        NodeKind::Block { statements: vec![expr_node] },
+                        SourceLocation { start, end },
+                    ));
+                }
+            }
         }
 
         // If there's more content, we need to determine if it's hash pairs or block statements

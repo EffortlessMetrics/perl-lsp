@@ -27,6 +27,7 @@ perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-formatting = { workspace = true }
 perl-lsp-cancellation = { workspace = true }
+perl-lsp-color-provider = { workspace = true }
 perl-lsp-input-validation = { workspace = true }
 perl-lsp-limits = { workspace = true }
 perl-lsp-uri = { workspace = true }
@@ -43,6 +44,7 @@ perl-lsp-code-lens = { workspace = true }
 perl-lsp-navigation = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-type-hierarchy = { workspace = true }
 perl-lsp-rename = { workspace = true }
+perl-lsp-selection-range = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
 perl-lsp-launcher = { workspace = true }
 perl-lsp-diagnostic-catalog = { workspace = true }
@@ -122,6 +124,11 @@ which = "8.0.2"
 parking_lot = "0.12.5"
 criterion = "0.8.1"
 uuid = { version = "1.21.0", features = ["v4"] }
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
 
 [[bench]]
 name = "rope_performance_benchmark"

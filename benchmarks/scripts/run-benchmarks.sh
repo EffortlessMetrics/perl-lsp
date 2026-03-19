@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --output, -o FILE    Save results to JSON file"
             echo "  --quick, -q          Run quick smoke benchmarks"
-            echo "  --category, -c CAT   Run specific category (parser, lexer, lsp, index)"
+            echo "  --category, -c CAT   Run specific category (parser, lexer, completion, navigation, lsp, index)"
             echo "  --verbose, -v        Show detailed output"
             echo "  --help, -h           Show this help"
             exit 0
@@ -158,6 +158,23 @@ json_output() {
         echo "    \"lexer\": {"
         run_criterion_bench "perl-lexer" "lexer_benchmarks" "lexer"
         echo "      \"_category\": \"lexer\""
+        echo "    },"
+    fi
+
+
+    # Completion benchmarks
+    if [[ -z "$CATEGORY" || "$CATEGORY" == "completion" ]]; then
+        echo "    \"completion\": {"
+        run_criterion_bench "perl-lsp-completion" "completion_benchmark" "completion"
+        echo "      \"_category\": \"completion\""
+        echo "    },"
+    fi
+
+    # Navigation benchmarks
+    if [[ -z "$CATEGORY" || "$CATEGORY" == "navigation" ]]; then
+        echo "    \"navigation\": {"
+        run_criterion_bench "perl-lsp-navigation" "navigation_benchmark" "navigation"
+        echo "      \"_category\": \"navigation\""
         echo "    },"
     fi
 

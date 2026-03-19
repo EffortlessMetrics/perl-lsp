@@ -699,30 +699,31 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse import list (with EOF guard to prevent infinite loop on truncated input)
-            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else if self.peek_kind() == Some(TokenKind::Identifier) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else {
-                    return Err(ParseError::syntax(
-                        "Expected string or identifier in import list",
-                        self.current_position(),
-                    ));
-                }
-
-                if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.consume_token()?; // consume comma
-                } else if self.peek_kind() != Some(TokenKind::RightParen) {
-                    return Err(ParseError::syntax(
-                        "Expected comma or closing parenthesis",
-                        self.current_position(),
-                    ));
+            // Perl import lists can contain arbitrary expressions: backslash refs,
+            // sub blocks, nested parens, fat-arrow pairs, etc.  Instead of
+            // enumerating every legal token we use a depth-tracking consumer that
+            // collects everything until the matching closing paren.
+            let mut depth: u32 = 1;
+            while depth > 0 && !self.tokens.is_eof() {
+                match self.peek_kind() {
+                    Some(TokenKind::LeftParen) => {
+                        depth = depth.saturating_add(1);
+                        args.push(self.consume_token()?.text.to_string());
+                    }
+                    Some(TokenKind::RightParen) => {
+                        depth = depth.saturating_sub(1);
+                        if depth > 0 {
+                            args.push(self.consume_token()?.text.to_string());
+                        } else {
+                            self.consume_token()?; // consume final )
+                        }
+                    }
+                    Some(_) => {
+                        args.push(self.consume_token()?.text.to_string());
+                    }
+                    None => break,
                 }
             }
-
-            self.expect(TokenKind::RightParen)?;
         } else if !Self::is_statement_terminator(self.peek_kind()) {
             // Complex `use` arguments can start with tokens outside the bare-arg
             // fast path, such as sigils in `use warnings $ENV{X} ? ...`.
@@ -908,11 +909,13 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse argument list (with EOF guard to prevent infinite loop on truncated input)
+            // Parse argument list (with EOF guard to prevent infinite loop on truncated input).
+            // Accept strings, identifiers, and numbers to support key => value pairs.
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else if self.peek_kind() == Some(TokenKind::Identifier) {
+                if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::String | TokenKind::Identifier | TokenKind::Number)
+                ) {
                     args.push(self.consume_token()?.text.to_string());
                 } else {
                     return Err(ParseError::syntax(
@@ -921,8 +924,12 @@ impl<'a> Parser<'a> {
                     ));
                 }
 
-                if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.consume_token()?; // consume comma
+                // Accept both comma and fat arrow as separators
+                if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Comma | TokenKind::FatArrow)
+                ) {
+                    self.consume_token()?;
                 } else if self.peek_kind() != Some(TokenKind::RightParen) {
                     return Err(ParseError::syntax(
                         "Expected comma or closing parenthesis",
@@ -931,7 +938,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.expect(TokenKind::RightParen)?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
         }
 
         // Don't consume semicolon here - let parse_statement handle it uniformly

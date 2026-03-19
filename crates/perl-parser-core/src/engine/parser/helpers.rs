@@ -399,6 +399,56 @@ impl<'a> Parser<'a> {
         &self.errors
     }
 
+
+    /// Expect a closing delimiter, recovering gracefully if missing.
+    /// Records error and returns Ok(()) at sync points instead of Err.
+    fn expect_closing_delimiter(&mut self, kind: TokenKind) -> ParseResult<()> {
+        if self.peek_kind() == Some(kind) {
+            self.consume_token()?;
+            return Ok(());
+        }
+        if self.is_delimiter_recovery_point() {
+            let pos = self.current_position();
+            self.errors.push(ParseError::syntax(
+                format!("Missing '{}' — recovered at statement boundary", kind.display_name()),
+                pos,
+            ));
+            return Ok(());
+        }
+        let pos = self.current_position();
+        Err(ParseError::unexpected(
+            kind.display_name(),
+            self.peek_kind().map(|k| k.display_name()).unwrap_or("end of input"),
+            pos,
+        ))
+    }
+
+    /// Check if current token is a delimiter recovery point.
+    fn is_delimiter_recovery_point(&mut self) -> bool {
+        matches!(
+            self.peek_kind(),
+            Some(TokenKind::Semicolon)
+                | Some(TokenKind::RightBrace)
+                | Some(TokenKind::LeftBrace)
+                | Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::Local)
+                | Some(TokenKind::State)
+                | Some(TokenKind::Sub)
+                | Some(TokenKind::Package)
+                | Some(TokenKind::Use)
+                | Some(TokenKind::If)
+                | Some(TokenKind::Unless)
+                | Some(TokenKind::Elsif)
+                | Some(TokenKind::Else)
+                | Some(TokenKind::While)
+                | Some(TokenKind::Until)
+                | Some(TokenKind::For)
+                | Some(TokenKind::Foreach)
+                | None
+        )
+    }
+
     /// Check if current token is a synchronization point for error recovery
     fn is_sync_point(&mut self) -> bool {
         match self.peek_kind() {
