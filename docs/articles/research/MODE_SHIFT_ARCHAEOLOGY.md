@@ -111,10 +111,12 @@ sessions.
 
 The maintainer's clarification adds one more useful nuance inside the March
 2026 mixed-tool window itself: not every active surface sat at exactly the same
-mode. The Codex CLI wave was closer to quasi-industrialized output, while the
-short Claude Code swarm runs were fully industrialized because they combined
-persistent control-plane state, explicit role boundaries, and autonomous
-worktree execution.
+mode. The Codex CLI wave was quasi-industrialized: AI was reviewing AI, but the
+loop still needed more hands-on prodding than it ideally should have. The short
+Claude Code swarm runs were fully industrialized even though the interface
+still allowed steering. The steering is not what made them industrialized; it
+is simply notable that the interface remained steering-enabled rather than
+fully async while the underlying operating mode was already industrial.
 
 ---
 
