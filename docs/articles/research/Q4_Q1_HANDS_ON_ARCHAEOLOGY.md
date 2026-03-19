@@ -117,6 +117,9 @@ The pattern shows up in the titles too:
 This is not passive review. It is active integration.
 The maintainer's correction is that this period was driven by a mix of Codex
 CLI and Claude Code, not by a single tool.
+That mix matters because the Codex CLI phase was already close to industrial
+throughput, while the Claude Code phase added more deliberate steering and
+control-plane structure.
 
 ---
 
