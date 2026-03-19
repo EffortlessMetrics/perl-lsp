@@ -241,10 +241,7 @@ mod tests {
     #[test]
     fn single_quoted_with_subdir() {
         let paths = extract_use_lib_paths("use lib 'local/lib/perl5';");
-        assert_eq!(
-            paths,
-            vec![UseLibPath { path: "local/lib/perl5".into(), from_findbin: false }]
-        );
+        assert_eq!(paths, vec![UseLibPath { path: "local/lib/perl5".into(), from_findbin: false }]);
     }
 
     #[test]
