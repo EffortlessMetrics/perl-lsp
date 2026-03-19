@@ -8,7 +8,7 @@ When the v3 recursive descent parser encounters a construct it cannot handle, it
 
 The result is a concise map from root-cause categories to file counts, telling us exactly where parser improvements will have the largest impact.
 
-> **Data sources**: This document references two corpora. The **system corpus** (7,095 files from `/usr/share/perl`, `/usr/lib/x86_64-linux-gnu/perl`, `/usr/share/perl5`) is the original baseline. The **CPAN corpus** (4,355 files from `target/cpan-corpus/lib/perl5`) covers top-1000 CPAN distributions and is the primary source for current bucket sizes. Both use the same first-error normalization pipeline.
+> **Data sources**: This document references two corpora. The **system corpus** (7,095 files from `/usr/share/perl`, `/usr/lib/x86_64-linux-gnu/perl`, `/usr/share/perl5`) is tracked in the committed baseline at `.ci/parser-corpus-baseline.json`. The **CPAN corpus** (4,355 files from `target/cpan-corpus/lib/perl5`) is tracked in `.ci/cpan-corpus-baseline.json`. Both use the same first-error normalization pipeline, and every count in this document comes from those checked-in baselines.
 
 ## Why First-Error Analysis
 
@@ -50,23 +50,23 @@ The table below lists all semantic buckets defined in `SEMANTIC_BUCKETS`, plus t
 
 Two sets of counts are shown:
 - **System** column: system Perl corpus baseline at commit `a44f7a6d` (2026-03-16, Perl 5.038002, 7,095 files, 5,139 clean = 72.4%)
-- **CPAN** column: CPAN top-1000 corpus sweep (2026-03-18, 4,355 files). The top-9 priority table uses the latest sweep data; the full tables reference the committed baseline at commit `0ff44b44` (2026-03-17, 3,139 clean = 72.1%).
+- **CPAN** column: committed CPAN top-1000 baseline at commit `0ff44b44` (2026-03-17, 4,355 files, 3,139 clean = 72.1%)
 
-The CPAN corpus numbers are the primary reference for current prioritization.
+The CPAN corpus numbers are the primary reference for current prioritization. Scout notes below are qualitative annotations only; the ranked counts and full tables all use the same committed baseline data.
 
-### Top 9 Buckets by CPAN Count (Current Priority Order)
+### Top 9 Buckets by CPAN Baseline Count
 
 | Rank | Bucket | CPAN | System | Root Cause Notes | Status |
 |------|--------|------|--------|------------------|--------|
-| 1 | `unexpected_token_in_expr` | 146 | 706 | Catch-all for unrecognized expression starts. CPAN count dropped dramatically from original 596 (system baseline pre-Wave 2). Scout reports baselines as stale -- the remaining 146 are a mix of subcategories not yet broken out. | RESOLVED per scout; baselines stale |
-| 2 | `unclosed_paren_identifier` | 140 | 319 | Primary root cause: block-list functions called inside parenthesized expressions. When `map { ... }`, `grep { ... }`, or `sort { ... }` appear inside `(...)`, the parser misidentifies the block's closing `}` and then sees the next identifier where `)` was expected. | Active |
-| 3 | `unexpected_question_expr` | 109 | 52 | Two confirmed root causes: (1) `use constant` with ternary -- `use constant FOO => $x ? 1 : 0` where the parser does not expect `?` after a constant-context expression; (2) named unary operators followed by ternary -- `-e $file ? "yes" : "no"` where the parser consumes the ternary `?` as part of the unary's argument. | Active |
-| 4 | `unclosed_paren` | 106 | 134 | Generic unclosed parenthesis. Mix of cascade errors and genuine misparses in complex nested expressions. | Active |
+| 1 | `unclosed_paren_identifier` | 180 | 319 | Primary root cause: block-list functions called inside parenthesized expressions. When `map { ... }`, `grep { ... }`, or `sort { ... }` appear inside `(...)`, the parser misidentifies the block's closing `}` and then sees the next identifier where `)` was expected. | Active |
+| 2 | `unexpected_token_in_expr` | 148 | 706 | Catch-all for unrecognized expression starts. Scout notes suggest the remaining files are a mix of subcategories that still need a fresh breakout pass. | Needs re-triage |
+| 3 | `unclosed_paren` | 108 | 134 | Generic unclosed parenthesis. Mix of cascade errors and genuine misparses in complex nested expressions. | Active |
+| 4 | `unexpected_question_expr` | 103 | 52 | Two confirmed root causes: (1) `use constant` with ternary -- `use constant FOO => $x ? 1 : 0` where the parser does not expect `?` after a constant-context expression; (2) named unary operators followed by ternary -- `-e $file ? \"yes\" : \"no\"` where the parser consumes the ternary `?` as part of the unary's argument. | Active |
 | 5 | `unexpected_rbrace_expr` | 83 | -- | `}` found where an expression was expected. Typically occurs when the parser misidentifies a hash dereference block boundary or when a bare block ends in expression context. New bucket (not present in original doc). | Active |
-| 6 | `unexpected_comma_expr` | 70 | -- | `,` found where an expression was expected. Common in list contexts where an empty element or trailing comma in a non-list position confuses the parser. New bucket (not present in original doc). | Active |
-| 7 | `expected_left_brace` | 66 | 54 | Missing `{` to open a block. Regression partially attributed to the `field` keyword: `field $x` declarations in `class` bodies are not yet fully supported, causing the parser to expect a block where none exists. | REGRESSION (field keyword) |
-| 8 | `expected_variable` | 66 | 178 | REGRESSION from the `field` keyword feature (PR #1860). The `field $x :param` declaration syntax triggers a false "expected variable" when attribute parsing is incomplete. Both corpora now show elevated counts. | REGRESSION (field keyword) |
-| 9 | `unexpected_fat_arrow_expr` | 66 | 38 | `=>` used as a general separator (e.g., `push @arr => $val`). Wave 2B fix (PR #1484) addressed 3 code paths but CPAN corpus shows 66 remaining -- additional call sites where `=>` appears in separator position are not yet handled. | Partially fixed |
+| 6 | `unexpected_fat_arrow_expr` | 76 | 38 | `=>` used as a general separator (e.g., `push @arr => $val`). Wave 2B fixed several code paths, but additional separator-position call sites still remain. | Partially fixed |
+| 7 | `expected_left_brace` | 68 | 54 | Missing `{` to open a block. This still mixes genuine missing-block cases with class/field-related block expectations. | Active |
+| 8 | `unexpected_comma_expr` | 68 | -- | `,` found where an expression was expected. Common in list contexts where an empty element or trailing comma in a non-list position confuses the parser. New bucket (not present in original doc). | Active |
+| 9 | `expected_comma_or_close_paren` | 55 | 11 | Argument list parsing failure where the parser loses track of list separators or closing delimiters. | Active |
 
 ### Expression Parsing Buckets (Full Table)
 
@@ -188,33 +188,35 @@ The roadmap in `docs/project/PARSER_EDGE_CASE_ROADMAP.md` orders work by bucket 
 
 | Priority | Bucket(s) | CPAN Files | Root Cause | Status |
 |----------|-----------|------------|------------|--------|
-| Next | `unexpected_token_in_expr` | 146 | Catch-all (baselines stale per scout) | Needs re-triage |
-| Next | `unclosed_paren_identifier` | 140 | Block-list functions in parens (`map`/`grep`/`sort`) | Active |
-| Next | `unexpected_question_expr` | 109 | `use constant` ternary + named unary ternary | Active |
-| Next | `unclosed_paren` | 106 | Generic unclosed parenthesis | Active |
+| Next | `unclosed_paren_identifier` | 180 | Block-list functions in parens (`map`/`grep`/`sort`) | Active |
+| Next | `unexpected_token_in_expr` | 148 | Catch-all bucket that still needs re-triage | Needs re-triage |
+| Next | `unclosed_paren` | 108 | Generic unclosed parenthesis | Active |
+| Next | `unexpected_question_expr` | 103 | `use constant` ternary + named unary ternary | Active |
 | Next | `unexpected_rbrace_expr` | 83 | Hash/block boundary confusion | Active |
-| Next | `unexpected_comma_expr` | 70 | Empty list elements / misplaced commas | Active |
-| Next | `expected_left_brace` | 66 | `field` keyword regression | REGRESSION |
-| Next | `expected_variable` | 66 | `field` keyword regression | REGRESSION |
-| Next | `unexpected_fat_arrow_expr` | 66 | Additional `=>` separator sites | Partially fixed |
+| Next | `unexpected_fat_arrow_expr` | 76 | Additional `=>` separator sites | Partially fixed |
+| Next | `expected_left_brace` | 68 | Missing-block and class/field block-expectation mix | Active |
+| Next | `unexpected_comma_expr` | 68 | Empty list elements / misplaced commas | Active |
+| Next | `expected_comma_or_close_paren` | 55 | Argument-list delimiter recovery gaps | Active |
 
-The largest single-root-cause win is now `unclosed_paren_identifier` (140 CPAN files), where fixing block-list function parsing inside parenthesized expressions would address the majority of failures. The `unexpected_token_in_expr` catch-all at 146 is technically larger but scout reports indicate its baselines are stale and it needs re-triage into subcategories.
+The largest single-root-cause win in the committed CPAN baseline is now `unclosed_paren_identifier` (180 files), where fixing block-list function parsing inside parenthesized expressions would address the biggest reproducible bucket. The `unexpected_token_in_expr` catch-all at 148 is still close behind, but it remains a re-triage target rather than a clearly isolated fix class.
 
-### Known Root Causes (2026-03-18)
+### Known Root Causes (2026-03-17 Baselines + 2026-03-18 Scout Notes)
 
 The following root causes have been identified through scout analysis of the CPAN corpus:
 
-**`unclosed_paren_identifier` (140 files)** -- Block-list functions (`map`, `grep`, `sort`) called inside parenthesized expressions. When the parser encounters `for my $x (map { BLOCK } @list)`, it misidentifies the block boundary and then sees an identifier where `)` was expected. The fix requires teaching the expression parser to recognize block-list function calls as valid subexpressions within parenthesized contexts.
+**`unclosed_paren_identifier` (180 CPAN files)** -- Block-list functions (`map`, `grep`, `sort`) called inside parenthesized expressions. When the parser encounters `for my $x (map { BLOCK } @list)`, it misidentifies the block boundary and then sees an identifier where `)` was expected. The fix requires teaching the expression parser to recognize block-list function calls as valid subexpressions within parenthesized contexts.
 
-**`unexpected_question_expr` (109 files)** -- Two distinct root causes confirmed:
+**`unexpected_question_expr` (103 CPAN files)** -- Two distinct root causes confirmed:
 1. *`use constant` with ternary*: `use constant FOO => $x ? 1 : 0` -- the parser does not expect `?` after the expression in a constant declaration context.
 2. *Named unary operators followed by ternary*: `-e $file ? "yes" : "no"` -- the parser consumes the ternary `?` as part of the unary operator's argument rather than recognizing it as a separate binary operator.
 
-**`expected_variable` (66 CPAN / 178 system)** -- REGRESSION from the `field` keyword feature (PR #1860). The `field $x :param` declaration syntax triggers a false "expected variable" error when attribute parsing is incomplete. The CPAN count jumped from 8 to 66, confirming the regression is spreading as more CPAN modules adopt `class`/`field` syntax.
+**`unexpected_fat_arrow_expr` (76 CPAN files)** -- Wave 2B fixed the highest-volume `=>` separator paths, but the committed CPAN baseline shows the parser still misses additional call sites where `=>` appears in separator position outside canonical hash constructors.
 
-**`expected_left_brace` (66 CPAN / 54 system)** -- Partial regression from `field` keyword support. `field $x` declarations in `class` bodies do not require a block, but the parser expects one. Also includes genuine cases where blocks are missing after `sub`, `if`, etc.
+**`expected_left_brace` (68 CPAN / 54 system)** -- This bucket mixes genuine missing-block cases with class/field-related block expectations. It remains worth triaging, but the committed CPAN baseline does not support treating it as a standalone `expected_variable`-style CPAN regression.
 
-**`unexpected_token_in_expr` (146 CPAN)** -- Scout reports indicate the baseline counts are stale. After Wave 2 fixes landed, many files that previously fell into this catch-all now parse cleanly or fall into more specific subcategory buckets. The remaining 146 are a heterogeneous mix that needs further triage to identify whether additional subcategory buckets should be broken out.
+**`expected_comma_or_close_paren` (55 CPAN files)** -- The parser still loses track of separators or closing delimiters in some argument-list contexts. This is now large enough in the committed CPAN baseline to rank alongside the more obvious expression buckets.
+
+**`unexpected_token_in_expr` (148 CPAN files)** -- This remains a heterogeneous catch-all bucket. Scout notes indicate many of these files likely belong in more-specific subcategories, so the next step here is re-triage rather than treating the bucket itself as a single root cause.
 
 ### Cascade Unmasking
 
