@@ -102,7 +102,32 @@ That is how the swarm recovers context when the live control plane is gone.
 
 ---
 
-## 5. The Taxonomy Is A Memory Graph, Not A Flat List
+## 5. Scout Logs Add A Preserved Research Tier
+
+The current swarm also preserves a smaller but important memory class outside
+both `swarm-state` and GitHub issues: tracked scout logs.
+
+As of `2026-03-19`, the committed log directory includes:
+
+- `.claude/logs/scouts/2026-03-19-v0.12.0-readiness.md`
+- `.claude/logs/scouts/2026-03-19-install-experience.md`
+
+These logs are not active queue state and not stable doctrine. They preserve
+dated research passes after their useful conclusions have already been absorbed
+into tracked historical docs.
+
+That gives the repo another memory class:
+
+- `swarm-state` for live durable coordination
+- scout logs for preserved session evidence
+- issue titles for recoverable learning, article, friction, and audit memory
+
+The logs matter because they keep more of the swarm's investigative reasoning
+recoverable instead of collapsing everything directly into polished narrative.
+
+---
+
+## 6. The Taxonomy Is A Memory Graph, Not A Flat List
 
 The repo’s memory model now has two linked halves:
 
@@ -118,6 +143,7 @@ That is the important historical shift:
 
 - chat is transient
 - swarm-state is committed coordination memory
+- scout logs are preserved session research memory
 - issue titles are recoverable lesson memory
 - findings.json is the durable control-plane conclusion layer
 

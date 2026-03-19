@@ -45,6 +45,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md](research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md) — how the repo moved from Q3 lane ideas and `maint/pr-*` bridges into deterministic `worktree-agent-*` execution
 - [research/SWARM_STATE_ARCHAEOLOGY.md](research/SWARM_STATE_ARCHAEOLOGY.md) — how `.claude/swarm-state/` became the committed memory ledger for the current swarm
 - [research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md](research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md) — how committed swarm-state files and issue-title prefixes split memory into queue state, pitfalls, findings, learning, and article artifacts
+- [research/SCOUT_LOG_ARCHAEOLOGY.md](research/SCOUT_LOG_ARCHAEOLOGY.md) — how tracked scout logs preserve dated session research as a memory tier between live swarm-state and polished archaeology
 - [research/SWARM_SURFACE_EVOLUTION.md](research/SWARM_SURFACE_EVOLUTION.md) — Jan→Mar 2026 transition from commands to the current skills/hooks/swarm-state control plane
 
 ### Trust, Provenance, and AI-Native Operations
