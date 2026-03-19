@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { execFile } from 'child_process';
+import { exec, execFile } from 'child_process';
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -84,7 +84,172 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
         }
     });
-    
+
+    const showParserErrorsCommand = vscode.commands.registerCommand('perl-lsp.showParserErrors', () => {
+        outputChannel.show();
+    });
+
+    const runPerltidyCommand = vscode.commands.registerCommand('perl-lsp.runPerltidy', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file to format');
+            return;
+        }
+
+        await editor.document.save();
+        const filePath = editor.document.uri.fsPath;
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const perltidyConfig = config.get<string>('perltidyConfig', '');
+        const args = perltidyConfig
+            ? `-pro=${JSON.stringify(perltidyConfig)} -b ${JSON.stringify(filePath)}`
+            : `-b ${JSON.stringify(filePath)}`;
+
+        exec(`perltidy ${args}`, { cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath }, (error, _stdout, stderr) => {
+            if (error) {
+                outputChannel.appendLine(`perltidy error: ${stderr || error.message}`);
+                vscode.window.showErrorMessage(`perltidy failed: ${stderr || error.message}`);
+                return;
+            }
+            void vscode.commands.executeCommand('workbench.action.files.revert');
+            vscode.window.showInformationMessage('perltidy completed');
+        });
+    });
+
+    const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file to check');
+            return;
+        }
+
+        await editor.document.save();
+        const filePath = editor.document.uri.fsPath;
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const includePaths = config.get<string[]>('includePaths', ['lib', 'local/lib/perl5']);
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const includeArgs = includePaths.map(p => {
+            const resolved = workspaceRoot ? path.resolve(workspaceRoot, p) : p;
+            return `-I${resolved}`;
+        });
+
+        exec(`perl ${includeArgs.join(' ')} -c ${JSON.stringify(filePath)}`, { cwd: workspaceRoot }, (error, stdout, stderr) => {
+            const output = (stderr || stdout).trim();
+            if (error) {
+                outputChannel.appendLine(`[syntax-check] ${output}`);
+                vscode.window.showErrorMessage(`Syntax error: ${output}`, 'Show Output').then(selection => {
+                    if (selection === 'Show Output') {
+                        outputChannel.show();
+                    }
+                });
+            } else {
+                vscode.window.showInformationMessage(`Syntax OK: ${path.basename(filePath)}`);
+            }
+        });
+    });
+
+    const showIncCommand = vscode.commands.registerCommand('perl-lsp.showInc', () => {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const includePaths = config.get<string[]>('includePaths', ['lib', 'local/lib/perl5']);
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+        exec('perl -e "print join(qq{\\n}, @INC)"', { cwd: workspaceRoot }, (error, stdout) => {
+            if (error) {
+                const resolved = includePaths.map(p => workspaceRoot ? path.resolve(workspaceRoot, p) : p);
+                const content = `Configured include paths:\n${resolved.join('\n')}`;
+                outputChannel.appendLine(content);
+                outputChannel.show();
+                return;
+            }
+
+            const sysInc = stdout.trim().split('\n');
+            const configuredPaths = includePaths.map(p => workspaceRoot ? path.resolve(workspaceRoot, p) : p);
+            const allPaths = [...new Set([...configuredPaths, ...sysInc])];
+
+            const incChannel = vscode.window.createOutputChannel('Perl @INC');
+            incChannel.clear();
+            incChannel.appendLine('Perl @INC paths:');
+            incChannel.appendLine('');
+            for (const p of allPaths) {
+                const marker = configuredPaths.includes(p) ? ' (configured)' : '';
+                incChannel.appendLine(`  ${p}${marker}`);
+            }
+            incChannel.show();
+        });
+    });
+
+    const openModuleCommand = vscode.commands.registerCommand('perl-lsp.openModule', async () => {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+        const moduleName = await vscode.window.showInputBox({
+            prompt: 'Enter Perl module name (e.g., File::Basename)',
+            placeHolder: 'Module::Name'
+        });
+
+        if (!moduleName) {
+            return;
+        }
+
+        const modulePath = moduleName.replace(/::/g, '/') + '.pm';
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const includePaths = config.get<string[]>('includePaths', ['lib', 'local/lib/perl5']);
+        const resolvedPaths = includePaths.map(p => workspaceRoot ? path.resolve(workspaceRoot, p) : p);
+
+        for (const incPath of resolvedPaths) {
+            const fullPath = path.join(incPath, modulePath);
+            if (fs.existsSync(fullPath)) {
+                const doc = await vscode.workspace.openTextDocument(fullPath);
+                await vscode.window.showTextDocument(doc);
+                return;
+            }
+        }
+
+        exec(
+            `perl -MFile::Spec -e "for (@INC) { my \\$f = File::Spec->catfile(\\$_, '${modulePath.replace(/'/g, "\\'")}'); print \\$f and last if -f \\$f }"`,
+            { cwd: workspaceRoot },
+            async (error, stdout) => {
+                if (error || !stdout.trim()) {
+                    vscode.window.showWarningMessage(`Module '${moduleName}' not found in @INC`);
+                    return;
+                }
+                const fullPath = stdout.trim();
+                if (fs.existsSync(fullPath)) {
+                    const doc = await vscode.workspace.openTextDocument(fullPath);
+                    await vscode.window.showTextDocument(doc);
+                } else {
+                    vscode.window.showWarningMessage(`Module '${moduleName}' not found at ${fullPath}`);
+                }
+            }
+        );
+    });
+
+    const runCurrentTestCommand = vscode.commands.registerCommand('perl-lsp.runCurrentTest', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file');
+            return;
+        }
+
+        const filePath = editor.document.uri.fsPath;
+        if (!filePath.endsWith('.t')) {
+            vscode.window.showWarningMessage('Run Current Test is only available for .t files');
+            return;
+        }
+
+        await editor.document.save();
+
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const includePaths = config.get<string[]>('includePaths', ['lib', 'local/lib/perl5']);
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const includeArgs = includePaths.map(p => {
+            const resolved = workspaceRoot ? path.resolve(workspaceRoot, p) : p;
+            return `-I${resolved}`;
+        });
+
+        const terminal = vscode.window.createTerminal({ name: `prove: ${path.basename(filePath)}`, cwd: workspaceRoot });
+        terminal.show();
+        terminal.sendText(`prove -v ${includeArgs.join(' ')} ${JSON.stringify(filePath)}`);
+    });
+
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         if (!currentServerPath) {
             vscode.window.showErrorMessage('Perl LSP server path is unavailable.');
@@ -122,7 +287,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             {
                 label: '$(refresh) Restart Server',
-                description: 'Shift+Alt+R',
+                description: 'Ctrl+Shift+R',
                 detail: 'Restart the language server',
                 command: 'perl-lsp.restart'
             },
@@ -141,15 +306,36 @@ export async function activate(context: vscode.ExtensionContext) {
                 disabled: !isTestFile
             },
             {
-                label: '$(list-flat) Format Document',
-                description: 'Shift+Alt+F',
-                detail: isPerl ? 'Format using perltidy' : 'Format using perltidy (Only available for Perl files)',
-                command: 'editor.action.formatDocument',
+                label: '$(beaker) Run Current Test (prove)',
+                description: 'Ctrl+Shift+T',
+                detail: isTestFile ? 'Run prove -v on active .t file' : 'Run prove -v on active .t file (Only available for .t files)',
+                command: 'perl-lsp.runCurrentTest',
+                disabled: !isTestFile
+            },
+            {
+                label: '$(list-flat) Run perltidy on File',
+                detail: isPerl ? 'Format current file with perltidy' : 'Format current file with perltidy (Only available for Perl files)',
+                command: 'perl-lsp.runPerltidy',
                 disabled: !isPerl
+            },
+            {
+                label: '$(pass) Check Syntax',
+                description: 'Ctrl+Shift+C',
+                detail: isPerl ? 'Run perl -c on current file' : 'Run perl -c on current file (Only available for Perl files)',
+                command: 'perl-lsp.checkSyntax',
+                disabled: !isPerl
+            },
+            {
+                label: '$(file-code) Open Module',
+                description: 'Ctrl+Shift+M',
+                detail: 'Search and open any module in @INC',
+                command: 'perl-lsp.openModule'
             },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
+            { label: '$(error) Show Parser Errors', detail: 'Show output channel filtered to errors', command: 'perl-lsp.showParserErrors' },
+            { label: '$(folder-library) Show @INC', detail: 'Show Perl include path resolution', command: 'perl-lsp.showInc' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
             { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
 
@@ -195,6 +381,12 @@ export async function activate(context: vscode.ExtensionContext) {
         restartCommand,
         organizeImportsCommand,
         runTestsCommand,
+        showParserErrorsCommand,
+        runPerltidyCommand,
+        checkSyntaxCommand,
+        showIncCommand,
+        openModuleCommand,
+        runCurrentTestCommand,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,
@@ -215,28 +407,28 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     // First check user settings
     const config = vscode.workspace.getConfiguration('perl-lsp');
     const userPath = config.get<string>('serverPath');
-    
+
     if (userPath && fs.existsSync(userPath)) {
         outputChannel.appendLine(`Using user-configured perl-lsp: ${userPath}`);
         return userPath;
     }
-    
+
     // Check bundled binary
     const platform = process.platform;
     const arch = process.arch;
     let binaryName = 'perl-lsp';
-    
+
     if (platform === 'win32') {
         binaryName = 'perl-lsp.exe';
     }
-    
+
     const bundledPath = path.join(
         context.extensionPath,
         'bin',
         `${platform}-${arch}`,
         binaryName
     );
-    
+
     if (fs.existsSync(bundledPath)) {
         outputChannel.appendLine(`Using bundled perl-lsp: ${bundledPath}`);
         // Make sure it's executable on Unix-like systems
@@ -245,7 +437,7 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
         }
         return bundledPath;
     }
-    
+
     // Try to find in PATH
     const pathDirs = process.env.PATH?.split(path.delimiter) || [];
     for (const dir of pathDirs) {
@@ -255,15 +447,15 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
             return fullPath;
         }
     }
-    
+
     // Check if auto-download is enabled
     const autoDownload = config.get<boolean>('autoDownload', true);
-    
+
     if (autoDownload) {
         outputChannel.appendLine('perl-lsp not found, attempting to download...');
         const downloader = new BinaryDownloader(context, outputChannel);
         const downloadedPath = await downloader.ensureBinary();
-        
+
         if (downloadedPath) {
             outputChannel.appendLine(`Downloaded perl-lsp to: ${downloadedPath}`);
             return downloadedPath;
@@ -271,7 +463,7 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     } else {
         outputChannel.appendLine('perl-lsp not found and auto-download is disabled');
     }
-    
+
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
 }
@@ -360,12 +552,6 @@ function createLanguageClient(serverPath: string): LanguageClient {
     return lc;
 }
 
-/**
- * Run `perl-lsp --health` and return `true` if the binary responds with `ok`.
- *
- * Waits up to 5 seconds. Returns `false` on timeout, non-zero exit, or if
- * stdout does not start with `ok`.
- */
 async function runHealthCheck(serverPath: string): Promise<boolean> {
     return new Promise(resolve => {
         execFile(serverPath, ['--health'], { timeout: 5000 }, (err: Error | null, stdout: string) => {

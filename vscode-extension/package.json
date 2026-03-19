@@ -52,7 +52,11 @@
     "onLanguage:perl",
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",
-    "onCommand:perl-lsp.reinstall"
+    "onCommand:perl-lsp.reinstall",
+    "onCommand:perl-lsp.checkSyntax",
+    "onCommand:perl-lsp.showInc",
+    "onCommand:perl-lsp.openModule",
+    "onCommand:perl-lsp.runCurrentTest"
   ],
   "contributes": {
     "languages": [
@@ -290,7 +294,7 @@
     "commands": [
       {
         "command": "perl-lsp.restart",
-        "title": "Restart Perl Language Server",
+        "title": "Restart Language Server",
         "category": "Perl",
         "icon": "$(refresh)"
       },
@@ -305,6 +309,12 @@
         "title": "Show Output Channel",
         "category": "Perl",
         "icon": "$(output)"
+      },
+      {
+        "command": "perl-lsp.showParserErrors",
+        "title": "Show Parser Errors",
+        "category": "Perl",
+        "icon": "$(error)"
       },
       {
         "command": "perl-lsp.showStatusMenu",
@@ -325,6 +335,36 @@
         "icon": "$(organization)"
       },
       {
+        "command": "perl-lsp.runPerltidy",
+        "title": "Run perltidy on File",
+        "category": "Perl",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "perl-lsp.checkSyntax",
+        "title": "Check Syntax",
+        "category": "Perl",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "perl-lsp.showInc",
+        "title": "Show @INC",
+        "category": "Perl",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "perl-lsp.openModule",
+        "title": "Open Module",
+        "category": "Perl",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "perl-lsp.runCurrentTest",
+        "title": "Run Current Test",
+        "category": "Perl",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "perl-lsp.runTests",
         "title": "Run Tests in Current File",
         "category": "Perl",
@@ -342,6 +382,10 @@
           "when": "editorLangId == perl"
         },
         {
+          "command": "perl-lsp.showParserErrors",
+          "when": "editorLangId == perl"
+        },
+        {
           "command": "perl-lsp.showStatusMenu",
           "when": "editorLangId == perl"
         },
@@ -354,6 +398,25 @@
           "when": "editorLangId == perl"
         },
         {
+          "command": "perl-lsp.runPerltidy",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.checkSyntax",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.showInc",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.openModule"
+        },
+        {
+          "command": "perl-lsp.runCurrentTest",
+          "when": "editorLangId == perl && resourceExtname == .t"
+        },
+        {
           "command": "perl-lsp.runTests",
           "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/"
         }
@@ -363,11 +426,21 @@
           "command": "perl-lsp.runTests",
           "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/",
           "group": "navigation"
+        },
+        {
+          "command": "perl-lsp.runCurrentTest",
+          "when": "editorLangId == perl && resourceExtname == .t",
+          "group": "navigation"
         }
       ],
       "editor/context": [
         {
           "command": "perl-lsp.runTests",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        },
+        {
+          "command": "perl-lsp.checkSyntax",
           "when": "editorLangId == perl",
           "group": "navigation"
         }
@@ -386,8 +459,23 @@
       },
       {
         "command": "perl-lsp.restart",
-        "key": "shift+alt+r",
+        "key": "ctrl+shift+r",
         "when": "editorTextFocus && editorLangId == perl"
+      },
+      {
+        "command": "perl-lsp.checkSyntax",
+        "key": "ctrl+shift+c",
+        "when": "editorTextFocus && editorLangId == perl"
+      },
+      {
+        "command": "perl-lsp.openModule",
+        "key": "ctrl+shift+m",
+        "when": "editorTextFocus && editorLangId == perl"
+      },
+      {
+        "command": "perl-lsp.runCurrentTest",
+        "key": "ctrl+shift+t",
+        "when": "editorTextFocus && editorLangId == perl && resourceExtname == .t"
       }
     ],
     "snippets": [
