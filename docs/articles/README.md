@@ -32,6 +32,7 @@ These documents intentionally preserve dated observations and period-specific me
 
 - [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
 - [research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md](research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md) — why `agents4` is the clearest perl-lsp-native preserved form of the canonical Q3 three-phase swarm
+- [research/CONTROL_PLANE_SELF_REPAIR_ARCHAEOLOGY.md](research/CONTROL_PLANE_SELF_REPAIR_ARCHAEOLOGY.md) — how March 16-19, 2026 turns the swarm operating system itself into a maintained target through audits, friction logs, swarm-infra issues, and follow-up control-plane PRs
 - [research/HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md](research/HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md) — how the March 2026 swarm split durable `swarm-state` from `.ops-perl-lsp` runtime without fully removing the older paths from live skills, hooks, commands, and donor agent packs
 - [research/HOOK_CONTROL_ARCHAEOLOGY.md](research/HOOK_CONTROL_ARCHAEOLOGY.md) — how hooks evolved from early interception into the deterministic control boundary for the current swarm, while still exposing live gaps and reserved lifecycle ownership
 - [research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md](research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md) — how orchestration guides, project doctrine, `.claude`, and `AGENTS.md` turned methodology into versioned operating instructions
