@@ -111,14 +111,18 @@ fn parse_line_policy_with_three_segments() {
 #[test]
 fn parse_line_with_severity_1_parses_correctly() {
     let line = "test.pl:1:1:1:SomePolicy:low severity violation";
-    let parsed = parse_perlcritic_line(line).expect("severity 1 must parse");
+    let parsed = parse_perlcritic_line(line);
+    assert!(parsed.is_some(), "severity 1 must parse");
+    let parsed = parsed.unwrap_or_else(|| unreachable!());
     assert_eq!(parsed.severity, 1);
 }
 
 #[test]
 fn parse_line_with_severity_5_parses_correctly() {
     let line = "test.pl:1:1:5:SomePolicy:critical violation";
-    let parsed = parse_perlcritic_line(line).expect("severity 5 must parse");
+    let parsed = parse_perlcritic_line(line);
+    assert!(parsed.is_some(), "severity 5 must parse");
+    let parsed = parsed.unwrap_or_else(|| unreachable!());
     assert_eq!(parsed.severity, 5);
 }
 
@@ -151,7 +155,9 @@ fn parse_line_with_non_numeric_column_returns_none() {
 #[test]
 fn parse_line_with_unix_path() {
     let line = "lib/Some/Module.pm:3:2:2:Subroutines::ProhibitExcessComplexity:too complex";
-    let parsed = parse_perlcritic_line(line).expect("unix path must parse");
+    let parsed = parse_perlcritic_line(line);
+    assert!(parsed.is_some(), "unix path must parse");
+    let parsed = parsed.unwrap_or_else(|| unreachable!());
     assert_eq!(parsed.file, "lib/Some/Module.pm");
     assert_eq!(parsed.line, 3);
     assert_eq!(parsed.column, 2);

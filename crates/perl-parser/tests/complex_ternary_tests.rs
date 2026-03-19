@@ -15,12 +15,14 @@ fn try_parse(code: &str) -> Result<(), String> {
     parser.parse().map(|_| ()).map_err(|e| format!("{e}"))
 }
 
-/// Recursively walk the AST and panic if any Error node is found.
+/// Recursively walk the AST and assert that no Error node is found.
 fn assert_no_error_nodes(node: &Node) {
-    if let NodeKind::Error { message, .. } = &node.kind {
-        panic!("Found Error node in AST: {message}");
-    }
-    visit_children(node, |child| assert_no_error_nodes(child));
+    assert!(
+        !matches!(&node.kind, NodeKind::Error { .. }),
+        "Found Error node in AST: {}",
+        if let NodeKind::Error { message, .. } = &node.kind { message.as_str() } else { "" }
+    );
+    visit_children(node, assert_no_error_nodes);
 }
 
 /// Visit immediate children of a node.
@@ -89,10 +91,8 @@ fn visit_children<F: FnMut(&Node)>(node: &Node, mut f: F) {
                 f(v);
             }
         }
-        NodeKind::Return { value } => {
-            if let Some(v) = value {
-                f(v);
-            }
+        NodeKind::Return { value: Some(v) } => {
+            f(v);
         }
         // Leaf nodes or nodes we don't need to recurse into for this test
         _ => {}

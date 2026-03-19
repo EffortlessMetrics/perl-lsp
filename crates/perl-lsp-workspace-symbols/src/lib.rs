@@ -603,10 +603,9 @@ my $top_level_var = 42;
         provider.index_document("file:///controller.pm", &ast, source);
 
         let results = provider.search("Controller", &source_map);
-        let pkg = results
-            .iter()
-            .find(|s| s.name.contains("Controller") && s.kind == 2) // 2 = Module/Package
-            .expect("should find Controller package symbol");
+        let pkg = results.iter().find(|s| s.name.contains("Controller") && s.kind == 2); // 2 = Module/Package
+        assert!(pkg.is_some(), "should find Controller package symbol");
+        let pkg = pkg.unwrap_or_else(|| unreachable!());
 
         assert_eq!(pkg.kind, 2, "Package should have Module kind (2)");
     }
