@@ -8,13 +8,13 @@
       "kind": "runtime_invariant",
       "status": "landed",
       "recorded_on": "2026-03-17",
-      "summary": "Anything under .claude/agents/ is part of the active tracked swarm surface.",
-      "decision": "Keep active tracked agents in .claude/agents/ only. Move donor or compatibility material out of that directory, and catalog every live agent there.",
+      "summary": "Anything under .claude/agents/archive/ is part of the tracked archived roster surface.",
+      "decision": "Keep tracked archived agent definitions in .claude/agents/archive/ and record the roster contract in the catalog and schema files. Remove obsolete donor generations instead of mixing them into the archived roster surface.",
       "surfaces": [
         ".claude/agents/",
+        ".claude/agents/archive/",
         ".claude/agents/AGENT_CATALOG.md",
-        ".claude/agents/README.md",
-        ".claude/agents-compat/"
+        ".claude/agents/README.md"
       ],
       "evidence": [
         {
@@ -31,9 +31,9 @@
         }
       ],
       "follow_up": [
-        "Keep future donor material outside .claude/agents/."
+        "Keep future donor material outside .claude/agents/archive/."
       ],
-      "notes": "Untracked or ambiguous files in .claude/agents/ are treated as a control-plane bug, not local scratch state."
+      "notes": "Untracked or ambiguous files in .claude/agents/archive/ are treated as a control-plane bug, not local scratch state."
     },
     {
       "id": "SWARM-FINDING-0002",

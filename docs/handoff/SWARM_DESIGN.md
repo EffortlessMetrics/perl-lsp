@@ -445,8 +445,9 @@ named coordinators; optional specialists are spawned on demand.
 The archived catalog records who usually spawns each tracked specialist, where
 it hands work next, and which slash entrypoints it should invoke first, so the
 agent list and the flow mapping stay coupled.
-Compatibility donor agents now live under `.claude/agents-compat/` rather than
-inside the archived roster directory.
+Older agent generations (`agents2` through `agents6` and `agents-compat`) have
+been removed. Historical tracked specialist definitions live under
+`.claude/agents/archive/`.
 
 ### Agent Taxonomy (~50 total after bootstrap)
 

@@ -36,8 +36,7 @@ SHA256SUMS
 scripts/__pycache__/
 *.pyc
 
-# Claude — agents/ is gitignored to allow swapping the active agents symlink.
-# agents2/, agents3/, agents4/ etc. are version-tracked.
+# Claude — ignore new local files under the archived agent roster surface.
 /.claude/agents/
 
 # Swarm ops — ignore the entire directory (contains repo mirror artifacts),
