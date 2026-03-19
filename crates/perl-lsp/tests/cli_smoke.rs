@@ -90,7 +90,7 @@ fn completion_fish_produces_output() {
 #[test]
 fn completion_unknown_shell_fails() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.args(["--completion", "powershell"]).assert().failure();
+    cmd.args(["--completion", "unknown-shell"]).assert().failure();
 }
 
 #[test]
