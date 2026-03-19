@@ -1,441 +1,360 @@
 # Troubleshooting Guide
 
-Common issues and their solutions when using perl-lsp.
+Practical fixes for common perl-lsp issues, organized by symptom.
 
 ## Quick Diagnostics
 
+Before diving into specific issues, run these checks:
+
 ```bash
-# Check installation
+# Verify binary exists and runs
 which perl-lsp && perl-lsp --version
 
-# Health check
+# Health check (returns "ok" when binary is functional)
 perl-lsp --health
 
-# Test JSON-RPC communication
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+# Detailed build info (version, git tag, feature profile)
+perl-lsp --info
 ```
 
-## Build Issues
+In VS Code, open the Output panel: **View > Output**, then select **Perl Language Server** from the dropdown. Most errors are logged there.
 
-### Compilation Fails
+---
 
-**Problem**: `cargo build` fails with errors.
+## 1. Extension Not Starting
 
-**Solutions**:
+### Binary not found
 
-1. Ensure you have Rust 1.92+ (MSRV):
-   ```bash
-   rustup update stable
-   rustc --version  # Should be >= 1.92
-   ```
+**Symptom**: Error message "Perl Language Server (perl-lsp) not found" with options to install or open settings.
 
-2. Clean and rebuild:
-   ```bash
-   cargo clean
-   cargo build -p perl-lsp --release
-   ```
+**Cause**: The extension searches for the binary in this order:
+1. `perl-lsp.serverPath` setting (user-configured absolute path)
+2. Bundled binary at `<extension>/bin/<platform>-<arch>/perl-lsp`
+3. `perl-lsp` in your system PATH
+4. Auto-download from GitHub releases (if `perl-lsp.autoDownload` is `true`)
 
-3. If using Nix:
-   ```bash
-   nix develop -c cargo build -p perl-lsp --release
-   ```
+**Fix**:
 
-### Missing Dependencies
+- **Auto-download** (default): Ensure you have internet access. The extension downloads the correct binary for your platform automatically. Check the Output panel for download errors.
+- **Manual install**: Set the `perl-lsp.serverPath` setting to the absolute path of your binary:
+  ```json
+  { "perl-lsp.serverPath": "/usr/local/bin/perl-lsp" }
+  ```
+- **Build from source**:
+  ```bash
+  cargo install perl-lsp
+  # Binary goes to ~/.cargo/bin/perl-lsp
+  ```
+- **Internal/air-gapped networks**: Set `perl-lsp.autoDownload` to `false` and either set `perl-lsp.serverPath` or set `perl-lsp.downloadBaseUrl` to your internal mirror URL hosting the release archives and SHA256SUMS file.
 
-**Problem**: Build complains about missing system dependencies.
+### Permission denied
 
-**Solution**: perl-lsp is pure Rust and should not require system dependencies. If you see C compiler or libclang errors, you may be building optional crates. Use:
+**Symptom**: The binary exists but cannot execute.
 
+**Cause**: Missing execute permission on the binary (Linux/macOS).
+
+**Fix**:
 ```bash
-cargo build -p perl-lsp --release
+chmod +x $(which perl-lsp)
+# Or if using a custom path:
+chmod +x /path/to/perl-lsp
 ```
 
-Not `cargo build --workspace` which includes optional native crates.
+The extension automatically sets `0o755` on bundled and downloaded binaries, but manually placed binaries may lack the execute bit.
 
-## Installation Issues
+### Wrong architecture / health check failed
 
-### Binary Not Found
+**Symptom**: Error message "perl-lsp health check failed. The binary does not respond to --health. It may be corrupted or incompatible with your platform."
 
-**Problem**: `perl-lsp: command not found` after installation.
+**Cause**: The binary was built for a different OS or CPU architecture (e.g., x86_64 binary on an ARM Mac), or the binary is corrupt.
 
-**Solutions**:
+**Fix**:
+- Click **Reinstall** in the error dialog to re-download the correct binary for your platform.
+- Or build from source for your platform:
+  ```bash
+  cargo install perl-lsp --force
+  ```
+- Verify the binary runs: `perl-lsp --health` should print a line starting with `ok`.
 
-1. Check Cargo's bin directory is in PATH:
-   ```bash
-   echo $PATH | tr ':' '\n' | grep cargo
-   # Should include: ~/.cargo/bin
-   ```
+---
 
-2. Add to PATH if missing:
-   ```bash
-   # Add to ~/.bashrc or ~/.zshrc
-   export PATH="$HOME/.cargo/bin:$PATH"
-   ```
+## 2. No Completions / No Diagnostics
 
-3. Verify installation location:
-   ```bash
-   ls -la ~/.cargo/bin/perl-lsp
-   ```
+### Check that the LSP is running
 
-### Permission Denied
+**Symptom**: No syntax errors highlighted, no completions, no hover information.
 
-**Problem**: Cannot execute perl-lsp binary.
+**Fix**: Look at the status bar (bottom-right of VS Code):
+- `$(check) Perl LSP` — server is running normally.
+- `$(sync~spin) Perl LSP` — server is starting, wait a moment.
+- `$(error) Perl LSP` — server is stopped. Click the status bar item and select **Restart Server**, or run the command palette action **Perl: Restart Perl Language Server** (`Shift+Alt+R`).
 
-**Solution**:
+### Check file type association
+
+**Symptom**: LSP features work in `.pm` files but not in your file.
+
+**Cause**: The extension activates only for files recognized as Perl. Supported extensions: `.pl`, `.pm`, `.pod`, `.t`, `.psgi`. Files with a `#!.*perl` shebang are also recognized.
+
+**Fix**:
+- Check the language mode in the VS Code status bar (bottom-right). It should say **Perl**.
+- If it says something else, click it and select **Perl** from the list, or press `Ctrl+K M` and type "Perl".
+
+### Check workspace folder is open
+
+**Symptom**: Completions work for built-in functions but not for your project's modules.
+
+**Cause**: perl-lsp indexes files within your workspace. If you opened a single file instead of a folder, workspace-level features (module resolution, go-to-definition across files) are limited.
+
+**Fix**: Open the project folder: **File > Open Folder** and select your project root.
+
+### Increase log verbosity
+
+**Symptom**: Something is wrong but you cannot tell what.
+
+**Fix**: Set `perl-lsp.trace.server` to `"verbose"` in your settings:
+```json
+{ "perl-lsp.trace.server": "verbose" }
+```
+Then check the Output panel (**Perl Language Server**). The trace level can be changed at runtime without restarting. Options: `"off"`, `"messages"`, `"verbose"`.
+
+### Diagnostics explicitly disabled
+
+**Symptom**: No red/yellow squiggles even on files with syntax errors.
+
+**Fix**: Check that diagnostics are enabled:
+```json
+{ "perl-lsp.enableDiagnostics": true }
+```
+
+---
+
+## 3. Slow Performance
+
+### Large workspace
+
+**Symptom**: Editor feels sluggish, high CPU usage after opening a project.
+
+**Cause**: perl-lsp indexes all Perl files in your workspace. Projects with thousands of `.pl`/`.pm` files (or large `local/lib/perl5` directories) take longer to index.
+
+**Fix**:
+- Ensure your `.gitignore` excludes `local/`, `vendor/`, `node_modules/`, and other non-project directories. perl-lsp respects `.gitignore` for file discovery.
+- Disable features you do not need:
+  ```json
+  {
+    "perl-lsp.enableSemanticTokens": false
+  }
+  ```
+
+### Many parse errors
+
+**Symptom**: Diagnostics panel shows hundreds of errors, editor is slow.
+
+**Cause**: Files with syntax the parser does not yet support cause cascading errors, which consumes CPU.
+
+**Fix**:
+- Verify your files parse correctly with Perl itself: `perl -c yourfile.pl`
+- Use `perl-lsp --check yourfile.pl` to test parsing without the editor.
+- File an issue for unsupported syntax patterns at https://github.com/EffortlessMetrics/perl-lsp/issues
+
+### High memory
+
+**Symptom**: perl-lsp process using excessive memory.
+
+**Cause**: Very large workspaces with many indexed files.
+
+**Fix**: Reduce the scope of your workspace. Open only the subdirectory you are working in rather than a monorepo root.
+
+---
+
+## 4. Formatting Not Working
+
+### perltidy not installed
+
+**Symptom**: Format Document does nothing or shows an error.
+
+**Cause**: perl-lsp uses `perltidy` for formatting. It must be installed and available in PATH.
+
+**Fix**:
 ```bash
-chmod +x ~/.cargo/bin/perl-lsp
+cpanm Perl::Tidy
+# or
+cpan Perl::Tidy
+
+# Verify installation
+perltidy --version
 ```
 
-## Runtime Issues
-
-### Server Crashes on Startup
-
-**Problem**: perl-lsp exits immediately or crashes.
-
-**Solutions**:
-
-1. Run with debug logging:
-   ```bash
-   RUST_LOG=perl_lsp=debug perl-lsp --stdio 2>debug.log
-   ```
-
-2. Check for conflicting processes:
-   ```bash
-   ps aux | grep perl-lsp
-   ```
-
-3. Verify the binary is not corrupted:
-   ```bash
-   cargo install --path crates/perl-lsp --force
-   ```
-
-### High Memory Usage
-
-**Problem**: perl-lsp uses excessive memory on large projects.
-
-**Solutions**:
-
-1. Limit indexed files:
-   ```json
-   {
-     "perl": {
-       "limits": {
-         "maxIndexedFiles": 1000
-       }
-     }
-   }
-   ```
-
-2. Exclude directories via workspace settings:
-   ```json
-   {
-     "perl": {
-       "workspace": {
-         "excludePaths": ["node_modules", "vendor", ".git"]
-       }
-     }
-   }
-   ```
-
-### Slow Performance
-
-**Problem**: LSP responses are slow.
-
-**Solutions**:
-
-1. Disable unused features:
-   ```json
-   {
-     "perl": {
-       "enableSemanticTokens": false,
-       "enableInlayHints": false
-     }
-   }
-   ```
-
-2. Reduce workspace scope - see [EDITOR_SETUP.md](EDITOR_SETUP.md#slow-performance)
-
-### No Diagnostics Appearing
-
-**Problem**: Syntax errors are not highlighted.
-
-**Solutions**:
-
-1. Ensure file has Perl extension: `.pl`, `.pm`, or `.t`
-
-2. Check editor recognizes file as Perl (language mode)
-
-3. Verify diagnostics are enabled in settings
-
-4. Check LSP logs for errors - see [EDITOR_SETUP.md](EDITOR_SETUP.md#no-diagnostics)
-
-### Completion Not Working
-
-**Problem**: No completions appear when typing.
-
-**Solutions**:
-
-1. Ensure you're in a valid completion context (after `$`, `@`, `%`, or mid-identifier)
-
-2. Check the file is recognized as Perl in your editor
-
-3. Try manually triggering completion:
-   - VS Code: `Ctrl+Space`
-   - Neovim: `<C-x><C-o>`
-   - Emacs: `M-TAB` or `C-M-i`
-
-4. Verify completion cap hasn't been reached:
-   ```json
-   {
-     "perl": {
-       "limits": {
-         "completionCap": 200
-       }
-     }
-   }
-   ```
-
-### Go-to-Definition Not Working
-
-**Problem**: "Go to Definition" doesn't find the symbol.
-
-**Solutions**:
-
-1. Ensure the definition is in an indexed file:
-   - File must be in workspace or `includePaths`
-   - File count must be under `maxIndexedFiles` limit
-
-2. Check include paths are configured:
-   ```json
-   {
-     "perl": {
-       "workspace": {
-         "includePaths": ["lib", ".", "local/lib/perl5"]
-       }
-     }
-   }
-   ```
-
-3. For CPAN modules, enable system @INC (if safe):
-   ```json
-   {
-     "perl": {
-       "workspace": {
-         "useSystemInc": true
-       }
-     }
-   }
-   ```
-
-4. Verify the symbol is actually defined (not just imported)
-
-### References Returning Incomplete Results
-
-**Problem**: "Find References" doesn't show all occurrences.
-
-**Solutions**:
-
-1. Check the references cap:
-   ```json
-   {
-     "perl": {
-       "limits": {
-         "referencesCap": 1000
-       }
-     }
-   }
-   ```
-
-2. Ensure all relevant files are indexed (check `maxIndexedFiles`)
-
-3. Wait for workspace indexing to complete (check progress notification)
-
-4. Check the reference search deadline:
-   ```json
-   {
-     "perl": {
-       "limits": {
-         "referenceSearchDeadlineMs": 5000
-       }
-     }
-   }
-   ```
-
-### Formatting Not Working
-
-**Problem**: Document formatting doesn't change the file.
-
-**Solutions**:
-
-1. Verify Perl::Tidy is installed:
-   ```bash
-   perl -e 'use Perl::Tidy;'
-   ```
-
-2. Check for `.perltidyrc` in your project or home directory
-
-3. Verify formatting is enabled in editor settings
-
-4. Check for errors in the LSP log - formatting errors are often reported there
-
-5. Try manual formatting via command palette to see error messages
-
-## Parser Issues
-
-### Incorrect Syntax Highlighting
-
-**Problem**: Code is parsed incorrectly or shows false errors.
-
-**Solutions**:
-
-1. Check if the syntax is a known limitation - see [KNOWN_LIMITATIONS.md](../reference/KNOWN_LIMITATIONS.md)
-
-2. Report unhandled syntax:
-   ```bash
-   # Create minimal reproduction
-   cat > test.pl << 'EOF'
-   # Your problematic code here
-   EOF
-
-   # Test parsing
-   perl-lsp --parse test.pl
-   ```
-
-3. File an issue at: https://github.com/EffortlessMetrics/perl-lsp/issues
-
-### Heredoc Issues
-
-**Problem**: Heredocs not parsed correctly.
-
-**Solution**: Ensure heredoc delimiters are on their own lines:
-
-```perl
-# Works
-my $text = <<'END';
-content here
-END
-
-# May not work
-my $text = <<'END'; print "after heredoc";
-content
-END
+Ensure formatting is enabled in settings:
+```json
+{ "perl-lsp.enableFormatting": true }
 ```
 
-## DAP (Debug Adapter) Issues
+### Custom .perltidyrc not found
 
-**Note**: DAP support is experimental. Current limitations:
+**Symptom**: Formatting uses default perltidy style, ignoring your project's rules.
 
-- Launch mode only (attach pending)
-- Variables/evaluate show placeholders
-- BridgeAdapter library available for advanced use
+**Cause**: perl-lsp searches for `.perltidyrc` in the workspace root and home directory. If your config is elsewhere, it will not be found.
 
-### Debugger Not Starting
+**Fix**: Set the path explicitly:
+```json
+{ "perl-lsp.perltidyConfig": "/path/to/your/.perltidyrc" }
+```
 
-**Problem**: Debug session fails to start.
+If left empty (default), perl-lsp searches the workspace and home directory automatically. The extension also watches for `.perltidyrc` changes and reloads.
 
-**Solutions**:
+### Format on save not working
 
-1. Ensure perl-dap is installed:
-   ```bash
-   cargo install --path crates/perl-dap
-   ```
+**Symptom**: Files are not formatted when you save.
 
-2. Verify Perl::LanguageServer is available (for bridge mode):
-   ```bash
-   perl -e 'use Perl::LanguageServer;'
-   ```
+**Fix**: Enable format-on-save in perl-lsp settings (this is separate from VS Code's built-in `editor.formatOnSave`):
+```json
+{ "perl-lsp.formatOnSave": true }
+```
 
-## Editor-Specific Issues
+---
 
-For detailed editor configuration and troubleshooting:
+## 5. Debug Adapter Not Connecting
 
-- [VS Code setup](EDITOR_SETUP.md#vs-code)
-- [Neovim setup](EDITOR_SETUP.md#neovim)
-- [Emacs setup](EDITOR_SETUP.md#emacs)
-- [Helix setup](EDITOR_SETUP.md#helix)
-- [General troubleshooting](EDITOR_SETUP.md#troubleshooting)
+### perl-dap not found
 
-### VS Code: Extension Not Activating
+**Symptom**: Error "Perl Debug Adapter (perl-dap) not found" when starting a debug session.
 
-**Problem**: The perl-lsp extension doesn't activate on Perl files.
+**Cause**: The debug adapter binary (`perl-dap`) ships alongside `perl-lsp` in release archives. If you built from source or the download did not include it, the binary may be missing.
 
-**Solutions**:
+**Fix**: The extension searches for `perl-dap` in these locations (in order):
+1. Auto-download directory (same location as the managed perl-lsp binary)
+2. System PATH
+3. `~/.cargo/bin/perl-dap`
+4. `/usr/local/bin/perl-dap`
 
-1. Check file association in VS Code bottom status bar (should say "Perl")
+Install it:
+```bash
+cargo install --path crates/perl-dap
+# or reinstall the extension binary (includes perl-dap):
+```
+In VS Code, run **Perl: Reinstall Server Binary** — this re-downloads both `perl-lsp` and `perl-dap`.
 
-2. Manually set language mode: `Ctrl+K M` then select "Perl"
+### Port conflict (TCP attach mode)
 
-3. Verify extension is installed and enabled:
-   ```bash
-   code --list-extensions | grep perl
-   ```
+**Symptom**: Debug attach fails to connect.
 
-4. Check VS Code Output panel for errors (View > Output > select "Perl Language Server")
+**Cause**: Default attach port (13603) is in use by another process, or the Perl debugger is not listening.
 
-### Neovim: LSP Not Attaching
+**Fix**:
+- Check if the port is in use: `lsof -i :13603` (Linux/macOS) or `netstat -an | findstr 13603` (Windows)
+- Change the port in your `launch.json`:
+  ```json
+  {
+    "type": "perl",
+    "request": "attach",
+    "host": "localhost",
+    "port": 13604,
+    "timeout": 5000
+  }
+  ```
 
-**Problem**: `:LspInfo` shows no client attached.
+### No launch.json configured
 
-**Solutions**:
+**Symptom**: Debug starts but immediately fails or debugs the wrong file.
 
-1. Verify filetype is recognized:
-   ```vim
-   :set filetype?
-   " Should output: filetype=perl
-   ```
+**Fix**: If you have no `launch.json`, the extension auto-creates a configuration that launches the current file. For a proper setup, create `.vscode/launch.json`:
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "perl",
+      "request": "launch",
+      "name": "Launch Script",
+      "program": "${workspaceFolder}/script.pl",
+      "stopOnEntry": true,
+      "includePaths": ["lib"]
+    }
+  ]
+}
+```
 
-2. Check lspconfig is loaded:
-   ```vim
-   :lua print(vim.inspect(require('lspconfig').perl_lsp))
-   ```
+---
 
-3. Manually start the client:
-   ```vim
-   :LspStart perl_lsp
-   ```
+## 6. Module Not Found / Go-to-Definition Fails
 
-4. Check `:LspLog` for errors
+### Include paths not configured
 
-### Emacs: eglot Fails to Connect
+**Symptom**: "Go to Definition" cannot find modules in your project's `lib/` directory, or module names show as unresolved.
 
-**Problem**: eglot reports connection failure.
+**Cause**: perl-lsp needs to know where your Perl modules live. By default, it searches `lib` and `local/lib/perl5` relative to the workspace root.
 
-**Solutions**:
+**Fix**: Add your project's library paths to the `perl-lsp.includePaths` setting:
+```json
+{
+  "perl-lsp.includePaths": [
+    "lib",
+    "local/lib/perl5",
+    "vendor/lib"
+  ]
+}
+```
 
-1. Check the `*eglot stderr*` buffer for errors
+Paths are resolved relative to the workspace root. You can also use absolute paths.
 
-2. Verify the command works in shell:
-   ```bash
-   perl-lsp --stdio
-   ```
+### Local modules with `use lib`
 
-3. Try lsp-mode as an alternative:
-   ```elisp
-   (require 'lsp-mode)
-   (add-hook 'perl-mode-hook #'lsp)
-   ```
+**Symptom**: Code uses `use lib 'lib'` or `use lib "$FindBin::Bin/../lib"` but perl-lsp cannot find those modules.
 
-4. Check `*lsp-log*` buffer for detailed errors
+**Cause**: perl-lsp does not execute Perl code, so it cannot evaluate `use lib` statements dynamically.
+
+**Fix**: Mirror the `use lib` paths in your `perl-lsp.includePaths` setting. For example, if your code has `use lib 'lib'`, ensure `"lib"` is in your `includePaths` (it is by default).
+
+### CPAN/system modules
+
+**Symptom**: Go-to-definition works for project modules but not for CPAN modules like `Moose`, `DBI`, etc.
+
+**Cause**: System-installed modules are outside the workspace directory tree.
+
+**Fix**: Add your Perl's library paths:
+```bash
+# Find your @INC paths
+perl -e 'print join("\n", @INC)'
+```
+
+Add the relevant paths to `perl-lsp.includePaths`:
+```json
+{
+  "perl-lsp.includePaths": [
+    "lib",
+    "local/lib/perl5",
+    "/usr/local/lib/perl5/site_perl/5.38"
+  ]
+}
+```
+
+---
 
 ## Getting Help
 
-1. Check existing issues: https://github.com/EffortlessMetrics/perl-lsp/issues
+1. **Check the Output panel**: View > Output > Perl Language Server. Most issues are logged here.
 
-2. Enable debug logging and include logs in bug reports:
-   ```bash
-   RUST_LOG=perl_lsp=debug,perl_parser=debug perl-lsp --stdio 2>debug.log
+2. **Enable verbose tracing**:
+   ```json
+   { "perl-lsp.trace.server": "verbose" }
    ```
 
-3. Include:
-   - perl-lsp version (`perl-lsp --version`)
-   - Rust version (`rustc --version`)
-   - OS and editor
-   - Minimal code reproduction
+3. **Run diagnostics from the command line**:
+   ```bash
+   perl-lsp --health        # Quick binary check
+   perl-lsp --info          # Version, git tag, feature profile
+   perl-lsp --check file.pl # Parse a file without the editor
+   ```
+
+4. **File an issue**: https://github.com/EffortlessMetrics/perl-lsp/issues
+   Include:
+   - `perl-lsp --info` output
+   - OS and editor version
+   - Relevant Output panel logs
+   - Minimal code reproduction (if applicable)
 
 ## See Also
 
-- [FAQ.md](../reference/FAQ.md) - Frequently asked questions
-- [GETTING_STARTED.md](../tutorials/GETTING_STARTED.md) - Installation and setup guide
-- [EDITOR_SETUP.md](EDITOR_SETUP.md) - Detailed editor configurations
-- [CONFIG.md](../reference/CONFIG.md) - All configuration options
-- [KNOWN_LIMITATIONS.md](../reference/KNOWN_LIMITATIONS.md) - Current parser limitations
+- [EDITOR_SETUP.md](EDITOR_SETUP.md) — Editor-specific configuration (VS Code, Neovim, Emacs, Helix)
+- [INSTALLATION.md](INSTALLATION.md) — Installation guide
+- [DEBUGGING.md](DEBUGGING.md) — Debug adapter setup and usage
