@@ -113,6 +113,19 @@ impl<'a> Parser<'a> {
             return Ok(stmt);
         }
 
+        if kind == TokenKind::Identifier {
+            let keyword_text = self.tokens.peek()?.text.clone();
+            let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+
+            if keyword_text.as_ref() == "else" && next_kind == Some(TokenKind::LeftBrace) {
+                return self.parse_orphaned_else();
+            }
+
+            if keyword_text.as_ref() == "elsif" && next_kind == Some(TokenKind::LeftParen) {
+                return self.parse_orphaned_elsif();
+            }
+        }
+
         let mut stmt = match kind {
             // Empty statement (lone semicolon) - just consume and return a no-op
             TokenKind::Semicolon => {
