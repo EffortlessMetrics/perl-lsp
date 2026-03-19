@@ -105,6 +105,51 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
 }
 
 export class PerlDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
+    /**
+     * Returns the workspace root URI path, or undefined if no workspace is open.
+     */
+    private getWorkspaceRoot(folder?: vscode.WorkspaceFolder): string | undefined {
+        if (folder) {
+            return folder.uri.fsPath;
+        }
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders && folders.length > 0) {
+            return folders[0].uri.fsPath;
+        }
+        return undefined;
+    }
+
+    /**
+     * Returns the configured Perl executable path from extension settings,
+     * defaulting to "perl" if not set.
+     */
+    private getPerlPath(): string {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const perlPath = config.get<string>('perlPath');
+        return perlPath || 'perl';
+    }
+
+    /**
+     * Returns configured include paths from perl-lsp.includePaths,
+     * resolved relative to the workspace root.
+     */
+    private getIncludePaths(folder?: vscode.WorkspaceFolder): string[] {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const paths = config.get<string[]>('includePaths', ['lib', 'local/lib/perl5']);
+        const root = this.getWorkspaceRoot(folder);
+        if (!root) {
+            return paths;
+        }
+        return paths.map(p => path.isAbsolute(p) ? p : path.join(root, p));
+    }
+
+    /**
+     * Builds -I flags from include paths for use in args arrays.
+     */
+    private buildIncludeArgs(folder?: vscode.WorkspaceFolder): string[] {
+        return this.getIncludePaths(folder).flatMap(p => ['-I', p]);
+    }
+
     resolveDebugConfiguration(
         folder: vscode.WorkspaceFolder | undefined,
         config: vscode.DebugConfiguration,
@@ -140,6 +185,24 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
             });
         }
 
+        // Inject perlPath from settings if not explicitly set
+        if (!config.perlPath) {
+            config.perlPath = this.getPerlPath();
+        }
+
+        // Inject include paths from settings if not explicitly set
+        if (!config.includePaths) {
+            config.includePaths = this.getIncludePaths(folder);
+        }
+
+        // Set cwd to workspace root if not explicitly set
+        if (!config.cwd) {
+            const root = this.getWorkspaceRoot(folder);
+            if (root) {
+                config.cwd = root;
+            }
+        }
+
         return config;
     }
 
@@ -147,12 +210,20 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
         folder: vscode.WorkspaceFolder | undefined,
         token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration[]> {
+        const perlPath = this.getPerlPath();
+        const includePaths = this.getIncludePaths(folder);
+        const root = this.getWorkspaceRoot(folder);
+        const cwd = root || '${workspaceFolder}';
+
         return [
             {
                 type: 'perl',
                 request: 'launch',
                 name: 'Launch Perl Script',
                 program: '${file}',
+                perlPath,
+                includePaths,
+                cwd,
                 stopOnEntry: true,
                 args: []
             },
@@ -161,11 +232,28 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
                 request: 'launch',
                 name: 'Launch Perl Test',
                 program: '${file}',
+                perlPath,
+                includePaths,
+                cwd,
                 stopOnEntry: false,
                 args: [],
                 env: {
                     'PERL_TEST_HARNESS_DUMP_TAP': '1'
                 }
+            },
+            {
+                type: 'perl',
+                request: 'launch',
+                name: 'Debug Current Test (prove)',
+                program: 'prove',
+                perlPath,
+                cwd,
+                stopOnEntry: false,
+                args: [
+                    '-v',
+                    ...includePaths.flatMap(p => ['-I', p]),
+                    '${file}'
+                ]
             },
             {
                 type: 'perl',
