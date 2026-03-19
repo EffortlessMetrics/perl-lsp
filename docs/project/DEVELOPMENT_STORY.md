@@ -4,6 +4,11 @@
 > server in nine months — and what the experience teaches about the future of
 > software engineering.
 
+> Historical snapshot: live metrics and current release posture belong in
+> [CURRENT_STATUS.md](CURRENT_STATUS.md) and [ROADMAP.md](ROADMAP.md); the
+> metrics in this story are intentionally frozen to the March 2026 launch
+> window.
+
 ---
 
 ## Part 1: The Architecture Story
@@ -31,7 +36,7 @@ agents — decomposed the workspace:
 | Feb 2026 | 53 | First SRP extraction wave |
 | Late Feb 2026 | 85 | Second wave |
 | Mar 2026 | 121 | Third wave |
-| Current | 130 | Continuing extraction + new features |
+| Mar 2026 snapshot | 130 | Continuing extraction + new features |
 
 The most intense day was March 5, 2026: 93 extraction-related commits in a single
 day.
@@ -135,7 +140,7 @@ injected before parsing — a fragile workaround. Heredocs were handled by a
 separate scanner pass. PEG backtracking caused performance cliffs on
 pathological inputs.
 
-**Phase 3 — Native recursive descent (July 2025 – present).** A hand-written
+**Phase 3 — Native recursive descent (July 2025 – March 2026 snapshot).** A hand-written
 parser with a mode-based lexer that resolves context-sensitive ambiguities at
 tokenization time:
 
@@ -307,9 +312,10 @@ against thousands of real Perl files from two sources:
 the clean-file count can only increase.
 
 **CPAN top-1000 corpus**: The 1,000 most-depended-upon CPAN distributions,
-installed locally and swept for parse errors. Currently 4,355 `.pm` files with a
-committed baseline of 3,139 clean (72.1%) and a strict known-clean manifest of
-1,579 modules that must stay at zero errors.
+installed locally and swept for parse errors. At the March 19, 2026 snapshot,
+the corpus contained 4,355 `.pm` files with a committed baseline of 3,139
+clean (72.1%) and a strict known-clean manifest of 1,579 modules that must
+stay at zero errors.
 
 The 90% target for CPAN is deliberately not 100%. Some distributions use source
 filters, XS-only code, or generated Perl that no static parser should be expected
@@ -364,7 +370,7 @@ cargo run -p xtask -- parser-corpus-sweep \
 | Mar 9, 2026 (Wave 1) | 51.1% (3,627/7,095) | — | Baseline established |
 | Mar 14, 2026 (Wave 2) | ~60% | — | POD, regex, builtins fixed |
 | Mar 17, 2026 | 72.4% (5,139/7,095) | 72.1% (3,139/4,355) | CPAN baseline seeded |
-| Current sprint target | — | 90%+ | Wave 3-4 parser fixes |
+| March 2026 target | — | 90%+ | Wave 3-4 parser fixes |
 
 The trajectory from 51% to 72% was driven by four merged PRs in Wave 1 that
 fixed POD block skipping, regex false positives, code dereference syntax, and
@@ -448,7 +454,8 @@ that single-agent use never encounters:
 ### No Panics in Production
 
 Production code contains zero calls to `unwrap()`, `expect()`, `panic!()`,
-`todo!()`, `unimplemented!()`, or `dbg!()`. The current ratchet baseline is
+`todo!()`, `unimplemented!()`, or `dbg!()`. The ratchet baseline in this
+snapshot is
 literally zero for all of these. Three automated gates enforce it:
 
 1. **Clippy lint gates** (`clippy::unwrap_used`, `clippy::expect_used`) run
