@@ -20,6 +20,10 @@ let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
+let progressDisposable: vscode.Disposable | undefined;
+let customStatusDisposable: vscode.Disposable | undefined;
+let isIndexing = false;
+const activeProgressTokens: Set<string | number> = new Set();
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -84,7 +88,7 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
         }
     });
-    
+
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         if (!currentServerPath) {
             vscode.window.showErrorMessage('Perl LSP server path is unavailable.');
@@ -215,28 +219,28 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     // First check user settings
     const config = vscode.workspace.getConfiguration('perl-lsp');
     const userPath = config.get<string>('serverPath');
-    
+
     if (userPath && fs.existsSync(userPath)) {
         outputChannel.appendLine(`Using user-configured perl-lsp: ${userPath}`);
         return userPath;
     }
-    
+
     // Check bundled binary
     const platform = process.platform;
     const arch = process.arch;
     let binaryName = 'perl-lsp';
-    
+
     if (platform === 'win32') {
         binaryName = 'perl-lsp.exe';
     }
-    
+
     const bundledPath = path.join(
         context.extensionPath,
         'bin',
         `${platform}-${arch}`,
         binaryName
     );
-    
+
     if (fs.existsSync(bundledPath)) {
         outputChannel.appendLine(`Using bundled perl-lsp: ${bundledPath}`);
         // Make sure it's executable on Unix-like systems
@@ -245,7 +249,7 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
         }
         return bundledPath;
     }
-    
+
     // Try to find in PATH
     const pathDirs = process.env.PATH?.split(path.delimiter) || [];
     for (const dir of pathDirs) {
@@ -255,15 +259,15 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
             return fullPath;
         }
     }
-    
+
     // Check if auto-download is enabled
     const autoDownload = config.get<boolean>('autoDownload', true);
-    
+
     if (autoDownload) {
         outputChannel.appendLine('perl-lsp not found, attempting to download...');
         const downloader = new BinaryDownloader(context, outputChannel);
         const downloadedPath = await downloader.ensureBinary();
-        
+
         if (downloadedPath) {
             outputChannel.appendLine(`Downloaded perl-lsp to: ${downloadedPath}`);
             return downloadedPath;
@@ -271,7 +275,7 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     } else {
         outputChannel.appendLine('perl-lsp not found and auto-download is disabled');
     }
-    
+
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
 }
@@ -546,13 +550,107 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
 
 function bindClientState(languageClient: LanguageClient) {
     stateChangeDisposable?.dispose();
+    progressDisposable?.dispose();
+    customStatusDisposable?.dispose();
+    activeProgressTokens.clear();
+    isIndexing = false;
+
     stateChangeDisposable = languageClient.onDidChangeState(event => {
         setStatusBarState(event.newState);
     });
+
+    // Listen for $/progress notifications to detect indexing
+    progressDisposable = languageClient.onNotification('$/progress', (params: any) => {
+        handleProgressNotification(params);
+    });
+
+    // Listen for custom perl-lsp/status notification
+    customStatusDisposable = languageClient.onNotification('perl-lsp/status', (params: any) => {
+        handleCustomStatus(params);
+    });
+}
+
+function handleProgressNotification(params: any) {
+    const token = params?.token;
+    const value = params?.value;
+    if (token == null || value == null) {
+        return;
+    }
+
+    const kind: string | undefined = value.kind;
+    const title: string = value.title || '';
+    const isIndexToken = /index/i.test(String(token)) || /index/i.test(title);
+
+    if (kind === 'begin') {
+        activeProgressTokens.add(token);
+        if (isIndexToken) {
+            isIndexing = true;
+            updateStatusBarForIndexing(value.message, value.percentage);
+        }
+    } else if (kind === 'report' && activeProgressTokens.has(token)) {
+        if (isIndexToken) {
+            updateStatusBarForIndexing(value.message, value.percentage);
+        }
+    } else if (kind === 'end') {
+        activeProgressTokens.delete(token);
+        if (isIndexToken) {
+            isIndexing = false;
+            if (client) {
+                setStatusBarState(State.Running);
+            }
+        }
+    }
+}
+
+function handleCustomStatus(params: any) {
+    if (!statusBarItem) {
+        return;
+    }
+
+    const status: string = params?.status || params?.state || '';
+
+    switch (status) {
+        case 'indexing':
+            isIndexing = true;
+            updateStatusBarForIndexing(params?.message);
+            break;
+        case 'ready':
+        case 'running':
+            isIndexing = false;
+            setStatusBarState(State.Running);
+            break;
+        case 'error':
+            isIndexing = false;
+            statusBarItem.text = '$(error) Perl LSP';
+            statusBarItem.tooltip = `Perl Language Server error: ${params?.message || 'unknown'} (click for options)`;
+            statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+            break;
+    }
+}
+
+function updateStatusBarForIndexing(message?: string, percentage?: number) {
+    if (!statusBarItem) {
+        return;
+    }
+
+    let text = '$(loading~spin) Perl LSP: indexing';
+    if (percentage != null) {
+        text += ` (${percentage}%)`;
+    }
+    statusBarItem.text = text;
+    statusBarItem.tooltip = message
+        ? `Indexing: ${message} (click for options)`
+        : 'Perl Language Server is indexing workspace... (click for options)';
+    statusBarItem.backgroundColor = undefined;
 }
 
 function setStatusBarState(state: State) {
     if (!statusBarItem) {
+        return;
+    }
+
+    // Don't override indexing state when server reports running
+    if (isIndexing && state === State.Running) {
         return;
     }
 
@@ -568,6 +666,7 @@ function setStatusBarState(state: State) {
             statusBarItem.backgroundColor = undefined;
             break;
         case State.Stopped:
+            isIndexing = false;
             statusBarItem.text = '$(error) Perl LSP';
             statusBarItem.tooltip = 'Perl Language Server is stopped (click for options)';
             statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
@@ -606,6 +705,10 @@ async function disposeLanguageClient() {
 
     stateChangeDisposable?.dispose();
     stateChangeDisposable = undefined;
+    progressDisposable?.dispose();
+    progressDisposable = undefined;
+    customStatusDisposable?.dispose();
+    customStatusDisposable = undefined;
 
     if (client) {
         const activeClient = client;
