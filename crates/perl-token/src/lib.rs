@@ -337,6 +337,8 @@ pub enum TokenKind {
     DataMarker,
     /// Data section content
     DataBody,
+    /// Version string literal: `v5.26.0`, `v5.10`
+    VString,
     /// Unparsed remainder (budget exceeded)
     UnknownRest,
     /// Heredoc depth limit exceeded (special error token)
@@ -508,6 +510,7 @@ impl TokenKind {
             TokenKind::FormatBody => "format body",
             TokenKind::DataMarker => "__DATA__",
             TokenKind::DataBody => "data section",
+            TokenKind::VString => "version string",
             TokenKind::UnknownRest => "unparsed content",
             TokenKind::HeredocDepthLimit => "heredoc depth limit",
 

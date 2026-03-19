@@ -270,6 +270,7 @@ fn all_token_kinds() -> Vec<TokenKind> {
         TokenKind::FormatBody,
         TokenKind::DataMarker,
         TokenKind::DataBody,
+        TokenKind::VString,
         TokenKind::UnknownRest,
         TokenKind::HeredocDepthLimit,
         // Identifiers and Variables
@@ -413,6 +414,7 @@ fn all_variants_are_listed() {
             | TokenKind::FormatBody
             | TokenKind::DataMarker
             | TokenKind::DataBody
+            | TokenKind::VString
             | TokenKind::UnknownRest
             | TokenKind::HeredocDepthLimit
             | TokenKind::Identifier

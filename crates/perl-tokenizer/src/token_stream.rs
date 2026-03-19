@@ -336,6 +336,7 @@ impl<'a> TokenStream<'a> {
             LexerTokenType::HeredocStart => TokenKind::HeredocStart,
             LexerTokenType::HeredocBody(_) => TokenKind::HeredocBody,
             LexerTokenType::FormatBody(_) => TokenKind::FormatBody,
+            LexerTokenType::Version(_) => TokenKind::VString,
             LexerTokenType::DataMarker(_) => TokenKind::DataMarker,
             LexerTokenType::DataBody(_) => TokenKind::DataBody,
             LexerTokenType::UnknownRest => TokenKind::UnknownRest,

@@ -573,6 +573,10 @@ impl<'a> PerlLexer<'a> {
                 return Some(token);
             }
 
+            if let Some(token) = self.try_vstring() {
+                return Some(token);
+            }
+
             if let Some(token) = self.try_identifier_or_keyword() {
                 return Some(token);
             }
@@ -1691,6 +1695,90 @@ impl<'a> PerlLexer<'a> {
     fn is_quote_delim(c: char) -> bool {
         // Quote delimiters are punctuation, but not whitespace or control characters
         !c.is_ascii_alphanumeric() && !c.is_whitespace() && !c.is_control()
+    }
+
+    /// Try to parse a v-string (version string) like `v5.26.0` or `v5.10`.
+    ///
+    /// A v-string starts with `v` followed by one or more digits, then optionally
+    /// `.` followed by digits, repeated. The `v` prefix distinguishes these from
+    /// normal identifiers. Examples: `v5.26.0`, `v5.10`, `v1.2.3.4`.
+    #[inline]
+    fn try_vstring(&mut self) -> Option<Token> {
+        let start = self.position;
+        let bytes = self.input_bytes;
+
+        // Must start with 'v' followed by at least one digit
+        if start >= bytes.len() || bytes[start] != b'v' {
+            return None;
+        }
+
+        let next_pos = start + 1;
+        if next_pos >= bytes.len() || !bytes[next_pos].is_ascii_digit() {
+            return None;
+        }
+
+        // We have `v` followed by a digit — scan the rest of the v-string.
+        // Pattern: v DIGITS (.DIGITS)*
+        let mut pos = next_pos;
+
+        // Consume leading digits
+        while pos < bytes.len() && bytes[pos].is_ascii_digit() {
+            pos += 1;
+        }
+
+        // Consume optional `.DIGITS` segments (require at least one digit after dot)
+        while pos < bytes.len() && bytes[pos] == b'.' {
+            let dot_pos = pos;
+            pos += 1; // skip '.'
+
+            if pos >= bytes.len() || !bytes[pos].is_ascii_digit() {
+                // Dot not followed by digit — not part of the v-string
+                pos = dot_pos;
+                break;
+            }
+
+            // Consume digits after the dot
+            while pos < bytes.len() && bytes[pos].is_ascii_digit() {
+                pos += 1;
+            }
+        }
+
+        // Make sure the v-string isn't followed by identifier-continuation characters
+        // (e.g. `v5x` should remain an identifier, not a v-string `v5` + `x`)
+        if pos < bytes.len() {
+            let next_byte = bytes[pos];
+            if next_byte == b'_' || next_byte.is_ascii_alphabetic() {
+                return None;
+            }
+            // Also check for non-ASCII identifier continuations
+            if next_byte >= 128
+                && let Some(ch) = self.input.get(pos..).and_then(|s| s.chars().next())
+                && is_perl_identifier_continue(ch)
+            {
+                return None;
+            }
+        }
+
+        // Require at least one dot segment to distinguish from a bare `v5` identifier.
+        // A bare `v` followed by digits but no dots (like `v5`) could be a variable
+        // name in some contexts. However, Perl treats `v5` as a v-string too, so we
+        // require the minimum: `v` + digits (which Perl interprets as chr(5)).
+        // But to avoid breaking existing identifier parsing for things like subroutine
+        // names that happen to match `v\d+`, we require at least one dot.
+        let text = &self.input[start..pos];
+        if !text.contains('.') {
+            return None;
+        }
+
+        self.position = pos;
+        self.mode = LexerMode::ExpectOperator;
+
+        Some(Token {
+            token_type: TokenType::Version(Arc::from(text)),
+            text: Arc::from(text),
+            start,
+            end: self.position,
+        })
     }
 
     #[inline]
