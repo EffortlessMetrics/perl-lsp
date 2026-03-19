@@ -51,20 +51,16 @@ pub fn add_workspace_symbol_completions(
         match symbol.kind {
             WsSymbolKind::Subroutine | WsSymbolKind::Method => {
                 // Add function completion
-                let label = if let Some(ref qname) = symbol.qualified_name {
-                    qname.clone()
-                } else {
-                    symbol.name.clone()
-                };
+                let label = symbol.qualified_name.as_ref().unwrap_or(&symbol.name).clone();
 
                 completions.push(CompletionItem {
-                    label: label.clone(),
+                    insert_text: Some(symbol.name.clone()),
+                    sort_text: Some(format!("3_{}", label)), // Sort after local symbols
+                    filter_text: Some(label.clone()),
+                    label,
                     kind: CompletionItemKind::Function,
                     detail: symbol.container_name.clone().or_else(|| Some("workspace".to_string())),
                     documentation: symbol.documentation.clone(),
-                    insert_text: Some(symbol.name.clone()),
-                    sort_text: Some(format!("3_{}", label)), // Sort after local symbols
-                    filter_text: Some(label),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
@@ -89,55 +85,58 @@ pub fn add_workspace_symbol_completions(
                 }
 
                 completions.push(CompletionItem {
-                    label: label.clone(),
+                    insert_text: Some(label.clone()),
+                    sort_text: Some(format!("3_{}", label)), // Sort after local symbols
+                    filter_text: Some(label.clone()),
+                    label,
                     kind: CompletionItemKind::Variable,
                     detail: symbol.container_name.clone().or_else(|| Some("workspace".to_string())),
                     documentation: symbol.documentation.clone(),
-                    insert_text: Some(label.clone()),
-                    sort_text: Some(format!("3_{}", label)), // Sort after local symbols
-                    filter_text: Some(label),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
             WsSymbolKind::Package => {
                 // Add package completion
+                let name = &symbol.name;
                 completions.push(CompletionItem {
-                    label: symbol.name.clone(),
+                    label: name.clone(),
                     kind: CompletionItemKind::Module,
                     detail: Some("package".to_string()),
                     documentation: symbol.documentation.clone(),
-                    insert_text: Some(symbol.name.clone()),
-                    sort_text: Some(format!("3_{}", symbol.name)),
-                    filter_text: Some(symbol.name.clone()),
+                    insert_text: Some(name.clone()),
+                    sort_text: Some(format!("3_{name}")),
+                    filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
             WsSymbolKind::Constant => {
                 // Add constant completion
+                let name = &symbol.name;
                 completions.push(CompletionItem {
-                    label: symbol.name.clone(),
+                    label: name.clone(),
                     kind: CompletionItemKind::Constant,
                     detail: symbol.container_name.clone().or_else(|| Some("workspace".to_string())),
                     documentation: symbol.documentation.clone(),
-                    insert_text: Some(symbol.name.clone()),
-                    sort_text: Some(format!("3_{}", symbol.name)),
-                    filter_text: Some(symbol.name.clone()),
+                    insert_text: Some(name.clone()),
+                    sort_text: Some(format!("3_{name}")),
+                    filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
             WsSymbolKind::Export => {
                 // Add exported symbol completion
+                let name = &symbol.name;
                 completions.push(CompletionItem {
-                    label: symbol.name.clone(),
+                    label: name.clone(),
                     kind: CompletionItemKind::Function,
                     detail: Some("exported".to_string()),
                     documentation: symbol.documentation.clone(),
-                    insert_text: Some(symbol.name.clone()),
-                    sort_text: Some(format!("2_{}", symbol.name)), // Prioritize exports
-                    filter_text: Some(symbol.name.clone()),
+                    insert_text: Some(name.clone()),
+                    sort_text: Some(format!("2_{name}")), // Prioritize exports
+                    filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
@@ -168,7 +167,7 @@ pub fn add_use_module_completions(
         return;
     }
 
-    let mut seen = HashSet::new();
+    let mut seen: HashSet<String> = HashSet::new();
 
     // Search for package symbols matching the prefix
     let all_symbols = if context.prefix.is_empty() {
@@ -191,17 +190,18 @@ pub fn add_use_module_completions(
             continue;
         }
 
+        let name = &symbol.name;
         completions.push(CompletionItem {
-            label: symbol.name.clone(),
+            label: name.clone(),
             kind: CompletionItemKind::Module,
             detail: Some("module".to_string()),
             documentation: symbol
                 .documentation
                 .clone()
-                .or_else(|| Some(format!("Package `{}`", symbol.name))),
-            insert_text: Some(symbol.name.clone()),
-            sort_text: Some(format!("1_{}", symbol.name)), // High priority in use context
-            filter_text: Some(symbol.name.clone()),
+                .or_else(|| Some(format!("Package `{name}`"))),
+            insert_text: Some(name.clone()),
+            sort_text: Some(format!("1_{name}")), // High priority in use context
+            filter_text: Some(name.clone()),
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),
         });
@@ -231,7 +231,7 @@ pub fn add_use_qw_import_completions(
         return;
     }
 
-    let mut seen = HashSet::new();
+    let mut seen: HashSet<&str> = HashSet::new();
     let members = index.get_package_members(module_name);
 
     for symbol in &members {
@@ -249,7 +249,7 @@ pub fn add_use_qw_import_completions(
         }
 
         // Deduplicate
-        if !seen.insert(symbol.name.clone()) {
+        if !seen.insert(&symbol.name) {
             continue;
         }
 
@@ -259,8 +259,9 @@ pub fn add_use_qw_import_completions(
             _ => "function",
         };
 
+        let name = &symbol.name;
         completions.push(CompletionItem {
-            label: symbol.name.clone(),
+            label: name.clone(),
             kind: match symbol.kind {
                 WsSymbolKind::Constant => CompletionItemKind::Constant,
                 _ => CompletionItemKind::Function,
@@ -269,10 +270,10 @@ pub fn add_use_qw_import_completions(
             documentation: symbol
                 .documentation
                 .clone()
-                .or_else(|| Some(format!("`{module_name}::{}`", symbol.name))),
-            insert_text: Some(symbol.name.clone()),
-            sort_text: Some(format!("1_{}", symbol.name)),
-            filter_text: Some(symbol.name.clone()),
+                .or_else(|| Some(format!("`{module_name}::{name}`"))),
+            insert_text: Some(name.clone()),
+            sort_text: Some(format!("1_{name}")),
+            filter_text: Some(name.clone()),
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),
         });
