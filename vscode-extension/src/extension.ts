@@ -13,6 +13,7 @@ import {
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
+import { PerlTaskProvider } from './taskProvider';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -20,6 +21,7 @@ let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
+let taskProvider: PerlTaskProvider | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -200,6 +202,13 @@ export async function activate(context: vscode.ExtensionContext) {
         reinstallCommand,
         formatOnSaveDisposable,
         configurationWatcher,
+    );
+
+    // Initialize task auto-detection
+    taskProvider = new PerlTaskProvider();
+    context.subscriptions.push(
+        vscode.tasks.registerTaskProvider(PerlTaskProvider.type, taskProvider),
+        taskProvider
     );
 
     // Initialize debug adapter

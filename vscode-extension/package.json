@@ -408,17 +408,26 @@
       {
         "type": "perl",
         "required": [
-          "script"
+          "task"
         ],
         "properties": {
-          "script": {
+          "task": {
             "type": "string",
-            "description": "The Perl script to execute"
-          },
-          "args": {
-            "type": "array",
-            "description": "Arguments to pass to the script"
+            "description": "The task to run (test, build, install-deps, run-file, check-syntax)"
           }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "perlc",
+        "owner": "perl",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+) at (.+) line (\\d+)",
+          "message": 1,
+          "file": 2,
+          "line": 3
         }
       }
     ]
