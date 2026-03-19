@@ -17,7 +17,7 @@ pub(crate) mod safe_eval;
 mod transport;
 
 use crate::feature_catalog::has_feature as catalog_has_feature;
-use crate::inline_values::collect_inline_values;
+use crate::inline_values::{collect_inline_values_with_runtime, extract_variable_names};
 use crate::protocol::{
     BreakpointLocation, BreakpointLocationsArguments, BreakpointLocationsResponseBody,
     CompletionItem, CompletionsArguments, CompletionsResponseBody, ContinueArguments,
