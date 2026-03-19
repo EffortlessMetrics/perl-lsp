@@ -722,7 +722,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.expect(TokenKind::RightParen)?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
         } else if !Self::is_statement_terminator(self.peek_kind()) {
             // Complex `use` arguments can start with tokens outside the bare-arg
             // fast path, such as sigils in `use warnings $ENV{X} ? ...`.
@@ -931,7 +931,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.expect(TokenKind::RightParen)?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
         }
 
         // Don't consume semicolon here - let parse_statement handle it uniformly
