@@ -80,6 +80,12 @@ pub struct LspLimits {
     /// Parse storm threshold - pending parses before degradation (default: 10)
     pub parse_storm_threshold: usize,
 
+    /// Maximum file size in bytes before skipping parse (default: 1MB)
+    ///
+    /// Files exceeding this limit will be stored with empty AST and
+    /// no diagnostics to prevent the parser from hanging on huge files.
+    pub max_file_size_bytes: usize,
+
     // =========================================================================
     // Deadlines
     // =========================================================================
@@ -139,6 +145,7 @@ impl Default for LspLimits {
             max_symbols_per_file: 5_000,
             max_total_symbols: 500_000,
             parse_storm_threshold: 10,
+            max_file_size_bytes: 1_024 * 1_024, // 1MB
 
             // Deadlines
             workspace_scan_deadline: Duration::from_secs(30),
@@ -207,6 +214,11 @@ impl LspLimits {
             }
             if let Some(v) = limits.get("maxTotalSymbols").and_then(|v| v.as_u64()) {
                 self.max_total_symbols = v as usize;
+            }
+
+            // File size limit
+            if let Some(v) = limits.get("maxFileSizeBytes").and_then(|v| v.as_u64()) {
+                self.max_file_size_bytes = v as usize;
             }
 
             // Deadlines (in milliseconds)
@@ -299,6 +311,12 @@ pub fn diagnostics_per_file_cap() -> usize {
     LSP_LIMITS.read().map(|l| l.diagnostics_per_file_cap).unwrap_or(200)
 }
 
+/// Get current maximum file size in bytes
+#[inline]
+pub fn max_file_size_bytes() -> usize {
+    LSP_LIMITS.read().map(|l| l.max_file_size_bytes).unwrap_or(1_024 * 1_024)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,6 +327,7 @@ mod tests {
         assert_eq!(limits.workspace_symbol_cap, 200);
         assert_eq!(limits.references_cap, 500);
         assert_eq!(limits.max_indexed_files, 10_000);
+        assert_eq!(limits.max_file_size_bytes, 1_024 * 1_024);
     }
 
     #[test]
