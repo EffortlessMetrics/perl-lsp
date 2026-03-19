@@ -88,6 +88,7 @@
 //! - **Cancellation aware**: Respects LSP cancellation for responsiveness
 //! - **Memory efficient**: Uses streaming iteration without loading all results
 
+pub(crate) mod auto_import;
 mod builtins;
 mod context;
 mod file_path;
@@ -571,6 +572,7 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                source,
             );
             if is_cancelled() {
                 return vec![];

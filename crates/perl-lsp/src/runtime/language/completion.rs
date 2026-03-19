@@ -439,6 +439,28 @@ impl LspServer {
                             item["commitCharacters"] = json!([";", " ", ")", "]", "}"]);
                         }
 
+                        // Add additionalTextEdits for auto-import
+                        if !c.additional_edits.is_empty() {
+                            let edits: Vec<serde_json::Value> = c
+                                .additional_edits
+                                .iter()
+                                .map(|(loc, text)| {
+                                    let line_index =
+                                        perl_parser_core::line_index::LineIndex::new(&doc.text);
+                                    let start_line = line_index.line_col(loc.start);
+                                    let end_line = line_index.line_col(loc.end);
+                                    json!({
+                                        "range": {
+                                            "start": { "line": start_line.0, "character": start_line.1 },
+                                            "end": { "line": end_line.0, "character": end_line.1 }
+                                        },
+                                        "newText": text
+                                    })
+                                })
+                                .collect();
+                            item["additionalTextEdits"] = json!(edits);
+                        }
+
                         item
                     })
                     .collect();
