@@ -169,11 +169,7 @@ impl DebugAdapter {
             }
         }
 
-        if values.is_empty() {
-            None
-        } else {
-            Some(values)
-        }
+        if values.is_empty() { None } else { Some(values) }
     }
 
     pub(super) fn handle_source(
