@@ -1129,6 +1129,52 @@ impl WorkspaceIndex {
         }
     }
 
+    /// Incrementally remove one file's symbols from the global cache,
+    /// re-inserting shadowed symbols from remaining files.
+    fn incremental_remove_symbols(
+        files: &HashMap<String, FileIndex>,
+        symbols: &mut HashMap<String, String>,
+        old_file_index: &FileIndex,
+    ) {
+        let mut affected_names: Vec<String> = Vec::new();
+        for sym in &old_file_index.symbols {
+            if let Some(ref qname) = sym.qualified_name {
+                if symbols.get(qname) == Some(&sym.uri) {
+                    symbols.remove(qname);
+                    affected_names.push(qname.clone());
+                }
+            }
+            if symbols.get(&sym.name) == Some(&sym.uri) {
+                symbols.remove(&sym.name);
+                affected_names.push(sym.name.clone());
+            }
+        }
+        if !affected_names.is_empty() {
+            for file_index in files.values() {
+                for sym in &file_index.symbols {
+                    if let Some(ref qname) = sym.qualified_name {
+                        if !symbols.contains_key(qname) && affected_names.contains(qname) {
+                            symbols.insert(qname.clone(), sym.uri.clone());
+                        }
+                    }
+                    if !symbols.contains_key(&sym.name) && affected_names.contains(&sym.name) {
+                        symbols.insert(sym.name.clone(), sym.uri.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Incrementally add one file's symbols to the global cache.
+    fn incremental_add_symbols(symbols: &mut HashMap<String, String>, file_index: &FileIndex) {
+        for sym in &file_index.symbols {
+            if let Some(ref qname) = sym.qualified_name {
+                symbols.insert(qname.clone(), sym.uri.clone());
+            }
+            symbols.insert(sym.name.clone(), sym.uri.clone());
+        }
+    }
+
     fn find_definition_in_files(
         files: &HashMap<String, FileIndex>,
         symbol_name: &str,
@@ -1286,9 +1332,17 @@ impl WorkspaceIndex {
                 Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
             }
 
+            // Incrementally remove old symbols before inserting new file
+            if let Some(old_index) = files.get(&key) {
+                let mut symbols = self.symbols.write();
+                Self::incremental_remove_symbols(&files, &mut symbols, old_index);
+                drop(symbols);
+            }
             files.insert(key.clone(), file_index);
             let mut symbols = self.symbols.write();
-            Self::rebuild_symbol_cache(&files, &mut symbols);
+            if let Some(new_index) = files.get(&key) {
+                Self::incremental_add_symbols(&mut symbols, new_index);
+            }
 
             if let Some(file_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
@@ -1332,9 +1386,9 @@ impl WorkspaceIndex {
         // Remove file index
         let mut files = self.files.write();
         if let Some(file_index) = files.remove(&key) {
-            // Rebuild the global symbol map so colliding names from other files stay available.
+            // Incrementally remove symbols and re-insert any shadowed names.
             let mut symbols = self.symbols.write();
-            Self::rebuild_symbol_cache(&files, &mut symbols);
+            Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
 
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
@@ -1455,6 +1509,106 @@ impl WorkspaceIndex {
             url::Url::from_file_path(uri).map_err(|_| format!("Invalid URI or file path: {}", uri))
         })?;
         self.index_file(url, text.to_string())
+    }
+
+    /// Index multiple files in a single batch operation.
+    ///
+    /// This is significantly faster than calling `index_file` in a loop for
+    /// initial workspace scans because it defers the global symbol cache
+    /// rebuild to a single pass at the end.
+    ///
+    /// Phase 1: Parse all files without holding locks.
+    /// Phase 2: Bulk-insert file indices and rebuild the symbol cache once.
+    pub fn index_files_batch(&self, files_to_index: Vec<(Url, String)>) -> Vec<String> {
+        let mut errors = Vec::new();
+
+        // Phase 1: Parse all files without locks
+        let mut parsed: Vec<(String, String, FileIndex)> = Vec::with_capacity(files_to_index.len());
+        for (uri, text) in &files_to_index {
+            let uri_str = uri.to_string();
+
+            // Content hash for early-exit
+            let mut hasher = DefaultHasher::new();
+            text.hash(&mut hasher);
+            let content_hash = hasher.finish();
+
+            let key = DocumentStore::uri_key(&uri_str);
+
+            // Check if content unchanged
+            {
+                let files = self.files.read();
+                if let Some(existing) = files.get(&key) {
+                    if existing.content_hash == content_hash {
+                        continue;
+                    }
+                }
+            }
+
+            // Update document store
+            if self.document_store.is_open(&uri_str) {
+                self.document_store.update(&uri_str, 1, text.clone());
+            } else {
+                self.document_store.open(uri_str.clone(), 1, text.clone());
+            }
+
+            // Parse
+            let mut parser = Parser::new(text);
+            let ast = match parser.parse() {
+                Ok(ast) => ast,
+                Err(e) => {
+                    errors.push(format!("Parse error in {}: {}", uri_str, e));
+                    continue;
+                }
+            };
+
+            let mut doc = match self.document_store.get(&uri_str) {
+                Some(d) => d,
+                None => {
+                    errors.push(format!("Document not found: {}", uri_str));
+                    continue;
+                }
+            };
+
+            let mut file_index = FileIndex { content_hash, ..Default::default() };
+            let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
+            visitor.visit(&ast, &mut file_index);
+
+            parsed.push((key, uri_str, file_index));
+        }
+
+        // Phase 2: Bulk insert with single cache rebuild
+        {
+            let mut files = self.files.write();
+            let mut symbols = self.symbols.write();
+            let mut global_refs = self.global_references.write();
+
+            for (key, uri_str, file_index) in parsed {
+                // Remove stale global references
+                if let Some(old_index) = files.get(&key) {
+                    Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
+                }
+
+                files.insert(key.clone(), file_index);
+
+                // Add global references for this file
+                if let Some(fi) = files.get(&key) {
+                    for (name, refs) in &fi.references {
+                        let entry = global_refs.entry(name.clone()).or_default();
+                        for reference in refs {
+                            entry.push(Location {
+                                uri: reference.uri.clone(),
+                                range: reference.range,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Single rebuild at the end
+            Self::rebuild_symbol_cache(&files, &mut symbols);
+        }
+
+        errors
     }
 
     /// Find all references to a symbol using dual indexing strategy
@@ -1699,16 +1853,22 @@ impl WorkspaceIndex {
     /// ```
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
-        self.all_symbols()
-            .into_iter()
-            .filter(|s| {
-                s.name.to_lowercase().contains(&query_lower)
-                    || s.qualified_name
+        let files = self.files.read();
+        let mut results = Vec::new();
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if symbol.name.to_lowercase().contains(&query_lower)
+                    || symbol
+                        .qualified_name
                         .as_ref()
                         .map(|qn| qn.to_lowercase().contains(&query_lower))
                         .unwrap_or(false)
-            })
-            .collect()
+                {
+                    results.push(symbol.clone());
+                }
+            }
+        }
+        results
     }
 
     /// Find symbols by query (alias for search_symbols for compatibility)
@@ -3515,5 +3675,72 @@ Utils::process_data();
             "find_references should not return duplicates for qualified calls, got {} non-def refs",
             non_def_refs.len()
         );
+    }
+
+    #[test]
+    fn test_batch_indexing() {
+        let index = WorkspaceIndex::new();
+        let files: Vec<(Url, String)> = (0..5)
+            .map(|i| {
+                let uri = Url::parse(&format!("file:///batch/module{}.pm", i)).ok().unwrap();
+                let code =
+                    format!("package Batch::Mod{};\nsub func_{} {{ return {}; }}\n1;", i, i, i);
+                (uri, code)
+            })
+            .collect();
+
+        let errors = index.index_files_batch(files);
+        assert!(errors.is_empty(), "batch indexing errors: {:?}", errors);
+        assert_eq!(index.file_count(), 5);
+        assert!(index.find_definition("Batch::Mod0::func_0").is_some());
+        assert!(index.find_definition("Batch::Mod4::func_4").is_some());
+    }
+
+    #[test]
+    fn test_batch_indexing_skips_unchanged() {
+        let index = WorkspaceIndex::new();
+        let uri = Url::parse("file:///batch/skip.pm").ok().unwrap();
+        let code = "package Skip;\nsub skip_fn { 1 }\n1;".to_string();
+
+        index.index_file(uri.clone(), code.clone()).ok();
+        assert_eq!(index.file_count(), 1);
+
+        let errors = index.index_files_batch(vec![(uri, code)]);
+        assert!(errors.is_empty());
+        assert_eq!(index.file_count(), 1);
+    }
+
+    #[test]
+    fn test_incremental_update_preserves_other_symbols() {
+        let index = WorkspaceIndex::new();
+
+        let uri_a = Url::parse("file:///incr/a.pm").ok().unwrap();
+        let uri_b = Url::parse("file:///incr/b.pm").ok().unwrap();
+        index.index_file(uri_a.clone(), "package A;\nsub a_func { 1 }\n1;".into()).ok();
+        index.index_file(uri_b.clone(), "package B;\nsub b_func { 2 }\n1;".into()).ok();
+
+        assert!(index.find_definition("A::a_func").is_some());
+        assert!(index.find_definition("B::b_func").is_some());
+
+        index.index_file(uri_a, "package A;\nsub a_func_v2 { 11 }\n1;".into()).ok();
+
+        assert!(index.find_definition("A::a_func_v2").is_some());
+        assert!(index.find_definition("B::b_func").is_some());
+    }
+
+    #[test]
+    fn test_remove_file_preserves_shadowed_symbols() {
+        let index = WorkspaceIndex::new();
+
+        let uri_a = Url::parse("file:///shadow/a.pm").ok().unwrap();
+        let uri_b = Url::parse("file:///shadow/b.pm").ok().unwrap();
+        index.index_file(uri_a.clone(), "package ShadowA;\nsub helper { 1 }\n1;".into()).ok();
+        index.index_file(uri_b.clone(), "package ShadowB;\nsub helper { 2 }\n1;".into()).ok();
+
+        assert!(index.find_definition("helper").is_some());
+
+        index.remove_file_url(&uri_a);
+        assert!(index.find_definition("helper").is_some());
+        assert!(index.find_definition("ShadowB::helper").is_some());
     }
 }
