@@ -150,7 +150,7 @@ pub struct LspArgs {
     #[arg(long)]
     pub check: bool,
 
-    /// Generate shell completions (bash, zsh, fish)
+    /// Generate shell completions (bash, zsh, fish, powershell)
     #[arg(long)]
     pub completion: Option<String>,
 
@@ -215,7 +215,7 @@ pub enum LaunchAction {
     Check,
     /// Generate shell completions for a given shell.
     Completion {
-        /// Target shell (bash, zsh, fish).
+        /// Target shell (bash, zsh, fish, powershell).
         shell: String,
     },
     /// Print version information.
@@ -314,7 +314,7 @@ impl fmt::Display for LaunchParseError {
                 write!(f, "Invalid port value: {raw_port}. {reason}")
             }
             Self::InvalidShell { raw_shell } => {
-                write!(f, "Unknown shell: {raw_shell}. Supported: bash, zsh, fish")
+                write!(f, "Unknown shell: {raw_shell}. Supported: bash, zsh, fish, powershell")
             }
         }
     }
@@ -429,7 +429,7 @@ fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParse
             }
 
             match raw_shell.as_str() {
-                "bash" | "zsh" | "fish" => {}
+                "bash" | "zsh" | "fish" | "powershell" => {}
                 _ => {
                     return Err(LaunchParseError::InvalidShell { raw_shell });
                 }
@@ -490,7 +490,7 @@ Options:\n\
   --feature-profile <name> Set feature profile\n\
                    Values: {supported_profiles}\n\
   --completion <shell> Generate shell completions\n\
-                   Shells: bash, zsh, fish\n\
+                   Shells: bash, zsh, fish, powershell\n\
   --help           Show this help message\n\
 \
 Examples:\n\
@@ -525,6 +525,7 @@ pub fn shell_completion(shell: &str) -> Option<&'static str> {
         "bash" => Some(BASH_COMPLETION),
         "zsh" => Some(ZSH_COMPLETION),
         "fish" => Some(FISH_COMPLETION),
+        "powershell" => Some(POWERSHELL_COMPLETION),
         _ => None,
     }
 }
@@ -545,7 +546,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
             return 0
             ;;
         --completion)
-            COMPREPLY=( $(compgen -W "bash zsh fish" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "bash zsh fish powershell" -- "${cur}") )
             return 0
             ;;
         --check)
@@ -576,7 +577,7 @@ _perl-lsp() {
         '--version[Show version information]' \
         '--features-json[Output features catalog as JSON]' \
         '--feature-profile[Set feature profile]:profile:(ga-lock ga prod production all auto)' \
-        '--completion[Generate shell completions]:shell:(bash zsh fish)' \
+        '--completion[Generate shell completions]:shell:(bash zsh fish powershell)' \
         '--help[Show help message]' \
         '*:file:_files -g "*.{pl,pm,t}"'
 }
@@ -594,8 +595,46 @@ complete -c perl-lsp -l check -F -d 'Validate Perl files'
 complete -c perl-lsp -l version -d 'Show version information'
 complete -c perl-lsp -l features-json -d 'Output features catalog as JSON'
 complete -c perl-lsp -l feature-profile -x -a 'ga-lock ga prod production all auto' -d 'Set feature profile'
-complete -c perl-lsp -l completion -x -a 'bash zsh fish' -d 'Generate shell completions'
+complete -c perl-lsp -l completion -x -a 'bash zsh fish powershell' -d 'Generate shell completions'
 complete -c perl-lsp -l help -d 'Show help message'
+"#;
+
+const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -CommandName perl-lsp -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+
+    $options = @(
+        [CompletionResult]::new('--stdio', '--stdio', 'ParameterName', 'Use stdio for communication (default)')
+        [CompletionResult]::new('--socket', '--socket', 'ParameterName', 'Use TCP socket for communication')
+        [CompletionResult]::new('--port', '--port', 'ParameterName', 'Port to listen on')
+        [CompletionResult]::new('--log', '--log', 'ParameterName', 'Enable logging to stderr')
+        [CompletionResult]::new('--health', '--health', 'ParameterName', 'Quick health check')
+        [CompletionResult]::new('--info', '--info', 'ParameterName', 'Show server info')
+        [CompletionResult]::new('--check', '--check', 'ParameterName', 'Validate Perl files')
+        [CompletionResult]::new('--version', '--version', 'ParameterName', 'Show version information')
+        [CompletionResult]::new('--features-json', '--features-json', 'ParameterName', 'Output features catalog as JSON')
+        [CompletionResult]::new('--feature-profile', '--feature-profile', 'ParameterName', 'Set feature profile')
+        [CompletionResult]::new('--completion', '--completion', 'ParameterName', 'Generate shell completions')
+        [CompletionResult]::new('--help', '--help', 'ParameterName', 'Show help message')
+    )
+
+    $elements = $commandAst.CommandElements
+    $prevWord = if ($elements.Count -ge 2) { $elements[$elements.Count - 2].Extent.Text } else { '' }
+
+    switch ($prevWord) {
+        '--completion' {
+            @('bash', 'zsh', 'fish', 'powershell') | Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            return
+        }
+        '--feature-profile' {
+            @('ga-lock', 'ga', 'prod', 'production', 'all', 'auto') | Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            return
+        }
+    }
+
+    $options | Where-Object { $_.CompletionText -like "$wordToComplete*" }
+}
 "#;
 
 /// Format a colored health status line.
@@ -758,8 +797,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_completion_powershell() {
+        let plan = must(parse_args(["perl-lsp", "--completion", "powershell"]));
+        assert_eq!(plan.action, LaunchAction::Completion { shell: "powershell".to_string() });
+    }
+
+    #[test]
     fn parse_completion_unknown_shell_errors() {
-        let result = parse_args(["perl-lsp", "--completion", "powershell"]);
+        let result = parse_args(["perl-lsp", "--completion", "nushell"]);
         assert!(result.is_err());
     }
 
@@ -784,6 +829,11 @@ mod tests {
     #[test]
     fn shell_completion_fish_is_nonempty() {
         assert!(super::shell_completion("fish").is_some());
+    }
+
+    #[test]
+    fn shell_completion_powershell_is_nonempty() {
+        assert!(super::shell_completion("powershell").is_some());
     }
 
     #[test]

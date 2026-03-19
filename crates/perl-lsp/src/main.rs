@@ -92,7 +92,7 @@ fn main() {
                 print!("{script}");
                 process::exit(0);
             } else {
-                eprintln!("Unknown shell: {shell}. Supported: bash, zsh, fish");
+                eprintln!("Unknown shell: {shell}. Supported: bash, zsh, fish, powershell");
                 process::exit(1);
             }
         }
