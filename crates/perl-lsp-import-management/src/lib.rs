@@ -35,26 +35,35 @@ pub fn collect_imports(lines: &[String]) -> Vec<String> {
 }
 
 /// Sort imports by category: pragmas, core, CPAN-style, then local.
+///
+/// Duplicates are removed (keeping the first occurrence). Categories are
+/// ordered: pragmas -> core -> CPAN -> local, each sorted alphabetically.
 #[must_use]
 pub fn sort_imports(imports: Vec<String>) -> Vec<String> {
     let mut pragmas = Vec::new();
     let mut core = Vec::new();
     let mut cpan = Vec::new();
     let mut local = Vec::new();
+    let mut seen = std::collections::HashSet::new();
 
     for import in imports {
-        if import.contains("strict")
-            || import.contains("warnings")
-            || import.contains("utf8")
-            || import.contains("feature")
+        let trimmed = import.trim().to_string();
+        if !seen.insert(trimmed.clone()) {
+            continue;
+        }
+
+        if trimmed.contains("strict")
+            || trimmed.contains("warnings")
+            || trimmed.contains("utf8")
+            || trimmed.contains("feature")
         {
-            pragmas.push(import);
-        } else if import.contains("::") {
-            cpan.push(import);
-        } else if import.starts_with("use lib") || import.contains("./") {
-            local.push(import);
+            pragmas.push(trimmed);
+        } else if trimmed.contains("::") {
+            cpan.push(trimmed);
+        } else if trimmed.starts_with("use lib") || trimmed.contains("./") {
+            local.push(trimmed);
         } else {
-            core.push(import);
+            core.push(trimmed);
         }
     }
 
