@@ -46,7 +46,7 @@ The same day also shows merge commits into concern-named branches such as:
 
 That branch naming matters. The work is not yet the later stateful swarm model. It is still a burst of concern-specific worktrees and rebases.
 
-*steven note: Those are Jules PRs. May have been reviewed and merged by Copilot CLI. Can't remember for sure.
+Maintainer recollection, consistent with the branch-family shape here: some of these concern-lane PRs may have originated from the January Jules-style backlog and then been reviewed or merged during the Copilot CLI maintainership burst. The git history alone does not settle that provenance with certainty, so this should be read as informed context rather than a proved claim.
 
 ---
 
@@ -82,7 +82,7 @@ This is not just more volume. It is a different batch shape:
 
 The release campaign is the best evidence that the 2/27 firehose was already in motion, but 2/28 is where it becomes a coordinated public-release push.
 
-Steven note: Jules backlog had cleared and copilot shifted attention to broader maintainership goals. I think I tweaked the fleet (swarm) instructions at that point to give it more maintainer vision. Either that or was clearing out with codex/claude code before turning copilot on fully. Probably the former though.
+Maintainer recollection, framed as inference: this is likely the point where the remaining Jules-style backlog had largely cleared and Copilot CLI shifted toward broader maintainership goals. That fits the visible pivot from concern-lane work into release orchestration, workflow hardening, and public-release preparation.
 
 ---
 
@@ -116,7 +116,7 @@ The significance is not merely attribution. It marks a shift in how the work was
 
 That is different from the later Claude swarm, where the control plane itself is versioned and the work is split across commands, skills, hooks, and swarm-state rather than just co-authored commits.
 
-Steven: Yeah, these were written by copilot cli. May have trickled into origin via prs over the final days after the copilot swarm was turned off though.
+Maintainer recollection: some of these trailer-bearing commits may have continued landing through PRs after the main Copilot swarm push had already tapered off. That would explain why the authorship pattern stays visible even as the burst changes shape.
 
 ---
 
@@ -149,7 +149,7 @@ It is also why the Copilot era feels messier than the later Claude Code swarm:
 The Copilot era is about throughput.
 The Claude era is about operability.
 
-Steven note: Copilot was directly reviewing, improving, and merging prs
+One maintainer distinction is worth preserving here: Copilot CLI was not only generating code, it was also directly reviewing, improving, and merging PRs. The difference from the later Claude Code swarms was not capability in the abstract, but control. The Claude-era control plane exposed more explicit levers around roles, isolation, memory, and enforcement.
 
 ---
 
