@@ -14,6 +14,7 @@ Supplemental archaeology note:
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
 - `ISSUE_ROUTING_ARCHAEOLOGY.md` — how the issue tracker became a typed overflow queue for `swarm-discovered` findings, self-improvement, and future builder slices
+- `ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md` — how issues and PRs became a shared lineage ledger, with March 2026 making explicit closure language and PR-backed learning issues normal
 - `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes

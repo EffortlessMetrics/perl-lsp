@@ -48,6 +48,7 @@ These documents intentionally preserve dated observations and period-specific me
 ### GitHub PR Ledger Archaeology
 
 - [research/PR_BRANCH_NAMING_ARCHAEOLOGY.md](research/PR_BRANCH_NAMING_ARCHAEOLOGY.md) — how head branches and PR titles reflect changing workflow eras
+- [research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md](research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md) — how issues and PRs evolved into a shared delivery ledger for fixes, closures, learning reports, and article evidence
 - [research/PR_LIFECYCLE_ARCHAEOLOGY.md](research/PR_LIFECYCLE_ARCHAEOLOGY.md) — how drafts, merges, closures, and disposal became part of the operating model
 - [research/REVIEW_LABEL_ARCHAEOLOGY.md](research/REVIEW_LABEL_ARCHAEOLOGY.md) — how the canonical Q3 swarm encoded review stages, gates, lanes, and merge readiness directly in GitHub labels alongside the three-phase `issue-to-draft` / `draft-to-pr` / `pr-to-merge` flow
 - [research/PR_REVIEW_LOOP_ARCHAEOLOGY.md](research/PR_REVIEW_LOOP_ARCHAEOLOGY.md) — how cleanup passes, follow-up PRs, and review repair became explicit and normal
