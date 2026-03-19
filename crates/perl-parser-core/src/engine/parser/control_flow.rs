@@ -223,7 +223,14 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'for'
 
         // Check if it's a foreach-style for loop
-        if matches!(self.peek_kind(), Some(TokenKind::My)) || self.is_variable_start() {
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::Local)
+                | Some(TokenKind::State)
+        ) || self.is_variable_start()
+        {
             return self.parse_foreach_style_for();
         }
 
@@ -314,7 +321,13 @@ impl<'a> Parser<'a> {
 
         // Set flag to prevent semicolon consumption in variable declaration
         self.in_for_loop_init = true;
-        let variable = if self.peek_kind() == Some(TokenKind::My) {
+        let variable = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::Local)
+                | Some(TokenKind::State)
+        ) {
             self.parse_variable_declaration()?
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             // foreach (LIST) — implicit $_ topic variable
@@ -359,7 +372,13 @@ impl<'a> Parser<'a> {
     fn parse_foreach_style_for(&mut self) -> ParseResult<Node> {
         // Set flag to prevent semicolon consumption in variable declaration
         self.in_for_loop_init = true;
-        let variable = if self.peek_kind() == Some(TokenKind::My) {
+        let variable = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::Local)
+                | Some(TokenKind::State)
+        ) {
             self.parse_variable_declaration()?
         } else {
             // for $var (LIST) — bare scalar without my

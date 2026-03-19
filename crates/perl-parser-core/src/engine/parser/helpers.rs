@@ -315,9 +315,24 @@ impl<'a> Parser<'a> {
         self.tokens.peek()
     }
 
-    /// Check if the next token starts a variable
+    /// Check if the next token starts a variable.
+    ///
+    /// This checks both dedicated sigil tokens (`ScalarSigil`, `ArraySigil`,
+    /// `HashSigil`) and combined `Identifier` tokens whose text begins with
+    /// a variable sigil character (`$`, `@`, `%`).
     fn is_variable_start(&mut self) -> bool {
-        Self::is_variable_sigil(self.peek_kind())
+        if Self::is_variable_sigil(self.peek_kind()) {
+            return true;
+        }
+        // The lexer sometimes emits variables as Identifier("$x") tokens
+        if self.peek_kind() == Some(TokenKind::Identifier) {
+            if let Ok(tok) = self.peek_token() {
+                return tok.text.starts_with('$')
+                    || tok.text.starts_with('@')
+                    || tok.text.starts_with('%');
+            }
+        }
+        false
     }
 
     /// Expect a specific token kind
