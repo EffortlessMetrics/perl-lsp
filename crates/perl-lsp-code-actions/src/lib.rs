@@ -25,6 +25,7 @@
 
 mod code_actions;
 mod enhanced;
+mod modernize;
 mod quick_fixes;
 mod refactors;
 mod types;

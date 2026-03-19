@@ -60,6 +60,8 @@ pub enum CodeActionKind {
     SourceOrganizeImports,
     /// Fix all issues action
     SourceFixAll,
+    /// Modernize Perl code action
+    SourceModernize,
 }
 
 /// Edit to apply for a code action
