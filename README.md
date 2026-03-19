@@ -22,29 +22,52 @@
 
 > **Note**: perl-lsp is in public alpha. Core features work well, but expect some rough edges. [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues).
 
+## Table of Contents
+
+- [At a Glance](#at-a-glance)
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Why perl-lsp?](#why-perl-lsp)
+- [Parser Coverage](#parser-coverage)
+- [Install](#install)
+- [Architecture](#architecture)
+- [Published Crates](#published-crates)
+- [Development](#development)
+- [Security](#security)
+- [Documentation](#documentation)
+- [License](#license)
+
+## At a Glance
+
+- **Native Rust binary** -- no Perl runtime required, sub-second startup, single-file install.
+- **Full LSP coverage** -- 53/53 advertised capabilities: completion, diagnostics, hover, navigation, refactoring, and more.
+- **Built-in debugger** -- DAP bridge for breakpoints, stepping, stack inspection, and variable watches.
+- **Broad Perl 5 syntax** -- recursive-descent parser handles heredocs, regex, quoting forms, formats, and Perl 5.8-5.40 idioms.
+- **Cross-file intelligence** -- dual-indexed workspace symbols for fast go-to-definition and find-references across your project.
+- **Supply chain hardened** -- SBOM generation, SLSA Level 2 provenance, zero `unsafe`, zero `unwrap`/`panic!` in production code.
+
 ## Quick Start
 
+**1. Install**
+
 ```bash
-# 1. Install
 cargo install perl-lsp
-
-# 2. Verify the install
 perl-lsp --health  # should print: ok X.Y.Z
-
-# 3. Configure your editor (VS Code)
-code --install-extension effortlessmetrics.perl-lsp-rs
-
-# 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
 ```
 
-New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
+**2. Hook it up**
 
-Contributing locally? Run `just devex` (or `just doctor`) for a quick environment check before diving into `just pr-fast` or the full CI gate.
+<details open>
+<summary><strong>VS Code</strong></summary>
+
+```bash
+code --install-extension effortlessmetrics.perl-lsp-rs
+```
+
+</details>
 
 <details>
-<summary><strong>Neovim / Emacs setup</strong></summary>
-
-**Neovim** (nvim-lspconfig):
+<summary><strong>Neovim</strong> (nvim-lspconfig)</summary>
 
 ```lua
 require('lspconfig').perl_ls.setup {
@@ -52,13 +75,20 @@ require('lspconfig').perl_ls.setup {
 }
 ```
 
-**Emacs** (eglot):
+</details>
+
+<details>
+<summary><strong>Emacs</strong> (eglot)</summary>
 
 ```elisp
 (add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
 ```
 
 </details>
+
+**3. Open a Perl file** -- completions, diagnostics, hover, and navigation work immediately.
+
+New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
 
 ## Features
 
@@ -83,12 +113,6 @@ flowchart TD
     dap --> runtime["Perl debug session"]
     parser --> lexer["perl-lexer\nmode-aware tokenizer"]
 ```
-
-### At a glance
-
-- **53/53 advertised LSP capabilities** implemented in the canonical feature catalog ([`features.toml`](features.toml)).
-- **Broad Perl 5 syntax coverage** through the native v3 parser, including heredocs, regex, quoting forms, and formats.
-- **Operational visibility** via continuously updated project metrics in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
 ## Why perl-lsp?
 
@@ -211,7 +235,6 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 | [features.toml](features.toml) | Canonical LSP feature catalog |
 | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | Live project metrics |
 | [ROADMAP.md](ROADMAP.md) | Version milestones and planning |
-| [Getting Started](docs/tutorials/GETTING_STARTED.md) | Installation and first steps |
 | [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
 
