@@ -11,11 +11,14 @@ Supplemental archaeology note:
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
+- `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
+- `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
 - `PR_REVIEW_LOOP_ARCHAEOLOGY.md` — how review cleanup, follow-up PRs, and post-batch repair show up as named first-class work
 - `PR_SLICE_SIZE_ARCHAEOLOGY.md` — how the PR archive favors small bounded slices while still using deliberate large campaign PRs
 - `PROVENANCE_RECEIPTS_ARCHAEOLOGY.md` — how proof moved from prose claims into receipt schemas, evidence docs, and forensics templates
+- `QUEUE_BOTTLENECK_ARCHAEOLOGY.md` — how the merge queue, CI throughput, and issue overflow became the real bottlenecks at swarm scale
 - `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
 - `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm
 - `SWARM_SURFACE_EVOLUTION.md` — the Jan→Mar 2026 transition where commands predate skills, then hooks and swarm-state turn the current control plane on

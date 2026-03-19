@@ -36,6 +36,12 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md](research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md) — how receipts, provenance schemas, and forensics turned proof into structured artifacts
 - [research/TRUSTED_CHANGE_ARCHAEOLOGY.md](research/TRUSTED_CHANGE_ARCHAEOLOGY.md) — how the repo industrialized trust through gates, receipts, drift checks, and durable lessons
 
+### CI, Queue, and Throughput Archaeology
+
+- [research/CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md](research/CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md) — how CI spend, lane design, and local-first validation became an explicit engineering constraint
+- [research/MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md](research/MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md) — how the human role shifted toward architectural direction, selection, merge pacing, and trusted-change oversight
+- [research/QUEUE_BOTTLENECK_ARCHAEOLOGY.md](research/QUEUE_BOTTLENECK_ARCHAEOLOGY.md) — how the three-wide merge queue and CI throughput shaped swarm behavior and issue overflow
+
 ### GitHub PR Ledger Archaeology
 
 - [research/PR_BRANCH_NAMING_ARCHAEOLOGY.md](research/PR_BRANCH_NAMING_ARCHAEOLOGY.md) — how head branches and PR titles reflect changing workflow eras
