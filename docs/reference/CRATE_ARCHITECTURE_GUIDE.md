@@ -573,9 +573,9 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
 ## Repo-Native Swarm Control Plane (*Diataxis: Explanation* - current repo automation)
 
 This repository now carries a repo-native Claude swarm control plane alongside
-the Rust workspace. The live control plane is the tracked `.claude/` tree.
-Older agent generations (`agents2` through `agents6` and `agents-compat`) have
-been removed.
+the Rust workspace. The live control plane is the tracked `.claude/` tree, not
+the older specialized-agent generations under `.claude/agents2/` and related
+directories.
 
 ### Canonical Runtime Surfaces (*Diataxis: Reference* - live swarm surfaces)
 
@@ -617,11 +617,11 @@ write boundary for PR-shaped changes.
 
 ### Historical Note (*Diataxis: Explanation* - older generations)
 
-Older agent generations (`.claude/agents2` through `.claude/agents6` and
-`.claude/agents-compat/`) have been removed from the live repo. Their
-historical role is now reflected by the archived tracked roster under
-`.claude/agents/archive/` and the associated ADR history; they are not part of
-the current runtime contract.
+Older agent generations (`.claude/agents2` through `.claude/agents6`) remain
+useful as donor material and operator history, but they are not the current
+runtime contract for this repository. Compatibility-only donor files now live
+under `.claude/agents-compat/`, leaving `.claude/agents/archive/` as the
+archived tracked roster.
 
 ## Development Guidelines
 

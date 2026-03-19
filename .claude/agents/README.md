@@ -6,6 +6,11 @@ loading agent definition files at runtime.
 
 See `archive/` for historical agent definitions.
 
+Legacy sibling directories such as `../agents-compat`, `../agents2`,
+`../agents3`, `../agents3 - to update`, `../agents4`, `../agents5`, and
+`../agents6` are also intentionally preserved as historical reference and
+analysis material. They are archived content, not accidental leftovers.
+
 ## Why archived
 
 The 54 agent definition files in this directory were never loaded by the
@@ -22,8 +27,3 @@ The archived files are still useful as reference for:
 - Reconstructing the original swarm roster
 
 All files are intact in `archive/`.
-
-Older agent generations (`agents2` through `agents6` and `agents-compat`) have
-been removed. Historical tracked agent definitions now live only under
-`archive/`; new docs should reference that archived roster instead of the
-deleted generations.

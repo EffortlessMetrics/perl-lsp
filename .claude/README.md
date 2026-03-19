@@ -13,6 +13,12 @@ The canonical runtime surfaces are:
 The pack under `docs/handoff/swarm-pack/` is a derived export, not a co-equal
 design source.
 
+Historical directories such as `.claude/agents-compat/`, `.claude/agents2/`,
+`.claude/agents3/`, `.claude/agents3 - to update/`, `.claude/agents4/`,
+`.claude/agents5/`, and `.claude/agents6/` are intentionally retained as
+archival evolution and analysis material. Do not remove them during cleanup
+unless a human explicitly asks for that archival content to be deleted.
+
 ## Canonical Roster
 
 Persistent coordinators:
@@ -78,7 +84,7 @@ dedup and lifecycle tracking.
 
 ## Compatibility Note
 
-Older agent generations (`agents2` through `agents6` and `agents-compat`) have
-been removed. Historical tracked agent definitions remain archived under
-`.claude/agents/archive/`; new docs, prompts, and commands should reference
-that archived roster material first.
+Compatibility donor material now lives under
+[`.claude/agents-compat/`](./agents-compat/). New docs, prompts, and commands
+should reference the archived roster material in `.claude/agents/archive/`
+first.
