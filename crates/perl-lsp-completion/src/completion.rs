@@ -98,6 +98,7 @@ mod methods;
 mod packages;
 mod regex_patterns;
 pub(crate) mod scope_distance;
+mod snippets;
 mod sort;
 mod test_more;
 mod variables;
@@ -580,6 +581,9 @@ impl CompletionProvider {
             if self.is_test_context(source, filepath) {
                 test_more::add_test_more_completions(&mut completions, &context);
             }
+
+            // Add Perl idiom snippet completions (context-aware)
+            snippets::add_snippet_completions(&mut completions, &context, source, filepath);
         }
 
         // Remove duplicates and sort completions by relevance
