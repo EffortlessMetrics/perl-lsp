@@ -590,4 +590,71 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Check if a token kind can appear as a subroutine name after `sub`.
+    ///
+    /// In Perl, any bareword can be a subroutine name, including reserved
+    /// keywords and word-operators:
+    /// ```perl
+    /// sub return { ... }   # autodie/exception.pm
+    /// sub eval { ... }     # perl5db.pl
+    /// sub next { ... }     # Net/NNTP.pm
+    /// sub cmp { ... }      # IO/Compress/Base/Common.pm
+    /// ```
+    ///
+    /// Returns `false` for tokens that signal anonymous sub syntax: `{`, `(`,
+    /// `:` (attribute), `;` (forward decl), sigils, operators, etc.
+    #[inline]
+    pub(crate) fn can_be_sub_name(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            // Regular identifiers
+            TokenKind::Identifier
+            // All keyword tokens (valid sub names in Perl)
+            | TokenKind::If
+            | TokenKind::Unless
+            | TokenKind::While
+            | TokenKind::Until
+            | TokenKind::For
+            | TokenKind::Foreach
+            | TokenKind::My
+            | TokenKind::Our
+            | TokenKind::State
+            | TokenKind::Local
+            | TokenKind::Field
+            | TokenKind::Sub
+            | TokenKind::Return
+            | TokenKind::Next
+            | TokenKind::Last
+            | TokenKind::Redo
+            | TokenKind::Goto
+            | TokenKind::Eval
+            | TokenKind::Do
+            | TokenKind::Use
+            | TokenKind::No
+            | TokenKind::Package
+            | TokenKind::Class
+            | TokenKind::Method
+            | TokenKind::Try
+            | TokenKind::Catch
+            | TokenKind::Finally
+            | TokenKind::Given
+            | TokenKind::When
+            | TokenKind::Default
+            | TokenKind::Continue
+            | TokenKind::Format
+            | TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck
+            | TokenKind::Undef
+            // Word-operators (also valid bareword sub names)
+            | TokenKind::WordAnd    // sub and { ... }
+            | TokenKind::WordOr     // sub or { ... }
+            | TokenKind::WordNot    // sub not { ... }
+            | TokenKind::WordXor    // sub xor { ... }
+            | TokenKind::StringCompare  // sub cmp { ... }
+        )
+    }
+
 }

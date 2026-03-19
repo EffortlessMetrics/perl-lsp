@@ -54,27 +54,15 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'sub'
 
-        let (name, name_span) = match self.peek_kind() {
-            // Regular identifier
-            Some(TokenKind::Identifier)
-            | Some(TokenKind::Method)
-            | Some(TokenKind::Class)
-            | Some(TokenKind::Try)
-            | Some(TokenKind::Catch)
-            | Some(TokenKind::Finally)
-            | Some(TokenKind::Given)
-            | Some(TokenKind::When)
-            | Some(TokenKind::Default)
-            | Some(TokenKind::Continue)
-            | Some(TokenKind::Format) => {
-                let token = self.tokens.next()?;
-                (
-                    Some(token.text.to_string()),
-                    Some(SourceLocation { start: token.start, end: token.end }),
-                )
-            }
-            // No name - anonymous subroutine
-            _ => (None, None),
+        let (name, name_span) = if self.peek_kind().is_some_and(Self::can_be_sub_name) {
+            let token = self.tokens.next()?;
+            (
+                Some(token.text.to_string()),
+                Some(SourceLocation { start: token.start, end: token.end }),
+            )
+        } else {
+            // No name - anonymous subroutine (next token is {, (, :, or similar)
+            (None, None)
         };
 
         // Parse optional attributes first (they come before signature in modern Perl)
