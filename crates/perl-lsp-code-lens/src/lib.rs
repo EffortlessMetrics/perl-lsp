@@ -70,10 +70,7 @@ pub struct CodeLensProvider {
 impl CodeLensProvider {
     /// Create a new code lens provider
     pub fn new(source: String) -> Self {
-        Self {
-            source,
-            file_path: None,
-        }
+        Self { source, file_path: None }
     }
 
     /// Set the file path for test file detection
@@ -344,12 +341,7 @@ mod tests {
         assert!(lenses.len() >= 5);
         let run_test_lenses: Vec<_> = lenses
             .iter()
-            .filter(|l| {
-                l.command
-                    .as_ref()
-                    .map(|c| c.command == "perl.runTest")
-                    .unwrap_or(false)
-            })
+            .filter(|l| l.command.as_ref().map(|c| c.command == "perl.runTest").unwrap_or(false))
             .collect();
         assert_eq!(run_test_lenses.len(), 2);
         Ok(())
@@ -394,17 +386,11 @@ mod tests {
         let reference_lens = lenses
             .iter()
             .find(|lens| {
-                lens.data
-                    .as_ref()
-                    .and_then(|data| data.get("name"))
-                    .and_then(|name| name.as_str())
+                lens.data.as_ref().and_then(|data| data.get("name")).and_then(|name| name.as_str())
                     == Some("first_function")
             })
             .ok_or("missing reference lens for first_function")?;
-        assert_eq!(
-            reference_lens.range,
-            WireRange::empty(WirePosition::new(2, 0))
-        );
+        assert_eq!(reference_lens.range, WireRange::empty(WirePosition::new(2, 0)));
         assert_eq!(
             reference_lens.range.start.to_byte_offset(source),
             source.find("sub first_function").unwrap_or(usize::MAX)
@@ -430,10 +416,7 @@ mod tests {
             .ok_or("missing run test lens for test_basic")?;
         let start = run_test_lens.range.start.to_byte_offset(source);
         let end = run_test_lens.range.end.to_byte_offset(source);
-        assert_eq!(
-            start,
-            source.find("sub test_basic").unwrap_or(usize::MAX)
-        );
+        assert_eq!(start, source.find("sub test_basic").unwrap_or(usize::MAX));
         assert!(end > start, "run test lens should cover a non-empty range");
         Ok(())
     }
@@ -499,10 +482,7 @@ mod tests {
             2,
             "expected 2 subtest lenses, got {}: {:?}",
             subtest_lenses.len(),
-            subtest_lenses
-                .iter()
-                .map(|l| l.command.as_ref().map(|c| &c.title))
-                .collect::<Vec<_>>()
+            subtest_lenses.iter().map(|l| l.command.as_ref().map(|c| &c.title)).collect::<Vec<_>>()
         );
         let titles: Vec<_> = subtest_lenses
             .iter()
@@ -521,18 +501,13 @@ mod tests {
 
     #[test]
     fn test_subtest_lens_without_t_extension() -> Result<(), String> {
-        let source =
-            "use Test::More;\nsubtest \"my test\" => sub { ok(1) };\ndone_testing();\n";
+        let source = "use Test::More;\nsubtest \"my test\" => sub { ok(1) };\ndone_testing();\n";
         let lenses = extract_lenses(source)?;
         let subtest_lenses: Vec<_> = lenses
             .iter()
             .filter(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runSubtest"))
             .collect();
-        assert_eq!(
-            subtest_lenses.len(),
-            1,
-            "subtest detection should work without .t path"
-        );
+        assert_eq!(subtest_lenses.len(), 1, "subtest detection should work without .t path");
         Ok(())
     }
 
