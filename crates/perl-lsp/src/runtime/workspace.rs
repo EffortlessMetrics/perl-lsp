@@ -10,7 +10,7 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 use crate::state::workspace_symbol_cap;
 use perl_module_path::file_path_to_module_name;
 use perl_module_rename::plan_module_rename_edits;
@@ -51,6 +51,86 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
 fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, ready: bool) {
     if let Err(e) = outbound.send_notification("perl-lsp/index-ready", json!({ "ready": ready })) {
         eprintln!("Failed to send index-ready notification: {}", e);
+    }
+}
+
+/// Sends LSP work-done-progress notifications from background threads
+/// that do not have access to `LspServer` methods.
+#[cfg(feature = "workspace")]
+struct ProgressReporter {
+    outbound: super::outbound::OutboundSender,
+    next_request_id: std::sync::Arc<std::sync::atomic::AtomicI64>,
+    token: String,
+    active: bool,
+}
+
+#[cfg(feature = "workspace")]
+impl ProgressReporter {
+    fn new(
+        outbound: super::outbound::OutboundSender,
+        next_request_id: std::sync::Arc<std::sync::atomic::AtomicI64>,
+        token: String,
+    ) -> Self {
+        Self { outbound, next_request_id, token, active: false }
+    }
+
+    fn create(&mut self) {
+        let id = self.next_request_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if let Err(e) = self.outbound.send_request(
+            id,
+            "window/workDoneProgress/create",
+            json!({ "token": self.token }),
+        ) {
+            eprintln!("Failed to create progress token: {}", e);
+            return;
+        }
+        self.active = true;
+    }
+
+    fn begin(&self, title: &str, message: Option<&str>) {
+        if !self.active {
+            return;
+        }
+        let mut value = json!({ "kind": "begin", "title": title, "percentage": 0 });
+        if let (Some(obj), Some(msg)) = (value.as_object_mut(), message) {
+            obj.insert("message".to_string(), json!(msg));
+        }
+        let _ = self
+            .outbound
+            .send_notification("$/progress", json!({ "token": self.token, "value": value }));
+    }
+
+    fn report(&self, message: &str, percentage: u32) {
+        if !self.active {
+            return;
+        }
+        let _ = self.outbound.send_notification(
+            "$/progress",
+            json!({
+                "token": self.token,
+                "value": {
+                    "kind": "report",
+                    "message": message,
+                    "percentage": percentage,
+                }
+            }),
+        );
+    }
+
+    fn end(&self, message: &str) {
+        if !self.active {
+            return;
+        }
+        let _ = self.outbound.send_notification(
+            "$/progress",
+            json!({
+                "token": self.token,
+                "value": {
+                    "kind": "end",
+                    "message": message,
+                }
+            }),
+        );
     }
 }
 
@@ -965,10 +1045,22 @@ impl LspServer {
         let outbound = self.outbound.clone();
         let limits = coordinator.limits().clone();
         let caps = coordinator.performance_caps().clone();
+        let progress_supported = self.client_capabilities.lock().work_done_progress_support;
+        let next_request_id = Arc::clone(&self.next_request_id);
 
         std::thread::spawn(move || {
             let budget_start = Instant::now();
             coordinator.transition_to_scanning();
+
+            let mut progress = ProgressReporter::new(
+                outbound.clone(),
+                next_request_id,
+                "perl-lsp/indexing".to_string(),
+            );
+            if progress_supported {
+                progress.create();
+                progress.begin("Indexing Perl workspace", Some("Discovering files..."));
+            }
 
             let mut files: Vec<std::path::PathBuf> = Vec::new();
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
@@ -986,6 +1078,7 @@ impl LspServer {
 
                     if total_files.is_multiple_of(64) {
                         coordinator.update_scan_progress(total_files);
+                        progress.report(&format!("Discovered {} files...", total_files), 0);
                     }
 
                     let elapsed_ms = budget_start.elapsed().as_millis() as u64;
@@ -1008,6 +1101,10 @@ impl LspServer {
             let mut indexed_files = 0usize;
             let total_files = files.len();
 
+            if total_files > 0 {
+                progress.report(&format!("Indexing 0/{total_files} files..."), 0);
+            }
+
             for path in files {
                 let elapsed_ms = budget_start.elapsed().as_millis() as u64;
                 if elapsed_ms > caps.initial_scan_budget_ms {
@@ -1029,6 +1126,19 @@ impl LspServer {
                 if coordinator.index().index_file(url, content).is_ok() {
                     indexed_files += 1;
                     coordinator.update_building_progress(indexed_files);
+
+                    // Report progress every 25 files to avoid flooding the client
+                    if indexed_files.is_multiple_of(25) || indexed_files == total_files {
+                        let pct = if total_files > 0 {
+                            ((indexed_files as u64 * 100) / total_files as u64) as u32
+                        } else {
+                            100
+                        };
+                        progress.report(
+                            &format!("Indexing {indexed_files}/{total_files} files..."),
+                            pct,
+                        );
+                    }
                 }
             }
 
@@ -1045,11 +1155,21 @@ impl LspServer {
                             .transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms });
                     }
                 }
+                progress.end(&format!(
+                    "Indexed {} files (incomplete: {})",
+                    indexed_files,
+                    match reason {
+                        EarlyExitReason::FileLimit => "file limit reached",
+                        EarlyExitReason::InitialTimeBudget => "time budget exceeded",
+                        EarlyExitReason::IncrementalTimeBudget => "incremental budget exceeded",
+                    }
+                ));
                 send_index_ready_notification(&outbound, false);
             } else {
                 let file_count = coordinator.index().file_count();
                 let symbol_count = coordinator.index().symbol_count();
                 coordinator.transition_to_ready(file_count, symbol_count);
+                progress.end(&format!("Indexed {file_count} files ({symbol_count} symbols)"));
                 send_index_ready_notification(&outbound, true);
             }
         });
