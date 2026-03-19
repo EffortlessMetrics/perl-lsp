@@ -19,6 +19,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/DEVELOPMENT_ARCHAEOLOGY.md](research/DEVELOPMENT_ARCHAEOLOGY.md) — development-history archaeology and launch-story findings
 - [research/DOCUMENTATION_SUMMARY.md](research/DOCUMENTATION_SUMMARY.md) — packaging summary for the article set
 - [research/ERA_TIMELINE.md](research/ERA_TIMELINE.md) — era-by-era timeline and velocity notes
+- [research/SWARM_SURFACE_EVOLUTION.md](research/SWARM_SURFACE_EVOLUTION.md) — Jan→Mar 2026 transition from commands to the current skills/hooks/swarm-state control plane
 - [research/SCOUT_SUMMARY.md](research/SCOUT_SUMMARY.md) — summary of the scout output delivered during the session
 - [research/TESTING_INFRASTRUCTURE_GAPS_SCOUT.md](research/TESTING_INFRASTRUCTURE_GAPS_SCOUT.md) — testing-gap research that fed related follow-up work
 - [research/five_eras_swarm_methodology.md](research/five_eras_swarm_methodology.md) — source draft behind the five-eras analysis
