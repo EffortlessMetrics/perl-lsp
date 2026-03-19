@@ -6,59 +6,58 @@ user-invocable: false
 
 # Coding Standards
 
-Load these standards before writing or reviewing code in `perl-lsp`.
+This skill is the full on-demand coding standards reference for agents. Hooks may
+inject a condensed summary automatically, but that Layer 0 context is not a
+replacement for the complete standards below.
 
 ## Banned In Production Code
 
-- no `unwrap()`, `expect()`, `panic!()`, `todo!()`, or `unimplemented!()`
-- no `dbg!()`
-- no `std::process::abort()`
-- no `std::process::exit()` outside `bin/` and `lifecycle.rs`
-- one allowed exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+- `unwrap()`, `expect()` → use `?`, `.ok_or_else()`, or pattern matching
+- `panic!()`, `todo!()`, `unimplemented!()` → return `Result`/`Option`
+- `dbg!()` → use `tracing::debug!`
+- `std::process::abort()` → never
+- `std::process::exit()` → only in `bin/` directories and `lifecycle.rs`
+- Exception: one `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
 
-Prefer `?`, `.ok_or_else()`, or explicit pattern matching.
+## Patterns
 
-## Common Patterns
-
-- use `Option<Regex>` with `.ok()` for graceful regex init
-- use fixed-size arrays for compile-time non-empty guarantees
-- prefer `.first()` over `.get(0)`
-- prefer `.push(char)` over `.push_str("x")` for a single character
-- prefer `or_default()` over `or_insert_with(Vec::new)`
-- avoid unnecessary `.clone()` on `Copy` types
+- Regex init: `Option<Regex>` with `.ok()` for graceful degradation
+- Non-empty collections: fixed-size arrays `[T; N]` for compile-time guarantees
+- `.first()` over `.get(0)`
+- `.push(char)` not `.push_str("x")` for single chars
+- `or_default()` not `or_insert_with(Vec::new)`
+- No unnecessary `.clone()` on Copy types
 
 ## Test Standards
 
-- prefer `Result<()>` return types in tests, or `perl_tdd_support::must` / `must_some`
-- use descriptive names like `test_<what>_<scenario>_<expected>`
-- for `perl-lsp` tests use `RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2`
+- Return `Result<()>` from tests, or use `perl_tdd_support::must` / `must_some`
+- Descriptive names: `test_<what>_<scenario>_<expected>`
+- LSP tests: `RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2`
 
 ## Commit Format
 
-- use conventional commits: `type(scope): description`
-- types: `fix`, `feat`, `test`, `docs`, `chore`, `perf`, `refactor`
-- scope should usually be the crate or subsystem
+- Conventional: `type(scope): description`
+- Types: `fix`, `feat`, `test`, `docs`, `chore`, `perf`, `refactor`
+- Scope: crate name, subsystem, or repo area being changed
 
-## Default Verification
+## Verification
 
-```bash
-cargo fmt --all
-cargo clippy -p <crate> --tests -- -D warnings
-cargo test -p <crate>
-```
+Run `cargo fmt --all && cargo clippy -p <crate> --tests -- -D warnings && cargo test -p <crate>`
 
-Escalate to `nix develop -c just ci-gate` for broader multi-crate changes.
+Escalate to `nix develop -c just ci-gate` for changes spanning 3+ crates.
 
-## Git Hygiene
+## Git Commit Hygiene
 
-- stage only files you intentionally changed
-- never use `git add -A` or `git add .`
-- normally exclude `Cargo.lock`, `.claude/` control-plane files, `docs/project/CURRENT_STATUS.md`, and `scripts/.ignored-baseline` unless they are the direct task
-- check the staged set with `git diff --cached --name-only`
+- Only `git add` files you intentionally created or modified
+- Never use `git add -A` or `git add .`
+- Exclude from commits unless your task requires them:
+  - `Cargo.lock` unless dependencies changed
+  - `.claude/` infrastructure files unless that is the task
+  - `docs/project/CURRENT_STATUS.md`
+  - `scripts/.ignored-baseline`
+- Before committing, run `git diff --cached --name-only`
 
-## Dual Indexing Reminder
-
-Workspace symbol work should preserve both bare and qualified indexing:
+## Dual Indexing
 
 ```rust
 file_index.references.entry(bare_name.to_string()).or_default().push(symbol_ref.clone());
