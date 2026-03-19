@@ -41,7 +41,7 @@ flowchart LR
 
 The mode-aware lexer fully implements slash disambiguation with comprehensive test coverage (21 test cases). No further implementation required.
 
-**Remaining Work**: Documentation only (ADR completion)
+**Remaining Work**: None for ADR coverage; optional fuzz/property testing could further strengthen regression protection.
 
 ### 2. Deep Nesting Stack Overflow
 
@@ -88,7 +88,7 @@ Byte limits (64KB), nesting limits (128), and the lexer parse budget are in plac
 | 7 | Evaluate timeout protection as defense-in-depth | Regex Backtracking | Medium |
 | 8 | Add telemetry for repeated parse-budget hits | Regex Backtracking | Medium |
 | 9 | Audit all recursive parsing paths | Deep Nesting | Medium |
-| 10 | Complete ADR documentation | Ambiguous Slash | Small |
+| 10 | Add fuzz/property tests for slash disambiguation | Ambiguous Slash | Small |
 
 ### Long-term Actions (Optional)
 
@@ -114,7 +114,7 @@ gantt
     Memory test                :b1, 2024-01-01, 1d
     Audit parsing paths        :b2, after b1, 1d
     section Ambiguous Slash
-    Complete ADR               :c1, 2024-01-01, 1d
+    Fuzz/property tests        :c1, 2024-01-01, 1d
 ```
 
 ## Verification Commands

@@ -357,7 +357,7 @@ graph TD
 | Incremental Parsing | <1ms | <5ms | ✅ |
 | Reference Coverage | 98% | 95%+ | ✅ |
 | Workspace Crates | 115+ | Scalable | ✅ |
-| Documented ADRs | 0/39 | 39 | 🟡 In Progress |
+| Documented ADRs | 36/36 | 36 | ✅ |
 
 ### Target State (v1.0.0)
 
@@ -368,7 +368,7 @@ graph TD
 | Completion Response (p95) | <50ms | <50ms | <40ms | <30ms | <30ms |
 | Completion Response (p99) | N/A | <100ms | <80ms | <60ms | <50ms |
 | Workspace Index | ~370µs | <300µs | <275µs | <250µs | <250µs |
-| ADR Coverage | 0% | 50% | 80% | 95% | 100% |
+| ADR Coverage | 100% | 100% | 100% | 100% | 100% |
 | Security Audit Findings | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 |
 
 ---
