@@ -2,7 +2,7 @@
 //!
 //! Validates transcript fixtures and replays representative command flows.
 //!
-//! Run with: `cargo test -p perl-dap --features dap-phase2`
+//! Run with: `cargo test -p perl-dap --features dap-phase2 -- golden`
 
 #[cfg(feature = "dap-phase2")]
 mod dap_golden_transcripts {
