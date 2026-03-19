@@ -9,8 +9,10 @@ Supplemental archaeology note:
 - `ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md` — the intentional slowdown that built the parser, quality gates, and architectural surfaces later swarms depended on
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
+- `MERGECODE_ARCHAEOLOGY.md` — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and explicit three-flow delivery into the doctrine layer before the later swarm control plane
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
 - `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
+- `CASEBOOK_FORENSICS_ARCHAEOLOGY.md` — how casebook exhibits, dossier scripts, lessons, and specialist auditors turned postmortems into a reusable evidence pipeline
 - `INSTRUCTION_SURFACE_ARCHAEOLOGY.md` — how prompt-like orchestration guides, project doctrine docs, `.claude`, and `AGENTS.md` became a committed instruction layer
 - `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-heavy bridge era where the repo was disciplined but still depended on maintainer integration
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation

@@ -87,6 +87,11 @@ Examples from `2026-01-20` alone:
 This is the era encoding review and integration into the branch name itself.
 The maintainer notes that branch naming was rarely done by hand; most of those
 names appear to have come from Claude Code.
+More specifically, the maintainer's correction is that `maint/` likely marks a
+Claude-started PR branch convention for that period, possibly tied to a Jules
+PR-review and maintainer script he was using at the time. That makes the
+branch family even more historically useful: it is not only a maintainer bridge
+mark, but a fingerprint of a specific human-plus-tool integration loop.
 
 ---
 

@@ -33,6 +33,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md](research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md) — how issue bodies, PR bodies, learning issues, and article issues together made the GitHub ledger recoverable swarm memory
 - [research/JULES_LANE_ARCHAEOLOGY.md](research/JULES_LANE_ARCHAEOLOGY.md) — January 2026 Bolt/Sentinel/Palette lanes as proto-specialists
 - [research/MAINTAINER_BRIDGE_ARCHAEOLOGY.md](research/MAINTAINER_BRIDGE_ARCHAEOLOGY.md) — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern explicit
+- [research/MERGECODE_ARCHAEOLOGY.md](research/MERGECODE_ARCHAEOLOGY.md) — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and three explicit flows into a doctrine layer before the modern swarm control plane
 - [research/MERGE_DISCIPLINE_ARCHAEOLOGY.md](research/MERGE_DISCIPLINE_ARCHAEOLOGY.md) — PR governance from Q3 flow packs to `green-merge`, `review-pr`, and `triage-prs`
 - [research/MAINTAINER_VISION_ARCHAEOLOGY.md](research/MAINTAINER_VISION_ARCHAEOLOGY.md) — repeated waves of encoding maintainer judgment into prompts, lanes, commands, skills, hooks, and state
 - [research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md](research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md) — how the repo moved from Q3 lane ideas and `maint/pr-*` bridges into deterministic `worktree-agent-*` execution
@@ -45,6 +46,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md](research/AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md) — how the repo moved from assisted coding toward an AI-native, receipt-driven operating model
 - [research/MODE_SHIFT_ARCHAEOLOGY.md](research/MODE_SHIFT_ARCHAEOLOGY.md) — how the repo moved from assisted to native to industrialized work, including the nuance that Q4/Q1 was already AI-native but still hands-on
 - [research/GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md](research/GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md) — how issue `#210` turned proof governance into gate harnesses, receipt schemas, status checks, and later audit prompts
+- [research/CASEBOOK_FORENSICS_ARCHAEOLOGY.md](research/CASEBOOK_FORENSICS_ARCHAEOLOGY.md) — how casebook exhibits, PR dossiers, lessons, and specialist auditors became a reusable scar-story memory system
 - [research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md](research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md) — how receipts, provenance schemas, and forensics turned proof into structured artifacts
 - [research/RECEIPTS_LIE_ARCHAEOLOGY.md](research/RECEIPTS_LIE_ARCHAEOLOGY.md) — how PR `#209` and later validator repairs taught the repo that proof artifacts need governance too
 - [research/TRUSTED_CHANGE_ARCHAEOLOGY.md](research/TRUSTED_CHANGE_ARCHAEOLOGY.md) — how the repo industrialized trust through gates, receipts, drift checks, and durable lessons
