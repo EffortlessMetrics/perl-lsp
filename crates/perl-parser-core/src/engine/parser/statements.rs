@@ -181,10 +181,16 @@ impl<'a> Parser<'a> {
                 // Check if this is an anonymous subroutine
                 Ok(if let NodeKind::Subroutine { name, .. } = &sub_node.kind {
                     if name.is_none() {
+                        // Anonymous sub may be followed by arrow: sub { 42 }->()
+                        let expr = if self.peek_kind() == Some(TokenKind::Arrow) {
+                            self.parse_postfix_chain(sub_node)?
+                        } else {
+                            sub_node
+                        };
                         // Wrap anonymous subroutines in expression statements
-                        let location = sub_node.location;
+                        let location = expr.location;
                         Node::new(
-                            NodeKind::ExpressionStatement { expression: Box::new(sub_node) },
+                            NodeKind::ExpressionStatement { expression: Box::new(expr) },
                             location,
                         )
                     } else {
@@ -223,8 +229,23 @@ impl<'a> Parser<'a> {
             // Goto statement
             TokenKind::Goto => self.parse_goto(),
 
-            // Block
-            TokenKind::LeftBrace => self.parse_block(),
+            // Block — or hashref/block constructor followed by arrow dereference
+            // e.g. {key => "value"}->{key}
+            TokenKind::LeftBrace => {
+                let block = self.parse_block()?;
+                if self.peek_kind() == Some(TokenKind::Arrow) {
+                    // The block is actually an expression (hash constructor)
+                    // followed by postfix arrow operators.
+                    let chained = self.parse_postfix_chain(block)?;
+                    let loc = chained.location;
+                    Ok(Node::new(
+                        NodeKind::ExpressionStatement { expression: Box::new(chained) },
+                        loc,
+                    ))
+                } else {
+                    Ok(block)
+                }
+            }
 
             // Expression-ish statement
             _ => {
@@ -478,6 +499,24 @@ impl<'a> Parser<'a> {
         expr = self.parse_bitwise_or_with(expr)?;
         expr = self.parse_and_with(expr)?;
         expr = self.parse_or_with(expr)?;
+        // Ternary (?:) sits between || and = in Perl precedence.
+        // Without this, `wantarray ? @list : $list[0]` fails.
+        if self.peek_kind() == Some(TokenKind::Question) {
+            self.tokens.next()?; // consume ?
+            let then_expr = self.parse_assignment()?;
+            self.expect(TokenKind::Colon)?;
+            let else_expr = self.parse_ternary()?;
+            let start = expr.location.start;
+            let end = else_expr.location.end;
+            expr = Node::new(
+                NodeKind::Ternary {
+                    condition: Box::new(expr),
+                    then_expr: Box::new(then_expr),
+                    else_expr: Box::new(else_expr),
+                },
+                SourceLocation { start, end },
+            );
+        }
         self.parse_word_or_expr(expr)
     }
 
