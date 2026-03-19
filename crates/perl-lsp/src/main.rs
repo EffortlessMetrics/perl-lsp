@@ -172,6 +172,7 @@ fn run_server(launch_config: LaunchConfig) {
         ));
         log_server_startup(
             "perl-lsp",
+            env!("CARGO_PKG_VERSION"),
             launch_config.transport,
             Some(launch_config.feature_profile),
         );
