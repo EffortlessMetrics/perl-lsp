@@ -9,6 +9,7 @@
 // - inlay_hints -> perl-lsp-inlay-hints
 // - rename -> perl-lsp-rename
 // - code_actions -> perl-lsp-code-actions
+// - code_lens -> perl-lsp-code-lens
 #[deprecated(since = "0.9.0", note = "Use perl_lsp_providers::code_actions instead")]
 pub mod code_actions;
 pub mod code_actions_pragmas;

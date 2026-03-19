@@ -39,6 +39,7 @@ perl-lsp-code-actions = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 perl-lsp-inlay-hints = { workspace = true }
+perl-lsp-code-lens = { workspace = true }
 perl-lsp-navigation = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-type-hierarchy = { workspace = true }
 perl-lsp-rename = { workspace = true }
