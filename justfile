@@ -1544,6 +1544,49 @@ release-gate: ci-gate release-build sbom-verify version-check
     @echo "  RELEASE GATE PASSED"
     @echo "=============================================="
 
+# Extended release check: release-gate + semver + changelog + publish dry-run + panic audit
+# Use before cutting a release tag. See docs/project/RELEASE_CHECKLIST.md
+release-check: release-gate semver-check
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Extended release checks ==="
+    echo "Checking CHANGELOG.md for release section..."
+    WORKSPACE_VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+    if ! grep -q "## \[${WORKSPACE_VERSION}\]" CHANGELOG.md; then
+      echo "ERROR: CHANGELOG.md missing section for [${WORKSPACE_VERSION}]"
+      echo "  Found [Unreleased] but need a versioned section before release."
+      exit 1
+    fi
+    echo "  CHANGELOG.md has [${WORKSPACE_VERSION}] section"
+    echo "Checking for banned panic constructs in production code..."
+    PANIC_HITS=$(grep -rn --include='*.rs' \
+      -e '\.unwrap()' -e '\.expect(' -e 'panic!(' \
+      -e 'todo!(' -e 'unimplemented!(' -e 'dbg!(' \
+      crates/*/src/ \
+      --exclude-dir='tests' --exclude-dir='benches' \
+      -- | grep -v '#\[allow' | grep -v '// allow' \
+           | grep -v 'crates/perl-lsp/src/util/uri.rs' \
+           | grep -v '#\[cfg(test)\]' || true)
+    if [ -n "$PANIC_HITS" ]; then
+      echo "WARNING: Potential panic constructs found in production code:"
+      echo "$PANIC_HITS" | head -20
+      echo "  (showing first 20 matches -- review before release)"
+    else
+      echo "  No banned panic constructs found"
+    fi
+    echo "Running cargo publish dry-run..."
+    cargo publish --dry-run -p perl-parser 2>&1 | tail -1
+    cargo publish --dry-run -p perl-lsp 2>&1 | tail -1
+    echo "  Publish dry-run passed"
+    echo "Building perl-dap release binary..."
+    cargo build -p perl-dap --release --locked
+    echo "  perl-dap release build passed"
+    echo "=============================================="
+    echo "  RELEASE CHECK PASSED"
+    echo "  See docs/project/RELEASE_CHECKLIST.md for"
+    echo "  manual verification steps before tagging."
+    echo "=============================================="
+
 # ============================================================================
 # LSP Test Tiering (Slice D: tiered test execution)
 # ============================================================================
