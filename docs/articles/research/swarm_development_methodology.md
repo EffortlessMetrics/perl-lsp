@@ -15,7 +15,7 @@ The perl-lsp project implements a production-grade multi-agent development metho
 Key metrics:
 - **8 core skills** capturing stable development procedures
 - **90 memory files** encoding 5 cycles of learnings
-- **54 agent definitions** providing role-specific context and todo structure, with skills carrying the mechanical substep instructions
+- **52 agent definitions + 2 roster JSON files** providing role-specific context and todo structure, with skills carrying the mechanical substep instructions
 - **3 CI tiers** (PR-fast: 1-2 min, merge-gate: 3-5 min, nightly: 15-30 min)
 - **5 persistent coordinators** (scout, builder, reviewer, ops, improver)
 - **25+ just recipes** implementing automated workflows
@@ -173,24 +173,25 @@ State that must survive across decisions:
 
 Restarting these contexts loses critical state. Workers, by contrast, are **context-bound** — each worker owns one concrete task, and when that task changes scope (crate, branch, verification), retire the worker and spawn fresh.
 
-### Archived Agent Definitions
+### Agent Definitions And Skills
 
 From `.claude/agents/README.md`:
 
 ```
-Agent definitions have been archived. The orchestrator uses inline prompt
-templates and skills (e.g., `/swarm`, `/parser-fix`, `/verify`) instead of
-loading agent definition files at runtime.
+The swarm orchestrator calls agents, and these agent files are part of the
+live swarm design.
 
-The 54 agent definition files in this directory were never loaded by the
-orchestrator. Every agent spawn uses an inline prompt constructed from
-CLAUDE.md context, skills, and handoff files.
+Each agent file provides role framing, lane ownership, communication rules,
+and the todo shape for the run. The todo items then name the specific skills
+or commands that carry the mechanical procedure for each step.
 ```
 
-This was a critical realization: **defining 54 agent files upfront is waste**. The coordinator model is much simpler:
-- Coordinator spawn prompts are embedded in the `/swarm` skill
-- Worker spawn prompts are generated inline by coordinators
-- Both reference shared skills and CLAUDE.md context
+The more accurate realization was not "agent files are waste." It was that
+the split had to be cleaner:
+- agent files carry the role contract
+- coordinator spawn prompts still route work and supply slice-specific context
+- skills carry reusable procedural steps that can be loaded mid-run
+- both agent files and skills reference shared control-plane doctrine
 
 Result: simpler maintenance, less hidden coupling, clearer audit trail.
 
@@ -509,13 +510,15 @@ status-update / status-check  # Refresh CURRENT_STATUS.md
 
 **Changes:**
 - Created 8 core skills (swarm, parser-fix, verify-build, etc.)
-- Archived 54 agent definition files
+- Consolidated 52 agent definition files plus 2 JSON roster artifacts into a
+  clearer role-and-skill split
 - Replaced prose instructions with `/skill-name` invocations
 - Added swarm-state/ directory for durable discovery tracking
 
 **What worked:**
 - Skills reduced agent prompt boilerplate by ~50%
-- Archived agent files freed up code search
+- The cleaner role-and-skill split reduced confusion about where role framing
+  ends and step-by-step procedure begins
 - Explicit skill invocation made procedures auditable
 
 **What didn't:**
@@ -566,7 +569,8 @@ status-update / status-check  # Refresh CURRENT_STATUS.md
 - Speculative rebasing burned CI queue
 - Shared worktrees caused branch contention
 - CURRENT_STATUS.md staleness (policy_checks blocker) affected 4/5 test PRs
-- 54 agent definition files were still referenced but never loaded
+- the agent/skill split was still being documented imprecisely in some
+  surfaces
 
 **Outcome**: Clear scaling path; critical friction points identified.
 
@@ -735,9 +739,9 @@ Requires: Read LATEST_VERSION from one source of truth.
 │   ├── parser-fix/SKILL.md
 │   ├── verify-build/SKILL.md
 │   └── ...
-├── agents/                         # Archived (no longer used)
-│   ├── archive/                    # 54 historical agent definitions
-│   ├── README.md                   # Why archived
+├── agents/                         # 52 agent definitions + 2 roster JSON files
+│   ├── builder.md                  # Role framing + todo shape
+│   ├── reviewer.md                 # Role framing + todo shape
 │   └── AGENT_CATALOG.md
 ├── hooks/                          # Deterministic enforcement
 │   ├── subagent-stop.sh
@@ -1060,7 +1064,7 @@ Parallelism: 100+ concurrent agents (bottleneck: CI @ 5 min)
 
 - **CLAUDE.md**: Project orchestration model, quick reference, coding standards
 - **.claude/skills/**: 8 reusable skills (swarm, parser-fix, verify-build, etc.)
-- **.claude/agents/**: 54 agent definitions for the current swarm surface
+- **.claude/agents/**: 52 agent definitions plus 2 roster JSON files for the current swarm surface
 - **.claude/hooks/**: Deterministic enforcement (subagent-stop, teammate-idle)
 - **.ci/GATE_REGISTRY.toml**: Merge-blocking gates with thresholds
 - **justfile**: 25+ automated workflows (pr-fast, ci-gate, ci-full)

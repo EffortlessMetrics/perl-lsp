@@ -437,12 +437,12 @@ bash swarm-pack/setup.sh    # Install agents, slash commands, hooks, ops, GH lab
 ```
 
 The pack installs reusable specialist agent definitions plus slash commands and
-hooks. In the archived source tree, the reusable specialist roster now lives
-under `.claude/agents/archive/` and is summarized in
+hooks. In the current source tree, the reusable specialist roster now lives
+under `.claude/agents/` and is summarized in
 `.claude/agents/AGENT_CATALOG.md`; `/bootstrap-agents` refreshes and extends
-that archived roster when the codebase changes. The live swarm still runs as 5
+that roster when the codebase changes. The live swarm still runs as 5
 named coordinators; optional specialists are spawned on demand.
-The archived catalog records who usually spawns each tracked specialist, where
+The catalog records who usually spawns each tracked specialist, where
 it hands work next, and which slash entrypoints it should invoke first, so the
 agent list and the flow mapping stay coupled.
 Compatibility donor agents now live under `.claude/agents-compat/` rather than

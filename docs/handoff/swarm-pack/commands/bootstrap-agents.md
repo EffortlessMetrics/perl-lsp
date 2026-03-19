@@ -29,9 +29,12 @@ Launch the `bootstrapper` agent:
 Agent(
   subagent_type: "bootstrapper",
   prompt: "Discover this codebase and generate domain-specific agents. $ARGUMENTS.
-Write agents to .claude/agents/archive/.
+Write agents to .claude/agents/.
 Update the repo-local coordinator and worker roster when the pattern is reusable.
-Create .claude/agents/AGENT_CATALOG.md and .claude/agents/archive/agent-roster.json.
+Create .claude/agents/AGENT_CATALOG.md and .claude/agents/agent-roster.json.
+Keep role framing and todo structure in the agent files; keep the mechanical
+substep instructions in skills or commands so agents can load them when those
+substeps become relevant.
 Target ~25-35 domain agents.",
   mode: "auto"
 )
@@ -39,7 +42,7 @@ Target ~25-35 domain agents.",
 
 ## After Bootstrap
 
-1. Review generated agents in `.claude/agents/archive/`
+1. Review generated agents in `.claude/agents/`
 2. Check `AGENT_CATALOG.md` for the full inventory
 3. Verify any `$PLACEHOLDER` values were filled in
 4. Test with `/swarm all` to start the swarm

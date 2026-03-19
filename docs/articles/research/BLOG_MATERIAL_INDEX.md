@@ -85,7 +85,7 @@ Supplemental archaeology note:
 - CPAN corpus as error oracle (4,355 modules, 80% clean)
 - Swarm infrastructure (100 agents in Cycle 5, 56 PRs, 80+ issues)
 - Perl-specific parsing challenges (context-sensitive //, special vars, fat-arrow placement)
-- 54 agent definitions plus `.claude` lineage: `agents4` (Q3 canonical swarm), `agents5-6` (evolution), `agents/` (current `agents7` layer)
+- 52 agent definitions plus 2 roster JSON files and the `.claude` lineage: `agents4` (Q3 canonical swarm), `agents5-6` (evolution), `agents/` (current `agents7` layer)
 - 97 LSP features implemented
 - 49 TODO/FIXME/HACK comments (pristine codebase)
 - 8 reusable skills, 48 commands, 30+ memory files
@@ -320,7 +320,7 @@ Microcrate Architecture → Isolated Crates → Parallel Agents
 **Data to Highlight**:
 - 0 circular dependencies
 - 97 LSP features (feature.toml)
-- 54 agent definitions plus the `.claude` lineage that connects Q3 swarm packs to the current `agents7` layer
+- 52 agent definitions plus 2 roster JSON files and the `.claude` lineage that connects Q3 swarm packs to the current `agents7` layer
 - 8 reusable skills (composable infrastructure)
 
 ---

@@ -31,8 +31,8 @@ The swarm is built from four layers:
 
 The persistent team is intentionally small. Most code mutation happens in
 short-lived workers with isolated worktrees.
-The archived specialist-worker inventory lives in
-[`../../.claude/agents/archive/agent-roster.json`](../../.claude/agents/archive/agent-roster.json),
+The specialist-worker inventory lives in
+[`../../.claude/agents/agent-roster.json`](../../.claude/agents/agent-roster.json),
 while [`../../.claude/agents/AGENT_CATALOG.md`](../../.claude/agents/AGENT_CATALOG.md)
 summarizes the roster and records spawned-by, handoff-to, and first-entrypoint
 metadata for every tracked specialist.

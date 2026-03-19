@@ -181,4 +181,4 @@ Start with `/swarm all`. Thin coordinator teammates spawn focused subagents in w
 
 **PR lifecycle**: Draft PR -> `/review-pr` -> `/pr-ready` -> CI -> `/green-merge`.
 
-**Files**: `.ops-perl-lsp/` (handoffs, metrics), `.claude/agents/archive/` (archived agent defs), `.claude/skills/` and `.claude/commands/` (skills and slash entrypoints).
+**Files**: `.ops-perl-lsp/` (handoffs, metrics), `.claude/agents/` (agent defs and roster), `.claude/skills/` and `.claude/commands/` (skills and slash entrypoints).

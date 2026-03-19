@@ -520,12 +520,12 @@ echo "========================================================================"
 echo " Swarm Pack — Setup Complete"
 echo "========================================================================"
 echo ""
-if [ -d "${CLAUDE_DIR}/agents/archive" ]; then
-    AGENT_SURFACE_DIR="${CLAUDE_DIR}/agents/archive"
-    AGENT_SURFACE_LABEL=".claude/agents/archive/"
-else
+if [ -d "${CLAUDE_DIR}/agents" ]; then
     AGENT_SURFACE_DIR="${CLAUDE_DIR}/agents"
     AGENT_SURFACE_LABEL=".claude/agents/"
+elif [ -d "${CLAUDE_DIR}/agents/archive" ]; then
+    AGENT_SURFACE_DIR="${CLAUDE_DIR}/agents/archive"
+    AGENT_SURFACE_LABEL=".claude/agents/archive/"
 fi
 AGENT_COUNT=$(find "${AGENT_SURFACE_DIR}" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
 SKILL_COUNT=$(find "${CLAUDE_DIR}/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')

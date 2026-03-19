@@ -281,13 +281,13 @@ was merged, reverted, and then the revert itself appears twice in
 history. The optimization was correct but exposed a pre-existing
 ordering assumption elsewhere.
 
-### 54 agent definitions, 3 actual patterns
+### 52 agent definitions, 3 actual patterns
 
-After defining 54 distinct agent types across six iterations
+After defining 52 distinct agent types across six iterations
 (`agents2` through `agents6`, plus `agents-compat`), analysis revealed
 that all agents fell into just 3 patterns: scout, builder, and
-reviewer. The 54 definitions were archived and replaced with 10
-composable skills.
+reviewer. The later swarm kept the agent layer but pushed more of the
+mechanical step instructions into composable skills.
 
 ---
 
