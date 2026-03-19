@@ -699,11 +699,14 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse import list (with EOF guard to prevent infinite loop on truncated input)
+            // Parse import list (with EOF guard to prevent infinite loop on truncated input).
+            // Accept strings, identifiers, and numbers as import items to support
+            // both simple import lists and key => value pairs.
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else if self.peek_kind() == Some(TokenKind::Identifier) {
+                if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::String | TokenKind::Identifier | TokenKind::Number)
+                ) {
                     args.push(self.consume_token()?.text.to_string());
                 } else {
                     return Err(ParseError::syntax(
@@ -712,8 +715,12 @@ impl<'a> Parser<'a> {
                     ));
                 }
 
-                if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.consume_token()?; // consume comma
+                // Accept both comma and fat arrow as separators
+                if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Comma | TokenKind::FatArrow)
+                ) {
+                    self.consume_token()?;
                 } else if self.peek_kind() != Some(TokenKind::RightParen) {
                     return Err(ParseError::syntax(
                         "Expected comma or closing parenthesis",
@@ -908,11 +915,13 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse argument list (with EOF guard to prevent infinite loop on truncated input)
+            // Parse argument list (with EOF guard to prevent infinite loop on truncated input).
+            // Accept strings, identifiers, and numbers to support key => value pairs.
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else if self.peek_kind() == Some(TokenKind::Identifier) {
+                if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::String | TokenKind::Identifier | TokenKind::Number)
+                ) {
                     args.push(self.consume_token()?.text.to_string());
                 } else {
                     return Err(ParseError::syntax(
@@ -921,8 +930,12 @@ impl<'a> Parser<'a> {
                     ));
                 }
 
-                if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.consume_token()?; // consume comma
+                // Accept both comma and fat arrow as separators
+                if matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Comma | TokenKind::FatArrow)
+                ) {
+                    self.consume_token()?;
                 } else if self.peek_kind() != Some(TokenKind::RightParen) {
                     return Err(ParseError::syntax(
                         "Expected comma or closing parenthesis",

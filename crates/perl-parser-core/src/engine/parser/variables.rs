@@ -540,7 +540,11 @@ impl<'a> Parser<'a> {
         let mut args = vec![];
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
             args.push(self.parse_expression()?);
-            if self.peek_kind() == Some(TokenKind::Comma) {
+            // Accept both comma and fat arrow as separators
+            if matches!(
+                self.peek_kind(),
+                Some(TokenKind::Comma | TokenKind::FatArrow)
+            ) {
                 self.consume_token()?;
             } else if self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
                 return Err(ParseError::syntax(
