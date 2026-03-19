@@ -358,4 +358,252 @@ mod tests {
         let ids = feature_ids_from_flags(&BuildFlags::default());
         assert!(ids.is_empty());
     }
+
+    // ── Feature flag evaluation (per-flag granularity) ──────────────
+
+    #[test]
+    fn feature_ids_from_flags_partial_enables_only_selected() {
+        let flags = BuildFlags { completion: true, hover: true, ..Default::default() };
+        let ids = feature_ids_from_flags(&flags);
+        assert!(ids.contains(&"lsp.completion"));
+        assert!(ids.contains(&"lsp.hover"));
+        assert!(!ids.contains(&"lsp.definition"));
+        assert!(!ids.contains(&"lsp.references"));
+        assert_eq!(ids.len(), 2, "should contain exactly 2 feature IDs");
+    }
+
+    #[test]
+    fn feature_ids_from_flags_single_flag_produces_one_id() {
+        let flags = BuildFlags { rename: true, ..Default::default() };
+        let ids = feature_ids_from_flags(&flags);
+        assert_eq!(ids.len(), 1);
+        assert_eq!(ids[0], "lsp.rename");
+    }
+
+    // ── Build profile feature gating ────────────────────────────────
+
+    #[test]
+    fn ga_lock_profile_gates_inline_values_out() {
+        let flags = FeatureProfile::GaLock.build_flags();
+        assert!(!flags.inline_values, "ga-lock must gate out inline_values");
+    }
+
+    #[test]
+    fn production_profile_gates_formatting_out() {
+        let flags = FeatureProfile::Production.build_flags();
+        assert!(!flags.formatting, "production must gate out formatting");
+        assert!(!flags.range_formatting, "production must gate out range_formatting");
+    }
+
+    #[test]
+    fn all_profile_gates_nothing_out() {
+        let flags = FeatureProfile::All.build_flags();
+        assert!(flags.formatting, "all must include formatting");
+        assert!(flags.range_formatting, "all must include range_formatting");
+        assert!(flags.inline_values, "all must include inline_values");
+    }
+
+    #[test]
+    fn all_profile_is_strict_superset_of_ga_lock() {
+        let all_ids = feature_ids_from_flags(&FeatureProfile::All.build_flags());
+        let ga_ids = feature_ids_from_flags(&FeatureProfile::GaLock.build_flags());
+        for id in &ga_ids {
+            assert!(all_ids.contains(id), "'all' must contain ga-lock feature '{id}'");
+        }
+        assert!(
+            all_ids.len() > ga_ids.len(),
+            "'all' should have strictly more features than ga-lock"
+        );
+    }
+
+    #[test]
+    fn all_profile_is_superset_of_production() {
+        let all_ids = feature_ids_from_flags(&FeatureProfile::All.build_flags());
+        let prod_ids = feature_ids_from_flags(&FeatureProfile::Production.build_flags());
+        for id in &prod_ids {
+            assert!(all_ids.contains(id), "'all' must contain production feature '{id}'");
+        }
+    }
+
+    // ── Feature ID lookup and validation ────────────────────────────
+
+    #[test]
+    fn catalog_advertised_ids_are_sorted_for_all_profiles() {
+        for profile in FeatureProfile::all() {
+            let ids = catalog_advertised_feature_ids(*profile);
+            let mut sorted = ids.clone();
+            sorted.sort_unstable();
+            assert_eq!(
+                ids,
+                sorted,
+                "catalog_advertised_feature_ids for {} should be sorted",
+                profile.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_advertised_ids_ga_lock_and_production_overlap_on_core_features() {
+        let prod_ids = catalog_advertised_feature_ids(FeatureProfile::Production);
+        let ga_ids = catalog_advertised_feature_ids(FeatureProfile::GaLock);
+        // Both profiles should share core features
+        let core_features = ["lsp.completion", "lsp.hover", "lsp.definition", "lsp.references"];
+        for id in &core_features {
+            assert!(prod_ids.contains(id), "production should contain core feature '{id}'");
+            assert!(ga_ids.contains(id), "ga-lock should contain core feature '{id}'");
+        }
+    }
+
+    #[test]
+    fn catalog_advertised_ids_ga_lock_includes_formatting_production_does_not() {
+        let prod_ids = catalog_advertised_feature_ids(FeatureProfile::Production);
+        let ga_ids = catalog_advertised_feature_ids(FeatureProfile::GaLock);
+        // GA-lock includes formatting by default, production does not
+        assert!(ga_ids.contains(&"lsp.formatting"), "ga-lock should include formatting");
+        assert!(
+            !prod_ids.contains(&"lsp.formatting"),
+            "production should not include formatting (requires perltidy)"
+        );
+    }
+
+    // ── Feature enablement/disablement ──────────────────────────────
+
+    #[test]
+    fn runtime_flags_perltidy_enables_formatting_for_all_profiles() {
+        for profile in FeatureProfile::all() {
+            let flags = profile.runtime_flags(true);
+            assert!(
+                flags.formatting,
+                "runtime with perltidy should enable formatting for {}",
+                profile.as_str()
+            );
+            assert!(
+                flags.range_formatting,
+                "runtime with perltidy should enable range_formatting for {}",
+                profile.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn runtime_flags_no_perltidy_matches_base_for_production() {
+        let base = FeatureProfile::Production.build_flags();
+        let runtime = FeatureProfile::Production.runtime_flags(false);
+        assert_eq!(base, runtime, "runtime(false) should match build_flags for production");
+    }
+
+    #[test]
+    fn runtime_advertised_features_without_perltidy_disables_formatting() {
+        let adv = FeatureProfile::Production.runtime_advertised_features(false);
+        assert!(!adv.formatting, "production without perltidy should not advertise formatting");
+        assert!(
+            !adv.range_formatting,
+            "production without perltidy should not advertise range_formatting"
+        );
+    }
+
+    #[test]
+    fn runtime_advertised_features_with_perltidy_enables_formatting() {
+        let adv = FeatureProfile::Production.runtime_advertised_features(true);
+        assert!(adv.formatting, "production with perltidy should advertise formatting");
+        assert!(adv.range_formatting, "production with perltidy should advertise range_formatting");
+    }
+
+    #[test]
+    fn advertised_features_all_profile_enables_everything_without_perltidy() {
+        let adv = FeatureProfile::All.advertised_features();
+        assert!(adv.completion);
+        assert!(adv.hover);
+        assert!(adv.definition);
+        assert!(adv.formatting, "all profile should advertise formatting");
+        assert!(adv.semantic_tokens);
+    }
+
+    // ── Default feature profile ─────────────────────────────────────
+
+    #[test]
+    fn current_profile_is_deterministic() {
+        let a = FeatureProfile::current();
+        let b = FeatureProfile::current();
+        assert_eq!(a, b, "current() must be deterministic across calls");
+    }
+
+    #[test]
+    fn current_profile_is_production_or_ga_lock() {
+        let current = FeatureProfile::current();
+        let valid = current == FeatureProfile::Production || current == FeatureProfile::GaLock;
+        assert!(valid, "current() must be Production or GaLock, got {:?}", current);
+    }
+
+    #[test]
+    fn current_profile_enables_core_capabilities() {
+        let flags = FeatureProfile::current().build_flags();
+        assert!(flags.completion);
+        assert!(flags.hover);
+        assert!(flags.definition);
+        assert!(flags.references);
+        assert!(flags.document_symbol);
+    }
+
+    // ── from_str_name module function ───────────────────────────────
+
+    #[test]
+    fn from_str_name_resolves_canonical_names() {
+        assert_eq!(from_str_name("ga-lock"), Some(FeatureProfile::GaLock));
+        assert_eq!(from_str_name("production"), Some(FeatureProfile::Production));
+        assert_eq!(from_str_name("all"), Some(FeatureProfile::All));
+    }
+
+    #[test]
+    fn from_str_name_resolves_aliases() {
+        assert_eq!(from_str_name("ga"), Some(FeatureProfile::GaLock));
+        assert_eq!(from_str_name("ga_lock"), Some(FeatureProfile::GaLock));
+        assert_eq!(from_str_name("prod"), Some(FeatureProfile::Production));
+    }
+
+    #[test]
+    fn from_str_name_resolves_auto_to_current() {
+        assert_eq!(from_str_name("auto"), Some(FeatureProfile::current()));
+    }
+
+    #[test]
+    fn from_str_name_returns_none_for_unknown() {
+        assert!(from_str_name("debug").is_none());
+        assert!(from_str_name("").is_none());
+        assert!(from_str_name("GA-LOCK").is_none());
+    }
+
+    // ── Trait derivations ───────────────────────────────────────────
+
+    #[test]
+    fn feature_profile_debug_is_human_readable() {
+        let debug_str = format!("{:?}", FeatureProfile::Production);
+        assert!(debug_str.contains("Production"), "Debug output should contain variant name");
+    }
+
+    #[test]
+    fn feature_profile_copy_preserves_equality() {
+        let original = FeatureProfile::All;
+        let copied: FeatureProfile = original;
+        let also_copied: FeatureProfile = original;
+        assert_eq!(original, copied);
+        assert_eq!(copied, also_copied);
+    }
+
+    // ── Profile ordering invariants ─────────────────────────────────
+
+    #[test]
+    fn all_profile_has_most_feature_ids() {
+        let ga_count = feature_ids_from_flags(&FeatureProfile::GaLock.build_flags()).len();
+        let prod_count = feature_ids_from_flags(&FeatureProfile::Production.build_flags()).len();
+        let all_count = feature_ids_from_flags(&FeatureProfile::All.build_flags()).len();
+        assert!(
+            all_count >= prod_count,
+            "all ({all_count}) should have >= features than production ({prod_count})"
+        );
+        assert!(
+            all_count >= ga_count,
+            "all ({all_count}) should have >= features than ga-lock ({ga_count})"
+        );
+    }
 }
