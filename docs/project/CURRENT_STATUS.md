@@ -57,8 +57,7 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
-| **Current release line** | `v0.11.0` public alpha | Truthful docs and receipts | Active |
-| **Active milestone** | `v0.12.0` public-alpha hardening sprint | Exit hardening sprint cleanly | In progress |
+| **Current release line** | `v0.12.0` public alpha | Truthful docs and receipts | Active |
 | **Merge gate** | `nix develop -c just ci-gate` | Green before merge | Required |
 | **Tier A Tests** | 2241 lib tests (discovered), 0 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
@@ -73,7 +72,7 @@ Key terms:
 
 ## What's True Right Now
 
-- **Release posture**: the current release line is `v0.11.0` public alpha; the active milestone is `v0.12.0` hardening, not a shipped release
+- **Release posture**: the current release line is `v0.12.0` public alpha
 - **Status discipline**: this file is for evidence, [ROADMAP.md](ROADMAP.md) is for planning, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `bash scripts/ignored-test-count.sh` is the tracked-test-debt source
@@ -105,7 +104,7 @@ Key terms:
 
 ## What's Next
 
-**Now (active milestone: v0.12.0 hardening sprint on top of the v0.11.0 release line)**
+**Now (active milestone: v0.12.0 public alpha release line)**
 - Raise the CPAN top-1000 full-corpus baseline from `72.1%` (`3139/4355`) to `90%+` clean parses while keeping the strict known-clean manifest at `100%`
 - Close repo-corpus coverage gaps (`63/68` NodeKinds currently covered) and retire the remaining parser audit `P2` hang-risk candidate
 - Land Moo/Moose/Class::Accessor, `use parent`/`use base`, and export-list disambiguation work needed for public-alpha expectations

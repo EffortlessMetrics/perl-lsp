@@ -6,8 +6,7 @@
 
 ## Current Framing
 
-- Current release line: `v0.11.0` public alpha (`Cargo.toml` `workspace.package.version`)
-- Active milestone: `v0.12.0` public-alpha hardening sprint
+- Current release line: `v0.12.0` public alpha (`Cargo.toml` `workspace.package.version`)
 - Current priorities: parser-quality ratchets, semantic-framework coverage, DAP/LSP hardening, and documentation alignment
 
 ## Now

@@ -1,8 +1,7 @@
 # NOW / NEXT / LATER
 
 > Last Updated: 2026-03-19
-> Current release line: `v0.11.0` public alpha
-> Active milestone: `v0.12.0` public-alpha hardening sprint
+> Current release line: `v0.12.0` public alpha
 
 This file is the short planning snapshot. The detailed roadmap is [docs/project/ROADMAP.md](docs/project/ROADMAP.md). The evidence-backed status view is [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 

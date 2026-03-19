@@ -2,7 +2,7 @@
 
 > **The Definitive Perl Development Tooling Platform**
 >
-> **Version**: v0.11.0| **Last Updated**: 2026-03-13
+> **Version**: v0.12.0| **Last Updated**: 2026-03-19
 > **Status**: Strategic Direction Document
 
 ---
@@ -28,7 +28,7 @@ Our vision is to become **the definitive Perl development tooling platform** wit
 
 ```mermaid
 graph LR
-    subgraph Today - v0.11.0
+    subgraph Today - v0.12.0
         A1[Public Alpha]
         A2[100% LSP Coverage]
         A3[80+ Crates]
@@ -677,4 +677,4 @@ Key architectural decisions that shape the technical direction.
 
 *This technical vision is a living document reflecting our aspirations and commitments. It evolves with the project and community.*
 
-**Last Updated**: 2026-03-13 | **Next Review**: 2026-06-01
+**Last Updated**: 2026-03-19 | **Next Review**: 2026-06-01
