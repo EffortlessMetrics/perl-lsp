@@ -61,7 +61,7 @@ Background material that explains why the system is designed the way it is.
 ### Project / ADR / Specs
 Decision records, project status, and planning documents.
 
-- [ADR Index](adr/README.md)
+- [ADR Index](adr/README.md) — chronological index plus a topic guide for parser, runtime, DAP, security, and swarm decisions
 - [Project Milestones](project/MILESTONES.md)
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
 - [Latency Caps SLO Spec](specs/LATENCY_CAPS_SLO_SPEC.md)
