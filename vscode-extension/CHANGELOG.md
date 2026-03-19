@@ -2,10 +2,19 @@
 
 All notable changes to the Perl Language Server extension will be documented in this file.
 
-## [Unreleased]
+## [0.12.0] - 2026-03-19
+
+### Changed
+- **Display Name**: Updated to "Perl Language Server (perl-lsp)" for clearer marketplace identification
+- **Description**: Rewritten for marketplace SEO: highlights key features, speed, and zero-dependency install
+- **Version Bump**: 0.12.0 public alpha release
+- **Preview Flag**: Marked as preview for public alpha period
+- **Keywords**: Added `debugger`, `refactoring`, `code-completion`, `diagnostics` for marketplace discovery
+- **Categories**: Added "Testing" to reflect Test Explorer integration
 
 ### Added
 - **Open VSX Publishing**: Extension now publishes to Open VSX Registry alongside VS Marketplace, enabling first-class support for VSCodium and other open-source VS Code derivatives. Added `ovsx` publish/check scripts and `@types/vscode` dev dependency fix for compatible builds.
+- **Comprehensive README**: Rewritten for marketplace listing with full configuration reference table, keyboard shortcuts, troubleshooting guide, and command reference
 
 ## [0.11.0] - 2026-03-11
 
