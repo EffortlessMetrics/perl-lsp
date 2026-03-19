@@ -235,6 +235,42 @@ impl<'a> Parser<'a> {
         let mut full_name = name;
         let mut end = token.end;
 
+        // Handle $#$ref — last index of dereferenced array
+        // The lexer sends `$#` as Identifier("$#"), so sigil="$" name="#"
+        if sigil == "$" && full_name == "#" {
+            let next_is_var = self
+                .tokens
+                .peek()
+                .ok()
+                .is_some_and(|t| t.text.starts_with('$'));
+            let next_is_sigil = self.peek_kind() == Some(TokenKind::ScalarSigil);
+            if next_is_var || next_is_sigil {
+                // $#$ref — parse the inner variable and wrap
+                let inner = self.parse_variable()?;
+                let inner_end = inner.location.end;
+                return Ok(Node::new(
+                    NodeKind::Unary {
+                        op: "$#".to_string(),
+                        operand: Box::new(inner),
+                    },
+                    SourceLocation { start: token.start, end: inner_end },
+                ));
+            } else if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                // $#{expr} — last index via block dereference
+                self.tokens.next()?; // consume {
+                let inner = self.parse_expression()?;
+                self.expect(TokenKind::RightBrace)?;
+                let brace_end = self.previous_position();
+                return Ok(Node::new(
+                    NodeKind::Unary {
+                        op: "$#".to_string(),
+                        operand: Box::new(inner),
+                    },
+                    SourceLocation { start: token.start, end: brace_end },
+                ));
+            }
+        }
+
         // The lexer may hand us a sigil-only token (`&`) or a precombined `$$`
         // token followed by the referenced identifier. Preserve the full target
         // name instead of leaving the tail as a stray identifier node.
@@ -399,7 +435,57 @@ impl<'a> Parser<'a> {
                             let token = self.tokens.next()?;
                             if self.peek_kind() == Some(TokenKind::Identifier) {
                                 let var_token = self.tokens.next()?;
-                                (format!("#{}", var_token.text), var_token.end)
+                                let mut var_name = var_token.text.to_string();
+                                let mut var_end = var_token.end;
+
+                                // Handle $#Pkg::Var (package-qualified)
+                                while self.peek_kind() == Some(TokenKind::DoubleColon) {
+                                    self.tokens.next()?;
+                                    var_name.push_str("::");
+                                    if self.peek_kind() == Some(TokenKind::Identifier) {
+                                        let next_token = self.tokens.next()?;
+                                        var_name.push_str(&next_token.text);
+                                        var_end = next_token.end;
+                                    }
+                                }
+
+                                (format!("#{}", var_name), var_end)
+                            } else if matches!(
+                                self.peek_kind(),
+                                Some(TokenKind::ScalarSigil)
+                            ) || self
+                                .tokens
+                                .peek()
+                                .ok()
+                                .is_some_and(|t| t.text.starts_with('$'))
+                            {
+                                // $#$ref — last index of dereferenced array
+                                // Parse the inner variable expression
+                                let inner = self.parse_variable()?;
+                                let end = inner.location.end;
+                                // Wrap in a Unary $#() node
+                                let node = Node::new(
+                                    NodeKind::Unary {
+                                        op: "$#".to_string(),
+                                        operand: Box::new(inner),
+                                    },
+                                    SourceLocation { start, end },
+                                );
+                                return Ok(node);
+                            } else if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                                // $#{expr} — last index of dereferenced array via block
+                                self.tokens.next()?; // consume {
+                                let inner = self.parse_expression()?;
+                                self.expect(TokenKind::RightBrace)?;
+                                let end = self.previous_position();
+                                let node = Node::new(
+                                    NodeKind::Unary {
+                                        op: "$#".to_string(),
+                                        operand: Box::new(inner),
+                                    },
+                                    SourceLocation { start, end },
+                                );
+                                return Ok(node);
                             } else {
                                 // Just $# by itself
                                 ("#".to_string(), token.end)
