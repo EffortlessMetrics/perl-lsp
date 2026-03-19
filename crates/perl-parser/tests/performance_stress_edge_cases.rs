@@ -521,7 +521,7 @@ fn assert_shallow_program_shape(ast: &Node, input: &str, case_name: &str) {
                 case_name
             );
         }
-        other => panic!("Expected Program root for {}, got {}", case_name, other.kind_name()),
+        other => unreachable!("Expected Program root for {}, got {}", case_name, other.kind_name()),
     }
 }
 

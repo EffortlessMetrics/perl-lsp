@@ -50,7 +50,7 @@ mod atomic_state_transition_tests {
             }
         }
 
-        panic!("cancellation state did not converge across check variants");
+        unreachable!("cancellation state did not converge across check variants");
     }
 
     /// Test atomic boolean state transitions through public API

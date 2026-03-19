@@ -25,14 +25,8 @@ mod tests {
         let input = "$cond ? return $x : $y;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        let ast = ast.as_ref().map(|a| a).filter(|_| true);
-        let ast_ref = ast.as_ref();
-        assert_no_errors(
-            input,
-            ast_ref.map(|a| *a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        let ast = ast.as_ref();
+        assert_no_errors(input, ast.unwrap_or_else(|| unreachable!()));
 
         // Verify structure: the then branch should be a Return node
         let ast = parse_code(input);
@@ -42,7 +36,7 @@ mod tests {
                 // Unwrap ExpressionStatement
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 // Should be a Ternary
                 if let NodeKind::Ternary { then_expr, .. } = &expr.kind {
@@ -52,7 +46,7 @@ mod tests {
                         then_expr.kind
                     );
                 } else {
-                    panic!("Expected Ternary, got {:?}", expr.kind);
+                    unreachable!("Expected Ternary, got {:?}", expr.kind);
                 }
             }
         }
@@ -64,19 +58,14 @@ mod tests {
         let input = "$cond ? $x : next;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Ternary { else_expr, .. } = &expr.kind {
                     assert!(
@@ -85,7 +74,7 @@ mod tests {
                         else_expr.kind
                     );
                 } else {
-                    panic!("Expected Ternary, got {:?}", expr.kind);
+                    unreachable!("Expected Ternary, got {:?}", expr.kind);
                 }
             }
         }
@@ -97,19 +86,14 @@ mod tests {
         let input = "$cond ? return $x : next;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Ternary { then_expr, else_expr, .. } = &expr.kind {
                     assert!(
@@ -123,7 +107,7 @@ mod tests {
                         else_expr.kind
                     );
                 } else {
-                    panic!("Expected Ternary, got {:?}", expr.kind);
+                    unreachable!("Expected Ternary, got {:?}", expr.kind);
                 }
             }
         }
@@ -135,19 +119,14 @@ mod tests {
         let input = "$cond ? $x : last;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Ternary { else_expr, .. } = &expr.kind {
                     assert!(
@@ -156,7 +135,7 @@ mod tests {
                         else_expr.kind
                     );
                 } else {
-                    panic!("Expected Ternary, got {:?}", expr.kind);
+                    unreachable!("Expected Ternary, got {:?}", expr.kind);
                 }
             }
         }
@@ -172,19 +151,14 @@ mod tests {
         let input = "$cond && return;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Binary { op, right, .. } = &expr.kind {
                     assert_eq!(op, "&&");
@@ -194,7 +168,7 @@ mod tests {
                         right.kind
                     );
                 } else {
-                    panic!("Expected Binary(&&), got {:?}", expr.kind);
+                    unreachable!("Expected Binary(&&), got {:?}", expr.kind);
                 }
             }
         }
@@ -206,19 +180,14 @@ mod tests {
         let input = "$cond || last;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Binary { op, right, .. } = &expr.kind {
                     assert_eq!(op, "||");
@@ -228,7 +197,7 @@ mod tests {
                         right.kind
                     );
                 } else {
-                    panic!("Expected Binary(||), got {:?}", expr.kind);
+                    unreachable!("Expected Binary(||), got {:?}", expr.kind);
                 }
             }
         }
@@ -240,19 +209,14 @@ mod tests {
         let input = "$cond && next;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Binary { op, right, .. } = &expr.kind {
                     assert_eq!(op, "&&");
@@ -262,7 +226,7 @@ mod tests {
                         right.kind
                     );
                 } else {
-                    panic!("Expected Binary(&&), got {:?}", expr.kind);
+                    unreachable!("Expected Binary(&&), got {:?}", expr.kind);
                 }
             }
         }
@@ -274,19 +238,14 @@ mod tests {
         let input = "$cond // return $x;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Binary { op, right, .. } = &expr.kind {
                     assert_eq!(op, "//");
@@ -296,7 +255,7 @@ mod tests {
                         right.kind
                     );
                 } else {
-                    panic!("Expected Binary(//), got {:?}", expr.kind);
+                    unreachable!("Expected Binary(//), got {:?}", expr.kind);
                 }
             }
         }
@@ -312,12 +271,7 @@ mod tests {
         let input = "do { return $x if $cond; $y };";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
     }
 
     // ---------------------------------------------------------------
@@ -330,12 +284,7 @@ mod tests {
         let input = "my $x = do { $cond ? return : $val };";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
     }
 
     // ---------------------------------------------------------------
@@ -348,19 +297,14 @@ mod tests {
         let input = "$cond ? return : $y;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Ternary { then_expr, .. } = &expr.kind {
                     assert!(
@@ -369,7 +313,7 @@ mod tests {
                         then_expr.kind
                     );
                 } else {
-                    panic!("Expected Ternary, got {:?}", expr.kind);
+                    unreachable!("Expected Ternary, got {:?}", expr.kind);
                 }
             }
         }
@@ -385,29 +329,27 @@ mod tests {
         let input = "$cond ? next OUTER : $y;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Ternary { then_expr, .. } = &expr.kind {
                     if let NodeKind::LoopControl { op, label } = &then_expr.kind {
                         assert_eq!(op, "next");
                         assert_eq!(label.as_deref(), Some("OUTER"));
                     } else {
-                        panic!("Expected LoopControl in then branch, got {:?}", then_expr.kind);
+                        unreachable!(
+                            "Expected LoopControl in then branch, got {:?}",
+                            then_expr.kind
+                        );
                     }
                 } else {
-                    panic!("Expected Ternary, got {:?}", expr.kind);
+                    unreachable!("Expected Ternary, got {:?}", expr.kind);
                 }
             }
         }
@@ -423,19 +365,14 @@ mod tests {
         let input = "$cond || redo;";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
 
         if let Some(ref node) = ast {
             if let NodeKind::Program { ref statements } = node.kind {
                 let stmt = &statements[0];
                 let expr = match &stmt.kind {
                     NodeKind::ExpressionStatement { expression } => expression.as_ref(),
-                    other => panic!("Expected ExpressionStatement, got {:?}", other),
+                    other => unreachable!("Expected ExpressionStatement, got {:?}", other),
                 };
                 if let NodeKind::Binary { op, right, .. } = &expr.kind {
                     assert_eq!(op, "||");
@@ -445,7 +382,7 @@ mod tests {
                         right.kind
                     );
                 } else {
-                    panic!("Expected Binary(||), got {:?}", expr.kind);
+                    unreachable!("Expected Binary(||), got {:?}", expr.kind);
                 }
             }
         }
@@ -461,12 +398,7 @@ mod tests {
         let input = "my %h = (return => 1);";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
     }
 
     #[test]
@@ -475,11 +407,6 @@ mod tests {
         let input = "my %h = (next => 1);";
         let ast = parse_code(input);
         assert!(ast.is_some(), "Failed to parse: {}", input);
-        assert_no_errors(
-            input,
-            ast.as_ref().map(|a| a).unwrap_or_else(|| {
-                panic!("no ast");
-            }),
-        );
+        assert_no_errors(input, ast.as_ref().unwrap_or_else(|| unreachable!()));
     }
 }

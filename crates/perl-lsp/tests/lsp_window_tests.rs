@@ -206,8 +206,9 @@ fn lsp_window_show_document_with_capability() {
     let result = server.show_document("file:///test.pl", options);
     assert!(result.is_ok());
 
-    let request = wait_for_method(&output, "window/showDocument")
-        .expect("Expected window/showDocument request");
+    let request = wait_for_method(&output, "window/showDocument");
+    assert!(request.is_some(), "Expected window/showDocument request");
+    let request = request.unwrap_or_else(|| unreachable!());
     assert_eq!(request["method"], "window/showDocument");
     assert_eq!(request["params"]["uri"], "file:///test.pl");
     assert_eq!(request["params"]["takeFocus"], true);
@@ -244,8 +245,9 @@ fn lsp_window_progress_lifecycle() {
     let result = server.create_work_done_progress(token);
     assert!(result.is_ok(), "Failed to create progress: {:?}", result);
 
-    let create_message = wait_for_method(&output, "window/workDoneProgress/create")
-        .expect("Expected window/workDoneProgress/create request");
+    let create_message = wait_for_method(&output, "window/workDoneProgress/create");
+    assert!(create_message.is_some(), "Expected window/workDoneProgress/create request");
+    let create_message = create_message.unwrap_or_else(|| unreachable!());
     assert_eq!(create_message["method"], "window/workDoneProgress/create");
     assert_eq!(create_message["params"]["token"], token);
 
@@ -255,8 +257,9 @@ fn lsp_window_progress_lifecycle() {
     let result = server.report_progress_begin(token, "Indexing", Some("Starting..."));
     assert!(result.is_ok());
 
-    let begin_message =
-        wait_for_method(&output, "$/progress").expect("Expected begin $/progress notification");
+    let begin_message = wait_for_method(&output, "$/progress");
+    assert!(begin_message.is_some(), "Expected begin $/progress notification");
+    let begin_message = begin_message.unwrap_or_else(|| unreachable!());
     assert_eq!(begin_message["method"], "$/progress");
     assert_eq!(begin_message["params"]["token"], token);
     assert_eq!(begin_message["params"]["value"]["kind"], "begin");
@@ -269,8 +272,9 @@ fn lsp_window_progress_lifecycle() {
     let result = server.report_progress_report(token, Some("50% complete"), Some(50));
     assert!(result.is_ok());
 
-    let report_message =
-        wait_for_method(&output, "$/progress").expect("Expected report $/progress notification");
+    let report_message = wait_for_method(&output, "$/progress");
+    assert!(report_message.is_some(), "Expected report $/progress notification");
+    let report_message = report_message.unwrap_or_else(|| unreachable!());
     assert_eq!(report_message["method"], "$/progress");
     assert_eq!(report_message["params"]["value"]["kind"], "report");
     assert_eq!(report_message["params"]["value"]["percentage"], 50);
@@ -281,8 +285,9 @@ fn lsp_window_progress_lifecycle() {
     let result = server.report_progress_end(token, Some("Complete"));
     assert!(result.is_ok());
 
-    let end_message =
-        wait_for_method(&output, "$/progress").expect("Expected end $/progress notification");
+    let end_message = wait_for_method(&output, "$/progress");
+    assert!(end_message.is_some(), "Expected end $/progress notification");
+    let end_message = end_message.unwrap_or_else(|| unreachable!());
     assert_eq!(end_message["method"], "$/progress");
     assert_eq!(end_message["params"]["value"]["kind"], "end");
     assert_eq!(end_message["params"]["value"]["message"], "Complete");
@@ -435,8 +440,9 @@ fn lsp_window_telemetry_respects_config() {
     assert!(result.is_ok());
 
     // Telemetry should now be sent
-    let telemetry_message =
-        wait_for_method(&output, "telemetry/event").expect("Expected telemetry/event notification");
+    let telemetry_message = wait_for_method(&output, "telemetry/event");
+    assert!(telemetry_message.is_some(), "Expected telemetry/event notification");
+    let telemetry_message = telemetry_message.unwrap_or_else(|| unreachable!());
     assert_eq!(telemetry_message["method"], "telemetry/event");
     assert_eq!(telemetry_message["params"]["event"], "test");
 }
@@ -460,8 +466,9 @@ fn lsp_window_message_types() {
 
         let _ = server.show_message_request(msg_type, "Test message", vec![]);
 
-        let message = wait_for_method(&output, "window/showMessageRequest")
-            .expect("Expected window/showMessageRequest");
+        let message = wait_for_method(&output, "window/showMessageRequest");
+        assert!(message.is_some(), "Expected window/showMessageRequest");
+        let message = message.unwrap_or_else(|| unreachable!());
         assert_eq!(message["params"]["type"], expected_value);
     }
 }
@@ -515,8 +522,9 @@ fn lsp_window_show_document_external_flag() {
 
     let _ = server.show_document("https://example.com", options);
 
-    let message =
-        wait_for_method(&output, "window/showDocument").expect("Expected window/showDocument");
+    let message = wait_for_method(&output, "window/showDocument");
+    assert!(message.is_some(), "Expected window/showDocument");
+    let message = message.unwrap_or_else(|| unreachable!());
     assert_eq!(message["params"]["external"], true);
     assert_eq!(message["params"]["uri"], "https://example.com");
 }

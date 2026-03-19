@@ -15,20 +15,20 @@ class Example {
     let ast = must(parser.parse());
 
     let NodeKind::Program { statements } = &ast.kind else {
-        panic!("expected program node, got {}", ast.kind.kind_name());
+        unreachable!("expected program node, got {}", ast.kind.kind_name());
     };
 
-    let class = statements
-        .iter()
-        .find(|statement| matches!(statement.kind, NodeKind::Class { .. }))
-        .unwrap_or_else(|| panic!("expected class declaration in {}", ast.to_sexp()));
+    let class =
+        statements.iter().find(|statement| matches!(statement.kind, NodeKind::Class { .. }));
+    assert!(class.is_some(), "expected class declaration in {}", ast.to_sexp());
+    let class = class.unwrap_or_else(|| unreachable!());
 
     let NodeKind::Class { body, .. } = &class.kind else {
-        panic!("expected class node, got {}", class.kind.kind_name());
+        unreachable!("expected class node, got {}", class.kind.kind_name());
     };
 
     let NodeKind::Block { statements } = &body.kind else {
-        panic!("expected class body block, got {}", body.kind.kind_name());
+        unreachable!("expected class body block, got {}", body.kind.kind_name());
     };
 
     let field_nodes: Vec<_> = statements

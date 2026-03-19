@@ -1031,11 +1031,9 @@ sub greeting {
     let ast = parser.parse()?;
     let _ = engine.infer(&ast);
 
-    if let Some(sub_type) = engine.get_subroutine("greeting") {
-        if let PerlType::Subroutine { returns, .. } = sub_type {
-            assert!(!returns.is_empty(), "greeting should have a return type");
-            assert_eq!(returns[0], PerlType::Scalar(ScalarType::String));
-        }
+    if let Some(PerlType::Subroutine { returns, .. }) = engine.get_subroutine("greeting") {
+        assert!(!returns.is_empty(), "greeting should have a return type");
+        assert_eq!(returns[0], PerlType::Scalar(ScalarType::String));
     }
     Ok(())
 }

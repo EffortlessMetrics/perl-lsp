@@ -1066,7 +1066,7 @@ mod signature_help_tests {
             assert!(sig.is_some(), "builtin '{}' should have a signature", name);
             let sig = sig.map(|s| &s.signatures);
             assert!(
-                sig.map_or(false, |s| !s.is_empty()),
+                sig.is_some_and(|s| !s.is_empty()),
                 "builtin '{}' should have at least one signature variant",
                 name
             );
@@ -1105,7 +1105,7 @@ mod signature_help_tests {
             );
             let h = help.as_ref();
             assert!(
-                h.map_or(false, |h| !h.signatures.is_empty()),
+                h.is_some_and(|h| !h.signatures.is_empty()),
                 "builtin '{}' should have non-empty signatures in help response",
                 name
             );

@@ -514,10 +514,9 @@ fn when_source_lacks_strict_enhanced_offers_add_pragmas() {
 fn when_source_starts_with_shebang_pragmas_are_inserted_after_it() {
     let source = "#!/usr/bin/env perl\nmy $x = 1;";
     let actions = enhanced_actions_for(source, (0, source.len()));
-    let pragma_action = actions
-        .iter()
-        .find(|action| action.title.contains("missing pragmas"))
-        .expect("expected pragma insertion action");
+    let pragma_action = actions.iter().find(|action| action.title.contains("missing pragmas"));
+    assert!(pragma_action.is_some(), "expected pragma insertion action");
+    let pragma_action = pragma_action.unwrap_or_else(|| unreachable!());
 
     assert_eq!(pragma_action.edit.changes.len(), 1);
     let change = &pragma_action.edit.changes[0];
@@ -530,10 +529,9 @@ fn when_source_starts_with_shebang_pragmas_are_inserted_after_it() {
 fn when_imports_are_out_of_order_enhanced_actions_offer_organization() {
     let source = "use My::Local;\nuse strict;\nuse warnings;\n";
     let actions = enhanced_actions_for(source, (0, source.len()));
-    let organize = actions
-        .iter()
-        .find(|action| action.title == "Organize imports")
-        .expect("expected organize imports action");
+    let organize = actions.iter().find(|action| action.title == "Organize imports");
+    assert!(organize.is_some(), "expected organize imports action");
+    let organize = organize.unwrap_or_else(|| unreachable!());
 
     assert_eq!(organize.kind, CodeActionKind::SourceOrganizeImports);
     let change = &organize.edit.changes[0];

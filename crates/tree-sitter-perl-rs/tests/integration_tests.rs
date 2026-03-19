@@ -319,6 +319,8 @@ BYTES
             .filter(|d| d.message.contains("encoding") || d.message.contains("utf8"))
             .count();
 
-        assert!(encoding_diagnostics == 0 || encoding_diagnostics > 0);
+        // Encoding diagnostics may or may not appear depending on the input;
+        // just verify we counted successfully (always true for usize).
+        let _ = encoding_diagnostics;
     }
 }
