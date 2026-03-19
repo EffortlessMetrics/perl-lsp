@@ -178,7 +178,7 @@ impl LspServer {
                     seen.insert(label.clone());
 
                     completions.push(crate::completion::CompletionItem {
-                        label: label.clone(),
+                        label,
                         kind: Self::workspace_symbol_kind(&symbol),
                         detail,
                         insert_text,

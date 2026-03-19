@@ -528,14 +528,12 @@ impl CompletionProvider {
                         .chars()
                         .all(|c| c.is_alphanumeric() || c == '.' || c == '_' || c == '-')
                 {
-                    let mut file_context = context.clone();
-                    file_context.prefix = path_prefix.to_string();
-                    file_context.prefix_start = start + 1;
-                    self.add_file_completions_with_cancellation(
-                        &mut completions,
-                        &file_context,
-                        is_cancelled,
+                    let file_context = file_path::FileCompletionContext::new(
+                        path_prefix,
+                        start + 1,
+                        context.position,
                     );
+                    completions.extend(file_path::complete_file_paths(&file_context, is_cancelled));
                 }
             }
         } else {
@@ -583,14 +581,7 @@ impl CompletionProvider {
         }
 
         // Remove duplicates and sort completions by relevance
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            sort::deduplicate_and_sort(completions.clone())
-        })) {
-            Ok(sorted_completions) => sorted_completions,
-            Err(_) => {
-                completions // Return unsorted completions as fallback
-            }
-        }
+        sort::deduplicate_and_sort(completions)
     }
 
     /// Get completions at a given position for Perl script development
@@ -745,10 +736,6 @@ impl CompletionProvider {
 
     /// Analyze the context at the cursor position
     fn analyze_context(&self, source: &str, position: usize) -> CompletionContext {
-        // Find the prefix (text before cursor on the same line)
-        let line_start = source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
-        let _prefix = source[line_start..position].to_string();
-
         // Find the word being typed
         // Special handling for method calls: include the -> and the receiver
         let (word_prefix, prefix_start) =
@@ -777,8 +764,13 @@ impl CompletionProvider {
                 (source[word_start..position].to_string(), word_start)
             };
 
-        // Detect trigger character
-        let trigger_character = if position > 0 { source.chars().nth(position - 1) } else { None };
+        // Detect trigger character (trigger chars are ASCII, so byte access is safe)
+        let trigger_character = if position > 0 {
+            let b = source.as_bytes()[position - 1];
+            if b.is_ascii() { Some(b as char) } else { None }
+        } else {
+            None
+        };
 
         // Simple heuristics for context detection
         let in_string = self.is_in_string(source, position);
@@ -836,7 +828,7 @@ impl CompletionProvider {
     ) {
         completions.extend(file_path::complete_file_paths(
             &file_path::FileCompletionContext::new(
-                context.prefix.clone(),
+                &context.prefix,
                 context.prefix_start,
                 context.position,
             ),

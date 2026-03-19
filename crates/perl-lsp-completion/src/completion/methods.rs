@@ -125,7 +125,7 @@ pub fn add_method_completions(
     source: &str,
     symbol_table: &SymbolTable,
 ) {
-    let mut seen = HashSet::new();
+    let mut seen: HashSet<&str> = HashSet::new();
 
     // Prefer discovered in-file methods first (including synthesized framework accessors).
     let method_prefix = context.prefix.rsplit("->").next().unwrap_or(&context.prefix);
@@ -157,7 +157,7 @@ pub fn add_method_completions(
             ("method".to_string(), doc)
         };
 
-        if seen.insert(name.clone()) {
+        if seen.insert(name.as_str()) {
             completions.push(CompletionItem {
                 label: name.clone(),
                 kind: crate::completion::items::CompletionItemKind::Function,
@@ -192,16 +192,15 @@ pub fn add_method_completions(
     };
 
     for (method, desc) in methods {
-        let method_name = method.to_string();
-        if seen.insert(method_name.clone()) {
+        if seen.insert(method) {
             completions.push(CompletionItem {
-                label: method_name.clone(),
+                label: method.to_string(),
                 kind: crate::completion::items::CompletionItemKind::Function,
                 detail: Some("method".to_string()),
                 documentation: Some(desc.to_string()),
                 insert_text: Some(format!("{}()", method)),
                 sort_text: Some(format!("2_{}", method)),
-                filter_text: Some(method_name),
+                filter_text: Some(method.to_string()),
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
             });
@@ -214,16 +213,15 @@ pub fn add_method_completions(
             ("isa", "Check if object is of given class"),
             ("can", "Check if object can call method"),
         ] {
-            let method_name = method.to_string();
-            if seen.insert(method_name.clone()) {
+            if seen.insert(method) {
                 completions.push(CompletionItem {
-                    label: method_name.clone(),
+                    label: method.to_string(),
                     kind: crate::completion::items::CompletionItemKind::Function,
                     detail: Some("method".to_string()),
                     documentation: Some(desc.to_string()),
                     insert_text: Some(format!("{}()", method)),
                     sort_text: Some(format!("9_{}", method)), // Lower priority
-                    filter_text: Some(method_name),
+                    filter_text: Some(method.to_string()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
