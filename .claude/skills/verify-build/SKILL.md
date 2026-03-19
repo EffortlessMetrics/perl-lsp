@@ -55,6 +55,16 @@ For `perl-lsp`, use:
 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 ```
 
+Status update (REQUIRED when tests were added, removed, or changed):
+
+```bash
+just status-update
+just status-check
+```
+
+This prevents the `policy_checks` CI gate from failing due to stale derived
+metrics in `docs/project/CURRENT_STATUS.md`. Always run after modifying tests.
+
 ## Receipt Format
 
 Report:
