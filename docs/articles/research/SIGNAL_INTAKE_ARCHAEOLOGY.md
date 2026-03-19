@@ -119,7 +119,16 @@ ledger shows the repo using these typed shapes in practice.
 
 ### Swarm-discovered issues become a real intake lane
 
-The March 19, 2026 issue wave contains multiple issue families with the
+In the GitHub issue ledger snapshot queried on `2026-03-19`:
+
+- `347` total issues exist
+- `189` carry the `swarm-discovered` label
+
+That is much stronger than a handful of examples. It means the label is not
+decorative metadata. It is one of the dominant intake lanes in the issue
+archive.
+
+The March 16 to March 19 wave contains multiple issue families with the
 `swarm-discovered` label:
 
 - parser bucket issues such as `#2184`, `#2186`, `#2188`, `#2189`
@@ -132,6 +141,20 @@ implementation slices, learning reports, article generation, and follow-on
 quality work.
 
 ### Bodies look handoff-oriented, not conversational
+
+The bodies also show a clear adoption asymmetry between structured markdown and
+literal form-field wording.
+
+In the same `2026-03-19` issue snapshot:
+
+- `87` issue bodies contain a `## Problem` heading
+- `15` contain a `## Context` heading
+- `9` contain `Suggested Approach`
+- `0` contain literal `Discovering Agent`
+- `0` contain literal `Relevant Files`
+
+That is useful evidence. The repo clearly adopted structured issue bodies, but
+it did not preserve the raw GitHub-form labels very often in the final text.
 
 Issue `#2188` ("parser: fix unexpected_arrow_expr") carries a structured
 builder-oriented body:
@@ -162,16 +185,23 @@ GitHub form fields.
 
 ### PR bodies also show normalization, with a caveat
 
-By March 15-19, 2026, PR bodies commonly use the new `Summary` and
-`Verification` sections. Representative examples include:
+By March 15-19, 2026, PR bodies commonly use the new `Summary` section, but the
+rest of the template lands unevenly.
+
+In a `200`-PR slice created on or after `2026-03-15`:
+
+- `183` contain `## Summary`
+- `6` contain `## Changes`
+- `10` contain `## Verification`
+- `0` contain `## Agent`
+- `0` contain all four canonical headings together
+
+Representative examples include:
 
 - PR `#2230`
 - PR `#2229`
 - PR `#2221`
 - PR `#2171`
-
-Searching the March 15+ PR ledger shows many matches for `## Summary` and
-`## Verification`.
 
 But the `## Agent` section is less consistently populated than the template
 would suggest. So the strongest claim is not full PR-body conformity. It is
@@ -193,7 +223,25 @@ Those issues matter archaeologically because they show the repo already wanted
 discoveries and operational pain to be captured as reusable artifacts. March
 2026 then formalizes that desire into labeled issue lanes and dedicated forms.
 
-## 7. Strongest Evidence-Backed Claims
+## 7. The Generic Public Issue Forms Leave Much Weaker Visible Artifacts
+
+The repo clearly defines typed public forms for parser bugs, generic bugs, and
+performance issues.
+
+But in the same `347`-issue GitHub snapshot queried on `2026-03-19`, there are:
+
+- `0` issue titles preserving the literal `[Parser]` prefix
+- `0` issue titles preserving the literal `[Bug]` prefix
+- `0` issue titles preserving the literal `[Performance]` prefix
+
+That does not prove those forms were never used. Titles can be edited after
+creation, and internal issue creation flows may bypass browser-form entry.
+
+But it does support a narrower and more defensible claim: the swarm-facing
+typed intake lane leaves strong on-ledger artifacts, while the public-facing
+typed forms leave much weaker visible artifacts in the current archive.
+
+## 8. Strongest Evidence-Backed Claims
 
 1. The repo started with generic human PR checklist intake, not swarm-native
    intake.
@@ -203,11 +251,17 @@ discoveries and operational pain to be captured as reusable artifacts. March
    and adding problem-specific forms.
 4. March 15, 2026 adds a genuinely swarm-native intake surface:
    `swarm_discovered.yml` is designed for resumable handoffs between agents.
-5. The GitHub ledger confirms these surfaces were actually used, especially via
-   the `swarm-discovered` issue wave and the widespread adoption of `Summary`
-   and `Verification` sections in March PR bodies.
-6. PR-body conformity is real but partial: proof sections normalize strongly,
-   while explicit `Agent` metadata is not yet universal.
+5. The GitHub ledger confirms strong adoption of the swarm-facing intake lane:
+   `189` of `347` issues in the `2026-03-19` snapshot carry
+   `swarm-discovered`.
+6. Actual issue-body adoption happens through structured markdown sections like
+   `Problem`, `Context`, and `Suggested Approach`, not through literal
+   preservation of the raw GitHub-form labels.
+7. PR-body conformity is real but partial: in a `200`-PR March 15+ slice,
+   `Summary` becomes near-normal, while `Changes`, `Verification`, and
+   especially `Agent` remain much less consistently populated.
+8. The public-facing typed issue forms leave much weaker visible artifacts in
+   the current ledger than the swarm-facing discovery lane.
 
 ## See Also
 
