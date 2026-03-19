@@ -54,6 +54,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0032](0032-skill-scoping-and-hook-enforcement.md) | Accepted | 2026-03-16 | Skill Scoping and Hook Enforcement | Frontmatter-based skill access control plus hook-enforced swarm coordination |
 | [ADR-0033](0033-worktree-first-disposable-workers.md) | Accepted | 2026-03-16 | Worktree-First Disposable Worker Execution | Small persistent coordinators, fresh workers per context shift, and worktree isolation for PR-shaped changes |
 | [ADR-0034](0034-custom-lsp-runtime.md) | Accepted | 2026-03-18 | Custom LSP Runtime over Framework Adoption | Bespoke protocol/transport/runtime stack kept to support governance, transport reuse, and explicit dispatch control |
+| [ADR-0035](0035-synthetic-fallback-uris.md) | Accepted | 2026-03-18 | Synthetic Fallback URIs at LSP Boundaries | Return guaranteed-valid placeholder URIs instead of panicking or hard-failing on malformed URI strings |
 
 ## About ADRs
 
