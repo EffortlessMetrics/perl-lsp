@@ -754,8 +754,11 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Method { name, signature: _, attributes: _, body } => {
+            NodeKind::Method { name, signature: _, attributes, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
+                let mut symbol_attributes = Vec::with_capacity(attributes.len() + 1);
+                symbol_attributes.push("method".to_string());
+                symbol_attributes.extend(attributes.iter().cloned());
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
@@ -764,7 +767,7 @@ impl SymbolExtractor {
                     scope_id: self.table.current_scope(),
                     declaration: None,
                     documentation,
-                    attributes: vec!["method".to_string()],
+                    attributes: symbol_attributes,
                 };
                 self.table.add_symbol(symbol);
 

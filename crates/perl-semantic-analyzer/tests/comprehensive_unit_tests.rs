@@ -103,6 +103,24 @@ sub gamma { 3 }
 }
 
 #[test]
+fn symbol_extraction_method_preserves_attributes() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "method size :lvalue :prototype($self) ($self) { $self }";
+    let table = parse_and_extract(code);
+    let methods =
+        table.symbols.get("size").ok_or("expected method symbol `size` to be extracted")?;
+    let method = methods
+        .iter()
+        .find(|symbol| symbol.kind == SymbolKind::Subroutine)
+        .ok_or("expected subroutine symbol for method `size`")?;
+
+    assert!(method.attributes.contains(&"method".to_string()));
+    assert!(method.attributes.contains(&"lvalue".to_string()));
+    assert!(method.attributes.contains(&"prototype($self)".to_string()));
+
+    Ok(())
+}
+
+#[test]
 fn symbol_extraction_nested_sub_variables() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 sub outer {

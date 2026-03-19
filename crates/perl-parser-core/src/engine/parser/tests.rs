@@ -1,5 +1,5 @@
 use super::*;
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 
 #[test]
 fn test_simple_variable() {
@@ -29,6 +29,70 @@ fn test_function_definition() {
 
     let ast = must(result);
     println!("AST: {}", ast.to_sexp());
+}
+
+#[test]
+fn test_method_attributes_parse() {
+    let mut parser = Parser::new("method size :lvalue :prototype($self) ($self) { $self; }");
+    let ast = must(parser.parse());
+
+    let NodeKind::Program { statements } = &ast.kind else {
+        panic!("Expected program node, got: {:?}", ast.kind);
+    };
+    let first = must_some(statements.first());
+    match &first.kind {
+        NodeKind::Method { signature, attributes, .. } => {
+            assert!(signature.is_some(), "Expected method signature");
+            assert_eq!(attributes, &vec!["lvalue".to_string(), "prototype($self)".to_string()]);
+        }
+        other => panic!("Expected method declaration, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_method_attributes_without_signature_parse() {
+    let mut parser = Parser::new("method reset :lvalue { return; }");
+    let ast = must(parser.parse());
+
+    let NodeKind::Program { statements } = &ast.kind else {
+        panic!("Expected program node, got: {:?}", ast.kind);
+    };
+    let first = must_some(statements.first());
+    match &first.kind {
+        NodeKind::Method { signature, attributes, .. } => {
+            assert!(signature.is_none(), "Did not expect method signature");
+            assert_eq!(attributes, &vec!["lvalue".to_string()]);
+        }
+        other => panic!("Expected method declaration, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_declaration_attributes_require_name() {
+    let mut parser = Parser::new("sub broken : { 1; }");
+    let _ast = must(parser.parse());
+    assert!(
+        parser
+            .errors()
+            .iter()
+            .any(|err| err.to_string().contains("Expected attribute name after ':'")),
+        "expected parser recovery error for missing attribute name, got: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
+fn test_declaration_attributes_require_closing_paren() {
+    let mut parser = Parser::new("method broken :prototype($self { 1; }");
+    let _ast = must(parser.parse());
+    assert!(
+        parser
+            .errors()
+            .iter()
+            .any(|err| err.to_string().contains("Unterminated attribute argument list")),
+        "expected parser recovery error for unterminated attribute argument list, got: {:?}",
+        parser.errors()
+    );
 }
 
 #[test]
