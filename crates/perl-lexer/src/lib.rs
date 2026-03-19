@@ -1951,7 +1951,13 @@ impl<'a> PerlLexer<'a> {
                 }
                 TokenType::Keyword(Arc::from(text))
             } else {
-                self.mode = LexerMode::ExpectOperator;
+                // Mirror parser bare-builtin handling so `/` after builtins like
+                // `join` or `print` is lexed as a regex term, not division.
+                if is_builtin_function(text) {
+                    self.mode = LexerMode::ExpectTerm;
+                } else {
+                    self.mode = LexerMode::ExpectOperator;
+                }
                 TokenType::Identifier(Arc::from(text))
             };
 
@@ -3094,6 +3100,18 @@ fn is_keyword(word: &str) -> bool {
     matches!(word.len(), 1..=9) && is_lexer_keyword(word)
 }
 
+#[inline]
+fn is_builtin_function(word: &str) -> bool {
+    BARE_TERM_BUILTINS.binary_search(&word).is_ok()
+}
+
+const BARE_TERM_BUILTINS: &[&str] = &[
+    "abs", "chomp", "chop", "chr", "close", "defined", "delete", "each", "exists", "hex", "int",
+    "join", "keys", "lc", "lcfirst", "length", "oct", "open", "ord", "pack", "print", "push",
+    "read", "ref", "reverse", "rindex", "say", "scalar", "splice", "sprintf", "sqrt", "substr",
+    "tie", "uc", "ucfirst", "unpack", "unshift", "untie", "values", "write",
+];
+
 /// Fast lookup table for compound operator second characters
 const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*";
 
@@ -3299,6 +3317,39 @@ mod tests {
         lexer.next_token(); // 2
         let token = lexer.next_token().ok_or("Expected exponent operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "**"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_join_regex_disambiguation() -> TestResult {
+        let mut lexer = PerlLexer::new("join /,/, @parts");
+        let token = lexer.next_token().ok_or("Expected join token")?;
+        assert!(matches!(token.token_type, TokenType::Identifier(ref id) if id.as_ref() == "join"));
+
+        let token = lexer.next_token().ok_or("Expected regex token")?;
+        assert_eq!(token.token_type, TokenType::RegexMatch);
+        Ok(())
+    }
+
+    #[test]
+    fn test_builtin_regex_disambiguation() -> TestResult {
+        for code in ["print /pattern/", "defined /pattern/", "keys /pattern/"] {
+            let mut lexer = PerlLexer::new(code);
+            lexer.next_token();
+            let token = lexer.next_token().ok_or("Expected regex token")?;
+            assert_eq!(token.token_type, TokenType::RegexMatch, "{code}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_nullary_builtin_division_disambiguation() -> TestResult {
+        let mut lexer = PerlLexer::new("time / 2");
+        let token = lexer.next_token().ok_or("Expected time token")?;
+        assert!(matches!(token.token_type, TokenType::Identifier(ref id) if id.as_ref() == "time"));
+
+        let token = lexer.next_token().ok_or("Expected division token")?;
+        assert_eq!(token.token_type, TokenType::Division);
         Ok(())
     }
 }
