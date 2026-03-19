@@ -11,6 +11,7 @@ Supplemental archaeology note:
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
 - `AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md` — why `agents4` is the clearest perl-lsp-native preserved form of the Q3 three-phase swarm, especially after the 2025-09-24 Perl LSP production-readiness refactor
+- `HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md` — how March 15 to 17, 2026 turned `swarm-state`, skills, findings, and hooks into the new control plane while leaving a deliberate `.ops-perl-lsp` runtime residue across live commands, agents6, and compatibility surfaces
 - `DIRECT_DELIVERY_ARCHAEOLOGY.md` — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - `INSTALL_SURFACE_ARCHAEOLOGY.md` — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
 - `Q3_CONTROL_PLANE_ARCHAEOLOGY.md` — how `agents4` shows the canonical Q3 swarm as an actual phase-aware operating surface, not just a directory of agent prompts

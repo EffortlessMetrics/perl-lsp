@@ -32,6 +32,7 @@ These documents intentionally preserve dated observations and period-specific me
 
 - [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
 - [research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md](research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md) — why `agents4` is the clearest perl-lsp-native preserved form of the canonical Q3 three-phase swarm
+- [research/HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md](research/HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md) — how the March 2026 swarm split durable `swarm-state` from `.ops-perl-lsp` runtime without fully removing the older paths from live skills, hooks, commands, and donor agent packs
 - [research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md](research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md) — how orchestration guides, project doctrine, `.claude`, and `AGENTS.md` turned methodology into versioned operating instructions
 - [research/ISSUE_LABEL_ARCHAEOLOGY.md](research/ISSUE_LABEL_ARCHAEOLOGY.md) — how label families and title prefixes gave the issue tracker a typed routing vocabulary for swarm discovery, self-improvement, and learning artifacts
 - [research/ISSUE_ROUTING_ARCHAEOLOGY.md](research/ISSUE_ROUTING_ARCHAEOLOGY.md) — how GitHub issues became swarm overflow memory and a typed routing surface instead of just backlog storage
