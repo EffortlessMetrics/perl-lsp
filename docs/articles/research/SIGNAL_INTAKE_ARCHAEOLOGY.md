@@ -241,7 +241,29 @@ But it does support a narrower and more defensible claim: the swarm-facing
 typed intake lane leaves strong on-ledger artifacts, while the public-facing
 typed forms leave much weaker visible artifacts in the current archive.
 
-## 8. Strongest Evidence-Backed Claims
+## 8. The Repo Also Self-Audits Intake Drift
+
+The March 19, 2026 issue wave includes an especially revealing control-plane
+artifact:
+
+- issue `#2156`
+  `swarm-infra: Inconsistent issue/PR templates across scout commands`
+
+That title matters because it shows the repo is not merely using typed intake.
+It is also discovering where its own issue and PR creation surfaces are still
+inconsistent.
+
+This is one of the more interesting current-era patterns:
+
+1. a control-plane surface lands
+2. the swarm starts using it at scale
+3. the swarm then opens issues about the remaining inconsistency in that same
+   surface
+
+That makes signal intake part of the self-improving loop, not only a static
+template choice.
+
+## 9. Strongest Evidence-Backed Claims
 
 1. The repo started with generic human PR checklist intake, not swarm-native
    intake.
@@ -262,6 +284,9 @@ typed forms leave much weaker visible artifacts in the current archive.
    especially `Agent` remain much less consistently populated.
 8. The public-facing typed issue forms leave much weaker visible artifacts in
    the current ledger than the swarm-facing discovery lane.
+9. By March 19, 2026, the repo is already opening `swarm-discovered`
+   infrastructure issues about inconsistent issue/PR intake surfaces, meaning
+   intake standardization is itself part of the self-improvement loop.
 
 ## See Also
 

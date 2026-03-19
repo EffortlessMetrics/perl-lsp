@@ -189,7 +189,24 @@ That is a useful sign of maturity. The hook system is not only about adding
 more automation. It is also about deciding which boundaries should remain under
 tool-default behavior.
 
-## 8. Strongest Evidence-Backed Claims
+## 8. The Hook Layer Also Produces Its Own Audit Trail
+
+The March 19, 2026 issue wave shows the swarm treating missing hook coverage as
+first-class engineering debt.
+
+Issue `#2154`, opened with the `swarm-discovered` label, is titled:
+
+- `swarm-infra: Hook enforcement incomplete — verify-build and other skills can't gate completion`
+
+That is historically useful evidence because it shows the repo is not merely
+adding hooks. It is also using the swarm to discover where hook ownership is
+still too narrow or too incomplete.
+
+In other words, by March 2026 the hook layer is important enough that gaps in
+hook enforcement are themselves routed through the same discovery-and-repair
+system as product bugs.
+
+## 9. Strongest Evidence-Backed Claims
 
 1. Deterministic hook control starts earlier than the current swarm, with
    `PreToolUse` evidence on `2025-09-06`.
@@ -201,6 +218,8 @@ tool-default behavior.
    judgment, hooks carry invariants.
 5. The live implementation is intentionally narrower in places than the ADR
    language, which makes hook evolution itself an archaeology subject.
+6. By March 19, 2026, missing hook coverage is already being surfaced as
+   `swarm-discovered` infrastructure debt rather than being left implicit.
 
 ## See Also
 
