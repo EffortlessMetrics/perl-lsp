@@ -119,3 +119,37 @@ fn use_exporter_import() {
 fn use_constant_hash() {
     assert_clean_parse("use constant { FOO => 1, BAR => 2 };");
 }
+
+// ===========================================================================
+// Complex parenthesized import lists (#2184)
+// ===========================================================================
+
+#[test]
+fn use_backslash_ref_and_number_in_parens() {
+    assert_clean_parse(r#"use Pod::Simple::Debug (\$debuglevel, 0);"#);
+}
+
+#[test]
+fn use_overload_coderef_in_parens() {
+    assert_clean_parse(r#"use overload ('==' => \&equal, '!=' => \&not_equal);"#);
+}
+
+#[test]
+fn use_sub_block_in_import_parens() {
+    assert_clean_parse(r#"use overload ('""' => sub { $_[0]->{name} });"#);
+}
+
+#[test]
+fn use_mixed_strings_and_hashrefs_in_parens() {
+    assert_clean_parse(r#"use Module ('key' => { nested => 'value' });"#);
+}
+
+#[test]
+fn use_nested_parens_in_import_list() {
+    assert_clean_parse(r#"use Module (foo => (1, 2, 3));"#);
+}
+
+#[test]
+fn use_version_and_parens() {
+    assert_clean_parse(r#"use Module 1.23 ('foo', 'bar');"#);
+}
