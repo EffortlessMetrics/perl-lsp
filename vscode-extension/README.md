@@ -5,67 +5,81 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 
-Lightning-fast Perl language support with 26+ IDE features powered by perl-lsp.
+A fast, native Perl 5 language server with 26+ IDE features. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
-## ✨ Features
+> **0.12.0 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
 
-### 🎯 Core Intelligence
-- **Go to Definition** - Jump to any symbol declaration
-- **Find References** - Find all usages across your project
-- **Hover Documentation** - Instant docs for functions and variables
-- **Auto-completion** - Smart suggestions for variables, functions, modules
-- **Signature Help** - Real-time parameter hints while typing
-- **Symbol Navigation** - Outline view and breadcrumbs
+## Features
 
-### 🔧 Refactoring & Code Actions
-- **Rename** - Safe renaming across files
-- **Extract Variable** - Pull out expressions into variables
-- **Extract Subroutine** - Create functions from code blocks
-- **Convert Loops** - Transform between for/while/foreach
-- **Add Error Checking** - Insert error handling automatically
-- **Organize Imports** - Sort and clean use statements
+### Navigation and Intelligence
+- **Go to Definition** -- Jump to any symbol declaration across files
+- **Find References** -- Find all usages of a symbol across your project
+- **Hover Documentation** -- Instant docs for functions, variables, and modules
+- **Auto-completion** -- Smart suggestions for variables, functions, and module names
+- **Signature Help** -- Real-time parameter hints as you type function calls
+- **Symbol Navigation** -- Outline view, breadcrumbs, and workspace symbol search
 
-### 📊 Advanced Features
-- **Semantic Highlighting** - Context-aware syntax coloring
-- **Type Hierarchy** - Navigate inheritance with @ISA
-- **Call Hierarchy** - Trace function calls up and down
-- **CodeLens** - Inline reference counts
-- **Inlay Hints** - Type annotations in editor
-- **Document Highlights** - Highlight symbol occurrences
+### Refactoring and Code Actions
+- **Rename** -- Safe renaming of symbols across files
+- **Extract Variable** -- Pull out expressions into named variables
+- **Extract Subroutine** -- Create functions from selected code blocks
+- **Organize Imports** -- Sort and clean `use` statements (`Shift+Alt+O`)
 
-### 🐛 Diagnostics & Quality
-- **Real-time Errors** - Syntax and semantic error detection
-- **Undefined Variables** - Catch typos under `use strict`
-- **Unused Variables** - Find dead code
-- **Missing Pragmas** - Suggest strict/warnings
-- **Code Folding** - Collapse code blocks
-- **Format on Type** - Auto-formatting as you code
+### Diagnostics and Quality
+- **Real-time Errors** -- Syntax and semantic error detection as you type
+- **Undefined Variables** -- Catch typos under `use strict`
+- **Unused Variables** -- Find dead code
+- **Missing Pragmas** -- Suggest `strict` and `warnings`
+- **Document Formatting** -- Format with `perltidy` (`Shift+Alt+F`)
 
-## 🚀 Performance
+### Advanced Features
+- **Semantic Highlighting** -- Context-aware syntax coloring beyond TextMate grammars
+- **Type Hierarchy** -- Navigate inheritance with `@ISA` and `use parent`
+- **Call Hierarchy** -- Trace function calls inbound and outbound
+- **CodeLens** -- Inline reference counts above functions
+- **Inlay Hints** -- Type annotations shown inline in the editor
+- **Code Folding** -- Collapse subs, blocks, POD, and heredocs
 
-- **1-150μs** typical parse times
-- **<50ms response time** for all operations
-- **100% Perl 5 coverage** including edge cases
-- **Sub-millisecond** position conversions (v0.8.0)
+### Debugging (via perl-dap)
+- **Breakpoints** -- Set breakpoints with conditional support
+- **Step Debugging** -- Step into, over, and out of function calls
+- **Variable Inspection** -- View variables, watch expressions, and call stack
+- **Attach to Process** -- Debug running Perl processes by PID or TCP
 
-## 📦 Installation
+### Test Explorer
+- **Test Discovery** -- Automatic discovery of `.t` test files
+- **Run Tests** -- Run individual tests or entire files from the Testing panel (`Shift+Alt+T`)
+- **TAP Support** -- Native Test Anything Protocol result parsing
 
-Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) or [Open VSX](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs).
+<!-- Screenshots placeholder: add screenshots showing features in action -->
+<!-- ![Go to Definition](images/goto-definition.png) -->
+<!-- ![Diagnostics](images/diagnostics.png) -->
+<!-- ![Completions](images/completions.png) -->
+
+## Installation
+
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) or [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs).
 
 ```bash
 # VS Code
 code --install-extension EffortlessMetrics.perl-lsp-rs
 
-# VSCodium / Open VSX consumers
+# VSCodium / Open VSX
 codium --install-extension EffortlessMetrics.perl-lsp-rs
 ```
 
-The extension automatically downloads the correct language server for your platform:
-- Windows (x64, ARM64)
-- macOS (Intel, Apple Silicon)
-- Linux (x64, ARM64)
+The extension automatically downloads the correct `perl-lsp` binary for your platform on first activation:
 
-Manual installation options:
+| Platform | Architectures |
+|----------|--------------|
+| **Windows** | x64, ARM64 |
+| **macOS** | Intel (x64), Apple Silicon (ARM64) |
+| **Linux** | x64, ARM64 (glibc and musl) |
+
+### Manual Installation
+
+If you prefer to manage the binary yourself:
+
 ```bash
 # Homebrew (macOS/Linux)
 brew tap tree-sitter-perl/tap
@@ -78,71 +92,110 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
 ```
 
-## ⚙️ Configuration
+Then point the extension to your binary via `perl-lsp.serverPath`.
 
-```json
-{
-  // Auto-download server if not found
-  "perl-lsp.autoDownload": true,
+## Configuration
 
-  // Custom server path (optional)
-  "perl-lsp.serverPath": "/usr/local/bin/perl-lsp",
+All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` and search for "perl-lsp".
 
-  // Enable real-time syntax diagnostics
-  "perl-lsp.enableDiagnostics": true,
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `perl-lsp.autoDownload` | `true` | Automatically download `perl-lsp` if not found locally |
+| `perl-lsp.serverPath` | `""` | Absolute path to a `perl-lsp` binary (overrides auto-download) |
+| `perl-lsp.channel` | `"latest"` | Release channel: `latest`, `stable`, or `tag` |
+| `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.0`) when channel is `tag` |
+| `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
+| `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting |
+| `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`) |
+| `perl-lsp.formatOnSave` | `false` | Format document on save |
+| `perl-lsp.enableRefactoring` | `true` | Enable refactoring code actions |
+| `perl-lsp.enableTestIntegration` | `true` | Enable Test Explorer integration |
+| `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional library paths for module resolution |
+| `perl-lsp.perltidyConfig` | `""` | Path to `.perltidyrc` (auto-detected if empty) |
+| `perl-lsp.trace.server` | `"off"` | LSP trace level for debugging: `off`, `messages`, `verbose` |
+| `perl-lsp.featureProfile` | `"auto"` | Runtime feature profile: `auto`, `ga`, `ga-lock`, `prod`, `all` |
+| `perl-lsp.downloadBaseUrl` | `""` | Internal mirror URL for air-gapped deployments |
 
-  // Enable semantic syntax highlighting
-  "perl-lsp.enableSemanticTokens": true,
+### Internal / Air-Gapped Deployment
 
-  // Enable document formatting (requires perltidy)
-  "perl-lsp.enableFormatting": true,
+For environments without internet access, set `perl-lsp.downloadBaseUrl` to an internal server hosting the release archives and `SHA256SUMS` file. See [INTERNAL_DEPLOYMENT.md](https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/INTERNAL_DEPLOYMENT.md) for details.
 
-  // Additional library include paths
-  "perl-lsp.includePaths": ["lib", "local/lib/perl5"],
+## Keyboard Shortcuts
 
-  // LSP trace level for debugging
-  "perl-lsp.trace.server": "off"
-}
-```
+| Action | Shortcut |
+|--------|----------|
+| Organize Imports | `Shift+Alt+O` |
+| Run Tests | `Shift+Alt+T` |
+| Restart Server | `Shift+Alt+R` |
+| Format Document | `Shift+Alt+F` |
+| Show Status Menu | Click status bar item |
 
-## 🎯 Supported Perl Features
+## Supported Perl Features
 
 ### Modern Perl (5.38+)
-- `class/method/field` keywords
-- `try/catch/finally` blocks  
+- `class` / `method` / `field` keywords
+- `try` / `catch` / `finally` blocks
 - `defer` blocks
 - Subroutine signatures
 - Type constraints
 
 ### Complete Syntax Support
-- Regular expressions with any delimiter (`m!pattern!`, `s{}{}`)
-- Heredocs (all variants including indented)
-- Unicode identifiers (`my $café = 'coffee'`)
+- Regular expressions with any delimiter (`m!pattern!`, `s{}{}``)
+- Heredocs (all variants including indented `<<~`)
+- Unicode identifiers (`my $cafe = 'coffee'`)
 - Postfix dereferencing (`$ref->@*`)
 - Smart match operator (`~~`)
 - Indirect object syntax
+- 150+ built-in function signatures with parameter documentation
 
-### Built-in Functions
-Complete signatures for 150+ Perl built-ins with parameter documentation.
+## Commands
 
-## 🤝 Compatibility
+Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 
-Works with any LSP-compatible editor:
-- Visual Studio Code
-- VSCodium (via Open VSX)  
-- Cursor
-- Gitpod
-- GitHub Codespaces
-- Neovim (via nvim-lspconfig)
-- Emacs (via lsp-mode)
+| Command | Description |
+|---------|-------------|
+| **Perl: Restart Language Server** | Restart the language server |
+| **Perl: Show Server Version** | Display installed perl-lsp version |
+| **Perl: Reinstall Server Binary** | Re-download the managed binary |
+| **Perl: Organize Use Statements** | Sort and clean `use` statements |
+| **Perl: Run Tests in Current File** | Run tests in the active `.t` or `.pl` file |
+| **Perl: Show Output Channel** | Open the extension output log |
+| **Perl: Show Status Menu** | Quick-access menu for all actions |
 
-## 📚 Resources
+## Compatibility
 
-- [Documentation](https://github.com/EffortlessMetrics/perl-lsp#readme)
+The `perl-lsp` binary works with any editor that supports the Language Server Protocol:
+
+| Editor | How to connect |
+|--------|---------------|
+| **VS Code / VSCodium** | This extension (auto-configured) |
+| **Cursor** | This extension |
+| **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
+| **Emacs** | `lsp-mode` or `eglot` |
+| **GitHub Codespaces** | This extension |
+| **Gitpod** | This extension |
+
+## Troubleshooting
+
+**Server not starting?**
+1. Open the output channel: Command Palette > "Perl: Show Output Channel"
+2. Check that `perl-lsp` is available: Command Palette > "Perl: Show Server Version"
+3. If auto-download failed, check your network/proxy settings or install manually
+
+**Formatting not working?**
+- Ensure `perltidy` is installed and available in your PATH
+- Check `perl-lsp.enableFormatting` is `true`
+
+**Diagnostics too noisy?**
+- Set `perl-lsp.enableDiagnostics` to `false` to disable
+- File an issue if you see false positives
+
+## Resources
+
+- [Source Code](https://github.com/EffortlessMetrics/perl-lsp)
 - [Issue Tracker](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)
-- [Changelog](https://github.com/EffortlessMetrics/perl-lsp/blob/master/CHANGELOG.md)
-- [Migration Guide](https://github.com/EffortlessMetrics/perl-lsp/blob/master/MIGRATION.md)
+- [Changelog](https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/CHANGELOG.md)
 
-## 📄 License
+## License
 
-MIT © Steven Zimmerman
+MIT

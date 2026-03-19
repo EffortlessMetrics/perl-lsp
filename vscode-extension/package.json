@@ -1,10 +1,10 @@
 {
   "name": "perl-lsp-rs",
-  "displayName": "perl-lsp-rs",
-  "description": "Comprehensive Perl language support powered by perl-lsp",
-  "version": "0.11.0",
+  "displayName": "Perl Language Server (perl-lsp)",
+  "description": "Fast, native Perl 5 language server: go-to-definition, completions, diagnostics, refactoring, debugging, and 26+ IDE features. Zero runtime dependencies.",
+  "version": "0.12.0",
   "publisher": "EffortlessMetrics",
-  "preview": false,
+  "preview": true,
   "markdown": "github",
   "engines": {
     "vscode": "^1.88.0"
@@ -13,14 +13,18 @@
     "Programming Languages",
     "Linters",
     "Formatters",
-    "Debuggers"
+    "Debuggers",
+    "Testing"
   ],
   "keywords": [
     "perl",
     "perl5",
     "language-server",
     "lsp",
-    "tree-sitter",
+    "debugger",
+    "refactoring",
+    "code-completion",
+    "diagnostics",
     "vscodium",
     "open-vsx"
   ],
@@ -200,7 +204,7 @@
         "perl-lsp.versionTag": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Specific release tag (e.g., `v0.8.3`) when channel is set to `tag`"
+          "markdownDescription": "Specific release tag (e.g., `v0.12.0`) when channel is set to `tag`"
         },
         "perl-lsp.serverPath": {
           "type": "string",
