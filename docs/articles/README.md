@@ -19,6 +19,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/ERA_TIMELINE.md](research/ERA_TIMELINE.md) — era-by-era timeline and velocity notes
 - [research/ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md](research/ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md) — the intentional late-2025 to early-2026 slowdown that built parser, architecture, and quality foundations
 - [research/COPILOT_FLEET_ARCHAEOLOGY.md](research/COPILOT_FLEET_ARCHAEOLOGY.md) — the February 27 to March 5, 2026 Copilot CLI firehose and its attribution boundary
+- [research/DIRECT_DELIVERY_ARCHAEOLOGY.md](research/DIRECT_DELIVERY_ARCHAEOLOGY.md) — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - [research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md](research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md) — March 11 to 19, 2026 as a mixed-tool period of short Claude swarm bursts plus Codex waves
 - [research/Q4_Q1_HANDS_ON_ARCHAEOLOGY.md](research/Q4_Q1_HANDS_ON_ARCHAEOLOGY.md) — the late-2025 to early-2026 stable, release-focused, but still maintainer-heavy bridge era
 - [research/Q3_SWARM_PR_ARCHAEOLOGY.md](research/Q3_SWARM_PR_ARCHAEOLOGY.md) — how late Q3 2025 becomes a PR-heavy Claude swarm rather than a mostly direct coding stream
@@ -31,6 +32,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/ISSUE_LABEL_ARCHAEOLOGY.md](research/ISSUE_LABEL_ARCHAEOLOGY.md) — how label families and title prefixes gave the issue tracker a typed routing vocabulary for swarm discovery, self-improvement, and learning artifacts
 - [research/ISSUE_ROUTING_ARCHAEOLOGY.md](research/ISSUE_ROUTING_ARCHAEOLOGY.md) — how GitHub issues became swarm overflow memory and a typed routing surface instead of just backlog storage
 - [research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md](research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md) — how issue bodies, PR bodies, learning issues, and article issues together made the GitHub ledger recoverable swarm memory
+- [research/LEARNING_LOOP_ARCHAEOLOGY.md](research/LEARNING_LOOP_ARCHAEOLOGY.md) — how lessons, forensics, casebook exhibits, swarm-state, and GitHub crosslinks form one durable learning loop
 - [research/JULES_LANE_ARCHAEOLOGY.md](research/JULES_LANE_ARCHAEOLOGY.md) — January 2026 Bolt/Sentinel/Palette lanes as proto-specialists
 - [research/MAINTAINER_BRIDGE_ARCHAEOLOGY.md](research/MAINTAINER_BRIDGE_ARCHAEOLOGY.md) — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern explicit
 - [research/MERGECODE_ARCHAEOLOGY.md](research/MERGECODE_ARCHAEOLOGY.md) — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and three explicit flows into a doctrine layer before the modern swarm control plane
@@ -64,6 +66,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md](research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md) — how issues and PRs evolved into a shared delivery ledger for fixes, closures, learning reports, and article evidence
 - [research/PR_LIFECYCLE_ARCHAEOLOGY.md](research/PR_LIFECYCLE_ARCHAEOLOGY.md) — how drafts, merges, closures, and disposal became part of the operating model
 - [research/REVIEW_LABEL_ARCHAEOLOGY.md](research/REVIEW_LABEL_ARCHAEOLOGY.md) — how the canonical Q3 swarm encoded review stages, gates, lanes, and merge readiness directly in GitHub labels alongside the three-phase `issue-to-draft` / `draft-to-pr` / `pr-to-merge` flow
+- [research/REVIEWER_ECOLOGY_ARCHAEOLOGY.md](research/REVIEWER_ECOLOGY_ARCHAEOLOGY.md) — how the repo layered human review, bot review, AI-reviewing-AI, and later gate/receipt enforcement instead of keeping review in one place
 - [research/PR_REVIEW_RECEIPT_ARCHAEOLOGY.md](research/PR_REVIEW_RECEIPT_ARCHAEOLOGY.md) — how labels, receipts, check runs, comments, and cleanup follow-ups turned PRs into governance artifacts
 - [research/PR_REVIEW_LOOP_ARCHAEOLOGY.md](research/PR_REVIEW_LOOP_ARCHAEOLOGY.md) — how cleanup passes, follow-up PRs, and review repair became explicit and normal
 - [research/PR_SLICE_SIZE_ARCHAEOLOGY.md](research/PR_SLICE_SIZE_ARCHAEOLOGY.md) — how the PR archive balances many small bounded slices with a smaller number of deliberate umbrella changes

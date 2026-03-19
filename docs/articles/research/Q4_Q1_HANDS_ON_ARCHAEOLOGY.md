@@ -43,9 +43,6 @@ The mode was not "human writes, AI assists." It was closer to AI writing and AI
 reviewing, with the maintainer paying the integration cost. The constraint was
 attention, not the absence of machine authorship.
 
-So the repo had already become strongly PR-shaped. The key limit was not lack of
-process. It was that the process still ran through the maintainer's hands.
-
 The maintainer's sharper distinction is that this phase still sat below a fully
 industrialized mode because individual implementation priorities were being set
 externally and then handed to coding agents. That creates a scaling limit at
@@ -152,6 +149,12 @@ work are interleaved tightly:
 This is the hands-on bridge: agents can draft, propose, and discover; the human
 still has to normalize, finish, and select.
 
+The maintainer's sharper correction is that this was already AI-native. Jules
+was not operating in a human-only review loop; Claude was already reviewing and
+improving Jules' work. What kept the era expensive was not the absence of
+machine review, but the fact that those reviews and integrations still relied
+on a relatively hands-on maintainer bridge.
+
 ---
 
 ## 5. What The Repo Was Optimizing For
@@ -179,9 +182,14 @@ Representative merged PRs:
 - `#777` - `v0.9.0` semantic-ready milestone
 - `#844` - `v0.9.1` release alignment
 
-That is why the era feels stable and consistent in retrospect. The repo is not
-thrashing from feature to feature. It is building a trustworthy shipping
-surface.
+There is also a measurable work-mix signal here. On a title-keyword scan of the
+same `195` merged PRs, `97` mention release work, CI, tests, docs, security,
+cleanup, hardening, or related trust-surface terms.
+
+That does not prove every merged change in the era was high quality. It does
+verify something narrower and more defensible: a large share of the merged work
+was explicitly about shipping discipline, hardening, verification, cleanup, and
+release truth rather than unconstrained feature spray.
 
 ---
 
@@ -211,8 +219,11 @@ In other words:
 - but the repo did not yet have a sufficiently externalized operating system for
   those behaviors
 
-That is why the era looks so good in quality terms and still feels expensive in
-attention terms.
+That is why the era can be described as quality-oriented and trust-surface-heavy
+without pretending the archive proves every outcome was high quality. The repo
+was investing heavily in verification and shipping discipline, and it still
+felt expensive in attention terms because those behaviors had not yet been
+fully externalized into a durable operating system.
 
 ---
 

@@ -9,12 +9,14 @@ Supplemental archaeology note:
 - `ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md` — the intentional slowdown that built the parser, quality gates, and architectural surfaces later swarms depended on
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
+- `DIRECT_DELIVERY_ARCHAEOLOGY.md` — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - `MERGECODE_ARCHAEOLOGY.md` — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and explicit three-flow delivery into the doctrine layer before the later swarm control plane
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
 - `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
 - `CASEBOOK_FORENSICS_ARCHAEOLOGY.md` — how casebook exhibits, dossier scripts, lessons, and specialist auditors turned postmortems into a reusable evidence pipeline
 - `INSTRUCTION_SURFACE_ARCHAEOLOGY.md` — how prompt-like orchestration guides, project doctrine docs, `.claude`, and `AGENTS.md` became a committed instruction layer
-- `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-heavy bridge era where the repo was disciplined but still depended on maintainer integration
+- `LEARNING_LOOP_ARCHAEOLOGY.md` — how lessons, forensics, casebook exhibits, swarm-state, and GitHub crosslinks form one durable learning loop
+- `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-oriented bridge era where shipping discipline was strong but maintainer integration was still expensive
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
 - `MODE_SHIFT_ARCHAEOLOGY.md` — the assisted/native/industrialized framework, grounded in repo evidence and the Q4/Q1 nuance that AI-native can still be hands-on
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
@@ -28,6 +30,7 @@ Supplemental archaeology note:
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
 - `REVIEW_LABEL_ARCHAEOLOGY.md` — how the canonical Q3 swarm used GitHub labels as a review state machine with intake, lanes, gates, and merge readiness alongside `issue-to-draft` / `draft-to-pr` / `pr-to-merge`
+- `REVIEWER_ECOLOGY_ARCHAEOLOGY.md` — how the repo layered human review, bot review, AI-reviewing-AI, and later gate/receipt enforcement instead of keeping review in one place
 - `PR_REVIEW_RECEIPT_ARCHAEOLOGY.md` — how PRs themselves became governance artifacts through labels, receipts, check runs, comments, and review repair
 - `PR_REVIEW_LOOP_ARCHAEOLOGY.md` — how review cleanup, follow-up PRs, and post-batch repair show up as named first-class work
 - `PR_SLICE_SIZE_ARCHAEOLOGY.md` — how the PR archive favors small bounded slices while still using deliberate large campaign PRs
