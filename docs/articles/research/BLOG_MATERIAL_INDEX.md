@@ -7,9 +7,11 @@ GitHub namespace note: issues and pull requests share the same ticket number lin
 
 Supplemental archaeology note:
 - `ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md` — the intentional slowdown that built the parser, quality gates, and architectural surfaces later swarms depended on
+- `ALPHA_READINESS_ARCHAEOLOGY.md` — how March 2026 kept shipped release truth separate from `v0.12.0` hardening plans while defining explicit alpha blockers and non-blockers
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
 - `DIRECT_DELIVERY_ARCHAEOLOGY.md` — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
+- `INSTALL_SURFACE_ARCHAEOLOGY.md` — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
 - `MERGECODE_ARCHAEOLOGY.md` — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and explicit three-flow delivery into the doctrine layer before the later swarm control plane
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
 - `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
@@ -51,6 +53,7 @@ Supplemental archaeology note:
 - `TRUSTED_CHANGE_ARCHAEOLOGY.md` — how mutation, fuzz, receipts, drift checks, and durable pitfall tracking made trusted change mechanical
 - `JULES_LANE_ARCHAEOLOGY.md` — how Bolt, Sentinel, and Palette acted as proto-specialist lanes before the current swarm model
 - `MERGE_DISCIPLINE_ARCHAEOLOGY.md` — how merge governance evolved from flow packs into commands, skills, queue pacing, and stateful reporting
+- `ARTICLE_EVIDENCE_LINEAGE_ARCHAEOLOGY.md` — source map linking future launch-article claims to exact issue/PR/doc evidence chains
 
 ---
 

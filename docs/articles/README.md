@@ -18,9 +18,11 @@ These documents intentionally preserve dated observations and period-specific me
 
 - [research/ERA_TIMELINE.md](research/ERA_TIMELINE.md) — era-by-era timeline and velocity notes
 - [research/ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md](research/ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md) — the intentional late-2025 to early-2026 slowdown that built parser, architecture, and quality foundations
+- [research/ALPHA_READINESS_ARCHAEOLOGY.md](research/ALPHA_READINESS_ARCHAEOLOGY.md) — how March 2026 kept shipped release truth separate from `v0.12.0` hardening plans while defining explicit alpha blockers and non-blockers
 - [research/COPILOT_FLEET_ARCHAEOLOGY.md](research/COPILOT_FLEET_ARCHAEOLOGY.md) — the February 27 to March 5, 2026 Copilot CLI firehose and its attribution boundary
 - [research/DIRECT_DELIVERY_ARCHAEOLOGY.md](research/DIRECT_DELIVERY_ARCHAEOLOGY.md) — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - [research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md](research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md) — March 11 to 19, 2026 as a mixed-tool period of short Claude swarm bursts plus Codex waves
+- [research/INSTALL_SURFACE_ARCHAEOLOGY.md](research/INSTALL_SURFACE_ARCHAEOLOGY.md) — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
 - [research/Q4_Q1_HANDS_ON_ARCHAEOLOGY.md](research/Q4_Q1_HANDS_ON_ARCHAEOLOGY.md) — the late-2025 to early-2026 stable, release-focused, but still maintainer-heavy bridge era
 - [research/Q3_SWARM_PR_ARCHAEOLOGY.md](research/Q3_SWARM_PR_ARCHAEOLOGY.md) — how late Q3 2025 becomes a PR-heavy Claude swarm rather than a mostly direct coding stream
 - [research/Q3_SWARM_TALK_ARCHAEOLOGY.md](research/Q3_SWARM_TALK_ARCHAEOLOGY.md) — how the Q3 2025 swarm talk articulated trusted change, flows, receipts, and adversarial verification before the control plane fully hardened
@@ -77,6 +79,7 @@ These documents intentionally preserve dated observations and period-specific me
 
 ### Research Maps and Source Drafts
 
+- [research/ARTICLE_EVIDENCE_LINEAGE_ARCHAEOLOGY.md](research/ARTICLE_EVIDENCE_LINEAGE_ARCHAEOLOGY.md) — source map linking future launch-article claims to exact issue/PR/doc evidence chains
 - [research/BLOG_MATERIAL_INDEX.md](research/BLOG_MATERIAL_INDEX.md) — scout-generated map of article angles and evidence
 - [research/DEVELOPMENT_ARCHAEOLOGY.md](research/DEVELOPMENT_ARCHAEOLOGY.md) — development-history archaeology and launch-story findings
 - [research/DOCUMENTATION_SUMMARY.md](research/DOCUMENTATION_SUMMARY.md) — packaging summary for the article set
