@@ -102,7 +102,9 @@ Add these labels to trigger additional CI checks:
 
 | Label | What it runs |
 |-------|--------------|
+| `ci:coverage` | Code coverage analysis |
 | `ci:bench` | Performance benchmarks |
+| `ci:mutation` | Mutation testing |
 | `ci:strict` | Pedantic clippy |
 | `ci:mac` | macOS build |
 | `ci:semver` | Breaking change detection |
