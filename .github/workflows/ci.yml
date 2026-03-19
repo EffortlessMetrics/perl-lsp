@@ -34,16 +34,16 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.head_ref }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust (sccache + nextest)
+        uses: ./.github/actions/setup-rust
         with:
-          toolchain: 1.92.0
+          toolchain: '1.92.0'
           components: rustfmt, clippy
-
-      - name: Install just
-        uses: taiki-e/install-action@v2
-        with:
-          tool: just
+          cache: 'true'
+          cache-key-suffix: ci-gate
+          sccache: 'true'
+          install-just: 'true'
+          install-nextest: 'true'
 
       - name: Auto-fix formatting
         run: |
@@ -57,14 +57,6 @@ jobs:
             echo "::notice::Auto-formatted code pushed. CI will re-run."
             exit 0
           fi
-
-      # Aggressive caching for dependencies and build artifacts
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
       - name: Run ci-gate with receipts
         run: just gates

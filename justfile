@@ -156,15 +156,25 @@ clippy-full:
     @echo "Clippy (full) passed"
 
 # Test core crates only (fast, for PR iterations)
+# Uses nextest when available for faster parallel execution
 test-core:
     @echo "Running tests (core crates: perl-parser, perl-lexer)..."
-    cargo test -p perl-parser -p perl-lexer --lib --locked
+    @if command -v cargo-nextest >/dev/null 2>&1; then \
+        cargo nextest run -p perl-parser -p perl-lexer --lib --locked --profile ci; \
+    else \
+        cargo test -p perl-parser -p perl-lexer --lib --locked; \
+    fi
     @echo "Tests (core) passed"
 
 # Test full workspace (thorough, for merge gate)
+# Uses nextest when available for faster parallel execution
 test-full:
     @echo "Running tests (full workspace)..."
-    RUST_TEST_THREADS=2 cargo test --workspace --lib --locked
+    @if command -v cargo-nextest >/dev/null 2>&1; then \
+        RUST_TEST_THREADS=2 cargo nextest run --workspace --lib --locked --profile ci; \
+    else \
+        RUST_TEST_THREADS=2 cargo test --workspace --lib --locked; \
+    fi
     @echo "Tests (full) passed"
 
 # LSP smoke test (deterministic, single-threaded)
@@ -528,15 +538,25 @@ ci-forbid-fatal:
     @echo "✅ No forbidden fatal constructs"
 
 # Core tests (fast, essential)
+# Uses nextest when available for faster parallel execution
 ci-test-core:
     @echo "🧪 Running core tests..."
-    cargo test --workspace --lib --bins
+    @if command -v cargo-nextest >/dev/null 2>&1; then \
+        cargo nextest run --workspace --lib --locked --profile ci; \
+    else \
+        cargo test --workspace --lib --bins; \
+    fi
     @echo "✅ Core tests passed"
 
 # Library tests only (fastest, for merge gate)
+# Uses nextest when available for faster parallel execution
 ci-test-lib:
     @echo "🧪 Running library tests..."
-    cargo test --workspace --lib --locked
+    @if command -v cargo-nextest >/dev/null 2>&1; then \
+        cargo nextest run --workspace --lib --locked --profile ci; \
+    else \
+        cargo test --workspace --lib --locked; \
+    fi
     @echo "✅ Library tests passed"
 
 # V2 bundle sync guard (in-crate v2 files must match extracted perl-parser-pest v2 files)

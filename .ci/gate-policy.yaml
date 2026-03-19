@@ -157,11 +157,18 @@ gates:
     description: "Fast unit test subset for quick feedback"
     required: true
     # Library tests only, no integration tests
+    # Uses nextest when available for faster parallel execution
     command: >-
-      cargo test
-      -p perl-parser -p perl-lexer -p perl-parser-core
-      --lib --locked
-      -- --test-threads=4
+      if command -v cargo-nextest >/dev/null 2>&1; then
+        cargo nextest run
+        -p perl-parser -p perl-lexer -p perl-parser-core
+        --lib --locked --profile ci;
+      else
+        cargo test
+        -p perl-parser -p perl-lexer -p perl-parser-core
+        --lib --locked
+        -- --test-threads=4;
+      fi
     timeout_seconds: 180
     retry_count: 1
     budgets:
@@ -202,7 +209,14 @@ gates:
     tier: merge_gate
     description: "All release-track workspace library tests (excluding internal tree-sitter harness)"
     required: true
-    command: cargo test --workspace --lib --locked --exclude tree-sitter-perl
+    # Uses nextest when available for faster parallel execution
+    command: >-
+      if command -v cargo-nextest >/dev/null 2>&1; then
+        cargo nextest run --workspace --lib --locked
+        --profile ci -E 'not package(tree-sitter-perl)';
+      else
+        cargo test --workspace --lib --locked --exclude tree-sitter-perl;
+      fi
     timeout_seconds: 300
     retry_count: 1
     budgets:

@@ -96,4 +96,11 @@ runs:
         cargo --version
         rustfmt --version 2>/dev/null || true
         clippy-driver --version 2>/dev/null || true
+        if command -v sccache >/dev/null 2>&1; then
+          echo "sccache: $(sccache --version 2>/dev/null || echo 'installed')"
+          echo "RUSTC_WRAPPER=${RUSTC_WRAPPER:-not set}"
+        fi
+        if command -v cargo-nextest >/dev/null 2>&1; then
+          echo "nextest: $(cargo nextest --version 2>/dev/null || echo 'installed')"
+        fi
         echo "::endgroup::"
