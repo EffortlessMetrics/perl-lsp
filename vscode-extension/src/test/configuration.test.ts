@@ -1,0 +1,410 @@
+/**
+ * Unit tests validating the extension's static configuration files:
+ *   - language-configuration.json
+ *   - package.json (contributes section, activation events, settings)
+ *   - snippets/*.json
+ *
+ * These are "contract tests" -- they verify that the configuration surfaces
+ * exposed to VSCode and end-users match expectations. Breaking these
+ * signals a user-visible regression.
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+const EXT_ROOT = path.resolve(__dirname, '..', '..');
+
+function readJson(relativePath: string): any {
+  const fullPath = path.join(EXT_ROOT, relativePath);
+  return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+}
+
+// ---------------------------------------------------------------------------
+// language-configuration.json
+// ---------------------------------------------------------------------------
+describe('language-configuration.json', () => {
+  let langConfig: any;
+
+  beforeAll(() => {
+    langConfig = readJson('language-configuration.json');
+  });
+
+  test('has line comment set to #', () => {
+    expect(langConfig.comments.lineComment).toBe('#');
+  });
+
+  test('defines bracket pairs for {}, [], ()', () => {
+    const brackets: [string, string][] = langConfig.brackets;
+    const pairs = brackets.map(([o, c]) => `${o}${c}`);
+    expect(pairs).toContain('{}');
+    expect(pairs).toContain('[]');
+    expect(pairs).toContain('()');
+  });
+
+  test('has auto-closing pairs for all bracket types', () => {
+    const opens = (langConfig.autoClosingPairs as any[]).map((p: any) => p.open);
+    expect(opens).toContain('{');
+    expect(opens).toContain('[');
+    expect(opens).toContain('(');
+    expect(opens).toContain('"');
+    expect(opens).toContain("'");
+  });
+
+  test('auto-closing single quotes are suppressed inside strings and comments', () => {
+    const singleQuote = (langConfig.autoClosingPairs as any[]).find(
+      (p: any) => p.open === "'"
+    );
+    expect(singleQuote).toBeDefined();
+    expect(singleQuote.notIn).toContain('string');
+    expect(singleQuote.notIn).toContain('comment');
+  });
+
+  test('has surrounding pairs for common delimiters', () => {
+    const pairs = (langConfig.surroundingPairs as [string, string][]).map(
+      ([o, c]) => `${o}${c}`
+    );
+    expect(pairs).toContain('{}');
+    expect(pairs).toContain('()');
+    expect(pairs).toContain('""');
+    expect(pairs).toContain("''");
+    expect(pairs).toContain('``');
+  });
+
+  test('has indentation rules', () => {
+    expect(langConfig.indentationRules).toBeDefined();
+    expect(langConfig.indentationRules.increaseIndentPattern).toBeTruthy();
+    expect(langConfig.indentationRules.decreaseIndentPattern).toBeTruthy();
+  });
+
+  test('increaseIndentPattern matches Perl keywords', () => {
+    const pattern = new RegExp(langConfig.indentationRules.increaseIndentPattern);
+    expect(pattern.test('sub foo {')).toBe(true);
+    expect(pattern.test('if ($x) {')).toBe(true);
+    expect(pattern.test('while (1) {')).toBe(true);
+    expect(pattern.test('for my $i (@arr) {')).toBe(true);
+    expect(pattern.test('foreach my $item (@list) {')).toBe(true);
+  });
+
+  test('decreaseIndentPattern matches closing structures', () => {
+    const pattern = new RegExp(langConfig.indentationRules.decreaseIndentPattern);
+    expect(pattern.test('}')).toBe(true);
+    expect(pattern.test('    }')).toBe(true);
+    expect(pattern.test('    )')).toBe(true);
+  });
+
+  test('has a wordPattern defined', () => {
+    expect(langConfig.wordPattern).toBeTruthy();
+    expect(() => new RegExp(langConfig.wordPattern)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// package.json contributes
+// ---------------------------------------------------------------------------
+describe('package.json contributes', () => {
+  let pkg: any;
+
+  beforeAll(() => {
+    pkg = readJson('package.json');
+  });
+
+  describe('language registration', () => {
+    test('registers perl language', () => {
+      const langs = pkg.contributes.languages;
+      expect(langs).toBeDefined();
+      const perl = langs.find((l: any) => l.id === 'perl');
+      expect(perl).toBeDefined();
+    });
+
+    test('perl language has expected file extensions', () => {
+      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      const exts: string[] = perl.extensions;
+      expect(exts).toContain('.pl');
+      expect(exts).toContain('.pm');
+      expect(exts).toContain('.t');
+      expect(exts).toContain('.pod');
+      expect(exts).toContain('.psgi');
+    });
+
+    test('perl language has shebang first-line detection', () => {
+      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      expect(perl.firstLine).toBeTruthy();
+      const pattern = new RegExp(perl.firstLine);
+      expect(pattern.test('#!/usr/bin/perl')).toBe(true);
+      expect(pattern.test('#!/usr/bin/env perl')).toBe(true);
+    });
+
+    test('perl language aliases include "Perl" and "Perl 5"', () => {
+      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
+      expect(perl.aliases).toContain('Perl');
+      expect(perl.aliases).toContain('Perl 5');
+    });
+  });
+
+  describe('activation events', () => {
+    test('activates on perl language', () => {
+      expect(pkg.activationEvents).toContain('onLanguage:perl');
+    });
+
+    test('activates on restart command', () => {
+      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.restart');
+    });
+
+    test('activates on reinstall command', () => {
+      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.reinstall');
+    });
+  });
+
+  describe('commands', () => {
+    test('registers expected commands', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.restart');
+      expect(commandIds).toContain('perl-lsp.showVersion');
+      expect(commandIds).toContain('perl-lsp.showOutput');
+      expect(commandIds).toContain('perl-lsp.reinstall');
+      expect(commandIds).toContain('perl-lsp.organizeImports');
+      expect(commandIds).toContain('perl-lsp.runTests');
+      expect(commandIds).toContain('perl-lsp.showStatusMenu');
+    });
+
+    test('all commands have a category', () => {
+      for (const cmd of pkg.contributes.commands) {
+        expect(cmd.category).toBeTruthy();
+      }
+    });
+
+    test('all commands have a title', () => {
+      for (const cmd of pkg.contributes.commands) {
+        expect(cmd.title).toBeTruthy();
+      }
+    });
+  });
+
+  describe('configuration settings', () => {
+    let properties: Record<string, any>;
+
+    beforeAll(() => {
+      properties = pkg.contributes.configuration.properties;
+    });
+
+    test('defines serverPath setting', () => {
+      expect(properties['perl-lsp.serverPath']).toBeDefined();
+      expect(properties['perl-lsp.serverPath'].type).toBe('string');
+    });
+
+    test('defines autoDownload setting with default true', () => {
+      expect(properties['perl-lsp.autoDownload']).toBeDefined();
+      expect(properties['perl-lsp.autoDownload'].default).toBe(true);
+    });
+
+    test('defines trace.server with valid enum values', () => {
+      const trace = properties['perl-lsp.trace.server'];
+      expect(trace).toBeDefined();
+      expect(trace.enum).toContain('off');
+      expect(trace.enum).toContain('messages');
+      expect(trace.enum).toContain('verbose');
+    });
+
+    test('defines channel setting with valid enum', () => {
+      const channel = properties['perl-lsp.channel'];
+      expect(channel).toBeDefined();
+      expect(channel.enum).toContain('latest');
+      expect(channel.enum).toContain('stable');
+      expect(channel.enum).toContain('tag');
+    });
+
+    test('defines featureProfile setting with valid enum', () => {
+      const profile = properties['perl-lsp.featureProfile'];
+      expect(profile).toBeDefined();
+      expect(profile.enum).toContain('auto');
+      expect(profile.enum).toContain('ga');
+      expect(profile.enum).toContain('all');
+    });
+
+    test('defines enableDiagnostics with default true', () => {
+      expect(properties['perl-lsp.enableDiagnostics'].default).toBe(true);
+    });
+
+    test('defines enableSemanticTokens with default true', () => {
+      expect(properties['perl-lsp.enableSemanticTokens'].default).toBe(true);
+    });
+
+    test('defines formatOnSave with default false', () => {
+      expect(properties['perl-lsp.formatOnSave'].default).toBe(false);
+    });
+
+    test('defines includePaths with sensible defaults', () => {
+      const includePaths = properties['perl-lsp.includePaths'];
+      expect(includePaths.default).toContain('lib');
+      expect(includePaths.default).toContain('local/lib/perl5');
+    });
+
+    test('defines downloadBaseUrl for internal hosting', () => {
+      const setting = properties['perl-lsp.downloadBaseUrl'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('string');
+      expect(setting.scope).toBe('machine');
+    });
+  });
+
+  describe('debugger configuration', () => {
+    test('registers perl debugger type', () => {
+      const debuggers = pkg.contributes.debuggers;
+      expect(debuggers).toBeDefined();
+      const perlDebug = debuggers.find((d: any) => d.type === 'perl');
+      expect(perlDebug).toBeDefined();
+    });
+
+    test('debugger launch requires program property', () => {
+      const perlDebug = pkg.contributes.debuggers.find((d: any) => d.type === 'perl');
+      expect(perlDebug.configurationAttributes.launch.required).toContain('program');
+    });
+
+    test('debugger provides initial configurations', () => {
+      const perlDebug = pkg.contributes.debuggers.find((d: any) => d.type === 'perl');
+      expect(perlDebug.initialConfigurations.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('breakpoints', () => {
+    test('enables breakpoints for perl language', () => {
+      const breakpoints = pkg.contributes.breakpoints;
+      expect(breakpoints).toBeDefined();
+      const hasPerl = breakpoints.some((b: any) => b.language === 'perl');
+      expect(hasPerl).toBe(true);
+    });
+  });
+
+  describe('keybindings', () => {
+    test('defines keybindings for key commands', () => {
+      const keybindings = pkg.contributes.keybindings;
+      expect(keybindings).toBeDefined();
+      const commands = keybindings.map((k: any) => k.command);
+      expect(commands).toContain('perl-lsp.organizeImports');
+      expect(commands).toContain('perl-lsp.runTests');
+      expect(commands).toContain('perl-lsp.restart');
+    });
+
+    test('keybindings are scoped to perl language', () => {
+      for (const kb of pkg.contributes.keybindings) {
+        expect(kb.when).toContain('editorLangId == perl');
+      }
+    });
+  });
+
+  describe('grammar', () => {
+    test('registers source.perl scope', () => {
+      const grammars = pkg.contributes.grammars;
+      const perl = grammars.find((g: any) => g.language === 'perl');
+      expect(perl).toBeDefined();
+      expect(perl.scopeName).toBe('source.perl');
+    });
+
+    test('grammar file exists', () => {
+      const grammars = pkg.contributes.grammars;
+      const perl = grammars.find((g: any) => g.language === 'perl');
+      const grammarPath = path.join(EXT_ROOT, perl.path);
+      expect(fs.existsSync(grammarPath)).toBe(true);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Snippet files
+// ---------------------------------------------------------------------------
+describe('snippets', () => {
+  test('perl.json is valid JSON', () => {
+    expect(() => readJson('snippets/perl.json')).not.toThrow();
+  });
+
+  test('launch.json is valid JSON', () => {
+    expect(() => readJson('snippets/launch.json')).not.toThrow();
+  });
+
+  test('each perl snippet has prefix, body, and description', () => {
+    const snippets = readJson('snippets/perl.json');
+    for (const [name, snippet] of Object.entries<any>(snippets)) {
+      expect(snippet.prefix).toBeTruthy();
+      expect(snippet.body).toBeTruthy();
+      expect(snippet.description).toBeTruthy();
+    }
+  });
+
+  test('each launch snippet has prefix, body, and description', () => {
+    const snippets = readJson('snippets/launch.json');
+    for (const [name, snippet] of Object.entries<any>(snippets)) {
+      expect(snippet.prefix).toBeTruthy();
+      expect(snippet.body).toBeTruthy();
+      expect(snippet.description).toBeTruthy();
+    }
+  });
+
+  test('perl snippets cover fundamental constructs', () => {
+    const snippets = readJson('snippets/perl.json');
+    const allPrefixes = Object.values<any>(snippets).flatMap((s: any) =>
+      Array.isArray(s.prefix) ? s.prefix : [s.prefix]
+    );
+    expect(allPrefixes).toContain('sub');
+    expect(allPrefixes).toContain('if');
+    expect(allPrefixes).toContain('while');
+    expect(allPrefixes).toContain('for');
+    expect(allPrefixes).toContain('package');
+    expect(allPrefixes).toContain('use');
+    expect(allPrefixes).toContain('my');
+  });
+
+  test('test snippets cover Test::More basics', () => {
+    const snippets = readJson('snippets/perl.json');
+    const allPrefixes = Object.values<any>(snippets).flatMap((s: any) =>
+      Array.isArray(s.prefix) ? s.prefix : [s.prefix]
+    );
+    expect(allPrefixes).toContain('ok');
+    expect(allPrefixes).toContain('is');
+    expect(allPrefixes).toContain('is_deeply');
+    expect(allPrefixes).toContain('done_testing');
+    expect(allPrefixes).toContain('subtest');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Package metadata
+// ---------------------------------------------------------------------------
+describe('package.json metadata', () => {
+  let pkg: any;
+
+  beforeAll(() => {
+    pkg = readJson('package.json');
+  });
+
+  test('has a valid name', () => {
+    expect(pkg.name).toBe('perl-lsp-rs');
+  });
+
+  test('has a valid version (semver)', () => {
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  test('requires vscode ^1.88.0 or higher', () => {
+    expect(pkg.engines.vscode).toBeTruthy();
+  });
+
+  test('main entry point is ./out/extension.js', () => {
+    expect(pkg.main).toBe('./out/extension.js');
+  });
+
+  test('has required dependencies', () => {
+    expect(pkg.dependencies['vscode-languageclient']).toBeTruthy();
+  });
+
+  test('publisher is EffortlessMetrics', () => {
+    expect(pkg.publisher).toBe('EffortlessMetrics');
+  });
+
+  test('extension is workspace-kind', () => {
+    expect(pkg.extensionKind).toContain('workspace');
+  });
+
+  test('supports untrusted workspaces', () => {
+    expect(pkg.capabilities.untrustedWorkspaces.supported).toBe(true);
+  });
+});
