@@ -114,7 +114,7 @@ The same judgment is now split across specialized surfaces:
 - skills for reusable procedures
 - hooks for deterministic enforcement
 - `swarm-state` for durable memory
-- archived rosters for historical context
+- older roster snapshots for historical context
 
 That is more conceptually sound than the earlier waves because the repository is
 finally giving its methodology dedicated places to live.

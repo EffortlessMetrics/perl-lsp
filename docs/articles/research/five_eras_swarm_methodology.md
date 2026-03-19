@@ -361,7 +361,8 @@ Structured, tagged, linked to issues. Clear intent.
 └── ... (8 total)
 ```
 
-These replace the 54 archived agent definition files (Era 2 artifact).
+These work with the 54 agent definition files rather than replacing the agent
+layer outright.
 
 ### Memory Files
 ```
@@ -391,7 +392,7 @@ Hooks are an Era 5 innovation — deterministic enforcement replacing agent memo
 
 ### Archived Agent Definitions
 ```
-.claude/agents/archive/
+.claude/agents/
 ├── parser-fix-engine.md        # Era 2 artifact
 ├── lsp-feature.md
 ├── semantic-analysis.md
@@ -632,4 +633,3 @@ The five eras show that this didn't happen by accident. It emerged through cycle
 **For future teams building multi-agent systems**: The journey is not straightforward. Start with Era 1 (deep context), discover Era 2 (parallelism), realize Era 3 (you need structure), crash through Era 4 (and learn that structure matters), then synthesize Era 5 (proper coordination, memory, enforcement).
 
 Or, learn from perl-lsp's journey and skip straight to Era 5's patterns.
-

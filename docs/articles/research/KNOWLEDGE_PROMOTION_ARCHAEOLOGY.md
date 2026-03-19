@@ -141,7 +141,7 @@ That means the repo has a promotion tier for:
 
 It says the canonical runtime surfaces are:
 
-- `.claude/agents/archive/`
+- `.claude/agents/`
 - `.claude/skills/`
 - `.claude/commands/`
 - `.claude/settings.json`

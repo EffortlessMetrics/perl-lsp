@@ -15,7 +15,7 @@ The perl-lsp project implements a production-grade multi-agent development metho
 Key metrics:
 - **8 core skills** capturing stable development procedures
 - **90 memory files** encoding 5 cycles of learnings
-- **54 archived agent definitions** (now obsolete; replaced by inline templates)
+- **54 agent definitions** providing role-specific context and todo structure, with skills carrying the mechanical substep instructions
 - **3 CI tiers** (PR-fast: 1-2 min, merge-gate: 3-5 min, nightly: 15-30 min)
 - **5 persistent coordinators** (scout, builder, reviewer, ops, improver)
 - **25+ just recipes** implementing automated workflows
@@ -1060,7 +1060,7 @@ Parallelism: 100+ concurrent agents (bottleneck: CI @ 5 min)
 
 - **CLAUDE.md**: Project orchestration model, quick reference, coding standards
 - **.claude/skills/**: 8 reusable skills (swarm, parser-fix, verify-build, etc.)
-- **.claude/agents/archive/**: 54 historical agent definitions (reference only)
+- **.claude/agents/**: 54 agent definitions for the current swarm surface
 - **.claude/hooks/**: Deterministic enforcement (subagent-stop, teammate-idle)
 - **.ci/GATE_REGISTRY.toml**: Merge-blocking gates with thresholds
 - **justfile**: 25+ automated workflows (pr-fast, ci-gate, ci-full)
@@ -1107,4 +1107,3 @@ The key innovations:
 The bottleneck is **CI throughput** (~5 min merge gate), not agent coordination. With optimal agent count (~9), the system sustains ~50-56 PRs per session.
 
 This methodology is now documented, battle-tested, and ready for adoption by other open source projects seeking to scale development velocity with AI.
-

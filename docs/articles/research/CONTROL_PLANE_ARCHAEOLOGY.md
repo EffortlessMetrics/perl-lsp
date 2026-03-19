@@ -228,13 +228,17 @@ Today, the swarm lives across:
 
 This is effectively the `agents7` layer.
 
-It is not the old "load this file as the runtime prompt" surface. Instead, it is the canonical archived roster surface:
+It is not merely an archived roster dump. It is the current agent-definition
+surface for the swarm:
 
 - `AGENT_CATALOG.md`
-- `archive/agent-roster.json`
-- 54 archived definitions for reference
+- role-specific agent files
+- machine-readable roster data
+- agent instructions that name the skills and commands to invoke first
 
-The current orchestrator uses these as historical or roster material, not as the sole runtime contract.
+The orchestrator still owns routing and spawn decisions, but it routes through
+these agent definitions rather than having to restate every role contract from
+scratch each time.
 
 ### `.claude/commands/`
 

@@ -100,7 +100,7 @@ The project explicitly encodes swarm orchestration into version control:
   - And 2 more for advanced operations
 
 - **Commands**: 48 command definitions (custom CLI entry points for agents)
-- **Archived Agents**: 54 agent definitions in `.claude/agents/archive/`, with older lineage directories retained alongside them
+- **Agent Surface**: 54 agent definitions in `.claude/agents/`, with older lineage directories retained alongside them
   - `.claude/agents4/`: canonical Q3 2025 swarm control-plane pack
   - `.claude/agents5/` and `.claude/agents6/`: evolution toward persistent teammate roles
   - `.claude/agents/`: effectively the `agents7` layer in the current swarm
@@ -343,7 +343,7 @@ Enforces before any push:
 3. **perl-line-index (59 LOC)**: A crate so small it's basically a single function, but useful enough to extract
 
 ### Infrastructure Oddities
-1. **54 archived agent definitions plus lineage directories**: `.claude/agents4/` preserves the canonical Q3 swarm pack, `agents5-6` capture the transition, and `.claude/agents/` is effectively `agents7`
+1. **54 agent definitions plus lineage directories**: `.claude/agents4/` preserves the canonical Q3 swarm pack, `agents5-6` capture the transition, and `.claude/agents/` is effectively `agents7`
 2. **swarm-metrics.jsonl barely used**: Metrics pipeline broken, needs hook-based auto-logging
 3. **Memory system outgrows CLAUDE.md**: 30+ memory files (MEMORY.md index truncates after 200 lines)
 
