@@ -1648,6 +1648,7 @@ dependencies = [
  "anyhow",
  "perl-dap-shell",
  "perl-tdd-support",
+ "tempfile",
 ]
 
 [[package]]
