@@ -3,7 +3,7 @@ use cpan_test_helpers::parse;
 
 /// Strict assertion that catches all ERROR variants in sexp output,
 /// including uppercase `(ERROR "...")` from error recovery.
-fn assert_no_errors(source: &str) {
+fn assert_use_args(source: &str, expected_use: &str) {
     let ast = parse(source);
     let sexp = ast.to_sexp();
 
@@ -30,40 +30,62 @@ fn assert_no_errors(source: &str) {
             sexp,
         );
     }
+
+    assert!(
+        sexp.contains(expected_use),
+        "Expected use clause for source:\n{}\n\nExpected fragment: {}\nSexp: {}",
+        source,
+        expected_use,
+        sexp,
+    );
 }
 
 #[test]
 fn test_use_constant_ternary_with_number_lhs() {
     // Number followed by ternary operator — the `?` must not be left orphaned
-    assert_no_errors("use constant FOO => 1 ? 'a' : 'b';");
+    assert_use_args("use constant FOO => 1 ? 'a' : 'b';", "(use constant (FOO 1 ? 'a' : 'b'))");
 }
 
 #[test]
 fn test_use_constant_ternary_with_string_lhs() {
     // String followed by ternary — same root cause as number
-    assert_no_errors("use constant FOO => 'yes' ? 1 : 0;");
+    assert_use_args("use constant FOO => 'yes' ? 1 : 0;", "(use constant (FOO 'yes' ? 1 : 0))");
 }
 
 #[test]
 fn test_use_constant_number_with_binary_op() {
     // Number followed by arithmetic operator
-    assert_no_errors("use constant BAR => 1 + 2;");
+    assert_use_args("use constant BAR => 1 + 2;", "(use constant (BAR 1 + 2))");
 }
 
 #[test]
 fn test_use_constant_string_with_concat_op() {
     // String followed by concatenation
-    assert_no_errors("use constant BAZ => 'hello' . ' world';");
+    assert_use_args(
+        "use constant BAZ => 'hello' . ' world';",
+        "(use constant (BAZ 'hello' . ' world'))",
+    );
 }
 
 #[test]
 fn test_use_constant_number_comparison() {
     // Number followed by comparison
-    assert_no_errors("use constant OLD => 5.008 < 5.016;");
+    assert_use_args("use constant OLD => 5.008 < 5.016;", "(use constant (OLD 5.008 < 5.016))");
 }
 
 #[test]
 fn test_use_constant_ternary_nested() {
     // Nested ternary in use constant value
-    assert_no_errors("use constant X => 1 ? 2 ? 'a' : 'b' : 'c';");
+    assert_use_args(
+        "use constant X => 1 ? 2 ? 'a' : 'b' : 'c';",
+        "(use constant (X 1 ? 2 ? 'a' : 'b' : 'c'))",
+    );
+}
+
+#[test]
+fn test_use_constant_ternary_with_nested_fat_arrows() {
+    assert_use_args(
+        "use constant MAP => 1 ? { foo => 'a' } : { bar => 'b' };",
+        "(use constant (MAP 1 ? { foo => 'a' } : { bar => 'b' }))",
+    );
 }
