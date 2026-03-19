@@ -55,6 +55,8 @@ The key discovery of Era 2 was that isolation enables parallelism. When two agen
 
 This is also the Q3 swarm era where daily PR volume becomes unmistakable. Compared with Era 1's more direct rhythm, work now lands as visible PR waves that have to be reviewed, merged, and occasionally untangled.
 
+The control-plane archaeology still preserves this phase. `.claude/agents4/` reads as the canonical Q3 swarm: a three-phase `review/`, `integration/`, and generation (stored on disk as `generative/`) model with explicit `issue-to-draft` and `pr-to-merge` flow files. The swarm was already real. It just had a heavier, more file-defined operating model.
+
 The commit rate actually *dropped* from Era 1 (22.5 to 15.3 per active day). This is the cost of coordination. The single-threaded conversation was replaced by a multi-threaded workflow, and the overhead of managing branches, reviewing PRs, and resolving conflicts consumed time that had previously gone to writing code.
 
 But the *breadth* of work increased. Era 1 had built depth in the parser. Era 2 spread across the LSP server, the scope analyzer, the test infrastructure, and early DAP work. Parallelism does not mean faster on any single task. It means more tasks in flight.
@@ -171,6 +173,8 @@ Each agent operates in its own worktree — a complete copy of the repository at
 The skill library — 8 skills, 48 commands — encodes the mechanics of recurring operations. `/verify` runs the canonical gate for a crate. `/parser-fix` follows the TDD loop. `/pr-create` handles the GitHub workflow. Agents orchestrate skills rather than reimplementing procedures from scratch.
 
 The memory system — 97 files encoding feedback, project state, and reference pointers — gives agents institutional knowledge that persists across conversations. An agent starting work today can read that "agents adding tests must run `update-current-status.py`" without discovering it through a failed CI run.
+
+The directory lineage captures the transition. `.claude/agents5/` and `.claude/agents6/` record the evolution from the older phase-pack model into persistent swarm teammates like `swarm-scout`, `swarm-builder`, `swarm-reviewer`, and `swarm-strategist`. The current swarm then lives across `.claude/agents/` (effectively the `agents7` layer), `.claude/commands/`, `.claude/skills/`, and `.claude/hooks/`, with `.claude/swarm-state/` acting as the current-ish state and documentation layer around it.
 
 **What Era 5 left behind**: 44 `worktree-agent-*` branches. A skill library. A memory system. The scout-constrain-build pattern. And a CPAN corpus parse rate of 80% — the threshold for the 0.12.0 public alpha.
 

@@ -119,6 +119,10 @@ _Method note: this report uses two lenses intentionally. Mainline sections call 
 - **Test infrastructure**: Heavy test addition
   - "Add comprehensive test suite for Perl code parsing"
   - "Add comprehensive test suite for Perl code parsing"
+- **Q3 control-plane strata**:
+  - `.claude/agents4/` looks like the canonical Q3 three-phase swarm
+  - That canonical form centers on `review/`, `integration/`, and generation (stored as `generative/`) packs plus `issue-to-draft` / `pr-to-merge` orchestration
+  - Signal: the swarm is still prompt-file-driven, with heavier role-pack definitions than the later teammate model
 
 ### Velocity Pattern
 Peak at **109 commits 2025-08-26**, drops to 75-78 commits 2025-08-27, suggesting single-day batch merges.
@@ -365,6 +369,12 @@ Peak merged velocity reaches **255 commits / 7 days** (~36/day), with a single-d
   - Skills reusable across agents
   - Memory system persists learnings across cycles
 
+- **Agent lineage still on disk**:
+  - `.claude/agents5/` and `.claude/agents6/` capture the evolution toward persistent teammate roles
+  - `.claude/agents/` is effectively the `agents7` layer
+  - The current swarm lives across `.claude/agents/`, `.claude/commands/`, `.claude/skills/`, and `.claude/hooks/`
+  - `.claude/swarm-state/` serves as the current-ish state/documentation layer around that control plane
+
 - **Batch merging pattern**:
   - 321 all-ref commits (2026-03-18), 250 (2026-03-15), 238 (2026-03-19)
   - Suggests: session bursts create large artifact waves, then merge/triage passes process them in batches
@@ -562,10 +572,10 @@ Era 5: Steven variants plus mixed-tool branch artifacts; author fields matter le
    - suggests experimental/trial phase for Copilot
 
 3. **Archived agents (54 definitions)**
-   - Versions v1-v6 of agent architecture
-   - v1-v3: Early generations
-   - v4: Something broke (skipped?), v5 "generative-flow", v6 "swarm v1"
-   - v7+: Current (documented in Era 5 memory files)
+   - `.claude/agents4/`: canonical Q3 three-phase swarm
+   - `.claude/agents5/` and `.claude/agents6/`: transition/evolution layers
+   - `.claude/agents/`: effectively the current `agents7` layer
+   - The live control plane now spans agents + commands + skills + hooks, with `swarm-state/` as current-ish documentation/state
 
 4. **Phantom bug in cycle 5**
    - Scout analysis tool itself had edge cases
