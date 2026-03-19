@@ -73,74 +73,30 @@ impl DocumentHighlightProvider {
         self.deduplicate_highlights(highlights)
     }
 
-    /// Deduplicate highlights by location, preferring Write kind over Read.
-    ///
-    /// Uses linear scan for small inputs (<50 items) to avoid HashMap allocation
-    /// overhead, falling back to HashMap for larger inputs.
+    /// Deduplicate highlights by location, preferring Write kind over Read
     fn deduplicate_highlights(&self, highlights: Vec<DocumentHighlight>) -> Vec<DocumentHighlight> {
-        /// Threshold below which linear scan outperforms HashMap
-        const LINEAR_THRESHOLD: usize = 50;
-
-        let mut result = if highlights.len() < LINEAR_THRESHOLD {
-            Self::dedup_linear(highlights)
-        } else {
-            Self::dedup_hashmap(highlights)
-        };
-
-        // Return sorted by position
-        result.sort_by_key(|h| h.location.start);
-        result
-    }
-
-    /// Linear-scan dedup for small inputs -- avoids HashMap allocation overhead.
-    fn dedup_linear(highlights: Vec<DocumentHighlight>) -> Vec<DocumentHighlight> {
-        let mut result: Vec<DocumentHighlight> = Vec::with_capacity(highlights.len());
-
-        for h in highlights {
-            let mut found = false;
-            for existing in &mut result {
-                if existing.location.start == h.location.start
-                    && existing.location.end == h.location.end
-                {
-                    // Prefer Write (3) over Read (2) over Text (1)
-                    if (h.kind as u8) > (existing.kind as u8) {
-                        existing.kind = h.kind;
-                    }
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                result.push(h);
-            }
-        }
-
-        result
-    }
-
-    /// HashMap-based dedup for larger inputs.
-    fn dedup_hashmap(highlights: Vec<DocumentHighlight>) -> Vec<DocumentHighlight> {
         use std::collections::HashMap;
 
-        let mut by_location: HashMap<(usize, usize), DocumentHighlight> =
-            HashMap::with_capacity(highlights.len());
+        // Group by location (start, end)
+        let mut by_location: HashMap<(usize, usize), DocumentHighlight> = HashMap::new();
 
         for h in highlights {
             let key = (h.location.start, h.location.end);
-            match by_location.get_mut(&key) {
-                Some(existing) => {
+            by_location
+                .entry(key)
+                .and_modify(|existing| {
                     // Prefer Write (3) over Read (2) over Text (1)
                     if (h.kind as u8) > (existing.kind as u8) {
-                        existing.kind = h.kind;
+                        *existing = h.clone();
                     }
-                }
-                None => {
-                    by_location.insert(key, h);
-                }
-            }
+                })
+                .or_insert(h);
         }
 
-        by_location.into_values().collect()
+        // Return sorted by position
+        let mut result: Vec<_> = by_location.into_values().collect();
+        result.sort_by_key(|h| h.location.start);
+        result
     }
 
     /// Find the node at the given byte offset
