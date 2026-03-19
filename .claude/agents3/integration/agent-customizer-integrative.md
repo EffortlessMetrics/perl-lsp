@@ -273,4 +273,3 @@ Ensure every customized agent includes:
 Return the complete adapted agent configuration as a JSON object with the same structure as the input, but with systemPrompt and whenToUse fields updated to reflect MergeCode Integrative flow standards. Maintain the original identifier unless it conflicts with MergeCode naming conventions.
 
 Focus on practical adaptation that preserves the agent's core purpose while ensuring it operates effectively within MergeCode's GitHub-native, gate-focused validation pipeline.
-

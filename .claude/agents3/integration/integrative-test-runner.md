@@ -59,7 +59,7 @@ Proceeding to mutation testing phase
   * [crate::test_name]: [error_summary]
 - Failure Categories:
   * Compilation: [count]
-  * Runtime: [count] 
+  * Runtime: [count]
   * Assertion: [count]
   * Timeout: [count]
 

@@ -21,19 +21,19 @@ When provided with a raw issue description, you will:
 3. **Create the Story File**: Write a properly formatted markdown file to `ISSUE-<id>.story.md` following this structure:
    ```markdown
    # ISSUE-<id>: [Title]
-   
+
    ## Context
    [Problem background and parser ecosystem component context]
-   
+
    ## User Story
    As a [user type], I want [goal] so that [business value].
-   
+
    ## Acceptance Criteria
    AC1: [Atomic, testable criterion with cargo test command]
-   AC2: [Atomic, testable criterion with cargo test command] 
+   AC2: [Atomic, testable criterion with cargo test command]
    AC3: [Atomic, testable criterion with cargo test command]
    ...
-   
+
    ## Test Commands
    ```bash
    # Relevant cargo test commands for validation

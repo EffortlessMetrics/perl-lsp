@@ -13,7 +13,7 @@ Your primary responsibility is to execute comprehensive fuzz testing on critical
 1. **Identify Context**: Extract the Pull Request number and identify affected parsing components (parser core, lexer, LSP providers, builtin function handling).
 2. **Execute Perl-Specific Validation**: Run comprehensive fuzz testing using:
    - `cargo fuzz run parser_fuzz` - Test recursive descent parser with complex Perl syntax
-   - `cargo fuzz run lexer_fuzz` - Validate Unicode-safe tokenization and delimiter handling  
+   - `cargo fuzz run lexer_fuzz` - Validate Unicode-safe tokenization and delimiter handling
    - `cargo fuzz run lsp_fuzz` - Test LSP provider robustness and workspace operations
    - `cargo test -p perl-corpus --test fuzz_corpus` - Run corpus-based property testing
    - Generate results following enterprise security logging standards

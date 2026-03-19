@@ -56,7 +56,7 @@ Generate a comprehensive matrix table showing:
 ```
 Feature Combination Matrix Results:
 ✅ parsers-default: PASS
-✅ parsers-extended: PASS  
+✅ parsers-extended: PASS
 ✅ cache-backends-all: PASS
 ✅ surrealdb: PASS
 ⚠️  surrealdb-rocksdb: SKIP (requires libclang)

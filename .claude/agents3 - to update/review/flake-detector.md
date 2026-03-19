@@ -67,7 +67,7 @@ fn flaky_test_name() {
 ## Flaky Test Detected: {test_name}
 
 **Reproduction Rate**: {X}% failure rate over {N} runs
-**Failure Patterns**: 
+**Failure Patterns**:
 - {pattern_1}
 - {pattern_2}
 
@@ -76,12 +76,12 @@ fn flaky_test_name() {
 {error_output}
 ```
 
-**Environment**: 
+**Environment**:
 - CI: {ci_failure_rate}%
 - Local: {local_failure_rate}%
 
 **Quarantine Action**: Added `#[ignore]` annotation
-**Next Steps**: 
+**Next Steps**:
 1. Investigate root cause
 2. Implement deterministic fix
 3. Remove quarantine annotation

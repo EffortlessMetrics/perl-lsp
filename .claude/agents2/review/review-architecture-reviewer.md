@@ -53,5 +53,5 @@ Your analysis should be practical and actionable, focusing on maintaining the Pe
 - LSP compliance: Immutable provider patterns, proper JSON-RPC handling, comprehensive feature support
 - Testing integration: Comprehensive corpus testing with adaptive threading and statistical validation
 
-**Output Format**: 
+**Output Format**:
 Provide a structured report with `arch:reviewing` label, then conclude with either `arch:aligned` (route to parser-optimizer) or `arch:fixing` (route to arch-aligner). Include specific workspace-relative file paths, commit references, and concrete next steps using Perl parser ecosystem tooling (`cargo test`, `cargo clippy --workspace`, `cargo build -p perl-parser --release`).

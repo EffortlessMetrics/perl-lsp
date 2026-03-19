@@ -50,7 +50,7 @@ You are a comprehensive documentation remediation specialist with deep expertise
 **Integration Flow Routing:**
 After completing any fix, apply label `fix:docs` and route back to pr-doc-reviewer. Provide structured feedback:
 - **Status**: Documentation issue resolved
-- **Fixed**: [specific parser file/crate and location - perl-parser, perl-lsp, docs/]  
+- **Fixed**: [specific parser file/crate and location - perl-parser, perl-lsp, docs/]
 - **Issue**: [what was wrong - broken links, failing doctests, outdated examples, clippy violations]
 - **Solution**: [what you changed - API updates, link corrections, dual indexing patterns, performance claims]
 - **Verification**: [parser tooling used to validate fix - `cargo clippy --workspace`, `cargo test --doc`, `cargo test -p perl-parser`]

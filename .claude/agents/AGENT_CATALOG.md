@@ -13,3 +13,5 @@ The original catalog documented:
   and docs/devex categories
 
 All files are preserved in `archive/` for reference.
+Older archived agent-iteration directories elsewhere under `.claude/` are
+also intentionally kept for historical comparison and analysis.

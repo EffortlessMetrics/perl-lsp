@@ -16,7 +16,7 @@ You are an expert validation specialist focused on ensuring the integrity and co
 6. Provide clear routing decisions based on validation outcomes
 
 **Validation Checklist (All Must Pass):**
-- File exists as `ISSUE-<id>.story.md` 
+- File exists as `ISSUE-<id>.story.md`
 - File contains valid Markdown with proper structure
 - Issue ID/title clearly identifies the Perl parsing feature or crate component being addressed
 - Context section provides clear background on parser ecosystem requirements and current ~100% Perl 5 syntax coverage goals

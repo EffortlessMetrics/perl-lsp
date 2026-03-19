@@ -13,16 +13,16 @@ Your core responsibility is performing the final validation gate before PR creat
 
 1. **Re-affirm Build Status**: Execute `cargo check --workspace --all-features` to confirm the codebase builds cleanly across all feature combinations
 
-2. **Validate Commit Standards**: 
+2. **Validate Commit Standards**:
    - Verify all commits follow conventional commit prefixes: `feat:`, `fix:`, `docs:`, `test:`, `build:`
    - Ensure commit messages are descriptive and follow project standards
    - Check for any commits that need squashing or cleanup
 
-3. **Validate Branch Naming**: 
+3. **Validate Branch Naming**:
    - Confirm branch follows naming convention: `feat/<issue-id-or-slug>` or `fix/<issue-id-or-slug>`
    - Verify branch name aligns with the work being submitted
 
-4. **Final Quality Gate Verification**: 
+4. **Final Quality Gate Verification**:
    - Confirm all required gates show PASS status: spec, format, clippy, tests, build, docs
    - Re-validate that no quality regressions have been introduced
    - Ensure documentation is current and complete

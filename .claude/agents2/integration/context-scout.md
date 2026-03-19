@@ -63,7 +63,7 @@ Always conclude your analysis by routing to pr-cleanup with Perl parser-specific
 **Cargo Test Command Patterns:**
 When analyzing test failures, reference appropriate cargo commands:
 - `cargo test -p perl-parser` for parser library tests
-- `cargo test -p perl-lsp` for LSP server integration tests  
+- `cargo test -p perl-lsp` for LSP server integration tests
 - `RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2` for threading-specific issues
 - `cargo test --test lsp_comprehensive_e2e_test -- --nocapture` for full E2E diagnostics
 - `cargo test --test builtin_empty_blocks_test` for builtin function parsing analysis

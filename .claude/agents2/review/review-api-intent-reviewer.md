@@ -50,5 +50,5 @@ Your primary responsibilities:
 - Verify compatibility with dual indexing patterns (qualified/bare function names), Rope implementation, and adaptive threading configuration
 - Validate LSP feature impacts on ~89% functional completeness and enhanced cross-file navigation capabilities
 
-**Output Format**: 
+**Output Format**:
 Provide classification (`parser-api:breaking|additive|none`), documentation assessment against parser ecosystem standards, and clear routing decision with specific recommendations for any gaps found. Reference specific file paths in `/crates/perl-parser/src/`, `/docs/`, commit SHAs, and validation commands (`cargo test -p perl-parser`, `cargo clippy --workspace`, `RUST_TEST_THREADS=2 cargo test -p perl-lsp`).

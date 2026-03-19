@@ -65,7 +65,7 @@ After a successful rebase and push, route back to rebase-checker to verify the n
 
 **Routing Decision**: → rebase-checker
 **Reason**: Rebase completed successfully with Perl parser workspace validation. Routing back for final verification.
-**Evidence**: 
+**Evidence**:
 - New PR Head: <actual-sha>
 - Workspace build: PASS/FAIL (all 5 published crates)
 - Clippy validation: PASS/FAIL (zero warnings maintained)
