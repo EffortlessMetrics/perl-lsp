@@ -9,7 +9,7 @@ use crate::{
         ErrorRecovery, ParseError, ParserErrorRecovery, StatementRecovery, SyncPoint,
     },
     parser_context::ParserContext,
-    position::Range,
+    position::{Position, Range},
 };
 use perl_lexer::TokenType;
 
@@ -214,12 +214,85 @@ impl StatementRecovery for RecoveryParser {
 
 // Core parsing methods (simplified for demonstration)
 impl RecoveryParser {
+    /// Returns `true` when `field` is followed by a sigil-prefixed variable.
+    fn is_field_followed_by_sigil(&self) -> bool {
+        self.context.peek_token(1).is_some_and(|token| {
+            matches!(
+                &token.token.token_type,
+                TokenType::Identifier(name)
+                    if matches!(name.chars().next(), Some('$' | '@' | '%' | '*' | '&'))
+            )
+        })
+    }
+
+    /// Consume a parenthesized argument list so recovery stays on one statement.
+    fn skip_parenthesized_suffix(&mut self) -> Result<Position, ParseError> {
+        let mut depth = 0usize;
+        let mut last_end = self.context.current_position();
+
+        loop {
+            let Some(token) = self.context.current_token() else {
+                let error = ParseError::new(
+                    "Expected ')' to close argument list".to_string(),
+                    self.context.current_position_range(),
+                )
+                .with_expected(vec![")".to_string()]);
+                self.context.add_error(error);
+                return Ok(last_end);
+            };
+
+            let token_type = token.token.token_type.clone();
+            let token_end = token.range().end;
+
+            match token_type {
+                TokenType::LeftParen => {
+                    depth += 1;
+                    last_end = token_end;
+                    self.context.advance();
+                }
+                TokenType::RightParen => {
+                    depth = depth.saturating_sub(1);
+                    last_end = token_end;
+                    self.context.advance();
+                    if depth == 0 {
+                        return Ok(last_end);
+                    }
+                }
+                _ => {
+                    last_end = token_end;
+                    self.context.advance();
+                }
+            }
+        }
+    }
+
+    /// Parse a bareword-like expression, optionally consuming a call suffix.
+    fn parse_bareword_expression(&mut self, name: String) -> Result<Node, ParseError> {
+        let start_pos = self.context.current_position();
+        let mut end_pos = self.context.current_position_range().end;
+
+        self.context.advance();
+
+        if self.context.check(&TokenType::LeftParen) {
+            end_pos = self.skip_parenthesized_suffix()?;
+        }
+
+        Ok(Node::new(
+            self.context.id_generator.next_id(),
+            NodeKind::Identifier { name },
+            Range::new(start_pos, end_pos),
+        ))
+    }
+
     /// Try to parse a statement
     fn try_parse_statement(&mut self) -> Result<Node, ParseError> {
         match self.context.current_token() {
             Some(token) => match &token.token.token_type {
                 TokenType::Keyword(kw) => match kw.as_ref() {
-                    "my" | "our" | "local" | "state" | "field" => self.parse_variable_declaration(),
+                    "my" | "our" | "local" | "state" => self.parse_variable_declaration(),
+                    "field" if self.is_field_followed_by_sigil() => {
+                        self.parse_variable_declaration()
+                    }
                     "if" => self.parse_if_statement(),
                     "while" => self.parse_while_statement(),
                     "sub" => self.parse_subroutine(),
@@ -341,7 +414,16 @@ impl RecoveryParser {
                     );
                     Ok(node)
                 }
-                TokenType::Identifier(_) => self.parse_variable(),
+                TokenType::Identifier(name) => {
+                    if matches!(name.chars().next(), Some('$' | '@' | '%' | '*' | '&')) {
+                        self.parse_variable()
+                    } else {
+                        self.parse_bareword_expression(name.to_string())
+                    }
+                }
+                TokenType::Keyword(kw) if kw.as_ref() == "field" => {
+                    self.parse_bareword_expression(kw.to_string())
+                }
                 _ => Err(ParseError::new("Expected expression".to_string(), token.range())),
             },
             None => Err(ParseError::new(
