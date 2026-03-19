@@ -1,6 +1,6 @@
 # Strategic Documentation Index
 
-> **Last Updated**: 2026-03-13
+> **Last Updated**: 2026-03-18
 > **Purpose**: Navigation hub for all strategic planning documents
 
 ---
@@ -23,7 +23,28 @@ This index provides a centralized navigation point for all strategic documentati
 
 ### Architecture Decision Records
 
-Located in [`docs/adr/`](adr/), these documents capture significant architectural decisions.
+Located in [`docs/adr/`](adr/), these documents capture significant architectural decisions. The catalog below now highlights every ADR series currently present in the repository so recent decisions are discoverable from this strategic index as well as from the dedicated ADR README.
+
+#### Legacy groundwork
+
+| ADR | Title | Description |
+|-----|-------|-------------|
+| [0001](adr/0001-substitution-operator-parsing-architecture.md) | Substitution Operator Parsing | Comprehensive `s///` parsing across delimiter and modifier forms |
+| [0002](adr/0002-api-documentation-infrastructure.md) | API Documentation Strategy | Early documentation enforcement and quality gate design |
+
+#### Historical `ADR_00X` series
+
+| ADR | Title | Description |
+|-----|-------|-------------|
+| [ADR-001](adr/ADR_001_AGENT_ARCHITECTURE.md) | Agent Architecture | Historical agent specialization model retained for context |
+| [ADR-002](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) | API Documentation (SPEC-149) | Documentation acceptance criteria and enforcement workflow |
+| [ADR-003](adr/ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md) | Missing Docs Infrastructure | Validation framework for missing-documentation coverage |
+| [ADR-004](adr/ADR_004_EXECUTE_COMMAND_CODE_ACTIONS.md) | Execute Command & Code Actions | `workspace/executeCommand` and perlcritic integration design |
+| [ADR-005](adr/ADR_005_HEREDOC_MANUAL_PARSING.md) | Manual Heredoc Parsing | Character-by-character heredoc parsing state machine |
+| [ADR-006](adr/ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) | LSP Cancellation Infrastructure | Cancellation checkpoints for responsive editor interactions |
+| [ADR-007](adr/ADR_007_SUBSTITUTION_OPERATOR_PARSING.md) | Substitution Operator Parsing | Alternate-series record for the substitution parser decision |
+
+#### Numbered architecture series
 
 | ADR | Title | Description |
 |-----|-------|-------------|
@@ -32,8 +53,30 @@ Located in [`docs/adr/`](adr/), these documents capture significant architectura
 | [0010](adr/0010-incremental-parsing-architecture.md) | Incremental Parsing | <1ms update target |
 | [0011](adr/0011-dap-bridge-mode-architecture.md) | DAP Bridge Mode | Debug Adapter Protocol bridge |
 | [0012](adr/0012-error-handling-strategy.md) | Error Handling Strategy | No-panic reliability |
+| [0013](adr/0013-utf16-position-tracking.md) | UTF-16 Position Tracking | Symmetric UTF-8/UTF-16 conversion with boundary safety |
+| [0014](adr/0014-mode-aware-lexer.md) | Mode-Aware Lexer | Slash disambiguation via explicit lexer modes |
+| [0015](adr/0015-supply-chain-security.md) | Supply Chain Security | SBOM/provenance strategy for release artifacts |
+| [0016](adr/0016-feature-governance.md) | Feature Governance | LSP capability governance and rollout controls |
+| [0017](adr/0017-workspace-exclusion-strategy.md) | Workspace Exclusion Strategy | Keep problematic crates out of the default workspace graph |
+| [0018](adr/0018-adaptive-threading-tests.md) | Adaptive Threading for Tests | Thread-aware timeout scaling for reliable CI |
+| [0019](adr/0019-security-first-dap.md) | Security-First DAP | Defensive debugger design and path protections |
+| [0020](adr/0020-rope-document-management.md) | Rope Document Management | Rope-backed text storage for efficient position math |
+| [0021](adr/0021-lsp-capability-contract.md) | LSP Capability Contract | Contract-driven capability advertisement policy |
+| [0022](adr/0022-scope-analyzer-hash-context.md) | Scope Analyzer Hash Context | Accurate Perl hash-key context detection |
+| [0023](adr/0023-include-macro-architecture.md) | `include!` Macro Architecture | Parser composition through Rust source inclusion |
+| [0024](adr/0024-fifo-heredoc-queue.md) | FIFO Heredoc Queue | Ordered heredoc content collection during parsing |
+| [0025](adr/0025-dual-document-representation.md) | Dual Document Representation | Rope plus string storage for mixed access patterns |
+| [0026](adr/0026-lifecycle-index-routing.md) | Lifecycle Index Routing | Building/Ready/Degraded routing for indexing results |
+| [0027](adr/0027-dap-bridge-native.md) | DAP Bridge vs Native | Phased debugger delivery strategy |
+| [0028](adr/0028-safe-eval-timeout.md) | Safe Eval Timeout | Time-bounded debugger eval to prevent hangs and DoS |
+| [0029](adr/0029-mutation-sentinel-values.md) | Mutation Sentinel Values | Sentinel-value strategy for mutation testing |
+| [0030](adr/0030-receipt-gate-system.md) | Receipt Gate System | Machine-readable CI gate receipts |
+| [0031](adr/0031-async-runtime-concurrent-dispatch.md) | Async Runtime with Concurrent Dispatch | Concurrent LSP scheduling with exclusive and shared lanes |
+| [0032](adr/0032-skill-scoping-and-hook-enforcement.md) | Skill Scoping and Hook Enforcement | Frontmatter-gated skills plus enforced worker hooks |
+| [0033](adr/0033-worktree-first-disposable-workers.md) | Worktree-First Disposable Workers | Fresh workers and worktree isolation for PR-sized changes |
+| [0034](adr/0034-custom-lsp-runtime.md) | Custom LSP Runtime | Bespoke protocol/runtime stack instead of framework adoption |
 
-See [docs/adr/README.md](adr/README.md) for the complete ADR index.
+See [docs/adr/README.md](adr/README.md) for per-ADR status, dates, and the canonical index.
 
 ---
 
