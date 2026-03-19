@@ -1,11 +1,18 @@
 # perl-lsp Current Status
 
 > **Truth contract**: All claims require evidence from:
+> - `Cargo.toml` (`workspace.package.version`) for the current release line
 > - `nix develop -c just ci-gate` output
 > - `bash scripts/ignored-test-count.sh` output
-> - Capability snapshots or targeted tests
+> - `features.toml`, capability snapshots, or targeted tests
 
 ---
+
+## What Belongs Here
+
+- This file is the evidence document.
+- [ROADMAP.md](ROADMAP.md) is the planning document.
+- Generated sections between `<!-- BEGIN: ... -->` and `<!-- END: ... -->` are machine-updated by `just status-update`. Do not hand-edit those blocks.
 
 ## Verification Protocol
 
@@ -14,7 +21,7 @@
 just ci-gate  # ~2-5 min
 ```
 
-**Tier B: Release Confidence** (large changes/release candidates)
+**Tier B: Release Confidence** (large changes or release candidates)
 ```bash
 just ci-full  # ~10-20 min
 ```
@@ -36,15 +43,13 @@ Key terms:
 - `implemented` (coverage): Features with `maturity in (ga, production)`
 - `trackable` (coverage): Features where `advertised = true`, `maturity != planned`, and `counts_in_coverage != false`
 - `implemented` (protocol): Features with `maturity in (ga, production, preview)`
-- `trackable` (protocol): Features where `maturity != planned` (excludes future work)
-- `counts_in_coverage = false`: Protocol plumbing (lifecycle, sync) that inflates coverage artificially
+- `trackable` (protocol): Features where `maturity != planned`
+- `counts_in_coverage = false`: Protocol plumbing that would otherwise inflate coverage artificially
 
 **Other Metrics**:
 
-- **Corpus counts**: `tree-sitter-perl/test/corpus` sections + `test_corpus/*.pl` files (fixture counts)
-- **Catalog source**: Root `features.toml` is canonical
-
-**Generated Sections**: Blocks between `<!-- BEGIN: X -->` and `<!-- END: X -->` are machine-updated by `just status-update`. Do not hand-edit.
+- **Corpus counts**: `tree-sitter-perl/test/corpus` sections + `test_corpus/*.pl` files
+- **Catalog source**: root `features.toml` is canonical
 
 ---
 
@@ -52,33 +57,35 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
+| **Current release line** | `v0.11.0` public alpha | Truthful docs and receipts | Active |
+| **Active milestone** | `v0.12.0` public-alpha hardening sprint | Exit hardening sprint cleanly | In progress |
+| **Merge gate** | `nix develop -c just ci-gate` | Green before merge | Required |
 | **Tier A Tests** | 2241 lib tests (discovered), 0 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 100% | PASS |
 <!-- END: STATUS_METRICS_TABLE -->
-| **Parser Coverage** | ~100% | 100% | Complete |
-| **Semantic Analyzer** | Phase 1, 2, 3 Complete (100%) | Complete | All NodeKind handlers |
-| **Mutation Score** | 87% | 90%+ | Ratchet to 90% |
+| **Parser hardening** | CPAN baseline, repo corpus, and hang-risk receipts tracked below | 90%+ CPAN clean next | Active |
+| **DAP stance** | Native + Bridge preview | Harden preview flows | Active |
 | **Documentation** | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |
 
 ---
 
 ## What's True Right Now
 
-- **Parser**: Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
-- **LSP Server**: Capability catalog is `features.toml`; Tier A gate is `just ci-gate`; TCP socket mode available
-- **Semantic Analyzer**: Phase 1, 2, 3 complete with all NodeKind handlers (100% AST node coverage), `textDocument/definition` integrated, uninitialized variable detection
-- **Refactoring Engine**: `perform_inline` and `perform_move_code` implemented
-- **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
-- **Quality**: 87% mutation score, comprehensive UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
-- **Safety Ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
-- **Security**: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)
-- **Parser Audit Receipts (2026-03-17)**: `just parser-audit` reports `91/91` repo-corpus files parse cleanly, `63/68` NodeKinds covered (`92.6%`), `12/12` GA features covered, and one remaining `P2` interpolation-heavy hang-risk candidate in `crates/perl-corpus/src/gen/builtins.rs`
-- **CPAN Baseline Receipts (2026-03-17)**: `just cpan-corpus-check` holds the committed baseline at `3139/4355` clean (`72.1%`) for the full installed corpus and `1579/1579` clean for the strict known-clean manifest
-- **Coverage Baseline Receipts (2026-03-17)**: a path-aware `cargo llvm-cov` workspace summary established a production-code baseline of `44.7%` lines (`44,200/98,811`), `46.9%` functions (`3,921/8,353`), and `42.6%` regions (`68,424/160,806`) with tests, benches, examples, `archive/`, and embedded tree-sitter crates excluded
-- **DAP Server**: Native adapter preview is implemented (breakpoints with AST validation via `perl-dap-breakpoint`, step/pause/continue handlers, safe-eval guards, stdio+socket transport, PID/TCP attach modes); BridgeAdapter remains available for Perl::LanguageServer interoperability
-- **Index State Machine Receipts (2026-02-16)**: `just ci-gate` + targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps (`~368.7us` initial small index, `~721.1us` initial medium index, `~212.6us` incremental update)
+- **Release posture**: the current release line is `v0.11.0` public alpha; the active milestone is `v0.12.0` hardening, not a shipped release
+- **Status discipline**: this file is for evidence, [ROADMAP.md](ROADMAP.md) is for planning, and `just status-update` plus `just status-check` are the anti-drift workflow
+- **LSP server**: `features.toml` is the canonical capability catalog; computed coverage is generated from it
+- **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `bash scripts/ignored-test-count.sh` is the tracked-test-debt source
+- **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates
+- **Refactoring engine**: inline and move-code flows exist; broader refactoring hardening is still roadmap work
+- **Safety ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
+- **Security**: hardening exists for path traversal, command injection, DAP evaluate, and perldoc/perlcritic argument injection
+- **Parser audit receipts (2026-03-17)**: `just parser-audit` reports `91/91` repo-corpus files parse cleanly, `63/68` NodeKinds covered (`92.6%`), `12/12` GA features covered, and one remaining `P2` interpolation-heavy hang-risk candidate in `crates/perl-corpus/src/gen/builtins.rs`
+- **CPAN baseline receipts (2026-03-17)**: `just cpan-corpus-check` holds the committed baseline at `3139/4355` clean (`72.1%`) for the full installed corpus and `1579/1579` clean for the strict known-clean manifest
+- **Coverage baseline receipts (2026-03-17)**: a path-aware `cargo llvm-cov` workspace summary established a production-code baseline of `44.7%` lines (`44,200/98,811`), `46.9%` functions (`3,921/8,353`), and `42.6%` regions (`68,424/160,806`) with tests, benches, examples, `archive/`, and embedded tree-sitter crates excluded
+- **DAP server**: the native adapter preview is implemented and the BridgeAdapter path remains available for Perl::LanguageServer interoperability
+- **Index state machine receipts (2026-02-16)**: `just ci-gate` plus targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps
 
 ### Computed Metrics (auto-updated by `just status-update`)
 
@@ -98,22 +105,23 @@ Key terms:
 
 ## What's Next
 
-**Now (v0.12.0 Public Alpha Epic Sprint)**
+**Now (active milestone: v0.12.0 hardening sprint on top of the v0.11.0 release line)**
 - Raise the CPAN top-1000 full-corpus baseline from `72.1%` (`3139/4355`) to `90%+` clean parses while keeping the strict known-clean manifest at `100%`
 - Close repo-corpus coverage gaps (`63/68` NodeKinds currently covered) and retire the remaining parser audit `P2` hang-risk candidate
 - Land Moo/Moose/Class::Accessor, `use parent`/`use base`, and export-list disambiguation work needed for public-alpha expectations
 - Raise workspace production-code coverage from the new baseline of `44.7%` lines / `46.9%` functions / `42.6%` regions
 - Burn down the residual coverage-gate blockers in `perl-parser` control-flow tests and `tree-sitter-perl-rs` parser/heredoc/glob suites
+- Keep README, roadmap, and agent guidance aligned with the actual release line and evidence sources
 
 **Next (v0.12.x hardening)**
 - Ratchet system-corpus and CPAN baselines as parser coverage improves
-- Fold internal torture/edge-case suites into routine verification receipts
+- Fold internal torture and edge-case suites into routine verification receipts
 - Publish benchmark and release-readiness receipts for the alpha burndown
 
 **Later (post v0.12.x)**
 - DAP preview hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
-- Package manager distribution (Homebrew/apt/etc.)
+- Broader distribution packaging
 
 See [ROADMAP.md](ROADMAP.md) for milestone details.
 
@@ -122,35 +130,32 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 ## Known Constraints
 
 - **Tracked test debt**: see `scripts/ignored-test-count.sh`; feature-gated ignores are by design
-- **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
-- **Docs scope**: perl-parser missing_docs is ratcheted (see `ci/check_missing_docs.sh`); workspace-wide enforcement is a separate decision
-- **Coverage scope**: the workspace baseline intentionally excludes tests, benches, examples, `archive/`, and embedded tree-sitter crates so `just coverage-summary` measures production code instead of harnesses
-- **Coverage gate**: `just coverage-summary` still depends on residual workspace test failures found during the March 17 sweep: `perl-parser` (`nodekind_combination_control_flow`), `tree-sitter-perl-rs` (`parser_tests`, `pure_rust_parser_tests`, `special_context_heredoc_tests`, `test_missing_edge_cases`, `test_real_world_heredocs`), plus a live long-run/hang-risk in `tree-sitter-perl-rs` `test_stacker_fix` (>17 minutes in a plain workspace sweep)
-- **Index State Machine**: Verification complete (2026-02-16 receipts captured with `just ci-gate` + targeted tests/benchmarks)
-
----
+- **Docs scope**: `perl-parser` `missing_docs` is ratcheted; workspace-wide enforcement is a separate decision
+- **Coverage scope**: the workspace baseline intentionally excludes tests, benches, examples, `archive/`, and embedded tree-sitter crates
+- **Coverage gate**: `just coverage-summary` still depends on residual workspace test failures found during the March 17 sweep
+- **Index state machine**: verification receipts are captured separately and summarized above
 
 ## Component Summary
 
 | Component | Status | Notes |
 | --- | --- | --- |
-| perl-parser | Public Alpha | ~100% Perl 5, 87% mutation score |
-| perl-lsp | Public Alpha | Coverage tracked via `features.toml` |
-| perl-dap | Preview (Native + Bridge) | Native adapter implemented/tested (phase2+phase3 suites); BridgeAdapter retained for compatibility |
-| perl-lexer | Public Alpha | Context-aware, sub-microsecond |
-| perl-corpus | Public Alpha | Corpus counts tracked in computed metrics |
-
----
+| `perl-parser` | Public alpha | Native parser path |
+| `perl-lsp` | Public alpha | Coverage tracked via `features.toml` |
+| `perl-dap` | Preview (Native + Bridge) | Native adapter is present; compatibility path retained |
+| `perl-lexer` | Public alpha | Context-aware tokenizer |
+| `perl-corpus` | Public alpha | Corpus counts tracked in computed metrics |
 
 ## How to Update This File
 
 1. Run `just status-update` to regenerate computed metrics
-2. Run `just ci-gate` to verify all gates pass
-3. Edit "What's True Right Now" and "What's Next" sections as needed
+2. Run `just status-check` to verify the generated sections are current
+3. Run `just ci-gate` to verify the repo-level receipt still passes
+4. Keep the current release line and next milestone aligned with `Cargo.toml` and [ROADMAP.md](ROADMAP.md)
+5. Edit narrative sections only after the evidence is current
 
-**Historical archives**: See `docs/archive/status_snapshots/` for sprint logs and completion history.
+**Historical archives**: see `docs/archive/status_snapshots/` for sprint logs and completion history.
 
 ---
 
-*Last Updated: 2026-03-17 (narrative sections only; run `just status-update` to refresh metrics)*
-*Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*
+*Last Updated: 2026-03-19 (narrative sections only; run `just status-update` to refresh metrics)*
+*Canonical docs: [ROADMAP.md](ROADMAP.md), [../../features.toml](../../features.toml)*
