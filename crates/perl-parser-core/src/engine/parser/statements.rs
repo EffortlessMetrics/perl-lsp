@@ -499,24 +499,7 @@ impl<'a> Parser<'a> {
         expr = self.parse_bitwise_or_with(expr)?;
         expr = self.parse_and_with(expr)?;
         expr = self.parse_or_with(expr)?;
-        // Ternary (?:) sits between || and = in Perl precedence.
-        // Without this, `wantarray ? @list : $list[0]` fails.
-        if self.peek_kind() == Some(TokenKind::Question) {
-            self.tokens.next()?; // consume ?
-            let then_expr = self.parse_assignment()?;
-            self.expect(TokenKind::Colon)?;
-            let else_expr = self.parse_ternary()?;
-            let start = expr.location.start;
-            let end = else_expr.location.end;
-            expr = Node::new(
-                NodeKind::Ternary {
-                    condition: Box::new(expr),
-                    then_expr: Box::new(then_expr),
-                    else_expr: Box::new(else_expr),
-                },
-                SourceLocation { start, end },
-            );
-        }
+        expr = self.parse_ternary_with(expr)?;
         self.parse_word_or_expr(expr)
     }
 
