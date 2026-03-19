@@ -678,6 +678,7 @@ impl<'a> Parser<'a> {
             | TokenKind::Our
             | TokenKind::Local
             | TokenKind::State
+            | TokenKind::Field
             | TokenKind::Package
             | TokenKind::Use
             | TokenKind::No

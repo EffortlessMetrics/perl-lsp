@@ -36,6 +36,49 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Returns `true` when `field` is followed by tokens that indicate a
+    /// field *declaration* (Perl 5.38+ `field $var` syntax) rather than a
+    /// function call or bareword identifier.
+    ///
+    /// A field declaration requires a variable sigil immediately after the
+    /// keyword. Everything else
+    /// (`field("str")`, `field()`, `field;`, etc.) is a regular
+    /// expression / function call.
+    fn is_field_declaration_context(&mut self) -> bool {
+        let next = match self.tokens.peek_second() {
+            Ok(t) => t.kind,
+            Err(_) => return false,
+        };
+
+        // Direct sigil token after `field` — definitely a declaration
+        if matches!(
+            next,
+            TokenKind::ScalarSigil
+                | TokenKind::ArraySigil
+                | TokenKind::HashSigil
+                | TokenKind::SubSigil
+                | TokenKind::GlobSigil
+                | TokenKind::Percent
+                | TokenKind::BitwiseAnd
+                | TokenKind::Star
+        ) {
+            return true;
+        }
+
+        // Identifier that starts with a sigil char (e.g. `$name`, `@items`)
+        if next == TokenKind::Identifier {
+            if let Ok(t) = self.tokens.peek_second() {
+                if let Some(ch) = t.text.chars().next() {
+                    if matches!(ch, '$' | '@' | '%' | '*' | '&') {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     /// Check recursion depth with optimized hot path
     #[inline(always)]
     fn check_recursion(&mut self) -> ParseResult<()> {
