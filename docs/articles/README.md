@@ -31,6 +31,7 @@ These documents intentionally preserve dated observations and period-specific me
 ### Control Plane and Process Archaeology
 
 - [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
+- [research/CONTROL_PLANE_REPAIR_CHAIN_ARCHAEOLOGY.md](research/CONTROL_PLANE_REPAIR_CHAIN_ARCHAEOLOGY.md) — how swarm self-audit issues turn into direct repair PRs, maintainer-superseded follow-ups, or explicitly banked control-plane debt
 - [research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md](research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md) — why `agents4` is the clearest perl-lsp-native preserved form of the canonical Q3 three-phase swarm
 - [research/CONTROL_PLANE_SELF_REPAIR_ARCHAEOLOGY.md](research/CONTROL_PLANE_SELF_REPAIR_ARCHAEOLOGY.md) — how March 16-19, 2026 turns the swarm operating system itself into a maintained target through audits, friction logs, swarm-infra issues, and follow-up control-plane PRs
 - [research/HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md](research/HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md) — how the March 2026 swarm split durable `swarm-state` from `.ops-perl-lsp` runtime without fully removing the older paths from live skills, hooks, commands, and donor agent packs

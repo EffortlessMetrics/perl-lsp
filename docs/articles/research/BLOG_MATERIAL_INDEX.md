@@ -10,6 +10,7 @@ Supplemental archaeology note:
 - `ALPHA_READINESS_ARCHAEOLOGY.md` — how March 2026 kept shipped release truth separate from `v0.12.0` hardening plans while defining explicit alpha blockers and non-blockers
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
+- `CONTROL_PLANE_REPAIR_CHAIN_ARCHAEOLOGY.md` — how concrete self-audit issues route into same-cycle repair PRs, maintainer supersession, or intentionally banked swarm-infra debt
 - `AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md` — why `agents4` is the clearest perl-lsp-native preserved form of the Q3 three-phase swarm, especially after the 2025-09-24 Perl LSP production-readiness refactor
 - `CONTROL_PLANE_SELF_REPAIR_ARCHAEOLOGY.md` — how March 16-19 turns the swarm operating system into first-class repo work through audit issues, friction logs, swarm-infra discoveries, and follow-up PRs that change skills, hooks, templates, and rosters
 - `HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md` — how March 15 to 17, 2026 turned `swarm-state`, skills, findings, and hooks into the new control plane while leaving a deliberate `.ops-perl-lsp` runtime residue across live commands, agents6, and compatibility surfaces

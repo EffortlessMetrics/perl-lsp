@@ -6,6 +6,12 @@ just an early prompt pack. The important change is that the repo starts
 encoding delivery as receipts, ledgers, and flow boundaries instead of as
 chatty one-off instructions.
 
+Maintainer context matters here: MergeCode itself was an internal context
+packer and AST-tooling environment, and the swarm was designed there before its
+surfaces were imported and specialized for `perl-lsp`. The committed repo does
+not preserve the whole off-repo MergeCode system, but it does preserve the
+doctrine layer that was transplanted from it.
+
 ---
 
 ## 1. `agents2` Was The MergeCode Doctrine Pack
@@ -22,6 +28,11 @@ work into named lanes:
 That structure matters. It is not a single generic assistant prompt. It is a
 workspaced doctrine for adapting agents to this repo's Rust parser, workspace,
 and release constraints.
+
+The strongest evidence-backed framing is therefore narrower than "MergeCode is
+fully present in the repo" and stronger than "these are just some old prompts."
+What the repo actually preserves is a transplanted doctrinal layer from the
+internal MergeCode environment where the swarm had already been designed.
 
 The root `agent-customizer.md` makes that explicit: generic agents are supposed
 to be specialized for the parser ecosystem, with repo-specific performance,
