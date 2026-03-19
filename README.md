@@ -1,24 +1,42 @@
 # perl-lsp
 
-`perl-lsp` is a native Rust language server for Perl 5. This repository also contains the parser, lexer, debug adapter, and supporting crates that power it.
+`perl-lsp` is a native Rust Perl 5 toolchain centered on editor support. This repository ships the Language Server Protocol server, a separate Debug Adapter Protocol server, embeddable parser and lexer crates, and the corpus, workspace, and status machinery used to harden them together.
 
 > Status: public alpha. APIs, behavior, and packaging are still evolving. See the [Stability Policy](docs/reference/STABILITY.md).
 
-## What This Repository Contains
+## Why This Repository Exists
 
-This workspace is split into many focused crates. The most important entry points are:
+Perl developers often end up stitching together separate parser, editor, and debugger stories. This project keeps those pieces in one native workspace:
 
-| Crate | Purpose |
-| --- | --- |
-| [`crates/perl-lsp`](crates/perl-lsp/) | Language Server Protocol binary for editor integration |
-| [`crates/perl-dap`](crates/perl-dap/) | Debug Adapter Protocol server for Perl debugging workflows |
-| [`crates/perl-parser`](crates/perl-parser/) | Native recursive-descent Perl parser library |
-| [`crates/perl-lexer`](crates/perl-lexer/) | Context-aware tokenizer used by the parser and editor tooling |
-| [`crates/perl-corpus`](crates/perl-corpus/) | Corpus and fixture support for parser and LSP hardening |
+- `perl-lsp` for editor integration over standard LSP
+- `perl-dap` for debugging workflows
+- `perl-parser` and `perl-lexer` for native Perl-aware tooling in Rust
+- Shared corpus, workspace, semantic, and status tooling so fixes land across the stack instead of in isolated forks
 
-If you want IDE features in an editor, install `perl-lsp`. If you want parsing and syntax tooling in your own Rust code, start with `perl-parser`.
+If you want editor features, install `perl-lsp`. If you want to build Perl-aware Rust tooling, start with `perl-parser`.
+
+## What You Get
+
+- Diagnostics, completion, hover, rename, code actions, formatting, and navigation for Perl files
+- Cross-file indexing and workspace-aware symbol lookup
+- A native parser and lexer stack that does not depend on a Perl runtime for parsing, indexing, or analysis
+- A DAP server for debugger integration through `perl-dap`
+- One repository containing the shipped binaries, parser libraries, VS Code extension, docs, CI gates, and test corpus
+
+Live capability and health tracking lives in:
+
+- [Current Status](docs/project/CURRENT_STATUS.md)
+- [Roadmap](docs/project/ROADMAP.md)
+- [`features.toml`](features.toml)
 
 ## Quick Start
+
+Choose the path that matches what you are trying to do:
+
+- VS Code: install the extension and let it find a `PATH` binary, use `perl-lsp.serverPath`, or auto-download at runtime with `perl-lsp.autoDownload`
+- Other editors: install `perl-lsp` and point your client at `perl-lsp --stdio`
+- Debugging: install or build `perl-dap` separately; it is not installed by the `perl-lsp` installer
+- Rust tooling: start with `perl-parser` if you want to embed parser or lexer behavior
 
 ### Install the LSP server
 
@@ -27,7 +45,7 @@ cargo install perl-lsp
 perl-lsp --health
 ```
 
-You can also build from source:
+Build from source:
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
@@ -36,7 +54,7 @@ cargo install --path crates/perl-lsp
 perl-lsp --health
 ```
 
-There is also a best-effort installer script for Linux and macOS:
+Best-effort installer script for Linux and macOS:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
@@ -48,68 +66,55 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 code --install-extension EffortlessMetrics.perl-lsp-rs
 ```
 
-### Run the server directly
+The extension can use `perl-lsp` from `PATH`, a configured `perl-lsp.serverPath`, or automatic runtime download when `perl-lsp.autoDownload` is enabled.
 
-```bash
-perl-lsp --stdio
-```
-
-Useful CLI checks:
+### Useful CLI checks
 
 ```bash
 perl-lsp --version
 perl-lsp --health
 perl-lsp --info
+perl-lsp --stdio
 perl-lsp --check script.pl
 ```
 
-For a full walkthrough, see [Getting Started](docs/tutorials/GETTING_STARTED.md).
+For a walkthrough from install to first editor connection, see [Getting Started](docs/tutorials/GETTING_STARTED.md).
 
 ## Editor Setup
 
-`perl-lsp` speaks standard JSON-RPC over stdio, so it works with editors that support LSP.
+`perl-lsp` speaks standard JSON-RPC over stdio, so it works with editors that support LSP. This repository includes setup guidance for VS Code, Neovim, Emacs, Helix, and other editor clients.
 
-The repository includes editor setup guidance for VS Code, Neovim, Emacs, Helix, and other LSP-capable editors. For complete configuration examples, see:
+Start here:
 
 - [Getting Started](docs/tutorials/GETTING_STARTED.md)
 - [Editor Setup](docs/how-to/EDITOR_SETUP.md)
+- [Extension Guide](docs/EXTENSION.md)
+- [VS Code Extension README](vscode-extension/README.md)
 
-## What You Get
+## Repository Overview
 
-The repository is broader than a single server binary, but the main user-facing capabilities are:
+This workspace is intentionally split into focused crates. The main entry points are:
 
-- Real-time diagnostics for Perl files
-- Completion for symbols, modules, variables, keywords, and builtins
-- Hover information and signature help for common Perl constructs
-- Navigation features such as go-to-definition, references, and symbols
-- Rename, code actions, and formatting support
-- Cross-file workspace indexing
-- Debug Adapter Protocol support through `perl-dap`
-- Native parser and lexer libraries for Perl-aware tooling
+| Path | Purpose |
+| --- | --- |
+| [`crates/perl-lsp`](crates/perl-lsp/) | LSP binary and server host |
+| [`crates/perl-dap`](crates/perl-dap/) | DAP server and debugger integration |
+| [`crates/perl-parser`](crates/perl-parser/) | Native recursive-descent Perl parser |
+| [`crates/perl-lexer`](crates/perl-lexer/) | Context-aware tokenizer |
+| [`crates/perl-parser-core`](crates/perl-parser-core/) | Shared parser infrastructure |
+| [`crates/perl-semantic-analyzer`](crates/perl-semantic-analyzer/) | Semantic analysis and resolution |
+| [`crates/perl-corpus`](crates/perl-corpus/) | Corpus and regression fixtures |
 
-For a deeper feature breakdown, see:
+## Contributor Devex
 
-- [LSP Features](docs/reference/LSP_FEATURES.md)
-- [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
-- [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md)
+Recommended contributor flow:
 
-## Parser and Tooling
+1. Check the environment with `just devex` or `just doctor`.
+2. Iterate with `just pr-fast`.
+3. Run `nix develop -c just ci-gate` before push.
+4. Install the pre-push hook with `bash scripts/install-githooks.sh` if you want the gate wired automatically.
 
-The parser stack in this repository is implemented natively in Rust. The current parser is a recursive-descent implementation backed by a context-aware lexer and exercised against curated corpus, fixture, and real-world test suites.
-
-If you are working on parser behavior directly, the most relevant crates are:
-
-- [`crates/perl-parser`](crates/perl-parser/)
-- [`crates/perl-parser-core`](crates/perl-parser-core/)
-- [`crates/perl-lexer`](crates/perl-lexer/)
-- [`crates/perl-semantic-analyzer`](crates/perl-semantic-analyzer/)
-- [`crates/perl-corpus`](crates/perl-corpus/)
-
-Project health and generated metrics live in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
-
-## Development
-
-Common commands:
+Common local commands:
 
 ```bash
 cargo build -p perl-lsp --release
@@ -129,18 +134,33 @@ Canonical local validation before push:
 nix develop -c just ci-gate
 ```
 
-Helpful additional commands:
+Useful fast-feedback commands:
 
 ```bash
+just devex
 just doctor
 just pr-fast
-just ci-lsp-def
+just status-check
+```
+
+For `perl-lsp` integration-heavy tests in constrained environments:
+
+```bash
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+```
+
+If your change affects generated status or capability docs, run:
+
+```bash
+just status-update
+just status-check
 ```
 
 See:
 
 - [Contributing Guide](CONTRIBUTING.md)
 - [Commands Reference](docs/reference/COMMANDS_REFERENCE.md)
+- [Extension Guide](docs/EXTENSION.md)
 - [Documentation Index](docs/README.md)
 
 ## Documentation
@@ -153,7 +173,8 @@ Good starting points:
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Set up and use the debug adapter |
 | [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | Understand the server architecture |
 | [Crate Architecture Guide](docs/reference/CRATE_ARCHITECTURE_GUIDE.md) | Navigate the workspace structure |
-| [Current Status](docs/project/CURRENT_STATUS.md) | Generated project metrics and health snapshots |
+| [Current Status](docs/project/CURRENT_STATUS.md) | Evidence-backed project metrics and receipts |
+| [Roadmap](docs/project/ROADMAP.md) | Active milestone and forward plan |
 | [Stability Policy](docs/reference/STABILITY.md) | Alpha status, versioning, and support expectations |
 
 ## License
