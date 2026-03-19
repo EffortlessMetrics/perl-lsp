@@ -50,29 +50,6 @@ impl LspServer {
         Ok(None) // Notification, no response
     }
 
-    /// Send $/logTrace notification to client
-    ///
-    /// Only sends if trace level is "messages" or "verbose".
-    /// The verbose field is only included when trace level is "verbose".
-    #[allow(dead_code)]
-    pub(crate) fn send_log_trace(&self, message: &str, verbose: Option<&str>) {
-        let current_level = self.trace_level.lock().clone();
-        if current_level == "off" {
-            return;
-        }
-        let mut params = json!({
-            "message": message
-        });
-        if current_level == "verbose" {
-            if let Some(v) = verbose {
-                params["verbose"] = json!(v);
-            }
-        }
-        if let Err(e) = self.notify("$/logTrace", params) {
-            eprintln!("Failed to send logTrace notification: {}", e);
-        }
-    }
-
     /// Handle initialized notification
     pub(super) fn handle_initialized_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
         self.initialized.store(true, Ordering::Release);

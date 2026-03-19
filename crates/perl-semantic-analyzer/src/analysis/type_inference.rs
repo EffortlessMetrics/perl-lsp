@@ -630,31 +630,10 @@ impl TypeInferenceEngine {
         }
     }
 
-    /// Parse a subroutine signature
-    #[allow(dead_code)]
-    fn parse_signature(
-        &mut self,
-        _sig: &Node,
-        _env: &mut TypeEnvironment,
-    ) -> Result<Vec<PerlType>, Vec<TypeConstraint>> {
-        // Simplified signature parsing
-        // In a full implementation, this would parse Perl 5.20+ signatures
-        Ok(vec![PerlType::Any])
-    }
-
     /// Extract variable name from a node
     fn extract_var_name(&self, node: &Node) -> String {
         match &node.kind {
             NodeKind::Variable { name, .. } => name.trim_start_matches(['$', '@', '%']).to_string(),
-            _ => String::new(),
-        }
-    }
-
-    /// Extract function name from a node
-    #[allow(dead_code)]
-    fn extract_func_name(&self, node: &Node) -> String {
-        match &node.kind {
-            NodeKind::Identifier { name } => name.clone(),
             _ => String::new(),
         }
     }

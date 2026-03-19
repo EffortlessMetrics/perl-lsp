@@ -31,7 +31,6 @@ mod dedup;
 /// Core diagnostics provider
 mod diagnostics;
 /// ERROR node classification and reporting
-mod error_nodes;
 /// Lint checks (common mistakes, deprecations, strict warnings)
 mod lints;
 /// Parse error to diagnostic conversion

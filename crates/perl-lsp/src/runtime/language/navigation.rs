@@ -687,30 +687,6 @@ impl LspServer {
         Ok(Some(json!([])))
     }
 
-    /// Find all implementations (simplified version)
-    ///
-    /// Note: This function and its helpers are currently unused but preserved
-    /// for future class hierarchy navigation features.
-    #[allow(dead_code)]
-    pub(crate) fn find_all_implementations(
-        &self,
-        ast: &Node,
-        documents: &HashMap<String, DocumentState>,
-    ) -> Vec<Location> {
-        let mut results = Vec::new();
-
-        // Find packages in current file and look for their implementations
-        let mut packages = Vec::new();
-        self.find_packages_in_ast(ast, &mut packages);
-
-        for package_name in packages {
-            let impls = self.find_subclasses(&package_name, documents);
-            results.extend(impls);
-        }
-
-        results
-    }
-
     /// Find all packages in an AST
     #[allow(dead_code)]
     fn find_packages_in_ast(&self, node: &Node, packages: &mut Vec<String>) {

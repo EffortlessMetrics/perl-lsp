@@ -1220,16 +1220,3 @@ fn is_known_function(name: &str) -> bool {
         _ => false,
     }
 }
-
-/// Check if an identifier is a known filehandle
-#[allow(dead_code)]
-fn is_filehandle(name: &str) -> bool {
-    match name {
-        "STDIN" | "STDOUT" | "STDERR" | "ARGV" | "ARGVOUT" | "DATA" | "STDHANDLE"
-        | "__PACKAGE__" | "__FILE__" | "__LINE__" | "__SUB__" | "__END__" | "__DATA__" => true,
-        _ => {
-            // Check if it's all uppercase (common convention for filehandles)
-            name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty()
-        }
-    }
-}

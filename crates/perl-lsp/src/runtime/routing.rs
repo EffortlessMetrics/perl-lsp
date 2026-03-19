@@ -199,19 +199,6 @@ fn degradation_reason_str(reason: &DegradationReason) -> &'static str {
     }
 }
 
-/// Helper trait for handlers to implement degraded behavior
-///
-/// Handlers can implement this trait to provide consistent degraded
-/// behavior across the codebase.
-#[allow(dead_code)]
-pub(crate) trait DegradedBehavior<T> {
-    /// The default empty result for this handler
-    fn empty_result() -> T;
-
-    /// Description of what's unavailable in degraded mode
-    fn unavailable_feature() -> &'static str;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

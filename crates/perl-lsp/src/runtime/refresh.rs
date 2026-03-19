@@ -247,27 +247,6 @@ impl RefreshController {
         self.refresh_diagnostics(server)?;
         Ok(())
     }
-
-    /// Force refresh without debounce check (testing/emergency use)
-    ///
-    /// Bypasses debounce timers and immediately sends all refresh requests
-    /// for capabilities the client supports. Use sparingly in production.
-    ///
-    /// # Errors
-    /// Returns first IO error encountered. Subsequent refresh attempts are skipped.
-    #[allow(dead_code)]
-    pub(crate) fn force_refresh_all(&self, server: &super::LspServer) -> io::Result<()> {
-        // Reset all timers to force immediate refresh
-        *self.code_lens_timer.lock() = RefreshTimer::new();
-        *self.semantic_tokens_timer.lock() = RefreshTimer::new();
-        *self.inlay_hint_timer.lock() = RefreshTimer::new();
-        *self.inline_value_timer.lock() = RefreshTimer::new();
-        *self.diagnostic_timer.lock() = RefreshTimer::new();
-        *self.folding_range_timer.lock() = RefreshTimer::new();
-
-        // Trigger all refreshes
-        self.refresh_all(server)
-    }
 }
 
 impl Default for RefreshController {

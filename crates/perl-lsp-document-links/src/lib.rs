@@ -154,15 +154,6 @@ fn is_pragma(pkg: &str) -> bool {
     )
 }
 
-#[allow(dead_code)]
-fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
-    let rel = module_name_to_path(pkg);
-    if let Some(base) = roots.first() {
-        let mut u = base.clone();
-        let mut p = u.path().to_string();
-        if !p.ends_with('/') {
-            p.push('/');
-        }
         if let Some(lib_dir) = ["lib/", "blib/lib/", ""].first() {
             let full_path = format!("{}{}{}", p, lib_dir, rel);
             u.set_path(&full_path);
@@ -172,14 +163,6 @@ fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
-#[allow(dead_code)]
-fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
-    if let Some(base) = roots.first() {
-        let mut u = base.clone();
-        let mut p = u.path().to_string();
-        if !p.ends_with('/') {
-            p.push('/');
-        }
         p.push_str(path);
         u.set_path(&p);
         return Some(u.to_string());
@@ -187,15 +170,6 @@ fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
-#[allow(dead_code)]
-fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) -> Option<Value> {
-    if let Some(idx) = line_text.find(pkg) {
-        let start = idx as u32;
-        let end = (idx + pkg.len()) as u32;
-        Some(json!({
-            "range": {
-                "start": {"line": line, "character": start},
-                "end":   {"line": line, "character": end}
             },
             "target": target,
             "tooltip": format!("Open {}", pkg)

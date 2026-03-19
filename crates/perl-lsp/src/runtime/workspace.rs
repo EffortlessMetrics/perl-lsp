@@ -29,24 +29,6 @@ use std::sync::Arc;
 use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
-// Note: WalkDir logic has been extracted to super::file_discovery.
-// These helper functions are retained for potential future use by
-// other workspace operations (e.g., file watcher filtering).
-#[cfg(feature = "workspace")]
-#[allow(dead_code)]
-fn is_perl_source_file(path: &Path) -> bool {
-    is_perl_source_path(path)
-}
-
-#[cfg(feature = "workspace")]
-#[allow(dead_code)]
-fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
-    if !entry.file_type().is_dir() {
-        return false;
-    }
-    is_skipped_dir_name(&entry.file_name().to_string_lossy())
-}
-
 #[cfg(feature = "workspace")]
 fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, ready: bool) {
     if let Err(e) = outbound.send_notification("perl-lsp/index-ready", json!({ "ready": ready })) {
