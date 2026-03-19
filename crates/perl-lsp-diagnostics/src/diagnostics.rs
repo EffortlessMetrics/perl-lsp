@@ -2,8 +2,8 @@
 //!
 //! This module provides the core diagnostic generation functionality.
 
-use perl_parser_core::error::ParseError;
 use perl_parser_core::Node;
+use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
 
