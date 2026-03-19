@@ -1,6 +1,6 @@
 # Strategic Documentation Index
 
-> **Last Updated**: 2026-03-18
+> **Last Updated**: 2026-03-19
 > **Purpose**: Navigation hub for all strategic planning documents
 
 ---
@@ -75,6 +75,9 @@ Located in [`docs/adr/`](adr/), these documents capture significant architectura
 | [0032](adr/0032-skill-scoping-and-hook-enforcement.md) | Skill Scoping and Hook Enforcement | Frontmatter-gated skills plus enforced worker hooks |
 | [0033](adr/0033-worktree-first-disposable-workers.md) | Worktree-First Disposable Workers | Fresh workers and worktree isolation for PR-sized changes |
 | [0034](adr/0034-custom-lsp-runtime.md) | Custom LSP Runtime | Bespoke protocol/runtime stack instead of framework adoption |
+| [0035](adr/0035-raw-pointer-parent-map.md) | Raw-Pointer Parent Map | Sidecar parent cache for efficient upward AST traversal |
+| [0036](adr/0036-generated-feature-catalog-contracts.md) | Generated Feature Catalog Contracts | Build-time compilation of `features.toml` into generated Rust contracts |
+| [0037](adr/0037-guaranteed-valid-uri-fallbacks.md) | Guaranteed-Valid Synthetic URI Fallbacks | Synthetic URI policy for malformed protocol-boundary values |
 
 See [docs/adr/README.md](adr/README.md) for per-ADR status, dates, and the canonical index.
 
@@ -193,4 +196,4 @@ Deep technical understanding and design patterns:
 
 ---
 
-*This index is maintained alongside the strategic documents it references. Last updated: 2026-03-13*
+*This index is maintained alongside the strategic documents it references. Last updated: 2026-03-19*
