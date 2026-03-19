@@ -1,250 +1,164 @@
-<p align="center">
-  <img src="vscode-extension/icon.png" alt="perl-lsp logo" width="120" />
-</p>
+# perl-lsp
 
-<h1 align="center">perl-lsp</h1>
+`perl-lsp` is a native Rust language server for Perl 5. This repository also contains the parser, lexer, debug adapter, and supporting crates that power it.
 
-<p align="center">
-  A fast, native <strong>Perl language server</strong> written in Rust — bringing modern IDE features to Perl 5.
-</p>
+> Status: public alpha. APIs, behavior, and packaging are still evolving. See the [Stability Policy](docs/reference/STABILITY.md).
 
-<p align="center">
-  <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://crates.io/crates/perl-lsp"><img src="https://img.shields.io/crates/v/perl-lsp.svg" alt="crates.io" /></a>
-  <a href="https://docs.rs/perl-lsp"><img src="https://docs.rs/perl-lsp/badge.svg" alt="docs.rs" /></a>
-  <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp"><img src="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg" alt="codecov" /></a>
-  <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License" /></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.92%2B-orange.svg" alt="Rust" /></a>
-  <a href="https://crates.io/crates/perl-lsp"><img src="https://img.shields.io/crates/d/perl-lsp.svg" alt="Downloads" /></a>
-</p>
+## What This Repository Contains
 
----
+This workspace is split into many focused crates. The most important entry points are:
 
-> **Note**: perl-lsp is in public alpha. Core features work well, but expect some rough edges. [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues).
+| Crate | Purpose |
+| --- | --- |
+| [`crates/perl-lsp`](crates/perl-lsp/) | Language Server Protocol binary for editor integration |
+| [`crates/perl-dap`](crates/perl-dap/) | Debug Adapter Protocol server for Perl debugging workflows |
+| [`crates/perl-parser`](crates/perl-parser/) | Native recursive-descent Perl parser library |
+| [`crates/perl-lexer`](crates/perl-lexer/) | Context-aware tokenizer used by the parser and editor tooling |
+| [`crates/perl-corpus`](crates/perl-corpus/) | Corpus and fixture support for parser and LSP hardening |
 
-## Table of Contents
-
-- [At a Glance](#at-a-glance)
-- [Quick Start](#quick-start)
-- [Features](#features)
-- [Why perl-lsp?](#why-perl-lsp)
-- [Parser Coverage](#parser-coverage)
-- [Install](#install)
-- [Architecture](#architecture)
-- [Published Crates](#published-crates)
-- [Development](#development)
-- [Security](#security)
-- [Documentation](#documentation)
-- [License](#license)
-
-## At a Glance
-
-- **Native Rust binary** -- no Perl runtime required, sub-second startup, single-file install.
-- **Full LSP coverage** -- 53/53 advertised capabilities: completion, diagnostics, hover, navigation, refactoring, and more.
-- **Built-in debugger** -- DAP bridge for breakpoints, stepping, stack inspection, and variable watches.
-- **Broad Perl 5 syntax** -- recursive-descent parser handles heredocs, regex, quoting forms, formats, and Perl 5.8-5.40 idioms.
-- **Cross-file intelligence** -- dual-indexed workspace symbols for fast go-to-definition and find-references across your project.
-- **Supply chain hardened** -- SBOM generation, SLSA Level 2 provenance, zero `unsafe`, zero `unwrap`/`panic!` in production code.
+If you want IDE features in an editor, install `perl-lsp`. If you want parsing and syntax tooling in your own Rust code, start with `perl-parser`.
 
 ## Quick Start
 
-**1. Install**
+### Install the LSP server
 
 ```bash
 cargo install perl-lsp
-perl-lsp --health  # should print: ok X.Y.Z
+perl-lsp --health
 ```
 
-**2. Hook it up**
-
-<details open>
-<summary><strong>VS Code</strong></summary>
-
-```bash
-code --install-extension effortlessmetrics.perl-lsp-rs
-```
-
-</details>
-
-<details>
-<summary><strong>Neovim</strong> (nvim-lspconfig)</summary>
-
-```lua
-require('lspconfig').perl_ls.setup {
-  cmd = { "perl-lsp", "--stdio" },
-}
-```
-
-</details>
-
-<details>
-<summary><strong>Emacs</strong> (eglot)</summary>
-
-```elisp
-(add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
-```
-
-</details>
-
-**3. Open a Perl file** -- completions, diagnostics, hover, and navigation work immediately.
-
-New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
-
-## Features
-
-### Capability Snapshot
-
-| Editing | Intelligence | Platform |
-|---------|--------------|----------|
-| **Completion** — symbols, keywords, modules, variables, snippets, and builtin signatures | **Navigation** — definition, references, document symbols, and workspace symbols | **Native Rust binary** — fast startup and no embedded Perl runtime |
-| **Refactoring** — rename, code actions, formatting, and import management | **Hover + diagnostics** — docs, signatures, and real-time error reporting | **Unicode-safe** — symmetric UTF-8/UTF-16 position handling |
-| **Debug Adapter** — breakpoints, stepping, stacks, and variables via DAP bridge | **Cross-file indexing** — dual-indexed symbol lookup across the workspace | **Incremental parsing** — sub-millisecond updates on common edit paths |
-
-### How the pieces fit together
-
-```mermaid
-flowchart TD
-    editor["Editor / IDE"] -->|JSON-RPC over stdio| lsp["perl-lsp\nLanguage Server"]
-    lsp --> providers["LSP providers\ncompletion · hover · diagnostics · rename"]
-    lsp --> index["Workspace index\ndual-indexed symbol graph"]
-    lsp --> dap["perl-dap\nDebug Adapter bridge"]
-    providers --> parser["perl-parser v3\nrecursive-descent parser"]
-    index --> parser
-    dap --> runtime["Perl debug session"]
-    parser --> lexer["perl-lexer\nmode-aware tokenizer"]
-```
-
-## Why perl-lsp?
-
-| | perl-lsp | Perl::LanguageServer | PLS |
-|---|----------|---------------------|-----|
-| **Language** | Rust (native binary) | Perl | Perl |
-| **Requires Perl runtime** | No | Yes | Yes |
-| **LSP feature coverage** | 53/53 advertised | Partial | Partial |
-| **Incremental parsing** | Yes (sub-ms updates) | N/A | N/A |
-| **Debug adapter** | Built-in (DAP bridge) | Built-in | No |
-| **Supply chain security** | SBOM + SLSA Level 2 | N/A | N/A |
-
-## Parser Coverage
-
-The v3 parser is a native recursive-descent implementation covering broad Perl 5 syntax
-(5.8 through 5.40), including heredocs, regex, quoting constructs, formats, and more.
-It is tested continuously against real-world Perl code to drive coverage improvements:
-
-- **Corpus test suite** -- 600+ test sections in `tree-sitter-perl/test/corpus/` plus 70+ standalone `.pl` fixtures.
-- **System Perl corpus sweep** -- benchmarked against all `.pm` and `.pl` files found in the system Perl installation. Current parse rates are tracked in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) and the baseline file (`.ci/parser-corpus-baseline.json`).
-- **Common-files gate** -- a curated set of core modules that must parse with zero errors on every PR (`.ci/common-corpus-manifest.txt`).
-- **Ratcheting CI gate** -- the overall parse rate can only go up, never down. Regressions fail the build.
-- **CPAN top 1000 goal** -- the long-term target is for 90%+ of the most-downloaded CPAN distributions to parse cleanly, driving parser improvements toward real-world Perl idioms.
-
-For detailed parse rates and the edge-case roadmap, see [PARSER_EDGE_CASE_ROADMAP.md](docs/project/PARSER_EDGE_CASE_ROADMAP.md).
-
-### Corpus Commands
-
-```bash
-just corpus-sweep          # Sweep system Perl corpus and print results
-just corpus-sweep-check    # Check against baseline (fails on regression)
-just corpus-sweep-update   # Update baseline with current results
-just common-corpus-check   # Check pinned modules parse cleanly (PR gate)
-just cpan-corpus-fetch     # Fetch CPAN top-1000 distribution list
-just cpan-corpus-install   # Install CPAN corpus locally; auto-fetches the list, bootstraps cpanm, and reuses a local cache
-just cpan-corpus-baseline-update  # Seed/update CPAN ratchet baseline
-just cpan-corpus-check     # Check CPAN baseline + known-clean manifest
-```
-
-See [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for the latest computed metrics.
-
-## Install
-
-### From crates.io
-
-```bash
-cargo install perl-lsp
-perl-lsp --health  # should print: ok X.Y.Z
-```
-
-### From source
+You can also build from source:
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
 cargo install --path crates/perl-lsp
-perl-lsp --health  # should print: ok X.Y.Z
+perl-lsp --health
 ```
 
-### Pre-built binaries
+There is also a best-effort installer script for Linux and macOS:
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
+```bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
+```
 
-## Architecture
+### Install the VS Code extension
 
-The workspace is organized as a family of focused Rust crates (115+), each with a
-single responsibility. The visualization above shows the runtime path most users care
-about: editor requests flow into `perl-lsp`, which fans out into providers, indexing,
-and debugging services before delegating parsing work to `perl-parser` and `perl-lexer`.
+```bash
+code --install-extension EffortlessMetrics.perl-lsp-rs
+```
 
-That separation keeps compile times fast, sharpens ownership boundaries, and makes it
-easier to evolve parsing, LSP features, and DAP support independently.
+### Run the server directly
 
-For the full tier system, architecture decision records, and design rationale, see:
+```bash
+perl-lsp --stdio
+```
 
+Useful CLI checks:
+
+```bash
+perl-lsp --version
+perl-lsp --health
+perl-lsp --info
+perl-lsp --check script.pl
+```
+
+For a full walkthrough, see [Getting Started](docs/tutorials/GETTING_STARTED.md).
+
+## Editor Setup
+
+`perl-lsp` speaks standard JSON-RPC over stdio, so it works with editors that support LSP.
+
+The repository includes editor setup guidance for VS Code, Neovim, Emacs, Helix, and other LSP-capable editors. For complete configuration examples, see:
+
+- [Getting Started](docs/tutorials/GETTING_STARTED.md)
+- [Editor Setup](docs/how-to/EDITOR_SETUP.md)
+
+## What You Get
+
+The repository is broader than a single server binary, but the main user-facing capabilities are:
+
+- Real-time diagnostics for Perl files
+- Completion for symbols, modules, variables, keywords, and builtins
+- Hover information and signature help for common Perl constructs
+- Navigation features such as go-to-definition, references, and symbols
+- Rename, code actions, and formatting support
+- Cross-file workspace indexing
+- Debug Adapter Protocol support through `perl-dap`
+- Native parser and lexer libraries for Perl-aware tooling
+
+For a deeper feature breakdown, see:
+
+- [LSP Features](docs/reference/LSP_FEATURES.md)
 - [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
-- [Architecture Decision Records](docs/adr/README.md) (microcrate architecture, dual indexing, incremental parsing, runtime dispatch, DAP security, and a topic guide for lesser-known ADRs)
-- [CLAUDE.md](CLAUDE.md) for the complete developer command reference
+- [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md)
 
-## Published Crates
+## Parser and Tooling
 
-| Crate | Purpose |
-|-------|---------|
-| [`perl-lsp`](https://crates.io/crates/perl-lsp) | Language Server Protocol binary |
-| [`perl-dap`](https://crates.io/crates/perl-dap) | Debug Adapter Protocol binary |
-| [`perl-parser`](https://crates.io/crates/perl-parser) | Recursive-descent Perl parser library |
-| [`perl-lexer`](https://crates.io/crates/perl-lexer) | Context-aware Perl tokenizer |
-| [`perl-corpus`](https://crates.io/crates/perl-corpus) | Parser and LSP test corpus |
+The parser stack in this repository is implemented natively in Rust. The current parser is a recursive-descent implementation backed by a context-aware lexer and exercised against curated corpus, fixture, and real-world test suites.
+
+If you are working on parser behavior directly, the most relevant crates are:
+
+- [`crates/perl-parser`](crates/perl-parser/)
+- [`crates/perl-parser-core`](crates/perl-parser-core/)
+- [`crates/perl-lexer`](crates/perl-lexer/)
+- [`crates/perl-semantic-analyzer`](crates/perl-semantic-analyzer/)
+- [`crates/perl-corpus`](crates/perl-corpus/)
+
+Project health and generated metrics live in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
 ## Development
 
+Common commands:
+
 ```bash
-cargo build --workspace            # Build everything
-cargo test --workspace             # Run all tests
-cargo clippy --workspace --lib     # Lint
-cargo fmt --all                    # Format
-nix develop -c just ci-gate        # Full local gate (required before push)
+cargo build -p perl-lsp --release
+cargo build -p perl-parser --release
+
+cargo test --workspace --lib
+cargo test -p perl-parser
+cargo test -p perl-lsp
+
+cargo fmt --all
+cargo clippy --workspace --lib
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines,
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards,
-and [SUPPORT.md](SUPPORT.md) for how to get help.
+Canonical local validation before push:
 
-## Security
+```bash
+nix develop -c just ci-gate
+```
 
-Release artifacts include SBOM generation (SPDX and CycloneDX) and SLSA Level 2
-provenance attestations. Production code enforces zero `unsafe`, zero `unwrap`/`expect`,
-and zero `panic!`-family macros via CI ratchets. Path traversal and command injection
-vectors are hardened.
+Helpful additional commands:
 
-See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details.
+```bash
+just doctor
+just pr-fast
+just ci-lsp-def
+```
+
+See:
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Commands Reference](docs/reference/COMMANDS_REFERENCE.md)
+- [Documentation Index](docs/README.md)
 
 ## Documentation
 
-| Resource | Description |
-|----------|-------------|
-| **[Getting Started](docs/tutorials/GETTING_STARTED.md)** | **Installation, editor setup, and first-run walkthrough** |
-| [Book](book/) | Comprehensive user and developer guide |
-| [docs/](docs/README.md) | Documentation index |
-| [features.toml](features.toml) | Canonical LSP feature catalog |
-| [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | Live project metrics |
-| [ROADMAP.md](ROADMAP.md) | Version milestones and planning |
-| [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
-| [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
+Good starting points:
 
-## History
-
-This project began as a fork of [tree-sitter-perl](https://github.com/tree-sitter-perl/tree-sitter-perl) in July 2025. It has since been rewritten as a native Rust recursive-descent parser and grown into a full-featured LSP/DAP toolkit with over 115 crates.
+| Resource | Purpose |
+| --- | --- |
+| [Getting Started](docs/tutorials/GETTING_STARTED.md) | Install, configure an editor, and verify the server |
+| [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Set up and use the debug adapter |
+| [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | Understand the server architecture |
+| [Crate Architecture Guide](docs/reference/CRATE_ARCHITECTURE_GUIDE.md) | Navigate the workspace structure |
+| [Current Status](docs/project/CURRENT_STATUS.md) | Generated project metrics and health snapshots |
+| [Stability Policy](docs/reference/STABILITY.md) | Alpha status, versioning, and support expectations |
 
 ## License
 
-Dual licensed under MIT or Apache-2.0:
+Dual licensed under:
 
-- [LICENSE-MIT](LICENSE-MIT)
-- [LICENSE-APACHE](LICENSE-APACHE)
+- [MIT](LICENSE-MIT)
+- [Apache-2.0](LICENSE-APACHE)
