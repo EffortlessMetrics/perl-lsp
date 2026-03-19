@@ -606,14 +606,14 @@ impl<'a> Parser<'a> {
                         }
                     }
 
-                    self.expect(TokenKind::RightParen)?;
+                    self.expect_closing_delimiter(TokenKind::RightParen)?;
                     let end = self.previous_position();
 
                     // Only convert to hash if we saw a fat comma
                     Ok(Self::build_list_or_hash(elements, saw_fat_comma, start, end))
                 } else {
                     // It's a parenthesized expression
-                    self.expect(TokenKind::RightParen)?;
+                    self.expect_closing_delimiter(TokenKind::RightParen)?;
                     Ok(first)
                 }
             }
@@ -635,7 +635,7 @@ impl<'a> Parser<'a> {
                     }
                 }
 
-                self.expect(TokenKind::RightBracket)?;
+                self.expect_closing_delimiter(TokenKind::RightBracket)?;
                 let end = self.previous_position();
 
                 Ok(Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation { start, end }))

@@ -20,7 +20,7 @@ impl<'a> Parser<'a> {
             self.parse_expression()?
         };
 
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         let then_branch = self.parse_block()?;
 
@@ -46,7 +46,7 @@ impl<'a> Parser<'a> {
                 self.parse_expression()?
             };
 
-            self.expect(TokenKind::RightParen)?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
             let elsif_block = self.parse_block()?;
             elsif_branches.push((Box::new(elsif_cond), Box::new(elsif_block)));
         }
@@ -80,7 +80,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
         self.mark_not_stmt_start();
         let condition = self.parse_expression()?;
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         // Negate the condition
         let negated_condition = Node::new(
@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
                 self.parse_expression()?
             };
 
-            self.expect(TokenKind::RightParen)?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
             let elsif_block = self.parse_block()?;
             elsif_branches.push((Box::new(elsif_cond), Box::new(elsif_block)));
         }
@@ -156,7 +156,7 @@ impl<'a> Parser<'a> {
             self.parse_expression()?
         };
 
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         let body = self.parse_block()?;
 
@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
         self.mark_not_stmt_start();
         let condition = self.parse_expression()?;
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         // Negate the condition
         let negated_condition = Node::new(
@@ -289,7 +289,7 @@ impl<'a> Parser<'a> {
             Some(Box::new(self.parse_expression()?))
         };
 
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
         let body = self.parse_block()?;
 
         // Handle continue block
@@ -331,7 +331,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
         self.mark_not_stmt_start();
         let list = self.parse_expression()?;
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         let body = self.parse_block()?;
 
@@ -370,7 +370,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
         self.mark_not_stmt_start();
         let list = self.parse_expression()?;
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         let body = self.parse_block()?;
 
@@ -518,7 +518,7 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                self.expect(TokenKind::RightParen)?;
+                self.expect_closing_delimiter(TokenKind::RightParen)?;
                 var_name
             } else {
                 None
@@ -575,7 +575,7 @@ impl<'a> Parser<'a> {
         // Parse the expression in parentheses
         self.expect(TokenKind::LeftParen)?;
         let expr = self.parse_expression()?;
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         // Parse the body block
         let body = self.parse_given_block()?;
@@ -624,7 +624,7 @@ impl<'a> Parser<'a> {
         // Parse the condition in parentheses
         self.expect(TokenKind::LeftParen)?;
         let condition = self.parse_expression()?;
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
 
         // Parse the body block
         let body = self.parse_block()?;
@@ -714,7 +714,7 @@ impl<'a> Parser<'a> {
             self.parse_expression()?
         };
 
-        self.expect(TokenKind::RightParen)?;
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
         let then_branch = self.parse_block()?;
 
         // Continue parsing any following elsif/else chain
@@ -738,7 +738,7 @@ impl<'a> Parser<'a> {
                 self.parse_expression()?
             };
 
-            self.expect(TokenKind::RightParen)?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
             let elsif_block = self.parse_block()?;
             elsif_branches.push((Box::new(elsif_cond), Box::new(elsif_block)));
         }

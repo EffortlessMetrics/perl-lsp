@@ -336,7 +336,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.expect(TokenKind::RightParen)?; // consume )
+            self.expect_closing_delimiter(TokenKind::RightParen)?; // consume )
 
             let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
                 self.tokens.next()?; // consume =
@@ -429,7 +429,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            s.expect(TokenKind::RightParen)?;
+            s.expect_closing_delimiter(TokenKind::RightParen)?;
             Ok(args)
         })
     }
