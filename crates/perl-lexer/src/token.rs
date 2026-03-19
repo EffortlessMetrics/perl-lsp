@@ -1,4 +1,7 @@
-//! Token types and structures for the Perl lexer
+//! Token types and structures for the Perl lexer.
+//!
+//! [`TokenType`] classifies every token the lexer can emit, and [`Token`]
+//! bundles a type with its source text and byte span.
 
 use std::sync::Arc;
 
@@ -127,31 +130,34 @@ pub enum TokenType {
     Error(Arc<str>),
 }
 
-/// Token with position information
+/// A single token produced by [`PerlLexer`](crate::PerlLexer).
+///
+/// Carries its [`TokenType`], the original source text (as a cheap-to-clone
+/// `Arc<str>`), and the byte span within the input.
 #[derive(Debug, Clone)]
 pub struct Token {
-    /// The type of token
+    /// Classification of this token (keyword, operator, literal, etc.).
     pub token_type: TokenType,
-    /// The actual text of the token
+    /// Original source text that this token spans.
     pub text: Arc<str>,
-    /// Start position in the input
+    /// Starting byte offset (inclusive) in the source input.
     pub start: usize,
-    /// End position in the input
+    /// Ending byte offset (exclusive) in the source input.
     pub end: usize,
 }
 
 impl Token {
-    /// Create a new token
+    /// Create a new token with the given type, source text, and byte span.
     pub fn new(token_type: TokenType, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Self { token_type, text: text.into(), start, end }
     }
 
-    /// Get the length of the token
+    /// Return the byte length of this token's span (`end - start`).
     pub fn len(&self) -> usize {
         self.end - self.start
     }
 
-    /// Check if the token is empty
+    /// Return `true` if the token has a zero-length span.
     pub fn is_empty(&self) -> bool {
         self.start == self.end
     }
