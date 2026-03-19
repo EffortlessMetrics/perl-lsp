@@ -23,7 +23,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) | Draft | 2026-01-28 | LSP Cancellation | Cancellation infrastructure for responsive editor interactions |
 | [ADR-007](ADR_007_SUBSTITUTION_OPERATOR_PARSING.md) | Accepted | 2025-01-20 | Substitution Parsing | Comprehensive s/// parsing with all modifiers |
 
-### Architecture Series (0008–0033)
+### Architecture Series (0008–0037)
 
 | ADR | Status | Date | Title | Description |
 |-----|--------|------|-------|-------------|
