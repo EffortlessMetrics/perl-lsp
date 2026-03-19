@@ -1828,6 +1828,7 @@ dependencies = [
  "perl-lsp-config",
  "perl-lsp-diagnostic-catalog",
  "perl-lsp-diagnostics",
+ "perl-lsp-document-highlight",
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
@@ -1993,6 +1994,14 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
+]
+
+[[package]]
+name = "perl-lsp-document-highlight"
+version = "0.11.0"
+dependencies = [
+ "perl-ast",
+ "perl-parser",
 ]
 
 [[package]]
