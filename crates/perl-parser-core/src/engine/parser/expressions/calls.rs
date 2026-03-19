@@ -104,10 +104,12 @@ impl<'a> Parser<'a> {
 
             // print STDOUT ... (uppercase bareword filehandle)
             // But NOT if followed by comma — that's a regular call: open FILE, "..."
+            // And NOT if followed by arrow — that's a class method chain:
+            //   print Data::Dumper->new([$self])->Dump()
             if next_kind == TokenKind::Identifier {
                 if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
                     if let Ok(third) = self.tokens.peek_third() {
-                        if third.kind == TokenKind::Comma {
+                        if third.kind == TokenKind::Comma || third.kind == TokenKind::Arrow {
                             return false;
                         }
                     }

@@ -51,16 +51,18 @@ impl<'a> Parser<'a> {
                     let start = op_token.start;
 
                     // Special case: +{ ... } forces a hash constructor (not a block)
+                    // If followed by ->, allow postfix chaining: +{@_}->{key}
                     if self.peek_kind() == Some(TokenKind::LeftBrace) {
                         // Parse as hash literal
                         let hash = self.parse_hash_or_block()?;
                         let end = hash.location.end;
 
                         // Wrap the hash in a unary plus to preserve the explicit disambiguation
-                        return Ok(Node::new(
+                        let node = Node::new(
                             NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(hash) },
                             SourceLocation { start, end },
-                        ));
+                        );
+                        return self.parse_postfix_chain(node);
                     }
 
                     // Check if we're at EOF or a terminator (for standalone operators)
@@ -99,10 +101,12 @@ impl<'a> Parser<'a> {
                                 TokenKind::Identifier => {
                                     let id_token = self.tokens.next()?;
                                     let end = id_token.end;
-                                    return Ok(Node::new(
+                                    let node = Node::new(
                                         NodeKind::Typeglob { name: id_token.text.to_string() },
                                         SourceLocation { start, end },
-                                    ));
+                                    );
+                                    // Allow postfix chaining: *$self->{key}
+                                    return self.parse_postfix_chain(node);
                                 }
                                 TokenKind::LeftBrace => {
                                     // Dynamic typeglob *{$name}

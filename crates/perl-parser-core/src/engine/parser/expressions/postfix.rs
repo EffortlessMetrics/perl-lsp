@@ -1,7 +1,16 @@
 impl<'a> Parser<'a> {
     /// Parse postfix expression
     fn parse_postfix(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_primary()?;
+        let expr = self.parse_primary()?;
+        self.parse_postfix_chain(expr)
+    }
+
+    /// Apply postfix operators (arrow chains, subscripts, etc.) to an
+    /// already-parsed expression.  Factored out of `parse_postfix` so
+    /// that callers who build an initial node outside the normal
+    /// `parse_primary` path (e.g. typeglobs in `parse_unary`) can still
+    /// participate in postfix chaining.
+    pub(crate) fn parse_postfix_chain(&mut self, mut expr: Node) -> ParseResult<Node> {
         let mut postfix_chain_depth = 0usize;
 
         let mut record_postfix_layer = || -> ParseResult<()> {
