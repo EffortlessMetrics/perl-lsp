@@ -12,6 +12,7 @@ Supplemental archaeology note:
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
 - `AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md` — why `agents4` is the clearest perl-lsp-native preserved form of the Q3 three-phase swarm, especially after the 2025-09-24 Perl LSP production-readiness refactor
 - `HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md` — how March 15 to 17, 2026 turned `swarm-state`, skills, findings, and hooks into the new control plane while leaving a deliberate `.ops-perl-lsp` runtime residue across live commands, agents6, and compatibility surfaces
+- `HOOK_CONTROL_ARCHAEOLOGY.md` — how hook history runs from 2025-09-06 `PreToolUse` interception to the March 2026 lifecycle hook regime, with prompts carrying judgment and hooks carrying invariants
 - `DIRECT_DELIVERY_ARCHAEOLOGY.md` — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - `INSTALL_SURFACE_ARCHAEOLOGY.md` — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
 - `Q3_CONTROL_PLANE_ARCHAEOLOGY.md` — how `agents4` shows the canonical Q3 swarm as an actual phase-aware operating surface, not just a directory of agent prompts
@@ -29,6 +30,7 @@ Supplemental archaeology note:
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
 - `ISSUE_LABEL_ARCHAEOLOGY.md` — how `swarm-discovered`, `swarm-improve-*`, reserved architectural escalation, and issue-title prefixes turned the issue tracker into typed routing memory
 - `ISSUE_ROUTING_ARCHAEOLOGY.md` — how the issue tracker became a typed overflow queue for `swarm-discovered` findings, self-improvement, and future builder slices
+- `SIGNAL_INTAKE_ARCHAEOLOGY.md` — how generic GitHub issue and PR entry points turned into typed signal intake through forms, gate-aware templates, and swarm-native discovery handoffs
 - `ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md` — how issue bodies and PR bodies became linked swarm memory, with review-summary, learning, ops, and article issues preserving what PRs meant
 - `ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md` — how issues and PRs became a shared lineage ledger, with March 2026 making explicit closure language and PR-backed learning issues normal
 - `MAINTAINER_BRIDGE_ARCHAEOLOGY.md` — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern obvious
