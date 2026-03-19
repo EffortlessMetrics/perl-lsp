@@ -155,6 +155,66 @@ fn lsp_color_detect_ansi_colors() -> TestResult {
 }
 
 #[test]
+fn lsp_color_detect_ansi_colors_with_utf16_prefix() -> TestResult {
+    let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
+    let server = LspServer::with_output(output);
+
+    send_request(
+        &server,
+        "initialize",
+        json!({
+            "capabilities": {},
+            "processId": 12345,
+            "rootUri": "file:///test"
+        }),
+    )
+    .ok();
+
+    let initialized_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized_request);
+
+    let did_open = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "textDocument/didOpen".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": "file:///test/utf16_ansi.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": r#"世界 \e[31m"#
+            }
+        })),
+    };
+    server.handle_request(did_open);
+
+    let result = send_request(
+        &server,
+        "textDocument/documentColor",
+        json!({
+            "textDocument": {
+                "uri": "file:///test/utf16_ansi.pl"
+            }
+        }),
+    )?;
+
+    let color_array = result.as_array().ok_or("Result should be an array")?;
+    assert_eq!(color_array.len(), 1, "Should detect exactly one ANSI color");
+
+    let ansi_color = &color_array[0];
+    assert_eq!(ansi_color["range"]["start"]["line"].as_u64(), Some(0));
+    assert_eq!(ansi_color["range"]["start"]["character"].as_u64(), Some(3));
+    assert_eq!(ansi_color["range"]["end"]["character"].as_u64(), Some(9));
+
+    Ok(())
+}
+
+#[test]
 fn lsp_color_presentation_hex() -> TestResult {
     let server = setup_color_server();
 
@@ -382,7 +442,7 @@ fn lsp_color_utf16_position_with_non_ascii_prefix() -> TestResult {
     // Document with non-ASCII before color:
     // "日本語" = 3 chars but 9 UTF-8 bytes, 3 UTF-16 code units
     // "émoji" = 5 chars, 6 UTF-8 bytes, 5 UTF-16 code units
-    // The color #FF0000 should be at UTF-16 position 9 (after "日本語" + " " + "émoji" + ": ")
+    // The color #FF0000 should be at UTF-16 position 13 (after "# " + "日本語" + " " + "émoji" + ": ")
     let text = r#"# 日本語 émoji: #FF0000
 # café: #00FF00"#;
 
