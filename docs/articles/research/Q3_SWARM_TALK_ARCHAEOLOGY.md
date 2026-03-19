@@ -175,6 +175,9 @@ So in this case, the talk and the repo were converging on the same vocabulary.
 
 Later archaeology shows those ideas hardening into operational systems:
 
+- PR `#209` becomes the canonical original case where the repo learned that a
+  receipt can be technically true and still operationally meaningless, because
+  the benchmark evidence overstated real readiness
 - mutation testing and fuzz lanes made reward hacking harder
 - `findings.json` and its schema turned conclusions into durable, machine-checkable state
 - control-plane docs moved review, readiness, and merge into explicit lifecycle steps
@@ -233,6 +236,7 @@ The later repo evidence shows that the talk was not a separate philosophy. It wa
 - [`docs/project/AGENT_SWARM_WORKFLOW.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/AGENT_SWARM_WORKFLOW.md)
 - [`docs/articles/SWARM_METHODOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/SWARM_METHODOLOGY.md)
 - [`docs/articles/research/Q3_SWARM_PR_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/Q3_SWARM_PR_ARCHAEOLOGY.md)
+- [`docs/articles/research/RECEIPTS_LIE_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/RECEIPTS_LIE_ARCHAEOLOGY.md)
 - [`docs/articles/research/TRUSTED_CHANGE_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/TRUSTED_CHANGE_ARCHAEOLOGY.md)
 - [`docs/articles/research/CONTROL_PLANE_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/CONTROL_PLANE_ARCHAEOLOGY.md)
 - [`docs/articles/research/SWARM_SURFACE_EVOLUTION.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/SWARM_SURFACE_EVOLUTION.md)

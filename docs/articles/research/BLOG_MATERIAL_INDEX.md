@@ -15,13 +15,16 @@ Supplemental archaeology note:
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
 - `ISSUE_ROUTING_ARCHAEOLOGY.md` — how the issue tracker became a typed overflow queue for `swarm-discovered` findings, self-improvement, and future builder slices
 - `ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md` — how issues and PRs became a shared lineage ledger, with March 2026 making explicit closure language and PR-backed learning issues normal
+- `MAINTAINER_BRIDGE_ARCHAEOLOGY.md` — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern obvious
 - `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
+- `MAINTAINER_VISION_ARCHAEOLOGY.md` — how maintainer judgment was repeatedly recast into better agent surfaces, from direct orchestration to skills/hooks/state
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
 - `REVIEW_LABEL_ARCHAEOLOGY.md` — how the canonical Q3 swarm used GitHub labels as a review state machine with intake, lanes, gates, and merge readiness alongside `issue-to-draft` / `draft-to-pr` / `pr-to-merge`
 - `PR_REVIEW_LOOP_ARCHAEOLOGY.md` — how review cleanup, follow-up PRs, and post-batch repair show up as named first-class work
 - `PR_SLICE_SIZE_ARCHAEOLOGY.md` — how the PR archive favors small bounded slices while still using deliberate large campaign PRs
 - `PROVENANCE_RECEIPTS_ARCHAEOLOGY.md` — how proof moved from prose claims into receipt schemas, evidence docs, and forensics templates
+- `RECEIPTS_LIE_ARCHAEOLOGY.md` — how PR `#209` became the original scar story showing that receipts can be technically true yet still operationally weak
 - `QUEUE_BOTTLENECK_ARCHAEOLOGY.md` — how the merge queue, CI throughput, and issue overflow became the real bottlenecks at swarm scale
 - `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
 - `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm

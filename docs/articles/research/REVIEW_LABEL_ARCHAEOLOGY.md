@@ -79,7 +79,11 @@ That stack reveals several important behaviors immediately:
 - fixes discovered during review are themselves classified
 - the PR can show both process state and technical risk at once
 
-This is a GitHub-native projection of the Q3 swarm workflow engine.
+The maintainer's clarification sharpens the interpretation: this is not best
+read as a separate GitHub overlay. It is part of the same Q3
+`issue-to-draft` / `draft-to-pr` / `pr-to-merge` machinery, exposed through
+labels because GitHub was one of the few available coordination surfaces for
+managing multiple massive PRs across many repos at the same time.
 
 PR `#160`, created on `2025-09-20`, reinforces the same pattern. It carries
 both `gate:policy (blocked)` and `gate:policy (clear)`, plus architecture and
@@ -120,6 +124,13 @@ This is the same design instinct that later shows up in:
 
 The later control plane is more durable, but the same decomposition impulse is
 already visible here inside the Q3 swarm itself.
+
+Historically, this also explains why the surface is so label-heavy: the repo
+was trying to keep generation, review, and integration lanes stable with
+different agents and worktrees, but the tooling was still early and Claude
+struggled with the coordination burden. The labels are therefore not only
+metadata. They are visible scaffolding for a swarm that had not yet found
+better local control-plane primitives.
 
 ---
 

@@ -5,6 +5,14 @@ This note tracks the maintainer's role in this repository as it moved from direc
 
 The recurring pattern across the docs is consistent: the human does not disappear. The human becomes the selector, the architect, and the merge bottleneck that keeps machine-generated work trustworthy.
 
+The maintainer's later clarification adds a second dimension to that role
+change: the repo is not only moving from direct coding toward review. It is
+also going through repeated waves of imparting maintainer vision into agent
+surfaces. Across those waves, the guidance becomes more conceptually sound,
+more iterated, and more reusable, even as some later surfaces depend less on
+line-by-line human review in the moment and more on gates, state, and archived
+lessons.
+
 ---
 
 ## 1. The Repository Says The Human Role Changed
@@ -77,6 +85,10 @@ The maintainer's architectural job is visible in the repo's own descriptions:
 
 That is why the repo can scale at all. The maintainer is not just the last reviewer. The maintainer is the person who keeps the architecture stable enough for agents to operate inside it.
 
+That is also why maintainer intent deserves its own archaeology. The repo is
+repeatedly trying to teach agents what "aligned with this codebase" means, not
+just asking them to execute isolated tasks faster.
+
 ---
 
 ## 4. The Maintainer Is Also The Merge Bottleneck
@@ -122,6 +134,11 @@ They are the repo's answer to the human bottleneck:
 
 That architecture makes the maintainer's role more selective and less mechanical. The human spends less time writing code and more time deciding what should be kept, merged, staged, or discarded.
 
+The tradeoff is visible in the historical arc. Later waves of guidance are
+better structured and easier to reuse, but they also sit further from direct
+maintainer inspection at the individual-change level. The repo keeps trying to
+close that gap with receipts, review lanes, merge gates, and persistent memory.
+
 ---
 
 ## 6. What The Maintainer Actually Does Now
@@ -144,6 +161,7 @@ That is the maintainer role in the AI-native repo. The human is not removed from
 - [`docs/project/AGENTIC_DEV.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/AGENTIC_DEV.md)
 - [`docs/project/JULES_BOT_ANALYSIS.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/JULES_BOT_ANALYSIS.md)
 - [`docs/articles/research/ERA_TIMELINE.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/ERA_TIMELINE.md)
+- [`docs/articles/research/MAINTAINER_VISION_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/MAINTAINER_VISION_ARCHAEOLOGY.md)
 - [`docs/articles/research/PR_LIFECYCLE_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/PR_LIFECYCLE_ARCHAEOLOGY.md)
 - [`docs/articles/research/PR_REVIEW_LOOP_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/PR_REVIEW_LOOP_ARCHAEOLOGY.md)
 - [`docs/articles/research/QUEUE_BOTTLENECK_ARCHAEOLOGY.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/QUEUE_BOTTLENECK_ARCHAEOLOGY.md)

@@ -109,6 +109,13 @@ issue-closing PRs in the full ledger.
 So while issue linkage existed from the beginning, March 2026 is when explicit
 closure language becomes swarm-normal rather than occasional.
 
+The maintainer's clarification makes the reason more specific: this was not
+just prose cleanup or a style fad. The sharper close/fix/resolve language came
+from general automation and handoff alignment for agents. Once builders,
+reviewers, scouts, and later learning issues all had to recover task lineage
+mechanically, explicit closure language stopped being optional nicety and
+started becoming routing infrastructure.
+
 That lines up with what the repo is doing in that period:
 
 - scouts discover issues
@@ -139,6 +146,14 @@ explicit close/fix/resolve language in their bodies.
 
 That is strong evidence that issue-linked PR authoring is now a real protocol.
 The PR is expected to say what issue it is advancing or closing.
+
+The important nuance is that this delivery protocol was deliberate. It helped
+the swarm hand work across agents without losing identity:
+
+- scouts could route issue-shaped work
+- builders could publish against the same issue identity
+- reviewers could reason about scope without rereading prior chat
+- later learning and article issues could cite the same lineage as evidence
 
 This is one reason the current swarm can sustain more parallel work without
 losing legibility:
