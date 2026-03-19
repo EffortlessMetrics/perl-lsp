@@ -10,8 +10,10 @@ Supplemental archaeology note:
 - `ALPHA_READINESS_ARCHAEOLOGY.md` — how March 2026 kept shipped release truth separate from `v0.12.0` hardening plans while defining explicit alpha blockers and non-blockers
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
+- `AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md` — why `agents4` is the clearest perl-lsp-native preserved form of the Q3 three-phase swarm, especially after the 2025-09-24 Perl LSP production-readiness refactor
 - `DIRECT_DELIVERY_ARCHAEOLOGY.md` — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - `INSTALL_SURFACE_ARCHAEOLOGY.md` — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
+- `Q3_CONTROL_PLANE_ARCHAEOLOGY.md` — how `agents4` shows the canonical Q3 swarm as an actual phase-aware operating surface, not just a directory of agent prompts
 - `MERGECODE_ARCHAEOLOGY.md` — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and explicit three-flow delivery into the doctrine layer before the later swarm control plane
 - `MERGECODE_ROOTS_ARCHAEOLOGY.md` — how `agents3` preserves a MergeCode-derived donor layer, `agents4` specializes it for perl-lsp, and late-September 2025 looks like a composite transplant rather than a pure local invention
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
@@ -52,6 +54,7 @@ Supplemental archaeology note:
 - `SWARM_SURFACE_EVOLUTION.md` — the Jan→Mar 2026 transition where commands predate skills, then hooks and swarm-state turn the current control plane on
 - `WORKTREE_PARALLELISM_ARCHAEOLOGY.md` — how the repo wanted lane-based worktree parallelism early, used `maint/pr-*` as a bridge, and later stabilized deterministic `worktree-agent-*` execution
 - `SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md` — how committed swarm-state files and issue-title taxonomy split memory into queue state, pitfalls, findings, learning, and article recovery channels
+- `KNOWLEDGE_COMPOUNDING_ARCHAEOLOGY.md` — how the current swarm compounds knowledge across live queue state, durable findings, operator reports, and preserved scout logs
 - `SCOUT_LOG_ARCHAEOLOGY.md` — how tracked scout logs preserve dated session research as recoverable evidence after findings are absorbed into higher-level archaeology notes
 - `SWARM_STATE_ARCHAEOLOGY.md` — how `swarm-state` became a layered institutional-memory ledger instead of transient coordination notes
 - `TRUSTED_CHANGE_ARCHAEOLOGY.md` — how mutation, fuzz, receipts, drift checks, and durable pitfall tracking made trusted change mechanical

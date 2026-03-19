@@ -124,7 +124,15 @@ So the history and the retained artifacts line up:
 - the review/integration/generative split and the flow-file naming both describe
   the same durable operating model
 
+For the control-plane mechanics inside those files rather than the PR archive
+shape around them, see
+[Q3_CONTROL_PLANE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/Q3_CONTROL_PLANE_ARCHAEOLOGY.md).
+
 That is why Q3 is the canonical swarm era in this repository's archaeology.
+
+For a closer read of why `agents4` itself is historically canonical rather than
+just adjacent to the Q3 era, see
+[AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md).
 
 ---
 

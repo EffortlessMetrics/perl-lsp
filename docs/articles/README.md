@@ -23,6 +23,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/DIRECT_DELIVERY_ARCHAEOLOGY.md](research/DIRECT_DELIVERY_ARCHAEOLOGY.md) — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - [research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md](research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md) — March 11 to 19, 2026 as a mixed-tool period of short Claude swarm bursts plus Codex waves
 - [research/INSTALL_SURFACE_ARCHAEOLOGY.md](research/INSTALL_SURFACE_ARCHAEOLOGY.md) — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
+- [research/Q3_CONTROL_PLANE_ARCHAEOLOGY.md](research/Q3_CONTROL_PLANE_ARCHAEOLOGY.md) — how `agents4` turns the canonical Q3 swarm into a phase-aware operating surface with evolving gates, Perl-LSP-specific evidence, and worktree-serial discipline
 - [research/Q4_Q1_HANDS_ON_ARCHAEOLOGY.md](research/Q4_Q1_HANDS_ON_ARCHAEOLOGY.md) — the late-2025 to early-2026 stable, release-focused, but still maintainer-heavy bridge era
 - [research/Q3_SWARM_PR_ARCHAEOLOGY.md](research/Q3_SWARM_PR_ARCHAEOLOGY.md) — how late Q3 2025 becomes a PR-heavy Claude swarm rather than a mostly direct coding stream
 - [research/Q3_SWARM_TALK_ARCHAEOLOGY.md](research/Q3_SWARM_TALK_ARCHAEOLOGY.md) — how the Q3 2025 swarm talk articulated trusted change, flows, receipts, and adversarial verification before the control plane fully hardened
@@ -30,6 +31,7 @@ These documents intentionally preserve dated observations and period-specific me
 ### Control Plane and Process Archaeology
 
 - [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
+- [research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md](research/AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md) — why `agents4` is the clearest perl-lsp-native preserved form of the canonical Q3 three-phase swarm
 - [research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md](research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md) — how orchestration guides, project doctrine, `.claude`, and `AGENTS.md` turned methodology into versioned operating instructions
 - [research/ISSUE_LABEL_ARCHAEOLOGY.md](research/ISSUE_LABEL_ARCHAEOLOGY.md) — how label families and title prefixes gave the issue tracker a typed routing vocabulary for swarm discovery, self-improvement, and learning artifacts
 - [research/ISSUE_ROUTING_ARCHAEOLOGY.md](research/ISSUE_ROUTING_ARCHAEOLOGY.md) — how GitHub issues became swarm overflow memory and a typed routing surface instead of just backlog storage
@@ -43,6 +45,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/MAINTAINER_VISION_ARCHAEOLOGY.md](research/MAINTAINER_VISION_ARCHAEOLOGY.md) — repeated waves of encoding maintainer judgment into prompts, lanes, commands, skills, hooks, and state
 - [research/OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md](research/OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md) — why the repo could already have review discipline, quality discipline, and specialization before those behaviors were sufficiently externalized into a lower-attention control plane
 - [research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md](research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md) — how the repo moved from Q3 lane ideas and `maint/pr-*` bridges into deterministic `worktree-agent-*` execution
+- [research/KNOWLEDGE_COMPOUNDING_ARCHAEOLOGY.md](research/KNOWLEDGE_COMPOUNDING_ARCHAEOLOGY.md) — how the current swarm compounds knowledge through layered `swarm-state`, operator commands, skills, and preserved scout logs rather than one generic memory file
 - [research/SWARM_STATE_ARCHAEOLOGY.md](research/SWARM_STATE_ARCHAEOLOGY.md) — how `.claude/swarm-state/` became the committed memory ledger for the current swarm
 - [research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md](research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md) — how committed swarm-state files and issue-title prefixes split memory into queue state, pitfalls, findings, learning, and article artifacts
 - [research/SCOUT_LOG_ARCHAEOLOGY.md](research/SCOUT_LOG_ARCHAEOLOGY.md) — how tracked scout logs preserve dated session research as a memory tier between live swarm-state and polished archaeology

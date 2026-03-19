@@ -149,6 +149,10 @@ That is the important historical shift:
 
 The repo ends up with a taxonomy of memory, not just a backlog.
 
+For the broader current stack that adds operator commands, skill usage, and
+preserved scout logs on top of `swarm-state`, see
+[KNOWLEDGE_COMPOUNDING_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/KNOWLEDGE_COMPOUNDING_ARCHAEOLOGY.md).
+
 ---
 
 ## Evidence Pointers
