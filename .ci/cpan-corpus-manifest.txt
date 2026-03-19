@@ -1588,3 +1588,22 @@ x86_64-linux-gnu-thread-multi::indirect
 x86_64-linux-gnu-thread-multi::version
 x86_64-linux-gnu-thread-multi::version::regex
 x86_64-linux-gnu-thread-multi::version::vxs
+#
+# Added by ratchet on 2026-03-18T11:23:37.995177751+00:00
+AppConfig::File
+Clone::PP
+Eval::TypeTiny
+Heap::Binomial
+IO::Pipely
+IO::TieCombine::Scalar
+URI::_generic
+YAML::PP::Schema::Failsafe
+YAML::PP::Schema::Perl
+x86_64-linux-gnu-thread-multi::PDL::Char
+x86_64-linux-gnu-thread-multi::PDL::IO::Dumper
+x86_64-linux-gnu-thread-multi::PDL::IO::Pic
+x86_64-linux-gnu-thread-multi::Template
+x86_64-linux-gnu-thread-multi::Template::Service
+x86_64-linux-gnu-thread-multi::Tk::FileSelect
+x86_64-linux-gnu-thread-multi::Tk::Pretty
+x86_64-linux-gnu-thread-multi::Tk::ProgressBar
