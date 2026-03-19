@@ -1806,6 +1806,37 @@ echo "🚪 Running local gate before push: nix develop -c just ci-gate"
 echo "   (Skip with: git push --no-verify)"
 echo ""
 
+# --- Check if test files changed and CURRENT_STATUS.md needs updating ---
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Detect test file changes in the commits being pushed
+# stdin provides: <local ref> <local sha> <remote ref> <remote sha>
+TEST_FILES_CHANGED=false
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    # For new branches, compare against merge-base with origin/master
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        remote_sha="$(git merge-base "$local_sha" origin/master 2>/dev/null || echo "$local_sha")"
+    fi
+    if git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null | grep -qE '^crates/.*/tests/.*\.rs$'; then
+        TEST_FILES_CHANGED=true
+        break
+    fi
+done
+
+if [ "$TEST_FILES_CHANGED" = true ] && [ -f "$REPO_ROOT/scripts/update-current-status.py" ]; then
+    echo "📊 Test files changed — checking if CURRENT_STATUS.md is up to date..."
+    if command -v python3 &>/dev/null; then
+        python3 "$REPO_ROOT/scripts/update-current-status.py" 2>/dev/null || true
+        if ! git diff --quiet -- docs/project/CURRENT_STATUS.md 2>/dev/null; then
+            echo ""
+            echo "⚠️  CURRENT_STATUS.md has stale test counts!"
+            echo "   Run: python3 scripts/update-current-status.py"
+            echo "   Then commit the updated file before pushing."
+            echo ""
+            exit 1
+        fi
+    fi
+fi
+
 # Try nix develop first, fall back to just alone
 if command -v nix &>/dev/null && [ -f flake.nix ]; then
     nix develop -c just ci-gate
