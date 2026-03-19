@@ -3,7 +3,6 @@
 //! Supplements `comprehensive_unit_tests.rs` with additional coverage for:
 //! - Token span arithmetic and consistency
 //! - Field mutation (pub fields)
-#![allow(clippy::panic)]
 //! - Arc sharing across multiple clones and independent allocations
 //! - TokenKind memory layout and size guarantees
 //! - TokenKind Debug format specifics per variant
@@ -171,8 +170,10 @@ fn token_kind_debug_keywords() {
         (TokenKind::Next, "Next"),
         (TokenKind::Last, "Last"),
         (TokenKind::Redo, "Redo"),
+        (TokenKind::Goto, "Goto"),
         (TokenKind::Class, "Class"),
         (TokenKind::Method, "Method"),
+        (TokenKind::Field, "Field"),
         (TokenKind::Format, "Format"),
         (TokenKind::Undef, "Undef"),
     ];
@@ -370,8 +371,10 @@ fn keyword_kinds() -> Vec<TokenKind> {
         TokenKind::Next,
         TokenKind::Last,
         TokenKind::Redo,
+        TokenKind::Goto,
         TokenKind::Class,
         TokenKind::Method,
+        TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
     ]
@@ -401,8 +404,8 @@ fn sigil_kinds() -> Vec<TokenKind> {
 }
 
 #[test]
-fn keyword_count_is_38() {
-    assert_eq!(keyword_kinds().len(), 38);
+fn keyword_count_is_40() {
+    assert_eq!(keyword_kinds().len(), 40);
 }
 
 #[test]
@@ -862,11 +865,8 @@ fn find_first_identifier() {
         Token::new(TokenKind::Identifier, "first_id", 4, 12),
         Token::new(TokenKind::Identifier, "second_id", 13, 22),
     ];
-    if let Some(first) = tokens.iter().find(|t| t.kind == TokenKind::Identifier) {
-        assert_eq!(&*first.text, "first_id");
-    } else {
-        panic!("should have found an identifier");
-    }
+    let first = tokens.iter().find(|t| t.kind == TokenKind::Identifier).map(|t| t.text.as_ref());
+    assert_eq!(first, Some("first_id"), "should have found identifier 'first_id'");
 }
 
 #[test]
@@ -985,11 +985,8 @@ fn format_body_token() {
 #[test]
 fn option_token_some() {
     let maybe: Option<Token> = Some(Token::new(TokenKind::Number, "42", 0, 2));
-    if let Some(t) = maybe {
-        assert_eq!(t.kind, TokenKind::Number);
-    } else {
-        panic!("expected Some");
-    }
+    assert!(maybe.is_some(), "expected Some");
+    assert_eq!(maybe.as_ref().map(|t| t.kind), Some(TokenKind::Number), "expected Number token");
 }
 
 #[test]
