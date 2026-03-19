@@ -38,10 +38,21 @@ Verified on `2026-03-19` from the merged PR archive and `git log`:
 So the repo had already become strongly PR-shaped. The key limit was not lack of
 process. It was that the process still ran through the maintainer's hands.
 
-Maintainer note: this was still an AI-native phase. The mode was not "human
-writes, AI assists." It was closer to AI writing and AI reviewing, with the
-maintainer paying the integration cost. The constraint was attention, not the
-absence of machine authorship.
+The maintainer's clarification matters here: this was still an AI-native phase.
+The mode was not "human writes, AI assists." It was closer to AI writing and AI
+reviewing, with the maintainer paying the integration cost. The constraint was
+attention, not the absence of machine authorship.
+
+
+So the repo had already become strongly PR-shaped. The key limit was not lack of
+process. It was that the process still ran through the maintainer's hands.
+
+Steven note: Sort of. This was still an AI native phase (| Mode           | Who writes | Who reviews | PR size            | Daily volume | What breaks      |
+| -------------- | ---------- | ----------- | ------------------ | ------------ | ---------------- |
+| Suggestions    | Human      | Human       | ~76 lines          | A few        | Nothing yet      |
+| Assisted       | AI         | Human       | ~500 lines         | Dozens       | Margins compress |
+| Native         | AI         | AI          | 2,000–20,000 lines | Hundreds     | Pricing model    |
+| Industrialized | AI         | AI          | Continuous         | 1,000+ PRs   | Everything       |) with the ai reviewing and making merge decisions. Steven was deciding individual implementation priorities with chatgpt web in an architectural sidechain and then having claude implement what was planned out with chatgpt. Which means there's a scaling limit of Steven. In industrialized, the orchestrator picks its own implementation steps based on the larger goals. Which is why industrialized pushes the repos forward so much faster, and allow so much better designed and thought out verification and automation and integration
 
 ---
 

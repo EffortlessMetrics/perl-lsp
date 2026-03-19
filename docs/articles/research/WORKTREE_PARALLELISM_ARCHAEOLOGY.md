@@ -59,6 +59,10 @@ shows the pattern clearly: in the early Jules phase, the maintainer created
 The `maint/pr-*` naming is not cosmetic. It marks curated integration work
 that sits between agent-produced material and the final merge.
 
+Across the full PR archive snapshot on `2026-03-19`, there are `62`
+`maint/pr-*` branches total. That makes the bridge family large enough to read
+as an operating pattern rather than a handful of cleanup exceptions.
+
 This is the intermediate form of worktree parallelism:
 
 - agents draft in their lanes
@@ -93,6 +97,11 @@ official operating model.
 
 The git history shows the worktree model becoming deterministic enough to
 scale.
+
+Across the full PR archive snapshot on `2026-03-19`, there are `50`
+`worktree-agent-*` branches total. In the March 11 to March 19, 2026 mixed-tool
+window alone, `44` merged PRs use that branch family. The model is no longer a
+thought experiment at that point. It is a repeatable execution surface.
 
 Merged PRs with `worktree-agent-*` head branches include:
 
@@ -136,4 +145,5 @@ the swarm's concurrency model.
 - [`.claude/skills/swarm/SKILL.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/skills/swarm/SKILL.md)
 - [`.claude/commands/swarm.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/commands/swarm.md)
 - [docs/project/JULES_BOT_ANALYSIS.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/JULES_BOT_ANALYSIS.md)
+- [ERA5_MIXED_TOOL_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/ERA5_MIXED_TOOL_ARCHAEOLOGY.md)
 - `git log` merged PRs with `worktree-agent-*` head branches: `#1911`, `#1917`, `#1942`, `#1954`

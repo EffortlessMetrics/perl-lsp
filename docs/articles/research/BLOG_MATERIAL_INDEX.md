@@ -35,6 +35,7 @@ Supplemental archaeology note:
 - `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm
 - `Q3_SWARM_TALK_ARCHAEOLOGY.md` — the Q3 2025 talk as primary-source evidence for trusted change, flows-not-chats, author/critic, receipts, and the later control-plane hardening
 - `SWARM_SURFACE_EVOLUTION.md` — the Jan→Mar 2026 transition where commands predate skills, then hooks and swarm-state turn the current control plane on
+- `WORKTREE_PARALLELISM_ARCHAEOLOGY.md` — how the repo wanted lane-based worktree parallelism early, used `maint/pr-*` as a bridge, and later stabilized deterministic `worktree-agent-*` execution
 - `SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md` — how committed swarm-state files and issue-title taxonomy split memory into queue state, pitfalls, findings, learning, and article recovery channels
 - `SWARM_STATE_ARCHAEOLOGY.md` — how `swarm-state` became a layered institutional-memory ledger instead of transient coordination notes
 - `TRUSTED_CHANGE_ARCHAEOLOGY.md` — how mutation, fuzz, receipts, drift checks, and durable pitfall tracking made trusted change mechanical
