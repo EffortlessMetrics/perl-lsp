@@ -357,7 +357,7 @@ graph TD
 | Incremental Parsing | <1ms | <5ms | ✅ |
 | Reference Coverage | 98% | 95%+ | ✅ |
 | Workspace Crates | 115+ | Scalable | ✅ |
-| Documented ADRs | 36/36 | 36 | ✅ |
+| Documented ADRs | 39/39 | 39 | ✅ |
 
 ### Target State (v1.0.0)
 
