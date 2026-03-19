@@ -34,6 +34,8 @@ Verified on `2026-03-19` from the merged PR archive and `git log`:
 - `14` were merged from `app/dependabot`
 - first-parent history for the same window contains `201` commits, `174` with
   explicit PR references and only `27` without them
+- only `1` of the `195` merged PRs carried any GitHub label at all; `194`
+  merged completely unlabeled
 
 So the repo had already become strongly PR-shaped. The key limit was not lack of
 process. It was that the process still ran through the maintainer's hands.
@@ -66,6 +68,8 @@ Verified on `2026-03-19` from merged PRs in the same window:
 - other large families were `fix/*` (`23`), `bolt*` (`14`),
   `dependabot/*` (`14`), `feat/*` (`13`), `refactor/*` (`11`),
   `feature/*` (`10`), `palette*` (`10`), and `sentinel*` (`10`)
+- title-level specialization is also visible directly: `16` merged PR titles
+  mention Bolt, `13` mention Sentinel, and `12` mention Palette
 
 That matters because `maint/pr-*` is not just a naming convention. It is a
 workflow signature. The maintainer is explicitly acknowledging that the PR is a
@@ -197,6 +201,17 @@ release truth rather than unconstrained feature spray.
 
 The operational problem was not lack of discipline. It was that the discipline
 was embodied in the maintainer rather than in a durable control plane.
+
+One of the clearest signals is what does **not** appear in the GitHub metadata.
+The era is visibly coordinated through branch families, persona titles, bridge
+PRs, and fast follow-up merges, but almost none of that behavior is encoded in
+durable labels or other first-class GitHub routing surfaces. In the verified
+window, `194` of `195` merged PRs were unlabeled.
+
+That is the operating-system gap in concrete form: the repo had standards,
+lanes, and specialization, but much of that discipline still lived in prompts,
+branch names, maintainer scripts, and human interpretation rather than in a
+fully externalized control plane.
 
 The evidence is spread across the repo:
 

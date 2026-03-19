@@ -32,6 +32,14 @@ Evidence already preserved elsewhere:
   verifies `195` merged PRs in the bridge window with fast merge latency and a
   large `maint/pr-*` bridge family
 
+One new detail matters here. In that same verified `2025-12-28..2026-02-25`
+window, only `1` of `195` merged PRs carried a GitHub label at all.
+
+That means the repo's review discipline was real, but it was not yet deeply
+externalized into durable GitHub routing metadata. Much of the actual review
+state still lived in branch families, titles, maintainer bridges, and local
+judgment.
+
 So the question is not whether the repo cared about review. It clearly did.
 
 ---
@@ -68,6 +76,9 @@ Evidence comes from multiple layers:
   integration lanes
 - [JULES_LANE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/JULES_LANE_ARCHAEOLOGY.md)
   documents Bolt, Sentinel, and Palette as proto-specialist lanes
+- [Q4_Q1_HANDS_ON_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/Q4_Q1_HANDS_ON_ARCHAEOLOGY.md)
+  verifies that the same bridge window contains `16` Bolt-titled merges, `13`
+  Sentinel-titled merges, and `12` Palette-titled merges
 - [FEATURE_GOVERNANCE.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/FEATURE_GOVERNANCE.md)
   shows specialization at the code-architecture level through dedicated
   governance microcrates
