@@ -38,8 +38,10 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/JULES_LANE_ARCHAEOLOGY.md](research/JULES_LANE_ARCHAEOLOGY.md) — January 2026 Bolt/Sentinel/Palette lanes as proto-specialists
 - [research/MAINTAINER_BRIDGE_ARCHAEOLOGY.md](research/MAINTAINER_BRIDGE_ARCHAEOLOGY.md) — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern explicit
 - [research/MERGECODE_ARCHAEOLOGY.md](research/MERGECODE_ARCHAEOLOGY.md) — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and three explicit flows into a doctrine layer before the modern swarm control plane
+- [research/MERGECODE_ROOTS_ARCHAEOLOGY.md](research/MERGECODE_ROOTS_ARCHAEOLOGY.md) — how `agents3` preserves a MergeCode-derived donor control plane later specialized into the canonical perl-lsp Q3 swarm in `agents4`
 - [research/MERGE_DISCIPLINE_ARCHAEOLOGY.md](research/MERGE_DISCIPLINE_ARCHAEOLOGY.md) — PR governance from Q3 flow packs to `green-merge`, `review-pr`, and `triage-prs`
 - [research/MAINTAINER_VISION_ARCHAEOLOGY.md](research/MAINTAINER_VISION_ARCHAEOLOGY.md) — repeated waves of encoding maintainer judgment into prompts, lanes, commands, skills, hooks, and state
+- [research/OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md](research/OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md) — why the repo could already have review discipline, quality discipline, and specialization before those behaviors were sufficiently externalized into a lower-attention control plane
 - [research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md](research/WORKTREE_PARALLELISM_ARCHAEOLOGY.md) — how the repo moved from Q3 lane ideas and `maint/pr-*` bridges into deterministic `worktree-agent-*` execution
 - [research/SWARM_STATE_ARCHAEOLOGY.md](research/SWARM_STATE_ARCHAEOLOGY.md) — how `.claude/swarm-state/` became the committed memory ledger for the current swarm
 - [research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md](research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md) — how committed swarm-state files and issue-title prefixes split memory into queue state, pitfalls, findings, learning, and article artifacts
@@ -54,6 +56,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md](research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md) — how receipts, provenance schemas, and forensics turned proof into structured artifacts
 - [research/RECEIPT_SURFACE_EVOLUTION_ARCHAEOLOGY.md](research/RECEIPT_SURFACE_EVOLUTION_ARCHAEOLOGY.md) — how PR-body receipt bundles, PR templates, issue `#210`, and typed gate receipts formed a layered proof surface instead of one flat “receipt” concept
 - [research/RECEIPTS_LIE_ARCHAEOLOGY.md](research/RECEIPTS_LIE_ARCHAEOLOGY.md) — how PR `#209` and later validator repairs taught the repo that proof artifacts need governance too
+- [research/TRUTH_SURFACE_ARCHAEOLOGY.md](research/TRUTH_SURFACE_ARCHAEOLOGY.md) — how the repo externalized anti-drift into source catalogs, computed evidence docs, typed receipts, lessons, and fail-closed checks
 - [research/TRUSTED_CHANGE_ARCHAEOLOGY.md](research/TRUSTED_CHANGE_ARCHAEOLOGY.md) — how the repo industrialized trust through gates, receipts, drift checks, and durable lessons
 - [research/VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md](research/VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md) — how the repo kept repairing helpers, gates, baselines, and assertions when the measurement surface itself proved incomplete
 

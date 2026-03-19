@@ -13,6 +13,7 @@ Supplemental archaeology note:
 - `DIRECT_DELIVERY_ARCHAEOLOGY.md` — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
 - `INSTALL_SURFACE_ARCHAEOLOGY.md` — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
 - `MERGECODE_ARCHAEOLOGY.md` — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and explicit three-flow delivery into the doctrine layer before the later swarm control plane
+- `MERGECODE_ROOTS_ARCHAEOLOGY.md` — how `agents3` preserves a MergeCode-derived donor layer, `agents4` specializes it for perl-lsp, and late-September 2025 looks like a composite transplant rather than a pure local invention
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
 - `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
 - `CASEBOOK_FORENSICS_ARCHAEOLOGY.md` — how casebook exhibits, dossier scripts, lessons, and specialist auditors turned postmortems into a reusable evidence pipeline
@@ -30,6 +31,7 @@ Supplemental archaeology note:
 - `MAINTAINER_BRIDGE_ARCHAEOLOGY.md` — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern obvious
 - `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
 - `MAINTAINER_VISION_ARCHAEOLOGY.md` — how maintainer judgment was repeatedly recast into better agent surfaces, from direct orchestration to skills/hooks/state
+- `OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md` — why the repo could already have strong review, quality, and specialization while still lacking a sufficiently externalized operating system to make that quality cheap in attention
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
 - `REVIEW_LABEL_ARCHAEOLOGY.md` — how the canonical Q3 swarm used GitHub labels as a review state machine with intake, lanes, gates, and merge readiness alongside `issue-to-draft` / `draft-to-pr` / `pr-to-merge`
@@ -43,6 +45,7 @@ Supplemental archaeology note:
 - `REVIEWER_NETWORK_ARCHAEOLOGY.md` — how reviewer identities themselves act as workflow-era signals, from human-led mixed review to machine-dense review lanes and later thinner gate-era threads
 - `QUEUE_BOTTLENECK_ARCHAEOLOGY.md` — how the merge queue, CI throughput, and issue overflow became the real bottlenecks at swarm scale
 - `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
+- `TRUTH_SURFACE_ARCHAEOLOGY.md` — how claim drift drove the repo to externalize truth into `features.toml`, `CURRENT_STATUS`, lessons, receipt schemas, `xtask`, and fail-closed checks
 - `VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md` — how corpus gates, helper coverage, parser test helpers, and benchmark baselines were hardened after proof surfaces proved incomplete
 - `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm
 - `Q3_SWARM_TALK_ARCHAEOLOGY.md` — the Q3 2025 talk as primary-source evidence for trusted change, flows-not-chats, author/critic, receipts, and the later control-plane hardening

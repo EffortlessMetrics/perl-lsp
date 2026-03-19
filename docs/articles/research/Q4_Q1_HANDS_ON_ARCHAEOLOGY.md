@@ -210,6 +210,9 @@ The evidence is spread across the repo:
 - [`docs/articles/research/CONTROL_PLANE_ARCHAEOLOGY.md`](CONTROL_PLANE_ARCHAEOLOGY.md)
   shows what the repo still lacked at this point: stable commands, skills,
   hooks, and committed state
+- [`docs/articles/research/OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md`](OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md)
+  tests that thesis directly and ties it to review discipline, quality
+  discipline, specialization, and still-expensive maintainer attention
 
 In other words:
 
