@@ -30,6 +30,12 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/SWARM_STATE_ARCHAEOLOGY.md](research/SWARM_STATE_ARCHAEOLOGY.md) — how `.claude/swarm-state/` became the committed memory ledger for the current swarm
 - [research/SWARM_SURFACE_EVOLUTION.md](research/SWARM_SURFACE_EVOLUTION.md) — Jan→Mar 2026 transition from commands to the current skills/hooks/swarm-state control plane
 
+### Trust, Provenance, and AI-Native Operations
+
+- [research/AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md](research/AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md) — how the repo moved from assisted coding toward an AI-native, receipt-driven operating model
+- [research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md](research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md) — how receipts, provenance schemas, and forensics turned proof into structured artifacts
+- [research/TRUSTED_CHANGE_ARCHAEOLOGY.md](research/TRUSTED_CHANGE_ARCHAEOLOGY.md) — how the repo industrialized trust through gates, receipts, drift checks, and durable lessons
+
 ### GitHub PR Ledger Archaeology
 
 - [research/PR_BRANCH_NAMING_ARCHAEOLOGY.md](research/PR_BRANCH_NAMING_ARCHAEOLOGY.md) — how head branches and PR titles reflect changing workflow eras
