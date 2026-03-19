@@ -5,7 +5,7 @@
 //! options for editors.
 
 use once_cell::sync::Lazy;
-use perl_position_tracking::{WirePosition, WireRange};
+use perl_position_tracking::{WirePosition, WireRange, offset_to_utf16_line_col};
 use regex::Regex;
 use serde_json::{Value, json};
 
@@ -51,16 +51,8 @@ const NAMED_COLORS: &[(&str, u8, u8, u8)] = &[
 /// LSP uses UTF-16 code units for character positions, but Rust strings use
 /// UTF-8 byte offsets. This converts a byte position within a line to the
 /// corresponding UTF-16 column position.
-fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> usize {
-    let mut units = 0;
-    for (i, ch) in line_text.char_indices() {
-        if i >= byte_pos {
-            break;
-        }
-        // UTF-16 encoding: chars >= U+10000 use 2 units
-        units += if ch as u32 >= 0x10000 { 2 } else { 1 };
-    }
-    units
+fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> u32 {
+    offset_to_utf16_line_col(line_text, byte_pos).1
 }
 
 /// Look up a named color (case-insensitive) and return its Color
@@ -131,8 +123,8 @@ fn detect_hex_colors(text: &str) -> Vec<ColorInformation> {
                 let hex = &cap[1];
                 if let Some(color) = parse_hex_color(hex) {
                     // Convert byte offsets to UTF-16 positions (LSP requirement)
-                    let start_char = byte_to_utf16_col(line, mat.start()) as u32;
-                    let end_char = byte_to_utf16_col(line, mat.end()) as u32;
+                    let start_char = byte_to_utf16_col(line, mat.start());
+                    let end_char = byte_to_utf16_col(line, mat.end());
 
                     colors.push(ColorInformation {
                         range: WireRange {
@@ -206,8 +198,8 @@ fn detect_ansi_colors(text: &str) -> Vec<ColorInformation> {
                 let code = &cap[1];
                 if let Some(color) = parse_ansi_color(code) {
                     // Convert byte offsets to UTF-16 positions (LSP requirement)
-                    let start_char = byte_to_utf16_col(line, mat.start()) as u32;
-                    let end_char = byte_to_utf16_col(line, mat.end()) as u32;
+                    let start_char = byte_to_utf16_col(line, mat.start());
+                    let end_char = byte_to_utf16_col(line, mat.end());
 
                     colors.push(ColorInformation {
                         range: WireRange {
@@ -369,8 +361,8 @@ fn detect_named_colors(text: &str) -> Vec<ColorInformation> {
             }
 
             if let Some(color) = lookup_named_color(mat.as_str()) {
-                let start_char = byte_to_utf16_col(line, match_start) as u32;
-                let end_char = byte_to_utf16_col(line, match_end) as u32;
+                let start_char = byte_to_utf16_col(line, match_start);
+                let end_char = byte_to_utf16_col(line, match_end);
 
                 colors.push(ColorInformation {
                     range: WireRange {
@@ -398,8 +390,8 @@ fn detect_term_ansicolor(text: &str) -> Vec<ColorInformation> {
         for cap in re.captures_iter(line) {
             if let (Some(mat), Some(name_match)) = (cap.get(0), cap.get(1)) {
                 if let Some(color) = lookup_named_color(name_match.as_str()) {
-                    let start_char = byte_to_utf16_col(line, mat.start()) as u32;
-                    let end_char = byte_to_utf16_col(line, mat.end()) as u32;
+                    let start_char = byte_to_utf16_col(line, mat.start());
+                    let end_char = byte_to_utf16_col(line, mat.end());
 
                     colors.push(ColorInformation {
                         range: WireRange {
@@ -585,11 +577,14 @@ mod tests {
     #[test]
     fn parser_detect_ansi_colors_utf16_positions() {
         // Test that ANSI color positions are in UTF-16 code units
-        // Chinese char = 3 bytes, 1 UTF-16 code unit
-        let text = r"\e[31m";
+        // Chinese chars are 3 bytes each, but only 1 UTF-16 code unit each.
+        let text = r"世界 \e[31m";
         let colors = detect_ansi_colors(text);
         assert_eq!(colors.len(), 1);
-        assert_eq!(colors[0].range.start.character, 0);
+
+        // "世界 " = 3 UTF-16 units before the ANSI sequence.
+        assert_eq!(colors[0].range.start.character, 3);
+        assert_eq!(colors[0].range.end.character, 9);
     }
 
     #[test]
