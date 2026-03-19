@@ -10,8 +10,10 @@ Supplemental archaeology note:
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
+- `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-heavy bridge era where the repo was disciplined but still depended on maintainer integration
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
+- `ISSUE_ROUTING_ARCHAEOLOGY.md` — how the issue tracker became a typed overflow queue for `swarm-discovered` findings, self-improvement, and future builder slices
 - `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
@@ -21,6 +23,7 @@ Supplemental archaeology note:
 - `QUEUE_BOTTLENECK_ARCHAEOLOGY.md` — how the merge queue, CI throughput, and issue overflow became the real bottlenecks at swarm scale
 - `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
 - `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm
+- `Q3_SWARM_TALK_ARCHAEOLOGY.md` — the Q3 2025 talk as primary-source evidence for trusted change, flows-not-chats, author/critic, receipts, and the later control-plane hardening
 - `SWARM_SURFACE_EVOLUTION.md` — the Jan→Mar 2026 transition where commands predate skills, then hooks and swarm-state turn the current control plane on
 - `SWARM_STATE_ARCHAEOLOGY.md` — how `swarm-state` became a layered institutional-memory ledger instead of transient coordination notes
 - `TRUSTED_CHANGE_ARCHAEOLOGY.md` — how mutation, fuzz, receipts, drift checks, and durable pitfall tracking made trusted change mechanical
