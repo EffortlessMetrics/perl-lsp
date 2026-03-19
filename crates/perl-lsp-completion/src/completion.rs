@@ -1739,6 +1739,9 @@ has 'name' => (re
             Some((code.len() - "(?:".len(), code.len())),
             "expected regex completion to replace the typed group opener"
         );
+    }
+
+    #[test]
     fn test_detect_use_qw_import_context_basic() {
         // Cursor right after opening paren in qw()
         let code = "use MyModule qw(";
