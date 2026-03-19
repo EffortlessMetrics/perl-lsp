@@ -107,6 +107,8 @@ The same philosophy shows up elsewhere:
 
 In this codebase, resilience is treated as a product feature. The guiding question is often not “what is the elegant failure mode?” but rather “what useful result can still be returned safely?”
 
+This oddity is now captured explicitly in [ADR-0037](../adr/0037-guaranteed-valid-uri-fallbacks.md), which documents why malformed URIs degrade to synthetic-but-valid identifiers at the protocol boundary.
+
 ---
 
 ## Curiosity #4: Degraded Mode Is a First-Class Operating State

@@ -56,6 +56,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0034](0034-custom-lsp-runtime.md) | Accepted | 2026-03-18 | Custom LSP Runtime over Framework Adoption | Bespoke protocol/transport/runtime stack kept to support governance, transport reuse, and explicit dispatch control |
 | [ADR-0035](0035-raw-pointer-parent-map.md) | Accepted | 2026-03-18 | Raw-Pointer Parent Map for AST Upward Traversal | Document-scoped sidecar parent cache using raw node pointers for fast declaration and scope walking |
 | [ADR-0036](0036-generated-feature-catalog-contracts.md) | Accepted | 2026-03-18 | Generated Feature Catalog Contracts | Build-time compilation of `features.toml` into generated Rust contracts for runtime, CI, and reporting |
+| [ADR-0037](0037-guaranteed-valid-uri-fallbacks.md) | Accepted | 2026-03-18 | Guaranteed-Valid Synthetic URI Fallbacks | Malformed boundary URIs degrade to stable synthetic URIs instead of failing requests or panicking |
 
 ## About ADRs
 
