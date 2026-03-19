@@ -16,6 +16,26 @@ improvement. Disposable workers in isolated worktrees do all code mutation.
 Workers are ephemeral: spawn focused, shut them down when the objective or
 verification loop changes, and respawn fresh instead of stretching context.
 
+## Orchestrator Discipline
+
+The lead orchestrates ONLY. It never:
+- Reads source code (agents investigate)
+- Creates issues directly (agents create issues with file:line references)
+- Fixes code (agents in worktrees fix code)
+- Reviews diffs (agents checkout and build)
+
+The lead ONLY:
+- Decides WHAT to investigate (areas, questions, goals)
+- Routes agents to work (SendMessage to idle agents, spawn new ones)
+- Processes agent results (route findings to next agent)
+- Captures learnings (memory files)
+- Manages the merge queue priority
+
+Why: Orchestrator context is expensive and strategic. Agent context is cheap
+and disposable. Every byte of orchestrator context spent on implementation
+details is a byte not spent on routing. Agents always find something the
+orchestrator would miss because they READ THE CODE.
+
 ## Slash Entry Point Scope
 
 `/swarm` is the main control-plane entrypoint. The core worker procedures
@@ -137,6 +157,7 @@ Read .claude/swarm-state/discovered-issues.md and completed-slices.md for dedup.
 Invoke /swarm-priorities to understand what matters.
 Spawn 5-8 Explore subagents per round (1 per error bucket for parser work).
 For each finding: invoke /plan-fix to write handoff, then /scout-report to create issue.
+Agents create their own issues — scout output quality >>> orchestrator guesses.
 If a discovery would produce a different crate surface or verification loop, split it into a new task instead of bundling it into an existing slice.
 Use TaskCreate for each slice. Message builder when tasks are ready.
 ```
@@ -150,6 +171,8 @@ Anchor each worktree worker to a concrete issue or scout finding before writing 
 Spawn worktree subagents: Agent(isolation: "worktree", prompt: "Invoke /coding-standards. Then invoke /parser-fix '<desc>'.")
 Run 3-5 subagents in parallel. Each subagent does one task.
 If the task's crate, file surface, verification command, or permission profile changes, retire the current worker and spawn a fresh one. One worktree worker should produce one PR-shaped unit of change.
+Do NOT rebase speculatively — only at merge time via ops.
+Run python3 scripts/update-current-status.py if tests were added.
 When done: invoke /verify-build, then /pr-create.
 SendMessage({to: "reviewer"}) when builds complete.
 ```
@@ -194,8 +217,10 @@ Create PRs with --label swarm-improve-docs or swarm-improve-tests.
 The lead's periodic duties:
 - **Every ~10 merges**: Check priority drift; send scout priority steering if needed
 - **Queue low**: Message scout to find more work
+- **Idle agents**: Repurpose via SendMessage instead of spawning new ones
 - **As needed**: `/swarm-status` to check state, `/green-merge` to drain queue
 - **Daily**: `/swarm-report` for user check-in
+- **Late cycle**: Reserve 10 agent slots for routing — do not fill all capacity
 
 ## Phase 4: Continuous Operation
 
@@ -216,6 +241,8 @@ improver ───→ worktree subs ──→ improvement PRs (always ~20%)
 
 - New worktree: separate PR, separate rebase surface, or separate verification loop.
 - New worker: different objective, crate, file surface, permissions, or hypothesis.
+- New agent for investigation: always — even "quick" tasks. The orchestrator never reads code.
 - New skill: instructions are stable enough to reuse across runs.
 - New hook: behavior must be guaranteed rather than requested.
 - No new worker: sequential branch-local work with the same goal, files, and verification loop.
+- Orchestrator creates issues: never. Agents create issues with code analysis and file:line references.
