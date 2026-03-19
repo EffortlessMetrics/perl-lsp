@@ -14,6 +14,7 @@ Supplemental archaeology note:
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
 - `ISSUE_ROUTING_ARCHAEOLOGY.md` — how the issue tracker became a typed overflow queue for `swarm-discovered` findings, self-improvement, and future builder slices
+- `ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md` — how issue bodies and PR bodies became linked swarm memory, with review-summary, learning, ops, and article issues preserving what PRs meant
 - `ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md` — how issues and PRs became a shared lineage ledger, with March 2026 making explicit closure language and PR-backed learning issues normal
 - `MAINTAINER_BRIDGE_ARCHAEOLOGY.md` — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern obvious
 - `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
@@ -27,6 +28,7 @@ Supplemental archaeology note:
 - `RECEIPTS_LIE_ARCHAEOLOGY.md` — how PR `#209` became the original scar story showing that receipts can be technically true yet still operationally weak
 - `QUEUE_BOTTLENECK_ARCHAEOLOGY.md` — how the merge queue, CI throughput, and issue overflow became the real bottlenecks at swarm scale
 - `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
+- `VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md` — how corpus gates, helper coverage, parser test helpers, and benchmark baselines were hardened after proof surfaces proved incomplete
 - `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm
 - `Q3_SWARM_TALK_ARCHAEOLOGY.md` — the Q3 2025 talk as primary-source evidence for trusted change, flows-not-chats, author/critic, receipts, and the later control-plane hardening
 - `SWARM_SURFACE_EVOLUTION.md` — the Jan→Mar 2026 transition where commands predate skills, then hooks and swarm-state turn the current control plane on
