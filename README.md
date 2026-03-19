@@ -1,5 +1,11 @@
 # perl-lsp
 
+[![CI](https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
+[![docs.rs](https://docs.rs/perl-lsp/badge.svg)](https://docs.rs/perl-lsp)
+[![License: MIT/Apache-2.0](https://img.shields.io/crates/l/perl-lsp.svg)](LICENSE-MIT)
+[![MSRV: 1.92](https://img.shields.io/badge/MSRV-1.92-blue.svg)](https://blog.rust-lang.org/)
+
 `perl-lsp` is a native Rust Perl 5 toolchain centered on editor support. This repository ships the Language Server Protocol server, a separate Debug Adapter Protocol server, embeddable parser and lexer crates, and the corpus, workspace, and status machinery used to harden them together.
 
 > Status: public alpha. APIs, behavior, and packaging are still evolving. See the [Stability Policy](docs/reference/STABILITY.md).
