@@ -52,6 +52,7 @@ Two comprehensive scout reports are ready for blog article development:
 
 **Era 2: Early Swarms (August–October 2025)**
 - First multi-agent experiments
+- Massive daily PR batches become normal
 - 840 commits / 3 months (9.3/day)
 - `codex/*` prefix emerges
 - Parser v2 (Pest) improvements
@@ -65,9 +66,10 @@ Two comprehensive scout reports are ready for blog article development:
 - Parser v3 (recursive descent) birth
 - No agents deployed yet
 
-**Era 4: Copilot CLI Fleet (Late February – Early March 2026)**
+**Era 4: Copilot CLI Fleet (2026-02-27 to 2026-03-05)**
 - GitHub Copilot mass-production
-- 1,658 commits / 2 weeks (82/day) **[PEAK]**
+- 255 merged commits on `master` / 7 days (36/day), with a 152-commit peak day
+- Copilot CLI attribution across the burst
 - `codex/*` dominates 95%+ of branches
 - Bot-enforced conventional commits
 - Firehose pattern (short-lived PRs)
@@ -82,7 +84,7 @@ Two comprehensive scout reports are ready for blog article development:
 - Memory persistence (30+ files)
 
 ### Critical Insights
-1. **Velocity ≠ Quality**: Era 5 (40/day) outperforms Era 4 (82/day) on sustainability
+1. **Velocity ≠ Quality**: Era 5 (~40/day sustained) outperforms the short Copilot CLI burst (~36/day merged average) on sustainability
 2. **Architecture Required Slowdown**: Era 3 (2.8/day) was intentional but enabled future speed
 3. **Steven Is Bottleneck**: Human review/merge in all eras
 4. **3-Wide Merge Queue Is CI Limit**: Optimal ~9 agents; Era 5 overprovisioned to 100 (overflow to issues)
@@ -92,14 +94,14 @@ Two comprehensive scout reports are ready for blog article development:
 - **"Five Eras of AI Development"** article (methodology evolution)
 - **"Why Slower Is Faster"** article (Era 3 rationale)
 - **"Copilot vs Claude Agents"** article (bot vs agent trade-offs)
-- **"From 14 to 82 to 40"** article (velocity patterns)
+- **"From Direct Commits to PR Swarms to Structured Teams"** article (workflow evolution)
 - **"Branch Naming as Signal"** article (codex/ vs worktree-agent-HASH)
 
 ### Key Numbers
 - **2,679** total commits
-- **1,658** commits in Copilot era (peak)
+- **255** merged commits in the Copilot CLI burst window
 - **321** commits in single day (Era 5, 2026-03-18)
-- **14.2** to **82.0** to **40.0** commits/day (across eras)
+- **14.2** to **36.4** to **40.0** commits/day (across eras)
 - **54** archived agent definitions
 - **100** agents deployed simultaneously (Era 5)
 
@@ -117,7 +119,7 @@ Two comprehensive scout reports are ready for blog article development:
 - Skill-based composition vs monolithic prompts (~90% success vs ~50%)
 - Results: 56 PRs, 80+ issues, corpus +8%, learnings captured in memory
 - Breakthrough discovery: "built but not wired" PR #2057 (9 lines, highest ROI)
-- Why Era 5 (Claude agents, 40/day) beats Era 4 (Copilot, 82/day)
+- Why Era 5 (Claude agents, ~40/day) beats the Copilot CLI burst (255 merged commits in 7 days)
 
 **Data to Highlight**:
 - 546,283 lines of Rust, zero circular dependencies
@@ -197,7 +199,7 @@ Repeat for Next Error Class
 - Era 1: Opus as direct partner (14/day, exploratory)
 - Era 2: Early experiments (9/day, coordination overhead)
 - Era 3: Architecture phase (2.8/day, intentional slowdown)
-- Era 4: Copilot firehose (82/day, mass-production)
+- Era 4: Copilot firehose (255 merged commits in 7 days, mass-production)
 - Era 5: Claude agents (40/day, sustainable)
 - Why Copilot's generic branching (`codex/*`) caused conflicts
 - Why Claude's deterministic naming (`worktree-agent-HASH`) enables parallelism
@@ -210,7 +212,7 @@ Repeat for Next Error Class
 Era 1: 14.2 commits/day  (Opus direct)
 Era 2:  9.3 commits/day  (early swarms, coordination)
 Era 3:  2.8 commits/day  (architecture, slowest)
-Era 4: 82.0 commits/day  (Copilot peak)
+Era 4: 36.4 commits/day  (Copilot CLI merged average)
 Era 5: 40.0 commits/day  (Claude, sustained)
 ```
 
@@ -262,7 +264,7 @@ Microcrate Architecture → Isolated Crates → Parallel Agents
 5. **"9-line PR (#2057) was the highest ROI fix this cycle"**
 6. **"80% CPAN coverage — real-world Perl parsing at scale"**
 7. **"Five distinct AI development eras: Opus→Swarms→Sidechain→Copilot→Claude"**
-8. **"Sustained 40 commits/day with perfect code quality (vs 82/day firehose)"**
+8. **"Sustained ~40 commits/day with better quality than the Copilot CLI firehose"**
 
 ### Key Visuals to Generate
 1. **Velocity Timeline Graph** (Era 1→5, x-axis=time, y-axis=commits/day)
@@ -313,4 +315,3 @@ Microcrate Architecture → Isolated Crates → Parallel Agents
 - `/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/DEVELOPMENT_ARCHAEOLOGY.md` (4,200 words)
 - `/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/ERA_TIMELINE.md` (8,000 words)
 - `/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/BLOG_MATERIAL_INDEX.md` (this file)
-

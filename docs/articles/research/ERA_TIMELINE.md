@@ -127,7 +127,7 @@ Peak at **109 commits 2025-08-26**, drops to 75-78 commits 2025-08-27, suggestin
 - **Testing infrastructure**: Corpus tests, highlight tests, S-expression comparison
 
 ### Verdict
-**Transition phase**. Opus is working with early agent infrastructure (evidenced by `codex/` branches). Work is more parallelized (multiple concurrent branches) but still single-human commits. Branch naming suggests automated tooling creating branches (`codex/` = Copilot-generated?). Velocity drops from Era 1 (~947/2mo → ~840/3mo), suggesting increased coordination overhead.
+**Transition phase**. This is where the repo visibly becomes swarm-driven: large daily PR batches appear in Q3 2025, even though Steven still remains the final integrator and much of the merged history keeps single-human attribution. Era 1 was more direct; Era 2 makes the PR stream itself part of the story.
 
 ---
 
@@ -197,23 +197,23 @@ Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91
 - **Mutation testing**: Integrated into development workflow
 
 ### Verdict
-**Architecture and correctness phase**. Velocity plummets (423 commits / 5mo vs 947 / 2mo in Era 1). This is intentional: human + Opus pair working on architectural design, ADRs, and mutation testing hardening. **No agents deployed yet.** The swarm infrastructure is being *designed* (ADRs written) but not *executed*. This is the calm before the storm.
+**Architecture and correctness phase**. Velocity plummets (423 commits / 5mo vs 947 / 2mo in Era 1), but this phase is notably high-quality, stable, and consistent. The tradeoff is that it remains too hands-on: the human is still carrying a large share of the architecture, coordination, and integration burden directly. The swarm infrastructure is being *designed* here, not yet allowed to operate at full scale.
 
 ---
 
-## Era 4: Copilot CLI Fleet Mode (Late February – Early March 2026)
+## Era 4: Copilot CLI Fleet Mode (February 27 – March 5, 2026)
 ### "GitHub Copilot CLI Fleet/Autopilot, 'Firehose of Tokens'"
 
-**Date Range**: 2025-02-15 to 2026-03-01
-**Duration**: ~2 weeks (if starting 2026-02-15)
-**Total Commits**: 1,658
-**Average Velocity**: ~82 commits/day
-**Peak Day**: 2026-02-28 (91 commits) AND earlier days at ~106 commits
+**Date Range**: 2026-02-27 to 2026-03-05
+**Duration**: 7 days
+**Total Commits**: 255 merged commits on `master`
+**Average Velocity**: ~36 commits/day
+**Peak Day**: 2026-03-04 (152 commits)
 
 ### Commit Patterns
-- **Conventional commits**: Jump to ~2,295/1,658 (138%)
-  - Suggests bot-generated commits with duplicate artifacts
+- **Conventional commits**: Dominant across the merged burst
   - Nearly every commit is "fix(X): ...", "feat(Y): ...", "chore(Z): ..."
+  - Suggests a strongly tool-shaped workflow even when final merges land under Steven's identities
 
 - **Branch naming**: Massive codex/ prefix proliferation
   - `codex/describe-architecture-decisions`
@@ -221,18 +221,17 @@ Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91
   - Consistent naming suggests automated branching
 
 - **Commit velocity**: **Firehose pattern**
-  - 1,658 commits in ~2 weeks = **82 commits/day average**
-  - Peak days: 106+ commits
+  - 255 merged commits in 7 days = **~36 commits/day average**
+  - Peak day: 152 commits on 2026-03-04
   - Suggests high-parallelism, short-lived PRs
 
 - **Commit message uniqueness**: High variation, many similar but not identical
   - Suggests: code-gen + human-review cycles, not pure automation
 
 ### Contributors
-- **Steven Zimmerman** (attributed for merges)
-- **Copilot-swe-agent[bot]** (appears in this era)
-  - Only **1 commit** directly attributed, suggests Steven is merging copilot work
-  - Bot infrastructure exists but Steven still doing final merges
+- **Steven Zimmerman / Steven Zimmerman, CPA** (attributed for merges on `master`)
+- **Copilot CLI attribution** across the burst even when merged commits land under Steven's identities
+- **Dependabot** continues in the background but is not the defining signal for this era
 
 ### Key Work
 1. **ADR coverage expansion**: Massive documentation push
@@ -257,11 +256,12 @@ Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91
 
 ### Distinctive Artifacts
 - **Copilot signature**:
-  - High commit count (~82/day)
+  - Copilot CLI attribution across the full 2026-02-27 → 2026-03-05 burst
+  - High merged-commit volume in a one-week window (~36/day, with a 152-commit peak day)
   - Conventional commit format enforcement
   - Branch names start with `codex/`
   - Similar but varied commit messages (not template-based)
-  - Long-running (2 weeks)
+  - Short, intense burst rather than a long steady phase
 
 - **Quality gate enforcement**:
   - "Merge pull request #XXX" pattern
@@ -273,7 +273,7 @@ Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91
   - Architecture becoming documented as-built rather than as-designed
 
 ### Velocity Pattern
-Peak velocity reaches **1,658 commits / 2 weeks** (~82/day). This is **1.7x higher than Era 2** and **6x higher than Era 3**. Sustained high velocity across consecutive days (106, 91, 109, 94 commits).
+Peak merged velocity reaches **255 commits / 7 days** (~36/day), with a single-day spike of **152 commits on 2026-03-04**. The defining shape is a compressed burst, not a long plateau.
 
 ### Architectural Milestones
 - **v0.12.0 polish**: Features implemented and documented
@@ -282,7 +282,7 @@ Peak velocity reaches **1,658 commits / 2 weeks** (~82/day). This is **1.7x high
 - **ADR catalog**: Architecture decisions formalized and indexed
 
 ### Verdict
-**Copilot mass-production era**. Velocity jumps 6x from Era 3 → Era 4. Clear firehose pattern: short-lived branches, high parallelism, consistent naming. **Bot activity exists but Steven remains the merge bottleneck**. Quality maintained (conventional commits, code review visible) but volume explodes. This is where Copilot CLI's "fleet mode" or "autopilot" shines. Estimated **20-40 parallel Copilot agents** generating code simultaneously, Steven merging in batches.
+**Copilot CLI mass-production burst**. Clear firehose pattern: short-lived branches, high parallelism, consistent naming, and Copilot CLI attribution across the entire window. Steven remains the merge bottleneck, but now the burden is selecting and integrating from a very dense PR stream rather than doing the work directly.
 
 ---
 
@@ -383,7 +383,7 @@ Peak velocity reaches **1,658 commits / 2 weeks** (~82/day). This is **1.7x high
 - **Worktree isolation proven**: 100 agents, zero conflicts
 
 ### Verdict
-**Mature swarm era**. Velocity is lower than Copilot era (40/day vs 82/day) but more *controlled*. Every agent has its own worktree branch, reducing merge conflicts. Agents use skills rather than raw prompts. Memory system captures learnings. This is **purpose-built infrastructure**, not generic automation. Success rate for constrained tasks ~90% (parser fixes), ~50% for unconstrained features (new UX). Optimal team size is ~9 coding agents (due to 3-wide merge queue) but burst to 100 with issue overflow queue. **This is the sweet spot for quality + velocity.**
+**Mature swarm era**. Velocity is slightly higher than the Copilot CLI burst on merged-commit average (40/day vs ~36/day) and far more *controlled*. Every agent has its own worktree branch, reducing merge conflicts. Agents use skills rather than raw prompts. Memory system captures learnings. This is **purpose-built infrastructure**, not generic automation. Success rate for constrained tasks ~90% (parser fixes), ~50% for unconstrained features (new UX). Optimal team size is ~9 coding agents (due to 3-wide merge queue) but burst to 100 with issue overflow queue. **This is the sweet spot for quality + velocity.**
 
 ---
 
@@ -394,11 +394,12 @@ Peak velocity reaches **1,658 commits / 2 weeks** (~82/day). This is **1.7x high
 Era 1 (Opus):        947 commits / 2mo   = 14.2 commits/day
 Era 2 (Early Swarms): 840 commits / 3mo   =  9.3 commits/day
 Era 3 (Sidechain):   423 commits / 5mo   =  2.8 commits/day [SLOWEST]
-Era 4 (Copilot):   1,658 commits / 2wk  = 82.0 commits/day [PEAK]
+Era 4 (Copilot):     255 commits / 7d   = 36.4 commits/day
 Era 5 (Claude Code): 837 commits / 3wk  = 40.0 commits/day [SUSTAINED]
 ```
 
-**Peak velocity**: Era 4 (Copilot) at 82/day
+**Peak merged average**: Era 5 (Claude Code) at 40/day
+**Peak single day**: Era 4 (Copilot CLI) with 152 commits on 2026-03-04
 **Most sustainable**: Era 5 at 40/day (with purpose-built infrastructure)
 **Most deliberate**: Era 3 at 2.8/day (architecture + mutation testing phase)
 
@@ -407,11 +408,11 @@ Era 5 (Claude Code): 837 commits / 3wk  = 40.0 commits/day [SUSTAINED]
 Era 1: 1,213 / 947   = 128% (duplicates, early stage)
 Era 2: ~50% (mixed, mostly natural language)
 Era 3: ~40% (still exploring)
-Era 4: 2,295 / 1,658 = 138% (bot-enforced + duplicates)
+Era 4: dominant on merged commits (Copilot CLI burst)
 Era 5: 943 / 837    = 113% (near-perfect, human-readable)
 ```
 
-**Insight**: Bot adoption (Era 4) forces conventional commits, but introduces duplicates. Mature agent teams (Era 5) achieve high adoption naturally.
+**Insight**: Tool-shaped workflows push Era 4 toward conventional commits. Mature agent teams (Era 5) achieve high adoption naturally while keeping the output easier to reason about.
 
 ### Branch Naming Evolution
 ```
@@ -482,9 +483,9 @@ Era 5: 3-4 (Steven + google-labs-jules bot + agents)
 
 ### 1. **Velocity Is Not Linear**
 - Opus direct coding (Era 1-2): ~14 commits/day
-- Copilot fleet (Era 4): ~82 commits/day
+- Copilot fleet (Era 4): ~36 merged commits/day, with a 152-commit peak day
 - Claude agents (Era 5): ~40 commits/day
-- **Lesson**: Not "faster is better." Era 5's 40/day is more sustainable and higher-quality than Era 4's 82/day.
+- **Lesson**: Not "faster is better." Era 5's ~40/day is more sustainable and higher-quality than the short Copilot CLI burst.
 
 ### 2. **Architecture Phase Required Slowdown**
 - Era 3 (2.8 commits/day) was intentional: ADRs written, mutation tests added, refactoring done.
@@ -590,11 +591,10 @@ Era 5: 3-4 (Steven + google-labs-jules bot + agents)
 | 1 | Opus Direct | 14/day | High | Single genius, slow |
 | 2 | Early Swarms | 9/day | High | Coordination overhead |
 | 3 | Sidechain | 2.8/day | Very High | Architecture requires slowdown |
-| 4 | Copilot Fleet | 82/day | Medium | Volume ≠ quality |
+| 4 | Copilot Fleet | 36/day | Medium | Volume ≠ quality |
 | 5 | Claude Agents | 40/day | High | Infrastructure-aware scaling |
 
 **The arc bends toward...**
-Well-designed infrastructure (worktree isolation, skills, memory, ADRs) enables controlled parallelism at 40 commits/day. This outperforms Copilot's 82/day because it maintains quality, prevents merge conflicts, and captures institutional knowledge.
+Well-designed infrastructure (worktree isolation, skills, memory, ADRs) enables controlled parallelism at ~40 commits/day. That slightly exceeds the merged average of the Copilot CLI burst while also maintaining quality, preventing merge conflicts, and capturing institutional knowledge.
 
 **The future**: Era 5 is the stable state. Scaling beyond 100 agents requires either (a) removing Steven as bottleneck via better CI tooling, or (b) embracing issue queue overflow as intentional.
-

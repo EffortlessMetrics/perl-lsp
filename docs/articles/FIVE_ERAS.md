@@ -32,6 +32,8 @@ This era built the foundation: the v3 recursive descent parser, the lexer, the b
 
 The limitation was throughput. One conversation, one context window, one thread of execution. The project was growing faster than a single dialogue could sustain. By late August, the commit messages show the strain — marathon sessions producing 30+ commits in a day, each building on the last.
 
+It was also still a mostly direct-commit era. PRs existed, but the repo had not yet shifted into the large daily PR batches that would define the next phase.
+
 The average of 22.5 commits per active day is deceptive. Some days had 40. Some had 2. What mattered was that every commit had a human in the loop who understood the full context.
 
 **What Era 1 left behind**: The parser architecture. The lexer design. The core AST types. The test corpus structure. Every subsequent era built on these foundations without replacing them.
@@ -51,11 +53,13 @@ Merge pull request #65 from EffortlessSteven/codex/support-complex-heredoc-delim
 
 The key discovery of Era 2 was that isolation enables parallelism. When two agents work on the same file, they conflict. When they work on separate modules, they do not. This was the seed of the microcrate architecture — the recognition that the unit of safe parallel work is the crate boundary.
 
+This is also the Q3 swarm era where daily PR volume becomes unmistakable. Compared with Era 1's more direct rhythm, work now lands as visible PR waves that have to be reviewed, merged, and occasionally untangled.
+
 The commit rate actually *dropped* from Era 1 (22.5 to 15.3 per active day). This is the cost of coordination. The single-threaded conversation was replaced by a multi-threaded workflow, and the overhead of managing branches, reviewing PRs, and resolving conflicts consumed time that had previously gone to writing code.
 
 But the *breadth* of work increased. Era 1 had built depth in the parser. Era 2 spread across the LSP server, the scope analyzer, the test infrastructure, and early DAP work. Parallelism does not mean faster on any single task. It means more tasks in flight.
 
-**What Era 2 left behind**: The PR-based workflow. The `codex/*` branch naming convention. The first 65 pull requests. The realization that crate boundaries are isolation boundaries.
+**What Era 2 left behind**: The PR-based workflow. The first high-volume daily swarm PR runs. The `codex/*` branch naming convention. The first 65 pull requests. The realization that crate boundaries are isolation boundaries.
 
 ---
 
@@ -66,6 +70,8 @@ But the *breadth* of work increased. Era 1 had built depth in the parser. Era 2 
 The slowest era by every metric. And the most important.
 
 Era 3 was an intentional deceleration. The architecture was designed in browser-based chat sessions — long-form conversations about how the system should be structured, not what code to write next. The code correctness sprint ran as a separate workstream. Architecture Decision Records (ADRs) were formalized. Mutation testing was introduced and hardened. The Nix development environment was locked down.
+
+This Q4/Q1 phase was high quality, stable, and consistent — but also a bit too hands-on. The human was still carrying too much of the orchestration and integration burden directly.
 
 The commit rate of 8.9 per active day (3.1 per calendar day) looks like stagnation compared to Era 1's 22.5. But the commits that *did* land were structural:
 
@@ -83,13 +89,13 @@ Every subsequent era's speed was enabled by Era 3's slowness. You cannot run 100
 
 ---
 
-## Era 4: Copilot CLI Fleet Mode (Late February -- Early March 2026)
+## Era 4: Copilot CLI Fleet Mode (February 27 -- March 5, 2026)
 
-**575 commits. 20 active days. 28.8 commits per active day. Peak: 152 commits in a single day.**
+**255 merged commits on `master`. 7 active days. 36.4 commits per active day. Peak: 152 commits on March 4, 2026.**
 
 The firehose.
 
-GitHub Copilot's autopilot mode enabled launching dozens of agents simultaneously through the CLI. The `codex/*` branch prefix proliferated — 431 remote branches, many with random suffixes appended to avoid collisions:
+GitHub Copilot CLI's fleet/autopilot mode enabled launching dozens of agents simultaneously through the CLI. This February 27 through March 5 burst carried Copilot CLI attribution even when the merged commits on `master` landed under Steven Zimmerman variants. The `codex/*` branch prefix proliferated — 431 remote branches, many with random suffixes appended to avoid collisions:
 
 ```
 codex/improve-fuzzing-coverage
@@ -171,12 +177,12 @@ The memory system — 97 files encoding feedback, project state, and reference p
 | 1. Opus Direct | 22.5 | Every commit reviewed in conversation |
 | 2. Early Swarms | 15.3 | PR review, some conflicts |
 | 3. Architectural | 8.9 | ADRs, mutation testing, formal gates |
-| 4. Copilot Fleet | 28.8 | CI pass rate, high duplication |
+| 4. Copilot Fleet | 36.4 | CI pass rate, high duplication |
 | 5. Agent Teams | 76.8 | Scout-verified, 90% constrained success |
 
 Era 5 has the highest raw velocity (76.8 commits per active day), but the comparison is misleading because it ran for only 5 days. The sustained rate will settle lower. What matters is the *structure* of the output.
 
-Era 4 produced 575 commits in 20 days and left behind 431 branches to triage. Era 5 produced 384 commits in 5 days and left behind 56 reviewed PRs with a clear merge order, 80+ filed issues with line-number references, and a corpus improvement of 8 percentage points.
+Era 4 produced 255 merged commits in 7 days and left behind 431 branches to triage. Era 5 produced 384 commits in 5 days and left behind 56 reviewed PRs with a clear merge order, 80+ filed issues with line-number references, and a corpus improvement of 8 percentage points.
 
 The difference is not speed. It is *legibility*. Era 4's output required significant human effort to triage — clustering duplicate PRs, comparing competing solutions, closing the inferior ones. Era 5's output was pre-triaged by the system itself. Scouts identified work. Builders executed it. Reviewers verified it. The human operator directed strategy, not housekeeping.
 
