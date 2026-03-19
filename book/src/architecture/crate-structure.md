@@ -570,16 +570,16 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
 - Tree-sitter compatible error nodes and diagnostics
 - Performance optimized (<5% overhead for normal code)
 
-## Historical Agent Ecosystem Integration (PR #153) (*Diataxis: Explanation* - specialized workflow automation history)
+## Agent Ecosystem Integration (PR #153) (*Diataxis: Explanation* - Specialized workflow automation)
 
 ### 94 Specialized Agents Architecture
 
-**Historical Note**: PR #153 introduced a comprehensive agent ecosystem with 94 specialized agents designed specifically for the tree-sitter-perl parsing ecosystem. That `.claude/agents2/` phase has since been removed from the live repo; the current tracked historical roster lives under `.claude/agents/archive/`.
+**Workflow Enhancement**: PR #153 introduces a comprehensive agent ecosystem with 94 specialized agents designed specifically for the tree-sitter-perl parsing ecosystem.
 
 #### Agent Directory Structure (*Diataxis: Reference* - Agent organization)
 
 ```
-.claude/agents2/                          # historical 94-agent specialization phase (removed)
+.claude/agents2/                          # 94 specialized agents (vs. 53 generic)
 ├── review/                               # 26 agents - PR review workflow
 │   ├── review-security-scanner.md       # UTF-16 security validation
 │   ├── review-mutation-tester.md        # 87% quality score validation
