@@ -65,6 +65,7 @@
 //! # }
 //! ```
 
+use crate::error_to_action;
 use crate::quick_fixes;
 use crate::refactors;
 use crate::types::QuickFixDiagnostic;
@@ -145,6 +146,16 @@ impl CodeActionsProvider {
                     "variable-shadowing" => {
                         actions.extend(quick_fixes::fix_variable_shadowing(&qf_diag));
                     }
+                    "parse-error" | "syntax-error" => {
+                        actions.extend(error_to_action::actions_for_error_diagnostic(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                        actions.extend(error_to_action::actions_for_builtin_typo(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
                     _ => {}
                 }
             }
@@ -223,6 +234,61 @@ mod tests {
         assert!(
             actions.iter().any(|a| a.title.contains("==")),
             "Expected action to change to comparison, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_generic_parse_error_missing_semicolon() {
+        let source = "my $x = 1\nmy $y = 2;";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let diagnostics = vec![make_diagnostic(0, 9, "parse-error", "Missing semicolon")];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|a| a.title.contains("semicolon")),
+            "Expected semicolon action for generic parse-error, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_generic_parse_error_builtin_typo() {
+        let source = "pritn \"hello\";";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let diagnostics =
+            vec![make_diagnostic(0, 5, "parse-error", "Bareword 'pritn' not allowed")];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|a| a.title.contains("print")),
+            "Expected 'Did you mean print?' action, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_syntax_error_maps_to_actions() {
+        let source = "my $x = 1";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let diagnostics = vec![make_diagnostic(0, 9, "syntax-error", "Unexpected end of file")];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|a| a.title.contains("semicolon")),
+            "Expected actions for syntax-error code, got: {:?}",
             actions
         );
     }
