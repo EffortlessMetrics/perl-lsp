@@ -76,7 +76,7 @@ use crate::{
         cancelled_response_with_method, document_not_found_error, enhanced_error,
     },
     state::{
-        ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
+        ClientCapabilities, DocumentState, ProjectConfig, ServerConfig, WorkspaceConfig,
         normalize_package_separator,
     },
     transport::{ContentLengthMessageReader, log_response},

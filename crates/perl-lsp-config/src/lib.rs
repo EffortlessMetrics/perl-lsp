@@ -3,6 +3,17 @@
 //!
 //! This microcrate isolates configuration parsing and defaults from the main
 //! server crate so they can evolve independently and be reused by tooling.
+//!
+//! ## Project Configuration
+//!
+//! The [`ProjectConfig`] type supports loading editor-agnostic project settings
+//! from a `.perl-lsp.toml` file in the workspace root. These settings provide
+//! baseline configuration that LSP `initializationOptions` and
+//! `didChangeConfiguration` values can override.
+
+mod project_config;
+
+pub use project_config::ProjectConfig;
 
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]

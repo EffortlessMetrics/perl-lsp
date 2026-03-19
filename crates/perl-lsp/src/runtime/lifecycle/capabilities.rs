@@ -181,6 +181,10 @@ impl LspServer {
             }
         }
 
+        // Load .perl-lsp.toml from workspace root (if available).
+        // This applies baseline project config before LSP client settings.
+        self.load_project_config();
+
         // Check for available tools quickly with a timeout
         // Use which/where command which is much faster than spawning the actual tools
         let has_perltidy = self.detect_tool("perltidy");
