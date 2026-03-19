@@ -13,6 +13,7 @@ Supplemental archaeology note:
 - `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
 - `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-heavy bridge era where the repo was disciplined but still depended on maintainer integration
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
+- `MODE_SHIFT_ARCHAEOLOGY.md` — the assisted/native/industrialized framework, grounded in repo evidence and the Q4/Q1 nuance that AI-native can still be hands-on
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
 - `ISSUE_LABEL_ARCHAEOLOGY.md` — how `swarm-discovered`, `swarm-improve-*`, reserved architectural escalation, and issue-title prefixes turned the issue tracker into typed routing memory
 - `ISSUE_ROUTING_ARCHAEOLOGY.md` — how the issue tracker became a typed overflow queue for `swarm-discovered` findings, self-improvement, and future builder slices

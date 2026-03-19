@@ -38,6 +38,11 @@ Verified on `2026-03-19` from the merged PR archive and `git log`:
 So the repo had already become strongly PR-shaped. The key limit was not lack of
 process. It was that the process still ran through the maintainer's hands.
 
+Maintainer note: this was still an AI-native phase. The mode was not "human
+writes, AI assists." It was closer to AI writing and AI reviewing, with the
+maintainer paying the integration cost. The constraint was attention, not the
+absence of machine authorship.
+
 ---
 
 ## 2. Branch Names Show The Human In The Loop
