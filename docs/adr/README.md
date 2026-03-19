@@ -61,43 +61,6 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 
 ## Topic Guide
 
-Use these clusters when you need ADRs for a specific subsystem instead of scanning the full index.
-
-### Parser and Lexer
-
-- [ADR-0001](0001-substitution-operator-parsing-architecture.md) - Substitution operator parsing architecture and delimiter/modifier support.
-- [ADR-0014](0014-mode-aware-lexer.md) - Slash disambiguation via lexer modes.
-- [ADR-0023](0023-include-macro-architecture.md) - `include!`-based parser composition for tight internal coupling.
-- [ADR-0024](0024-fifo-heredoc-queue.md) - FIFO heredoc collection for single-pass parsing.
-
-### LSP Runtime, Documents, and Indexing
-
-- [ADR-0020](0020-rope-document-management.md) - Rope-backed document model for efficient edits and offset conversion.
-- [ADR-0021](0021-lsp-capability-contract.md) - Capability advertisement contract and `lsp-ga-lock` release mode.
-- [ADR-0022](0022-scope-analyzer-hash-context.md) - Hash-key context detection for strict-mode analysis.
-- [ADR-0025](0025-dual-document-representation.md) - Dual Rope + String representation for editor and parser workloads.
-- [ADR-0026](0026-lifecycle-index-routing.md) - Lifecycle-aware request routing while indexes build or degrade.
-- [ADR-0031](0031-async-runtime-concurrent-dispatch.md) - Concurrent request dispatch and bounded worker pool.
-- [ADR-0034](0034-custom-lsp-runtime.md) - Custom runtime stack instead of framework adoption.
-
-### DAP and Editor Integrations
-
-- [ADR-0011](0011-dap-bridge-mode-architecture.md) - DAP bridge architecture.
-- [ADR-0019](0019-security-first-dap.md) - Security model for debug flows.
-- [ADR-0027](0027-dap-bridge-native.md) - Phased bridge-to-native debugger strategy.
-- [ADR-004](ADR_004_EXECUTE_COMMAND_CODE_ACTIONS.md) - Execute-command and code-action integration plan.
-
-### Workspace, Release, and Delivery
-
-- [ADR-0015](0015-supply-chain-security.md) - SBOM and provenance policy for releases.
-- [ADR-0017](0017-workspace-exclusion-strategy.md) - Excluding C-dependent crates from the default workspace path.
-- [ADR-0030](0030-receipt-gate-system.md) - Receipt-based CI gate verification and audit trail.
-- [ADR-0032](0032-skill-scoping-and-hook-enforcement.md) - Skill scoping and swarm hook policy.
-- [ADR-0033](0033-worktree-first-disposable-workers.md) - Worktree-first disposable worker execution model.
-
-
-## Topic Guide
-
 Use this section when you know the area of the system but not the ADR number yet. It highlights ADRs that were previously easy to miss because they were only listed in the chronological index.
 
 ### Parser and language semantics
@@ -115,6 +78,8 @@ Use this section when you know the area of the system but not the ADR number yet
 - [ADR-0021](0021-lsp-capability-contract.md) — advertised capability policy.
 - [ADR-0022](0022-scope-analyzer-hash-context.md) — semantic reference analysis for barewords and hash keys.
 - [ADR-0026](0026-lifecycle-index-routing.md) — index lifecycle states and degraded-mode request routing.
+- [ADR-0035](0035-raw-pointer-parent-map.md) — document-scoped sidecar parent caches for fast upward AST traversal.
+- [ADR-0037](0037-guaranteed-valid-uri-fallbacks.md) — resilience-first synthetic URI policy for malformed protocol-boundary values.
 - [ADR-0030](0030-receipt-gate-system.md) — machine-readable CI gate verification.
 - [ADR-0031](0031-async-runtime-concurrent-dispatch.md) and [ADR-0034](0034-custom-lsp-runtime.md) — bespoke runtime decisions and concurrent dispatch evolution.
 - [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) — cancellation guarantees and parser checkpoints.
@@ -130,6 +95,7 @@ Use this section when you know the area of the system but not the ADR number yet
 
 - [ADR-0002](0002-api-documentation-infrastructure.md), [ADR-002](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md), and [ADR-003](ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md) — documentation quality gates and validation infrastructure.
 - [ADR-004](ADR_004_EXECUTE_COMMAND_CODE_ACTIONS.md) — executeCommand and code action architecture.
+- [ADR-0036](0036-generated-feature-catalog-contracts.md) — build-time generation of feature governance contracts from `features.toml`.
 - [ADR-001](ADR_001_AGENT_ARCHITECTURE.md), [ADR-0032](0032-skill-scoping-and-hook-enforcement.md), and [ADR-0033](0033-worktree-first-disposable-workers.md) — historical and current swarm orchestration decisions.
 
 ## About ADRs
