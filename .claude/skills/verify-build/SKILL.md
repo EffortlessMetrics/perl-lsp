@@ -19,9 +19,10 @@ This skill verifies a deliverable and produces a receipt. It does not replace
 4. Run clippy unless `--skip-clippy` is present
 5. Run tests unless `--skip-test` is present
 6. If the change added, removed, or materially changed tests, run
-   `just status-update` and `just status-check` before handoff so computed
-   docs stay fresh
-7. Report a receipt with pass/fail status for each step
+   `python3 scripts/update-current-status.py` then `just status-check`
+   before handoff so computed docs stay fresh
+7. Verify new functions are called from an entry point (not just defined)
+8. Report a receipt with pass/fail status for each step
 
 ## Commands
 
@@ -64,12 +65,19 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 Status refresh (REQUIRED when tests were added, removed, or changed):
 
 ```bash
-just status-update
+python3 scripts/update-current-status.py
 just status-check
 ```
 
 This prevents the `policy_checks` CI gate from failing due to stale derived
 metrics in `docs/project/CURRENT_STATUS.md`. Always run after modifying tests.
+
+Wiring check (REQUIRED for new features and enhancements):
+
+Verify that new public functions or methods are actually called from an entry
+point. Grep for the function name — if no call site exists outside its
+definition and tests, the feature is built but not wired and will be dead code
+in production.
 
 ## Receipt Format
 
@@ -80,6 +88,7 @@ Report:
 - clippy result
 - test result
 - whether status refresh was required and run
+- wiring check result (for new features)
 - overall pass/fail
 - first failure details if anything failed
 
