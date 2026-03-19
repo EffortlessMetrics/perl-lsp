@@ -1,4 +1,4 @@
-.TH PERL-LSP 1 "2026-03-19" "perl-lsp 0.12.0" "Perl Language Server"
+.TH PERL-LSP 1 "2026-03-19" "perl-lsp 0.11.0" "Perl Language Server"
 .SH NAME
 perl\-lsp \- Perl Language Server Protocol implementation
 .SH SYNOPSIS
@@ -48,18 +48,17 @@ environment variable is set.
 Set the feature profile, which controls which LSP capabilities are
 advertised to the editor.
 Supported values:
-.BR ga\-lock ", " ga ", " prod ", " production ", " all ", " auto .
+.BR auto ", " ga\-lock ", " ga ", " ga_lock ", " prod ", " production ", " all .
 .TP
 .B \-\-health
 Perform a quick health check and print
 .RI \(dq ok
-.IR version \(dq
+.IR "<version>" \(dq
 to stdout, then exit.
 .TP
 .B \-\-info
-Show server information including version, git tag, parser version,
-feature profile, number of advertised features, LSP coverage percentage,
-and executable path.
+Show server information including version, git tag, feature profile,
+number of advertised features, and LSP coverage percentage.
 .TP
 .B \-\-check
 Validate Perl files and report parse errors in batch mode, then exit.
@@ -74,7 +73,7 @@ The output reflects the active feature profile.
 Generate shell completion script for the given shell and print it to
 stdout, then exit.
 Supported shells:
-.BR bash ", " zsh ", " fish .
+.BR bash ", " zsh ", " fish ", " powershell .
 .TP
 .B \-\-version
 Print version information and exit.
