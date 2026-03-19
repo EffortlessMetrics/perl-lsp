@@ -4,6 +4,7 @@
 //! ghost text. These are deterministic completions based on patterns,
 //! not AI-powered suggestions.
 
+use perl_position_tracking::utf16_line_col_to_offset;
 use serde::{Deserialize, Serialize};
 
 /// Inline completion item (LSP 3.18 preview)
@@ -53,18 +54,36 @@ impl InlineCompletionProvider {
         line: u32,
         character: u32,
     ) -> InlineCompletionList {
-        let lines: Vec<&str> = text.lines().collect();
-
-        if let Some(current_line) = lines.get(line as usize) {
-            let prefix = &current_line[..character.min(current_line.len() as u32) as usize];
-
-            // Get completions based on context
+        if let Some((prefix, current_line)) = self.line_context_at_position(text, line, character) {
             let items = self.get_completions_for_context(prefix, current_line);
-
             return InlineCompletionList { items };
         }
 
         InlineCompletionList { items: vec![] }
+    }
+
+    fn line_context_at_position<'a>(
+        &self,
+        text: &'a str,
+        line: u32,
+        character: u32,
+    ) -> Option<(&'a str, &'a str)> {
+        if text.is_empty() {
+            return (line == 0).then_some(("", ""));
+        }
+
+        for (line_idx, raw_line) in text.split_inclusive('\n').enumerate() {
+            if line_idx as u32 == line {
+                let current_line = raw_line
+                    .strip_suffix("\r\n")
+                    .or_else(|| raw_line.strip_suffix('\n'))
+                    .unwrap_or(raw_line);
+                let prefix_end = utf16_line_col_to_offset(current_line, 0, character);
+                return Some((&current_line[..prefix_end], current_line));
+            }
+        }
+
+        None
     }
 
     fn get_completions_for_context(
@@ -376,5 +395,16 @@ mod tests {
         let completions = provider.get_inline_completions("#!/", 0, 3);
         assert!(!completions.items.is_empty());
         assert_eq!(completions.items[0].insert_text, "/usr/bin/env perl");
+    }
+
+    #[test]
+    fn test_after_arrow_with_unicode_prefix_uses_utf16_position() {
+        let provider = InlineCompletionProvider::new();
+        let source = "my $emoji = \"😀\"; my $obj = Package->";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(!completions.items.is_empty());
+        assert_eq!(completions.items[0].insert_text, "new()");
     }
 }
