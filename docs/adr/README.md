@@ -95,6 +95,43 @@ Use these clusters when you need ADRs for a specific subsystem instead of scanni
 - [ADR-0032](0032-skill-scoping-and-hook-enforcement.md) - Skill scoping and swarm hook policy.
 - [ADR-0033](0033-worktree-first-disposable-workers.md) - Worktree-first disposable worker execution model.
 
+
+## Topic Guide
+
+Use this section when you know the area of the system but not the ADR number yet. It highlights ADRs that were previously easy to miss because they were only listed in the chronological index.
+
+### Parser and language semantics
+
+- [ADR-0001](0001-substitution-operator-parsing-architecture.md) / [ADR-007](ADR_007_SUBSTITUTION_OPERATOR_PARSING.md) — substitution operator parsing strategy and legacy record alignment.
+- [ADR-0014](0014-mode-aware-lexer.md) — slash disambiguation and lexer mode design.
+- [ADR-0023](0023-include-macro-architecture.md) — `include!`-based parser composition.
+- [ADR-0024](0024-fifo-heredoc-queue.md) and [ADR-005](ADR_005_HEREDOC_MANUAL_PARSING.md) — heredoc declaration parsing and FIFO content capture.
+
+### LSP runtime, indexing, and editor responsiveness
+
+- [ADR-0009](0009-dual-indexing-strategy.md) — cross-file symbol lookup strategy.
+- [ADR-0010](0010-incremental-parsing-architecture.md) — low-latency edit handling.
+- [ADR-0020](0020-rope-document-management.md) and [ADR-0025](0025-dual-document-representation.md) — text storage and position conversion architecture.
+- [ADR-0021](0021-lsp-capability-contract.md) — advertised capability policy.
+- [ADR-0022](0022-scope-analyzer-hash-context.md) — semantic reference analysis for barewords and hash keys.
+- [ADR-0026](0026-lifecycle-index-routing.md) — index lifecycle states and degraded-mode request routing.
+- [ADR-0030](0030-receipt-gate-system.md) — machine-readable CI gate verification.
+- [ADR-0031](0031-async-runtime-concurrent-dispatch.md) and [ADR-0034](0034-custom-lsp-runtime.md) — bespoke runtime decisions and concurrent dispatch evolution.
+- [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) — cancellation guarantees and parser checkpoints.
+
+### DAP and security
+
+- [ADR-0011](0011-dap-bridge-mode-architecture.md) and [ADR-0027](0027-dap-bridge-native.md) — debugger bridge architecture and native migration plan.
+- [ADR-0015](0015-supply-chain-security.md) — SBOM and provenance requirements for releases.
+- [ADR-0017](0017-workspace-exclusion-strategy.md) — workspace shaping for portability and build isolation.
+- [ADR-0019](0019-security-first-dap.md) and [ADR-0028](0028-safe-eval-timeout.md) — DAP threat model and evaluation timeout policy.
+
+### Documentation, automation, and swarm workflow
+
+- [ADR-0002](0002-api-documentation-infrastructure.md), [ADR-002](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md), and [ADR-003](ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md) — documentation quality gates and validation infrastructure.
+- [ADR-004](ADR_004_EXECUTE_COMMAND_CODE_ACTIONS.md) — executeCommand and code action architecture.
+- [ADR-001](ADR_001_AGENT_ARCHITECTURE.md), [ADR-0032](0032-skill-scoping-and-hook-enforcement.md), and [ADR-0033](0033-worktree-first-disposable-workers.md) — historical and current swarm orchestration decisions.
+
 ## About ADRs
 
 Architecture Decision Records (ADRs) capture important architectural decisions along with their context and consequences. Each ADR includes:
