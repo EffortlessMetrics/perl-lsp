@@ -1,0 +1,531 @@
+mod cpan_test_helpers;
+use cpan_test_helpers::*;
+
+// ===== Fat arrow in various expression contexts =====
+
+// Moose/Moo `has` with fat arrow: has name => (is => 'ro')
+#[test]
+fn has_attribute_fat_arrow() {
+    let source = r#"has name => (is => 'ro', isa => 'Str');"#;
+    assert_clean_parse(source);
+}
+
+// Multiple `has` attributes
+#[test]
+fn has_multiple_attributes() {
+    let source = r#"has [qw(foo bar)] => (is => 'ro');"#;
+    assert_clean_parse(source);
+}
+
+// Anonymous hash ref with fat arrow
+#[test]
+fn anon_hashref_fat_arrow() {
+    let source = r#"my $h = { key => "value", foo => "bar" };"#;
+    assert_clean_parse(source);
+}
+
+// Function call with fat arrow named args
+#[test]
+fn function_call_fat_arrow_args() {
+    let source = r#"foo(bar => 1, baz => 2);"#;
+    assert_clean_parse(source);
+}
+
+// Method call with fat arrow named args
+#[test]
+fn method_call_fat_arrow_args() {
+    let source = r#"$obj->method(key => "value");"#;
+    assert_clean_parse(source);
+}
+
+// push with fat arrow (Perl allows => anywhere comma is valid)
+#[test]
+fn push_fat_arrow_separator() {
+    let source = r#"push @array => $value;"#;
+    assert_clean_parse(source);
+}
+
+// Hash assignment with fat arrow
+#[test]
+fn hash_assignment_fat_arrow() {
+    let source = r#"my %hash = (key1 => "val1", key2 => "val2");"#;
+    assert_clean_parse(source);
+}
+
+// Nested hash refs
+#[test]
+fn nested_hashref_fat_arrow() {
+    let source = r#"my $config = { db => { host => "localhost", port => 5432 } };"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in array ref context
+#[test]
+fn fat_arrow_in_arrayref() {
+    let source = r#"my $a = [key => "value"];"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow after string literal
+#[test]
+fn string_fat_arrow() {
+    let source = r#"my %h = ("key" => "value");"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow after number
+#[test]
+fn number_fat_arrow() {
+    let source = r#"my %h = (1 => "one", 2 => "two");"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in return context
+#[test]
+fn return_hash_fat_arrow() {
+    let source = r#"sub foo { return (key => "value") }"#;
+    assert_clean_parse(source);
+}
+
+// Chained method calls with fat arrow args
+#[test]
+fn chained_method_fat_arrow() {
+    let source = r#"$obj->foo(bar => 1)->baz(qux => 2);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in ternary
+#[test]
+fn fat_arrow_in_ternary_value() {
+    let source = r#"my %h = $cond ? (a => 1) : (b => 2);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with complex RHS expressions
+#[test]
+fn fat_arrow_complex_rhs() {
+    let source = r#"my %h = (key => $a + $b, other => $c || $d);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with sub ref as value
+#[test]
+fn fat_arrow_sub_ref_value() {
+    let source = r#"my %dispatch = (add => sub { $_[0] + $_[1] }, mul => sub { $_[0] * $_[1] });"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in method call without parens (common Moose pattern)
+#[test]
+fn has_fat_arrow_no_parens() {
+    let source = r#"has 'name' => (is => 'ro');"#;
+    assert_clean_parse(source);
+}
+
+// Comma and fat arrow mixed
+#[test]
+fn mixed_comma_fat_arrow() {
+    let source = r#"my @list = (a => 1, "b", "c", d => 2);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with negative number value
+#[test]
+fn fat_arrow_negative_number() {
+    let source = r#"my %h = (offset => -1, limit => 100);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with array ref value
+#[test]
+fn fat_arrow_arrayref_value() {
+    let source = r#"my %h = (items => [1, 2, 3], names => ["a", "b"]);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with hashref value
+#[test]
+fn fat_arrow_hashref_value() {
+    let source = r#"my %h = (config => { debug => 1 });"#;
+    assert_clean_parse(source);
+}
+
+// die with hashref (common pattern)
+#[test]
+fn die_hashref_fat_arrow() {
+    let source = r#"die { error => "bad input", code => 42 };"#;
+    assert_clean_parse(source);
+}
+
+// Moose-style `extends`, `with`, `before`, `after`, `around`
+#[test]
+fn moose_extends_with() {
+    let source = r#"extends 'Some::Class';
+with 'Some::Role';
+before 'method' => sub { print "before\n" };
+after 'method' => sub { print "after\n" };
+around 'method' => sub { my $orig = shift; $orig->(@_) };"#;
+    assert_clean_parse(source);
+}
+
+// Perl `=>` used as separator in print
+#[test]
+fn print_fat_arrow() {
+    let source = r#"print STDERR => "error message\n";"#;
+    assert_clean_parse(source);
+}
+
+// Complex: hash slice with fat arrow
+#[test]
+fn hash_constructor_in_call() {
+    let source = r#"$self->configure(name => $name, verbose => 1);"#;
+    assert_clean_parse(source);
+}
+
+// Trailing comma after fat arrow pair
+#[test]
+fn trailing_comma_after_fat_arrow() {
+    let source = r#"my %h = (key => "value",);"#;
+    assert_clean_parse(source);
+}
+
+// Empty hash
+#[test]
+fn empty_hash_ref() {
+    let source = r#"my $h = {};"#;
+    assert_clean_parse(source);
+}
+
+// `use parent` / `use base` with fat arrow
+#[test]
+fn use_parent_fat_arrow() {
+    let source = r#"use parent -norequire => 'Some::Class';"#;
+    assert_clean_parse(source);
+}
+
+// ===== Patterns likely seen in CPAN that might trigger unexpected_fat_arrow_expr =====
+
+// Fat arrow after a variable (not a bareword)
+#[test]
+fn variable_fat_arrow() {
+    let source = r#"my %h = ($key => $value);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in list assignment
+#[test]
+fn list_assignment_fat_arrow() {
+    let source = r#"my @pairs = (one => 1, two => 2, three => 3);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in for loop
+#[test]
+fn fat_arrow_in_for_hash() {
+    let source = r#"for my $k (keys %h) { print $k => $h{$k} }"#;
+    assert_clean_parse(source);
+}
+
+// Bare `has` as user-defined function
+#[test]
+fn user_defined_has_fat_arrow() {
+    let source = r#"has name => (is => 'ro', isa => 'Str', default => sub { 'unnamed' });"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in map
+#[test]
+fn map_fat_arrow_result() {
+    let source = r#"my %h = map { $_ => 1 } @list;"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow inside grep block
+#[test]
+fn grep_with_fat_arrow() {
+    let source = r#"my @r = grep { $_->{key} => 1 } @items;"#;
+    assert_clean_parse(source);
+}
+
+// Chained fat arrow pairs in assignment
+#[test]
+fn chained_fat_arrow_pairs_stmt() {
+    let source = r#"%opts = (verbose => 1, debug => 0, output => '/tmp/log');"#;
+    assert_clean_parse(source);
+}
+
+// Passing hash to function without parens
+#[test]
+fn function_hash_no_parens() {
+    let source = r#"configure name => "test", verbose => 1;"#;
+    assert_clean_parse(source);
+}
+
+// Dispatch table
+#[test]
+fn dispatch_table() {
+    let source = r#"my %dispatch = (
+    add  => \&do_add,
+    del  => \&do_del,
+    list => \&do_list,
+);"#;
+    assert_clean_parse(source);
+}
+
+// Moose `has` with `+` prefix (attribute override)
+#[test]
+fn moose_has_plus_override() {
+    let source = r#"has '+name' => (is => 'rw');"#;
+    assert_clean_parse(source);
+}
+
+// Type::Tiny / Type::Utils `declare`, `coerce` with fat arrow
+#[test]
+fn type_tiny_declare_coerce() {
+    let source = r#"declare "PositiveInt", as Int, where { $_ > 0 };"#;
+    assert_clean_parse(source);
+}
+
+// Hash ref in return
+#[test]
+fn return_hashref() {
+    let source = r#"sub foo { return { status => 'ok', code => 200 } }"#;
+    assert_clean_parse(source);
+}
+
+// Constructor pattern
+#[test]
+fn constructor_new_hash() {
+    let source = r#"my $obj = Class->new(name => "test", id => 42);"#;
+    assert_clean_parse(source);
+}
+
+// Nested method calls with hash args
+#[test]
+fn nested_method_hash_args() {
+    let source = r#"$self->log->info(message => "starting", level => 1);"#;
+    assert_clean_parse(source);
+}
+
+// Exception object construction (common pattern)
+#[test]
+fn exception_construction() {
+    let source = r#"Exception->throw(error => "bad", trace => Carp::longmess());"#;
+    assert_clean_parse(source);
+}
+
+// Catalyst / Dancer route with fat arrow
+#[test]
+fn catalyst_action() {
+    let source = r#"__PACKAGE__->config(namespace => 'api');"#;
+    assert_clean_parse(source);
+}
+
+// DBI connect with hash
+#[test]
+fn dbi_connect_hash() {
+    let source =
+        r#"my $dbh = DBI->connect($dsn, $user, $pass, { RaiseError => 1, AutoCommit => 0 });"#;
+    assert_clean_parse(source);
+}
+
+// Multiple fat arrow in complex expression
+#[test]
+fn complex_nested_fat_arrow() {
+    let source = r#"my %config = (
+    database => {
+        host => 'localhost',
+        port => 5432,
+        options => { timeout => 30, retry => 3 },
+    },
+    logging => {
+        level => 'info',
+        file  => '/var/log/app.log',
+    },
+);"#;
+    assert_clean_parse(source);
+}
+
+// Ternary with hash construction
+#[test]
+fn ternary_hash_construction() {
+    let source = r#"my $opts = $debug ? { verbose => 1, trace => 1 } : { verbose => 0 };"#;
+    assert_clean_parse(source);
+}
+
+// eval with hash
+#[test]
+fn eval_hashref() {
+    let source = r#"eval { $obj->method(timeout => 10) };"#;
+    assert_clean_parse(source);
+}
+
+// wantarray with fat arrow
+#[test]
+fn wantarray_fat_arrow_context() {
+    let source = r#"return wantarray ? (status => 'ok') : { status => 'ok' };"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow after expression (e.g., in list context)
+#[test]
+fn expression_result_fat_arrow() {
+    let source = r#"my @x = ($a + $b => $c);"#;
+    assert_clean_parse(source);
+}
+
+// Unshift with fat arrow
+#[test]
+fn unshift_fat_arrow_sep() {
+    let source = r#"unshift @arr => $val;"#;
+    assert_clean_parse(source);
+}
+
+// splice with fat arrow
+#[test]
+fn splice_fat_arrow_sep() {
+    let source = r#"splice @arr, 0, 1 => @new;"#;
+    assert_clean_parse(source);
+}
+
+// Hash in anonymous sub
+#[test]
+fn hash_in_anon_sub() {
+    let source = r#"my $cb = sub { return { ok => 1 } };"#;
+    assert_clean_parse(source);
+}
+
+// do-while with hashref
+#[test]
+fn do_block_hashref() {
+    let source = r#"my $r = do { { key => "val" } };"#;
+    assert_clean_parse(source);
+}
+
+// Local hash assignment
+#[test]
+fn local_hash_assignment() {
+    let source = r#"local %ENV = (%ENV, PATH => '/usr/bin');"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with qw
+#[test]
+fn fat_arrow_with_qw() {
+    let source = r#"my %h = (names => [qw(foo bar baz)]);"#;
+    assert_clean_parse(source);
+}
+
+// Multiple return values with fat arrow
+#[test]
+fn multi_return_fat_arrow() {
+    let source = r#"sub info { return (name => $self->{name}, age => $self->{age}) }"#;
+    assert_clean_parse(source);
+}
+
+// Complex: hash of arrays
+#[test]
+fn hash_of_arrays() {
+    let source = r#"my %data = (fruits => ['apple', 'banana'], vegs => ['carrot', 'pea']);"#;
+    assert_clean_parse(source);
+}
+
+// OO: Moo/Moose `with` and `extends` combined
+#[test]
+fn moose_with_extends() {
+    let source = r#"
+extends 'Base::Class';
+with 'Role::One', 'Role::Two';
+has foo => (is => 'ro', default => sub { [] });
+has bar => (is => 'rw', isa => 'Str', required => 1);
+"#;
+    assert_clean_parse(source);
+}
+
+// Test::More with fat arrow
+#[test]
+fn test_more_fat_arrow() {
+    let source = r#"is($got, $expected, "test name");"#;
+    assert_clean_parse(source);
+}
+
+// Carp with fat arrow in hashref
+#[test]
+fn croak_hashref() {
+    let source = r#"croak { message => "bad input", code => 42 };"#;
+    assert_clean_parse(source);
+}
+
+// ===== Patterns found in actual CPAN/system Perl files =====
+
+// bless EXPR => CLASS (CPAN::Distroprefs, Encode.pm)
+// In Perl, `bless $ref => $class` is valid — => acts as comma
+#[test]
+fn bless_fat_arrow_class() {
+    let source = r#"bless $_[1] => $_[0];"#;
+    assert_clean_parse(source);
+}
+
+// bless {} => CLASS
+#[test]
+fn bless_hashref_fat_arrow_class() {
+    let source = r#"sub new { bless $_[1] || {} => $_[0] }"#;
+    assert_clean_parse(source);
+}
+
+// bless hash element => package (Encode.pm)
+#[test]
+fn bless_hash_elem_fat_arrow_package() {
+    let source = r#"bless $obj{$_} => __PACKAGE__;"#;
+    assert_clean_parse(source);
+}
+
+// Comma followed by fat arrow: `key, => value` (B::Deparse)
+// Perl treats `, =>` as just `,` then `=>` — the comma is redundant
+#[test]
+fn comma_then_fat_arrow() {
+    let source = r#"my %h = (OPpLVREF_SV, => '$', OPpLVREF_AV, => '@');"#;
+    assert_clean_parse(source);
+}
+
+// Array ref with multiple fat arrows: [key => KEY => [value]]
+// (ExtUtils::Installed)
+#[test]
+fn arrayref_chained_fat_arrows() {
+    let source = r#"my @tuples = ([inc_override => INC => [ @INC ]]);"#;
+    assert_clean_parse(source);
+}
+
+// Full ExtUtils::Installed pattern
+#[test]
+fn for_tuple_chained_fat_arrows() {
+    let source = r#"for my $tuple ([inc_override => INC => [ @INC ] ],
+                   [ extra_libs => EXTRA => [] ])
+{
+    my ($arg,$key,$val)=@$tuple;
+}"#;
+    assert_clean_parse(source);
+}
+
+// Regex capture var with comma-fat-arrow (Pod::Simple::HTML)
+#[test]
+fn regex_capture_comma_fat_arrow() {
+    let source = r#"my @r = ( $1, => "<$2>", "/$1", => "</$2>" );"#;
+    assert_clean_parse(source);
+}
+
+// Full Pod::Simple::HTML pattern
+#[test]
+fn map_ternary_comma_fat_arrow() {
+    let source = r#"return map {; m/^([-_:0-9a-zA-Z]+)=([-_:0-9a-zA-Z]+)$/s
+     ? ( $1, => "\n<$2>", "/$1", => "</$2>\n" ) : die "Funky $_"
+  } @_;"#;
+    assert_clean_parse(source);
+}
+
+// bless with define_encoding pattern (Encode.pm)
+#[test]
+fn define_encoding_fat_arrow() {
+    let source = r#"Encode::define_encoding( $obj{$_} => $_ );"#;
+    assert_clean_parse(source);
+}
