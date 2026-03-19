@@ -3,6 +3,9 @@
 
 Two comprehensive scout reports are ready for blog article development:
 
+Supplemental archaeology note:
+- `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
+
 ---
 
 ## Report 1: DEVELOPMENT_ARCHAEOLOGY.md

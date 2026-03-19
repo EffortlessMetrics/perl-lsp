@@ -15,6 +15,7 @@ These documents intentionally preserve dated observations and period-specific me
 ## Research and Source Material
 
 - [research/BLOG_MATERIAL_INDEX.md](research/BLOG_MATERIAL_INDEX.md) — scout-generated map of article angles and evidence
+- [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
 - [research/DEVELOPMENT_ARCHAEOLOGY.md](research/DEVELOPMENT_ARCHAEOLOGY.md) — development-history archaeology and launch-story findings
 - [research/DOCUMENTATION_SUMMARY.md](research/DOCUMENTATION_SUMMARY.md) — packaging summary for the article set
 - [research/ERA_TIMELINE.md](research/ERA_TIMELINE.md) — era-by-era timeline and velocity notes
