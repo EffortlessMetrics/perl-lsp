@@ -4,7 +4,7 @@ This repo runs one swarm, not multiple parallel pack stories.
 
 The canonical runtime surfaces are:
 
-- `.claude/agents/archive/` — archived agent definitions and roster data
+- `.claude/agents/` — agent definitions, roster data, and role-specific swarm instructions
 - `.claude/skills/` — canonical skill layer for swarm control and core worker procedures
 - `.claude/commands/` — slash entrypoints that currently live as command files
 - `.claude/settings.json` — shared permissions and hook enforcement
@@ -39,11 +39,13 @@ Reusable workers:
 - `research-docs`
 - `research-verify`
 
-Tracked specialist workers are archived under `.claude/agents/archive/` for
-documentation, quality, review, research, and domain-specific execution. See
-[agents/README.md](./agents/README.md) for the archived roster contract and
-[agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the archived inventory
-summary.
+Tracked specialist workers live under `.claude/agents/` for documentation,
+quality, review, research, and domain-specific execution. See
+[agents/README.md](./agents/README.md) for the role/invocation split and
+[agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the swarm inventory
+summary. Those agent files name the skills/commands to invoke, while the
+mechanical substep instructions stay in the skills so they can be loaded when
+they become relevant during the run.
 
 ## Operating Doctrine
 
@@ -62,13 +64,11 @@ operator procedures currently live under `.claude/commands/`. Agents invoke
 both the same way unless frontmatter intentionally changes who can call them or
 how they run.
 
-The archived roster mapping lives in
+The roster mapping lives in
 [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md). It records who usually
 spawns each tracked agent, where it hands work next, and which slash
-entrypoints it should invoke first. The machine-readable version of that
-contract lives in [agents/archive/agent-roster.json](./agents/archive/agent-roster.json)
-and is validated against
-[agents/archive/agent-roster.schema.json](./agents/archive/agent-roster.schema.json).
+entrypoints it should invoke first. The machine-readable roster contract is
+kept alongside the agent definitions.
 
 Validate the roster contract with:
 
@@ -86,5 +86,5 @@ dedup and lifecycle tracking.
 
 Compatibility donor material now lives under
 [`.claude/agents-compat/`](./agents-compat/). New docs, prompts, and commands
-should reference the archived roster material in `.claude/agents/archive/`
-first.
+should treat `.claude/agents/` as the current swarm surface and the older
+sibling directories as donor/historical material.
