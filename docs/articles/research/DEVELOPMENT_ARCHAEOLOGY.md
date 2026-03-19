@@ -19,10 +19,10 @@ _Compiled 2026-03-19 by scout-dev-history agent. A comprehensive look at the uni
 The surprising pattern: **Human + AI hybrid development**.
 
 ```
-Commits by Author:
+Commits by Author (all refs):
   4,073  Steven Zimmerman (primary human)
   1,149  Steven Zimmerman, CPA (variant account)
-    216  google-labs-jules[bot] (Claude AI agent)
+    216  google-labs-jules[bot] (Jules draft-PR / bot-authored branch burst)
     183  EffortlessSteven (variant)
     176  Veesh Goldman (community contributor)
     124  Paul "LeoNerd" Evans (Perl core team)
@@ -36,7 +36,7 @@ Commits by Author:
 ```
 
 **Total unique human contributors**: 20 (with only 3 core: Zimmerman, Goldman, Evans)
-**AI contributions**: 216 commits from `google-labs-jules[bot]` — these are Claude agents in swarm cycles
+**AI contributions**: 216 all-ref commits from `google-labs-jules[bot]`, concentrated in the January 2026 draft-PR bridge rather than the March Claude Code swarm window
 
 ### PR Velocity
 - **Total PRs created**: 2,214 (all-time)
@@ -44,10 +44,10 @@ Commits by Author:
 - **Last PR created**: feat(cli): add PowerShell completion generation for perl-lsp (#2075)
 - **PRs with issue references**: 548/2,679 commits (20% explicit issue linking)
 
-### The "425 Commits in 24 Hours" Record
-On 2026-03-19 alone: **425 commits** created as git artifacts from agent merges. This represents:
-- Cycle 5 final push
-- 100-agent parallel execution reaching peak velocity
+### The "321 Artifacts in 24 Hours" Record
+On 2026-03-18 alone: **321 all-ref commits** were created as git artifacts during a session burst. This represents:
+- A concentrated Cycle 5 push rather than a continuously running swarm
+- Batch-oriented parallel execution reaching peak visible git volume
 - Smart orchestrator model encoding learnings into infrastructure
 
 ---
@@ -421,7 +421,7 @@ Not directly measured in commits, but:
 3. **80% CPAN corpus clean** (real-world coverage)
 4. **97 LSP features** defined (comprehensive)
 5. **100 agents** in single cycle (swarm scaling story)
-6. **425 commits in 24 hours** (peak velocity)
+6. **321 all-ref commits in 24 hours** (peak artifact velocity)
 
 ### Stories to Tell
 1. **Perl's parsing is hard** — concrete examples of ambiguities
@@ -456,7 +456,7 @@ Not directly measured in commits, but:
 - 2,213 total issues
 - 2,679 total commits
 - 1,154 commits in 2026
-- 425 commits on 2026-03-19 (peak day)
+- 321 all-ref commits on 2026-03-18 (peak day)
 
 ---
 

@@ -3,6 +3,8 @@
 
 _Deep archaeological analysis of git history across five distinct development eras, each with unique patterns, tooling, and velocity characteristics._
 
+_Method note: this report uses two lenses intentionally. Mainline sections call out merged `master` history when integration pressure is the point; swarm sections also use `git log --all` and remote-branch evidence when branch proliferation and session volume are the point._
+
 ---
 
 ## Era 1: Opus Direct (July–August 2025)
@@ -187,6 +189,11 @@ Peak at **109 commits 2025-08-26**, drops to 75-78 commits 2025-08-27, suggestin
 - **Correctness focus**: Mutation testing, error recovery, panic elimination
   - Quality-over-velocity mindset
 
+- **January Jules bridge**:
+  - `google-labs-jules[bot]` authored roughly 210 all-ref commits between 2026-01-16 and 2026-01-30
+  - The same window also contains "superseded", revert, and maintainer-improvement commits plus Bolt/Sentinel/Palette follow-up work
+  - Signal: draft PRs are entering the workflow, but acceptance and integration are still highly hands-on
+
 ### Velocity Pattern
 Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91 commits on peak day (2026-02-28), suggesting slower, more deliberate work. This is the **slowest era**.
 
@@ -197,14 +204,14 @@ Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91
 - **Mutation testing**: Integrated into development workflow
 
 ### Verdict
-**Architecture and correctness phase**. Velocity plummets (423 commits / 5mo vs 947 / 2mo in Era 1), but this phase is notably high-quality, stable, and consistent. The tradeoff is that it remains too hands-on: the human is still carrying a large share of the architecture, coordination, and integration burden directly. The swarm infrastructure is being *designed* here, not yet allowed to operate at full scale.
+**Architecture and correctness phase**. Velocity plummets (423 commits / 5mo vs 947 / 2mo in Era 1), but this phase is notably high-quality, stable, and consistent. The tradeoff is that it remains too hands-on: the human is still carrying a large share of the architecture, coordination, and integration burden directly. January's Jules draft-PR burst shows the system probing for more delegation, but the swarm infrastructure is still being *designed* here rather than allowed to operate at full scale.
 
 ---
 
-## Era 4: Copilot CLI Fleet Mode (February 27 – March 5, 2026)
+## Era 4: Copilot CLI Fleet Mode (Late February – March 5, 2026)
 ### "GitHub Copilot CLI Fleet/Autopilot, 'Firehose of Tokens'"
 
-**Date Range**: 2026-02-27 to 2026-03-05
+**Date Range**: 2026-02-27 to 2026-03-05, with the first `Co-authored-by: Copilot` trailers appearing on 2026-02-28
 **Duration**: 7 days
 **Total Commits**: 255 merged commits on `master`
 **Average Velocity**: ~36 commits/day
@@ -230,7 +237,7 @@ Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91
 
 ### Contributors
 - **Steven Zimmerman / Steven Zimmerman, CPA** (attributed for merges on `master`)
-- **Copilot CLI attribution** across the burst even when merged commits land under Steven's identities
+- **GitHub Copilot attribution via `Co-authored-by: Copilot` trailers** across the burst even when merged commits land under Steven's identities
 - **Dependabot** continues in the background but is not the defining signal for this era
 
 ### Key Work
@@ -256,7 +263,7 @@ Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91
 
 ### Distinctive Artifacts
 - **Copilot signature**:
-  - Copilot CLI attribution across the full 2026-02-27 → 2026-03-05 burst
+  - The first all-ref `Co-authored-by: Copilot` trailers appear on 2026-02-28 and then dominate the burst
   - High merged-commit volume in a one-week window (~36/day, with a 152-commit peak day)
   - Conventional commit format enforcement
   - Branch names start with `codex/`
@@ -282,23 +289,22 @@ Peak merged velocity reaches **255 commits / 7 days** (~36/day), with a single-d
 - **ADR catalog**: Architecture decisions formalized and indexed
 
 ### Verdict
-**Copilot CLI mass-production burst**. Clear firehose pattern: short-lived branches, high parallelism, consistent naming, and Copilot CLI attribution across the entire window. Steven remains the merge bottleneck, but now the burden is selecting and integrating from a very dense PR stream rather than doing the work directly.
+**Copilot CLI mass-production burst**. Clear firehose pattern: short-lived branches, high parallelism, consistent naming, and GitHub Copilot trailers beginning on 2026-02-28. Steven remains the merge bottleneck, but now the burden is selecting and integrating from a very dense PR stream rather than doing the work directly.
 
 ---
 
-## Era 5: Claude Code Agent Teams (March 15–19, 2026)
+## Era 5: Claude Code Agent Teams (March 11–19, 2026)
 ### "Native Claude Agents in Worktree Isolation"
 
-**Date Range**: 2026-03-01 to 2026-03-20 (current)
-**Duration**: 3 weeks
-**Total Commits**: 837
-**Average Velocity**: ~40 commits/day
-**Peak Day**: 2026-03-18 (321 commits)
+**Date Range**: 2026-03-11 to 2026-03-19
+**Operating Mode**: A couple of short Claude Code swarm runs, well under 20 hours total, interleaved with Codex CLI PR waves
+**Tool Mix**: Claude Code agent teams + Codex CLI batches (often in sets of 4 PRs)
+**Usage Pattern**: Sometimes cleanup/merge Codex output, other times scout issues and build directly
 
 ### Commit Patterns
-- **Conventional commits**: ~943/837 (113%)
+- **Conventional commits**: Near-universal on merged commits during the session bursts
   - High consistency, near-perfect format adoption
-  - Every merge commit follows "chore(X): ", "fix(Y): ", "feat(Z): " pattern
+  - The exact author mix is less informative here than the branch/task artifacts around each session
 
 - **Branch naming**: **Worktree pattern emerges**
   - `worktree-agent-ab615443`
@@ -306,11 +312,10 @@ Peak merged velocity reaches **255 commits / 7 days** (~36/day), with a single-d
   - `worktree-agent-a90d7ded`
   - Hash-based naming suggests automated worktree naming from agent IDs
 
-- **Commit velocity**: **Peak day 321 commits (2026-03-18)**
-  - Second peak: 250 commits (2026-03-15)
-  - Third peak: 212 commits (2026-03-19)
-  - **Burst pattern**: High 3 days, lower on others
-  - Suggests: agents working in parallel, merges happen in batches
+- **Session cadence**:
+  - A couple of concentrated Claude swarm runs inside the March 11–19 window
+  - Codex CLI PR waves continue in parallel, often in sets of four
+  - Suggests: Era 5 is a mixed-tool coordination phase, not a continuously running single-tool swarm
 
 - **Commit message style**:
   - Verb-first, conventional: "chore(swarm): add X", "fix(parser): handle Y", "test(perl-Z): add W"
@@ -318,11 +323,9 @@ Peak merged velocity reaches **255 commits / 7 days** (~36/day), with a single-d
   - Many reference skills: "add /scout-then-build skill", "encode cycle 5 learnings"
 
 ### Contributors
-- **Steven Zimmerman** (merge bottleneck again)
-- **google-labs-jules[bot]** (Claude agent pool)
-  - Accounts for 216 all-time commits, but concentrated here
-  - These commits appear as "Agent X merged PR Y" with bot attribution
-- **EffortlessSteven, EffortlessMetrics** (team identity)
+- **Steven Zimmerman / Steven Zimmerman, CPA** dominate the author field in this window
+- **Author names are not the primary signal**: `git log --all` for 2026-03-11..2026-03-19 shows no `google-labs-jules[bot]` commits
+- **The defining artifacts are structural instead**: 44 remote `worktree-agent-*` branches plus concurrent Codex CLI PR waves
 
 ### Key Work
 1. **Swarm infrastructure maturation**:
@@ -363,17 +366,17 @@ Peak merged velocity reaches **255 commits / 7 days** (~36/day), with a single-d
   - Memory system persists learnings across cycles
 
 - **Batch merging pattern**:
-  - 321 commits (2026-03-18), 250 (2026-03-15), 212 (2026-03-19)
-  - Suggests: agents finish 50-100 tasks, then "merge wave" processes them in batches
+  - 321 all-ref commits (2026-03-18), 250 (2026-03-15), 238 (2026-03-19)
+  - Suggests: session bursts create large artifact waves, then merge/triage passes process them in batches
   - "run /green-merge for Batch 0" visible in task names
 
 - **100-agent session signal**:
   - Cycle 5 memory reports "~100 agents deployed"
-  - 837 commits / ~100 agents = 8-9 commits/agent average
+  - The 100-agent scale belongs to specific session bursts, not the full March 11–19 window
   - Most agents complete 1-2 features per session
 
 ### Velocity Pattern
-**Burst pattern emerges**: 321 commits, then 250, then drop to 117, then 193, then 159, then 117. This is **deliberate throttling** not resource exhaustion. Merge queue is 3-wide (CI bottleneck), so batch sizes cluster around 50-80 commits (1-2 merges/agent).
+**Not directly comparable to Era 4 on a simple commits/day basis.** Era 5 mixes short Claude swarm sessions, Codex CLI PR waves, and merge-cleanup work in the same March 11–19 window. The key signal is not a daily average. It is the shift to session-based orchestration with cleaner routing and better downstream triage.
 
 ### Architectural Milestones
 - **Swarm orchestration complete**: Coordinator + workers model encoded
@@ -383,7 +386,7 @@ Peak merged velocity reaches **255 commits / 7 days** (~36/day), with a single-d
 - **Worktree isolation proven**: 100 agents, zero conflicts
 
 ### Verdict
-**Mature swarm era**. Velocity is slightly higher than the Copilot CLI burst on merged-commit average (40/day vs ~36/day) and far more *controlled*. Every agent has its own worktree branch, reducing merge conflicts. Agents use skills rather than raw prompts. Memory system captures learnings. This is **purpose-built infrastructure**, not generic automation. Success rate for constrained tasks ~90% (parser fixes), ~50% for unconstrained features (new UX). Optimal team size is ~9 coding agents (due to 3-wide merge queue) but burst to 100 with issue overflow queue. **This is the sweet spot for quality + velocity.**
+**Mature swarm era**. This is a mixed-tool, session-based phase: a couple of short Claude Code swarm runs inside the March 11–19 window, plus ongoing Codex CLI PR waves. The important improvement is control. Every agent has its own worktree branch, the Claude side uses skills rather than raw prompts, and the human can alternate between cleanup/merge sessions and scout/build sessions. This is **purpose-built infrastructure**, not generic automation.
 
 ---
 
@@ -395,12 +398,12 @@ Era 1 (Opus):        947 commits / 2mo   = 14.2 commits/day
 Era 2 (Early Swarms): 840 commits / 3mo   =  9.3 commits/day
 Era 3 (Sidechain):   423 commits / 5mo   =  2.8 commits/day [SLOWEST]
 Era 4 (Copilot):     255 commits / 7d   = 36.4 commits/day
-Era 5 (Claude Code): 837 commits / 3wk  = 40.0 commits/day [SUSTAINED]
+Era 5 (Claude Code): session-based mixed-tool bursts (not directly comparable)
 ```
 
-**Peak merged average**: Era 5 (Claude Code) at 40/day
-**Peak single day**: Era 4 (Copilot CLI) with 152 commits on 2026-03-04
-**Most sustainable**: Era 5 at 40/day (with purpose-built infrastructure)
+**Peak merged average among continuous phases**: Era 4 (Copilot CLI) at 36/day
+**Peak all-ref artifact day**: Era 5 with 321 commits on 2026-03-18
+**Most sustainable**: Era 5, because the swarm is used selectively instead of running as a constant firehose
 **Most deliberate**: Era 3 at 2.8/day (architecture + mutation testing phase)
 
 ### Conventional Commit Adoption
@@ -409,7 +412,7 @@ Era 1: 1,213 / 947   = 128% (duplicates, early stage)
 Era 2: ~50% (mixed, mostly natural language)
 Era 3: ~40% (still exploring)
 Era 4: dominant on merged commits (Copilot CLI burst)
-Era 5: 943 / 837    = 113% (near-perfect, human-readable)
+Era 5: near-universal on merged commits
 ```
 
 **Insight**: Tool-shaped workflows push Era 4 toward conventional commits. Mature agent teams (Era 5) achieve high adoption naturally while keeping the output easier to reason about.
@@ -451,7 +454,7 @@ Era 1: 1 (Steven only)
 Era 2: 2 (Steven + variant)
 Era 3: 3 (Steven + Paul Evans joins)
 Era 4: 3 (Steven + Copilot bot + variants)
-Era 5: 3-4 (Steven + google-labs-jules bot + agents)
+Era 5: Steven variants plus mixed-tool branch artifacts; author fields matter less than worktree/PR evidence
 ```
 
 **Surprise**: No external community PRs visible. All work is internal (human + AI).
@@ -484,8 +487,8 @@ Era 5: 3-4 (Steven + google-labs-jules bot + agents)
 ### 1. **Velocity Is Not Linear**
 - Opus direct coding (Era 1-2): ~14 commits/day
 - Copilot fleet (Era 4): ~36 merged commits/day, with a 152-commit peak day
-- Claude agents (Era 5): ~40 commits/day
-- **Lesson**: Not "faster is better." Era 5's ~40/day is more sustainable and higher-quality than the short Copilot CLI burst.
+- Claude agents (Era 5): session-based bursts, not a continuous daily cadence
+- **Lesson**: Not "faster is better." Era 5's selective Claude runs are more sustainable and higher-quality than a continuous firehose.
 
 ### 2. **Architecture Phase Required Slowdown**
 - Era 3 (2.8 commits/day) was intentional: ADRs written, mutation tests added, refactoring done.
@@ -592,9 +595,9 @@ Era 5: 3-4 (Steven + google-labs-jules bot + agents)
 | 2 | Early Swarms | 9/day | High | Coordination overhead |
 | 3 | Sidechain | 2.8/day | Very High | Architecture requires slowdown |
 | 4 | Copilot Fleet | 36/day | Medium | Volume ≠ quality |
-| 5 | Claude Agents | 40/day | High | Infrastructure-aware scaling |
+| 5 | Claude Agents | Burst-based | High | Infrastructure-aware scaling |
 
 **The arc bends toward...**
-Well-designed infrastructure (worktree isolation, skills, memory, ADRs) enables controlled parallelism at ~40 commits/day. That slightly exceeds the merged average of the Copilot CLI burst while also maintaining quality, preventing merge conflicts, and capturing institutional knowledge.
+Well-designed infrastructure (worktree isolation, skills, memory, ADRs) enables selective, controlled parallelism. That matters more than raw throughput because it preserves quality, reduces merge conflict pressure, and captures institutional knowledge.
 
 **The future**: Era 5 is the stable state. Scaling beyond 100 agents requires either (a) removing Steven as bottleneck via better CI tooling, or (b) embracing issue queue overflow as intentional.

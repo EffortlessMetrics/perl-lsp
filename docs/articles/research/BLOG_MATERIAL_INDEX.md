@@ -64,27 +64,28 @@ Two comprehensive scout reports are ready for blog article development:
 - ADRs written (ADR-005, ADR-008)
 - Mutation testing hardening
 - Parser v3 (recursive descent) birth
-- No agents deployed yet
+- January 2026 Jules draft-PR bridge: heavy bot-authored draft work, still requiring local review/improve/reject loops
 
-**Era 4: Copilot CLI Fleet (2026-02-27 to 2026-03-05)**
+**Era 4: Copilot CLI Fleet (late February to 2026-03-05)**
 - GitHub Copilot mass-production
 - 255 merged commits on `master` / 7 days (36/day), with a 152-commit peak day
-- Copilot CLI attribution across the burst
+- `Co-authored-by: Copilot` trailers first appear on 2026-02-28 and then define the burst
 - `codex/*` dominates 95%+ of branches
 - Bot-enforced conventional commits
 - Firehose pattern (short-lived PRs)
 - Steven remains merge bottleneck
 
-**Era 5: Claude Code Agent Teams (March 15–19, 2026 — Current)**
+**Era 5: Claude Code Agent Teams (March 11–19, 2026)**
 - Native Claude agents in worktree isolation
-- 837 commits / 3 weeks (40/day) **[SUSTAINED]**
+- A couple of short Claude Code swarm runs inside the window, well under 20 hours total
+- Codex CLI also active in the same period, often generating PR waves in sets of 4
 - `worktree-agent-HASH` naming (deterministic)
-- 100 agents deployed (microcrate isolation)
+- 100-agent bursts are session-specific, not continuous
 - Skills library (8 skills, 48 hooks)
 - Memory persistence (30+ files)
 
 ### Critical Insights
-1. **Velocity ≠ Quality**: Era 5 (~40/day sustained) outperforms the short Copilot CLI burst (~36/day merged average) on sustainability
+1. **Velocity ≠ Quality**: Era 5 is better understood as selective, mixed-tool orchestration than as a commits/day race
 2. **Architecture Required Slowdown**: Era 3 (2.8/day) was intentional but enabled future speed
 3. **Steven Is Bottleneck**: Human review/merge in all eras
 4. **3-Wide Merge Queue Is CI Limit**: Optimal ~9 agents; Era 5 overprovisioned to 100 (overflow to issues)
@@ -100,8 +101,8 @@ Two comprehensive scout reports are ready for blog article development:
 ### Key Numbers
 - **2,679** total commits
 - **255** merged commits in the Copilot CLI burst window
-- **321** commits in single day (Era 5, 2026-03-18)
-- **14.2** to **36.4** to **40.0** commits/day (across eras)
+- **321** all-ref git artifacts in a single day (Era 5 session burst, 2026-03-18)
+- **14.2** to **36.4** merged commits/day, then session-based mixed-tool bursts
 - **54** archived agent definitions
 - **100** agents deployed simultaneously (Era 5)
 
@@ -119,7 +120,7 @@ Two comprehensive scout reports are ready for blog article development:
 - Skill-based composition vs monolithic prompts (~90% success vs ~50%)
 - Results: 56 PRs, 80+ issues, corpus +8%, learnings captured in memory
 - Breakthrough discovery: "built but not wired" PR #2057 (9 lines, highest ROI)
-- Why Era 5 (Claude agents, ~40/day) beats the Copilot CLI burst (255 merged commits in 7 days)
+- Why Era 5's selective Claude orchestration beats the Copilot CLI burst
 
 **Data to Highlight**:
 - 546,283 lines of Rust, zero circular dependencies
@@ -200,7 +201,7 @@ Repeat for Next Error Class
 - Era 2: Early experiments (9/day, coordination overhead)
 - Era 3: Architecture phase (2.8/day, intentional slowdown)
 - Era 4: Copilot firehose (255 merged commits in 7 days, mass-production)
-- Era 5: Claude agents (40/day, sustainable)
+- Era 5: selective Claude runs + Codex waves (mixed-tool, sustainable)
 - Why Copilot's generic branching (`codex/*`) caused conflicts
 - Why Claude's deterministic naming (`worktree-agent-HASH`) enables parallelism
 - Skills as reusable primitives (8 skills, 10 commands, 48 hooks)
@@ -213,7 +214,7 @@ Era 1: 14.2 commits/day  (Opus direct)
 Era 2:  9.3 commits/day  (early swarms, coordination)
 Era 3:  2.8 commits/day  (architecture, slowest)
 Era 4: 36.4 commits/day  (Copilot CLI merged average)
-Era 5: 40.0 commits/day  (Claude, sustained)
+Era 5: session-based mixed-tool bursts  (Claude Code + Codex CLI)
 ```
 
 **Key Insight**: Velocity peaks in Era 4 but sustainability peaks in Era 5. Infrastructure matters more than raw commits/day.
@@ -264,23 +265,23 @@ Microcrate Architecture → Isolated Crates → Parallel Agents
 5. **"9-line PR (#2057) was the highest ROI fix this cycle"**
 6. **"80% CPAN coverage — real-world Perl parsing at scale"**
 7. **"Five distinct AI development eras: Opus→Swarms→Sidechain→Copilot→Claude"**
-8. **"Sustained ~40 commits/day with better quality than the Copilot CLI firehose"**
+8. **"Selective Claude sessions plus Codex waves beat a constant firehose on trust and triage"**
 
 ### Key Visuals to Generate
 1. **Velocity Timeline Graph** (Era 1→5, x-axis=time, y-axis=commits/day)
 2. **Crate Dependency Graph** (130 nodes, show zero cycles)
 3. **Corpus Ratchet Progress** (72% → 80%, show error bucket reduction)
 4. **Branch Naming Evolution** (natural → codex/* → worktree-agent-HASH)
-5. **Agent Burst Pattern** (321 commits, 250 commits, 212 commits show batch merging)
+5. **Agent Burst Pattern** (321, 250, and 238 all-ref artifact days show session batching, not constant cadence)
 
 ### Companion Numbers
 - **Unique contributors**: 20 (3 core: Zimmerman, Goldman, Evans)
-- **AI-generated commits**: 216 (google-labs-jules bot)
+- **Jules-authored commits**: 216 all-ref commits, concentrated in the January 2026 draft-PR bridge rather than the March Claude window
 - **Merged PRs (all-time)**: 2,214
 - **Filed issues (all-time)**: 2,213
 - **Commits this year (2026)**: 1,154 / 2,679 (43%)
 - **Commits last 10 days**: 1,146 (avg 114/day)
-- **Peak day**: 2026-03-18 (321 commits)
+- **Peak all-ref day**: 2026-03-18 (321 git artifacts during a session burst)
 
 ---
 
