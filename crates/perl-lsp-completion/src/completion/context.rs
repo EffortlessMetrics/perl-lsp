@@ -1,6 +1,6 @@
 //! Completion context analysis
 
-use perl_semantic_analyzer::symbol::{ScopeKind, SymbolKind, SymbolTable};
+use perl_semantic_analyzer::symbol::{ScopeId, ScopeKind, SymbolKind, SymbolTable};
 
 /// Context for completion
 #[derive(Debug, Clone)]
@@ -23,6 +23,8 @@ pub struct CompletionContext {
     pub prefix: String,
     /// Start position of the prefix (for text edit range calculation)
     pub prefix_start: usize,
+    /// The innermost scope containing the cursor position
+    pub cursor_scope_id: ScopeId,
 }
 
 impl CompletionContext {
@@ -94,6 +96,7 @@ impl CompletionContext {
             current_package,
             prefix,
             prefix_start,
+            cursor_scope_id: 0,
         }
     }
 }

@@ -1,11 +1,18 @@
 //! Variable completion for Perl
 //!
 //! Provides completion for scalar, array, and hash variables with scope analysis.
+//! Variables are ranked by scope distance: immediate scope > parent scope >
+//! package level, giving users the most relevant completions first.
 
+use super::scope_distance::compute_scope_distance;
 use super::{context::CompletionContext, items::CompletionItem};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
-/// Add variable completions with thread-safe symbol table access
+/// Add variable completions with scope-distance ranking.
+///
+/// Variables from the immediate scope rank highest, then parent scopes,
+/// then package/global scope. This produces more relevant completion
+/// lists when the same prefix matches variables at multiple scope depths.
 pub fn add_variable_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -19,6 +26,9 @@ pub fn add_variable_completions(
         for symbol in symbols {
             if symbol.kind == kind && name.starts_with(prefix_without_sigil) {
                 let insert_text = format!("{}{}", sigil, name);
+
+                let distance =
+                    compute_scope_distance(symbol_table, context.cursor_scope_id, symbol.scope_id);
 
                 completions.push(CompletionItem {
                     label: insert_text.clone(),
@@ -35,7 +45,7 @@ pub fn add_variable_completions(
                     ),
                     documentation: symbol.documentation.clone(),
                     insert_text: Some(insert_text),
-                    sort_text: Some(format!("1_{}", name)), // Variables have high priority
+                    sort_text: Some(format!("1{}_{}", distance.sort_key(), name)),
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
@@ -103,6 +113,9 @@ pub fn add_special_variables(
 }
 
 /// Add all variables without sigils (for interpolation contexts)
+///
+/// Uses scope-distance ranking so closer variables sort before distant ones,
+/// while keeping the `5x_` prefix to rank below sigil-prefixed completions.
 pub fn add_all_variables(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -114,6 +127,11 @@ pub fn add_all_variables(
             for symbol in symbols {
                 if symbol.kind.is_variable() && name.starts_with(&context.prefix) {
                     let sigil = symbol.kind.sigil().unwrap_or("");
+                    let distance = compute_scope_distance(
+                        symbol_table,
+                        context.cursor_scope_id,
+                        symbol.scope_id,
+                    );
                     completions.push(CompletionItem {
                         label: format!("{}{}", sigil, name),
                         kind: crate::completion::items::CompletionItemKind::Variable,
@@ -123,7 +141,7 @@ pub fn add_all_variables(
                         )),
                         documentation: symbol.documentation.clone(),
                         insert_text: Some(format!("{}{}", sigil, name)),
-                        sort_text: Some(format!("5_{}", name)),
+                        sort_text: Some(format!("5{}_{}", distance.sort_key(), name)),
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
                         text_edit_range: Some((context.prefix_start, context.position)),

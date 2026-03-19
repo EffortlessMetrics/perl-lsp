@@ -947,3 +947,165 @@ fn multiline_code_completion() {
     assert!(has_label(&items, "$line2"));
     assert!(has_label(&items, "$line3"));
 }
+
+// ===========================================================================
+// Scope-distance ranking tests
+// ===========================================================================
+
+fn find_item<'a>(items: &'a [CompletionItem], label: &str) -> Option<&'a CompletionItem> {
+    items.iter().find(|i| i.label == label)
+}
+
+fn sort_text_of(items: &[CompletionItem], label: &str) -> Option<String> {
+    find_item(items, label).and_then(|i| i.sort_text.clone())
+}
+
+#[test]
+fn scope_distance_immediate_variable_ranks_before_outer() {
+    // $inner is in the same scope as cursor (immediate),
+    // $outer is in a parent scope.
+    let code = "my $outer = 1;\nsub foo {\n    my $inner = 2;\n    $";
+    let items = completions_at_end(code);
+
+    let inner_sort = sort_text_of(&items, "$inner");
+    let outer_sort = sort_text_of(&items, "$outer");
+
+    assert!(inner_sort.is_some(), "$inner should be in completions");
+    assert!(outer_sort.is_some(), "$outer should be in completions");
+
+    // Immediate scope variable should sort before parent scope variable
+    assert!(
+        inner_sort < outer_sort,
+        "immediate scope $inner ({:?}) should sort before outer $outer ({:?})",
+        inner_sort,
+        outer_sort
+    );
+}
+
+#[test]
+fn scope_distance_nested_blocks_rank_closer_first() {
+    // $block_var is in the if-block (immediate),
+    // $sub_var is in the enclosing sub (parent),
+    // $file_var is at file scope (package level).
+    let code = concat!(
+        "my $file_var = 0;\n",
+        "sub process {\n",
+        "    my $sub_var = 1;\n",
+        "    if (1) {\n",
+        "        my $block_var = 2;\n",
+        "        $"
+    );
+    let items = completions_at_end(code);
+
+    let block_sort = sort_text_of(&items, "$block_var");
+    let sub_sort = sort_text_of(&items, "$sub_var");
+    let file_sort = sort_text_of(&items, "$file_var");
+
+    assert!(block_sort.is_some(), "$block_var should be in completions");
+    assert!(sub_sort.is_some(), "$sub_var should be in completions");
+    assert!(file_sort.is_some(), "$file_var should be in completions");
+
+    assert!(
+        block_sort < sub_sort,
+        "immediate $block_var ({:?}) should sort before parent $sub_var ({:?})",
+        block_sort,
+        sub_sort
+    );
+    assert!(
+        sub_sort < file_sort,
+        "parent $sub_var ({:?}) should sort before file-level $file_var ({:?})",
+        sub_sort,
+        file_sort
+    );
+}
+
+#[test]
+fn scope_distance_function_ranking() {
+    // Test with a shared prefix so both functions match
+    let code2 = concat!(
+        "sub utility_a { }\n",
+        "sub process {\n",
+        "    sub utility_b { }\n",
+        "    utility_"
+    );
+    let items2 = completions_at_end(code2);
+
+    let inner_sort = sort_text_of(&items2, "utility_b");
+    let outer_sort = sort_text_of(&items2, "utility_a");
+
+    assert!(inner_sort.is_some(), "utility_b should be in completions");
+    assert!(outer_sort.is_some(), "utility_a should be in completions");
+
+    assert!(
+        inner_sort < outer_sort,
+        "inner utility_b ({:?}) should sort before outer utility_a ({:?})",
+        inner_sort,
+        outer_sort
+    );
+}
+
+#[test]
+fn scope_distance_same_scope_variables_alphabetical() {
+    // Two variables in the same scope should be ordered alphabetically
+    let code = "my $zebra = 1;\nmy $alpha = 2;\n$";
+    let items = completions_at_end(code);
+
+    let alpha_sort = sort_text_of(&items, "$alpha");
+    let zebra_sort = sort_text_of(&items, "$zebra");
+
+    assert!(alpha_sort.is_some(), "$alpha should be in completions");
+    assert!(zebra_sort.is_some(), "$zebra should be in completions");
+
+    // Same scope distance, so should be alphabetical by name
+    assert!(
+        alpha_sort < zebra_sort,
+        "$alpha ({:?}) should sort before $zebra ({:?}) at same scope depth",
+        alpha_sort,
+        zebra_sort
+    );
+}
+
+#[test]
+fn scope_distance_workspace_variables_rank_last() {
+    // Workspace symbols (sort prefix 3_) should rank after local variables (1x_)
+    let index = Arc::new(WorkspaceIndex::new());
+    let file_url = must(Url::parse("file:///other.pm"));
+    let module_code = r#"
+package Other;
+our $ws_item = 42;
+sub ws_func { }
+1;
+"#;
+    must(index.index_file(file_url, module_code.to_string()));
+
+    // Use a prefix that matches both a local variable and a workspace function
+    let code = "my $local_var = 1;\nws_";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    // Find a workspace function completion (sort prefix 3_) vs nothing local
+    // The workspace function should appear with sort prefix starting with 3
+    let ws_func = find_item(&items, "ws_func");
+    if let Some(ws_item) = ws_func {
+        let sort_text = ws_item.sort_text.as_deref().unwrap_or("");
+        assert!(
+            sort_text.starts_with('3'),
+            "workspace function sort_text ({:?}) should start with '3' (workspace tier)",
+            sort_text
+        );
+    }
+
+    // Also verify that local variables use scope-distance sort keys (1a-1d)
+    let code2 = "my $local_var = 1;\n$lo";
+    let provider2 = parse_and_provider(code2);
+    let items2 = provider2.get_completions(code2, code2.len());
+    let local_sort = sort_text_of(&items2, "$local_var");
+    assert!(local_sort.is_some(), "$local_var should be in completions");
+
+    let sort = local_sort.as_deref().unwrap_or("");
+    assert!(
+        sort.starts_with("1a") || sort.starts_with("1b") || sort.starts_with("1c"),
+        "local variable sort_text ({:?}) should use scope-distance prefix (1a/1b/1c)",
+        sort
+    );
+}

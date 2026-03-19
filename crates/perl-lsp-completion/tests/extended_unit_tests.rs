@@ -783,7 +783,9 @@ fn user_variable_sort_priority() {
     let items = completions_at_end(code);
     let item = must_some(find_item(&items, "$foo"));
     let sort_text = must_some(item.sort_text.as_ref());
-    assert!(sort_text.starts_with("1_"), "user variable sort_text should start with 1_");
+    // sort_text format is "1{distance}_name" where distance is a-d for scope proximity
+    assert!(sort_text.starts_with("1"), "user variable sort_text should start with 1");
+    assert!(sort_text.contains('_'), "user variable sort_text should contain underscore separator");
 }
 
 #[test]
@@ -792,7 +794,9 @@ fn user_function_sort_priority() {
     let items = completions_at_end(code);
     let item = must_some(find_item(&items, "handler"));
     let sort_text = must_some(item.sort_text.as_ref());
-    assert!(sort_text.starts_with("2_"), "user function sort_text should start with 2_");
+    // sort_text format is "2{distance}_name" where distance is a-d for scope proximity
+    assert!(sort_text.starts_with("2"), "user function sort_text should start with 2");
+    assert!(sort_text.contains('_'), "user function sort_text should contain underscore separator");
 }
 
 #[test]
