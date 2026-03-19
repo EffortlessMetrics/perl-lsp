@@ -26,15 +26,21 @@ The directory is split into three operational lanes:
 The top-level flow files make the sequencing explicit:
 
 - [`.claude/agents4/issue-to-draft.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/agents4/issue-to-draft.md)
+- [`.claude/agents4/draft-to-pr.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/agents4/draft-to-pr.md)
 - [`.claude/agents4/pr-to-merge.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/agents4/pr-to-merge.md)
 
 That is the key historical clue. The Q3 swarm was not just "more agents." It was a three-phase PR pipeline:
 
 1. issue to draft
-2. review and cleanup
-3. integration and merge
+2. draft to PR
+3. PR to merge
 
-That structure matches the historical behavior of the period: lots of work, but routed through PR-shaped checkpoints rather than one-off direct commits.
+Those flow-file names and the directory names `generative/`, `integration/`,
+and `review/` are two naming schemes for the same canonical Q3 swarm, not two
+different systems.
+
+That structure matches the historical behavior of the period: lots of work, but
+routed through PR-shaped checkpoints rather than one-off direct commits.
 
 ---
 
@@ -89,19 +95,34 @@ That is not just volume. It is PR-shaped throughput.
 
 ## 4. Why `agents4` Fits The Evidence
 
-The three-phase layout in `agents4` explains why the Q3 history looks the way it does.
+The three-phase layout in `agents4` explains why the Q3 history looks the way
+it does.
 
-`generative/` corresponds to getting an implementation into draft shape.
+The key point is that both surfaces describe the same swarm:
 
-`review/` corresponds to the cleanup, validation, and rework loop that shows up in the PR-heavy subject lines.
+- one view names the role packs: `generative/`, `integration/`, `review/`
+- the other view names the workflow path: `issue-to-draft`, `draft-to-pr`,
+  `pr-to-merge`
 
-`integration/` corresponds to the final gatekeeping and merge-orchestration layer that becomes visible in the merge commits and staged validation refs.
+The maintainer's mapping is explicit:
+
+- `generative/` is the `issue-to-draft` phase
+- `review/` is the `draft-to-pr` phase
+- `integration/` is the `pr-to-merge` phase
+
+The directory names and the flow-file names are two ways of naming the same
+three-phase Q3 swarm.
+
+The history shows both views in action at once: generation, cleanup, staged
+promotion, validation, and merge all become visible in the PR-heavy subject
+lines and refs.
 
 So the history and the retained artifacts line up:
 
 - the repo is producing more PR-shaped work
 - the control plane is explicitly organized around PR-shaped work
-- the review/integration/generative split gives that work a durable operating model
+- the review/integration/generative split and the flow-file naming both describe
+  the same durable operating model
 
 That is why Q3 is the canonical swarm era in this repository's archaeology.
 
@@ -112,6 +133,7 @@ That is why Q3 is the canonical swarm era in this repository's archaeology.
 Files:
 
 - [`.claude/agents4/issue-to-draft.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/agents4/issue-to-draft.md)
+- [`.claude/agents4/draft-to-pr.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/agents4/draft-to-pr.md)
 - [`.claude/agents4/pr-to-merge.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/agents4/pr-to-merge.md)
 - [`.claude/agents4/`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/agents4/)
 

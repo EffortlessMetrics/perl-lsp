@@ -1,17 +1,18 @@
 # Review Label Archaeology
-## How GitHub Labels Briefly Became A Review State Machine
+## How The Q3 Swarm Used GitHub Labels As A Review State Machine
 
-This note documents a distinct governance phase in the repository: a short,
-highly structured period in late Q3 2025 when GitHub labels were used as an
-explicit review state machine.
+This note documents one GitHub-facing surface of the canonical Q3 swarm: a
+short, highly structured period in late Q3 2025 when GitHub labels were used as
+an explicit review state machine.
 
 The repo did not just tag pull requests by topic. It encoded review progress,
 review effort, gating results, lane assignment, and readiness directly in the
 GitHub label set.
 
 That phase did not last long, but it matters historically because it shows the
-same methodology later seen in `.claude` commands and skills trying to exist in
-the surfaces GitHub already exposed.
+Q3 swarm's three-phase methodology being expressed directly through GitHub
+metadata before later `.claude` commands, skills, hooks, and `swarm-state`
+became the more durable control plane.
 
 All counts and PR examples in this note were verified from the full
 `gh pr list --state all --limit 2000` ledger on `2026-03-19`.
@@ -36,9 +37,9 @@ appear on a relatively small cluster of PRs:
 - `flow:integrative`: `7`
 - `review-lane-1`: `2`
 
-Those are not repo-wide norms. They are evidence of a concentrated experiment:
-for a brief window, the repo made review state highly legible inside GitHub
-itself.
+Those are not repo-wide norms. They are evidence of a concentrated Q3 swarm
+expression: for a brief window, the repo made review state highly legible
+inside GitHub itself.
 
 The label families cluster around the same ideas:
 
@@ -78,7 +79,7 @@ That stack reveals several important behaviors immediately:
 - fixes discovered during review are themselves classified
 - the PR can show both process state and technical risk at once
 
-This is a GitHub-native version of a workflow engine.
+This is a GitHub-native projection of the Q3 swarm workflow engine.
 
 PR `#160`, created on `2025-09-20`, reinforces the same pattern. It carries
 both `gate:policy (blocked)` and `gate:policy (clear)`, plus architecture and
@@ -117,8 +118,8 @@ This is the same design instinct that later shows up in:
 - `/green-merge`
 - `/triage-prs`
 
-The later control plane is more durable, but the decomposition impulse is
-already visible here.
+The later control plane is more durable, but the same decomposition impulse is
+already visible here inside the Q3 swarm itself.
 
 ---
 
@@ -171,9 +172,10 @@ issues in their titles:
 That means the label-based review system was not operating on anonymous diffs.
 It was attached to issue-shaped delivery.
 
-Historically, that matters because it connects three later themes:
+Historically, that matters because it connects three aligned themes:
 
 - issue-to-draft routing in the Q3 swarm packs
+- draft-to-pr promotion inside the same Q3 flow pack
 - issue overflow and routing in the current swarm
 - PR governance and readiness as distinct control-plane responsibilities
 
@@ -182,7 +184,7 @@ traceable through explicit references and explicit state.
 
 ---
 
-## 6. The System Was Brief, Not Permanent
+## 6. The GitHub-Label Surface Was Brief, Not The Q3 Swarm
 
 One of the most interesting findings is that this label-heavy system was
 intense, but short-lived.
@@ -193,33 +195,36 @@ The latest observed usages in the full PR snapshot are early:
 - latest `flow:review`: `2025-10-02` on `#205`
 - latest `merge-ready`: `2025-10-04` on `#209`
 
-That suggests the repo did not scale this exact GitHub-label model across the
+That suggests the repo did not scale this exact GitHub-label surface across the
 entire later history.
 
-Instead, the governance logic appears to migrate:
+Instead, the governance logic evolves:
 
-1. first into structured GitHub labels and lanes
-2. later into Q3 flow packs such as `issue-to-draft` and `pr-to-merge`
-3. finally into commands, skills, hooks, and `swarm-state`
+1. in Q3, into structured GitHub labels and lanes alongside the three-phase
+   `issue-to-draft` / `draft-to-pr` / `pr-to-merge` swarm
+2. later, into more durable `.claude` commands, skills, hooks, and
+   `swarm-state`
 
-So the labels are best understood as a bridge technology.
+So the labels are best understood as one surface of the canonical Q3 swarm, not
+as a separate governance era.
 
-GitHub was being used as the control plane before the repo had a better one.
+GitHub was one of the Q3 swarm's control surfaces before the repo promoted more
+of that logic into dedicated local runtime surfaces.
 
 ---
 
 ## 7. What This Says About The Repo
 
-This short label burst is historically important because it shows the repo
-trying to solve a very modern problem with the tools it had:
+This short label burst is historically important because it shows the canonical
+Q3 swarm solving a very modern problem with the tools it had:
 
 - how to make review state visible
 - how to separate gates from judgments
 - how to express queue ownership
 - how to preserve process truth alongside code truth
 
-The later Claude-era control plane did not invent these concerns. It gave them
-better surfaces.
+The later Claude-era control plane did not invent these concerns. It gave the
+same concerns better surfaces.
 
 The label phase proves the methodology was already there:
 
@@ -229,14 +234,16 @@ The label phase proves the methodology was already there:
 - queue ownership matters
 - GitHub metadata can carry operational truth
 
-That is why this period belongs in the archaeology. It is the repo's earliest
-clear attempt to make trusted change legible as structured state.
+That is why this period belongs inside the Q3 swarm archaeology. It is one of
+the clearest surviving examples of the three-phase swarm making trusted change
+legible as structured state.
 
 ---
 
 ## Evidence Pointers
 
 - [MERGE_DISCIPLINE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/MERGE_DISCIPLINE_ARCHAEOLOGY.md)
+- [Q3_SWARM_PR_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/Q3_SWARM_PR_ARCHAEOLOGY.md)
 - [PR_REVIEW_LOOP_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/PR_REVIEW_LOOP_ARCHAEOLOGY.md)
 - [CONTROL_PLANE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/CONTROL_PLANE_ARCHAEOLOGY.md)
 - [SWARM_SURFACE_EVOLUTION.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/SWARM_SURFACE_EVOLUTION.md)

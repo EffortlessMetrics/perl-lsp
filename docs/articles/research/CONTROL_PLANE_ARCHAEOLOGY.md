@@ -52,11 +52,20 @@ The counts in that retained tree are revealing:
 
 This is not "a few helper prompts." It is a full three-phase operating model.
 
-The swarm's mental model at this stage is:
+The important nuance is that the directory names and the top-level flow files
+are two naming schemes for the same Q3 swarm:
 
-1. generate an implementation and draft PR
-2. integrate and stabilize it
-3. review, validate, and promote it
+- role-pack view: `generative/`, `integration/`, `review/`
+- flow view: `issue-to-draft`, `draft-to-pr`, `pr-to-merge`
+
+The explicit mapping the maintainer calls out is:
+
+- `generative/` = `issue-to-draft`
+- `review/` = `draft-to-pr`
+- `integration/` = `pr-to-merge`
+
+Those are not separate layers. They are two ways the same canonical swarm was
+encoded on disk.
 
 The repo still preserves nearby variants in `.claude/agents2/` and `.claude/agents3/`, but `agents4` reads as the canonical Q3 form because it cleanly presents the three lanes the maintainer still points back to: `review`, `integration`, and generation.
 
