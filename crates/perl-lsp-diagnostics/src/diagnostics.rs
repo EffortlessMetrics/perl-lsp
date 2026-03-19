@@ -10,7 +10,7 @@ use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
 use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export diagnostic types from the shared SRP microcrate.
-pub use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
+pub use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 
 /// Diagnostics provider
 ///
@@ -44,8 +44,9 @@ impl DiagnosticsProvider {
         for error in parse_errors {
             let (location, message) = match error {
                 ParseError::UnexpectedToken { location, expected, found } => {
-                    let found = format_found_token(found);
-                    (*location, format!("Expected {expected}, found {found}"))
+                    let found_display = format_found_token(found);
+                    let msg = build_enhanced_message(expected, found, &found_display);
+                    (*location, msg)
                 }
                 ParseError::SyntaxError { location, message } => (*location, message.clone()),
                 ParseError::UnexpectedEof => (source.len(), "Unexpected end of input".to_string()),
@@ -58,12 +59,23 @@ impl DiagnosticsProvider {
 
             let suggestion = build_parse_error_suggestion(error);
 
+            // Surface the suggestion as relatedInformation for IDE integration
+            let related_information = suggestion
+                .as_ref()
+                .map(|s| {
+                    vec![RelatedInformation {
+                        location: (range_start, range_end),
+                        message: format!("Suggestion: {s}"),
+                    }]
+                })
+                .unwrap_or_default();
+
             diagnostics.push(Diagnostic {
                 range: (range_start, range_end),
                 severity: DiagnosticSeverity::Error,
                 code: Some("parse-error".to_string()),
                 message,
-                related_information: Vec::new(),
+                related_information,
                 tags: Vec::new(),
                 suggestion,
             });
@@ -87,6 +99,40 @@ fn format_found_token(found: &str) -> String {
     }
 }
 
+/// Build an enhanced error message with Perl-specific context.
+fn build_enhanced_message(expected: &str, found: &str, found_display: &str) -> String {
+    let expected_lower = expected.to_lowercase();
+
+    // Missing semicolon
+    if expected.contains(';') || expected_lower.contains("semicolon") {
+        return format!("Missing semicolon after statement. Add `;` here (found {found_display})");
+    }
+
+    // Expected variable after my/our/local/state
+    if expected_lower.contains("variable") {
+        return format!(
+            "Expected a variable like `$foo`, `@bar`, or `%hash` here, found {found_display}"
+        );
+    }
+
+    // Unexpected closing delimiter -- possible mismatch
+    if found == "}" || found == ")" || found == "]" {
+        let opener = match found {
+            "}" => "{",
+            ")" => "(",
+            "]" => "[",
+            _ => "",
+        };
+        return format!(
+            "Unexpected `{found}` -- possible unmatched brace. \
+             Check the opening `{opener}` earlier in this scope"
+        );
+    }
+
+    // Default
+    format!("Expected {expected}, found {found_display}")
+}
+
 /// Build a contextual suggestion for a parse error based on the expected/found tokens.
 ///
 /// Each suggestion is designed to be actionable: the user should be able to read
@@ -96,7 +142,7 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
         ParseError::UnexpectedToken { expected, found, .. } => {
             // Missing semicolon: parser expected ';' or found something when ';' was expected
             if expected.contains(';') || expected.contains("semicolon") {
-                return Some("Add a ';' at the end of the statement".to_string());
+                return Some("Missing semicolon after statement. Add `;` here.".to_string());
             }
             // Found ';' when expecting something else often means missing expression
             if found == ";" {
@@ -118,6 +164,18 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
             if expected.contains(')') {
                 return Some(
                     "Add a closing ')' -- there may be an unmatched opening '('".to_string(),
+                );
+            }
+            // Missing closing bracket
+            if expected.contains(']') {
+                return Some(
+                    "Add a closing ']' -- there may be an unmatched opening '['".to_string(),
+                );
+            }
+            // Expected a variable (e.g. after my/our/local/state)
+            if expected.to_lowercase().contains("variable") {
+                return Some(
+                    "Expected a variable like `$foo`, `@bar`, or `%hash` after the declaration keyword".to_string(),
                 );
             }
             None

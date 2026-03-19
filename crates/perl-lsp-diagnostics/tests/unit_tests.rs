@@ -1039,9 +1039,12 @@ fn missing_semicolon_parse_error_has_suggestion() -> Result<(), Box<dyn std::err
     let suggestion = first.suggestion.as_deref().unwrap_or_default();
     assert!(suggestion.contains(';'), "Suggestion should mention adding a semicolon: {suggestion}");
 
-    // Message should mention what was expected
-    assert!(first.message.contains("Expected"));
-    assert!(first.message.contains(";"));
+    // Message should mention missing semicolon (enhanced format)
+    assert!(
+        first.message.contains("semicolon") || first.message.contains(";"),
+        "Message should mention semicolon: {}",
+        first.message
+    );
     Ok(())
 }
 

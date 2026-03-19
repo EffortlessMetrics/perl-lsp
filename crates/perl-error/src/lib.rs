@@ -630,6 +630,13 @@ impl ParseError {
                             .to_string(),
                     );
                 }
+                // Expected a variable (e.g. after my/our/local/state)
+                if expected.to_lowercase().contains("variable") {
+                    return Some(
+                        "expected a variable like $foo, @bar, or %hash after the declaration keyword"
+                            .to_string(),
+                    );
+                }
                 None
             }
             ParseError::UnclosedDelimiter { delimiter } => {
