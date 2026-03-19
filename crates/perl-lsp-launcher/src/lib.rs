@@ -9,6 +9,9 @@
 
 use std::error::Error;
 use std::fmt;
+use std::io;
+use std::io::IsTerminal;
+use std::sync::Once;
 
 use clap::{Args, Parser};
 pub use perl_lsp_feature_governance::{
@@ -16,9 +19,85 @@ pub use perl_lsp_feature_governance::{
     to_json_for_profile,
 };
 use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
+use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};
+
+static LOGGING_INIT: Once = Once::new();
 
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
+
+/// Returns whether runtime logging should be enabled.
+///
+/// Logging activates when the CLI explicitly requests it or when
+/// `PERL_LSP_LOG`/`RUST_LOG` is already set in the environment, which keeps
+/// environment-driven tracing behavior consistent with the historical Perl LSP
+/// binary contract.
+pub fn should_enable_logging(explicit_flag: bool) -> bool {
+    explicit_flag || logging_env_directive().is_some()
+}
+
+fn logging_env_directive() -> Option<String> {
+    std::env::var("PERL_LSP_LOG").ok().or_else(|| std::env::var("RUST_LOG").ok())
+}
+
+/// Resolve the effective tracing filter for the current process.
+///
+/// Environment overrides take precedence; otherwise the returned filter uses
+/// `explicit_default_filter` when logging was requested explicitly and
+/// `implicit_default_filter` when logging is only enabled via default behavior.
+pub fn logging_filter(
+    explicit_flag: bool,
+    explicit_default_filter: &str,
+    implicit_default_filter: &str,
+) -> String {
+    logging_env_directive().unwrap_or_else(|| {
+        if explicit_flag {
+            explicit_default_filter.to_string()
+        } else {
+            implicit_default_filter.to_string()
+        }
+    })
+}
+
+/// Initialize stderr-based tracing once for the current process.
+///
+/// Invalid `RUST_LOG` values fall back to `default_filter`.
+pub fn init_logging(default_filter: &str) {
+    LOGGING_INIT.call_once(|| {
+        let filter = EnvFilter::try_from_default_env()
+            .or_else(|_| EnvFilter::try_new(default_filter))
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+
+        let use_ansi = std::env::var("NO_COLOR").is_err() && io::stderr().is_terminal();
+        let _ = tracing_fmt()
+            .with_env_filter(filter)
+            .with_writer(io::stderr)
+            .with_ansi(use_ansi)
+            .with_target(true)
+            .try_init();
+    });
+}
+
+/// Emit a consistent startup log line for server binaries.
+pub fn log_server_startup(
+    server_name: &str,
+    transport: TransportMode,
+    feature_profile: Option<FeatureProfile>,
+) {
+    tracing::info!(server = server_name, transport = transport.label(), "server starting");
+
+    if let Some(port) = transport.port() {
+        tracing::info!(server = server_name, port, "listening port configured");
+    }
+
+    if let Some(feature_profile) = feature_profile {
+        tracing::info!(
+            server = server_name,
+            feature_profile = feature_profile.as_str(),
+            "feature profile selected"
+        );
+    }
+}
 
 /// Transport options shared by server binaries.
 #[derive(Args, Debug, Clone)]
