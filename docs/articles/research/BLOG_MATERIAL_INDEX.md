@@ -38,6 +38,7 @@ Supplemental archaeology note:
 - `MAINTAINER_BRIDGE_ARCHAEOLOGY.md` — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern obvious
 - `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
 - `MAINTAINER_VISION_ARCHAEOLOGY.md` — how maintainer judgment was repeatedly recast into better agent surfaces, from direct orchestration to skills/hooks/state
+- `MAINTAINER_PR_THREAD_ARCHAEOLOGY.md` — how Q3 lane comments and March 2026 verification reviews made PR threads themselves a maintainer-vision transfer surface
 - `OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md` — why the repo could already have strong review, quality, and specialization while still lacking a sufficiently externalized operating system to make that quality cheap in attention
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
