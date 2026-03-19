@@ -233,6 +233,13 @@ pub fn get_shebang_lens(source: &str) -> Option<CodeLens> {
 mod tests {
     use super::*;
 
+    fn extract_lenses(source: &str) -> Result<Vec<CodeLens>, String> {
+        let mut parser = perl_parser::Parser::new(source);
+        let ast = parser.parse().map_err(|e| format!("parse error: {}", e))?;
+        let provider = CodeLensProvider::new(source.to_string());
+        Ok(provider.extract(&ast))
+    }
+
     #[test]
     fn test_code_lens_extraction() -> Result<(), String> {
         let source = r#"#!/usr/bin/perl
@@ -252,10 +259,7 @@ sub test_another {
 }
 "#;
 
-        let mut parser = perl_parser::Parser::new(source);
-        let ast = parser.parse().map_err(|e| format!("parse error: {}", e))?;
-        let provider = CodeLensProvider::new(source.to_string());
-        let lenses = provider.extract(&ast);
+        let lenses = extract_lenses(source)?;
 
         // Should have lenses for:
         // - Package reference
@@ -308,5 +312,85 @@ sub test_another {
         if let Some(cmd) = cmd_opt {
             assert_eq!(cmd.title, "3 references");
         }
+    }
+
+    #[test]
+    fn test_reference_lens_position_accuracy() -> Result<(), String> {
+        let source = r#"package TestPackage;
+
+sub first_function {
+    return 1;
+}
+"#;
+
+        let lenses = extract_lenses(source)?;
+        let reference_lens = lenses
+            .iter()
+            .find(|lens| {
+                lens.data.as_ref().and_then(|data| data.get("name")).and_then(|name| name.as_str())
+                    == Some("first_function")
+            })
+            .ok_or("missing reference lens for first_function")?;
+
+        assert_eq!(reference_lens.range, WireRange::empty(WirePosition::new(2, 0)));
+        assert_eq!(
+            reference_lens.range.start.to_byte_offset(source),
+            source.find("sub first_function").unwrap_or(usize::MAX)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_run_test_lens_range_targets_subroutine_body() -> Result<(), String> {
+        let source = r#"sub test_basic {
+    ok(1, "basic test");
+}
+
+sub helper_function {
+    return 42;
+}
+"#;
+
+        let lenses = extract_lenses(source)?;
+        let run_test_lens = lenses
+            .iter()
+            .find(|lens| {
+                lens.command.as_ref().is_some_and(|command| {
+                    command.command == "perl.runTest"
+                        && command
+                            .arguments
+                            .as_ref()
+                            .is_some_and(|arguments| arguments == &[json!("test_basic")])
+                })
+            })
+            .ok_or("missing run test lens for test_basic")?;
+
+        let start = run_test_lens.range.start.to_byte_offset(source);
+        let end = run_test_lens.range.end.to_byte_offset(source);
+
+        assert_eq!(start, source.find("sub test_basic").unwrap_or(usize::MAX));
+        assert!(end > start, "run test lens should cover a non-empty range");
+        assert!(source[start..end].contains("ok(1, \"basic test\")"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_reference_lens_handles_unicode_and_crlf_positions() -> Result<(), String> {
+        let source = "package Caf\u{00e9};\r\n\r\nsub \u{4f60}\u{597d} {\r\n    return 1;\r\n}\r\n";
+        let lenses = extract_lenses(source)?;
+        let reference_lens = lenses
+            .iter()
+            .find(|lens| {
+                lens.data.as_ref().and_then(|data| data.get("name")).and_then(|name| name.as_str())
+                    == Some("\u{4f60}\u{597d}")
+            })
+            .ok_or("missing reference lens for unicode subroutine")?;
+
+        assert_eq!(reference_lens.range, WireRange::empty(WirePosition::new(2, 0)));
+        assert_eq!(
+            reference_lens.range.start.to_byte_offset(source),
+            source.find("sub \u{4f60}\u{597d}").unwrap_or(usize::MAX)
+        );
+        Ok(())
     }
 }

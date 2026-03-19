@@ -35,6 +35,7 @@ perl-lsp-rename = { workspace = true }
 perl-lsp-navigation = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-code-actions = { workspace = true }
+perl-lsp-code-lens = { workspace = true }
 perl-lsp-folding = { workspace = true }
 perl-lsp-uri = { workspace = true }
 rustc-hash = "2.1.1"
@@ -54,4 +55,3 @@ perl-tdd-support = { workspace = true }
 
 [lints]
 workspace = true
-
