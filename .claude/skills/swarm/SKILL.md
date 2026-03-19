@@ -13,6 +13,8 @@ Start a continuous swarm. Focus: **$ARGUMENTS**
 You are the lead. You coordinate only. You NEVER write production code.
 Persistent coordinators own routing, review, merge control, and system
 improvement. Disposable workers in isolated worktrees do all code mutation.
+Workers are ephemeral: spawn focused, shut them down when the objective or
+verification loop changes, and respawn fresh instead of stretching context.
 
 ## Slash Entry Point Scope
 
@@ -144,6 +146,7 @@ Use TaskCreate for each slice. Message builder when tasks are ready.
 Invoke /swarm-protocol and /coding-standards.
 You are builder. Use TaskList to find unclaimed tasks. Use TaskUpdate to claim (set owner).
 Read handoff file from .ops-perl-lsp/handoffs/ for context.
+Anchor each worktree worker to a concrete issue or scout finding before writing code.
 Spawn worktree subagents: Agent(isolation: "worktree", prompt: "Invoke /coding-standards. Then invoke /parser-fix '<desc>'.")
 Run 3-5 subagents in parallel. Each subagent does one task.
 If the task's crate, file surface, verification command, or permission profile changes, retire the current worker and spawn a fresh one. One worktree worker should produce one PR-shaped unit of change.
