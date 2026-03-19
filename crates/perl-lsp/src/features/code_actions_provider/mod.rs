@@ -16,6 +16,8 @@ pub struct CodeAction {
     pub edit: TextEdit,
     /// ID of the diagnostic this action fixes
     pub diagnostic_id: Option<String>,
+    /// Exact diagnostic range this action was derived from
+    pub diagnostic_range: Option<(usize, usize)>,
 }
 
 /// Kind of code action
@@ -261,8 +263,14 @@ mod tests {
         );
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
-        // Remove action: the edit range should span the whole declaration
-        let remove = &actions[0];
+        let remove = actions
+            .iter()
+            .find(|action| action.title.contains("Remove unused variable"))
+            .expect("remove action should be present");
+
+        let declaration_end =
+            provider.source().find('\n').expect("declaration line should end with newline") + 1;
+        assert_eq!(remove.edit.range, (0, declaration_end));
         assert!(remove.edit.new_text.is_empty());
     }
 
@@ -430,7 +438,7 @@ mod tests {
     // ── Quick-fix: unused parameter ─────────────────────────────────────
 
     #[test]
-    fn test_unused_parameter_fix_offers_rename_and_comment() {
+    fn test_unused_parameter_fix_offers_safe_rename_only() {
         let diagnostic = make_diagnostic(
             (20, 25),
             DiagnosticSeverity::Warning,
@@ -441,14 +449,13 @@ mod tests {
         let provider = CodeActionsProvider::new(String::new());
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 1);
         assert!(actions[0].title.contains("$_self"));
         assert!(actions[0].title.contains("mark as intentionally unused"));
-        assert_eq!(actions[1].title, "Add comment explaining unused parameter");
     }
 
     #[test]
-    fn test_unused_parameter_comment_inserts_before_param() {
+    fn test_unused_parameter_rename_stays_within_parameter_range() {
         let diagnostic = make_diagnostic(
             (20, 25),
             DiagnosticSeverity::Warning,
@@ -459,10 +466,9 @@ mod tests {
         let provider = CodeActionsProvider::new(String::new());
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
-        let comment_action = &actions[1];
-        // Comment is inserted at the start of the parameter range
-        assert_eq!(comment_action.edit.range, (20, 20));
-        assert_eq!(comment_action.edit.new_text, "# unused ");
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].edit.range, (20, 25));
+        assert_eq!(actions[0].edit.new_text, "$_ctx");
     }
 
     // ── Quick-fix: unquoted bareword ────────────────────────────────────
@@ -791,6 +797,7 @@ mod tests {
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
         for action in &actions {
             assert_eq!(action.diagnostic_id.as_deref(), Some("undefined-variable"));
+            assert_eq!(action.diagnostic_range, Some((18, 20)));
         }
     }
 
@@ -970,6 +977,15 @@ mod tests {
         // Should find "my $x = 42;\n" starting at offset 0, ending after semicolon+newline
         assert_eq!(range.0, 0);
         assert_eq!(range.1, 12); // "my $x = 42;\n" is 12 bytes
+    }
+
+    #[test]
+    fn test_find_declaration_range_when_near_is_inside_declaration() {
+        let source = "my $unused = 42;\nprint 1;\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+
+        let range = source_utils::find_declaration_range(&provider, "$unused", 3);
+        assert_eq!(range, (0, 17));
     }
 
     #[test]

@@ -78,13 +78,13 @@ fn test_unused_parameter_code_actions() -> Result<(), Box<dyn std::error::Error>
     let code_actions_provider = CodeActionsProviderV2::new(source.to_string());
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
-    // Should offer to rename with underscore or add comment
+    // Should offer only the safe rename fix
     let unused_actions: Vec<_> =
         actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("unused-parameter")).collect();
 
     assert!(!unused_actions.is_empty());
+    assert_eq!(unused_actions.len(), 1);
     assert!(unused_actions.iter().any(|a| a.title.contains("$_unused")));
-    assert!(unused_actions.iter().any(|a| a.title.contains("comment")));
     Ok(())
 }
 

@@ -349,6 +349,76 @@ print $undefined_var;
     Ok(())
 }
 
+/// Test quick fixes preserve associated diagnostics in the LSP response
+#[test]
+fn test_quickfix_actions_include_associated_diagnostics() -> Result<(), Box<dyn std::error::Error>>
+{
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+use strict;
+use warnings;
+
+print $undefined_var;
+"#
+                }
+            }
+        }),
+    );
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 70,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": { "uri": uri },
+                "range": {
+                    "start": { "line": 4, "character": 6 },
+                    "end": { "line": 4, "character": 20 }
+                },
+                "context": {
+                    "diagnostics": []
+                }
+            }
+        }),
+    );
+
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+    let declare_action = actions
+        .iter()
+        .find(|action| action["title"].as_str() == Some("Declare '$undefined_var' with 'my'"))
+        .ok_or("Expected quick fix for undefined variable")?;
+
+    let diagnostics = declare_action["diagnostics"]
+        .as_array()
+        .ok_or("Expected quick fix to include associated diagnostics")?;
+    assert_eq!(diagnostics.len(), 1);
+
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic["source"].as_str(), Some("perl"));
+    assert!(
+        matches!(diagnostic["code"].as_str(), Some("undeclared-variable" | "undefined-variable")),
+        "unexpected diagnostic code: {diagnostic:?}"
+    );
+
+    shutdown_and_exit(&server);
+    Ok(())
+}
+
 /// Test extract subroutine refactoring
 #[test]
 fn test_extract_subroutine() -> Result<(), Box<dyn std::error::Error>> {

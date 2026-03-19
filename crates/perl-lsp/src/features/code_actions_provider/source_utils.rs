@@ -19,21 +19,16 @@ pub(super) fn find_declaration_range(
 ) -> (usize, usize) {
     let search_pattern = format!("my {}", var_name);
     let source = provider.source();
+    let line_start = source[..near].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+    let line_end = source[near..].find('\n').map(|offset| near + offset).unwrap_or(source.len());
+
+    if let Some(pos) = source[line_start..line_end].find(&search_pattern) {
+        let pos = line_start + pos;
+        return (pos, declaration_end(source, pos, &search_pattern));
+    }
 
     if let Some(pos) = source[..near].rfind(&search_pattern) {
-        let end = source[pos..]
-            .find(';')
-            .map(|offset| {
-                let semicolon = pos + offset + 1;
-                if semicolon < source.len() && source.as_bytes()[semicolon] == b'\n' {
-                    semicolon + 1
-                } else {
-                    semicolon
-                }
-            })
-            .unwrap_or(pos + search_pattern.len());
-
-        return (pos, end);
+        return (pos, declaration_end(source, pos, &search_pattern));
     }
 
     (near, near)
@@ -74,4 +69,18 @@ fn extract_between(message: &str, delimiter: char) -> Option<String> {
     let start = message.find(delimiter)?;
     let end = message[start + 1..].find(delimiter)?;
     Some(message[start + 1..start + 1 + end].to_string())
+}
+
+fn declaration_end(source: &str, pos: usize, search_pattern: &str) -> usize {
+    source[pos..]
+        .find(';')
+        .map(|offset| {
+            let semicolon = pos + offset + 1;
+            if semicolon < source.len() && source.as_bytes()[semicolon] == b'\n' {
+                semicolon + 1
+            } else {
+                semicolon
+            }
+        })
+        .unwrap_or(pos + search_pattern.len())
 }
