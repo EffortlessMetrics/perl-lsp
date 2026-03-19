@@ -378,6 +378,29 @@ print $undefined_var;
         }),
     );
 
+    let diag_response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 69,
+            "method": "textDocument/diagnostic",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+    let reported_diagnostics =
+        diag_response["result"]["items"].as_array().ok_or("Expected diagnostics result items")?;
+    let reported_diagnostic = reported_diagnostics
+        .iter()
+        .find(|diagnostic| {
+            matches!(
+                diagnostic["code"].as_str(),
+                Some("undeclared-variable" | "undefined-variable")
+            )
+        })
+        .ok_or("Expected undefined-variable style diagnostic in pull diagnostics")?;
+
     let response = send_request(
         &server,
         json!({
@@ -391,7 +414,7 @@ print $undefined_var;
                     "end": { "line": 4, "character": 20 }
                 },
                 "context": {
-                    "diagnostics": []
+                    "diagnostics": diag_response["result"]["items"].clone()
                 }
             }
         }),
@@ -409,11 +432,11 @@ print $undefined_var;
     assert_eq!(diagnostics.len(), 1);
 
     let diagnostic = &diagnostics[0];
-    assert_eq!(diagnostic["source"].as_str(), Some("perl"));
-    assert!(
-        matches!(diagnostic["code"].as_str(), Some("undeclared-variable" | "undefined-variable")),
-        "unexpected diagnostic code: {diagnostic:?}"
-    );
+    assert_eq!(diagnostic["range"], reported_diagnostic["range"]);
+    assert_eq!(diagnostic["severity"], reported_diagnostic["severity"]);
+    assert_eq!(diagnostic["code"], reported_diagnostic["code"]);
+    assert_eq!(diagnostic["source"], reported_diagnostic["source"]);
+    assert_eq!(diagnostic["message"], reported_diagnostic["message"]);
 
     shutdown_and_exit(&server);
     Ok(())

@@ -262,6 +262,7 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Information => 3,
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
+                                "code": d.code.clone(),
                                 "source": "perl-lsp",
                                 "message": d.message.clone(),
                             });
@@ -409,6 +410,7 @@ impl LspServer {
                                         InternalDiagnosticSeverity::Information => 3,
                                         InternalDiagnosticSeverity::Hint => 4,
                                     },
+                                    "code": d.code.clone(),
                                     "source": "perl-lsp",
                                     "message": d.message,
                                 })
@@ -454,6 +456,7 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Information => 3,
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
+                                "code": d.code,
                                 "source": "perl-lsp",
                                 "message": d.message,
                             })

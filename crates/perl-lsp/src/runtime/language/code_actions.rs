@@ -130,7 +130,7 @@ impl LspServer {
                                 crate::features::diagnostics::DiagnosticSeverity::Hint => 4,
                             },
                             "code": diagnostic.code.clone(),
-                            "source": "perl",
+                            "source": "perl-lsp",
                             "message": diagnostic.message.clone(),
                         })
                     })

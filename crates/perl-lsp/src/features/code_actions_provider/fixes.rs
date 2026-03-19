@@ -49,34 +49,28 @@ pub(super) fn fix_unused_variable(
     let Some(var_name) = source_utils::extract_quoted_value(&diagnostic.message) else {
         return Vec::new();
     };
+    let unused_name = source_utils::make_unused_name(&var_name);
+    let mut actions = Vec::new();
 
-    vec![
-        diagnostic_action(
+    if let Some(range) =
+        source_utils::find_declaration_range(provider, &var_name, diagnostic.range.0)
+    {
+        actions.push(diagnostic_action(
             diagnostic,
             format!("Remove unused variable '{}'", var_name),
             CodeActionKind::QuickFix,
-            TextEdit {
-                range: source_utils::find_declaration_range(
-                    provider,
-                    &var_name,
-                    diagnostic.range.0,
-                ),
-                new_text: String::new(),
-            },
-        ),
-        diagnostic_action(
-            diagnostic,
-            format!(
-                "Rename to '{}' (mark as intentionally unused)",
-                source_utils::make_unused_name(&var_name)
-            ),
-            CodeActionKind::QuickFix,
-            TextEdit {
-                range: diagnostic.range,
-                new_text: source_utils::make_unused_name(&var_name),
-            },
-        ),
-    ]
+            TextEdit { range, new_text: String::new() },
+        ));
+    }
+
+    actions.push(diagnostic_action(
+        diagnostic,
+        format!("Rename to '{}' (mark as intentionally unused)", unused_name),
+        CodeActionKind::QuickFix,
+        TextEdit { range: diagnostic.range, new_text: unused_name },
+    ));
+
+    actions
 }
 
 pub(super) fn fix_variable_shadowing(diagnostic: &Diagnostic) -> Vec<CodeAction> {

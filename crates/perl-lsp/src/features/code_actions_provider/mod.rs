@@ -274,6 +274,47 @@ mod tests {
         assert!(remove.edit.new_text.is_empty());
     }
 
+    #[test]
+    fn test_unused_variable_remove_action_uses_nearest_same_line_declaration() {
+        let source = "my $x = 1; { my $x = 2; }\n".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let inner_decl = source.rfind("my $x").expect("inner declaration should be present");
+
+        let diagnostic = make_diagnostic(
+            (inner_decl + 3, inner_decl + 5),
+            DiagnosticSeverity::Warning,
+            "unused-variable",
+            "Variable '$x' is declared but never used",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        let remove = actions
+            .iter()
+            .find(|action| action.title.contains("Remove unused variable"))
+            .expect("remove action should be present");
+
+        assert_eq!(remove.edit.range.0, inner_decl);
+        assert_eq!(&provider.source()[remove.edit.range.0..remove.edit.range.1], "my $x = 2;");
+    }
+
+    #[test]
+    fn test_unused_variable_fix_skips_remove_when_declaration_is_not_simple_my() {
+        let source = "my ($used, $unused) = @_;\n".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let start = source.find("$unused").expect("unused variable should be present");
+
+        let diagnostic = make_diagnostic(
+            (start, start + "$unused".len()),
+            DiagnosticSeverity::Warning,
+            "unused-variable",
+            "Variable '$unused' is declared but never used",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Rename to '$_unused' (mark as intentionally unused)");
+    }
+
     // ── Quick-fix: variable shadowing ───────────────────────────────────
 
     #[test]
@@ -975,8 +1016,7 @@ mod tests {
         // near=18 ("$x" at offset 18 in "print $x")
         let range = source_utils::find_declaration_range(&provider, "$x", 18);
         // Should find "my $x = 42;\n" starting at offset 0, ending after semicolon+newline
-        assert_eq!(range.0, 0);
-        assert_eq!(range.1, 12); // "my $x = 42;\n" is 12 bytes
+        assert_eq!(range, Some((0, 12))); // "my $x = 42;\n" is 12 bytes
     }
 
     #[test]
@@ -985,7 +1025,19 @@ mod tests {
         let provider = CodeActionsProvider::new(source);
 
         let range = source_utils::find_declaration_range(&provider, "$unused", 3);
-        assert_eq!(range, (0, 17));
+        assert_eq!(range, Some((0, 17)));
+    }
+
+    #[test]
+    fn test_find_declaration_range_uses_nearest_same_line_match() {
+        let source = "my $x = 1; { my $x = 2; }\n".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let inner_decl = source.rfind("my $x").expect("inner declaration should be present");
+
+        let range = source_utils::find_declaration_range(&provider, "$x", inner_decl + 3)
+            .expect("should find the nearest declaration");
+        assert_eq!(range.0, inner_decl);
+        assert_eq!(&provider.source()[range.0..range.1], "my $x = 2;");
     }
 
     #[test]
@@ -994,7 +1046,6 @@ mod tests {
         let provider = CodeActionsProvider::new(source);
 
         let range = source_utils::find_declaration_range(&provider, "$y", 6);
-        // No "my $y" found, so returns (near, near)
-        assert_eq!(range, (6, 6));
+        assert_eq!(range, None);
     }
 }
