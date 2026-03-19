@@ -149,7 +149,7 @@ let links = compute_links(uri, source, &roots);
 
 ## Code Lens Provider
 
-**Module**: `crates/perl-parser/src/code_lens_provider.rs`
+**Module**: `crates/perl-lsp-code-lens/src/lib.rs`
 **LSP Method**: `textDocument/codeLens`, `codeLens/resolve`
 **LSP Specification**: [LSP 3.17 Code Lens](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeLens)
 
@@ -167,10 +167,12 @@ Displays inline actionable information above code elements such as reference cou
 
 ### Configuration
 
-No external configuration required. Integrates with workspace index for reference counting:
+No external configuration required. Integrates with workspace index for reference counting.
+
+Standalone consumers should import the implementation crate directly, while `perl-lsp` keeps a compatibility re-export at `perl_lsp::features::code_lens_provider`:
 
 ```rust
-use perl_parser::code_lens_provider::{CodeLensProvider, resolve_code_lens};
+use perl_lsp_code_lens::{CodeLensProvider, resolve_code_lens};
 
 let provider = CodeLensProvider::new(source.to_string());
 ```
@@ -253,7 +255,8 @@ Detects shebang line and returns "Run Script" lens if present.
 ### Example Usage
 
 ```rust
-use perl_parser::{Parser, code_lens_provider::{CodeLensProvider, resolve_code_lens}};
+use perl_lsp_code_lens::{CodeLensProvider, resolve_code_lens};
+use perl_parser::Parser;
 
 let source = r#"#!/usr/bin/perl
 package MyApp;
