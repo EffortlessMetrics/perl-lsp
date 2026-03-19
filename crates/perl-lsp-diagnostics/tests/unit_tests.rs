@@ -922,8 +922,8 @@ fn full_pipeline_fallback_parse_error() -> Result<(), Box<dyn std::error::Error>
 // =========================================================================
 
 #[test]
-fn undeclared_variable_diagnostic_has_suggestion_and_enhanced_message()
--> Result<(), Box<dyn std::error::Error>> {
+fn undeclared_variable_diagnostic_has_suggestion_and_enhanced_message(
+) -> Result<(), Box<dyn std::error::Error>> {
     // Build an AST that the scope analyzer would see as undeclared usage
     // We test through the provider to exercise the full pipeline
     let ast = Arc::new(program(vec![use_node("strict", 0, 12), use_node("warnings", 13, 27)]));
@@ -1039,9 +1039,12 @@ fn missing_semicolon_parse_error_has_suggestion() -> Result<(), Box<dyn std::err
     let suggestion = first.suggestion.as_deref().unwrap_or_default();
     assert!(suggestion.contains(';'), "Suggestion should mention adding a semicolon: {suggestion}");
 
-    // Message should mention what was expected
-    assert!(first.message.contains("Expected"));
-    assert!(first.message.contains(";"));
+    // Message should mention missing semicolon (enhanced format)
+    assert!(
+        first.message.contains("semicolon") || first.message.contains(";"),
+        "Message should mention semicolon: {}",
+        first.message
+    );
     Ok(())
 }
 
@@ -1071,8 +1074,8 @@ fn unexpected_eof_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn found_semicolon_when_expecting_expression_has_suggestion()
--> Result<(), Box<dyn std::error::Error>> {
+fn found_semicolon_when_expecting_expression_has_suggestion(
+) -> Result<(), Box<dyn std::error::Error>> {
     let ast = Arc::new(program(vec![]));
     let source = "my $x = ;";
     let errors = vec![ParseError::UnexpectedToken {
@@ -1102,8 +1105,8 @@ fn found_semicolon_when_expecting_expression_has_suggestion()
 // =========================================================================
 
 #[test]
-fn unused_variable_has_warning_severity_and_unnecessary_tag()
--> Result<(), Box<dyn std::error::Error>> {
+fn unused_variable_has_warning_severity_and_unnecessary_tag(
+) -> Result<(), Box<dyn std::error::Error>> {
     // Construct a diagnostic as the scope system would produce
     let d = Diagnostic {
         range: (3, 10),
@@ -1182,8 +1185,8 @@ fn unused_variable_through_provider_has_correct_severity() -> Result<(), Box<dyn
 }
 
 #[test]
-fn unused_parameter_has_warning_severity_and_unnecessary_tag()
--> Result<(), Box<dyn std::error::Error>> {
+fn unused_parameter_has_warning_severity_and_unnecessary_tag(
+) -> Result<(), Box<dyn std::error::Error>> {
     let d = Diagnostic {
         range: (5, 12),
         severity: DiagnosticSeverity::Warning,
