@@ -185,7 +185,6 @@ fn all_token_kinds() -> Vec<TokenKind> {
         TokenKind::Goto,
         TokenKind::Class,
         TokenKind::Method,
-        TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
         // Operators
@@ -333,7 +332,6 @@ fn all_variants_are_listed() {
             | TokenKind::Goto
             | TokenKind::Class
             | TokenKind::Method
-            | TokenKind::Field
             | TokenKind::Format
             | TokenKind::Undef
             | TokenKind::Assign
