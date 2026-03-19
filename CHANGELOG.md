@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.0] - 2026-03-19
-
-The public alpha release — a major quality push spanning 200+ PRs focused on parser
-correctness, completion intelligence, CPAN corpus coverage, test hardening, and
-microcrate modularization. CPAN corpus coverage increased from ~51% to 72%+.
-
 ### Added
 - **Completion: Import Lists**: `use Module qw(...)` triggers symbol completion from the target module (#1937).
 - **Completion: Regex Literals**: Variable and function completions inside `/…/`, `m/…/`, `qr/…/` patterns (#1925).
