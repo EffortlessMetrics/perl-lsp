@@ -284,6 +284,11 @@
           ],
           "default": "auto",
           "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
+        },
+        "perl-lsp.autoPopulateNewFiles": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically populate new `.pm` and `.t` files with standard Perl boilerplate (package declaration, `use strict`, `use warnings`, etc.)."
         }
       }
     },

@@ -202,6 +202,26 @@ export async function activate(context: vscode.ExtensionContext) {
         configurationWatcher,
     );
 
+    // Auto-populate new Perl files with boilerplate
+    const fileCreationWatcher = vscode.workspace.onDidCreateFiles(async (event) => {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        if (!config.get<boolean>('autoPopulateNewFiles', true)) {
+            return;
+        }
+
+        for (const fileUri of event.files) {
+            const filePath = fileUri.fsPath;
+
+            if (filePath.endsWith('.pm')) {
+                await populateModuleFile(fileUri, filePath);
+            } else if (filePath.endsWith('.t')) {
+                await populateTestFile(fileUri);
+            }
+        }
+    });
+
+    context.subscriptions.push(fileCreationWatcher);
+
     // Initialize debug adapter
     activateDebugger(context);
     await initializeLanguageClient(context);
@@ -209,6 +229,66 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export async function deactivate() {
     await disposeLanguageClient();
+}
+
+function inferPackageName(filePath: string): string {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    let relativePath = filePath;
+
+    if (workspaceFolders) {
+        for (const folder of workspaceFolders) {
+            const folderPath = folder.uri.fsPath;
+            if (filePath.startsWith(folderPath)) {
+                relativePath = filePath.slice(folderPath.length + 1);
+                break;
+            }
+        }
+    }
+
+    // Strip common lib prefixes
+    const libPrefixes = ['lib/', 'lib\\'];
+    for (const prefix of libPrefixes) {
+        if (relativePath.startsWith(prefix)) {
+            relativePath = relativePath.slice(prefix.length);
+            break;
+        }
+    }
+
+    // Remove .pm extension and convert path separators to ::
+    return relativePath
+        .replace(/\.pm$/, '')
+        .replace(/[/\\]/g, '::');
+}
+
+async function populateModuleFile(fileUri: vscode.Uri, filePath: string): Promise<void> {
+    try {
+        const stat = await vscode.workspace.fs.stat(fileUri);
+        if (stat.size > 0) {
+            return;
+        }
+    } catch {
+        return;
+    }
+
+    const packageName = inferPackageName(filePath);
+    const content = `package ${packageName};\nuse strict;\nuse warnings;\n\n\n\n1;\n`;
+    const encoder = new TextEncoder();
+    await vscode.workspace.fs.writeFile(fileUri, encoder.encode(content));
+}
+
+async function populateTestFile(fileUri: vscode.Uri): Promise<void> {
+    try {
+        const stat = await vscode.workspace.fs.stat(fileUri);
+        if (stat.size > 0) {
+            return;
+        }
+    } catch {
+        return;
+    }
+
+    const content = `use strict;\nuse warnings;\nuse Test::More;\n\n\n\ndone_testing;\n`;
+    const encoder = new TextEncoder();
+    await vscode.workspace.fs.writeFile(fileUri, encoder.encode(content));
 }
 
 async function getServerPath(context: vscode.ExtensionContext): Promise<string | null> {
