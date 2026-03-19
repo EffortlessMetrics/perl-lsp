@@ -210,6 +210,71 @@ fn local_declarator() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn field_keyword_with_sigil_is_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    let parser = RecoveryParser::new("field $name".to_string());
+    let (ast, errors) = parser.parse();
+
+    match &ast.kind {
+        V2NodeKind::Program { statements } => {
+            assert_eq!(statements.len(), 1);
+            match &statements[0].kind {
+                V2NodeKind::VariableDeclaration { declarator, .. } => {
+                    assert_eq!(declarator, "field");
+                }
+                other => {
+                    return Err(format!("expected VariableDeclaration, got {:?}", other).into());
+                }
+            }
+        }
+        other => return Err(format!("expected Program, got {:?}", other).into()),
+    }
+
+    assert!(errors.is_empty(), "field declaration should not produce errors");
+    Ok(())
+}
+
+#[test]
+fn field_keyword_call_is_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    let parser = RecoveryParser::new("field('name')".to_string());
+    let (ast, errors) = parser.parse();
+
+    match &ast.kind {
+        V2NodeKind::Program { statements } => {
+            assert_eq!(statements.len(), 1);
+            match &statements[0].kind {
+                V2NodeKind::Identifier { name } => assert_eq!(name, "field"),
+                other => return Err(format!("expected Identifier, got {:?}", other).into()),
+            }
+        }
+        other => return Err(format!("expected Program, got {:?}", other).into()),
+    }
+
+    assert!(errors.is_empty(), "field(...) should recover as a single bareword expression");
+    Ok(())
+}
+
+#[test]
+fn spaced_field_call_with_variable_args_is_not_declaration()
+-> Result<(), Box<dyn std::error::Error>> {
+    let parser = RecoveryParser::new("field ($x, $y)".to_string());
+    let (ast, errors) = parser.parse();
+
+    match &ast.kind {
+        V2NodeKind::Program { statements } => {
+            assert_eq!(statements.len(), 1);
+            match &statements[0].kind {
+                V2NodeKind::Identifier { name } => assert_eq!(name, "field"),
+                other => return Err(format!("expected Identifier, got {:?}", other).into()),
+            }
+        }
+        other => return Err(format!("expected Program, got {:?}", other).into()),
+    }
+
+    assert!(errors.is_empty(), "field ($x, $y) should stay an expression in recovery mode");
+    Ok(())
+}
+
+#[test]
 fn state_declarator() -> Result<(), Box<dyn std::error::Error>> {
     let parser = RecoveryParser::new("state $counter = 0".to_string());
     let (ast, errors) = parser.parse();
