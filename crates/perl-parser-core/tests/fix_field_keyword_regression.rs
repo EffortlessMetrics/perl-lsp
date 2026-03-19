@@ -106,12 +106,15 @@ fn test_field_with_variable_is_declaration() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
-fn test_field_list_declaration() -> Result<(), Box<dyn std::error::Error>> {
-    // `field` followed by `(` for list-style declaration
+fn test_field_spaced_variable_args_are_function_call() -> Result<(), Box<dyn std::error::Error>> {
+    // A spaced call with variable args must stay a function call, not a field declaration.
     let source = r#"
         field ($x, $y);
     "#;
-    assert_clean_parse(source);
+    let ast = parse(source);
+    let sexp = ast.to_sexp();
+    assert!(!sexp.contains("ERROR"), "Expected clean parse for spaced field call, got: {}", sexp,);
+    assert_eq!(top_level_kinds(&ast), vec!["ExpressionStatement"]);
     Ok(())
 }
 
