@@ -31,7 +31,8 @@ PR `#153` carried a dense state stack:
 
 The PR was not just tagged by topic. It was labeled as a specific point in the
 review pipeline, with gate outcomes exposed as labels and review effort encoded
-explicitly. The PR also had `35` reviews and `100` comments, which makes it
+explicitly. The PR also had `35` reviews and `100` comments, with review
+traffic from the maintainer plus multiple automated reviewers. That makes it
 read as a live governance artifact rather than a static diff.
 
 PR `#160` shows the same model with a different emphasis:
@@ -50,8 +51,8 @@ PR `#160` shows the same model with a different emphasis:
 - `docs:complete`
 
 That combination is important because it shows the PR carrying both technical
-and governance meaning at once. The blocked/clear policy labels are not a final
-badge. They are the audit trail.
+and governance meaning at once. The PR had `13` reviews and `57` comments. The
+blocked/clear policy labels are not a final badge. They are the audit trail.
 
 ---
 
@@ -86,7 +87,8 @@ PR `#209` is the canonical receipt-heavy example. Its label stack includes:
 It also had `6` reviews and `29` comments. The body is a full receipt bundle:
 test counts, performance claims, security claims, documentation claims, and a
 checklist-style readiness statement. The status rollup attached to the PR shows
-many named checks, not a single green/red bit.
+many named checks, not a single green/red bit. The review traffic is also
+multi-tool: Codex, CodeRabbit, Copilot, and Gemini all appear on the same PR.
 
 Historically, that matters because the PR itself is no longer just carrying a
 diff. It is carrying proof about the diff.
@@ -120,6 +122,12 @@ The comments and reviews tell you:
 
 That is why the PR archive reads like a governance ledger. The repo was
 encoding state, proof, and review pressure directly onto the PR surface.
+
+PR `#533`, `feat: implement standardized CI gate harness`, shows the later
+surface after some of that governance moved into repo infrastructure. It has
+only `2` reviews and `3` comments and no special labels, which is exactly the
+point: some of the governance burden had migrated from PR decoration into the
+gate harness, receipt schema, and CI status plumbing.
 
 ---
 

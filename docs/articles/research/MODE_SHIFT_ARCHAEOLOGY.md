@@ -109,6 +109,13 @@ That is the industrialized end of the framework: AI writes and AI reviews at
 scale, the human selects and arbitrates, and the system keeps learning between
 sessions.
 
+The maintainer's clarification adds one more useful nuance inside the March
+2026 mixed-tool window itself: not every active surface sat at exactly the same
+mode. The Codex CLI wave was closer to quasi-industrialized output, while the
+short Claude Code swarm runs were fully industrialized because they combined
+persistent control-plane state, explicit role boundaries, and autonomous
+worktree execution.
+
 ---
 
 ## 5. Why The Same Underlying Mode Looked Different Across Eras

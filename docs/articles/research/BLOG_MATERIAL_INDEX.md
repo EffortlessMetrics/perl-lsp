@@ -11,6 +11,7 @@ Supplemental archaeology note:
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
 - `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
+- `INSTRUCTION_SURFACE_ARCHAEOLOGY.md` — how prompt-like orchestration guides, project doctrine docs, `.claude`, and `AGENTS.md` became a committed instruction layer
 - `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-heavy bridge era where the repo was disciplined but still depended on maintainer integration
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
 - `MODE_SHIFT_ARCHAEOLOGY.md` — the assisted/native/industrialized framework, grounded in repo evidence and the Q4/Q1 nuance that AI-native can still be hands-on

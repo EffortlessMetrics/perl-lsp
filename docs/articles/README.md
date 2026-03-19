@@ -27,6 +27,7 @@ These documents intentionally preserve dated observations and period-specific me
 ### Control Plane and Process Archaeology
 
 - [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
+- [research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md](research/INSTRUCTION_SURFACE_ARCHAEOLOGY.md) — how orchestration guides, project doctrine, `.claude`, and `AGENTS.md` turned methodology into versioned operating instructions
 - [research/ISSUE_LABEL_ARCHAEOLOGY.md](research/ISSUE_LABEL_ARCHAEOLOGY.md) — how label families and title prefixes gave the issue tracker a typed routing vocabulary for swarm discovery, self-improvement, and learning artifacts
 - [research/ISSUE_ROUTING_ARCHAEOLOGY.md](research/ISSUE_ROUTING_ARCHAEOLOGY.md) — how GitHub issues became swarm overflow memory and a typed routing surface instead of just backlog storage
 - [research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md](research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md) — how issue bodies, PR bodies, learning issues, and article issues together made the GitHub ledger recoverable swarm memory
