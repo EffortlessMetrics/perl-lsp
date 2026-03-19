@@ -136,8 +136,8 @@ fn test_inline_completion_no_suggestions() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn test_inline_completion_after_arrow_with_multibyte_prefix() -> Result<(), Box<dyn std::error::Error>>
-{
+fn test_inline_completion_after_arrow_with_multibyte_prefix()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = setup_server()?;
     let uri = "file:///test.pl";
     let text = "my $emoji = \"😀\"; my $obj = Package->";
