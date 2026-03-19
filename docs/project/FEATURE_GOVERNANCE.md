@@ -5,6 +5,8 @@ layered crate architecture called "feature governance." It covers why the system
 exists, how the crates fit together, how features flow from declaration to runtime
 capability, and how to add new features.
 
+> Architectural note: the build-time `features.toml` → generated Rust contract pipeline is now formalized in [ADR-0036](../adr/0036-generated-feature-catalog-contracts.md).
+
 ## Why Feature Governance Exists
 
 The Perl LSP advertises 80+ features spanning LSP text document operations,
