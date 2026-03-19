@@ -85,6 +85,12 @@ read as a separate GitHub overlay. It is part of the same Q3
 labels because GitHub was one of the few available coordination surfaces for
 managing multiple massive PRs across many repos at the same time.
 
+More specifically, the labels were not only coping with big PRs or many repos.
+They were trying to keep generation, review, and integration lanes running in
+parallel inside a single repo. If one review lane took nine hours, another lane
+could keep generating or integrating the next slice in a different worktree.
+The label surface therefore records queue geometry as much as review state.
+
 PR `#160`, created on `2025-09-20`, reinforces the same pattern. It carries
 both `gate:policy (blocked)` and `gate:policy (clear)`, plus architecture and
 schema alignment labels. That means the label set is being used as an audit

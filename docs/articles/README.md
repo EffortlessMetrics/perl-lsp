@@ -27,6 +27,7 @@ These documents intentionally preserve dated observations and period-specific me
 ### Control Plane and Process Archaeology
 
 - [research/CONTROL_PLANE_ARCHAEOLOGY.md](research/CONTROL_PLANE_ARCHAEOLOGY.md) — tracked `.claude` and `.jules` lineage from Q3 swarm packs to the current control plane
+- [research/ISSUE_LABEL_ARCHAEOLOGY.md](research/ISSUE_LABEL_ARCHAEOLOGY.md) — how label families and title prefixes gave the issue tracker a typed routing vocabulary for swarm discovery, self-improvement, and learning artifacts
 - [research/ISSUE_ROUTING_ARCHAEOLOGY.md](research/ISSUE_ROUTING_ARCHAEOLOGY.md) — how GitHub issues became swarm overflow memory and a typed routing surface instead of just backlog storage
 - [research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md](research/ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md) — how issue bodies, PR bodies, learning issues, and article issues together made the GitHub ledger recoverable swarm memory
 - [research/JULES_LANE_ARCHAEOLOGY.md](research/JULES_LANE_ARCHAEOLOGY.md) — January 2026 Bolt/Sentinel/Palette lanes as proto-specialists
@@ -34,11 +35,13 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/MERGE_DISCIPLINE_ARCHAEOLOGY.md](research/MERGE_DISCIPLINE_ARCHAEOLOGY.md) — PR governance from Q3 flow packs to `green-merge`, `review-pr`, and `triage-prs`
 - [research/MAINTAINER_VISION_ARCHAEOLOGY.md](research/MAINTAINER_VISION_ARCHAEOLOGY.md) — repeated waves of encoding maintainer judgment into prompts, lanes, commands, skills, hooks, and state
 - [research/SWARM_STATE_ARCHAEOLOGY.md](research/SWARM_STATE_ARCHAEOLOGY.md) — how `.claude/swarm-state/` became the committed memory ledger for the current swarm
+- [research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md](research/SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md) — how committed swarm-state files and issue-title prefixes split memory into queue state, pitfalls, findings, learning, and article artifacts
 - [research/SWARM_SURFACE_EVOLUTION.md](research/SWARM_SURFACE_EVOLUTION.md) — Jan→Mar 2026 transition from commands to the current skills/hooks/swarm-state control plane
 
 ### Trust, Provenance, and AI-Native Operations
 
 - [research/AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md](research/AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md) — how the repo moved from assisted coding toward an AI-native, receipt-driven operating model
+- [research/GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md](research/GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md) — how issue `#210` turned proof governance into gate harnesses, receipt schemas, status checks, and later audit prompts
 - [research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md](research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md) — how receipts, provenance schemas, and forensics turned proof into structured artifacts
 - [research/RECEIPTS_LIE_ARCHAEOLOGY.md](research/RECEIPTS_LIE_ARCHAEOLOGY.md) — how PR `#209` and later validator repairs taught the repo that proof artifacts need governance too
 - [research/TRUSTED_CHANGE_ARCHAEOLOGY.md](research/TRUSTED_CHANGE_ARCHAEOLOGY.md) — how the repo industrialized trust through gates, receipts, drift checks, and durable lessons
