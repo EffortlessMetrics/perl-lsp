@@ -65,6 +65,7 @@
 //! # }
 //! ```
 
+use crate::modernize;
 use crate::quick_fixes;
 use crate::refactors;
 use crate::types::QuickFixDiagnostic;
@@ -152,6 +153,9 @@ impl CodeActionsProvider {
 
         // Get refactoring actions for selection
         actions.extend(refactors::get_refactoring_actions(&self.source, ast, range));
+
+        // Get modernization suggestions
+        actions.extend(modernize::get_modernize_actions(&self.source));
 
         actions
     }
