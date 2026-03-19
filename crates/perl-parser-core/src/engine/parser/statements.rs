@@ -113,6 +113,19 @@ impl<'a> Parser<'a> {
             return Ok(stmt);
         }
 
+        if kind == TokenKind::Identifier {
+            let keyword_text = self.tokens.peek()?.text.clone();
+            let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+
+            if keyword_text.as_ref() == "else" && next_kind == Some(TokenKind::LeftBrace) {
+                return self.parse_orphaned_else();
+            }
+
+            if keyword_text.as_ref() == "elsif" && next_kind == Some(TokenKind::LeftParen) {
+                return self.parse_orphaned_elsif();
+            }
+        }
+
         let mut stmt = match kind {
             // Empty statement (lone semicolon) - just consume and return a no-op
             TokenKind::Semicolon => {
@@ -143,6 +156,14 @@ impl<'a> Parser<'a> {
             // Control flow
             TokenKind::If => self.parse_if_statement(),
             TokenKind::Unless => self.parse_unless_statement(),
+
+            // Orphaned else/elsif — these appear at statement level when the
+            // preceding if/unless block failed to parse or was consumed by
+            // error recovery. Instead of crashing into expression parsing,
+            // consume the else/elsif clause gracefully and wrap it in an
+            // error-recovery If node so the rest of the file can keep parsing.
+            TokenKind::Else => self.parse_orphaned_else(),
+            TokenKind::Elsif => self.parse_orphaned_elsif(),
             TokenKind::While => self.parse_while_statement(),
             TokenKind::Until => self.parse_until_statement(),
             TokenKind::For => self.parse_for_statement(),

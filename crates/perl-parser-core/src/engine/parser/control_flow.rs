@@ -70,6 +70,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse unless statement (syntactic sugar for if not)
+    ///
+    /// Perl allows `unless (...) { } elsif (...) { } else { }` chains,
+    /// identical to if/elsif/else except the initial condition is negated.
     fn parse_unless_statement(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'unless'
@@ -86,14 +89,47 @@ impl<'a> Parser<'a> {
         );
 
         let then_branch = self.parse_block()?;
+
+        let mut elsif_branches = Vec::new();
+        let mut else_branch = None;
+
+        // Handle elsif chains (valid Perl: unless ... elsif ... else ...)
+        while self.peek_kind() == Some(TokenKind::Elsif) {
+            self.tokens.next()?; // consume 'elsif'
+            self.expect(TokenKind::LeftParen)?;
+
+            let elsif_cond = if matches!(
+                self.peek_kind(),
+                Some(TokenKind::My)
+                    | Some(TokenKind::Our)
+                    | Some(TokenKind::Local)
+                    | Some(TokenKind::State)
+            ) {
+                self.parse_variable_declaration()?
+            } else {
+                self.mark_not_stmt_start();
+                self.parse_expression()?
+            };
+
+            self.expect(TokenKind::RightParen)?;
+            let elsif_block = self.parse_block()?;
+            elsif_branches.push((Box::new(elsif_cond), Box::new(elsif_block)));
+        }
+
+        // Handle else
+        if self.peek_kind() == Some(TokenKind::Else) {
+            self.tokens.next()?; // consume 'else'
+            else_branch = Some(Box::new(self.parse_block()?));
+        }
+
         let end = self.previous_position();
 
         Ok(Node::new(
             NodeKind::If {
                 condition: Box::new(negated_condition),
                 then_branch: Box::new(then_branch),
-                elsif_branches: vec![],
-                else_branch: None,
+                elsif_branches,
+                else_branch,
             },
             SourceLocation { start, end },
         ))
@@ -596,6 +632,131 @@ impl<'a> Parser<'a> {
 
         Ok(Node::new(
             NodeKind::When { condition: Box::new(condition), body: Box::new(body) },
+            SourceLocation { start, end },
+        ))
+    }
+
+    /// Handle an orphaned `else` that appears at statement level without a
+    /// preceding `if`/`unless`.  This happens when earlier error recovery
+    /// consumed the `if` block, leaving the `else` stranded.
+    ///
+    /// Strategy: record an error, consume the `else` keyword and its block
+    /// (if present), then wrap the result in an If node with a synthetic
+    /// true condition so the block contents are still visible to the LSP.
+    fn parse_orphaned_else(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let else_token = self.consume_token()?; // consume 'else'
+
+        // Record a descriptive error
+        self.record_error(ParseError::syntax(
+            "'else' without preceding 'if' or 'unless'",
+            else_token.start,
+        ));
+
+        // Try to consume the block so we don't leave it orphaned
+        let else_block = if self.peek_kind() == Some(TokenKind::LeftBrace) {
+            self.parse_block()?
+        } else {
+            // No block follows — produce an empty placeholder
+            Node::new(
+                NodeKind::Block { statements: vec![] },
+                SourceLocation { start, end: self.previous_position() },
+            )
+        };
+
+        let end = self.previous_position();
+
+        // Wrap in an If with a synthetic "true" condition so consumers see
+        // the block contents.  The error is already recorded above.
+        let synthetic_cond = Node::new(
+            NodeKind::Number { value: "1".to_string() },
+            SourceLocation { start, end: start },
+        );
+
+        Ok(Node::new(
+            NodeKind::If {
+                condition: Box::new(synthetic_cond),
+                then_branch: Box::new(else_block),
+                elsif_branches: vec![],
+                else_branch: None,
+            },
+            SourceLocation { start, end },
+        ))
+    }
+
+    /// Handle an orphaned `elsif` that appears at statement level without a
+    /// preceding `if`/`unless`.  Same recovery approach as `parse_orphaned_else`:
+    /// record the error, consume the elsif clause (and any following elsif/else
+    /// chain), then wrap the whole thing in a recovered If node.
+    fn parse_orphaned_elsif(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let elsif_token = self.consume_token()?; // consume 'elsif'
+
+        // Record a descriptive error
+        self.record_error(ParseError::syntax(
+            "'elsif' without preceding 'if' or 'unless'",
+            elsif_token.start,
+        ));
+
+        // Parse the elsif condition
+        self.expect(TokenKind::LeftParen)?;
+
+        let condition = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::Local)
+                | Some(TokenKind::State)
+        ) {
+            self.parse_variable_declaration()?
+        } else {
+            self.mark_not_stmt_start();
+            self.parse_expression()?
+        };
+
+        self.expect(TokenKind::RightParen)?;
+        let then_branch = self.parse_block()?;
+
+        // Continue parsing any following elsif/else chain
+        let mut elsif_branches = Vec::new();
+        let mut else_branch = None;
+
+        while self.peek_kind() == Some(TokenKind::Elsif) {
+            self.tokens.next()?; // consume 'elsif'
+            self.expect(TokenKind::LeftParen)?;
+
+            let elsif_cond = if matches!(
+                self.peek_kind(),
+                Some(TokenKind::My)
+                    | Some(TokenKind::Our)
+                    | Some(TokenKind::Local)
+                    | Some(TokenKind::State)
+            ) {
+                self.parse_variable_declaration()?
+            } else {
+                self.mark_not_stmt_start();
+                self.parse_expression()?
+            };
+
+            self.expect(TokenKind::RightParen)?;
+            let elsif_block = self.parse_block()?;
+            elsif_branches.push((Box::new(elsif_cond), Box::new(elsif_block)));
+        }
+
+        if self.peek_kind() == Some(TokenKind::Else) {
+            self.tokens.next()?; // consume 'else'
+            else_branch = Some(Box::new(self.parse_block()?));
+        }
+
+        let end = self.previous_position();
+
+        Ok(Node::new(
+            NodeKind::If {
+                condition: Box::new(condition),
+                then_branch: Box::new(then_branch),
+                elsif_branches,
+                else_branch,
+            },
             SourceLocation { start, end },
         ))
     }
