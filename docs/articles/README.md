@@ -61,6 +61,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md](research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md) — how issues and PRs evolved into a shared delivery ledger for fixes, closures, learning reports, and article evidence
 - [research/PR_LIFECYCLE_ARCHAEOLOGY.md](research/PR_LIFECYCLE_ARCHAEOLOGY.md) — how drafts, merges, closures, and disposal became part of the operating model
 - [research/REVIEW_LABEL_ARCHAEOLOGY.md](research/REVIEW_LABEL_ARCHAEOLOGY.md) — how the canonical Q3 swarm encoded review stages, gates, lanes, and merge readiness directly in GitHub labels alongside the three-phase `issue-to-draft` / `draft-to-pr` / `pr-to-merge` flow
+- [research/PR_REVIEW_RECEIPT_ARCHAEOLOGY.md](research/PR_REVIEW_RECEIPT_ARCHAEOLOGY.md) — how labels, receipts, check runs, comments, and cleanup follow-ups turned PRs into governance artifacts
 - [research/PR_REVIEW_LOOP_ARCHAEOLOGY.md](research/PR_REVIEW_LOOP_ARCHAEOLOGY.md) — how cleanup passes, follow-up PRs, and review repair became explicit and normal
 - [research/PR_SLICE_SIZE_ARCHAEOLOGY.md](research/PR_SLICE_SIZE_ARCHAEOLOGY.md) — how the PR archive balances many small bounded slices with a smaller number of deliberate umbrella changes
 - [research/PR_WAVE_ARCHAEOLOGY.md](research/PR_WAVE_ARCHAEOLOGY.md) — how the repository moves in bursty PR waves rather than a smooth stream

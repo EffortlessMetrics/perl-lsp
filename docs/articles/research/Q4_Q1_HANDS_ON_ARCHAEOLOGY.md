@@ -85,6 +85,8 @@ Examples from `2026-01-20` alone:
 - `maint/pr-302-indexing-wait-20260120` -> PR `#394`
 
 This is the era encoding review and integration into the branch name itself.
+The maintainer notes that branch naming was rarely done by hand; most of those
+names appear to have come from Claude Code.
 
 ---
 
@@ -113,6 +115,8 @@ The pattern shows up in the titles too:
 - `feat: Achieve Zero Unwraps in Production Code & Stabilize Tests` (`#574`)
 
 This is not passive review. It is active integration.
+The maintainer's correction is that this period was driven by a mix of Codex
+CLI and Claude Code, not by a single tool.
 
 ---
 
