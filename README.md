@@ -20,7 +20,7 @@
 
 ---
 
-> **Public Alpha (v0.12.0)** -- perl-lsp is usable for daily development but still evolving.
+> **Public Alpha** -- perl-lsp is usable for daily development but still evolving.
 > [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) and help shape the project.
 
 ## Why perl-lsp?
