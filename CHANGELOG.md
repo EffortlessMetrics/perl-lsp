@@ -7,33 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-03-19
+
+The public alpha release — a major quality push spanning 200+ PRs focused on parser
+correctness, completion intelligence, CPAN corpus coverage, test hardening, and
+microcrate modularization. CPAN corpus coverage increased from ~51% to 72%+.
+
 ### Added
-- **Async Runtime with Concurrent Dispatch**: LSP server migrated to a two-lane scheduler — exclusive worker for mutations + 4-worker read pool for concurrent hover/goto-def/completion requests. `$/cancelRequest` is now processed inline before enqueuing (#1555).
-- **Continuous Swarm Infrastructure**: 53 agents, 22 skills, 12 named teammates, GitHub-native tracking, handoff protocol, and portable agent pack for other repos (#1553).
+- **Completion: Import Lists**: `use Module qw(...)` triggers symbol completion from the target module (#1937).
+- **Completion: Regex Literals**: Variable and function completions inside `/…/`, `m/…/`, `qr/…/` patterns (#1925).
+- **Completion: Scope-Ranked Locals**: Local symbols ranked by scope distance for more relevant suggestions (#1983).
+- **Completion: Qualified Variables**: Workspace-qualified variable completion for cross-package symbols (#1731).
+- **Global Reference Index**: O(1) symbol lookups via a new global reference HashMap in workspace-index (#1934).
+- **V-String Tokenization**: Version strings (`v5.36.0`) now tokenized as a dedicated token type (#1914).
+- **DeadBranch Detection**: Dead code analysis detects constant-condition `if`/`unless` branches (#1596).
+- **Class Field Declarations**: Parser supports Perl class field declaration syntax (#1808+).
+- **CLI Flags**: `--check`, `--info`, `--completion` flags for scripting and editor integration (#1682).
+- **Diagnostic Accessibility**: Improved error message quality and accessibility in diagnostics (#1672).
+- **Async Runtime with Concurrent Dispatch**: Two-lane scheduler — exclusive worker for mutations + 4-worker read pool for concurrent requests. `$/cancelRequest` processed inline (#1555).
 - **Goto AST Node**: Dedicated `Goto` node with full `TokenKind::display_name` support (#1521).
 - **Smarter Selection Range**: Expand/shrink selection chains with semantic awareness (#1545).
-- **Cross-file Go-to-Definition for Methods and Modules**: Improved navigation for method calls and `use parent`/`base` statements (#1542, #1544).
+- **Cross-file Go-to-Definition**: Improved navigation for method calls and `use parent`/`base` statements (#1542, #1544).
 - **Enhanced Diagnostics**: Added `suggestion` field to diagnostic messages (#1543).
-- **Inlay Hints for Builtins**: Derive parameter names from builtin function signatures (#1541).
+- **Inlay Hints for Builtins**: Parameter names derived from builtin function signatures (#1541).
 - **Semantic Tokens**: Comprehensive AST walker with new token types for broader coverage (#1540).
-- **DAP Improvements**: POD detection, conditional expression validation in breakpoints (#1536), and improved variable inspection rendering (#1535).
-- **Hover Enhancements**: Improved documentation quality in hover responses (#1537).
-- **Cross-sigil Variable Highlighting**: Highlight `@foo` and `%foo` references when cursor is on `$foo` (#1538).
+- **Cross-sigil Variable Highlighting**: Highlight `@foo`/`%foo` references when cursor is on `$foo` (#1538).
 - **Extract Variable for Methods**: Code actions handle method calls and hash/array access (#1534).
-- **Workspace Symbols Ranking**: Improved ranking with comprehensive tests (#1529).
+- **Workspace Symbols Ranking**: Improved ranking algorithm with comprehensive tests (#1529).
 - **Completion for Moo/Moose Accessors**: Show `isa` type in completion for accessor methods (#1525).
 - **Signature Help Builtin Coverage**: Expanded coverage for common Perl builtins (#1532).
+- **DAP Improvements**: POD detection, conditional expression validation in breakpoints (#1536), improved variable inspection rendering (#1535), hardened smoke tests and timeout handling (#1883).
+- **Hover Enhancements**: Improved documentation quality in hover responses (#1537).
+- **VS Code Extension**: Trace support, config change detection (#1876), `--health` binary validation before starting LSP client (#1598), Open VSX keywords and metadata (#1879), client refresh behavior fix.
 
 ### Fixed
-- **Parser**: Statement modifiers after complex expressions (#1550), package-qualified variable subscripts (#1548), fat arrow as list separator in all builtin argument paths (#1549), split regex slash disambiguation in expression contexts (#1547).
+- **Parser — Control Flow**: Handle orphaned `else`/`elsif` and `unless`+`else`/`elsif` chains (#1981), allow bare `return` in ternary branches (#1727), handle statement-start nullary builtin precedence (#1724), recover bare list-operator calls in postfix args (#1989).
+- **Parser — Expressions**: Accept fat arrows in expression contexts (#1985), support last-index deref `->$#*` in bracket expressions (#1988), slurp trailing operators after Number/String in `use` import values (#1980), handle `use constant NAME => expr` fully (#1577).
+- **Parser — Disambiguation**: Disambiguate `field` keyword from bareword identifier (#1978), allow keyword barewords as subroutine names (#1986), allow keyword methods and trailing separators (#1993), recover field bareword calls in recovery parser, validate declaration attributes.
+- **Parser — Builtins**: `map`/`grep`/`sort` BLOCK LIST without trailing semicolon (#1623), `tie(VARIABLE, CLASS, LIST)` with parenthesized args (#1630), `defined`/`ref` at statement start (#1618), `push`/`pop` with postfix deref lvalue (#1619), nullary builtins in paren expressions (#1629).
+- **Parser — OO**: Tighten qualified class-name and namespaced class parsing, statement modifiers after complex expressions (#1550), package-qualified variable subscripts (#1548).
+- **Parser — Misc**: Tighten deref parsing (#1884), transliteration delimiter parsing, operator strings in `use overload` (#1492), chained method calls after deref constructs (#1474), ternary then-branch assignments (#1516, #1518).
+- **Lexer**: Prevent prototype mode leak after `sub` keyword (#1906), disambiguate regex after bare builtins (#1965), recognize special punctuation variables `$~`, `$^`, `$=`, `$%`, `$;`, `$^W` etc. (#1615), disambiguate `$$var` scalar deref from `$$` PID variable (#1572), peek/reset state restoration, make regex parse budget reachable (#1455).
+- **Completion**: Preserve regex interpolation completions (#1925).
+- **Workspace Index**: Rebuild find-definition symbol cache after index updates (#1919).
+- **LSP Runtime**: Preserve scheduler ordering and stabilize tests (#1882), close outbound sender before joining writer thread (#1593), stop advertising unsupported `debugTests` command (#1742).
 - **Incremental Parsing**: Improved efficiency and fixed position underflow (#1539).
 - **On-Type Formatting**: Heredoc suppression, string/comment-aware brace matching, correct trigger semantics (#1530).
-- **Test Count Sync**: Updated test count to 1953, removed PerlIO from corpus manifest (#1552).
+- **Diagnostics**: Suppress strict/warnings false positives for OO frameworks (#1565).
+- **DAP**: Fix socket default port, harden debugger smoke and timeout handling (#1883), prevent subtraction overflow in inline values (#1515).
 
 ### Changed
-- **bypassPermissions**: Set as default permission mode (#1554).
+- **Microcrate Extractions**: 8 new microcrates extracted — perl-dap-config, perl-dap-session-model, perl-ast-v2, perl-ts-statement-tracker, perl-lsp-type-hierarchy, perl-perltidy, perl-lsp-completion-filepath, perl-workspace-index-monitor.
+- **God File Splits**: `debug_adapter.rs` (6778 lines) split into focused domain modules (#1666), `lsp_comprehensive_3_17_test.rs` split into feature-specific test files (#1681), `cpan_pattern_tests.rs` split into 16 standalone test files (#1665), runtime `mod.rs` handler groups extracted (#1676).
+- **Refactored Internals**: Execute command modules, code actions provider, perl critic tooling, centralized server startup logging (#1826).
+- **Feature Gating**: Tightened LSP capability feature gating and feature profile normalization.
 - **Native Debt Report**: `xtask` now has a native `debt-report` subcommand (#1528).
 - **Devex Targeted Checks**: Converted from shell script to native Rust xtask subcommand (#1527).
+- **CI**: Auto-fix formatting instead of failing on `cargo fmt` (#1625).
+- **CPAN Corpus**: Baseline ratcheted after merge sessions (#1892).
+
+### Performance
+- **find_definition**: Replaced O(n*m) scan with O(1) HashMap lookup in workspace-index (#1919).
+- **LSP Async Scheduling**: Improved read scheduling for lower latency on concurrent requests (#1837).
 
 ## [0.11.0] - 2026-03-12
 
