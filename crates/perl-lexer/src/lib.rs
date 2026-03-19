@@ -246,6 +246,8 @@ pub struct PerlLexer<'a> {
     in_prototype: bool,
     /// Paren depth to track when we exit prototype
     prototype_depth: usize,
+    /// Track if we just saw a 'sub' keyword (waiting for possible prototype)
+    after_sub: bool,
     /// Current position with line/column tracking
     #[allow(dead_code)]
     current_pos: Position,
@@ -282,6 +284,7 @@ impl<'a> PerlLexer<'a> {
             delimiter_stack: Vec::new(),
             in_prototype: false,
             prototype_depth: 0,
+            after_sub: false,
             current_pos: Position::start(),
             after_newline: true, // Start of file counts as after newline
             pending_heredocs: Vec::new(),
@@ -680,6 +683,7 @@ impl<'a> PerlLexer<'a> {
         let saved_delimiter_stack = self.delimiter_stack.clone();
         let saved_prototype = self.in_prototype;
         let saved_depth = self.prototype_depth;
+        let saved_after_sub = self.after_sub;
         let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
         let saved_pending_heredocs = self.pending_heredocs.clone();
@@ -695,6 +699,7 @@ impl<'a> PerlLexer<'a> {
         self.delimiter_stack = saved_delimiter_stack;
         self.in_prototype = saved_prototype;
         self.prototype_depth = saved_depth;
+        self.after_sub = saved_after_sub;
         self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
         self.pending_heredocs = saved_pending_heredocs;
@@ -726,6 +731,7 @@ impl<'a> PerlLexer<'a> {
         self.delimiter_stack.clear();
         self.in_prototype = false;
         self.prototype_depth = 0;
+        self.after_sub = false;
         self.current_pos = Position::start();
         self.after_newline = true;
         self.pending_heredocs.clear();
@@ -1954,7 +1960,7 @@ impl<'a> PerlLexer<'a> {
                         self.mode = LexerMode::ExpectTerm;
                     }
                     "sub" => {
-                        self.in_prototype = true;
+                        self.after_sub = true;
                     }
                     // Quote operators expect a delimiter next (must be immediately adjacent)
                     op if quote_handler::is_quote_operator(op) => {
@@ -2333,6 +2339,8 @@ impl<'a> PerlLexer<'a> {
         }
 
         let text = &self.input[start..self.position];
+        // Operator ends prototype window (e.g. `:` for attributes)
+        self.after_sub = false;
         // Postfix ++ and -- complete a term expression, so next token is an operator
         // (e.g., "$x++ / 2" → / is division, not regex)
         if (text == "++" || text == "--") && self.mode == LexerMode::ExpectOperator {
@@ -2380,7 +2388,12 @@ impl<'a> PerlLexer<'a> {
                 }
 
                 self.advance();
-                if self.in_prototype {
+                if self.after_sub {
+                    // Promote after_sub to in_prototype now that we see '('
+                    self.in_prototype = true;
+                    self.after_sub = false;
+                    self.prototype_depth = 1;
+                } else if self.in_prototype {
                     self.prototype_depth += 1;
                 }
                 self.mode = LexerMode::ExpectTerm;
@@ -2409,6 +2422,8 @@ impl<'a> PerlLexer<'a> {
             }
             ';' => {
                 self.advance();
+                // Semicolon ends prototype window (forward declaration)
+                self.after_sub = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::Semicolon,
@@ -2449,6 +2464,8 @@ impl<'a> PerlLexer<'a> {
             }
             '{' => {
                 self.advance();
+                // Opening brace ends prototype window — no prototype follows
+                self.after_sub = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftBrace,
@@ -3292,6 +3309,7 @@ impl Checkpointable for PerlLexer<'_> {
             delimiter_stack: self.delimiter_stack.clone(),
             in_prototype: self.in_prototype,
             prototype_depth: self.prototype_depth,
+            after_sub: self.after_sub,
             current_pos: self.current_pos,
             context,
         }
@@ -3303,6 +3321,7 @@ impl Checkpointable for PerlLexer<'_> {
         self.delimiter_stack.clone_from(&checkpoint.delimiter_stack);
         self.in_prototype = checkpoint.in_prototype;
         self.prototype_depth = checkpoint.prototype_depth;
+        self.after_sub = checkpoint.after_sub;
         self.current_pos = checkpoint.current_pos;
 
         // Handle special contexts

@@ -1189,6 +1189,7 @@ fn checkpoint_new_defaults() {
     assert!(cp.delimiter_stack.is_empty());
     assert!(!cp.in_prototype);
     assert_eq!(cp.prototype_depth, 0);
+    assert!(!cp.after_sub);
     assert!(cp.is_at_start());
 }
 

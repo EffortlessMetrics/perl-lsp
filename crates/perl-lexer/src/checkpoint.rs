@@ -19,6 +19,8 @@ pub struct LexerCheckpoint {
     pub in_prototype: bool,
     /// Paren depth to track when we exit prototype
     pub prototype_depth: usize,
+    /// Whether we just saw 'sub' and are waiting for a possible prototype
+    pub after_sub: bool,
     /// Current position with line/column tracking
     pub current_pos: Position,
     /// Additional context for complex states
@@ -49,6 +51,7 @@ impl LexerCheckpoint {
             delimiter_stack: Vec::new(),
             in_prototype: false,
             prototype_depth: 0,
+            after_sub: false,
             current_pos: Position::start(),
             context: CheckpointContext::Normal,
         }
@@ -71,7 +74,8 @@ impl LexerCheckpoint {
             mode_changed: self.mode != other.mode,
             delimiter_stack_changed: self.delimiter_stack != other.delimiter_stack,
             prototype_state_changed: self.in_prototype != other.in_prototype
-                || self.prototype_depth != other.prototype_depth,
+                || self.prototype_depth != other.prototype_depth
+                || self.after_sub != other.after_sub,
             context_changed: self.context != other.context,
         }
     }
@@ -89,6 +93,7 @@ impl LexerCheckpoint {
                 self.delimiter_stack.clear();
                 self.in_prototype = false;
                 self.prototype_depth = 0;
+                self.after_sub = false;
                 self.context = CheckpointContext::Normal;
             }
         }
@@ -113,11 +118,12 @@ impl fmt::Display for LexerCheckpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Checkpoint@{} mode={:?} delims={} proto={}",
+            "Checkpoint@{} mode={:?} delims={} proto={} after_sub={}",
             self.position,
             self.mode,
             self.delimiter_stack.len(),
-            self.in_prototype
+            self.in_prototype,
+            self.after_sub
         )
     }
 }

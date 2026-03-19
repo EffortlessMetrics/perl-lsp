@@ -1187,3 +1187,104 @@ fn transliteration_with_ranges() -> R {
     assert_eq!(first.text.as_ref(), "tr/a-zA-Z/A-Za-z/");
     Ok(())
 }
+
+// ===========================================================================
+// 7. Prototype mode leak regression tests (after 'sub' keyword)
+// ===========================================================================
+
+/// `sub foo { }` — no prototype, after_sub must not leak into body.
+/// Without the fix, `in_prototype` stays true and `$^W` inside the body
+/// would be mis-lexed (the `^` treated as a literal prototype char).
+#[test]
+fn sub_no_prototype_does_not_leak() -> R {
+    // $^W is a special variable; inside a prototype it would be mishandled
+    let input = "sub foo { my $x = $^W; }";
+    let sig = significant(input);
+
+    // Find the $^W variable token — it should be a single Variable token
+    // containing "^W", not split by prototype mode treating ^ as literal
+    let var_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(&t.token_type, TokenType::Identifier(v) if v.as_ref() == "$^W"))
+        .collect();
+    assert!(
+        !var_tokens.is_empty(),
+        "Expected $^W to be lexed as a Variable containing '^W', got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// `sub foo : lvalue { }` — attribute without prototype should not leak.
+#[test]
+fn sub_attribute_without_prototype_does_not_leak() -> R {
+    let input = "sub foo : lvalue { my $x = $^W; }";
+    let sig = significant(input);
+
+    let var_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(&t.token_type, TokenType::Identifier(v) if v.as_ref() == "$^W"))
+        .collect();
+    assert!(
+        !var_tokens.is_empty(),
+        "Expected $^W to be lexed correctly after sub with attribute, got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// `sub foo ($self) { }` — signature (not prototype) should not leak.
+#[test]
+fn sub_signature_does_not_leak() -> R {
+    // After the signature parens close, prototype mode must be off
+    let input = "sub foo ($self) { my $x = $^W; }";
+    let sig = significant(input);
+
+    let var_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(&t.token_type, TokenType::Identifier(v) if v.as_ref() == "$^W"))
+        .collect();
+    assert!(
+        !var_tokens.is_empty(),
+        "Expected $^W to be lexed correctly after sub with signature, got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// `sub foo ($$) { }` — actual prototype, verify prototype mode engages and exits.
+#[test]
+fn sub_with_prototype_works_correctly() -> R {
+    let input = "sub foo ($$) { my $x = $^W; }";
+    let sig = significant(input);
+
+    // After prototype parens close, $^W should still be lexed correctly
+    let var_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(&t.token_type, TokenType::Identifier(v) if v.as_ref() == "$^W"))
+        .collect();
+    assert!(
+        !var_tokens.is_empty(),
+        "Expected $^W after prototype to be lexed correctly, got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Forward declaration `sub foo;` should not leak prototype mode.
+#[test]
+fn sub_forward_declaration_does_not_leak() -> R {
+    let input = "sub foo; my $x = $^W;";
+    let sig = significant(input);
+
+    let var_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(&t.token_type, TokenType::Identifier(v) if v.as_ref() == "$^W"))
+        .collect();
+    assert!(
+        !var_tokens.is_empty(),
+        "Expected $^W after forward declaration to be lexed correctly, got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
