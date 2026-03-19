@@ -1,0 +1,600 @@
+# perl-lsp Development Era Timeline
+## Five Distinct AI Development Paradigms (July 2025 – March 2026)
+
+_Deep archaeological analysis of git history across five distinct development eras, each with unique patterns, tooling, and velocity characteristics._
+
+---
+
+## Era 1: Opus Direct (July–August 2025)
+### "Claude Opus as Direct Coding Partner"
+
+**Date Range**: 2025-07-01 to 2025-09-01
+**Duration**: 2 months
+**Total Commits**: 947
+**Average Velocity**: ~14-15 commits/day
+**Peak Day**: 2025-07-16 (192 commits)
+
+### Commit Patterns
+- **Conventional commits**: 1,213/947 (128% — duplicate commits suggest merge artifacts)
+- **Commit message style**: Verbose, descriptive, natural language
+  - Example: "docs: update architecture and progress reports for Rope-based incremental parsing enhancements"
+  - Example: "final: apply pr-cleanup-agent fixes for production-ready merge"
+  - Example: "comprehensive PR cleanup: fix parser/scope analyzer issues"
+- **No branching convention**: Direct commits to master or long-lived feature branches
+- **Merge commits**: Heavy merge conflicts, manual conflict resolution in commit messages
+  - "resolve merge conflicts in CLAUDE.md on master branch"
+  - "resolve merge conflicts with master - integrate incremental parsing documentation"
+
+### Contributors
+- **Steven Zimmerman** (100% of commits)
+- **No external contributions in this era**
+- **No bot activity** (pre-automation)
+
+### Key Work
+1. **Incremental parsing**: Rope-based structure for efficient re-parsing
+   - Major feature PR #65: "Support complex heredoc delimiter expressions"
+   - Major feature PR #66: "Improve incremental parsing reuse and benchmarks"
+   - Major feature PR #67: "Make LSP harness async and enable definition timeout test"
+
+2. **Scope analyzer**: Hash key context detection
+   - PR #50: "implement-is_in_hash_key_context-function"
+   - Focus: Variable resolution in different syntactic contexts
+
+3. **Parser foundation**: Early variable resolution work
+   - "extend-parsing-logic-in-variable-resolution"
+   - "compute-line-and-column-offsets-in-parser"
+
+4. **File completion logic**: Initial LSP provider implementation
+   - "implement-file-completion-logic"
+
+5. **Error handling**: Converting panics to returns
+   - "convert-panic-branches-to-return-errors"
+
+### Distinctive Artifacts
+- **Branch naming**: `codex/` prefix appeared (early Copilot signal)
+- **PR references**: Manual PR numbers (#50, #65, #66, #67)
+- **Documentation updates**: Heavy doc maintenance during development
+- **Merge conflict discipline**: Explicit conflict resolution commits
+
+### Architectural Milestones
+- **Parser version**: v1 (C-based tree-sitter) being wrapped in Rust
+- **Incremental parsing**: Rope-based Crdt introduced (later removed)
+- **Scope analysis**: Initial variable context tracking implemented
+
+### Verdict
+**Exploratory phase**. Opus directly writing code with human review. Emphasis on architectural foundations rather than feature breadth. High-quality but slow: ~947 commits in 2 months suggests manual, careful development.
+
+---
+
+## Era 2: Early Swarms (August–October 2025)
+### "First Multi-Agent Experiments"
+
+**Date Range**: 2025-08-01 to 2025-10-31
+**Duration**: 3 months
+**Total Commits**: 840
+**Average Velocity**: ~9-10 commits/day
+**Peak Day**: 2025-08-26 (109 commits)
+
+### Commit Patterns
+- **Conventional commits**: Slight uptick but still inconsistent
+  - "Improve pest postfix modifier parsing"
+  - "Improve qualified calls in pest parser"
+  - "Improve pest delimiter parsing"
+- **Branch strategy**: Heavy `codex/` prefix usage intensifies
+  - `codex/add-test-for-tree-sitter-perl-highlights`
+  - `codex/extend-dead_code_detector-to-analyze-code`
+  - `codex/add-lightweight-http-server-with-watch-feature`
+  - `codex/replace-c-scanner-with-rust-implementation`
+  - `codex/convert-panic-branches-to-return-errors`
+- **Merge pattern**: Long-lived branches with frequent "Merge branch 'master' into codex/..." commits
+  - Indicates parallel work with frequent rebasing
+
+### Contributors
+- **Steven Zimmerman** (100% human-attributed commits)
+- **EffortlessSteven** (variant, same person)
+- **No bot commits yet** (but infrastructure preparing for it)
+
+### Key Work
+1. **Parser v2 (Pest)**: Significant development
+   - Multiple "Improve pest" commits for postfix modifiers, qualified calls, delimiters
+   - Suggests v2 was being improved in parallel with v1/v3
+
+2. **Tree-sitter highlights**: C scanner replacement
+   - "replace-c-scanner-with-rust-implementation"
+   - Moving from C dependencies to pure Rust
+
+3. **Dead code detector**: Infrastructure tooling
+   - "extend-dead_code_detector-to-analyze-code"
+
+4. **Dev experience**: HTTP server for watching files
+   - "add-lightweight-http-server-with-watch-feature"
+   - Signals shift toward local development tooling
+
+### Distinctive Artifacts
+- **codex/ prefix dominates**: 90%+ of meaningful commits in `codex/` branches
+- **Merge hell**: Multiple "Merge branch 'master' into codex/X" per day
+  - Suggests 2-4 concurrent long-running feature branches
+- **Test infrastructure**: Heavy test addition
+  - "Add comprehensive test suite for Perl code parsing"
+  - "Add comprehensive test suite for Perl code parsing"
+
+### Velocity Pattern
+Peak at **109 commits 2025-08-26**, drops to 75-78 commits 2025-08-27, suggesting single-day batch merges.
+
+### Architectural Milestones
+- **Parser v2 evolution**: Pest grammar improvements (postfix, qualified calls)
+- **v1 deprecation signal**: C scanner replacement suggests moving away from C dependencies
+- **Testing infrastructure**: Corpus tests, highlight tests, S-expression comparison
+
+### Verdict
+**Transition phase**. Opus is working with early agent infrastructure (evidenced by `codex/` branches). Work is more parallelized (multiple concurrent branches) but still single-human commits. Branch naming suggests automated tooling creating branches (`codex/` = Copilot-generated?). Velocity drops from Era 1 (~947/2mo → ~840/3mo), suggesting increased coordination overhead.
+
+---
+
+## Era 3: Architectural Sidechain (October 2025–February 2026)
+### "Heavy Correctness Sprint + Browser-Chat Architecture Design"
+
+**Date Range**: 2025-10-01 to 2026-02-28
+**Duration**: 5 months
+**Total Commits**: 423
+**Average Velocity**: ~2.8 commits/day
+**Peak Day**: 2026-02-28 (91 commits)
+
+### Commit Patterns
+- **Conventional commits**: Still lower adoption (not all commits follow format)
+  - Mix of "fix:", "feat:", "chore:" with natural language
+- **Branch naming**: `codex/` remains but less frequent
+  - Some shift toward descriptive feature branches
+- **Merge style**: Longer individual commits (more work per commit)
+  - Suggests fewer, larger PRs rather than incremental commits
+- **Documentation emphasis**: Heavy ADR (Architecture Decision Record) addition
+  - "docs: ADR-008 swarm-v2 architecture + CHANGELOG"
+  - "docs: add ADR-005 for skill scoping and hook enforcement design"
+
+### Contributors
+- **Steven Zimmerman** (nearly 100%)
+- **Paul Evans** appears (Perl 5 core team joining)
+- **Still no bot activity** (infrastructure not yet live)
+
+### Key Work
+1. **Parser v3 emergence**: Recursive descent parser development
+   - Focus on error recovery, not just parsing
+   - Commits like "restore architectural integrity for Issue #146"
+   - "eliminate fragile unreachable!() macros (Issue #178)"
+
+2. **Mutation testing**: Hardening phase
+   - "Add comprehensive mutation tests and improve parser robustness"
+   - "Implement comprehensive mutation testing hardening for quote parser"
+   - Suggests rigorous testing before v0.10+ release
+
+3. **Semantic analysis**: Variable scope and context
+   - "Import Refactoring and Test Infrastructure Improvements (v2)"
+   - "Dead Code Detection, Diagnostics, and Performance Improvements"
+
+4. **LSP completeness**: Feature provider implementation
+   - Heavy testing infrastructure for LSP integration
+   - Flaky test handling: "mark all flaky LSP integration tests... as ignored"
+
+### Distinctive Artifacts
+- **ADR system introduced**: Architectural Decision Records for design trade-offs
+  - ADR-005: skill scoping and hook enforcement
+  - ADR-008: swarm-v2 architecture
+  - Signals: design being formalized, swarm infrastructure being designed in prose first
+
+- **Flaky test acknowledgment**: "mark all flaky LSP integration tests... as ignored"
+  - Pragmatic acceptance of flakiness while fixing root causes
+
+- **Correctness focus**: Mutation testing, error recovery, panic elimination
+  - Quality-over-velocity mindset
+
+### Velocity Pattern
+Dramatic drop: 423 commits over 5 months (~2.8/day vs ~14/day in Era 1). Only 91 commits on peak day (2026-02-28), suggesting slower, more deliberate work. This is the **slowest era**.
+
+### Architectural Milestones
+- **Parser v3 (Recursive Descent)**: Born from error recovery requirements
+- **Skill scoping system**: Designed via ADR (hook enforcement, agent responsibilities)
+- **Swarm v2 architecture**: Designed in prose via ADR-008
+- **Mutation testing**: Integrated into development workflow
+
+### Verdict
+**Architecture and correctness phase**. Velocity plummets (423 commits / 5mo vs 947 / 2mo in Era 1). This is intentional: human + Opus pair working on architectural design, ADRs, and mutation testing hardening. **No agents deployed yet.** The swarm infrastructure is being *designed* (ADRs written) but not *executed*. This is the calm before the storm.
+
+---
+
+## Era 4: Copilot CLI Fleet Mode (Late February – Early March 2026)
+### "GitHub Copilot CLI Fleet/Autopilot, 'Firehose of Tokens'"
+
+**Date Range**: 2025-02-15 to 2026-03-01
+**Duration**: ~2 weeks (if starting 2026-02-15)
+**Total Commits**: 1,658
+**Average Velocity**: ~82 commits/day
+**Peak Day**: 2026-02-28 (91 commits) AND earlier days at ~106 commits
+
+### Commit Patterns
+- **Conventional commits**: Jump to ~2,295/1,658 (138%)
+  - Suggests bot-generated commits with duplicate artifacts
+  - Nearly every commit is "fix(X): ...", "feat(Y): ...", "chore(Z): ..."
+
+- **Branch naming**: Massive codex/ prefix proliferation
+  - `codex/describe-architecture-decisions`
+  - `codex/document-apparent-adrs-in-codebase`
+  - Consistent naming suggests automated branching
+
+- **Commit velocity**: **Firehose pattern**
+  - 1,658 commits in ~2 weeks = **82 commits/day average**
+  - Peak days: 106+ commits
+  - Suggests high-parallelism, short-lived PRs
+
+- **Commit message uniqueness**: High variation, many similar but not identical
+  - Suggests: code-gen + human-review cycles, not pure automation
+
+### Contributors
+- **Steven Zimmerman** (attributed for merges)
+- **Copilot-swe-agent[bot]** (appears in this era)
+  - Only **1 commit** directly attributed, suggests Steven is merging copilot work
+  - Bot infrastructure exists but Steven still doing final merges
+
+### Key Work
+1. **ADR coverage expansion**: Massive documentation push
+   - "document-apparent-adrs-in-codebase"
+   - "catalog ADR coverage"
+   - "improve ADR discoverability"
+   - 10+ ADR-related commits in short period
+
+2. **Diagnostic improvements**: Perl modernization suggestions
+   - "add Perl version compatibility warnings"
+   - "add helpful fix suggestions to error messages"
+   - Error-to-action mapping
+
+3. **Performance tuning**: Workspace-scale optimization
+   - "tune for CPAN-scale workspaces (#1664)"
+   - Global reference index for O(1) lookups
+   - Progress reporting for workspace indexing
+
+4. **Code cleanup**: Dead code elimination, formatting
+   - "remove dead code before 0.12.0 release"
+   - "auto-format with cargo fmt" (repeated many times)
+
+### Distinctive Artifacts
+- **Copilot signature**:
+  - High commit count (~82/day)
+  - Conventional commit format enforcement
+  - Branch names start with `codex/`
+  - Similar but varied commit messages (not template-based)
+  - Long-running (2 weeks)
+
+- **Quality gate enforcement**:
+  - "Merge pull request #XXX" pattern
+  - Steven doing all final merges
+  - No bot-direct merges
+
+- **Documentation as artifact**:
+  - ADR system being populated (not designed anymore, but catalogued)
+  - Architecture becoming documented as-built rather than as-designed
+
+### Velocity Pattern
+Peak velocity reaches **1,658 commits / 2 weeks** (~82/day). This is **1.7x higher than Era 2** and **6x higher than Era 3**. Sustained high velocity across consecutive days (106, 91, 109, 94 commits).
+
+### Architectural Milestones
+- **v0.12.0 polish**: Features implemented and documented
+- **Workspace indexing**: CPAN-scale performance achieved
+- **Error-to-action**: LSP diagnostic improvements
+- **ADR catalog**: Architecture decisions formalized and indexed
+
+### Verdict
+**Copilot mass-production era**. Velocity jumps 6x from Era 3 → Era 4. Clear firehose pattern: short-lived branches, high parallelism, consistent naming. **Bot activity exists but Steven remains the merge bottleneck**. Quality maintained (conventional commits, code review visible) but volume explodes. This is where Copilot CLI's "fleet mode" or "autopilot" shines. Estimated **20-40 parallel Copilot agents** generating code simultaneously, Steven merging in batches.
+
+---
+
+## Era 5: Claude Code Agent Teams (March 15–19, 2026)
+### "Native Claude Agents in Worktree Isolation"
+
+**Date Range**: 2026-03-01 to 2026-03-20 (current)
+**Duration**: 3 weeks
+**Total Commits**: 837
+**Average Velocity**: ~40 commits/day
+**Peak Day**: 2026-03-18 (321 commits)
+
+### Commit Patterns
+- **Conventional commits**: ~943/837 (113%)
+  - High consistency, near-perfect format adoption
+  - Every merge commit follows "chore(X): ", "fix(Y): ", "feat(Z): " pattern
+
+- **Branch naming**: **Worktree pattern emerges**
+  - `worktree-agent-ab615443`
+  - `worktree-agent-a638b42e`
+  - `worktree-agent-a90d7ded`
+  - Hash-based naming suggests automated worktree naming from agent IDs
+
+- **Commit velocity**: **Peak day 321 commits (2026-03-18)**
+  - Second peak: 250 commits (2026-03-15)
+  - Third peak: 212 commits (2026-03-19)
+  - **Burst pattern**: High 3 days, lower on others
+  - Suggests: agents working in parallel, merges happen in batches
+
+- **Commit message style**:
+  - Verb-first, conventional: "chore(swarm): add X", "fix(parser): handle Y", "test(perl-Z): add W"
+  - Highly uniform suggests templated generation
+  - Many reference skills: "add /scout-then-build skill", "encode cycle 5 learnings"
+
+### Contributors
+- **Steven Zimmerman** (merge bottleneck again)
+- **google-labs-jules[bot]** (Claude agent pool)
+  - Accounts for 216 all-time commits, but concentrated here
+  - These commits appear as "Agent X merged PR Y" with bot attribution
+- **EffortlessSteven, EffortlessMetrics** (team identity)
+
+### Key Work
+1. **Swarm infrastructure maturation**:
+   - "/scout-then-build skill" (#2118)
+   - "/merge-queue skill" (#2121)
+   - "cycle 5 learnings into skills and templates" (#2116, #2123)
+   - "smart orchestrator model" (#2181)
+   - "enhancement-builder prompt template" (#2183)
+
+2. **Parser fixes** (constrained agents):
+   - "handle complex expressions in parenthesized arguments (#1704)"
+   - "recognize fat-arrow in function argument lists (#2147)"
+   - "improve delimiter recovery to reduce cascading errors"
+
+3. **Corpus ratcheting**:
+   - Baseline improvements visible in commits
+   - Error bucket analysis and fixes
+
+4. **Distribution features**:
+   - "add PowerShell completion generation"
+   - "add man page generation"
+   - "cargo-binstall configuration"
+
+5. **Code quality**:
+   - "exclude agent worktrees from rust-analyzer (#2031)"
+   - Dead code cleanup (#2126)
+   - Pre-push hook improvements (#2128)
+
+### Distinctive Artifacts
+- **Worktree isolation visible**:
+  - Branch names like `worktree-agent-HASH` prove per-agent isolation
+  - Enables 50-100 parallel agents without branch conflicts
+  - Zero circular dependency issues (enforced by arch)
+
+- **Skills as primitives**:
+  - Agents invoke `/verify-build`, `/parser-fix`, `/scout-then-build`
+  - Skills reusable across agents
+  - Memory system persists learnings across cycles
+
+- **Batch merging pattern**:
+  - 321 commits (2026-03-18), 250 (2026-03-15), 212 (2026-03-19)
+  - Suggests: agents finish 50-100 tasks, then "merge wave" processes them in batches
+  - "run /green-merge for Batch 0" visible in task names
+
+- **100-agent session signal**:
+  - Cycle 5 memory reports "~100 agents deployed"
+  - 837 commits / ~100 agents = 8-9 commits/agent average
+  - Most agents complete 1-2 features per session
+
+### Velocity Pattern
+**Burst pattern emerges**: 321 commits, then 250, then drop to 117, then 193, then 159, then 117. This is **deliberate throttling** not resource exhaustion. Merge queue is 3-wide (CI bottleneck), so batch sizes cluster around 50-80 commits (1-2 merges/agent).
+
+### Architectural Milestones
+- **Swarm orchestration complete**: Coordinator + workers model encoded
+- **Agent lifecycle documented**: Spawn focused, shutdown when done, respawn fresh
+- **Skills library stabilized**: 8 reusable skills, 10 commands, 48 hooks
+- **Memory persistence**: 30+ memory files surviving across sessions
+- **Worktree isolation proven**: 100 agents, zero conflicts
+
+### Verdict
+**Mature swarm era**. Velocity is lower than Copilot era (40/day vs 82/day) but more *controlled*. Every agent has its own worktree branch, reducing merge conflicts. Agents use skills rather than raw prompts. Memory system captures learnings. This is **purpose-built infrastructure**, not generic automation. Success rate for constrained tasks ~90% (parser fixes), ~50% for unconstrained features (new UX). Optimal team size is ~9 coding agents (due to 3-wide merge queue) but burst to 100 with issue overflow queue. **This is the sweet spot for quality + velocity.**
+
+---
+
+## Comparative Analysis Across Eras
+
+### Velocity Trajectory
+```
+Era 1 (Opus):        947 commits / 2mo   = 14.2 commits/day
+Era 2 (Early Swarms): 840 commits / 3mo   =  9.3 commits/day
+Era 3 (Sidechain):   423 commits / 5mo   =  2.8 commits/day [SLOWEST]
+Era 4 (Copilot):   1,658 commits / 2wk  = 82.0 commits/day [PEAK]
+Era 5 (Claude Code): 837 commits / 3wk  = 40.0 commits/day [SUSTAINED]
+```
+
+**Peak velocity**: Era 4 (Copilot) at 82/day
+**Most sustainable**: Era 5 at 40/day (with purpose-built infrastructure)
+**Most deliberate**: Era 3 at 2.8/day (architecture + mutation testing phase)
+
+### Conventional Commit Adoption
+```
+Era 1: 1,213 / 947   = 128% (duplicates, early stage)
+Era 2: ~50% (mixed, mostly natural language)
+Era 3: ~40% (still exploring)
+Era 4: 2,295 / 1,658 = 138% (bot-enforced + duplicates)
+Era 5: 943 / 837    = 113% (near-perfect, human-readable)
+```
+
+**Insight**: Bot adoption (Era 4) forces conventional commits, but introduces duplicates. Mature agent teams (Era 5) achieve high adoption naturally.
+
+### Branch Naming Evolution
+```
+Era 1: Direct commits + long-lived features
+Era 2: codex/* prefix emerges (~80% of branches)
+Era 3: codex/* dominates, some descriptive branches
+Era 4: codex/* pervasive (~95% of branches, Copilot signal)
+Era 5: worktree-agent-HASH (isolated, non-conflicting)
+```
+
+**Critical transition**: Era 5 abandons generic naming for **deterministic hash-based naming**, enabling N agents on same codebase.
+
+### Merge Pattern Evolution
+```
+Era 1: Manual conflict resolution, long commits
+Era 2: "Merge branch 'master' into codex/X" (frequent rebases)
+Era 3: Fewer merges overall (architecture phase)
+Era 4: "Merge pull request #XXX" (Steven doing final merges)
+Era 5: "Merge pull request #YYYY from EffortlessMetrics/worktree-agent-Z"
+```
+
+**Insight**: Steven remains human bottleneck in all eras (does final merge), but infrastructure evolves to reduce conflicts (worktree isolation in Era 5).
+
+### Test Infrastructure Evolution
+```
+Era 1: Heavy incremental parsing tests
+Era 2: Corpus tests, highlight tests
+Era 3: Mutation testing, flaky test isolation
+Era 4: ADR coverage, diagnostic tests
+Era 5: Test infrastructure mature, focus on pest vs v3 comparison
+```
+
+### Contributor Count
+```
+Era 1: 1 (Steven only)
+Era 2: 2 (Steven + variant)
+Era 3: 3 (Steven + Paul Evans joins)
+Era 4: 3 (Steven + Copilot bot + variants)
+Era 5: 3-4 (Steven + google-labs-jules bot + agents)
+```
+
+**Surprise**: No external community PRs visible. All work is internal (human + AI).
+
+---
+
+## Technological Transitions
+
+### Parser Version Lineage
+- **Era 1-2**: v1 (C) being wrapped, v2 (Pest) being improved
+- **Era 3**: v3 (Recursive Descent) emerging, v2 becoming secondary
+- **Era 4-5**: v3 dominates, v2 kept for benchmarking, v1 archived
+
+### Architecture Decision Documentation
+- **Era 1**: No ADRs
+- **Era 2**: No explicit ADRs, but "codex/" suggests automated planning
+- **Era 3**: ADRs designed and written (ADR-005, ADR-008)
+- **Era 4**: ADRs indexed and catalogued (documentation push)
+- **Era 5**: ADRs used as reference, not created (stable architecture)
+
+### Skill System Evolution
+- **Era 1-3**: No skills (monolithic agent)
+- **Era 4**: Emerging (infrastructure preparation)
+- **Era 5**: 8 skills, 10 commands, 48 hooks (mature)
+
+---
+
+## Key Insights
+
+### 1. **Velocity Is Not Linear**
+- Opus direct coding (Era 1-2): ~14 commits/day
+- Copilot fleet (Era 4): ~82 commits/day
+- Claude agents (Era 5): ~40 commits/day
+- **Lesson**: Not "faster is better." Era 5's 40/day is more sustainable and higher-quality than Era 4's 82/day.
+
+### 2. **Architecture Phase Required Slowdown**
+- Era 3 (2.8 commits/day) was intentional: ADRs written, mutation tests added, refactoring done.
+- This "slowdown" enabled Era 4-5 to sustain high velocity without quality degradation.
+- **Lesson**: Build infrastructure before scaling.
+
+### 3. **Branch Naming as Evolutionary Signal**
+- `codex/` = Copilot era (generic code-generation tool)
+- `worktree-agent-HASH` = Claude era (isolated agents, deterministic naming)
+- **Lesson**: Tool choice reveals in branching strategy.
+
+### 4. **Merge Queue is the Bottleneck**
+- 3-wide merge queue means ~9 optimal coding agents
+- Era 5 spawned ~100 agents; excess overflow to GitHub issue queue
+- **Lesson**: Don't scale agents beyond CI capacity.
+
+### 5. **Steven Remains Human Bottleneck**
+- In all 5 eras, final merges are done by Steven
+- Copilot (Era 4): Steven merges Copilot's work
+- Claude agents (Era 5): Steven merges agent work
+- **Lesson**: Scaling agents ≠ scaling human review. Steven is the quality gate.
+
+### 6. **Bot vs Agent Distinction**
+- **Copilot (Era 4)**: Generates code at high volume, human selects/merges
+- **Claude agents (Era 5)**: Plan-then-execute, constrain scope, preserve institutional knowledge via memory
+- **Lesson**: Agents > bots for sustained development.
+
+---
+
+## Amusing Artifacts & Artifacts
+
+### Commit Message Gems
+
+**Era 1** (Opus-as-helper):
+- "final: apply pr-cleanup-agent fixes for production-ready merge"
+  - _Agent references appearing in Era 1 commits!_
+
+**Era 2** (Merge chaos):
+- 4+ commits on same day resolving same conflicts
+- "Merge branch 'master' into codex/X", then 5 mins later "Merge branch 'master' into codex/X" again
+  - _Suggests rebase loops, not moving forward_
+
+**Era 3** (Philosophical):
+- "restore architectural integrity for Issue #146"
+  - _Suggests refactoring for principle, not just velocity_
+
+**Era 4** (Copilot flood):
+- "auto-format with cargo fmt" (repeated 50+ times)
+- "docs: expand ADR coverage summaries" (repeated)
+  - _Suggests Copilot re-doing same work, Steven selecting best version_
+
+**Era 5** (Meta):
+- "chore(swarm): add /merge-queue skill"
+- "chore(swarm): encode cycle 5 learnings into skills and templates"
+- "docs: add ADR topic guide to improve ADR discoverability"
+  - _Commits about the infrastructure that creates commits_
+
+### Branch Name Evolution
+- `codex/implement-is_in_hash_key_context-function` (2025-08-31)
+- `codex/finish-incremental-parsing-implementation` (2025-08-31)
+- `codex/extend-dead_code_detector-to-analyze-code` (2025-09-05)
+- `worktree-agent-ab615443` (2026-03-05) ← Paradigm shift!
+
+### Hidden Signals
+1. **"final: apply pr-cleanup-agent" in Era 1** (2025-08-31)
+   - Agents existed before Era 2 officially started
+   - Suggests Steven testing agents before deployment
+
+2. **Copilot-swe-agent[bot] with only 1 commit** (Era 4)
+   - Bot registered but Steven does all merges
+   - suggests experimental/trial phase for Copilot
+
+3. **Archived agents (54 definitions)**
+   - Versions v1-v6 of agent architecture
+   - v1-v3: Early generations
+   - v4: Something broke (skipped?), v5 "generative-flow", v6 "swarm v1"
+   - v7+: Current (documented in Era 5 memory files)
+
+4. **Phantom bug in cycle 5**
+   - Scout analysis tool itself had edge cases
+   - Found "bucket #5" that wasn't real
+   - Discovered DURING cycle 5, fixed in-place
+
+---
+
+## Release Markers
+
+### v0.9.1 → v0.10 → v0.12.0
+- **v0.9.1 close-out** (Era 3, late 2025): Mutation testing, flaky tests
+- **v1.0 readiness** (Era 3 → 4): Architecture decisions + "v0.10 readiness"
+- **v0.12.0 public alpha** (Era 5, 2026-03-19):
+  - 97 LSP features
+  - 80% CPAN corpus clean
+  - Full swarm infrastructure
+  - Ready for public launch
+
+---
+
+## Conclusion: Five Eras Tell a Story
+
+| Era | Paradigm | Velocity | Quality | Lesson |
+|-----|----------|----------|---------|--------|
+| 1 | Opus Direct | 14/day | High | Single genius, slow |
+| 2 | Early Swarms | 9/day | High | Coordination overhead |
+| 3 | Sidechain | 2.8/day | Very High | Architecture requires slowdown |
+| 4 | Copilot Fleet | 82/day | Medium | Volume ≠ quality |
+| 5 | Claude Agents | 40/day | High | Infrastructure-aware scaling |
+
+**The arc bends toward...**
+Well-designed infrastructure (worktree isolation, skills, memory, ADRs) enables controlled parallelism at 40 commits/day. This outperforms Copilot's 82/day because it maintains quality, prevents merge conflicts, and captures institutional knowledge.
+
+**The future**: Era 5 is the stable state. Scaling beyond 100 agents requires either (a) removing Steven as bottleneck via better CI tooling, or (b) embracing issue queue overflow as intentional.
+

@@ -16,6 +16,7 @@ Choose the path that matches what you are trying to do:
 | Work on LSP features as a contributor | [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) |
 | Run builds, tests, and CI commands | [Commands Reference](reference/COMMANDS_REFERENCE.md) |
 | Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
+| Read the historical analyses and launch material | [Articles and Research Notes](articles/README.md) |
 
 ## Documentation Map
 
@@ -66,6 +67,16 @@ Decision records, project status, and planning documents.
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
 - [Latency Caps SLO Spec](specs/LATENCY_CAPS_SLO_SPEC.md)
 - [Release Candidate Baseline](specs/RELEASE_CANDIDATE_BASELINE.md)
+
+### Historical Analyses
+Long-form historical writing plus the supporting research notes that fed it.
+
+- [Articles and Research Notes](articles/README.md)
+- [Five Eras of AI-Assisted Development](articles/FIVE_ERAS.md)
+- [Agentic Swarm Development](articles/SWARM_METHODOLOGY.md)
+- [Parsing Perl](articles/PARSING_PERL.md)
+- [Zero-Panic Reliability and Security](articles/ZERO_PANIC.md)
+- [Curiosities, Records, and Surprising Facts](articles/CURIOSITIES.md)
 
 ## Suggested Reading Order for New Contributors
 
