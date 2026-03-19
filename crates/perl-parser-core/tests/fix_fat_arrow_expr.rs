@@ -529,3 +529,162 @@ fn define_encoding_fat_arrow() {
     let source = r#"Encode::define_encoding( $obj{$_} => $_ );"#;
     assert_clean_parse(source);
 }
+
+// ===== Additional regression tests for complex fat arrow value expressions =====
+
+// Fat arrow with do block value (issue #1651 acceptance criteria)
+#[test]
+fn fat_arrow_do_block_value() {
+    let source = r#"my %h = (data => do { my $x = 1; $x + 1 });"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with method call chain as value
+#[test]
+fn fat_arrow_method_chain_value() {
+    let source = r#"my %h = (result => $obj->foo->bar->baz);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with regex as value
+#[test]
+fn fat_arrow_qr_regex_value() {
+    let source = r#"my %h = (pattern => qr/^\d+$/, alt => qr{foo|bar}i);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with string concatenation value
+#[test]
+fn fat_arrow_concat_value() {
+    let source = r#"my %h = (path => $dir . "/" . $file);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with ternary value
+#[test]
+fn fat_arrow_ternary_value() {
+    let source = r#"my %h = (mode => $debug ? "verbose" : "quiet");"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with logical or value (common default pattern)
+#[test]
+fn fat_arrow_logical_or_value() {
+    let source = r#"my %h = (name => $opts{name} || "default");"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with defined-or value
+#[test]
+fn fat_arrow_defined_or_value() {
+    let source = r#"my %h = (port => $ENV{PORT} // 8080);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with anonymous sub that has prototype
+#[test]
+fn fat_arrow_sub_with_args() {
+    let source = r#"my %h = (handler => sub { my ($self, $req) = @_; return $req });"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with backslash ref values
+#[test]
+fn fat_arrow_ref_values() {
+    let source = r#"my %h = (code => \&handler, list => \@items, map => \%config);"#;
+    assert_clean_parse(source);
+}
+
+// Deeply nested hash with mixed structures
+#[test]
+fn fat_arrow_deeply_nested() {
+    let source = r#"my $cfg = {
+    server => {
+        listen => [":8080", ":8443"],
+        tls => { cert => "/etc/ssl/cert.pem", key => "/etc/ssl/key.pem" },
+    },
+    routes => [
+        { path => "/api", handler => \&api_handler },
+        { path => "/", handler => sub { return { status => 200 } } },
+    ],
+};"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in complex Moose has with builder/default
+#[test]
+fn moose_has_complex_attributes() {
+    let source = r#"has config => (
+    is      => 'ro',
+    isa     => 'HashRef',
+    lazy    => 1,
+    builder => '_build_config',
+    default => sub { {} },
+);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in hash slice assignment
+#[test]
+fn hash_slice_assignment_fat_arrow() {
+    let source = r#"@hash{qw(a b c)} = (1 => 2, 3);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in complex map expression
+#[test]
+fn fat_arrow_in_map_to_hash() {
+    let source = r#"my %index = map { $_->name => $_ } @objects;"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow with sprintf value
+#[test]
+fn fat_arrow_sprintf_value() {
+    let source = r#"my %h = (msg => sprintf("Hello %s, you have %d items", $name, $count));"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in die with complex expression
+#[test]
+fn fat_arrow_die_complex() {
+    let source = r#"die {
+    error   => "Request failed",
+    code    => $resp->code,
+    message => $resp->message // "unknown",
+    trace   => Carp::longmess(),
+};"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow after expression with postfix deref
+#[test]
+fn fat_arrow_postfix_deref_value() {
+    let source =
+        r#"my %h = (items => $data->{results}->@*, count => scalar $data->{results}->@*);"#;
+    assert_clean_parse(source);
+}
+
+// Multiple fat arrows in dispatch table
+#[test]
+fn fat_arrow_complex_dispatch_table() {
+    let source = r#"my %dispatch = (
+    GET    => sub { $self->handle_get(@_) },
+    POST   => sub { $self->handle_post(@_) },
+    DELETE => sub { $self->handle_delete(@_) },
+    PUT    => sub { $self->handle_put(@_) },
+);"#;
+    assert_clean_parse(source);
+}
+
+// Fat arrow in eval block with error hash
+#[test]
+fn fat_arrow_eval_error_handling() {
+    let source = r#"my $result = eval {
+    my $data = $self->fetch(timeout => 30, retry => 3);
+    return { ok => 1, data => $data };
+} or do {
+    return { ok => 0, error => $@ };
+};"#;
+    assert_clean_parse(source);
+}
