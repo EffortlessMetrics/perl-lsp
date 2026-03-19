@@ -16,6 +16,7 @@ use std::sync::Arc;
 ///
 /// Queries the workspace index to provide completions for symbols from other files.
 /// This enables cross-file completion when the user types a symbol name.
+/// Deduplicates against already-collected local completions by label.
 pub fn add_workspace_symbol_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -37,6 +38,10 @@ pub fn add_workspace_symbol_completions(
         return;
     }
 
+    // Collect existing labels to deduplicate workspace symbols against local ones
+    let existing_labels: HashSet<String> =
+        completions.iter().map(|item| item.label.clone()).collect();
+
     // Search for symbols matching the prefix
     let matching_symbols = index.find_symbols(&context.prefix);
 
@@ -56,6 +61,11 @@ pub fn add_workspace_symbol_completions(
                 } else {
                     symbol.name.clone()
                 };
+
+                // Skip if already provided by local completion (bare name match)
+                if existing_labels.contains(&label) || existing_labels.contains(&symbol.name) {
+                    continue;
+                }
 
                 completions.push(CompletionItem {
                     label: label.clone(),
@@ -88,6 +98,11 @@ pub fn add_workspace_symbol_completions(
                     continue;
                 }
 
+                // Skip if already provided by local completion
+                if existing_labels.contains(&label) {
+                    continue;
+                }
+
                 completions.push(CompletionItem {
                     label: label.clone(),
                     kind: CompletionItemKind::Variable,
@@ -101,7 +116,10 @@ pub fn add_workspace_symbol_completions(
                 });
             }
             WsSymbolKind::Package => {
-                // Add package completion
+                if existing_labels.contains(&symbol.name) {
+                    continue;
+                }
+
                 completions.push(CompletionItem {
                     label: symbol.name.clone(),
                     kind: CompletionItemKind::Module,
@@ -115,7 +133,10 @@ pub fn add_workspace_symbol_completions(
                 });
             }
             WsSymbolKind::Constant => {
-                // Add constant completion
+                if existing_labels.contains(&symbol.name) {
+                    continue;
+                }
+
                 completions.push(CompletionItem {
                     label: symbol.name.clone(),
                     kind: CompletionItemKind::Constant,
@@ -129,7 +150,10 @@ pub fn add_workspace_symbol_completions(
                 });
             }
             WsSymbolKind::Export => {
-                // Add exported symbol completion
+                if existing_labels.contains(&symbol.name) {
+                    continue;
+                }
+
                 completions.push(CompletionItem {
                     label: symbol.name.clone(),
                     kind: CompletionItemKind::Function,
@@ -142,8 +166,29 @@ pub fn add_workspace_symbol_completions(
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }
+            WsSymbolKind::Import => {
+                if existing_labels.contains(&symbol.name) {
+                    continue;
+                }
+
+                completions.push(CompletionItem {
+                    label: symbol.name.clone(),
+                    kind: CompletionItemKind::Function,
+                    detail: symbol
+                        .container_name
+                        .clone()
+                        .map(|c| format!("imported from {c}"))
+                        .or_else(|| Some("imported".to_string())),
+                    documentation: symbol.documentation.clone(),
+                    insert_text: Some(symbol.name.clone()),
+                    sort_text: Some(format!("2_{}", symbol.name)),
+                    filter_text: Some(symbol.name.clone()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                });
+            }
             _ => {
-                // Skip other symbol types
+                // Skip other symbol types (Class, Role, Label, Format)
             }
         }
     }

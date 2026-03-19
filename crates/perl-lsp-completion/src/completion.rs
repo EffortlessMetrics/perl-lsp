@@ -1880,4 +1880,48 @@ sub do_work { }
         assert!(detail.contains("MyLib"), "detail should mention module name, got: {detail:?}");
         Ok(())
     }
+    #[test]
+    fn test_workspace_symbols_dedup_with_local_functions() {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = must(Url::parse("file:///workspace/Worker.pm"));
+        let module_code = "package Worker;\nsub process_data { }\n1;\n";
+        must(index.index_file(module_uri, module_code.to_string()));
+
+        let code = "sub process_data { }\nproc";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        let process_items: Vec<_> =
+            completions.iter().filter(|c| c.label == "process_data").collect();
+        assert!(
+            process_items.len() <= 1,
+            "workspace should not duplicate local process_data, found {}: {:?}",
+            process_items.len(),
+            process_items.iter().map(|c| (&c.label, &c.detail)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_workspace_subroutine_completion() {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = must(Url::parse("file:///workspace/MyApp.pm"));
+        let module_code = "package MyApp;\nsub run_app { }\n1;\n";
+        must(index.index_file(module_uri, module_code.to_string()));
+
+        let code = "run_";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label.contains("run_app")),
+            "should suggest run_app from workspace, got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
 }

@@ -498,3 +498,179 @@ fn special_variables_appear_for_dollar_prefix() {
         labels(&items)
     );
 }
+
+// ===========================================================================
+// 12. Workspace-aware completion (issue #1653)
+// ===========================================================================
+
+fn workspace_with_modules() -> Arc<WorkspaceIndex> {
+    let index = Arc::new(WorkspaceIndex::new());
+    let uri1 = must(Url::parse("file:///workspace/MyApp/Config.pm"));
+    must(
+        index.index_file(
+            uri1,
+            "package MyApp::Config;
+sub load_config { }
+sub save_config { }
+1;
+"
+            .to_string(),
+        ),
+    );
+    let uri2 = must(Url::parse("file:///workspace/MyApp/Logger.pm"));
+    must(
+        index.index_file(
+            uri2,
+            "package MyApp::Logger;
+sub log_info { }
+sub log_error { }
+sub log_debug { }
+1;
+"
+            .to_string(),
+        ),
+    );
+    let uri3 = must(Url::parse("file:///workspace/Utils.pm"));
+    must(
+        index.index_file(
+            uri3,
+            "package Utils;
+use Exporter 'import';
+our @EXPORT_OK = qw(trim_string format_date);
+sub trim_string { }
+sub format_date { }
+1;
+"
+            .to_string(),
+        ),
+    );
+    index
+}
+
+#[test]
+fn workspace_use_suggests_module_names() {
+    let index = workspace_with_modules();
+    let code = "use MyApp";
+    let items = completions_with_index(code, code.len(), index);
+    assert!(
+        has_label(&items, "MyApp::Config"),
+        "should suggest MyApp::Config, got: {:?}",
+        labels(&items)
+    );
+    assert!(
+        has_label(&items, "MyApp::Logger"),
+        "should suggest MyApp::Logger, got: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
+fn workspace_use_suggests_at_least_three_modules() {
+    let index = workspace_with_modules();
+    let code = "use ";
+    let items = completions_with_index(code, code.len(), index);
+    let module_items: Vec<_> =
+        items.iter().filter(|i| i.detail.as_deref() == Some("module")).collect();
+    assert!(
+        module_items.len() >= 3,
+        "should suggest >=3 modules, found {}: {:?}",
+        module_items.len(),
+        module_items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn workspace_subroutine_completion_in_general_context() {
+    let index = workspace_with_modules();
+    let code = "log_i";
+    let items = completions_with_index(code, code.len(), index);
+    assert!(
+        items.iter().any(|i| i.label.contains("log_info")),
+        "should suggest log_info, got: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
+fn workspace_method_completion_with_inferred_type() {
+    let index = workspace_with_modules();
+    let code = "my $cfg = MyApp::Config->new;\n$cfg->";
+    let items = completions_with_index(code, code.len(), index);
+    assert!(
+        items.iter().any(|i| i.label == "load_config"),
+        "should suggest load_config, got: {:?}",
+        labels(&items)
+    );
+    assert!(
+        items.iter().any(|i| i.label == "save_config"),
+        "should suggest save_config, got: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
+fn workspace_package_member_completion_after_colons() {
+    let index = workspace_with_modules();
+    let code = "MyApp::Logger::";
+    let items = completions_with_index(code, code.len(), index);
+    assert!(has_label(&items, "log_info"), "should suggest log_info, got: {:?}", labels(&items));
+    assert!(has_label(&items, "log_error"), "should suggest log_error, got: {:?}", labels(&items));
+}
+
+#[test]
+fn workspace_completions_dedup_with_local() {
+    let index = workspace_with_modules();
+    let code = "sub log_info { }
+log_i";
+    let items = completions_with_index(code, code.len(), index);
+    let log_info_items: Vec<_> = items.iter().filter(|i| i.label == "log_info").collect();
+    assert!(
+        log_info_items.len() <= 1,
+        "should not duplicate local log_info, found {}",
+        log_info_items.len()
+    );
+}
+
+#[test]
+fn workspace_completions_sort_after_local() {
+    let index = workspace_with_modules();
+    let code = "sub load_local { }
+load";
+    let items = completions_with_index(code, code.len(), index);
+    let local_item = items.iter().find(|i| i.label == "load_local");
+    let ws_item = items.iter().find(|i| i.label.contains("load_config"));
+    if let (Some(local), Some(ws)) = (local_item, ws_item) {
+        let local_sort = local.sort_text.as_deref().unwrap_or(&local.label);
+        let ws_sort = ws.sort_text.as_deref().unwrap_or(&ws.label);
+        assert!(
+            local_sort < ws_sort,
+            "local should sort before workspace: local={local_sort:?} ws={ws_sort:?}"
+        );
+    }
+}
+
+#[test]
+fn workspace_use_qw_suggests_module_exports() {
+    let index = workspace_with_modules();
+    let code = "use Utils qw(tri";
+    let items = completions_with_index(code, code.len(), index);
+    assert!(
+        has_label(&items, "trim_string"),
+        "should suggest trim_string, got: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
+fn workspace_empty_prefix_does_not_suggest_all_symbols() {
+    let index = workspace_with_modules();
+    let code = "";
+    let items = completions_with_index(code, code.len(), index);
+    let ws_items: Vec<_> =
+        items.iter().filter(|i| i.detail.as_deref() == Some("workspace")).collect();
+    assert!(
+        ws_items.is_empty(),
+        "should not suggest workspace symbols with empty prefix, found: {:?}",
+        ws_items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
