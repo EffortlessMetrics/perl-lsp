@@ -945,140 +945,61 @@ impl<'a> Parser<'a> {
     }
 
     /// Consume a value expression on the right-hand side of `=>` inside a `use`
-    /// import list.  The value may be a simple literal, a code reference
-    /// (`\&name`), an anonymous sub (`sub { ... }`), or a more complex
-    /// expression which is consumed token-by-token until a comma or statement
-    /// terminator is reached.
+    /// import list. Values are stored as raw tokens, so this consumer needs to
+    /// keep nested delimiters and ternaries balanced instead of bailing on the
+    /// first operator or inner fat arrow.
     fn consume_use_import_value(&mut self, args: &mut Vec<String>) -> ParseResult<()> {
-        match self.peek_kind() {
-            Some(TokenKind::Number | TokenKind::String) => {
-                args.push(self.consume_token()?.text.to_string());
+        let mut paren_depth = 0usize;
+        let mut bracket_depth = 0usize;
+        let mut brace_depth = 0usize;
+        let mut ternary_depth = 0usize;
+        let mut consumed_any = false;
+
+        while !self.tokens.is_eof() {
+            let kind = self.peek_kind();
+            let at_top_level = paren_depth == 0 && bracket_depth == 0 && brace_depth == 0;
+
+            if Self::is_statement_terminator(kind) {
+                break;
             }
-            Some(TokenKind::Identifier) => {
-                // Peek ahead to see if this identifier is followed by =>
-                // If so, it is actually a key for the next pair, not a value.
-                if self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::FatArrow) {
-                    // Don't consume - let the outer loop handle it as a key
-                } else {
-                    // Consume the identifier first.
-                    args.push(self.consume_token()?.text.to_string());
-                    // If an operator follows (e.g. `$] < 5.016`), the value is a
-                    // full expression. Consume the operator and everything until the
-                    // next value boundary so the stray `<` is not left over for the
-                    // outer parser to misread as a glob/readline construct.
-                    if matches!(
-                        self.peek_kind(),
-                        Some(
-                            TokenKind::Less
-                                | TokenKind::Greater
-                                | TokenKind::LessEqual
-                                | TokenKind::GreaterEqual
-                                | TokenKind::Equal
-                                | TokenKind::NotEqual
-                                | TokenKind::And
-                                | TokenKind::Or
-                                | TokenKind::Plus
-                                | TokenKind::Minus
-                                | TokenKind::Star
-                                | TokenKind::Slash
-                                | TokenKind::Dot
-                                | TokenKind::WordAnd
-                                | TokenKind::WordOr
-                        )
-                    ) {
-                        while !Self::is_statement_terminator(self.peek_kind())
-                            && self.peek_kind() != Some(TokenKind::Comma)
-                            && self.peek_kind() != Some(TokenKind::FatArrow)
-                        {
-                            args.push(self.consume_token()?.text.to_string());
-                        }
+
+            if at_top_level && ternary_depth == 0 {
+                match kind {
+                    Some(
+                        TokenKind::Comma
+                        | TokenKind::FatArrow
+                        | TokenKind::RightParen
+                        | TokenKind::RightBracket
+                        | TokenKind::RightBrace,
+                    ) => break,
+                    Some(TokenKind::Identifier)
+                        if !consumed_any
+                            && self.tokens.peek_second().map(|t| t.kind)
+                                == Ok(TokenKind::FatArrow) =>
+                    {
+                        break;
                     }
+                    _ => {}
                 }
             }
-            Some(TokenKind::LeftBrace) => {
-                let mut depth: usize = 0;
-                loop {
-                    match self.peek_kind() {
-                        Some(TokenKind::LeftBrace) => {
-                            depth += 1;
-                            args.push(self.consume_token()?.text.to_string());
-                        }
-                        Some(TokenKind::RightBrace) => {
-                            args.push(self.consume_token()?.text.to_string());
-                            depth = depth.saturating_sub(1);
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        None => break,
-                        _ if self.tokens.is_eof() => break,
-                        _ => {
-                            args.push(self.consume_token()?.text.to_string());
-                        }
-                    }
-                }
+
+            let token = self.consume_token()?;
+            match token.kind {
+                TokenKind::LeftParen => paren_depth += 1,
+                TokenKind::RightParen => paren_depth = paren_depth.saturating_sub(1),
+                TokenKind::LeftBracket => bracket_depth += 1,
+                TokenKind::RightBracket => bracket_depth = bracket_depth.saturating_sub(1),
+                TokenKind::LeftBrace => brace_depth += 1,
+                TokenKind::RightBrace => brace_depth = brace_depth.saturating_sub(1),
+                TokenKind::Question => ternary_depth += 1,
+                TokenKind::Colon => ternary_depth = ternary_depth.saturating_sub(1),
+                _ => {}
             }
-            Some(TokenKind::LeftBracket) => {
-                let mut depth: usize = 0;
-                loop {
-                    match self.peek_kind() {
-                        Some(TokenKind::LeftBracket) => {
-                            depth += 1;
-                            args.push(self.consume_token()?.text.to_string());
-                        }
-                        Some(TokenKind::RightBracket) => {
-                            args.push(self.consume_token()?.text.to_string());
-                            depth = depth.saturating_sub(1);
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        None => break,
-                        _ if self.tokens.is_eof() => break,
-                        _ => {
-                            args.push(self.consume_token()?.text.to_string());
-                        }
-                    }
-                }
-            }
-            Some(TokenKind::Sub) => {
-                // Anonymous sub value: sub { ... }
-                // Consume tokens including the entire block
-                args.push(self.consume_token()?.text.to_string()); // 'sub'
-                if self.peek_kind() == Some(TokenKind::LeftBrace) {
-                    let mut depth: usize = 0;
-                    loop {
-                        match self.peek_kind() {
-                            Some(TokenKind::LeftBrace) => {
-                                depth += 1;
-                                args.push(self.consume_token()?.text.to_string());
-                            }
-                            Some(TokenKind::RightBrace) => {
-                                args.push(self.consume_token()?.text.to_string());
-                                depth = depth.saturating_sub(1);
-                                if depth == 0 {
-                                    break;
-                                }
-                            }
-                            None => break,
-                            _ if self.tokens.is_eof() => break,
-                            _ => {
-                                args.push(self.consume_token()?.text.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {
-                // For complex expressions (e.g. \&name), consume tokens until ',' or ';'
-                while !Self::is_statement_terminator(self.peek_kind())
-                    && self.peek_kind() != Some(TokenKind::Comma)
-                    && self.peek_kind() != Some(TokenKind::FatArrow)
-                {
-                    args.push(self.consume_token()?.text.to_string());
-                }
-            }
+
+            args.push(token.text.to_string());
+            consumed_any = true;
         }
+
         Ok(())
     }
 }
