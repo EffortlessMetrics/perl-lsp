@@ -1599,3 +1599,350 @@ fn lexer_error_with_unterminated_string_has_suggestion() -> Result<(), Box<dyn s
     );
     Ok(())
 }
+
+// =========================================================================
+// 18. Version compatibility — check_version_compat
+// =========================================================================
+
+fn use_node_with_args(module: &str, args: Vec<&str>, start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::Use {
+            module: module.to_string(),
+            args: args.into_iter().map(|s| s.to_string()).collect(),
+            has_filter_risk: false,
+        },
+        loc(start, end),
+    )
+}
+
+fn try_node(start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::Try {
+            body: Box::new(block(vec![])),
+            catch_blocks: vec![],
+            finally_block: None,
+        },
+        loc(start, end),
+    )
+}
+
+fn class_node(name: &str, start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::Class {
+            name: name.to_string(),
+            body: Box::new(block(vec![])),
+        },
+        loc(start, end),
+    )
+}
+
+fn given_node(start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::Given {
+            expr: Box::new(var_node("$", "x", start, start + 2)),
+            body: Box::new(block(vec![])),
+        },
+        loc(start, end),
+    )
+}
+
+fn state_decl_node(start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "state".to_string(),
+            variable: Box::new(var_node("$", "counter", start + 6, end)),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(start, end),
+    )
+}
+
+fn sub_with_sig(name: &str, start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::Subroutine {
+            name: Some(name.to_string()),
+            name_span: None,
+            prototype: None,
+            signature: Some(Box::new(Node::new(
+                NodeKind::Signature { parameters: vec![] },
+                loc(start + 10, start + 12),
+            ))),
+            attributes: vec![],
+            body: Box::new(block(vec![])),
+        },
+        loc(start, end),
+    )
+}
+
+#[test]
+fn version_compat_no_version_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // Without a version declaration, no warnings should be emitted
+    let root = program(vec![
+        expr_stmt(func_call("say", vec![var_node("$", "msg", 5, 9)], 0, 10), 0, 11),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("version-compat")),
+        "Without version declaration, no version-compat warnings should fire"
+    );
+    Ok(())
+}
+
+#[test]
+fn version_compat_say_below_v510() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.8; say "hello"; -> should warn
+    let root = program(vec![
+        use_node("v5.8", 0, 10),
+        expr_stmt(func_call("say", vec![var_node("$", "msg", 20, 24)], 15, 25), 15, 26),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(
+        !compat.is_empty(),
+        "say() with v5.8 should produce version-compat warning"
+    );
+    assert!(compat[0].message.contains("say()"));
+    assert!(compat[0].message.contains("v5.10"));
+    Ok(())
+}
+
+#[test]
+fn version_compat_say_with_v510_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![
+        use_node("v5.10", 0, 12),
+        expr_stmt(func_call("say", vec![var_node("$", "msg", 20, 24)], 15, 25), 15, 26),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("version-compat")),
+        "say() with v5.10 should NOT produce warning"
+    );
+    Ok(())
+}
+
+#[test]
+fn version_compat_try_catch_below_v534() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![
+        use_node("v5.32", 0, 12),
+        try_node(15, 50),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(
+        !compat.is_empty(),
+        "try/catch with v5.32 should produce version-compat warning"
+    );
+    assert!(compat[0].message.contains("try/catch"));
+    Ok(())
+}
+
+#[test]
+fn version_compat_class_below_v538() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![
+        use_node("v5.36", 0, 12),
+        class_node("Foo", 15, 50),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(
+        !compat.is_empty(),
+        "class syntax with v5.36 should produce version-compat warning"
+    );
+    assert!(compat[0].message.contains("class syntax"));
+    Ok(())
+}
+
+#[test]
+fn version_compat_state_below_v510() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![
+        use_node("v5.8", 0, 10),
+        state_decl_node(15, 35),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(
+        !compat.is_empty(),
+        "state with v5.8 should produce version-compat warning"
+    );
+    assert!(compat[0].message.contains("state"));
+    Ok(())
+}
+
+#[test]
+fn version_compat_signatures_below_v520() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![
+        use_node("v5.18", 0, 12),
+        sub_with_sig("greet", 15, 50),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(
+        !compat.is_empty(),
+        "signatures with v5.18 should produce version-compat warning"
+    );
+    assert!(compat[0].message.contains("signature"));
+    Ok(())
+}
+
+#[test]
+fn version_compat_feature_pragma_below_version() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.8; use feature 'say'; -> should warn about feature 'say'
+    let root = program(vec![
+        use_node("v5.8", 0, 10),
+        use_node_with_args("feature", vec!["'say'"], 12, 30),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(
+        !compat.is_empty(),
+        "use feature 'say' with v5.8 should warn"
+    );
+    assert!(compat[0].message.contains("feature 'say'"));
+    Ok(())
+}
+
+#[test]
+fn version_compat_explicit_feature_enables_suppresses_node_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.32; use feature 'try'; try { } catch { } -> should NOT warn about try node
+    // (feature explicitly enabled, even though version is below 5.34)
+    let root = program(vec![
+        use_node("v5.32", 0, 12),
+        use_node_with_args("feature", vec!["'try'"], 13, 30),
+        try_node(35, 60),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    // Should still warn about the feature pragma itself
+    let node_warnings: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| {
+            d.code.as_deref() == Some("version-compat")
+                && d.message.contains("try/catch")
+        })
+        .collect();
+    assert!(
+        node_warnings.is_empty(),
+        "try/catch node should NOT warn when feature 'try' is explicitly enabled"
+    );
+    Ok(())
+}
+
+#[test]
+fn version_compat_given_below_v510() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![
+        use_node("v5.8", 0, 10),
+        given_node(15, 50),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(
+        !compat.is_empty(),
+        "given/when with v5.8 should produce version-compat warning"
+    );
+    assert!(compat[0].message.contains("given/when"));
+    Ok(())
+}
+
+#[test]
+fn version_compat_numeric_version_036() -> Result<(), Box<dyn std::error::Error>> {
+    // use 5.036; try { } catch { } -> should NOT warn (5.036 = 5.36, try needs 5.34)
+    let root = program(vec![
+        use_node("5.036", 0, 12),
+        try_node(15, 50),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let try_warnings: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| {
+            d.code.as_deref() == Some("version-compat")
+                && d.message.contains("try/catch")
+        })
+        .collect();
+    assert!(
+        try_warnings.is_empty(),
+        "try/catch with 5.036 (=v5.36) should NOT warn: {:?}",
+        try_warnings.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn version_compat_diagnostic_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![
+        use_node("v5.8", 0, 10),
+        expr_stmt(func_call("say", vec![var_node("$", "x", 16, 18)], 12, 19), 12, 20),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let compat: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("version-compat"))
+        .collect();
+    assert!(!compat.is_empty());
+    let first = &compat[0];
+    assert!(first.suggestion.is_some(), "Should have a suggestion");
+    let suggestion = first.suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("v5.10"),
+        "Suggestion should mention required version: {suggestion}"
+    );
+    assert!(!first.related_information.is_empty(), "Should have related info");
+    assert_eq!(first.severity, DiagnosticSeverity::Warning);
+    Ok(())
+}
+
+#[test]
+fn version_compat_say_with_feature_enabled_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.8; use feature 'say'; say "hello"; -> say() should not warn (feature explicitly enabled)
+    let root = program(vec![
+        use_node("v5.8", 0, 10),
+        use_node_with_args("feature", vec!["'say'"], 12, 30),
+        expr_stmt(func_call("say", vec![var_node("$", "msg", 40, 44)], 35, 45), 35, 46),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::version_compat::check_version_compat(&root, &mut diagnostics);
+    let say_warnings: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| {
+            d.code.as_deref() == Some("version-compat")
+                && d.message.contains("say()")
+        })
+        .collect();
+    assert!(
+        say_warnings.is_empty(),
+        "say() should not warn when feature 'say' is explicitly enabled"
+    );
+    Ok(())
+}

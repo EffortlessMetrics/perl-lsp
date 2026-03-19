@@ -88,3 +88,4 @@
 pub mod common_mistakes;
 pub mod deprecated;
 pub mod strict_warnings;
+pub mod version_compat;
