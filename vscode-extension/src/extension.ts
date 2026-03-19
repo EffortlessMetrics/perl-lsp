@@ -497,12 +497,12 @@ async function refreshTestAdapter(context: vscode.ExtensionContext) {
     }
 
     const config = vscode.workspace.getConfiguration('perl-lsp');
-    if (!config.get<boolean>('enableTestIntegration', true) || !client) {
+    if (!config.get<boolean>('enableTestIntegration', true)) {
         outputChannel.appendLine('Perl test integration disabled.');
         return;
     }
 
-    testAdapter = new PerlTestAdapter(client);
+    testAdapter = new PerlTestAdapter();
     context.subscriptions.push(testAdapter);
     outputChannel.appendLine('Perl test integration enabled.');
 }
