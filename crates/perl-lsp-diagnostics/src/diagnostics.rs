@@ -6,7 +6,9 @@ use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
+use perl_semantic_analyzer::symbol::SymbolExtractor;
 
+use crate::lints;
 use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export diagnostic types from the shared SRP microcrate.
@@ -74,6 +76,13 @@ impl DiagnosticsProvider {
         let scope_analyzer = ScopeAnalyzer::new();
         let scope_issues = scope_analyzer.analyze(ast, source, &pragma_map);
         diagnostics.extend(scope_issues_to_diagnostics(scope_issues));
+
+        // Run lint checks: deprecated syntax, strict/warnings, common mistakes
+        lints::deprecated::check_deprecated_syntax(ast, &mut diagnostics);
+        lints::strict_warnings::check_strict_warnings(ast, &mut diagnostics);
+
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        lints::common_mistakes::check_common_mistakes(ast, &symbol_table, &mut diagnostics);
 
         diagnostics
     }
