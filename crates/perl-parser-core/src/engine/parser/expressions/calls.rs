@@ -142,6 +142,10 @@ impl<'a> Parser<'a> {
         // Array/list manipulation builtins are also excluded because
         // `push $aref->@*, $x` has `$aref->@*` as the first argument, not an
         // indirect object.
+        //
+        // Block-list functions (sort, map, grep, etc.) are excluded because
+        // `sort @list or die` is a regular function call with word operator,
+        // not an indirect method call.
         if name.chars().next().is_some_and(|c| c.is_lowercase())
             && !matches!(
                 name,
@@ -175,6 +179,46 @@ impl<'a> Parser<'a> {
                     | "sin"
                     | "exp"
                     | "log"
+                    // Block-list functions: `sort @list or die` is a regular call
+                    | "sort"
+                    | "map"
+                    | "grep"
+                    | "reverse"
+                    | "join"
+                    // Common builtins whose first arg is never an indirect object
+                    | "die"
+                    | "warn"
+                    | "carp"
+                    | "croak"
+                    | "confess"
+                    | "cluck"
+                    | "exit"
+                    | "eval"
+                    | "require"
+                    | "return"
+                    | "delete"
+                    | "exists"
+                    | "values"
+                    | "keys"
+                    | "each"
+                    | "local"
+                    | "wantarray"
+                    | "caller"
+                    | "mkdir"
+                    | "rmdir"
+                    | "chdir"
+                    | "chmod"
+                    | "chown"
+                    | "unlink"
+                    | "rename"
+                    | "symlink"
+                    | "link"
+                    | "readlink"
+                    | "stat"
+                    | "lstat"
+                    | "chroot"
+                    | "utime"
+                    | "umask"
             )
         {
             if let Ok(next) = self.tokens.peek_second() {
@@ -204,6 +248,19 @@ impl<'a> Parser<'a> {
                         // Arrow after $var means method/deref chain: func $obj->method(...)
                         // That's a regular call with a complex first argument, not indirect object.
                         if third.kind == TokenKind::Arrow {
+                            return false;
+                        }
+                        // Word operators after $var means regular call with low-precedence
+                        // operator: func @list or die, func $arg and next, etc.
+                        // These are NOT indirect method calls.
+                        if matches!(
+                            third.kind,
+                            TokenKind::WordOr
+                                | TokenKind::WordAnd
+                                | TokenKind::WordXor
+                                | TokenKind::WordNot
+                                | TokenKind::Semicolon
+                        ) {
                             return false;
                         }
                         return true;

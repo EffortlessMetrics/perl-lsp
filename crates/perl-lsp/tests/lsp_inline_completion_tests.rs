@@ -134,3 +134,20 @@ fn test_inline_completion_no_suggestions() -> Result<(), Box<dyn std::error::Err
     assert!(items.is_empty());
     Ok(())
 }
+
+#[test]
+fn test_inline_completion_after_arrow_with_multibyte_prefix()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///test.pl";
+    let text = "my $emoji = \"😀\"; my $obj = Package->";
+    open_doc(&server, uri, text);
+
+    let character = text.len() as u32;
+    let result = inline_completion(&server, uri, 0, character)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(!items.is_empty());
+    assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "new()");
+    Ok(())
+}
