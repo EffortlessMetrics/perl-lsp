@@ -7,8 +7,17 @@
 The orchestrator routes work to agents, never writes code directly.
 
 - **Code change** -> worktree agent: `Agent(isolation: "worktree", prompt: "Goal: ... Crate: ... Verify: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>. Commit and create PR.")`
+  - Scout before building new features. Use 3:1 scout:builder ratio. Scout output = builder spec (exact files, functions, verify commands).
 - **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "Find ... in crates/...")`
 - **Multiple changes** -> parallel worktree agents, one per crate. Microcrate architecture prevents conflicts.
+  - Reserve 10 agent slots for late-cycle routing. Use SendMessage to repurpose idle agents instead of spawning new ones when roster is full.
+
+### Merge Queue Protocol
+
+- Don't rebase PRs unless merge conflicts exist
+- Merge in batches of 3 (CI cancellation cascade -- rapid merges cancel each other's CI runs)
+- Run `just cpan-corpus-ratchet` after parser fix merges
+- Run `python3 scripts/update-current-status.py` if tests were added
 
 ## Quick Reference
 
@@ -164,6 +173,7 @@ Invoke `/coding-standards` for full detail.
 - **Prefer**: `.first()` over `.get(0)`, `.push(char)` over `.push_str("x")`, `or_default()` over `or_insert_with(Vec::new)`
 - **Avoid**: unnecessary `.clone()` on Copy types
 - **Regex**: `Option<Regex>` with `.ok()` for graceful degradation
+- After adding tests, run `python3 scripts/update-current-status.py` to prevent `policy_checks` CI failure
 
 ## Documentation
 
