@@ -8,6 +8,9 @@ argument-hint: "<crate-name> [--skip-fmt] [--skip-clippy] [--skip-test]"
 
 Run the standard verification pipeline for one crate. Context: **$ARGUMENTS**
 
+This skill verifies a deliverable and produces a receipt. It does not replace
+`/pr-create`, commit flow, or reviewer/ops handoff.
+
 ## Steps
 
 1. Parse the crate name from the first positional argument
@@ -15,7 +18,10 @@ Run the standard verification pipeline for one crate. Context: **$ARGUMENTS**
 3. Run formatting unless `--skip-fmt` is present
 4. Run clippy unless `--skip-clippy` is present
 5. Run tests unless `--skip-test` is present
-6. Report a receipt with pass/fail status for each step
+6. If the change added, removed, or materially changed tests, run
+   `just status-update` and `just status-check` before handoff so computed
+   docs stay fresh
+7. Report a receipt with pass/fail status for each step
 
 ## Commands
 
@@ -55,7 +61,7 @@ For `perl-lsp`, use:
 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 ```
 
-Status update (REQUIRED when tests were added, removed, or changed):
+Status refresh (REQUIRED when tests were added, removed, or changed):
 
 ```bash
 just status-update
@@ -73,6 +79,7 @@ Report:
 - fmt result
 - clippy result
 - test result
+- whether status refresh was required and run
 - overall pass/fail
 - first failure details if anything failed
 
