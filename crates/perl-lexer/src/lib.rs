@@ -365,7 +365,10 @@ impl<'a> PerlLexer<'a> {
         (end, visible_end)
     }
 
-    /// Get the next token from the input
+    /// Advance the lexer and return the next token.
+    ///
+    /// Returns `None` only after an `EOF` token has already been emitted.
+    /// The final meaningful call returns `Some(Token { token_type: TokenType::EOF, .. })`.
     pub fn next_token(&mut self) -> Option<Token> {
         // Normalize file start (BOM) once
         if self.position == 0 {
@@ -676,7 +679,10 @@ impl<'a> PerlLexer<'a> {
         })
     }
 
-    /// Peek at the next token without consuming it
+    /// Peek at the next token without consuming it.
+    ///
+    /// Saves and restores the full lexer state so the next call to
+    /// [`next_token`](Self::next_token) returns the same token.
     pub fn peek_token(&mut self) -> Option<Token> {
         let saved_pos = self.position;
         let saved_mode = self.mode;
@@ -711,7 +717,9 @@ impl<'a> PerlLexer<'a> {
         token
     }
 
-    /// Get all remaining tokens
+    /// Consume all remaining tokens and return them as a vector.
+    ///
+    /// The returned vector always ends with an `EOF` token.
     pub fn collect_tokens(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
         while let Some(token) = self.next_token() {
@@ -724,7 +732,10 @@ impl<'a> PerlLexer<'a> {
         tokens
     }
 
-    /// Reset the lexer to the beginning
+    /// Reset the lexer to the beginning of the input.
+    ///
+    /// Clears all internal state (mode, delimiter stack, heredoc queue, etc.)
+    /// so the lexer can re-tokenize the same source from scratch.
     pub fn reset(&mut self) {
         self.position = 0;
         self.mode = LexerMode::ExpectTerm;
@@ -741,7 +752,10 @@ impl<'a> PerlLexer<'a> {
         self.start_time = std::time::Instant::now();
     }
 
-    /// Switch lexer to format body parsing mode
+    /// Switch the lexer into format-body parsing mode.
+    ///
+    /// In this mode the lexer consumes input verbatim until it encounters a
+    /// line containing only `.` (the Perl format terminator).
     pub fn enter_format_mode(&mut self) {
         self.mode = LexerMode::InFormatBody;
     }
