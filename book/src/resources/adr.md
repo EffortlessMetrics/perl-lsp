@@ -9,7 +9,7 @@ The project currently maintains ADRs in `docs/adr/` across several groups:
 - **Legacy foundations**: ADR-0001 through ADR-0002.
 - **Historical current-series ADRs**: ADR-001 through ADR-007, preserved for earlier documentation and workflow decisions.
 - **Core architecture ADRs**: ADR-0008 through ADR-0030, covering parser architecture, indexing, DAP, UTF-16 position handling, error strategy, rope-backed documents, lifecycle/index routing, and delivery gates.
-- **Current direction ADRs**: ADR-0031 through ADR-0034, covering concurrent dispatch, skill/hook enforcement, disposable worktrees, and the custom LSP runtime.
+- **Current direction ADRs**: ADR-0031 through ADR-0037, covering concurrent dispatch, skill/hook enforcement, disposable worktrees, the custom LSP runtime, parent-map traversal, generated feature contracts, and synthetic URI fallbacks.
 
 For the canonical index, including status and date metadata for every ADR, see [`docs/adr/README.md`](../../docs/adr/README.md).
 
