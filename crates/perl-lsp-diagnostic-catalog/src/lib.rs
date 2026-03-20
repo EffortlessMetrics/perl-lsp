@@ -17,6 +17,10 @@ pub struct DiagnosticMeta {
     pub code: Value,
     /// Optional code description object containing a docs URL.
     pub desc: Option<Value>,
+    /// Optional human-readable context hint explaining what the diagnostic
+    /// means and how to resolve it.  `None` for codes (e.g. Perl::Critic)
+    /// whose per-policy descriptions already serve this purpose.
+    pub hint: Option<&'static str>,
 }
 
 impl DiagnosticMeta {
@@ -24,6 +28,7 @@ impl DiagnosticMeta {
         Self {
             code: json!(code.as_str()),
             desc: code.documentation_url().map(|url| json!({ "href": url })),
+            hint: code.context_hint(),
         }
     }
 }
