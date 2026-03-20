@@ -13,28 +13,29 @@ GitHub Issue = task spec from scout to builder (HANDOFF)
 ## Core Pipeline
 
 ```
-/flow-scout → /flow-build → /flow-review → /flow-merge → /flow-improve
-   scout      plan-reviewer   reviewer       ops          improver
-  (haiku)  →   (sonnet)   →  builder  →  (haiku+sonnet) → (haiku) → (sonnet)
+/flow-scout → /flow-build → /flow-review → /flow-merge
+   scout      plan-reviewer   reviewer       ops
+  (haiku)  →   (sonnet)   →  builder  →  (haiku+sonnet) → (haiku)
                              (sonnet)
+
+If builder doesn't finish: /flow-continue → same builder, reads existing PR
 ```
 
 Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
 Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
-## Agents (11)
+## Agents (10)
 
-### Pipeline Agents (7)
+### Pipeline Agents (6)
 
 | Agent | Model | Steps | Role |
 |-------|-------|-------|------|
-| scout | haiku | 7 | Broad investigation → file initial plan |
-| plan-reviewer | sonnet | 4 | Refine plan, stress-test, mark builder-ready |
-| builder | sonnet | 5 | Implement from refined spec → draft PR |
-| reviewer | haiku | 4 | Fast standards check (banned patterns, scope) |
-| reviewer-deep | sonnet | 4 | Deep correctness check (logic, edge cases) |
-| ops | haiku | 4 | Merge queue, CI, post-merge validation |
-| improver | sonnet | 4 | Post-merge quality follow-ups |
+| scout | haiku | 8 | Broad investigation → file initial plan |
+| plan-reviewer | sonnet | 5 | Refine plan, stress-test, mark builder-ready |
+| builder | sonnet | 6 | Implement from spec → draft PR. Also used for continuation via /builder-read-pr |
+| reviewer | haiku | 5 | Fast standards check (banned patterns, scope) |
+| reviewer-deep | sonnet | 5 | Deep correctness check (logic, edge cases) |
+| ops | haiku | 5 | Merge queue, CI, post-merge validation |
 
 ### Specialized Scouts (3)
 
@@ -67,10 +68,10 @@ Haiku checks standards. Sonnet checks correctness. Haiku merges.
 | Command | What it does |
 |---------|-------------|
 | /flow-scout | Pick scout variant, spawn, get issue |
-| /flow-build | Validate spec, spawn builder in worktree |
+| /flow-build | Validate spec (or trigger plan-review first), spawn builder in worktree |
+| /flow-continue | Spawn builder to continue an incomplete PR |
 | /flow-review | Two-tier: reviewer (haiku) → reviewer-deep (sonnet) |
 | /flow-merge | Spawn ops for merge queue |
-| /flow-improve | Spawn improver for quality follow-ups |
 
 ## Shared Operations (10)
 
