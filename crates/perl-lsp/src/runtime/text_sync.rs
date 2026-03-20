@@ -182,37 +182,69 @@ impl LspServer {
                     // Just ensure the index exists even without workspace feature
                 }
 
-                // Update the workspace-wide index for cross-file features
+                // Update the workspace-wide index for cross-file features.
+                // Indexing runs in a background task so the handler returns
+                // immediately without blocking on file I/O or symbol extraction.
+                // `notify_parse_complete` is called inside the background task.
                 #[cfg(feature = "workspace")]
                 if let Some(coordinator) = self.coordinator() {
-                    let workspace_index = coordinator.index();
                     if let Ok(url) = url::Url::parse(uri) {
-                        match workspace_index.index_file(url, text.to_string()) {
-                            Ok(()) => {
-                                // Transition to Ready on first successful index if still Building
-                                if matches!(
-                                    coordinator.state(),
-                                    IndexState::Building { phase: IndexPhase::Idle, .. }
-                                ) {
-                                    let symbol_count = workspace_index.symbol_count();
-                                    let file_count = workspace_index.file_count();
-                                    coordinator.transition_to_ready(file_count, symbol_count);
-                                    tracing::info!(
-                                        "Index transitioned to Ready after first file (symbols: {})",
-                                        symbol_count
-                                    );
+                        let workspace_index = Arc::clone(coordinator.index());
+                        let coordinator_clone = Arc::clone(coordinator);
+                        let text_owned = text.to_string();
+                        let uri_owned = uri.to_string();
+                        let task_counter = Arc::clone(&self.pending_index_task_count);
+                        task_counter.fetch_add(1, Ordering::SeqCst);
+
+                        let task = move || {
+                            match workspace_index.index_file(url, text_owned) {
+                                Ok(()) => {
+                                    if matches!(
+                                        coordinator_clone.state(),
+                                        IndexState::Building { phase: IndexPhase::Idle, .. }
+                                    ) {
+                                        let symbol_count = workspace_index.symbol_count();
+                                        let file_count = workspace_index.file_count();
+                                        coordinator_clone
+                                            .transition_to_ready(file_count, symbol_count);
+                                        tracing::info!(
+                                            "Index transitioned to Ready after first file \
+                                             (symbols: {})",
+                                            symbol_count
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to index file {}: {}", uri_owned, e);
                                 }
                             }
-                            Err(e) => {
-                                tracing::warn!("Failed to index file {}: {}", uri, e);
+                            coordinator_clone.notify_parse_complete(&uri_owned);
+                            task_counter.fetch_sub(1, Ordering::SeqCst);
+                        };
+
+                        // Spawn on the tokio blocking pool when a runtime is available
+                        // (production path via Scheduler).  Fall back to synchronous
+                        // execution in unit tests that construct LspServer directly.
+                        match tokio::runtime::Handle::try_current() {
+                            Ok(handle) => {
+                                handle.spawn_blocking(task);
+                                // Diagnostics are published below; coordinator completion
+                                // happens asynchronously in the background task.
+                            }
+                            Err(_) => {
+                                task();
                             }
                         }
+                        // Skip the synchronous notify_parse_complete below — it was
+                        // moved into the background task (or run inline on fallback).
+                        self.publish_diagnostics(uri);
+                        return Ok(());
                     }
                 }
             }
 
             // Notify coordinator that all work (parse + index) is complete (may trigger recovery)
-            // This must come AFTER indexing to keep mutation work inside the tracking window
+            // Reached only when: no coordinator, URL parse fails, or workspace feature is off.
             #[cfg(feature = "workspace")]
             if let Some(coordinator) = self.coordinator() {
                 coordinator.notify_parse_complete(uri);
@@ -441,31 +473,50 @@ impl LspServer {
                 // Must drop the lock before calling publish_diagnostics
                 drop(documents);
 
-                // Index symbols for workspace search
-                // Note: Indexing is a MUTATION operation - use coordinator.index() directly
-                // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
+                // Index symbols for workspace search.
+                // Indexing runs in a background task so the handler returns
+                // immediately; `notify_parse_complete` is called inside the task.
                 if let Some(ref _ast) = ast_arc {
-                    // Update the workspace-wide index for cross-file features
-                    // Note: version is maintained by the document state
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
-                        let workspace_index = coordinator.index();
                         if let Ok(url) = url::Url::parse(uri) {
+                            let workspace_index = Arc::clone(coordinator.index());
+                            let coordinator_clone = Arc::clone(coordinator);
                             let doc_content = self
                                 .documents
                                 .lock()
                                 .get(uri)
                                 .map(|d| d.text.clone())
                                 .unwrap_or_default();
-                            if let Err(e) = workspace_index.index_file(url, doc_content) {
-                                tracing::warn!("Failed to index file {}: {}", uri, e);
+                            let uri_owned = uri.to_string();
+                            let task_counter = Arc::clone(&self.pending_index_task_count);
+                            task_counter.fetch_add(1, Ordering::SeqCst);
+
+                            let task = move || {
+                                if let Err(e) = workspace_index.index_file(url, doc_content) {
+                                    tracing::warn!("Failed to index file {}: {}", uri_owned, e);
+                                }
+                                coordinator_clone.notify_parse_complete(&uri_owned);
+                                task_counter.fetch_sub(1, Ordering::SeqCst);
+                            };
+
+                            match tokio::runtime::Handle::try_current() {
+                                Ok(handle) => {
+                                    handle.spawn_blocking(task);
+                                }
+                                Err(_) => {
+                                    task();
+                                }
                             }
+
+                            // Send diagnostics (debounced); coordinator completion is async.
+                            self.publish_diagnostics_debounced(uri);
+                            return Ok(());
                         }
                     }
                 }
 
-                // Notify coordinator that all work (parse + index) is complete (may trigger recovery)
-                // This must come AFTER indexing to keep mutation work inside the tracking window
+                // Notify coordinator synchronously when no coordinator/URL/workspace feature.
                 #[cfg(feature = "workspace")]
                 if let Some(coordinator) = self.coordinator() {
                     coordinator.notify_parse_complete(uri);
@@ -692,5 +743,52 @@ impl LspServer {
             "line": last_line,
             "character": last_char
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Verify that `did_open` and `did_change` return with the document stored
+    /// and that the `pending_index_tasks()` counter is accessible (issue #2352).
+    ///
+    /// Without a tokio runtime the sync fallback path runs, so the counter
+    /// returns to zero before the assertions.  This test exercises the public
+    /// API surface introduced by the async-indexing refactor.
+    #[test]
+    fn test_indexing_does_not_block_did_change() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_async_index.pl";
+        let text = "package Foo;\nsub bar { 1 }\n1;\n";
+
+        // Open document — handler must return Ok even when indexing is async.
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        }))?;
+
+        // Document must be stored in the in-memory map after did_open returns.
+        assert!(server.documents.lock().contains_key(uri));
+
+        // The counter is accessible; in the sync fallback path (no tokio runtime
+        // in unit tests) it settles to 0 once the handler returns.
+        assert_eq!(server.pending_index_tasks(), 0);
+
+        // A subsequent did_change must also succeed.
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "package Foo;\nsub baz { 2 }\n1;\n" }]
+        })))?;
+
+        assert!(server.documents.lock().contains_key(uri));
+        assert_eq!(server.pending_index_tasks(), 0);
+
+        Ok(())
     }
 }

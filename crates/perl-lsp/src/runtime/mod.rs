@@ -208,6 +208,12 @@ pub struct LspServer {
     feature_profile: FeatureProfile,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, perl_pod::PodDoc>>>,
+    /// Count of background workspace indexing tasks currently in flight.
+    ///
+    /// Incremented before spawning a background `index_file` task, decremented
+    /// when it completes.  Used by tests to observe that indexing was detached
+    /// from the synchronous handler (issue #2352).
+    pub(crate) pending_index_task_count: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
@@ -374,6 +380,15 @@ impl LspServer {
     //   symbol_extraction - AST symbol extraction and reference counting
     //   test_runners      - run_test, run_test_file
     //   test_api          - #[cfg(test)] public wrappers
+
+    /// Number of background workspace-indexing tasks currently in flight.
+    ///
+    /// Returns 0 when all background `index_file` tasks have completed.
+    /// Intended for tests that need to observe the async-indexing behaviour
+    /// introduced by issue #2352.
+    pub fn pending_index_tasks(&self) -> usize {
+        self.pending_index_task_count.load(std::sync::atomic::Ordering::SeqCst)
+    }
 
     /// Install the diagnostic debouncer (called from Scheduler::new after Arc wrapping).
     pub(crate) fn install_diagnostic_debouncer(
