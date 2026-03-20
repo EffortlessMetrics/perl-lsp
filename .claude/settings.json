@@ -74,18 +74,18 @@
     ],
     "SubagentStart": [
       {
-        "matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver",
+        "matcher": "builder|reviewer|reviewer-deep|ops|improver|scout",
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Reminder: Invoke /coding-standards before writing any code. No unwrap(), expect(), panic!(), todo!() in production. Use Result/Option. Run cargo fmt + clippy before committing.'"
+            "command": "echo 'You have full autonomy within your scope. Follow your todo list. No unwrap/expect/panic in production. Crate CLAUDE.md files provide local context.'"
           }
         ]
       }
     ],
     "SubagentStop": [
       {
-        "matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver",
+        "matcher": "builder|reviewer|reviewer-deep|ops|improver|scout",
         "hooks": [
           {
             "type": "command",
@@ -111,7 +111,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Post-compaction context refresh: swarm mode is worktree-first and worker-disposable. Coordinators route work; disposable workers mutate code in isolated worktrees. Use TaskList/TaskUpdate for coordination. Name required skills explicitly in worker prompts. See CLAUDE.md and the swarm skill for the current control plane.'"
+            "command": "echo 'Context refresh: Agents follow todo lists with step skills. Flows: /flow-scout → /flow-build → /flow-review → /flow-merge → /flow-improve. Agents have autonomy within scope. Crate CLAUDE.md files provide domain context. Issues carry task specs.'"
           }
         ]
       }
