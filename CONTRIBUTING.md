@@ -1,496 +1,193 @@
 # Contributing to Perl LSP
 
-Thank you for your interest in contributing to Perl LSP! This guide will help you get started.
+Thank you for your interest in contributing to Perl LSP! Whether you're fixing a bug, improving the parser, or adding an LSP feature, this guide will help you get started.
 
 ## Getting Started
 
-1. **Fork and Clone**
-   ```bash
-   git clone https://github.com/your-username/perl-lsp.git
-   cd perl-lsp
-   ```
+### Prerequisites
 
-2. **Install Dependencies**
-   ```bash
-   # Rust toolchain (if not already installed)
-   # The project pins its toolchain via rust-toolchain.toml (MSRV 1.92)
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+- **Rust** toolchain (pinned via `rust-toolchain.toml`, MSRV 1.92)
+- **Nix** (recommended) for a reproducible dev environment
 
-   # Recommended: use Nix for a reproducible dev environment
-   nix develop
-   ```
+### Setup
 
-3. **Build the Project**
-   ```bash
-   cargo build -p perl-lsp --release     # LSP server
-   cargo build -p perl-parser --release  # Parser library
-   cargo test --workspace --lib          # Run all tests
-   ```
+```bash
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
+cd perl-lsp
+nix develop          # Recommended: reproducible environment
+
+# Or without Nix -- just ensure Rust is installed:
+# curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+### Build and Test
+
+```bash
+cargo build -p perl-lsp --release     # Build the LSP server
+cargo test --workspace --lib          # Run all library tests
+```
+
+## Project Structure
+
+The workspace contains many crates organized into families. Key crates:
+
+| Crate | Purpose |
+|-------|---------|
+| `perl-parser` | Main parser (v3 recursive descent) |
+| `perl-lsp` | LSP server binary |
+| `perl-dap` | Debug Adapter Protocol server |
+| `perl-lexer` | Context-aware tokenizer |
+
+Crate families: `perl-module-*` (module resolution), `perl-lsp-*` (LSP providers), `perl-dap-*` (DAP), `perl-workspace-*` (workspace discovery).
+
+For the full crate map, key paths, and architecture details, see [CLAUDE.md](CLAUDE.md).
+
+## Finding Issues to Work On
+
+- Look for issues labeled **`good first issue`** for beginner-friendly tasks
+- **`help wanted`** marks issues where maintainer input is available
+- **`parser`** issues improve Perl parsing coverage
+- **`lsp`** issues add or fix editor features
+- Browse [open issues](https://github.com/EffortlessMetrics/perl-lsp/issues) or check the [roadmap](docs/project/ROADMAP.md) for larger goals
 
 ## Development Workflow
 
-### Making Changes
-
-1. Create a feature branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Make your changes following our coding standards:
-   - Run `cargo fmt` to format code
-   - Run `cargo clippy` to check for common issues
-   - Add tests for new functionality
-   - Update documentation as needed
-
-3. Test your changes:
-   ```bash
-   cargo test --workspace --lib   # Run all tests
-   cargo test -p perl-parser      # Test specific crate
-   cargo fmt --all                # Format code
-   cargo clippy --workspace       # Lint checks
-   ```
-
-4. Commit with clear messages:
-   ```bash
-   git commit -m "feat: add new feature X"
-   git commit -m "fix: resolve issue #123"
-   ```
-
-### Pull Request Process
-
-1. **Push your branch** and open a Pull Request
-2. **Describe your changes** clearly in the PR description
-3. **Link related issues** using GitHub keywords (e.g., "Fixes #123")
-4. **Respond to review feedback** promptly
-
-## Continuous Integration
-
-See **[CI & Automation](./docs/project/CI.md)** for comprehensive details about our GitHub Actions setup, including:
-
-- **Pinned runner versions** (`ubuntu-22.04`, `windows-2022`)
-- **Default CI jobs** that run on every PR
-- **Opt-in CI labels** for heavy jobs (`ci:bench`, `ci:mutation`, `ci:strict`, `ci:mac`, `ci:semver`)
-- **Build optimizations** (lean flags, nextest configuration)
-- **Troubleshooting tips** for common CI issues
-
-### Quick CI Tips
-
-- All PRs run **format checks**, **clippy**, and **core tests** automatically
-- Tests use **nextest** with lean build flags for faster, reliable execution
-- Add `ci:bench` label to run performance benchmarks
-- Add `ci:strict` label for pedantic clippy checks
-- Add `ci:mac` label if your changes affect macOS
-- Add `ci:semver` label to check for breaking API changes
-
-### Local CI Validation
-
-You **must** run the local CI gate before pushing. The canonical command uses Nix for a reproducible environment:
+### 1. Branch
 
 ```bash
-# Canonical local gate (REQUIRED before push)
-nix develop -c just ci-gate
+git checkout -b feature/your-feature-name
+```
 
-# Quick environment diagnostics (recommended when onboarding/troubleshooting)
-just devex (alias: just doctor)
+### 2. Code
 
-# Fallback without `just`/Nix: run the Rust-native local mirror
-cargo run -p perl-ci-hygiene -- check-local
+Follow the [coding standards](#coding-standards) below.
 
-# Install pre-push hook (runs gate automatically)
+### 3. Test Locally
+
+```bash
+cargo fmt --all                       # Format
+cargo clippy --workspace              # Lint
+cargo test -p <your-crate>            # Test the crate you changed
+```
+
+### 4. Run the CI Gate
+
+You **must** pass the local CI gate before pushing:
+
+```bash
+nix develop -c just ci-gate           # Required before push (~3-5 min)
+```
+
+For faster iteration during development:
+
+```bash
+just pr-fast                          # Quick check (~1-2 min)
+```
+
+Install the pre-push hook to run the gate automatically:
+
+```bash
 bash scripts/install-githooks.sh
 ```
 
-### CI Gate Tiers
+### 5. Open a Pull Request
 
-| Tier | Command | Time | When to Use |
-|------|---------|------|-------------|
-| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration during development |
-| **B (Merge gate)** | `nix develop -c just ci-gate` | ~3-5 min | Before pushing (required) |
-| **C (Nightly)** | `just ci-full` | ~15-30 min | Mutation testing, fuzzing, benchmarks |
+1. Push your branch and open a PR
+2. Describe your changes and link related issues (e.g., "Fixes #123")
+3. All PRs run format checks, clippy, and tests automatically in CI
 
-See: [Local CI Summary](docs/ci/LOCAL_CI_SUMMARY.md)
+#### CI Labels (Opt-in)
 
-**Semantic & LSP Changes**:
+Add these labels to trigger additional CI checks:
 
-If you modify `crates/perl-parser/src/semantic.rs` or any LSP handler (especially `textDocument/definition`):
+| Label | What it runs |
+|-------|--------------|
+| `ci:coverage` | Code coverage analysis |
+| `ci:bench` | Performance benchmarks |
+| `ci:mutation` | Mutation testing |
+| `ci:strict` | Pedantic clippy |
+| `ci:mac` | macOS build |
+| `ci:semver` | Breaking change detection |
 
-```bash
-# Run semantic-aware definition tests
-just ci-lsp-def
-
-# Or run the full gate (includes ci-lsp-def)
-just ci-gate
-```
-
-The semantic tests validate that LSP definition resolution works correctly for:
-- Scalar variable references → declarations
-- Subroutine calls → sub definitions
-- Lexical scope resolution
-- Package-qualified symbol lookups
-
-## SemVer Breaking Change Detection
-
-Perl LSP follows strict [Semantic Versioning 2.0.0](https://semver.org/). We use automated tools to detect breaking changes in public APIs.
-
-### When to Check for Breaking Changes
-
-**Required for:**
-- Changes to public API functions, types, or modules
-- Changes to `pub` items in published crates (`perl-parser`, `perl-lexer`, `perl-parser-core`, `perl-lsp`)
-- Signature changes to existing functions
-- Removing or renaming public items
-- Changes to error types or return values
-
-**Not required for:**
-- Internal (`pub(crate)`) changes
-- Test-only code changes
-- Documentation updates
-- Performance improvements that don't change behavior
-
-### Local SemVer Checking
-
-Check for breaking changes locally before submitting a PR:
-
-```bash
-# Check all published packages for breaking changes
-just semver-check
-
-# Check a specific package
-just semver-check-package perl-parser
-
-# View detailed diff of API changes
-just semver-diff perl-parser
-
-# List available baseline tags
-just semver-list-baselines
-```
-
-**Understanding the output:**
-
-```rust
-// Breaking change (requires major version bump)
-- pub fn parse(&mut self, source: &str) -> Result<Node, ParseError>
-+ pub fn parse(&mut self, source: &str, config: &Config) -> Result<Node, Error>
-
-// Non-breaking change (allowed in minor version)
-+ pub fn parse_with_config(&mut self, source: &str, config: &Config) -> Result<Node, Error>
-```
-
-### CI SemVer Validation
-
-Add the `ci:semver` label to your PR to run automated breaking change detection:
-
-1. **Add label:** `ci:semver` to your PR
-2. **CI runs:** GitHub Actions compares your changes against the last release tag
-3. **Review results:** Check the workflow output for breaking changes
-4. **Download report:** Breaking changes report available as artifact
-
-**CI checks:**
-- Compares against baseline (last release tag, e.g., `v0.8.5`)
-- Checks `perl-parser`, `perl-lexer`, `perl-parser-core`, `perl-lsp`
-- Generates JSON report of all breaking changes
-- Warns on breaking changes (doesn't fail the build)
-
-### SemVer Policy Summary
-
-| Change Type | Example | Version Bump | Allowed In |
-|-------------|---------|--------------|------------|
-| **Breaking** | Remove public function | Major (0.9 → 1.0) | Major releases only |
-| **Breaking** | Change function signature | Major (0.9 → 1.0) | Major releases only |
-| **Additive** | Add new public function | Minor (0.x → 0.x+1.0) | Minor releases |
-| **Additive** | Add new enum variant | Minor (0.x → 0.x+1.0) | Minor releases (with `#[non_exhaustive]`) |
-| **Patch** | Fix bug, same behavior | Patch (0.x.y → 0.x.y+1) | Patch releases |
-| **Patch** | Documentation update | Patch (0.x.y → 0.x.y+1) | Patch releases |
-
-### Breaking Change Workflow
-
-If you need to make a breaking change:
-
-1. **Document the breaking change:**
-   ```markdown
-   ## Breaking Changes
-   - `Parser::parse()` signature changed to include `Config` parameter
-   - Migration: Use `Parser::parse_with_config()` or pass default config
-   ```
-
-2. **Deprecate before removing (when possible):**
-   ```rust
-   #[deprecated(since = "1.2.0", note = "use `parse_with_config()` instead")]
-   pub fn parse_legacy(source: &str) -> Result<Node, ParseError> {
-       self.parse_with_config(source, &Config::default())
-   }
-   ```
-
-3. **Add migration guide** to PR description
-4. **Label PR with `breaking-change`**
-5. **Coordinate with maintainers** for major version planning
-
-### Configuration
-
-SemVer checking is configured in `.cargo-semver-checks.toml`:
-
-```toml
-# Published crates checked for breaking changes
-- perl-parser (strict)
-- perl-lexer (strict)
-- perl-parser-core (strict)
-- perl-lsp (strict)
-
-# Internal crates excluded
-- xtask (build tooling)
-- perl-tdd-support (test utilities)
-- perl-parser-pest (deprecated)
-```
-
-### Resources
-
-- **SemVer spec:** https://semver.org/
-- **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
-- **Project stability policy:** [`docs/reference/STABILITY.md`](docs/reference/STABILITY.md)
-- **API stability guarantees:** [`docs/reference/STABILITY.md`](docs/reference/STABILITY.md)
+For full CI details, see [CI & Automation](docs/project/CI.md).
 
 ## Coding Standards
 
-- **Formatting:** Use `cargo fmt --all` before committing
-- **Linting:** Fix all `cargo clippy --workspace` warnings
-- **Testing:** Maintain or improve test coverage
-- **Documentation:** Update docs for public APIs and new features
-- **Commits:** Use conventional commit format (feat:, fix:, docs:, etc.)
+### Formatting and Linting
 
-### No Fatal Constructs in Production Code
+- Run `cargo fmt --all` before every commit
+- Fix all `cargo clippy --workspace` warnings
+- Use [conventional commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, etc.
 
-The following are **banned** in non-test code:
+### Banned in Production Code
 
 | Banned | Use Instead |
 |--------|-------------|
-| `unwrap()`, `expect()` | `?`, `.ok_or_else()`, or pattern matching |
-| `panic!()`, `todo!()`, `unimplemented!()` | Return `Result`/`Option` |
-| `std::process::abort()` | Never use, not even in binaries |
-| `std::process::exit()` | Allowed **only** in `bin/` directories and `lifecycle.rs` |
+| `unwrap()`, `expect()` | `?`, `.ok_or_else()`, pattern matching |
+| `panic!()`, `todo!()`, `unimplemented!()` | Return `Result` or `Option` |
 | `dbg!()` | `tracing::debug!` |
+| `std::process::exit()` | Only in `bin/` and `lifecycle.rs` |
 
-In tests: use `Result<()>` return types, or `perl_tdd_support::must`/`must_some` helpers.
+In tests: use `Result<()>` returns or `perl_tdd_support::must` / `must_some` helpers.
 
-### Code Style Guidelines
+### Style Preferences
 
-- Prefer `.first()` over `.get(0)` for accessing first element
-- Use `.push(char)` instead of `.push_str("x")` for single characters
-- Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
-- Avoid unnecessary `.clone()` on types that implement Copy
-- Use `Option<Regex>` with `.ok()` for graceful regex init degradation
+- `.first()` over `.get(0)`
+- `.push(char)` over `.push_str("x")` for single characters
+- `or_default()` over `or_insert_with(Vec::new)`
+- Avoid `.clone()` on `Copy` types
 
-### Documentation Anti-Drift Policy
+### Documentation Anti-Drift
 
-Metrics in this project are **computed, not hand-edited**. The evidence surface is [`docs/project/CURRENT_STATUS.md`](docs/project/CURRENT_STATUS.md), auto-generated by `scripts/update-current-status.py`.
+Metrics in this project are **computed, not hand-edited**. Never put exact numeric claims (crate counts, test counts, percentages) in prose files. Link to [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for live metrics instead.
 
-**Rules for README and crates.io copy:**
+## Testing Guidelines
 
-- No exact numeric claims (crate counts, test counts, percentages, timing numbers) in `README.md` or crate-level READMEs
-- Use qualitative descriptions ("fast", "comprehensive", "full coverage") and link to `docs/project/CURRENT_STATUS.md` for evidence
-- Links to `docs/project/CURRENT_STATUS.md` in `README.md` must use absolute URLs (`https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md`) for portability
-- `features.toml` is the canonical source for LSP capability definitions
-- No parenthetical counts in tier lists or family descriptions — list members by name instead
-
-**Where volatile metrics belong:**
-
-- `docs/project/CURRENT_STATUS.md` — auto-generated sections between `<!-- BEGIN -->` / `<!-- END -->` markers
-- CI output and benchmark receipts
-- NOT in `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, or `Cargo.toml` comments
-
-### Cross-Platform `ExitStatus` in Tests
-
-On Unix, `ExitStatus::from_raw(1)` is **wrong** (needs high-byte encoding). On Windows, the signature doesn't exist. Always use the portable helpers from `crates/perl-parser/src/execute_command.rs`:
-
-```rust
-#[cfg(test)]
-use crate::execute_command::mock_status;
-
-#[test]
-fn status_round_trip() {
-    assert!(mock_status(0).success());
-    assert_eq!(mock_status(1).code(), Some(1));
-}
-```
-
-**Never use** `std::process::ExitStatus::from_raw(..)` directly in tests/benches - CI will reject it.
-
-#### Pre-Commit Hook (Optional)
-
-To catch policy violations before pushing, install the pre-commit hook:
+- Place tests in `tests/` or inline with `#[cfg(test)]`
+- Test both success and failure paths
+- For parser changes, add edge case tests and run `just cpan-corpus-sweep` to check CPAN coverage
 
 ```bash
-# Option 1: Copy hook (manual updates needed)
-cp .ci/hooks/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-
-# Option 2: Symlink hook (auto-updates with git pull)
-ln -sf ../../.ci/hooks/pre-commit .git/hooks/pre-commit
+cargo test -p <crate>                          # Test a specific crate
+cargo test -p perl-parser -- test_name --exact # Run an exact test
+cargo nextest run                              # Fast parallel runner
 ```
 
-#### Manual Policy Check
-
-Run the policy check locally anytime:
+For LSP tests, control threading to avoid flaky results:
 
 ```bash
-./.ci/scripts/check-from-raw.sh
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 ```
 
-## Workspace Architecture
+See [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) for the full command catalog.
 
-We use a unified Rust workspace for all core and auxiliary crates.
+## SemVer and Breaking Changes
 
-### Core Crates (Build Everywhere)
-These crates have zero system dependencies and work on all platforms:
-- **perl-parser**: Main parser library
-- **perl-lsp**: LSP server binary
-- **perl-lexer**: Tokenizer
-- **tree-sitter-perl-rs**: Pure-Rust tree-sitter bindings (default)
+We follow [Semantic Versioning 2.0.0](https://semver.org/). Check for breaking changes before submitting PRs that modify public APIs:
 
-### Advanced Components (Opt-in)
-Some functionality requires system dependencies (like `libclang-dev`) and is gated behind Cargo features:
-
-| Feature | Crate | Dependency | Description |
-|---------|-------|------------|-------------|
-| `bindings` | tree-sitter-perl | `libclang-dev` | Generates C bindings via bindgen |
-| `c-parser` | tree-sitter-perl | C compiler | Builds the native C parser/scanner |
-
-#### Building with Advanced Features
-```bash
-# Ubuntu/Debian
-sudo apt-get install libclang-dev
-cargo build -p tree-sitter-perl --features bindings,c-parser
-```
-
-### Key Paths
-
-| What | Where |
-|------|-------|
-| Parser source | `crates/perl-parser/src/` |
-| LSP providers | `crates/perl-lsp-*/src/` |
-| LSP server binary | `crates/perl-lsp/src/` |
-| DAP server | `crates/perl-dap/src/` |
-| Lexer / tokenizer | `crates/perl-lexer/src/` |
-| Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
-| Tests | `crates/*/tests/` |
-| Fuzz targets | `fuzz/fuzz_targets/` |
-| VSCode extension | `vscode-extension/` |
-| Documentation | `docs/` |
-| Features catalog | `features.toml` |
-| CI gate policy | `.ci/gate-policy.yaml` |
-| Technical debt ledger | `.ci/debt-ledger.yaml` |
-| CPAN corpus manifest | `.ci/common-corpus-manifest.txt` |
-| Corpus baseline | `.ci/parser-corpus-baseline.json` |
-| Build tooling | `xtask/` |
-
-### SemVer Compliance
-
-All API changes are checked for Semantic Versioning (SemVer) compatibility using `cargo-semver-checks`.
-
-#### Check for breaking changes locally
 ```bash
 just semver-check
 ```
 
-Breaking changes are allowed in minor version bumps, but require a migration guide in `CHANGELOG.md`. See [STABILITY.md](docs/reference/STABILITY.md) for versioning details.
+If a breaking change is necessary:
+1. Document it in the PR description with a migration guide
+2. Label the PR with `breaking-change`
+3. Coordinate with maintainers
 
-## Testing Guidelines
-
-### Writing Tests
-
-- Place tests in `tests/` directory or inline with `#[cfg(test)]`
-- Use descriptive test names that explain what is being tested
-- Test both success and failure cases
-- Add edge case tests for parser improvements
-
-### Running Tests
-
-```bash
-# Fast parallel testing with nextest
-cargo nextest run
-
-# Traditional test runner
-cargo test
-
-# Test specific crate
-cargo test -p perl-parser
-
-# Test with verbose output
-cargo test -- --nocapture
-
-# Run determinism checks
-cargo test --test determinism_test
-```
-
-### Dead Code Detection
-
-We use `cargo-machete` and `clippy` to identify unused dependencies and code.
-
-#### Check for dead code locally
-```bash
-just dead-code
-```
-
-#### Handling False Positives
-If a dependency is detected as unused but is actually required (e.g., used only via macros or in tests), add it to the ignore list in the crate's `Cargo.toml`:
-
-```toml
-[package.metadata.cargo-machete]
-ignored = ["crate-name"]
-```
-
-For unreachable code warnings from clippy, use `#[allow(dead_code)]` with a comment explaining why it should be preserved.
-
-### Documentation
-
-- **Public APIs** must have documentation comments (`///`)
-- **Modules** should have module-level documentation (`//!`)
-- **Complex functions** should include examples in doc comments
-- Run `cargo doc --no-deps --open` to view generated docs
-
-## Dependency Management
-
-The project uses **Dependabot** for automated dependency updates. Dependabot PRs are created weekly and should be reviewed according to the update type:
-
-- **Patch updates (x.y.Z)** - Can be merged quickly if CI passes
-- **Minor updates (x.Y.0)** - Require changelog review and testing
-- **Major updates (X.0.0)** - Require deep review, migration planning, and comprehensive testing
-
-For handling Dependabot PRs:
-
-```bash
-# View all dependency PRs
-gh pr list --label "dependencies"
-
-# Merge passing patch updates
-gh pr list --author "app/dependabot" --search "status:success" --json number --jq '.[].number' | \
-  xargs -I {} gh pr merge {} --auto --squash
-```
-
-See **[Dependency Management Guide](./docs/how-to/DEPENDENCY_MANAGEMENT.md)** for complete details on:
-- Update strategy and grouping
-- Review process by update type
-- Auto-merge configuration
-- Security update handling
-- Troubleshooting common issues
-
-For quick reference, see **[Dependency Quick Reference](./docs/how-to/DEPENDENCY_QUICK_REFERENCE.md)**.
+See [STABILITY.md](docs/reference/STABILITY.md) for our API stability policy.
 
 ## Adding New Crates
 
-The workspace uses a tiered dependency structure (see `Cargo.toml`). When adding a new crate:
-
-1. **Create the crate** under `crates/` following the naming convention of its family (e.g., `perl-lsp-*` for LSP providers, `perl-module-*` for module resolution).
-2. **Add it to the workspace** in the root `Cargo.toml` members list.
-3. **Place it in the correct tier** — leaf crates with no internal deps go in Tier 1, crates with dependencies go in later tiers.
-4. **Follow existing patterns** — look at a sibling crate in the same family for structure, `Cargo.toml` metadata, and test layout.
-5. **Run the full gate** to verify: `nix develop -c just ci-gate`
+1. Create the crate under `crates/` using the naming convention of its family
+2. Add it to the workspace `members` in the root `Cargo.toml`
+3. Follow the structure of a sibling crate in the same family
+4. Run `nix develop -c just ci-gate` to verify
 
 ## Getting Help
 
-- **Issues:** Browse existing issues or create a new one
-- **Discussions:** Use GitHub Discussions for questions and ideas
-- **Documentation:** Check `docs/` for comprehensive guides
-- **Code Examples:** See `examples/` and test files for usage patterns
+- **Issues**: [Browse or create issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
+- **Discussions**: Use [GitHub Discussions](https://github.com/EffortlessMetrics/perl-lsp/discussions) for questions and ideas
+- **Docs**: See `docs/` for detailed guides -- start with [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md)
 
 ## Code of Conduct
 
@@ -499,241 +196,3 @@ We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). Please
 ## License
 
 This project is dual-licensed under [MIT](LICENSE-MIT) and [Apache-2.0](LICENSE-APACHE). By contributing, you agree that your contributions will be licensed under both licenses.
-
-## Release Process
-
-This section describes the release process for Perl LSP.
-
-### Version Policy
-
-We follow [Semantic Versioning 2.0.0](https://semver.org/):
-
-- **Major (X.0.0)**: Breaking changes, requires migration guide
-- **Minor (X.Y.0)**: New features, backward compatible
-- **Patch (X.Y.Z)**: Bug fixes, security updates, documentation
-
-### Release Types
-
-| Release Type | Frequency | Examples | Requirements |
-|--------------|-----------|----------|--------------|
-| **Major** | As needed | 0.x → 1.0.0 | Breaking changes, migration guide, extensive testing |
-| **Minor** | Quarterly | 0.x → 0.x+1.0 | New features, API additions, performance improvements |
-| **Patch** | As needed | 0.x.y → 0.x.y+1 | Bug fixes, security updates, documentation updates |
-
-### Release Process Workflow
-
-#### 1. Pre-Release Preparation
-
-```bash
-# Update version numbers in Cargo.toml files
-# Then run cargo check to verify
-
-# Run comprehensive validation
-just ci-full
-just security-scan
-just semver-check
-
-# Update documentation
-# - UPDATE_CHANGELOG.md
-# - Update version references in README.md
-# - Update feature matrix in docs/reference/FEATURES.md
-```
-
-#### 2. Release Checklist
-
-Before any release, ensure:
-
-- [ ] All tests pass: `just ci-full`
-- [ ] Security scan passes: `just security-scan`
-- [ ] No breaking changes (for minor/patch): `just semver-check`
-- [ ] Documentation updated: `CHANGELOG.md`, version references
-- [ ] Performance benchmarks run: `cargo bench`
-- [ ] Release notes drafted: `RELEASE_NOTES.md`
-- [ ] Version numbers updated in all crates
-- [ ] Git tag prepared: `git tag -a v<0.x.y> -m "Release v<0.x.y>"`
-
-#### 3. Release Execution
-
-```bash
-# Ensure you are aligned with origin/master and clean.
-git fetch origin master
-git checkout master
-git reset --hard origin/master
-git status --short
-
-# One-command release orchestration (recommended).
-# Authoritative release command path:
-# `scripts/release-turnkey-pr.sh` is the canonical RC flow.
-# Legacy release scripts are listed in `scripts/DEPRECATED_RELEASE_SCRIPTS.md`.
-scripts/release-turnkey-pr.sh <0.x.y>
-
-# Manual equivalent flow:
-# 1) Dispatch "Version Bump & Changelog Generation" with version=<0.x.y>
-# 2) Review and merge the generated release/v<0.x.y> PR
-# 3) Dispatch "Release Orchestration" with version=<0.x.y>
-
-# Optional controls:
-# --skip-crates, --skip-extension, --skip-docker, --prerelease
-```
-
-#### Required GitHub Secrets
-
-The full release pipeline requires the following repository secrets. Configure them under **Settings > Secrets and variables > Actions** in the GitHub repository.
-
-| Secret | Purpose | Where to create |
-|--------|---------|-----------------|
-| `CARGO_REGISTRY_TOKEN` | Publish crates to crates.io | [crates.io Account Settings > API Tokens](https://crates.io/settings/tokens) -- create a token scoped to the `perl-lsp` and related crates |
-| `VSCE_PAT` | Publish the VS Code extension to the Visual Studio Marketplace | [Azure DevOps > User Settings > Personal Access Tokens](https://dev.azure.com/) -- scope to **Marketplace (Manage)** |
-| `OVSX_PAT` | Publish the VS Code extension to the Open VSX Registry | [Open VSX > User Settings > Access Tokens](https://open-vsx.org/user-settings/tokens) |
-| `DOCKER_USERNAME` | Push container images to Docker Hub (optional -- GHCR works without secrets) | [Docker Hub Account Settings](https://hub.docker.com/settings/general) |
-| `DOCKER_PASSWORD` | Docker Hub authentication (optional -- GHCR works without secrets) | Same Docker Hub account; use an access token rather than your password |
-
-> **Note:** `DOCKER_USERNAME` and `DOCKER_PASSWORD` are only needed if you publish to Docker Hub. GitHub Container Registry (GHCR) uses the built-in `GITHUB_TOKEN` and requires no additional secrets.
-
-#### 4. Post-Release Tasks
-
-- [ ] Update website/documentation
-- [ ] Announce on community channels
-- [ ] Monitor for issues
-- [ ] Begin next development cycle
-
-### Code Review Process for Releases
-
-#### Release Reviewers
-
-All releases require review from:
-
-- **Core Maintainer**: Technical approval
-- **Release Manager**: Process validation
-- **Security Lead**: Security assessment (for major/minor releases)
-
-#### Review Criteria
-
-**Technical Review:**
-- Code quality and performance
-- Test coverage and quality
-- Documentation completeness
-- Breaking change justification
-
-**Process Review:**
-- Version compliance with SemVer
-- Release checklist completion
-- Changelog accuracy
-- Migration guide quality (for breaking changes)
-
-**Security Review:**
-- Dependency vulnerability scan
-- Security best practices
-- Attack surface analysis
-- Security best practices
-
-### Testing Requirements for Releases
-
-#### Release Testing Matrix
-
-| Release Type | Required Tests | Performance Tests | Security Tests |
-|--------------|----------------|-------------------|----------------|
-| **Major** | Full test suite | Comprehensive benchmarks | Full security scan |
-| **Minor** | Full test suite | Regression benchmarks | Security scan |
-| **Patch** | Core tests | N/A | Security scan (if security patch) |
-
-#### Test Execution
-
-```bash
-# Full test suite (required for all releases)
-cargo test --workspace
-
-# Performance benchmarks (required for major/minor)
-cargo bench
-
-# Security scan (required for all releases)
-just security-scan
-
-# Mutation testing (required for major releases)
-just mutation-test
-
-# Integration tests (required for major/minor)
-just integration-test
-```
-
-### Version Policy Details
-
-#### Breaking Changes Definition
-
-Breaking changes include:
-- API signature changes
-- Removal of public functions/types
-- Changes in behavior that affect existing code
-- Configuration format changes
-- Dependency requirement changes
-
-#### Compatibility Guarantees
-
-**For v1.x series:**
-- API stability within major version
-- Configuration format stability
-- LSP protocol compatibility
-- File format compatibility
-
-**Migration Support:**
-- Automated migration tools when possible
-- Comprehensive migration guides
-- Deprecation warnings before removal
-- Backward compatibility periods
-
-### Emergency Releases
-
-For critical security issues:
-
-1. **Immediate Assessment**: Triage within 24 hours
-2. **Rapid Fix**: Develop and test fix in 48-72 hours
-3. **Expedited Release**: Bypass normal process if needed
-4. **Security Advisory**: Coordinate disclosure
-5. **Post-Mortem**: Document and improve process
-
-### Release Communication
-
-#### Release Channels
-
-- **GitHub Releases**: Primary announcement channel
-- **CHANGELOG.md**: Detailed change log
-- **Security Advisories**: For security-related releases
-- **Community Forums**: Discussion and support
-- **Email Lists**: For enterprise notifications
-
-#### Release Notes Template
-
-```markdown
-# Release v<0.x.y>
-
-## Highlights
-- Key features and improvements
-- Performance metrics
-- Security enhancements
-
-## Breaking Changes
-- Detailed list with migration guidance
-
-## New Features
-- Comprehensive feature list with examples
-
-## Bug Fixes
-- Bug fixes with issue references
-
-## Security Updates
-- Security fixes and CVE references
-
-## Performance Improvements
-- Benchmarks and performance metrics
-
-## Upgrade Instructions
-- Step-by-step upgrade guide
-- Migration considerations
-
-## Known Issues
-- Any known limitations or issues
-```
-
----
-
-Thank you for contributing to Perl LSP! 🚀
