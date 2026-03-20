@@ -283,22 +283,53 @@ fn heredoc_tied_handle_code_exists() -> Result<(), Box<dyn std::error::Error>> {
 /// All codes must start with PL or PC prefix.
 #[test]
 fn all_codes_have_valid_prefix() -> Result<(), Box<dyn std::error::Error>> {
-    // Existing codes that are already stable
-    let existing_codes = [
+    let all_codes = [
+        // Parser
         DiagnosticCode::ParseError,
         DiagnosticCode::SyntaxError,
         DiagnosticCode::UnexpectedEof,
+        // Strict/warnings/scope
         DiagnosticCode::MissingStrict,
         DiagnosticCode::MissingWarnings,
         DiagnosticCode::UnusedVariable,
         DiagnosticCode::UndefinedVariable,
+        DiagnosticCode::VariableShadowing,
+        DiagnosticCode::VariableRedeclaration,
+        DiagnosticCode::DuplicateParameter,
+        DiagnosticCode::ParameterShadowsGlobal,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UnquotedBareword,
+        DiagnosticCode::UninitializedVariable,
+        DiagnosticCode::MisspelledPragma,
+        // Package/module
         DiagnosticCode::MissingPackageDeclaration,
         DiagnosticCode::DuplicatePackage,
+        // Subroutine
         DiagnosticCode::DuplicateSubroutine,
         DiagnosticCode::MissingReturn,
+        // Best practices
         DiagnosticCode::BarewordFilehandle,
         DiagnosticCode::TwoArgOpen,
         DiagnosticCode::ImplicitReturn,
+        DiagnosticCode::AssignmentInCondition,
+        DiagnosticCode::NumericComparisonWithUndef,
+        // Deprecated
+        DiagnosticCode::DeprecatedDefined,
+        DiagnosticCode::DeprecatedArrayBase,
+        // Security
+        DiagnosticCode::SecurityStringEval,
+        DiagnosticCode::SecurityBacktickExec,
+        // Import
+        DiagnosticCode::UnusedImport,
+        // Heredoc
+        DiagnosticCode::HeredocInFormat,
+        DiagnosticCode::HeredocInBegin,
+        DiagnosticCode::HeredocDynamicDelimiter,
+        DiagnosticCode::HeredocInSourceFilter,
+        DiagnosticCode::HeredocInRegexCode,
+        DiagnosticCode::HeredocInEval,
+        DiagnosticCode::HeredocTiedHandle,
+        // Perl::Critic
         DiagnosticCode::CriticSeverity1,
         DiagnosticCode::CriticSeverity2,
         DiagnosticCode::CriticSeverity3,
@@ -306,7 +337,7 @@ fn all_codes_have_valid_prefix() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::CriticSeverity5,
     ];
 
-    for code in &existing_codes {
+    for code in &all_codes {
         let s = code.as_str();
         assert!(
             s.starts_with("PL") || s.starts_with("PC"),
@@ -316,7 +347,42 @@ fn all_codes_have_valid_prefix() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// parse_code round-trip: as_str() output must be parseable back.
+/// parse_code round-trip: as_str() output must be parseable back for all new codes.
+#[test]
+fn new_codes_round_trip_through_parse_code() -> Result<(), Box<dyn std::error::Error>> {
+    let new_codes = [
+        DiagnosticCode::VariableShadowing,
+        DiagnosticCode::VariableRedeclaration,
+        DiagnosticCode::DuplicateParameter,
+        DiagnosticCode::ParameterShadowsGlobal,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UnquotedBareword,
+        DiagnosticCode::UninitializedVariable,
+        DiagnosticCode::MisspelledPragma,
+        DiagnosticCode::AssignmentInCondition,
+        DiagnosticCode::NumericComparisonWithUndef,
+        DiagnosticCode::DeprecatedDefined,
+        DiagnosticCode::DeprecatedArrayBase,
+        DiagnosticCode::SecurityStringEval,
+        DiagnosticCode::SecurityBacktickExec,
+        DiagnosticCode::UnusedImport,
+        DiagnosticCode::HeredocInFormat,
+        DiagnosticCode::HeredocInBegin,
+        DiagnosticCode::HeredocDynamicDelimiter,
+        DiagnosticCode::HeredocInSourceFilter,
+        DiagnosticCode::HeredocInRegexCode,
+        DiagnosticCode::HeredocInEval,
+        DiagnosticCode::HeredocTiedHandle,
+    ];
+    for code in new_codes {
+        let s = code.as_str();
+        let parsed = DiagnosticCode::parse_code(s);
+        assert_eq!(parsed, Some(code), "parse_code({s}) should return {code:?}");
+    }
+    Ok(())
+}
+
+/// parse_code round-trip: as_str() output must be parseable back for original codes.
 #[test]
 fn existing_codes_round_trip_through_parse_code() -> Result<(), Box<dyn std::error::Error>> {
     let codes = [

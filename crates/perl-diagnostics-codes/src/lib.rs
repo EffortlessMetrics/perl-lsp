@@ -9,10 +9,14 @@
 //! | Range       | Category                  |
 //! |-------------|---------------------------|
 //! | PL001-PL099 | Parser diagnostics        |
-//! | PL100-PL199 | Strict/warnings           |
+//! | PL100-PL199 | Strict/warnings/scope     |
 //! | PL200-PL299 | Package/module            |
 //! | PL300-PL399 | Subroutine                |
 //! | PL400-PL499 | Best practices            |
+//! | PL500-PL599 | Deprecated syntax         |
+//! | PL600-PL699 | Security                  |
+//! | PL700-PL799 | Import/use                |
+//! | PL800-PL899 | Heredoc anti-patterns     |
 //! | PC001-PC005 | Perl::Critic violations   |
 //!
 //! # Example
@@ -240,52 +244,65 @@ impl DiagnosticCode {
     }
 
     /// Get the documentation URL for this code, if available.
+    ///
+    /// All `PL`-prefixed codes return a URL. `PC`-prefixed (Perl::Critic) codes
+    /// return `None` because their documentation is on metacpan.org rather than
+    /// the perl-lsp docs site.
     pub fn documentation_url(&self) -> Option<&'static str> {
-        let code = self.as_str();
-        // Perl::Critic codes don't have centralized documentation
-        if code.starts_with("PC") {
-            return None;
+        // Exhaustive match on the enum ensures that adding a new variant
+        // without updating this function produces a compiler error.
+        match self {
+            DiagnosticCode::ParseError => Some("https://docs.perl-lsp.org/errors/PL001"),
+            DiagnosticCode::SyntaxError => Some("https://docs.perl-lsp.org/errors/PL002"),
+            DiagnosticCode::UnexpectedEof => Some("https://docs.perl-lsp.org/errors/PL003"),
+            DiagnosticCode::MissingStrict => Some("https://docs.perl-lsp.org/errors/PL100"),
+            DiagnosticCode::MissingWarnings => Some("https://docs.perl-lsp.org/errors/PL101"),
+            DiagnosticCode::UnusedVariable => Some("https://docs.perl-lsp.org/errors/PL102"),
+            DiagnosticCode::UndefinedVariable => Some("https://docs.perl-lsp.org/errors/PL103"),
+            DiagnosticCode::VariableShadowing => Some("https://docs.perl-lsp.org/errors/PL104"),
+            DiagnosticCode::VariableRedeclaration => Some("https://docs.perl-lsp.org/errors/PL105"),
+            DiagnosticCode::DuplicateParameter => Some("https://docs.perl-lsp.org/errors/PL106"),
+            DiagnosticCode::ParameterShadowsGlobal => {
+                Some("https://docs.perl-lsp.org/errors/PL107")
+            }
+            DiagnosticCode::UnusedParameter => Some("https://docs.perl-lsp.org/errors/PL108"),
+            DiagnosticCode::UnquotedBareword => Some("https://docs.perl-lsp.org/errors/PL109"),
+            DiagnosticCode::UninitializedVariable => Some("https://docs.perl-lsp.org/errors/PL110"),
+            DiagnosticCode::MisspelledPragma => Some("https://docs.perl-lsp.org/errors/PL111"),
+            DiagnosticCode::MissingPackageDeclaration => {
+                Some("https://docs.perl-lsp.org/errors/PL200")
+            }
+            DiagnosticCode::DuplicatePackage => Some("https://docs.perl-lsp.org/errors/PL201"),
+            DiagnosticCode::DuplicateSubroutine => Some("https://docs.perl-lsp.org/errors/PL300"),
+            DiagnosticCode::MissingReturn => Some("https://docs.perl-lsp.org/errors/PL301"),
+            DiagnosticCode::BarewordFilehandle => Some("https://docs.perl-lsp.org/errors/PL400"),
+            DiagnosticCode::TwoArgOpen => Some("https://docs.perl-lsp.org/errors/PL401"),
+            DiagnosticCode::ImplicitReturn => Some("https://docs.perl-lsp.org/errors/PL402"),
+            DiagnosticCode::AssignmentInCondition => Some("https://docs.perl-lsp.org/errors/PL403"),
+            DiagnosticCode::NumericComparisonWithUndef => {
+                Some("https://docs.perl-lsp.org/errors/PL404")
+            }
+            DiagnosticCode::DeprecatedDefined => Some("https://docs.perl-lsp.org/errors/PL500"),
+            DiagnosticCode::DeprecatedArrayBase => Some("https://docs.perl-lsp.org/errors/PL501"),
+            DiagnosticCode::SecurityStringEval => Some("https://docs.perl-lsp.org/errors/PL600"),
+            DiagnosticCode::SecurityBacktickExec => Some("https://docs.perl-lsp.org/errors/PL601"),
+            DiagnosticCode::UnusedImport => Some("https://docs.perl-lsp.org/errors/PL700"),
+            DiagnosticCode::HeredocInFormat => Some("https://docs.perl-lsp.org/errors/PL800"),
+            DiagnosticCode::HeredocInBegin => Some("https://docs.perl-lsp.org/errors/PL801"),
+            DiagnosticCode::HeredocDynamicDelimiter => {
+                Some("https://docs.perl-lsp.org/errors/PL802")
+            }
+            DiagnosticCode::HeredocInSourceFilter => Some("https://docs.perl-lsp.org/errors/PL803"),
+            DiagnosticCode::HeredocInRegexCode => Some("https://docs.perl-lsp.org/errors/PL804"),
+            DiagnosticCode::HeredocInEval => Some("https://docs.perl-lsp.org/errors/PL805"),
+            DiagnosticCode::HeredocTiedHandle => Some("https://docs.perl-lsp.org/errors/PL806"),
+            // Perl::Critic violations: documentation is on metacpan.org, not perl-lsp docs
+            DiagnosticCode::CriticSeverity1
+            | DiagnosticCode::CriticSeverity2
+            | DiagnosticCode::CriticSeverity3
+            | DiagnosticCode::CriticSeverity4
+            | DiagnosticCode::CriticSeverity5 => None,
         }
-        // Build URL from stable code string for all PL codes
-        Some(match code {
-            "PL001" => "https://docs.perl-lsp.org/errors/PL001",
-            "PL002" => "https://docs.perl-lsp.org/errors/PL002",
-            "PL003" => "https://docs.perl-lsp.org/errors/PL003",
-            "PL100" => "https://docs.perl-lsp.org/errors/PL100",
-            "PL101" => "https://docs.perl-lsp.org/errors/PL101",
-            "PL102" => "https://docs.perl-lsp.org/errors/PL102",
-            "PL103" => "https://docs.perl-lsp.org/errors/PL103",
-            "PL104" => "https://docs.perl-lsp.org/errors/PL104",
-            "PL105" => "https://docs.perl-lsp.org/errors/PL105",
-            "PL106" => "https://docs.perl-lsp.org/errors/PL106",
-            "PL107" => "https://docs.perl-lsp.org/errors/PL107",
-            "PL108" => "https://docs.perl-lsp.org/errors/PL108",
-            "PL109" => "https://docs.perl-lsp.org/errors/PL109",
-            "PL110" => "https://docs.perl-lsp.org/errors/PL110",
-            "PL111" => "https://docs.perl-lsp.org/errors/PL111",
-            "PL200" => "https://docs.perl-lsp.org/errors/PL200",
-            "PL201" => "https://docs.perl-lsp.org/errors/PL201",
-            "PL300" => "https://docs.perl-lsp.org/errors/PL300",
-            "PL301" => "https://docs.perl-lsp.org/errors/PL301",
-            "PL400" => "https://docs.perl-lsp.org/errors/PL400",
-            "PL401" => "https://docs.perl-lsp.org/errors/PL401",
-            "PL402" => "https://docs.perl-lsp.org/errors/PL402",
-            "PL403" => "https://docs.perl-lsp.org/errors/PL403",
-            "PL404" => "https://docs.perl-lsp.org/errors/PL404",
-            "PL500" => "https://docs.perl-lsp.org/errors/PL500",
-            "PL501" => "https://docs.perl-lsp.org/errors/PL501",
-            "PL600" => "https://docs.perl-lsp.org/errors/PL600",
-            "PL601" => "https://docs.perl-lsp.org/errors/PL601",
-            "PL700" => "https://docs.perl-lsp.org/errors/PL700",
-            "PL800" => "https://docs.perl-lsp.org/errors/PL800",
-            "PL801" => "https://docs.perl-lsp.org/errors/PL801",
-            "PL802" => "https://docs.perl-lsp.org/errors/PL802",
-            "PL803" => "https://docs.perl-lsp.org/errors/PL803",
-            "PL804" => "https://docs.perl-lsp.org/errors/PL804",
-            "PL805" => "https://docs.perl-lsp.org/errors/PL805",
-            "PL806" => "https://docs.perl-lsp.org/errors/PL806",
-            _ => return None,
-        })
     }
 
     /// Get the default severity for this diagnostic code.

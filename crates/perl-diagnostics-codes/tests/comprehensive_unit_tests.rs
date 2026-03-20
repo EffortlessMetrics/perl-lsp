@@ -15,20 +15,52 @@ use perl_diagnostics_codes::{
 // ---------------------------------------------------------------------------
 
 const ALL_CODES: &[DiagnosticCode] = &[
+    // Parser (PL001-PL099)
     DiagnosticCode::ParseError,
     DiagnosticCode::SyntaxError,
     DiagnosticCode::UnexpectedEof,
+    // Strict/warnings/scope (PL100-PL199)
     DiagnosticCode::MissingStrict,
     DiagnosticCode::MissingWarnings,
     DiagnosticCode::UnusedVariable,
     DiagnosticCode::UndefinedVariable,
+    DiagnosticCode::VariableShadowing,
+    DiagnosticCode::VariableRedeclaration,
+    DiagnosticCode::DuplicateParameter,
+    DiagnosticCode::ParameterShadowsGlobal,
+    DiagnosticCode::UnusedParameter,
+    DiagnosticCode::UnquotedBareword,
+    DiagnosticCode::UninitializedVariable,
+    DiagnosticCode::MisspelledPragma,
+    // Package/module (PL200-PL299)
     DiagnosticCode::MissingPackageDeclaration,
     DiagnosticCode::DuplicatePackage,
+    // Subroutine (PL300-PL399)
     DiagnosticCode::DuplicateSubroutine,
     DiagnosticCode::MissingReturn,
+    // Best practices (PL400-PL499)
     DiagnosticCode::BarewordFilehandle,
     DiagnosticCode::TwoArgOpen,
     DiagnosticCode::ImplicitReturn,
+    DiagnosticCode::AssignmentInCondition,
+    DiagnosticCode::NumericComparisonWithUndef,
+    // Deprecated syntax (PL500-PL599)
+    DiagnosticCode::DeprecatedDefined,
+    DiagnosticCode::DeprecatedArrayBase,
+    // Security (PL600-PL699)
+    DiagnosticCode::SecurityStringEval,
+    DiagnosticCode::SecurityBacktickExec,
+    // Import (PL700-PL799)
+    DiagnosticCode::UnusedImport,
+    // Heredoc anti-patterns (PL800-PL899)
+    DiagnosticCode::HeredocInFormat,
+    DiagnosticCode::HeredocInBegin,
+    DiagnosticCode::HeredocDynamicDelimiter,
+    DiagnosticCode::HeredocInSourceFilter,
+    DiagnosticCode::HeredocInRegexCode,
+    DiagnosticCode::HeredocInEval,
+    DiagnosticCode::HeredocTiedHandle,
+    // Perl::Critic violations (PC001-PC005)
     DiagnosticCode::CriticSeverity1,
     DiagnosticCode::CriticSeverity2,
     DiagnosticCode::CriticSeverity3,
@@ -169,11 +201,19 @@ fn code_as_str_parser_range() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn code_as_str_strict_warnings_range() -> Result<(), Box<dyn std::error::Error>> {
+fn code_as_str_strict_warnings_scope_range() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(DiagnosticCode::MissingStrict.as_str(), "PL100");
     assert_eq!(DiagnosticCode::MissingWarnings.as_str(), "PL101");
     assert_eq!(DiagnosticCode::UnusedVariable.as_str(), "PL102");
     assert_eq!(DiagnosticCode::UndefinedVariable.as_str(), "PL103");
+    assert_eq!(DiagnosticCode::VariableShadowing.as_str(), "PL104");
+    assert_eq!(DiagnosticCode::VariableRedeclaration.as_str(), "PL105");
+    assert_eq!(DiagnosticCode::DuplicateParameter.as_str(), "PL106");
+    assert_eq!(DiagnosticCode::ParameterShadowsGlobal.as_str(), "PL107");
+    assert_eq!(DiagnosticCode::UnusedParameter.as_str(), "PL108");
+    assert_eq!(DiagnosticCode::UnquotedBareword.as_str(), "PL109");
+    assert_eq!(DiagnosticCode::UninitializedVariable.as_str(), "PL110");
+    assert_eq!(DiagnosticCode::MisspelledPragma.as_str(), "PL111");
     Ok(())
 }
 
@@ -196,6 +236,40 @@ fn code_as_str_best_practices_range() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(DiagnosticCode::BarewordFilehandle.as_str(), "PL400");
     assert_eq!(DiagnosticCode::TwoArgOpen.as_str(), "PL401");
     assert_eq!(DiagnosticCode::ImplicitReturn.as_str(), "PL402");
+    assert_eq!(DiagnosticCode::AssignmentInCondition.as_str(), "PL403");
+    assert_eq!(DiagnosticCode::NumericComparisonWithUndef.as_str(), "PL404");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_deprecated_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::DeprecatedDefined.as_str(), "PL500");
+    assert_eq!(DiagnosticCode::DeprecatedArrayBase.as_str(), "PL501");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_security_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::SecurityStringEval.as_str(), "PL600");
+    assert_eq!(DiagnosticCode::SecurityBacktickExec.as_str(), "PL601");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_import_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::UnusedImport.as_str(), "PL700");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_heredoc_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::HeredocInFormat.as_str(), "PL800");
+    assert_eq!(DiagnosticCode::HeredocInBegin.as_str(), "PL801");
+    assert_eq!(DiagnosticCode::HeredocDynamicDelimiter.as_str(), "PL802");
+    assert_eq!(DiagnosticCode::HeredocInSourceFilter.as_str(), "PL803");
+    assert_eq!(DiagnosticCode::HeredocInRegexCode.as_str(), "PL804");
+    assert_eq!(DiagnosticCode::HeredocInEval.as_str(), "PL805");
+    assert_eq!(DiagnosticCode::HeredocTiedHandle.as_str(), "PL806");
     Ok(())
 }
 
@@ -256,6 +330,9 @@ fn severity_error_codes() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::SyntaxError,
         DiagnosticCode::UnexpectedEof,
         DiagnosticCode::UndefinedVariable,
+        DiagnosticCode::VariableRedeclaration,
+        DiagnosticCode::DuplicateParameter,
+        DiagnosticCode::UnquotedBareword,
     ];
     for code in &error_codes {
         assert_eq!(
@@ -274,6 +351,11 @@ fn severity_warning_codes() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::MissingStrict,
         DiagnosticCode::MissingWarnings,
         DiagnosticCode::UnusedVariable,
+        DiagnosticCode::VariableShadowing,
+        DiagnosticCode::ParameterShadowsGlobal,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UninitializedVariable,
+        DiagnosticCode::MisspelledPragma,
         DiagnosticCode::MissingPackageDeclaration,
         DiagnosticCode::DuplicatePackage,
         DiagnosticCode::DuplicateSubroutine,
@@ -281,6 +363,12 @@ fn severity_warning_codes() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::BarewordFilehandle,
         DiagnosticCode::TwoArgOpen,
         DiagnosticCode::ImplicitReturn,
+        DiagnosticCode::AssignmentInCondition,
+        DiagnosticCode::NumericComparisonWithUndef,
+        DiagnosticCode::DeprecatedDefined,
+        DiagnosticCode::DeprecatedArrayBase,
+        DiagnosticCode::SecurityStringEval,
+        DiagnosticCode::SecurityBacktickExec,
         DiagnosticCode::CriticSeverity1,
         DiagnosticCode::CriticSeverity2,
     ];
@@ -296,8 +384,31 @@ fn severity_warning_codes() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn severity_information_codes() -> Result<(), Box<dyn std::error::Error>> {
+    let info_codes = [
+        DiagnosticCode::HeredocInFormat,
+        DiagnosticCode::HeredocInBegin,
+        DiagnosticCode::HeredocDynamicDelimiter,
+        DiagnosticCode::HeredocInSourceFilter,
+        DiagnosticCode::HeredocInRegexCode,
+        DiagnosticCode::HeredocInEval,
+        DiagnosticCode::HeredocTiedHandle,
+    ];
+    for code in &info_codes {
+        assert_eq!(
+            code.severity(),
+            DiagnosticSeverity::Information,
+            "{} should be Information severity",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn severity_hint_codes() -> Result<(), Box<dyn std::error::Error>> {
     let hint_codes = [
+        DiagnosticCode::UnusedImport,
         DiagnosticCode::CriticSeverity3,
         DiagnosticCode::CriticSeverity4,
         DiagnosticCode::CriticSeverity5,
@@ -318,39 +429,56 @@ fn severity_hint_codes() -> Result<(), Box<dyn std::error::Error>> {
 // ===========================================================================
 
 #[test]
-fn documentation_url_pl_codes_have_urls() -> Result<(), Box<dyn std::error::Error>> {
+fn documentation_url_all_pl_codes_have_urls() -> Result<(), Box<dyn std::error::Error>> {
+    // Every PL-prefixed code should have a documentation URL following the
+    // canonical pattern https://docs.perl-lsp.org/errors/<CODE>.
     let pl_codes = [
-        (DiagnosticCode::ParseError, "PL001"),
-        (DiagnosticCode::SyntaxError, "PL002"),
-        (DiagnosticCode::UnexpectedEof, "PL003"),
-        (DiagnosticCode::MissingStrict, "PL100"),
-        (DiagnosticCode::MissingWarnings, "PL101"),
-        (DiagnosticCode::UnusedVariable, "PL102"),
-        (DiagnosticCode::UndefinedVariable, "PL103"),
-        (DiagnosticCode::MissingPackageDeclaration, "PL200"),
-        (DiagnosticCode::DuplicatePackage, "PL201"),
-        (DiagnosticCode::DuplicateSubroutine, "PL300"),
-        (DiagnosticCode::MissingReturn, "PL301"),
-        (DiagnosticCode::BarewordFilehandle, "PL400"),
-        (DiagnosticCode::TwoArgOpen, "PL401"),
-        (DiagnosticCode::ImplicitReturn, "PL402"),
+        DiagnosticCode::ParseError,
+        DiagnosticCode::SyntaxError,
+        DiagnosticCode::UnexpectedEof,
+        DiagnosticCode::MissingStrict,
+        DiagnosticCode::MissingWarnings,
+        DiagnosticCode::UnusedVariable,
+        DiagnosticCode::UndefinedVariable,
+        DiagnosticCode::VariableShadowing,
+        DiagnosticCode::VariableRedeclaration,
+        DiagnosticCode::DuplicateParameter,
+        DiagnosticCode::ParameterShadowsGlobal,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UnquotedBareword,
+        DiagnosticCode::UninitializedVariable,
+        DiagnosticCode::MisspelledPragma,
+        DiagnosticCode::MissingPackageDeclaration,
+        DiagnosticCode::DuplicatePackage,
+        DiagnosticCode::DuplicateSubroutine,
+        DiagnosticCode::MissingReturn,
+        DiagnosticCode::BarewordFilehandle,
+        DiagnosticCode::TwoArgOpen,
+        DiagnosticCode::ImplicitReturn,
+        DiagnosticCode::AssignmentInCondition,
+        DiagnosticCode::NumericComparisonWithUndef,
+        DiagnosticCode::DeprecatedDefined,
+        DiagnosticCode::DeprecatedArrayBase,
+        DiagnosticCode::SecurityStringEval,
+        DiagnosticCode::SecurityBacktickExec,
+        DiagnosticCode::UnusedImport,
+        DiagnosticCode::HeredocInFormat,
+        DiagnosticCode::HeredocInBegin,
+        DiagnosticCode::HeredocDynamicDelimiter,
+        DiagnosticCode::HeredocInSourceFilter,
+        DiagnosticCode::HeredocInRegexCode,
+        DiagnosticCode::HeredocInEval,
+        DiagnosticCode::HeredocTiedHandle,
     ];
-    for (code, expected_suffix) in &pl_codes {
+    for code in &pl_codes {
+        let code_str = code.as_str();
         let url = code.documentation_url();
-        assert!(url.is_some(), "{} should have a documentation URL", code.as_str());
+        assert!(url.is_some(), "{code_str} should have a documentation URL");
         let url_str = url.ok_or("missing url")?;
-        assert!(
-            url_str.ends_with(expected_suffix),
-            "URL for {} should end with {}, got {}",
-            code.as_str(),
-            expected_suffix,
-            url_str,
-        );
-        assert!(
-            url_str.starts_with("https://docs.perl-lsp.org/errors/"),
-            "URL for {} should start with base URL, got {}",
-            code.as_str(),
-            url_str,
+        let expected_url = format!("https://docs.perl-lsp.org/errors/{code_str}");
+        assert_eq!(
+            url_str, expected_url,
+            "documentation URL for {code_str} should be {expected_url}"
         );
     }
     Ok(())
@@ -381,17 +509,55 @@ fn documentation_url_critic_codes_return_none() -> Result<(), Box<dyn std::error
 // ===========================================================================
 
 #[test]
-fn tags_unused_variable_has_unnecessary() -> Result<(), Box<dyn std::error::Error>> {
-    let tags = DiagnosticCode::UnusedVariable.tags();
-    assert_eq!(tags.len(), 1);
-    assert_eq!(tags[0], DiagnosticTag::Unnecessary);
+fn tags_unnecessary_codes() -> Result<(), Box<dyn std::error::Error>> {
+    // These codes mark code that can be safely removed.
+    let unnecessary = [
+        DiagnosticCode::UnusedVariable,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UnusedImport,
+    ];
+    for code in &unnecessary {
+        let tags = code.tags();
+        assert_eq!(tags.len(), 1, "{} should have exactly one tag", code.as_str());
+        assert_eq!(
+            tags[0],
+            DiagnosticTag::Unnecessary,
+            "{} should have Unnecessary tag",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn tags_deprecated_codes() -> Result<(), Box<dyn std::error::Error>> {
+    // These codes mark deprecated language constructs.
+    let deprecated = [DiagnosticCode::DeprecatedDefined, DiagnosticCode::DeprecatedArrayBase];
+    for code in &deprecated {
+        let tags = code.tags();
+        assert_eq!(tags.len(), 1, "{} should have exactly one tag", code.as_str());
+        assert_eq!(
+            tags[0],
+            DiagnosticTag::Deprecated,
+            "{} should have Deprecated tag",
+            code.as_str()
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn tags_all_other_codes_empty() -> Result<(), Box<dyn std::error::Error>> {
+    // Codes that carry tags (Unnecessary or Deprecated) — skip these.
+    let tagged_codes = [
+        DiagnosticCode::UnusedVariable,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UnusedImport,
+        DiagnosticCode::DeprecatedDefined,
+        DiagnosticCode::DeprecatedArrayBase,
+    ];
     for code in ALL_CODES {
-        if *code == DiagnosticCode::UnusedVariable {
+        if tagged_codes.contains(code) {
             continue;
         }
         assert!(
@@ -430,6 +596,14 @@ fn category_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::MissingWarnings,
         DiagnosticCode::UnusedVariable,
         DiagnosticCode::UndefinedVariable,
+        DiagnosticCode::VariableShadowing,
+        DiagnosticCode::VariableRedeclaration,
+        DiagnosticCode::DuplicateParameter,
+        DiagnosticCode::ParameterShadowsGlobal,
+        DiagnosticCode::UnusedParameter,
+        DiagnosticCode::UnquotedBareword,
+        DiagnosticCode::UninitializedVariable,
+        DiagnosticCode::MisspelledPragma,
     ];
     for code in &sw_codes {
         assert_eq!(
@@ -476,12 +650,74 @@ fn category_best_practices() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::BarewordFilehandle,
         DiagnosticCode::TwoArgOpen,
         DiagnosticCode::ImplicitReturn,
+        DiagnosticCode::AssignmentInCondition,
+        DiagnosticCode::NumericComparisonWithUndef,
     ];
     for code in &bp_codes {
         assert_eq!(
             code.category(),
             DiagnosticCategory::BestPractices,
             "{} should be BestPractices category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_deprecated() -> Result<(), Box<dyn std::error::Error>> {
+    let dep_codes = [DiagnosticCode::DeprecatedDefined, DiagnosticCode::DeprecatedArrayBase];
+    for code in &dep_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::Deprecated,
+            "{} should be Deprecated category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_security() -> Result<(), Box<dyn std::error::Error>> {
+    let sec_codes = [DiagnosticCode::SecurityStringEval, DiagnosticCode::SecurityBacktickExec];
+    for code in &sec_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::Security,
+            "{} should be Security category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_import() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::UnusedImport.category(),
+        DiagnosticCategory::Import,
+        "UnusedImport should be Import category"
+    );
+    Ok(())
+}
+
+#[test]
+fn category_heredoc() -> Result<(), Box<dyn std::error::Error>> {
+    let heredoc_codes = [
+        DiagnosticCode::HeredocInFormat,
+        DiagnosticCode::HeredocInBegin,
+        DiagnosticCode::HeredocDynamicDelimiter,
+        DiagnosticCode::HeredocInSourceFilter,
+        DiagnosticCode::HeredocInRegexCode,
+        DiagnosticCode::HeredocInEval,
+        DiagnosticCode::HeredocTiedHandle,
+    ];
+    for code in &heredoc_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::Heredoc,
+            "{} should be Heredoc category",
             code.as_str()
         );
     }
@@ -674,15 +910,20 @@ fn category_debug_contains_variant_name() -> Result<(), Box<dyn std::error::Erro
 fn category_hash_consistency() -> Result<(), Box<dyn std::error::Error>> {
     use std::collections::HashSet;
     let mut set = HashSet::new();
+    // Insert each category variant; inserting a duplicate must not grow the set.
     set.insert(DiagnosticCategory::Parser);
-    set.insert(DiagnosticCategory::Parser);
-    assert_eq!(set.len(), 1);
+    set.insert(DiagnosticCategory::Parser); // duplicate
+    assert_eq!(set.len(), 1, "duplicate insert should not grow set");
     set.insert(DiagnosticCategory::StrictWarnings);
     set.insert(DiagnosticCategory::PackageModule);
     set.insert(DiagnosticCategory::Subroutine);
     set.insert(DiagnosticCategory::BestPractices);
+    set.insert(DiagnosticCategory::Deprecated);
+    set.insert(DiagnosticCategory::Security);
+    set.insert(DiagnosticCategory::Import);
+    set.insert(DiagnosticCategory::Heredoc);
     set.insert(DiagnosticCategory::PerlCritic);
-    assert_eq!(set.len(), 6);
+    assert_eq!(set.len(), 10, "all 10 distinct categories should be present");
     Ok(())
 }
 
@@ -1025,19 +1266,6 @@ fn documentation_url_format_consistency() {
 }
 
 #[test]
-fn documentation_url_all_pl_codes_have_urls() {
-    for code in ALL_CODES {
-        if code.as_str().starts_with("PL") {
-            assert!(
-                code.documentation_url().is_some(),
-                "PL code {} should have a documentation URL",
-                code.as_str()
-            );
-        }
-    }
-}
-
-#[test]
 fn documentation_url_all_pc_codes_have_no_urls() {
     for code in ALL_CODES {
         if code.as_str().starts_with("PC") {
@@ -1067,26 +1295,32 @@ fn parser_category_codes_are_all_errors() {
 }
 
 #[test]
-fn no_information_severity_codes_exist() {
-    // Current API has no Information-level codes
-    for code in ALL_CODES {
-        assert_ne!(
-            code.severity(),
-            DiagnosticSeverity::Information,
-            "no codes should be Information severity currently: {}",
+fn information_severity_codes_are_heredoc() {
+    // Heredoc anti-pattern codes (PL800-PL806) are Information severity
+    let info_codes: Vec<&DiagnosticCode> =
+        ALL_CODES.iter().filter(|c| c.severity() == DiagnosticSeverity::Information).collect();
+    assert_eq!(info_codes.len(), 7, "expected exactly 7 Information-severity codes");
+    for code in &info_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::Heredoc,
+            "Information-severity code {} should be Heredoc category",
             code.as_str()
         );
     }
 }
 
 #[test]
-fn hint_codes_are_only_critic_3_4_5() {
+fn hint_codes_are_critic_3_4_5_and_unused_import() {
     let hint_codes: Vec<&DiagnosticCode> =
         ALL_CODES.iter().filter(|c| c.severity() == DiagnosticSeverity::Hint).collect();
-    assert_eq!(hint_codes.len(), 3);
-    for code in &hint_codes {
-        assert_eq!(code.category(), DiagnosticCategory::PerlCritic);
-    }
+    assert_eq!(hint_codes.len(), 4, "expected exactly 4 Hint-severity codes");
+    // UnusedImport + CriticSeverity3/4/5
+    let hint_code_strings: Vec<&str> = hint_codes.iter().map(|c| c.as_str()).collect();
+    assert!(hint_code_strings.contains(&"PL700"), "UnusedImport should be Hint");
+    assert!(hint_code_strings.contains(&"PC003"), "CriticSeverity3 should be Hint");
+    assert!(hint_code_strings.contains(&"PC004"), "CriticSeverity4 should be Hint");
+    assert!(hint_code_strings.contains(&"PC005"), "CriticSeverity5 should be Hint");
 }
 
 // --- DiagnosticCode: Display trait ---
@@ -1127,7 +1361,7 @@ fn category_inequality_across_variants() {
 // --- DiagnosticCategory: coverage of all codes ---
 
 #[test]
-fn all_six_categories_are_represented() {
+fn all_ten_categories_are_represented() {
     use std::collections::HashSet;
     let categories: HashSet<DiagnosticCategory> = ALL_CODES.iter().map(|c| c.category()).collect();
     assert!(categories.contains(&DiagnosticCategory::Parser));
@@ -1135,18 +1369,31 @@ fn all_six_categories_are_represented() {
     assert!(categories.contains(&DiagnosticCategory::PackageModule));
     assert!(categories.contains(&DiagnosticCategory::Subroutine));
     assert!(categories.contains(&DiagnosticCategory::BestPractices));
+    assert!(categories.contains(&DiagnosticCategory::Deprecated));
+    assert!(categories.contains(&DiagnosticCategory::Security));
+    assert!(categories.contains(&DiagnosticCategory::Import));
+    assert!(categories.contains(&DiagnosticCategory::Heredoc));
     assert!(categories.contains(&DiagnosticCategory::PerlCritic));
-    assert_eq!(categories.len(), 6);
+    assert_eq!(categories.len(), 10, "expected all 10 distinct categories");
 }
 
 // --- DiagnosticCode: tags exhaustive check ---
 
 #[test]
-fn only_unused_variable_has_non_empty_tags() {
+fn codes_with_non_empty_tags() {
+    // UnusedVariable, UnusedParameter, UnusedImport → Unnecessary
+    // DeprecatedDefined, DeprecatedArrayBase → Deprecated
     let codes_with_tags: Vec<&DiagnosticCode> =
         ALL_CODES.iter().filter(|c| !c.tags().is_empty()).collect();
-    assert_eq!(codes_with_tags.len(), 1);
-    assert_eq!(*codes_with_tags[0], DiagnosticCode::UnusedVariable);
+    assert_eq!(codes_with_tags.len(), 5, "expected exactly 5 codes with tags");
+
+    let with_unnecessary: Vec<&&DiagnosticCode> =
+        codes_with_tags.iter().filter(|c| c.tags().contains(&DiagnosticTag::Unnecessary)).collect();
+    assert_eq!(with_unnecessary.len(), 3, "expected 3 codes with Unnecessary tag");
+
+    let with_deprecated: Vec<&&DiagnosticCode> =
+        codes_with_tags.iter().filter(|c| c.tags().contains(&DiagnosticTag::Deprecated)).collect();
+    assert_eq!(with_deprecated.len(), 2, "expected 2 codes with Deprecated tag");
 }
 
 #[test]
@@ -1159,8 +1406,10 @@ fn unused_variable_tag_is_exactly_unnecessary() {
 // --- Cross-cutting: ALL_CODES count ---
 
 #[test]
-fn all_codes_count_is_19() {
-    assert_eq!(ALL_CODES.len(), 19, "expected 19 diagnostic codes total");
+fn all_codes_count() {
+    // 3 parser + 12 strict/scope + 2 package + 2 subroutine + 5 best-practices
+    // + 2 deprecated + 2 security + 1 import + 7 heredoc + 5 critic = 41
+    assert_eq!(ALL_CODES.len(), 41, "ALL_CODES must include every variant");
 }
 
 // --- DiagnosticCode: parse_code boundary values ---
@@ -1168,8 +1417,10 @@ fn all_codes_count_is_19() {
 #[test]
 fn parse_code_all_valid_pl_codes() {
     let valid_pl = [
-        "PL001", "PL002", "PL003", "PL100", "PL101", "PL102", "PL103", "PL200", "PL201", "PL300",
-        "PL301", "PL400", "PL401", "PL402",
+        "PL001", "PL002", "PL003", "PL100", "PL101", "PL102", "PL103", "PL104", "PL105", "PL106",
+        "PL107", "PL108", "PL109", "PL110", "PL111", "PL200", "PL201", "PL300", "PL301", "PL400",
+        "PL401", "PL402", "PL403", "PL404", "PL500", "PL501", "PL600", "PL601", "PL700", "PL800",
+        "PL801", "PL802", "PL803", "PL804", "PL805", "PL806",
     ];
     for s in &valid_pl {
         assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
