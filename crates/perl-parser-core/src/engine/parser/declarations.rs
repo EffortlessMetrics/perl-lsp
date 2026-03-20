@@ -1012,9 +1012,62 @@ impl<'a> Parser<'a> {
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
                         args.push(self.consume_token()?.text.to_string());
+
+                        // Handle fat arrow or comma after a string key
+                        // (e.g. `no overload '==' => \&func` or `no overload '+', '-'`)
+                        match self.peek_kind() {
+                            Some(TokenKind::Comma) => {
+                                self.consume_token()?; // consume comma, continue loop
+                            }
+                            Some(TokenKind::FatArrow) => {
+                                self.consume_token()?; // consume =>
+                                // Best-effort: slurp the value until ',' or ';'
+                                while !Self::is_statement_terminator(self.peek_kind())
+                                    && self.peek_kind() != Some(TokenKind::Comma)
+                                    && !self.tokens.is_eof()
+                                {
+                                    args.push(self.consume_token()?.text.to_string());
+                                }
+                                // Consume trailing comma if present
+                                if self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?;
+                                }
+                            }
+                            _ => {
+                                // No separator; continue to terminator check
+                            }
+                        }
                     }
                     Some(TokenKind::Identifier) => {
                         args.push(self.consume_token()?.text.to_string());
+
+                        // Handle comma or fat arrow after identifier
+                        match self.peek_kind() {
+                            Some(TokenKind::Comma) => {
+                                self.consume_token()?; // consume comma, continue loop
+                            }
+                            Some(TokenKind::FatArrow) => {
+                                self.consume_token()?; // consume =>
+                                // Best-effort: slurp the value until ',' or ';'
+                                while !Self::is_statement_terminator(self.peek_kind())
+                                    && self.peek_kind() != Some(TokenKind::Comma)
+                                    && !self.tokens.is_eof()
+                                {
+                                    args.push(self.consume_token()?.text.to_string());
+                                }
+                                // Consume trailing comma if present
+                                if self.peek_kind() == Some(TokenKind::Comma) {
+                                    self.consume_token()?;
+                                }
+                            }
+                            _ => {
+                                // No separator; continue to terminator check
+                            }
+                        }
+                    }
+                    Some(TokenKind::Comma) => {
+                        // Standalone comma — skip and continue
+                        self.consume_token()?;
                     }
                     _ => break,
                 }
@@ -1027,36 +1080,31 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse argument list (with EOF guard to prevent infinite loop on truncated input).
-            // Accept strings, identifiers, and numbers to support key => value pairs.
-            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                if matches!(
-                    self.peek_kind(),
-                    Some(TokenKind::String | TokenKind::Identifier | TokenKind::Number)
-                ) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else {
-                    return Err(ParseError::syntax(
-                        "Expected string or identifier in argument list",
-                        self.current_position(),
-                    ));
-                }
-
-                // Accept both comma and fat arrow as separators
-                if matches!(
-                    self.peek_kind(),
-                    Some(TokenKind::Comma | TokenKind::FatArrow)
-                ) {
-                    self.consume_token()?;
-                } else if self.peek_kind() != Some(TokenKind::RightParen) {
-                    return Err(ParseError::syntax(
-                        "Expected comma or closing parenthesis",
-                        self.current_position(),
-                    ));
+            // `no` import lists can contain arbitrary expressions: backslash refs,
+            // sub blocks, nested parens, fat-arrow pairs, sigil-prefixed variables,
+            // etc.  Instead of enumerating every legal token we use a depth-tracking
+            // consumer that collects everything until the matching closing paren.
+            let mut depth: u32 = 1;
+            while depth > 0 && !self.tokens.is_eof() {
+                match self.peek_kind() {
+                    Some(TokenKind::LeftParen) => {
+                        depth = depth.saturating_add(1);
+                        args.push(self.consume_token()?.text.to_string());
+                    }
+                    Some(TokenKind::RightParen) => {
+                        depth = depth.saturating_sub(1);
+                        if depth > 0 {
+                            args.push(self.consume_token()?.text.to_string());
+                        } else {
+                            self.consume_token()?; // consume final )
+                        }
+                    }
+                    Some(_) => {
+                        args.push(self.consume_token()?.text.to_string());
+                    }
+                    None => break,
                 }
             }
-
-            self.expect_closing_delimiter(TokenKind::RightParen)?;
         }
 
         // Don't consume semicolon here - let parse_statement handle it uniformly
