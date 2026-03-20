@@ -4,6 +4,9 @@ use super::*;
 
 impl DebugAdapter {
     /// Handle inlineValues request (custom)
+    ///
+    /// Queries the Perl debugger for runtime variable values and returns
+    /// inline value hints with Perl-idiomatic formatting.
     pub(super) fn handle_inline_values(
         &self,
         seq: i64,
@@ -73,7 +76,15 @@ impl DebugAdapter {
             }
         };
 
-        let inline_values = collect_inline_values(&content, start_line, end_line);
+        // Query runtime variable values from the debugger
+        let runtime_values = self.query_inline_variable_values(&content, start_line, end_line);
+
+        let inline_values = collect_inline_values_with_runtime(
+            &content,
+            start_line,
+            end_line,
+            runtime_values.as_ref(),
+        );
         let body = InlineValuesResponseBody { inline_values };
 
         match serde_json::to_value(&body) {
@@ -94,6 +105,71 @@ impl DebugAdapter {
                 message: Some(format!("Failed to serialize inlineValues response: {}", e)),
             },
         }
+    }
+
+    /// Query runtime variable values for inline display.
+    ///
+    /// Extracts variable names from source, then queries the Perl debugger
+    /// for each variable's current value.
+    fn query_inline_variable_values(
+        &self,
+        source: &str,
+        start_line: i64,
+        end_line: i64,
+    ) -> Option<HashMap<String, String>> {
+        let var_names = extract_variable_names(source, start_line, end_line);
+        if var_names.is_empty() {
+            return None;
+        }
+
+        // Check for active debug session
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+        if !has_session {
+            return None;
+        }
+
+        let mut values = HashMap::new();
+
+        for var_name in &var_names {
+            if self.cancel_requested.load(Ordering::Acquire) {
+                self.cancel_requested.store(false, Ordering::Release);
+                return Some(values);
+            }
+
+            let sigil = var_name.chars().next().unwrap_or('$');
+            let cmd = match sigil {
+                '@' => format!("p scalar {}", var_name),
+                '%' => format!("p scalar(keys {})", var_name),
+                _ => format!("p {}", var_name),
+            };
+
+            let output_frame_markers = {
+                let mut session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+                if let Some(ref mut session) = *session_guard {
+                    if let Some(stdin) = session.process.stdin.as_mut() {
+                        let commands = vec![cmd];
+                        self.send_framed_debugger_commands(stdin, &commands).ok()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            let result = output_frame_markers.and_then(|(begin, end)| {
+                self.capture_framed_debugger_output(&begin, &end, DEBUGGER_QUERY_WAIT_MS)
+            });
+
+            if let Some(lines) = result {
+                let raw: String = lines.join(" ").trim().to_string();
+                if !raw.is_empty() {
+                    values.insert(var_name.clone(), raw);
+                }
+            }
+        }
+
+        if values.is_empty() { None } else { Some(values) }
     }
 
     pub(super) fn handle_source(
