@@ -127,10 +127,36 @@ impl<'a> Parser<'a> {
             match kind {
                 TokenKind::WordOr | TokenKind::WordXor => {
                     let op_token = self.tokens.next()?;
-                    // Parse the right side as a full expression starting with assignment
-                    let right = self.parse_assignment()?;
+                    // Parse the right side as a full expression starting with assignment.
+                    // In Perl, comma has higher precedence than word operators, so
+                    // '\ or \ = 1, 0' parses as '\ or ((\ = 1), 0)'.
+                    // After parsing the first assignment, collect trailing comma elements.
+                    let mut right = self.parse_assignment()?;
                     // Apply any 'and' operators to the right side
-                    let right = self.parse_word_and_expr_with(right)?;
+                    right = self.parse_word_and_expr_with(right)?;
+
+                    // Collect trailing comma-separated elements (comma > or in precedence)
+                    if self.peek_kind() == Some(TokenKind::Comma) {
+                        let mut elements = vec![right];
+                        while self.peek_kind() == Some(TokenKind::Comma) {
+                            self.consume_token()?; // consume ','
+                            match self.peek_kind() {
+                                Some(TokenKind::Semicolon)
+                                | Some(TokenKind::RightParen)
+                                | Some(TokenKind::RightBrace)
+                                | Some(TokenKind::RightBracket)
+                                | None => break,
+                                Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                                _ => {
+                                    let elem = self.parse_assignment()?;
+                                    elements.push(elem);
+                                }
+                            }
+                        }
+                        let r_start = elements[0].location.start;
+                        let r_end = elements[elements.len() - 1].location.end;
+                        right = Self::build_list_or_hash(elements, false, r_start, r_end);
+                    }
 
                     let start = expr.location.start;
                     let end = right.location.end;
