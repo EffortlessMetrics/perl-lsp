@@ -23,10 +23,13 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     let mut caps = ServerCapabilities::default();
 
     // Always-on capabilities
-    // Use Options instead of Kind to comply with LSP 3.18 shape requirements
+    // Use Options instead of Kind to comply with LSP 3.18 shape requirements.
+    // TextDocumentSyncKind::FULL (1): the server always reparses the full document
+    // on every didChange notification.  INCREMENTAL (2) would be inaccurate — no
+    // incremental AST state is maintained between edits.
     caps.text_document_sync = Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
         open_close: Some(true),
-        change: Some(TextDocumentSyncKind::INCREMENTAL),
+        change: Some(TextDocumentSyncKind::FULL),
         will_save: None,
         will_save_wait_until: None,
         save: None,
