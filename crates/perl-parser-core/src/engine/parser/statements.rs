@@ -80,6 +80,14 @@ impl<'a> Parser<'a> {
         // Every new statement begins here
         self.at_stmt_start = true;
 
+        // A `/` at statement start is always a regex delimiter, never division.
+        // The lexer may be in ExpectOperator mode after a preceding block's `}`,
+        // causing it to emit Division (Slash) instead of RegexMatch.  Roll back
+        // and re-lex in ExpectTerm mode to get the correct token.
+        if self.tokens.peek()?.kind == TokenKind::Slash {
+            self.tokens.relex_as_term();
+        }
+
         let kind = self.tokens.peek()?.kind;
 
         // Don't check for labels here - it breaks regular identifier parsing
