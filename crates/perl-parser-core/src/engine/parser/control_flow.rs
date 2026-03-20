@@ -143,7 +143,14 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
 
         // Check if this is a variable declaration in the condition
-        let condition = if matches!(
+        let condition = if self.peek_kind() == Some(TokenKind::RightParen) {
+            // while () { } — empty condition is the infinite-loop idiom, equivalent to while (1)
+            let loc = self.current_position();
+            Node::new(
+                NodeKind::Number { value: "1".to_string() },
+                SourceLocation { start: loc, end: loc },
+            )
+        } else if matches!(
             self.peek_kind(),
             Some(TokenKind::My)
                 | Some(TokenKind::Our)
