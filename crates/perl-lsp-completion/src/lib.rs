@@ -24,4 +24,7 @@
 
 mod completion;
 
-pub use completion::{CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider};
+pub use completion::{
+    CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider,
+    get_test_more_documentation,
+};

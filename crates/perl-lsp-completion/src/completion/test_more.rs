@@ -35,6 +35,44 @@ pub const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
     ("new_ok", "new_ok('${1:Class}', [${2:args}], ${3:name});", "Test object creation"),
 ];
 
+/// Test::More function signatures for hover documentation.
+///
+/// Each entry is `(name, signature, description)`.
+const TEST_MORE_SIGNATURES: &[(&str, &str, &str)] = &[
+    ("ok", "ok($expr, $name)", "Test condition is true"),
+    ("is", "is($got, $expected, $name)", "Test values are equal (string comparison)"),
+    ("isnt", "isnt($got, $not_expected, $name)", "Test values are not equal"),
+    ("like", "like($got, qr/.../, $name)", "Test string matches regex"),
+    ("unlike", "unlike($got, qr/.../, $name)", "Test string does not match regex"),
+    ("cmp_ok", "cmp_ok($got, $op, $expected, $name)", "Compare using an operator"),
+    ("isa_ok", "isa_ok($ref, $class, $name)", "Test object is of the given class"),
+    ("can_ok", "can_ok($class_or_obj, @methods)", "Test object/class can do methods"),
+    ("pass", "pass($name)", "Unconditionally pass a test"),
+    ("fail", "fail($name)", "Unconditionally fail a test"),
+    ("diag", "diag($message)", "Print a diagnostic message to STDERR"),
+    ("note", "note($message)", "Print a note message to STDOUT"),
+    ("explain", "explain($ref)", "Dump a data structure as a string"),
+    ("skip", "skip($why, $how_many)", "Skip tests"),
+    ("todo_skip", "todo_skip($why, $how_many)", "Mark tests as TODO and skip"),
+    ("BAIL_OUT", "BAIL_OUT($reason)", "Stop all testing immediately"),
+    ("subtest", "subtest $name => sub { ... }", "Run a subtest in its own scope"),
+    (
+        "done_testing",
+        "done_testing($tests?)",
+        "Finish testing (optional count; omit to auto-count)",
+    ),
+    ("plan", "plan tests => $num", "Declare the number of tests to run"),
+    ("use_ok", "use_ok($module)", "Test that a module loads successfully"),
+    ("require_ok", "require_ok($module)", "Test that a module requires successfully"),
+    ("is_deeply", "is_deeply($got, $expected, $name)", "Deep structure comparison"),
+    ("new_ok", "new_ok($class, \\@args, $name)", "Test object creation"),
+];
+
+/// Return `(signature, description)` for a Test::More function, or `None` if unknown.
+pub fn get_test_more_documentation(name: &str) -> Option<(&'static str, &'static str)> {
+    TEST_MORE_SIGNATURES.iter().find(|(n, _, _)| *n == name).map(|(_, sig, desc)| (*sig, *desc))
+}
+
 /// Add Test::More completions
 pub fn add_test_more_completions(
     completions: &mut Vec<CompletionItem>,
