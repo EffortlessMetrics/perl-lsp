@@ -291,3 +291,195 @@ impl Default for RegexValidator {
         Self::new()
     }
 }
+
+/// A named capture group extracted from a Perl regex pattern.
+///
+/// Named captures use the `(?<name>...)` syntax introduced in Perl 5.10.
+/// Captured text is accessible via `$+{name}` or `$1`, `$2`, ... by index.
+#[derive(Debug, Clone)]
+pub struct CaptureGroup {
+    /// The capture group name from `(?<name>...)`.
+    pub name: String,
+    /// One-based capture index (counting all capturing groups left to right).
+    pub index: usize,
+    /// The sub-pattern inside the capture group.
+    pub pattern: String,
+}
+
+/// Analysis utilities for Perl regex patterns: capture extraction and hover text.
+pub struct RegexAnalyzer;
+
+impl RegexAnalyzer {
+    /// Extract all named capture groups from a Perl regex pattern.
+    ///
+    /// Scans the pattern for `(?<name>...)` groups and returns them in left-to-right
+    /// order. Non-capturing groups (`(?:...)`), lookaheads, and lookbehinds do not
+    /// increment the capture index. Escaped parentheses (`\(`) are skipped.
+    ///
+    /// # Example
+    /// ```
+    /// use perl_regex::RegexAnalyzer;
+    /// let caps = RegexAnalyzer::extract_named_captures("(?<year>\\d{4})-(?<month>\\d{2})");
+    /// assert_eq!(caps.len(), 2);
+    /// assert_eq!(caps[0].name, "year");
+    /// assert_eq!(caps[0].index, 1);
+    /// ```
+    pub fn extract_named_captures(pattern: &str) -> Vec<CaptureGroup> {
+        let mut result = Vec::new();
+        let mut capture_index = 0usize;
+        let chars: Vec<char> = pattern.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
+
+        while i < len {
+            // Skip escaped characters.
+            if chars[i] == '\\' {
+                i += 2;
+                continue;
+            }
+
+            // Skip character classes [...] entirely.
+            if chars[i] == '[' {
+                i += 1;
+                while i < len {
+                    if chars[i] == '\\' {
+                        i += 2;
+                    } else if chars[i] == ']' {
+                        i += 1;
+                        break;
+                    } else {
+                        i += 1;
+                    }
+                }
+                continue;
+            }
+
+            if chars[i] == '(' {
+                i += 1;
+
+                // Determine the group kind.
+                if i < len && chars[i] == '?' {
+                    i += 1; // consume '?'
+
+                    if i < len && chars[i] == '<' {
+                        i += 1; // consume '<'
+
+                        // Lookbehind: (?<= or (?<!  — not a capture.
+                        if i < len && (chars[i] == '=' || chars[i] == '!') {
+                            i += 1;
+                            continue;
+                        }
+
+                        // Named capture (?<name>...) — collect the name.
+                        capture_index += 1;
+                        let name_start = i;
+                        while i < len && chars[i] != '>' {
+                            i += 1;
+                        }
+                        let name: String = chars[name_start..i].iter().collect();
+                        if i < len {
+                            i += 1; // consume '>'
+                        }
+
+                        // Collect the sub-pattern up to the matching ')'.
+                        let pattern_start = i;
+                        let mut depth = 1usize;
+                        while i < len && depth > 0 {
+                            if chars[i] == '\\' {
+                                i += 2;
+                                continue;
+                            }
+                            if chars[i] == '(' {
+                                depth += 1;
+                            } else if chars[i] == ')' {
+                                depth -= 1;
+                            }
+                            i += 1;
+                        }
+                        // The ')' was consumed above; sub-pattern ends before it.
+                        let sub: String = if i > 0 && pattern_start < i - 1 {
+                            chars[pattern_start..i - 1].iter().collect()
+                        } else {
+                            String::new()
+                        };
+
+                        result.push(CaptureGroup { name, index: capture_index, pattern: sub });
+                        continue;
+                    } else if i < len && matches!(chars[i], ':' | '=' | '!' | '>' | '|' | 'P' | '#')
+                    {
+                        // Non-capturing group: (?:...), (?=...), (?!...), (?|...), etc.
+                        // Does not increment capture_index; just move on (fall through to
+                        // normal scanning — the loop will handle nested parens naturally).
+                        continue;
+                    }
+                    // Any other (?...) — treat as non-capturing for index purposes.
+                    continue;
+                }
+
+                // Plain capturing group `(...)`.
+                capture_index += 1;
+                continue;
+            }
+
+            i += 1;
+        }
+
+        result
+    }
+
+    /// Generate hover text for a Perl regex pattern and its modifiers.
+    ///
+    /// Summarises the named capture groups and explains the meaning of each
+    /// modifier flag (`i`, `m`, `s`, `x`, `g`).
+    ///
+    /// # Example
+    /// ```
+    /// use perl_regex::RegexAnalyzer;
+    /// let text = RegexAnalyzer::hover_text_for_regex("(?<id>\\d+)", "i");
+    /// assert!(text.contains("id"));
+    /// assert!(text.contains("case"));
+    /// ```
+    pub fn hover_text_for_regex(pattern: &str, modifiers: &str) -> String {
+        let mut parts: Vec<String> = Vec::new();
+
+        if !pattern.is_empty() {
+            parts.push(format!("Regex: `{pattern}`"));
+        }
+
+        // Named captures section.
+        let captures = Self::extract_named_captures(pattern);
+        if !captures.is_empty() {
+            parts.push("Named captures:".to_string());
+            for cap in &captures {
+                parts.push(format!(
+                    "  ${{{name}}} (capture {index}): `{pat}`",
+                    name = cap.name,
+                    index = cap.index,
+                    pat = cap.pattern,
+                ));
+            }
+        }
+
+        // Modifier explanations.
+        let modifier_notes: Vec<&str> = modifiers
+            .chars()
+            .filter_map(|m| match m {
+                'i' => Some("case-insensitive matching"),
+                'm' => Some("multiline mode: ^ and $ match line boundaries"),
+                's' => Some("single-line mode: dot matches newline"),
+                'x' => Some("extended mode: whitespace and comments allowed"),
+                'g' => Some("global: match all occurrences"),
+                _ => None,
+            })
+            .collect();
+
+        if !modifier_notes.is_empty() {
+            parts.push("Modifiers:".to_string());
+            for note in modifier_notes {
+                parts.push(format!("  {note}"));
+            }
+        }
+
+        parts.join("\n")
+    }
+}
