@@ -185,6 +185,8 @@ Run `nix develop -c just ci-gate` before pushing. See [CONTRIBUTING.md](CONTRIBU
 
 ## Continuous Swarm Development
 
+**Session start**: Run `just clean-worktrees` to prune stale agent worktrees before spawning new ones.
+
 Start with `/swarm all`. Thin coordinator teammates spawn focused subagents in worktree isolation. ~20% capacity reserved for background improvement.
 
 **Key skills**: `/swarm` (start), `/swarm-protocol` (rules), `/coding-standards` (standards), `/verify` (crate gate), `/parser-fix` (TDD fix).
