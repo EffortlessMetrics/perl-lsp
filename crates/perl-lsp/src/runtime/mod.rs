@@ -202,6 +202,8 @@ pub struct LspServer {
     trace_level: Arc<Mutex<String>>,
     /// Runtime feature profile selected by launch arguments or compiled default.
     feature_profile: FeatureProfile,
+    /// Cache of extracted POD documentation keyed by resolved file path.
+    pod_cache: Arc<Mutex<HashMap<PathBuf, perl_pod::PodDoc>>>,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
