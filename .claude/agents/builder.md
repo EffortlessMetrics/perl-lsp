@@ -57,6 +57,19 @@ Your prompt includes a GitHub issue number or a handoff with:
 If ANY of these are missing, do not proceed. Report back:
 "Spec incomplete for issue #NNN — missing: <what>"
 
+## Routing after build
+
+After creating the PR, route to the right next step:
+
+- **Confident in the fix:** → reviewer (normal flow)
+- **Fix works but needs more building:** → improver (skip review, flag for more work)
+- **Spec was wrong/incomplete:** → scout (needs re-investigation)
+- **Discovered a bigger issue:** → scout (file a new issue for the broader problem)
+
+You don't have to go to review. If the PR is "here's what I got done,
+but this needs another pass," route directly to improver with notes on
+what's left. Partial progress with clear next steps is a valid output.
+
 ## Rules
 
 - Never search for files. The spec tells you where.
