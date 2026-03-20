@@ -256,9 +256,10 @@ fn all_advertised_features_are_all_true() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn all_feature_ids_count_matches_all_flags() -> Result<(), Box<dyn std::error::Error>> {
     let ids = BuildFlags::all().to_feature_ids();
-    // BuildFlags has 35 bool fields but only 33 emit feature IDs
-    // (workspace_symbol_resolve and source_organize_imports have no ID mapping)
-    assert_eq!(ids.len(), 33);
+    // BuildFlags has 35 bool fields but only 34 emit feature IDs
+    // (workspace_symbol_resolve and source_organize_imports have no ID mapping).
+    // range_formatting emits both LSP_RANGE_FORMATTING and LSP_RANGES_FORMATTING.
+    assert_eq!(ids.len(), 34);
     Ok(())
 }
 
@@ -658,7 +659,12 @@ fn single_flag_formatting_produces_correct_id() -> Result<(), Box<dyn std::error
 #[test]
 fn single_flag_range_formatting_produces_correct_id() -> Result<(), Box<dyn std::error::Error>> {
     let flags = BuildFlags { range_formatting: true, ..Default::default() };
-    assert_eq!(flags.to_feature_ids(), vec![LSP_RANGE_FORMATTING]);
+    // range_formatting gates both single-range and multi-range formatting because
+    // both features require perltidy and the rangesFormatting handler already exists.
+    let ids = flags.to_feature_ids();
+    assert!(ids.contains(&LSP_RANGE_FORMATTING), "must contain LSP_RANGE_FORMATTING");
+    assert!(ids.contains(&LSP_RANGES_FORMATTING), "must contain LSP_RANGES_FORMATTING");
+    assert_eq!(ids.len(), 2);
     Ok(())
 }
 

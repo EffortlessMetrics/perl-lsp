@@ -293,6 +293,12 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
         });
     }
 
+    // Manually add documentRangesFormattingProvider (LSP 3.18) because lsp-types 0.97
+    // predates this field.  The handler already exists in formatting.rs.
+    if build.range_formatting {
+        json["documentRangesFormattingProvider"] = serde_json::json!(true);
+    }
+
     json
 }
 
@@ -341,8 +347,13 @@ mod tests {
     /// - `inline_completion`: advertised via `experimental` JSON, no typed field
     /// - `type_hierarchy`: injected in `capabilities_json()`, not in struct
     /// - `notebook_cell_execution`: sub-feature of notebook sync, no own field
-    const KNOWN_STRUCTURAL_GAPS: &[&str] =
-        &["lsp.inline_completion", "lsp.type_hierarchy", "lsp.notebook_cell_execution"];
+    /// - `ranges_formatting`: injected in `capabilities_json()` (LSP 3.18, not in lsp-types 0.97)
+    const KNOWN_STRUCTURAL_GAPS: &[&str] = &[
+        "lsp.inline_completion",
+        "lsp.notebook_cell_execution",
+        "lsp.ranges_formatting",
+        "lsp.type_hierarchy",
+    ];
 
     /// Guard: feature IDs from BuildFlags must match feature IDs extracted
     /// from the ServerCapabilities that `capabilities_for()` actually builds.
@@ -381,5 +392,47 @@ mod tests {
     #[test]
     fn feature_id_alignment_all() {
         assert_feature_id_alignment("all", BuildFlags::all());
+    }
+
+    /// Verify that `documentRangesFormattingProvider` is present in the JSON
+    /// capabilities when `range_formatting` is enabled (LSP 3.18 gap fix).
+    #[test]
+    fn ranges_formatting_advertised_in_json_when_enabled() {
+        let flags = BuildFlags { range_formatting: true, ..BuildFlags::default() };
+        let json = capabilities_json(flags);
+        assert!(
+            json.get("documentRangesFormattingProvider").is_some(),
+            "documentRangesFormattingProvider must be present in capabilities JSON when \
+             range_formatting is enabled"
+        );
+    }
+
+    /// Verify that `documentRangesFormattingProvider` is absent when disabled.
+    #[test]
+    fn ranges_formatting_absent_in_json_when_disabled() {
+        let flags = BuildFlags { range_formatting: false, ..BuildFlags::default() };
+        let json = capabilities_json(flags);
+        assert!(
+            json.get("documentRangesFormattingProvider").is_none(),
+            "documentRangesFormattingProvider must not be present when range_formatting is disabled"
+        );
+    }
+
+    /// Verify resolve providers are advertised in the full capabilities JSON.
+    #[test]
+    fn resolve_providers_advertised_in_full_profile() {
+        let json = capabilities_json(BuildFlags::all());
+        assert!(
+            json["completionProvider"]["resolveProvider"].as_bool().unwrap_or(false),
+            "completionProvider.resolveProvider must be true"
+        );
+        assert!(
+            json["codeActionProvider"]["resolveProvider"].as_bool().unwrap_or(false),
+            "codeActionProvider.resolveProvider must be true"
+        );
+        assert!(
+            json["codeLensProvider"]["resolveProvider"].as_bool().unwrap_or(false),
+            "codeLensProvider.resolveProvider must be true"
+        );
     }
 }
