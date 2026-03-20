@@ -476,6 +476,14 @@ enum Commands {
         /// Check whether docs are up-to-date (CI gate); exit non-zero if stale
         #[arg(long)]
         check: bool,
+
+        /// Operate on CURRENT_STATUS.md only
+        #[arg(long)]
+        current_status: bool,
+
+        /// Operate on ROADMAP.md only
+        #[arg(long)]
+        roadmap: bool,
     },
 
     /// Generate SRP microcrate inventory and split-candidate report
@@ -806,7 +814,9 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Report => features::report(),
         },
-        Commands::UpdateStatus { write, check } => update_status::run(write, check),
+        Commands::UpdateStatus { write, check, current_status, roadmap } => {
+            update_status::run(write, check, current_status, roadmap)
+        }
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {

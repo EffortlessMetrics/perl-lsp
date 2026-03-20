@@ -3,6 +3,7 @@
 > Canonical planning document.
 > Evidence and computed metrics belong in [CURRENT_STATUS.md](CURRENT_STATUS.md).
 > Current release line is taken from [`../../Cargo.toml`](../../Cargo.toml); current capability truth is taken from [`../../features.toml`](../../features.toml).
+> Generated sections between `<!-- BEGIN: ... -->` and `<!-- END: ... -->` are machine-updated by `just roadmap-update`.
 
 ## Current Framing
 

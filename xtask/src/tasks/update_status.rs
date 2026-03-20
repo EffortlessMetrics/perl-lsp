@@ -23,31 +23,39 @@ use crate::utils::project_root;
 ///
 /// * `write` – write changes back to disk.
 /// * `check` – verify files are up to date (returns error if stale).
+/// * `current_status` – operate on CURRENT_STATUS.md.
+/// * `roadmap` – operate on ROADMAP.md.
 ///
-/// When neither flag is set, defaults to `check`.
-pub fn run(write: bool, check: bool) -> Result<()> {
+/// When neither document flag is set, both CURRENT_STATUS.md and ROADMAP.md are
+/// processed for backward compatibility.
+/// When neither write nor check is set, defaults to `check`.
+pub fn run(write: bool, check: bool, current_status: bool, roadmap: bool) -> Result<()> {
     let check = if !write && !check { true } else { check };
+    let update_current = current_status || !roadmap;
+    let update_roadmap_doc = roadmap || !current_status;
 
     let root = project_root()?;
 
     let mut files_to_update: Vec<(&str, PathBuf, String)> = Vec::new();
 
-    // --- CURRENT_STATUS.md ---
-    let status_path = root.join("docs/project/CURRENT_STATUS.md");
-    let original_status =
-        fs::read_to_string(&status_path).context("reading docs/project/CURRENT_STATUS.md")?;
-    let updated_status = update_current_status(&root, &original_status)?;
-    if updated_status != original_status {
-        files_to_update.push(("docs/project/CURRENT_STATUS.md", status_path, updated_status));
+    if update_current {
+        let status_path = root.join("docs/project/CURRENT_STATUS.md");
+        let original_status =
+            fs::read_to_string(&status_path).context("reading docs/project/CURRENT_STATUS.md")?;
+        let updated_status = update_current_status(&root, &original_status)?;
+        if updated_status != original_status {
+            files_to_update.push(("docs/project/CURRENT_STATUS.md", status_path, updated_status));
+        }
     }
 
-    // --- ROADMAP.md ---
-    let roadmap_path = root.join("docs/project/ROADMAP.md");
-    let original_roadmap =
-        fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
-    let updated_roadmap = update_roadmap(&root, &original_roadmap)?;
-    if updated_roadmap != original_roadmap {
-        files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
+    if update_roadmap_doc {
+        let roadmap_path = root.join("docs/project/ROADMAP.md");
+        let original_roadmap =
+            fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
+        let updated_roadmap = update_roadmap(&root, &original_roadmap)?;
+        if updated_roadmap != original_roadmap {
+            files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
+        }
     }
 
     if files_to_update.is_empty() {
@@ -68,8 +76,12 @@ pub fn run(write: bool, check: bool) -> Result<()> {
         for (name, _, _) in &files_to_update {
             eprintln!("{name} is out of date.");
         }
-        eprintln!("Run `just status-update`");
-        eprintln!("Then re-run `just ci-gate`");
+        let update_hint = match files_to_update.as_slice() {
+            [("docs/project/CURRENT_STATUS.md", ..)] => "`just status-update`",
+            [("docs/project/ROADMAP.md", ..)] => "`just roadmap-update`",
+            _ => "`cargo run -p xtask -- update-status --write`",
+        };
+        eprintln!("Run {update_hint}");
         return Err(eyre!("{} file(s) out of date", files_to_update.len()));
     }
 
@@ -407,21 +419,21 @@ fn replace_block(
     Ok(result.into_owned())
 }
 
-/// Replace a single row matching `pattern` with `replacement`.
-fn replace_row(text: &str, pattern: &str, replacement: &str) -> Result<String> {
-    let re = Regex::new(pattern).context("building row replacement regex")?;
+fn read_workspace_version(root: &Path) -> Option<String> {
+    let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).ok()?;
+    let section_re = Regex::new(r"(?ms)^\[workspace\.package\]\s*(?P<body>.*?)(?:^\[|\z)").ok()?;
+    let body =
+        section_re.captures(&cargo_toml).and_then(|caps| caps.name("body")).map(|m| m.as_str())?;
+    let version_re = Regex::new(r#"(?m)^version\s*=\s*"([^"]+)""#).ok()?;
+    let version =
+        version_re.captures(body).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())?;
+    Some(format!("v{version}"))
+}
 
-    let mut count = 0;
-    let result = re.replace_all(text, |_caps: &regex::Captures<'_>| {
-        count += 1;
-        replacement.to_string()
-    });
-
-    if count != 1 {
-        return Err(eyre!("Expected 1 match for row pattern {pattern:?}, got {count}"));
-    }
-
-    Ok(result.into_owned())
+fn read_active_milestone(root: &Path) -> Option<String> {
+    let roadmap = fs::read_to_string(root.join("docs/project/ROADMAP.md")).ok()?;
+    let re = Regex::new(r"(?m)^\- Active milestone:\s*(.+)$").ok()?;
+    re.captures(&roadmap).and_then(|caps| caps.get(1)).map(|m| m.as_str().trim().to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +447,10 @@ fn update_current_status(root: &Path, original: &str) -> Result<String> {
     let tests = count_tests(root);
     let missing_docs_current = count_missing_docs_perl_parser(root);
     let missing_docs_baseline = read_missing_docs_baseline(root);
+    let release_line = read_workspace_version(root)
+        .map(|v| format!("`{v}` public alpha"))
+        .unwrap_or_else(|| "UNVERIFIED".to_string());
+    let active_milestone = read_active_milestone(root).unwrap_or_else(|| "UNVERIFIED".to_string());
 
     let tier_a_tests_str =
         tests.tier_a_lib_tests.map_or_else(|| "UNVERIFIED".to_string(), |n| n.to_string());
@@ -456,15 +472,35 @@ fn update_current_status(root: &Path, original: &str) -> Result<String> {
         _ => String::new(),
     };
 
-    // Build table row content — uses UX coverage (headline metric)
     let lsp_target_pct: usize = 100;
     let lsp_status = if cov.ux_percent >= lsp_target_pct { "PASS" } else { "In progress" };
-    let lsp_table_row = format!(
-        "| **LSP Coverage** | {}% ({}/{} advertised features, `features.toml`) | {}% | {} |",
-        cov.ux_percent, cov.ux_implemented, cov.ux_total, lsp_target_pct, lsp_status
-    );
+    let at_a_glance = [
+        "| Metric | Value | Target | Status |".to_string(),
+        "| --- | --- | --- | --- |".to_string(),
+        format!("| **Current release line** | {release_line} | Truthful docs and receipts | Active |"),
+        format!(
+            "| **Active milestone** | {active_milestone} | See [ROADMAP.md](ROADMAP.md) | In progress |"
+        ),
+        "| **Merge gate** | `nix develop -c just ci-gate` | Green before merge | Required |"
+            .to_string(),
+        format!(
+            "| **Tier A Tests** | {tier_a_tests_str} lib tests (discovered), {ignored_tests_str} ignores (tracked) | 100% pass | PASS |"
+        ),
+        format!(
+            "| **Tracked Test Debt** | {tracked_debt_str} ({bug_count_str} bug, {manual_count_str} manual) | 0 | Near-zero |"
+        ),
+        format!(
+            "| **LSP Coverage** | {}% ({}/{} advertised features, `features.toml`) | {}% | {} |",
+            cov.ux_percent, cov.ux_implemented, cov.ux_total, lsp_target_pct, lsp_status
+        ),
+        "| **Parser hardening** | CPAN baseline, repo corpus, and hang-risk receipts tracked below | 90%+ CPAN clean next | Active |".to_string(),
+        "| **DAP stance** | Native + Bridge preview | Harden preview flows | Active |".to_string(),
+        format!(
+            "| **Documentation** | perl-parser missing_docs = {missing_docs_str}{baseline_suffix} | 0 | Ratchet |"
+        ),
+    ]
+    .join("\n");
 
-    // Build bullets section content
     let lsp_coverage = format!(
         "- **LSP Coverage**: {}% user-visible feature coverage ({}/{} advertised features from `features.toml`)",
         cov.ux_percent, cov.ux_implemented, cov.ux_total
@@ -482,9 +518,6 @@ fn update_current_status(root: &Path, original: &str) -> Result<String> {
     let docs_status = format!(
         "- **Docs (perl-parser)**: missing_docs warnings = {missing_docs_str}{baseline_suffix}"
     );
-    let quality_metrics = "- **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing";
-    let production_status =
-        "- **Production Status**: LSP server public alpha (`just ci-gate` passing)";
 
     let lsp_target = if cov.ux_percent >= lsp_target_pct {
         "**Target**: maintain 100% LSP coverage (no regressions)".to_string()
@@ -498,8 +531,6 @@ fn update_current_status(root: &Path, original: &str) -> Result<String> {
         parser_coverage.as_str(),
         test_status.as_str(),
         docs_status.as_str(),
-        quality_metrics,
-        production_status,
         "",
         lsp_target.as_str(),
     ]
@@ -507,46 +538,19 @@ fn update_current_status(root: &Path, original: &str) -> Result<String> {
 
     let mut text = original.to_string();
 
-    // Replace Tier A Tests row
-    text = replace_row(
-        &text,
-        r"(?m)^\| \*\*Tier A Tests\*\* \| .* \| 100% pass \| .* \|$",
-        &format!(
-            "| **Tier A Tests** | {tier_a_tests_str} lib tests (discovered), {ignored_tests_str} ignores (tracked) | 100% pass | PASS |"
-        ),
-    )?;
-
-    // Replace Tracked Test Debt row
-    text = replace_row(
-        &text,
-        r"(?m)^\| \*\*Tracked Test Debt\*\* \| .* \| 0 \| .* \|$",
-        &format!(
-            "| **Tracked Test Debt** | {tracked_debt_str} ({bug_count_str} bug, {manual_count_str} manual) | 0 | Near-zero |"
-        ),
-    )?;
-
-    // Replace Documentation row
-    text = replace_row(
-        &text,
-        r"(?m)^\| \*\*Documentation\*\* \| .* \| 0 \| .* \|$",
-        &format!(
-            "| **Documentation** | perl-parser missing_docs = {missing_docs_str}{baseline_suffix} | 0 | Ratchet |"
-        ),
-    )?;
-
-    // Replace STATUS_METRICS_TABLE block
+    // Replace STATUS_AT_A_GLANCE block
     text = replace_block(
         &text,
-        "<!-- BEGIN: STATUS_METRICS_TABLE -->",
-        "<!-- END: STATUS_METRICS_TABLE -->",
-        &lsp_table_row,
+        "<!-- BEGIN: STATUS_AT_A_GLANCE -->",
+        "<!-- END: STATUS_AT_A_GLANCE -->",
+        &at_a_glance,
     )?;
 
-    // Replace STATUS_METRICS_BULLETS block
+    // Replace STATUS_COMPUTED_METRICS block
     text = replace_block(
         &text,
-        "<!-- BEGIN: STATUS_METRICS_BULLETS -->",
-        "<!-- END: STATUS_METRICS_BULLETS -->",
+        "<!-- BEGIN: STATUS_COMPUTED_METRICS -->",
+        "<!-- END: STATUS_COMPUTED_METRICS -->",
         &bullets_content,
     )?;
 
@@ -595,25 +599,6 @@ mod tests {
     fn test_replace_block_missing_marker() {
         let input = "no markers here";
         let result = replace_block(input, "<!-- BEGIN: X -->", "<!-- END: X -->", "new");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_replace_row() -> Result<()> {
-        let input = "line1\n| **Foo** | old | bar | baz |\nline3";
-        let result = replace_row(
-            input,
-            r"(?m)^\| \*\*Foo\*\* \| .* \| bar \| .* \|$",
-            "| **Foo** | new | bar | qux |",
-        )?;
-        assert_eq!(result, "line1\n| **Foo** | new | bar | qux |\nline3");
-        Ok(())
-    }
-
-    #[test]
-    fn test_replace_row_no_match() {
-        let input = "no matching row";
-        let result = replace_row(input, r"(?m)^\| \*\*Missing\*\* \|.*$", "replacement");
         assert!(result.is_err());
     }
 

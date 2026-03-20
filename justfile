@@ -729,13 +729,21 @@ ci-doc-paths:
     @bash ci/check_doc_paths.sh docs
     @echo "✅ Documentation paths check passed"
 
-# Update derived metrics in CURRENT_STATUS.md and ROADMAP.md
+# Update derived metrics in CURRENT_STATUS.md
 status-update:
-    @cargo run -p xtask -- update-status --write
+    @cargo run -p xtask -- update-status --current-status --write
 
 # Verify CURRENT_STATUS.md derived metrics are up-to-date
 status-check:
-    @cargo run -p xtask -- update-status --check
+    @cargo run -p xtask -- update-status --current-status --check
+
+# Update generated sections in ROADMAP.md
+roadmap-update:
+    @cargo run -p xtask -- update-status --roadmap --write
+
+# Verify generated sections in ROADMAP.md are up-to-date
+roadmap-check:
+    @cargo run -p xtask -- update-status --roadmap --check
 
 # ============================================================================
 # Corpus Audit Commands
