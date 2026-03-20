@@ -5,6 +5,7 @@
 
 mod client_requests;
 mod constructors;
+pub(crate) mod diagnostic_debounce;
 mod diagnostics;
 mod dispatch;
 mod document_access;
@@ -193,6 +194,8 @@ pub struct LspServer {
     progress_token_to_request: Arc<Mutex<HashMap<String, Value>>>,
     /// Refresh controller for debounced client refresh requests
     refresh_controller: refresh::RefreshController,
+    /// Diagnostic publication debouncer (installed after Arc wrapping in Scheduler::new)
+    diagnostic_debouncer: Mutex<Option<diagnostic_debounce::DiagnosticDebouncer>>,
     /// Notebook document store (LSP 3.17)
     pub(crate) notebook_store: notebook::NotebookStore,
     /// Trace level set by client via $/setTrace (off, messages, verbose)
@@ -365,6 +368,30 @@ impl LspServer {
     //   symbol_extraction - AST symbol extraction and reference counting
     //   test_runners      - run_test, run_test_file
     //   test_api          - #[cfg(test)] public wrappers
+
+    /// Install the diagnostic debouncer (called from Scheduler::new after Arc wrapping).
+    pub(crate) fn install_diagnostic_debouncer(
+        &self,
+        debouncer: diagnostic_debounce::DiagnosticDebouncer,
+    ) {
+        *self.diagnostic_debouncer.lock() = Some(debouncer);
+    }
+
+    /// Publish diagnostics with trailing-edge debouncing.
+    ///
+    /// If a debouncer is installed (normal runtime via Scheduler), the publication
+    /// is deferred until a quiet period elapses. If no debouncer is installed
+    /// (unit tests that construct LspServer directly), falls through to immediate
+    /// publication.
+    pub(crate) fn publish_diagnostics_debounced(&self, uri: &str) {
+        let guard = self.diagnostic_debouncer.lock();
+        if let Some(ref d) = *guard {
+            d.schedule(uri);
+        } else {
+            drop(guard);
+            self.publish_diagnostics(uri);
+        }
+    }
 }
 
 // Helper functions for non-blocking handlers

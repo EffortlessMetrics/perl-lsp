@@ -428,7 +428,8 @@ impl LspServer {
                 }
 
                 // Send diagnostics (use original URI for client notification)
-                self.publish_diagnostics(uri);
+                // Debounced: coalesces rapid typing into a single publication
+                self.publish_diagnostics_debounced(uri);
             }
         }
 

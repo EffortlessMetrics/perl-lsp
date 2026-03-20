@@ -155,6 +155,13 @@ impl Scheduler {
             )),
         ];
 
+        // Install diagnostic debouncer now that server is wrapped in Arc.
+        let debounce_server = Arc::clone(&server);
+        let debouncer = super::diagnostic_debounce::DiagnosticDebouncer::new(move |uri| {
+            debounce_server.publish_diagnostics(uri);
+        });
+        server.install_diagnostic_debouncer(debouncer);
+
         Self {
             mutation_tx,
             read_tx,
