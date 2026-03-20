@@ -1,5 +1,6 @@
 ---
 description: Builder step 2 — write the failing test from the spec before implementing the fix
+user-invocable: false
 ---
 
 # Builder Write Test

@@ -1,5 +1,6 @@
 ---
 description: Scout step 2 — find exact file and line locations for the finding
+user-invocable: false
 ---
 
 # Scout Locate

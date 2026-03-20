@@ -1,5 +1,6 @@
 ---
 description: Builder step 1 — read and validate the spec before implementing
+user-invocable: false
 ---
 
 # Builder Read Spec

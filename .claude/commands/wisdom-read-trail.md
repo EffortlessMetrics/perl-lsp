@@ -1,5 +1,6 @@
 ---
 description: Wisdom step 1 — read the full issue→PR→merge trail
+user-invocable: false
 ---
 
 # Wisdom: Read Trail

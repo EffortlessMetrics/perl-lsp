@@ -1,5 +1,6 @@
 ---
 description: Reviewer step 4 — approve, apply trivial fix, or send back to builder
+user-invocable: false
 ---
 
 # Reviewer Decide

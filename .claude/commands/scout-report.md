@@ -1,6 +1,7 @@
 ---
 description: Write scout findings as a builder-ready GitHub issue
 argument-hint: "<one-line title of the finding>"
+user-invocable: false
 ---
 
 # Scout Report

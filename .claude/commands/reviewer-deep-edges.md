@@ -1,5 +1,6 @@
 ---
 description: Deep reviewer step 3 — check for edge cases the builder might have missed
+user-invocable: false
 ---
 
 # Deep Reviewer Edge Cases

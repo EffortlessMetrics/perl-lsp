@@ -1,5 +1,6 @@
 ---
 description: Plan reviewer step 4 — improve the spec and mark builder-ready
+user-invocable: false
 ---
 
 # Plan Review: Improve

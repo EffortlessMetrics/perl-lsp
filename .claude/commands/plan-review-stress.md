@@ -1,5 +1,6 @@
 ---
 description: Plan reviewer step 3 — stress-test the proposed approach
+user-invocable: false
 ---
 
 # Plan Review: Stress Test

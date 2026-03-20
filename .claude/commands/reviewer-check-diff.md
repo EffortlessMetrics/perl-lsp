@@ -1,5 +1,6 @@
 ---
 description: Reviewer step 2 — check the diff for correctness, standards, and scope
+user-invocable: false
 ---
 
 # Reviewer Check Diff

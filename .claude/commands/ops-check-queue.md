@@ -1,5 +1,6 @@
 ---
 description: Ops step 1 — find merge-ready PRs in the queue
+user-invocable: false
 ---
 
 # Ops Check Queue
