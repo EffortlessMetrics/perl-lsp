@@ -5,7 +5,9 @@
 //! - Pull diagnostics: Client-initiated via `textDocument/diagnostic` and `workspace/diagnostic`
 
 use super::*;
-use crate::features::diagnostics::Diagnostic as InternalDiagnostic;
+use crate::features::diagnostics::{
+    Diagnostic as InternalDiagnostic, DiagnosticTag as InternalDiagnosticTag,
+};
 
 impl LspServer {
     /// Generate markdown-formatted diagnostic message (LSP 3.18)
@@ -72,6 +74,20 @@ impl LspServer {
                 // Add external perlcritic diagnostics (opt-in)
                 self.collect_external_perlcritic_diagnostics(uri, &mut diagnostics);
 
+                // Add dead code diagnostics from workspace-wide symbol analysis
+                #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                {
+                    if let Some(workspace_index) = self.workspace_index() {
+                        let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
+                            &workspace_index,
+                            uri,
+                            &doc.text,
+                            &doc.line_starts,
+                        );
+                        diagnostics.extend(dead_code_diags);
+                    }
+                }
+
                 // Convert to LSP diagnostics
                 diagnostics
                     .into_iter()
@@ -79,7 +95,7 @@ impl LspServer {
                         let (start_line, start_char) = self.offset_to_pos16(doc, d.range.0);
                         let (end_line, end_char) = self.offset_to_pos16(doc, d.range.1);
 
-                        json!({
+                        let mut diag = json!({
                             "range": {
                                 "start": {"line": start_line, "character": start_char},
                                 "end": {"line": end_line, "character": end_char},
@@ -93,7 +109,19 @@ impl LspServer {
                             "code": d.code,
                             "source": "perl-parser",
                             "message": d.message,
-                        })
+                        });
+                        if !d.tags.is_empty() {
+                            diag["tags"] = json!(
+                                d.tags
+                                    .iter()
+                                    .map(|t| match t {
+                                        InternalDiagnosticTag::Unnecessary => 1,
+                                        InternalDiagnosticTag::Deprecated => 2,
+                                    })
+                                    .collect::<Vec<i32>>()
+                            );
+                        }
+                        diag
                     })
                     .collect()
             } else {
@@ -207,6 +235,20 @@ impl LspServer {
                     // Add external perlcritic diagnostics (opt-in)
                     self.collect_external_perlcritic_diagnostics(uri, &mut diagnostics);
 
+                    // Add dead code diagnostics from workspace-wide symbol analysis
+                    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                    {
+                        if let Some(workspace_index) = self.workspace_index() {
+                            let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
+                                &workspace_index,
+                                uri,
+                                &doc.text,
+                                &doc.line_starts,
+                            );
+                            diagnostics.extend(dead_code_diags);
+                        }
+                    }
+
                     // Generate a result ID based on content
                     let result_id = format!("{:x}", md5::compute(&doc.text));
 
@@ -254,6 +296,19 @@ impl LspServer {
                                 "source": "perl-lsp",
                                 "message": d.message.clone(),
                             });
+
+                            // Add diagnostic tags (e.g., Unnecessary, Deprecated)
+                            if !d.tags.is_empty() {
+                                diag["tags"] = json!(
+                                    d.tags
+                                        .iter()
+                                        .map(|t| match t {
+                                            InternalDiagnosticTag::Unnecessary => 1,
+                                            InternalDiagnosticTag::Deprecated => 2,
+                                        })
+                                        .collect::<Vec<i32>>()
+                                );
+                            }
 
                             // Add markdown content if client supports it (LSP 3.18)
                             if self.client_capabilities.lock().markup_message_support {
@@ -358,6 +413,20 @@ impl LspServer {
                 // Add external perlcritic diagnostics (opt-in)
                 self.collect_external_perlcritic_diagnostics(uri_str, &mut diagnostics);
 
+                // Add dead code diagnostics from workspace-wide symbol analysis
+                #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                {
+                    if let Some(workspace_index) = self.workspace_index() {
+                        let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
+                            &workspace_index,
+                            uri_str,
+                            &doc.text,
+                            &doc.line_starts,
+                        );
+                        diagnostics.extend(dead_code_diags);
+                    }
+                }
+
                 // Generate result ID
                 let result_id = format!("{:x}", md5::compute(&doc.text));
 
@@ -384,7 +453,7 @@ impl LspServer {
                                     doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                                 let end_pos =
                                     doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
-                                json!({
+                                let mut diag = json!({
                                     "range": {
                                         "start": {
                                             "line": start_pos.0,
@@ -404,7 +473,19 @@ impl LspServer {
                                     "code": d.code.clone(),
                                     "source": "perl-lsp",
                                     "message": d.message,
-                                })
+                                });
+                                if !d.tags.is_empty() {
+                                    diag["tags"] = json!(
+                                        d.tags
+                                            .iter()
+                                            .map(|t| match t {
+                                                InternalDiagnosticTag::Unnecessary => 1,
+                                                InternalDiagnosticTag::Deprecated => 2,
+                                            })
+                                            .collect::<Vec<i32>>()
+                                    );
+                                }
+                                diag
                             })
                             .collect();
 
@@ -430,7 +511,7 @@ impl LspServer {
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                             let end_pos =
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
-                            json!({
+                            let mut diag = json!({
                                 "range": {
                                     "start": {
                                         "line": start_pos.0,
@@ -450,7 +531,19 @@ impl LspServer {
                                 "code": d.code,
                                 "source": "perl-lsp",
                                 "message": d.message,
-                            })
+                            });
+                            if !d.tags.is_empty() {
+                                diag["tags"] = json!(
+                                    d.tags
+                                        .iter()
+                                        .map(|t| match t {
+                                            InternalDiagnosticTag::Unnecessary => 1,
+                                            InternalDiagnosticTag::Deprecated => 2,
+                                        })
+                                        .collect::<Vec<i32>>()
+                                );
+                            }
+                            diag
                         })
                         .collect();
 
