@@ -154,7 +154,7 @@ This era is the *synthesis* of all prior learnings:
 - **Ops** — Merging, validation, post-merge verification
 - **Improver** — Background work (tests, docs, devex)
 
-**8 Reusable Skills** (working with 52 agent definition files and 2 roster JSON files):
+**8 Reusable Skills** (replacing 54 agent definition files):
 ```
 /swarm              → Control plane (team creation, bootstrap)
 /parser-fix         → TDD parser workflow
@@ -361,8 +361,7 @@ Structured, tagged, linked to issues. Clear intent.
 └── ... (8 total)
 ```
 
-These work with the 52 agent definition files rather than replacing the agent
-layer outright.
+These replace the 54 archived agent definition files (Era 2 artifact).
 
 ### Memory Files
 ```
@@ -390,29 +389,25 @@ Memory system didn't exist in Eras 1–3. It emerged in Era 4 (as necessity) and
 
 Hooks are an Era 5 innovation — deterministic enforcement replacing agent memory.
 
-### Agent Definitions
+### Archived Agent Definitions
 ```
-.claude/agents/
+.claude/agents/archive/
 ├── parser-fix-engine.md        # Era 2 artifact
 ├── lsp-feature.md
 ├── semantic-analysis.md
-├── ... (52 agent files + 2 roster JSON files total in the surface)
+├── ... (54 total)
 ```
 
-These files represent the role layer of the later swarm design. Era 5 did not
-replace them outright with inline templates. The cleaner split is:
-- agent files define who owns what and which skills to invoke
-- skills hold the mechanical step-by-step instructions
-- orchestrators still provide slice-specific routing context
+These files represent the Era 2–3 approach. They were well-designed but never used. Era 5 replaced them with inline templates + skills.
 
 From `.claude/agents/README.md`:
 ```
-The swarm orchestrator calls agents, and these agent files are part of the
-live swarm design.
+Agent definitions have been archived. The orchestrator uses inline prompt
+templates and skills instead of loading agent definition files at runtime.
 
-Each agent file provides role framing, lane ownership, communication rules,
-and the todo shape for the run. The todo items then name the specific skills
-or commands that carry the mechanical procedure for each step.
+The 54 agent definition files in this directory were never loaded by the
+orchestrator. Every agent spawn uses an inline prompt constructed from
+CLAUDE.md context, skills, and handoff files.
 ```
 
 ---
@@ -637,3 +632,4 @@ The five eras show that this didn't happen by accident. It emerged through cycle
 **For future teams building multi-agent systems**: The journey is not straightforward. Start with Era 1 (deep context), discover Era 2 (parallelism), realize Era 3 (you need structure), crash through Era 4 (and learn that structure matters), then synthesize Era 5 (proper coordination, memory, enforcement).
 
 Or, learn from perl-lsp's journey and skip straight to Era 5's patterns.
+

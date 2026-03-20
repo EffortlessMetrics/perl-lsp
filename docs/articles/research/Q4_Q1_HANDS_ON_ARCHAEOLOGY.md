@@ -38,19 +38,6 @@ Verified on `2026-03-19` from the merged PR archive and `git log`:
 So the repo had already become strongly PR-shaped. The key limit was not lack of
 process. It was that the process still ran through the maintainer's hands.
 
-The maintainer's clarification matters here: this was still an AI-native phase.
-The mode was not "human writes, AI assists." It was closer to AI writing and AI
-reviewing, with the maintainer paying the integration cost. The constraint was
-attention, not the absence of machine authorship.
-
-The maintainer's sharper distinction is that this phase still sat below a fully
-industrialized mode because individual implementation priorities were being set
-externally and then handed to coding agents. That creates a scaling limit at
-the maintainer layer. In a truly industrialized mode, the orchestrator can pick
-its own implementation steps from larger goals, which is why later industrial
-surfaces move faster and support stronger verification, automation, and
-integration.
-
 ---
 
 ## 2. Branch Names Show The Human In The Loop
@@ -82,13 +69,6 @@ Examples from `2026-01-20` alone:
 - `maint/pr-302-indexing-wait-20260120` -> PR `#394`
 
 This is the era encoding review and integration into the branch name itself.
-The maintainer notes that branch naming was rarely done by hand; most of those
-names appear to have come from Claude Code.
-More specifically, the maintainer's correction is that `maint/` likely marks a
-Claude-started PR branch convention for that period, possibly tied to a Jules
-PR-review and maintainer script he was using at the time. That makes the
-branch family even more historically useful: it is not only a maintainer bridge
-mark, but a fingerprint of a specific human-plus-tool integration loop.
 
 ---
 
@@ -149,12 +129,6 @@ work are interleaved tightly:
 This is the hands-on bridge: agents can draft, propose, and discover; the human
 still has to normalize, finish, and select.
 
-The maintainer's sharper correction is that this was already AI-native. Jules
-was not operating in a human-only review loop; Claude was already reviewing and
-improving Jules' work. What kept the era expensive was not the absence of
-machine review, but the fact that those reviews and integrations still relied
-on a relatively hands-on maintainer bridge.
-
 ---
 
 ## 5. What The Repo Was Optimizing For
@@ -182,14 +156,9 @@ Representative merged PRs:
 - `#777` - `v0.9.0` semantic-ready milestone
 - `#844` - `v0.9.1` release alignment
 
-There is also a measurable work-mix signal here. On a title-keyword scan of the
-same `195` merged PRs, `97` mention release work, CI, tests, docs, security,
-cleanup, hardening, or related trust-surface terms.
-
-That does not prove every merged change in the era was high quality. It does
-verify something narrower and more defensible: a large share of the merged work
-was explicitly about shipping discipline, hardening, verification, cleanup, and
-release truth rather than unconstrained feature spray.
+That is why the era feels stable and consistent in retrospect. The repo is not
+thrashing from feature to feature. It is building a trustworthy shipping
+surface.
 
 ---
 
@@ -210,9 +179,6 @@ The evidence is spread across the repo:
 - [`docs/articles/research/CONTROL_PLANE_ARCHAEOLOGY.md`](CONTROL_PLANE_ARCHAEOLOGY.md)
   shows what the repo still lacked at this point: stable commands, skills,
   hooks, and committed state
-- [`docs/articles/research/OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md`](OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md)
-  tests that thesis directly and ties it to review discipline, quality
-  discipline, specialization, and still-expensive maintainer attention
 
 In other words:
 
@@ -222,11 +188,8 @@ In other words:
 - but the repo did not yet have a sufficiently externalized operating system for
   those behaviors
 
-That is why the era can be described as quality-oriented and trust-surface-heavy
-without pretending the archive proves every outcome was high quality. The repo
-was investing heavily in verification and shipping discipline, and it still
-felt expensive in attention terms because those behaviors had not yet been
-fully externalized into a durable operating system.
+That is why the era looks so good in quality terms and still feels expensive in
+attention terms.
 
 ---
 

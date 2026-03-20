@@ -28,7 +28,7 @@ The historical note in `docs/project/AGENTIC_SWARM_ERA.md` explicitly describes 
 
 The current `.claude` runtime surfaces explain why Era 5 should not be treated as a simple "Claude era":
 
-- `.claude/agents/` is the active agent-definition surface
+- `.claude/agents/` is the archived roster surface
 - `.claude/commands/` holds slash entrypoints
 - `.claude/skills/` holds reusable procedures
 - `.claude/hooks/` enforces behavior deterministically

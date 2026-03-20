@@ -1,230 +1,183 @@
 # Issue-PR Crosslink Archaeology
-## How GitHub Links Became Recoverable Swarm Memory
+## How Issue Numbers, PR Bodies, And Follow-Up Issues Became Swarm Memory
 
-This note goes one layer deeper than
-[ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md).
-The genealogy note shows that issues and PRs became a shared delivery ledger.
-This note focuses on the mechanism that made that ledger recoverable later:
-explicit crosslinks in PR bodies and issue bodies.
+This note goes deeper than the genealogy note. It focuses on one specific
+historical mechanism: issue and pull request crosslinks became a durable memory
+system for the swarm.
 
-The important historical point is that the repository did not stop at "PRs
-close issues." It also started creating issues whose job was to remember what a
-PR meant:
+The pattern is not just "issues track work" and "PRs close issues." The repo
+also learned to:
 
-- review-summary issues
-- follow-up stabilization issues
-- ops audit and friction issues
-- learning issues
-- article issues
+- use explicit close/fix/resolves language in PR bodies
+- write issues that cite prior PRs as evidence or source material
+- create learning issues that summarize what a PR taught the next agent
+- create article issues that cite PRs as receipts for later writing
 
-That is why later sessions can often recover the work from GitHub itself rather
-than from chat history.
+Taken together, those links make sessions recoverable without chat history.
+The GitHub ledger itself carries the lineage.
 
-All counts in this note were verified from local GitHub CLI snapshots on
-`2026-03-19`:
+All counts below were verified from GitHub CLI snapshots on `2026-03-19`:
 
 - full PR ledger: `gh pr list --state all --limit 2000`
-- issue sample ledger: `gh issue list --state all --limit 400`
+- issue ledger sample: `gh issue list --state all --limit 400`
 
 ---
 
-## 1. The Loop Starts Immediately
+## 1. The Ledger Starts With Explicit Closure
 
-The earliest explicit closure in the PR ledger is:
+The earliest visible explicit closure in the archive is PR `#20`:
 
-- [PR #20](https://github.com/EffortlessMetrics/perl-lsp/pull/20)
-  `ci: fix flaky cancellation tests by conditionally ignoring in CI`
+- [#20](https://github.com/EffortlessMetrics/perl-lsp/pull/20) `ci: fix flaky cancellation tests by conditionally ignoring in CI`
 - body: `Fixes #15`
 
-That already gives the PR a lineage anchor.
+That is a small detail with a large implication. The PR is not merely shipping
+code. It is declaring which issue it resolves.
 
-The issue side responds immediately too:
+The matching issue-side behavior appears immediately:
 
-- [issue #16](https://github.com/EffortlessMetrics/perl-lsp/issues/16)
-  `Lexer: support single-quote delimiters for s/// operator`
-- body cites `PR #3`
+- [#21](https://github.com/EffortlessMetrics/perl-lsp/issues/21) `Make LSP cancellation tests deterministic (remove cfg(ci) ignores)`
+- body references `PR #20` as the temporary fix and `PR #15` as the original attempt
 
-- [issue #21](https://github.com/EffortlessMetrics/perl-lsp/issues/21)
-  `Make LSP cancellation tests deterministic (remove cfg(ci) ignores)`
-- body cites `PR #20` as the temporary fix and `PR #15` as the original attempt
+The issue and the PR are already forming a loop:
 
-So from the first week of visible history, the repo already has a loop:
+- the PR says what it closes
+- the issue says what the PR meant
 
-- PR says what issue it resolves
-- issue says what prior PR did and why it was insufficient
-
-That is the seed of recoverable swarm memory.
+That loop is the first version of swarm memory in this repository.
 
 ---
 
-## 2. Q3 Uses Issues To Remember Review Outcomes
+## 2. Explicit Close/Fix Language Becomes A Routing Contract
 
-By September 2025, the issue tracker is doing more than recording bugs. It is
-also recording what PR review discovered.
+The full PR archive shows that this is not a one-off habit.
 
-The strongest early example is:
+- `71` PRs in the full `2000`-PR ledger use explicit closing language such as
+  `Closes #...`, `Fixes #...`, or `Resolves #...`
 
-- [issue #157](https://github.com/EffortlessMetrics/perl-lsp/issues/157)
-  `Integrative Review Summary: PR #153 findings and follow-up actions`
+Representative March 2026 examples:
 
-Its body is not a backlog request. It is an explicit memory artifact for PR
-`#153`:
+- [#2173](https://github.com/EffortlessMetrics/perl-lsp/pull/2173) `fix(parser): improve delimiter recovery to reduce cascading errors`
+- body: `Fixes #1649`
+- [#2180](https://github.com/EffortlessMetrics/perl-lsp/pull/2180) `fix(parser): handle arrow after typeglob, block, sub, and builtins (#1703)`
+- body: `Fixes #1703`
+- [#2221](https://github.com/EffortlessMetrics/perl-lsp/pull/2221) `fix(parser): accept complex expressions in use/no import lists`
+- body: `Closes #2184`
+- [#2229](https://github.com/EffortlessMetrics/perl-lsp/pull/2229) `feat(lsp): add large file size guard (#2163)`
+- body: `Closes #2163`
 
-- overall merge verdict
-- gate results
-- follow-up issues created from the review
-- tag trail from the integrative pipeline
+The exact wording matters less than the protocol:
 
-That is historically important because the issue is storing review memory in a
-searchable GitHub object rather than leaving it inside agent output or PR
-comments alone.
+- the PR body states lineage explicitly
+- the issue number becomes part of the merge contract
+- later agents can recover scope without reconstructing a chat thread
 
-This same pattern appears again in:
-
-- [issue #198](https://github.com/EffortlessMetrics/perl-lsp/issues/198)
-  `Stabilize Test Infrastructure: Fix 17 Ignored Tests from PR #176`
-
-There the issue body turns a closed PR into a structured queue of remaining
-stabilization work. The issue is downstream of the PR, not upstream.
-
-That is a big shift. The issue tracker is no longer only where work starts. It
-is also where the repo remembers what a PR left unfinished.
+This is why the crosslink language matters historically. It turns merge text into
+searchable task identity.
 
 ---
 
-## 3. March 2026 Uses Issues As Ops Memory
+## 3. Issues Start Remembering PRs
 
-By March 2026, crosslinks are doing operational memory work too.
+The issue archive does the reverse move too.
 
-Two representative examples:
+In the sampled `400`-issue ledger, `32` issues mention PRs in the body.
+That is already evidence that the tracker is not just upstream of implementation.
+It is also a downstream record of what the implementation taught.
 
-- [issue #1667](https://github.com/EffortlessMetrics/perl-lsp/issues/1667)
-  `audit(swarm): cycle 2 improvements & protocol gaps`
-- [issue #1678](https://github.com/EffortlessMetrics/perl-lsp/issues/1678)
-  `friction: cycle 2 operational friction log — 14 items`
+Early examples are straightforward follow-ups:
 
-These are not feature issues. They are swarm-memory issues.
+- [#16](https://github.com/EffortlessMetrics/perl-lsp/issues/16) `Lexer: support single-quote delimiters for s/// operator`
+- body: `Fixed in parser: PR #3`
+- [#157](https://github.com/EffortlessMetrics/perl-lsp/issues/157) `Integrative Review Summary: PR #153 findings and follow-up actions`
+- body frames the issue as a review summary of PR `#153`
+- [#198](https://github.com/EffortlessMetrics/perl-lsp/issues/198) `Stabilize Test Infrastructure: Fix 17 Ignored Tests from PR #176`
+- body treats PR `#176` as the source of the follow-up queue
 
-They cite PRs as evidence for protocol or operational lessons:
+These are not backlog issues in the ordinary sense. They are memory packets for
+the work already done.
 
-- `#1667` cites PR `#1555` as the concrete red-CI example that exposed a
-  protocol gap
-- `#1678` cites PR `#1665` for the fixed file-split anti-pattern and PR
-  `#1555` for merge-discipline friction
-
-That means GitHub issues are now remembering:
-
-- which PR exposed the problem
-- what operational lesson it taught
-- what protocol change should follow
-
-This is a more advanced use of crosslinks than simple closure language. The
-issue is functioning as an institutional memory object for the swarm.
+The PR number is the anchor that lets a later session jump directly to the
+relevant context.
 
 ---
 
-## 4. The Archive Quantifies The Pattern
+## 4. Learning Issues Turn PRs Into Reusable Experience
 
-Across the full `2000`-PR archive slice:
+The learning issues are the clearest evidence that the repo was preserving
+session knowledge in GitHub itself.
 
-- `71` PRs use explicit `Closes`, `Fixes`, or `Resolves` language
+In the sampled issue ledger, the learning/article subset with PR references is
+small but highly structured:
 
-Across the sampled `400`-issue ledger:
+- `3` issues with titles starting `learning:` or `article:` mention a PR in the body
 
-- `32` issues mention PRs in the body
+The learning examples are especially explicit:
 
-That sample is not just one issue type. It contains at least four distinct
-memory functions:
+- [#2190](https://github.com/EffortlessMetrics/perl-lsp/issues/2190) `learning: parser fix agent experience report (#1700)`
+- body cites `PR #2040`
+- [#2191](https://github.com/EffortlessMetrics/perl-lsp/issues/2191) `learning: parser fix agent experience report (#1703)`
+- body cites `PR #2180`
 
-1. **Classic follow-up**
-   Example: `#21` cites `#20` and `#15`
+Those issues are not asking for new implementation. They record what the PR
+taught:
 
-2. **Review-summary memory**
-   Example: `#157` cites `#153`
-
-3. **Ops/protocol memory**
-   Examples: `#1667`, `#1678`
-
-4. **Learning/publication memory**
-   Examples: `#2190`, `#2191`, `#2195`, `#2197`
-
-That last category is where the repo becomes especially unusual.
-
----
-
-## 5. Learning Issues Turn PRs Into Reusable Experience
-
-The learning issues are explicit about their function:
-
-- [issue #2190](https://github.com/EffortlessMetrics/perl-lsp/issues/2190)
-  `learning: parser fix agent experience report (#1700)`
-- body cites [PR #2040](https://github.com/EffortlessMetrics/perl-lsp/pull/2040)
-
-- [issue #2191](https://github.com/EffortlessMetrics/perl-lsp/issues/2191)
-  `learning: parser fix agent experience report (#1703)`
-- body cites [PR #2180](https://github.com/EffortlessMetrics/perl-lsp/pull/2180)
-
-These issues are not asking for more work. They are preserving:
-
+- what failed first
 - what debugging method worked
-- what the real root cause was
-- what helper or parser trap another agent should know next time
+- what pattern another builder should recognize next time
+- what trap to avoid in a later session
 
-That is exactly the kind of context that is usually lost in chat-native work.
-Here it survives because the issue cites the PR directly.
-
----
-
-## 6. Article Issues Turn PRs Into Publication Receipts
-
-The article issues use the same crosslink mechanism, but for launch-story
-evidence.
-
-Representative examples:
-
-- [issue #2195](https://github.com/EffortlessMetrics/perl-lsp/issues/2195)
-  `article: Corpus-Driven Parser Development — Testing Against 4,355 Real CPAN Files`
-- body cites [PR #2039](https://github.com/EffortlessMetrics/perl-lsp/pull/2039)
-
-- [issue #2197](https://github.com/EffortlessMetrics/perl-lsp/issues/2197)
-  `article: The Self-Improving Swarm — How Our Development System Learns From Every Session`
-- body cites issue and memory artifacts as evidence for cycle-to-cycle learning
-
-That matters because article planning is no longer detached from implementation.
-The writing issues are anchored in concrete PRs and operational artifacts.
-
-So the crosslink system is doing double duty:
-
-- engineering memory
-- publication memory
+That is swarm memory in its most practical form. A later agent can read the
+issue and recover the lesson without chat history, because the issue itself
+contains the lesson and the PR number that generated it.
 
 ---
 
-## 7. Why This Makes Sessions Recoverable
+## 5. Article Issues Turn PRs Into Publication Receipts
 
-The recovery mechanism is straightforward:
+Article issues use the same pattern, but for narrative and publication work.
 
-1. issue number preserves task or lesson identity
-2. PR number preserves implementation identity
-3. explicit close/fix language binds them mechanically
-4. downstream issues preserve the next lesson, audit, or publication use
+- [#2195](https://github.com/EffortlessMetrics/perl-lsp/issues/2195) `article: Corpus-Driven Parser Development — Testing Against 4,355 Real CPAN Files`
+- body cites `PR #2039` as evidence for the corpus-ratchet story
 
-That means a later session can often reconstruct the story from GitHub alone:
+That crosslink matters because the article issue is no longer speculative
+planning. It is a publication seed with receipts attached.
 
-- open the original issue
-- open the linked PR
-- open the follow-up learning or audit issue
+The body can point to a PR and say, in effect: this claim is grounded in this
+delivery. That makes the article recoverable as a historical artifact rather
+than a free-floating draft.
 
-This repo therefore ends up with a linked memory graph rather than a plain
-backlog:
+---
 
-- issue -> PR
-- PR -> follow-up issue
-- PR -> learning issue
-- PR -> article issue
+## 6. Why This Makes Sessions Recoverable
 
-That graph is one of the main reasons this codebase is so archaeologically
-legible.
+The recovery mechanism is simple and durable:
+
+1. the issue number preserves the task identity
+2. the PR number preserves the implementation identity
+3. explicit close/fix language binds the two together
+4. follow-up issues preserve the next question or lesson
+
+That means a later session can reconstruct state from GitHub alone:
+
+- open the issue to see the original problem or lesson
+- open the PR to see the implementation and closure language
+- open the follow-up issue to see what the next agent should learn
+
+This is better than chat history for archaeology because it is:
+
+- searchable
+- timestamped
+- durable across worktree pruning
+- visible to future maintainers and agents
+
+The repository therefore evolved from a backlog-plus-merge-log model into a
+linked memory graph:
+
+- issue -> PR -> learning issue
+- issue -> PR -> article issue
+- issue -> PR -> follow-up issue
+
+That graph is the reason the swarm can be replayed after the fact.
 
 ---
 
@@ -232,16 +185,14 @@ legible.
 
 - [ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md)
 - [ISSUE_ROUTING_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/ISSUE_ROUTING_ARCHAEOLOGY.md)
-- [PR_LIFECYCLE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/PR_LIFECYCLE_ARCHAEOLOGY.md)
-- [PR_REVIEW_LOOP_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/PR_REVIEW_LOOP_ARCHAEOLOGY.md)
-- [issue #21](https://github.com/EffortlessMetrics/perl-lsp/issues/21)
-- [issue #157](https://github.com/EffortlessMetrics/perl-lsp/issues/157)
-- [issue #198](https://github.com/EffortlessMetrics/perl-lsp/issues/198)
-- [issue #1667](https://github.com/EffortlessMetrics/perl-lsp/issues/1667)
-- [issue #1678](https://github.com/EffortlessMetrics/perl-lsp/issues/1678)
-- [issue #2190](https://github.com/EffortlessMetrics/perl-lsp/issues/2190)
-- [issue #2191](https://github.com/EffortlessMetrics/perl-lsp/issues/2191)
-- [issue #2195](https://github.com/EffortlessMetrics/perl-lsp/issues/2195)
-- [issue #2197](https://github.com/EffortlessMetrics/perl-lsp/issues/2197)
+- [Q3_SWARM_PR_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/Q3_SWARM_PR_ARCHAEOLOGY.md)
+- [#20](https://github.com/EffortlessMetrics/perl-lsp/pull/20)
+- [#16](https://github.com/EffortlessMetrics/perl-lsp/issues/16)
+- [#21](https://github.com/EffortlessMetrics/perl-lsp/issues/21)
+- [#157](https://github.com/EffortlessMetrics/perl-lsp/issues/157)
+- [#198](https://github.com/EffortlessMetrics/perl-lsp/issues/198)
+- [#2190](https://github.com/EffortlessMetrics/perl-lsp/issues/2190)
+- [#2191](https://github.com/EffortlessMetrics/perl-lsp/issues/2191)
+- [#2195](https://github.com/EffortlessMetrics/perl-lsp/issues/2195)
 - `71` PRs with explicit close/fix/resolves language in the full archive snapshot
 - `32` issues in the sampled archive with PR references in the body
