@@ -39,19 +39,17 @@ gh issue create --title "<type>: <description>" --label "swarm-discovered" \
 
 Create issues for: security vulnerabilities, design flaws, missing features, recurring patterns needing architectural decisions.
 
-**Discovery log** (`.ops-perl-lsp/discovered-issues.md`):
-For smaller items not worth a full issue. Scouts read this as an input source.
+**Discovery log**: For smaller items not worth a full issue, file a GitHub issue with label `swarm-discovered`. Scouts read these as an input source.
 
 ## 2. Direct Communication
 
 Message other teammates directly. Don't route through the lead.
 
-- **Builder → Improver-docs**: "Found undocumented pattern in <crate>."
-- **Builder → Improver-tests**: "Crate has no tests for <function>."
-- **Reviewer → Fixer**: "REVIEW BLOCKED on <branch>: <blockers>."
-- **Reviewer → Improver-docs**: "Same pattern in 3 PRs — needs an ADR."
-- **Fixer → Scout**: "Root cause deeper than expected. Need a proper slice."
-- **Fixer → Improver-devex**: "Error message at <file:line> was misleading."
+- **Builder → Reviewer**: "PR ready for review on <branch>."
+- **Reviewer → Builder**: "REVIEW BLOCKED on <branch>: <blockers>."
+- **Scout → Builder**: "Issue filed: <link>. Builder-ready."
+- **Ops → Scout**: "Post-merge regression in <crate>. Need investigation."
+- **Wisdom → Scout**: "Pattern found across 3 PRs — needs an issue."
 - **Any → Any**: If you know who should hear it, tell them.
 
 ## 3. GitHub-Native Tracking
@@ -76,9 +74,6 @@ Use GitHub as the source of truth for work state.
 
 ## Agent
 <agent-type that created this>
-
-## Handoff
-<link to .ops-perl-lsp/handoffs/<branch>.md if applicable>
 
 ## Verification
 - $FMT_CMD — clean
@@ -112,31 +107,18 @@ Append-only. The lead/merger analyzes periodically for patterns.
 
 ## 5. Agent Self-Improvement
 
-When your agent definition is wrong or incomplete, write a patch:
-
-`.ops-perl-lsp/agent-patches/<your-agent-name>.md`:
-```markdown
-# Patch: <agent-name>
-## Problem — what was wrong/missing
-## Suggested Change — specific edit
-## Evidence — branch, error, time wasted
-```
-
-Bootstrapper integrates validated patches during `--refresh`. User reviews.
+When your agent definition is wrong or incomplete, file a GitHub issue with label `swarm-architectural` describing the problem, suggested change, and evidence. The user reviews.
 
 ## 6. Dedup
 
 Before starting work:
-1. `.ops-perl-lsp/completed-slices.md` — done already?
-2. `.ops-perl-lsp/known-pitfalls.md` — known trap?
-3. `.ops-perl-lsp/discovered-issues.md` — already flagged?
-4. `gh issue list --label "swarm-discovered"` — already an issue?
-5. `gh pr list --state open` — already a PR?
+1. `gh issue list --label "swarm-discovered"` — already an issue?
+2. `gh pr list --state open` — already a PR?
+3. `gh issue list --label "swarm-architectural"` — architectural decision pending?
 
 After completing:
-1. `completed-slices.md` — `in-progress` (scout) or `merged` (merger)
-2. `known-pitfalls.md` — if you learned a reusable lesson
-3. `swarm-metrics.jsonl` — always
+1. `swarm-metrics.jsonl` — always
+2. GitHub issue with label `swarm-discovered` — if you learned a reusable lesson
 
 ## 7. User Interaction
 
@@ -225,10 +207,8 @@ Agent(prompt: "Look up docs: <API or protocol section>", run_in_background: true
 Agent(prompt: "Verify: <claim to cross-check>", run_in_background: true, name: "verify-<topic>")
 ```
 
-Three research agents:
-- **research-web** — general web search → condensed answer with sources
-- **research-docs** — fetch upstream docs (docs.rs, perldoc, LSP/DAP spec)
-- **research-verify** — cross-check a specific claim against authoritative sources
+Research agent:
+- **research-web** — general web search, doc lookup, fact verification → condensed answer with sources
 
 These run in background. You get a condensed answer without polluting your context with search results. Use them aggressively — verified facts are always better than assumptions.
 
@@ -237,8 +217,6 @@ These run in background. You get a condensed answer without polluting your conte
 Each stage reads the PREVIOUS stage's output, not the original source:
 - Builder reads handoff (not 10 source files)
 - Reviewer reads builder briefing (not cold diff)
-- Improvers read "Lessons Learned" sections
-
 Include in handoffs: code excerpts, error messages, decision rationale, file:line refs.
 
 ## 9a. Learning Loop
@@ -247,9 +225,7 @@ The swarm writes to four persistence layers, each with different lifetimes:
 
 | Layer | Lifetime | Location | What |
 |-------|----------|----------|------|
-| **Handoffs** | Until merge | `.ops-perl-lsp/handoffs/` | Context transfer: scout→builder→reviewer |
-| **Runtime** | Current session | `.ops-perl-lsp/` | metrics, agent-patches, salvage |
-| **Knowledge** | Across sessions | `.ops-perl-lsp/` | known-pitfalls, completed-slices, discovered-issues, queue |
+| **Runtime** | Current session | `.ops-perl-lsp/swarm-metrics.jsonl` | Metrics, patterns |
 | **GitHub** | Permanent | Issues, PRs, labels | Work items, discoveries, architectural decisions |
 | **Memory** | Across sessions | Claude Code memories | Critical lessons future sessions need |
 
@@ -263,21 +239,15 @@ The **lead** should write memories for things that matter ACROSS SESSIONS:
 Don't write memories for ephemeral state (which PRs are open, which slices are in progress) — that's in the ops files and GitHub.
 
 ### Flow
-1. **Fixers** → `known-pitfalls.md` → scouts/builders avoid traps
-2. **All agents** → `discovered-issues.md` → scouts pick up pre-investigated leads
-3. **All agents** → `swarm-metrics.jsonl` → lead spots patterns
-4. **Failing agents** → `agent-patches/` → bootstrapper improves definitions
-5. **Improver-docs** → ADRs and docs from handoff lessons
-6. **Improver-devex** → fixes friction from handoff lessons
-7. **Merger** → analyzes metrics, reports patterns
-8. **All agents** → GitHub issues/labels for permanent visibility
-9. **Lead** → Claude Code memories for cross-session knowledge
+1. **All agents** → `swarm-metrics.jsonl` → lead spots patterns
+2. **All agents** → GitHub issues/labels for permanent visibility
+3. **Lead** → Claude Code memories for cross-session knowledge
 
 The system gets better with each cycle AND each session.
 
 ## 10. CI Gate Discipline
 
-**NEVER merge a PR with failing CI Gate. If CI fails, message the fixer. Do not merge red.**
+**NEVER merge a PR with failing CI Gate. If CI fails, file a fix issue or spawn a fix builder. Do not merge red.**
 
 ### Rules
 
@@ -285,7 +255,7 @@ The system gets better with each cycle AND each session.
 2. **No "pre-existing failure" exceptions.** If CI fails for any reason — including failures inherited from a previous broken merge — fix the failure FIRST, then merge.
 3. **Cascading failures must be fixed before merging more PRs.** When a large change (e.g., async migration, refactor) breaks CI, stop all merges and fix CI on master before queuing any new merges.
 4. **Each PR must pass CI independently.** A PR that only passes because it is layered on top of another unmerged PR is not ready to merge.
-5. **The merge pipeline:** check CI → if SUCCESS, merge; if FAILURE, SendMessage({to: "fixer"}) with the PR number and failure log.
+5. **The merge pipeline:** check CI → if SUCCESS, merge; if FAILURE, file a fix issue or spawn a fix builder with the PR number and failure log.
 
 ### Cascade pattern to avoid
 
@@ -390,10 +360,9 @@ This is not optional. The strategist relies on metrics for priority steering, bo
 
 - Builder: after PR is created (or after failure is reported)
 - Reviewer: after review is posted
-- Fixer: after fix is pushed (or after escalation)
-- Merger: after merge (or after merge rejection)
+- Ops: after merge (or after merge rejection)
 - Scout: after issues are filed
-- Improver: after PR is created
+- Wisdom: after synthesis is documented
 
 ### Enforcement
 

@@ -26,10 +26,7 @@ specific step becomes relevant midway through the run, the agent can load the
 matching skill then, rather than carrying every detailed procedure in the
 initial agent prompt.
 
-Legacy sibling directories such as `../agents-compat`, `../agents2`,
-`../agents3`, `../agents3 - to update`, `../agents4`, `../agents5`, and
-`../agents6` are intentionally preserved as historical reference and analysis
-material.
+Legacy directories archived to `docs/reference/archive/` during architecture transition.
 
 ## What These Files Are Good For
 

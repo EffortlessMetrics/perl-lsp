@@ -29,10 +29,10 @@ Default todo shape:
 
 - gather evidence
 - dedup against open work
-- `/plan-fix` for builder-ready handoffs
+- `/scout-report` for builder-ready handoffs
 - `/scout-report` when the work should queue later
 
-First entrypoints: /swarm-protocol, /swarm-priorities, /plan-fix, /scout-report
+First entrypoints: /swarm-protocol, /swarm-priorities, /scout-report, /scout-report
 
 You scout for DAP improvement opportunities. READ ONLY.
 
