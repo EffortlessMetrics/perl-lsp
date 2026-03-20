@@ -5,26 +5,26 @@
 ```
 Agent file = identity + objectives + todo list (WHAT to do)
 Step skill = mechanical instructions per todo step (HOW to do it)
-Flow command = spawn the right agent for a pipeline stage (ROUTING)
 Crate CLAUDE.md = domain context carried by the codebase (CONTEXT)
 GitHub Issue = task spec from scout to builder (HANDOFF)
+Orchestrator = reads catalog + agent files to route work (ROUTING)
 ```
 
 ## Core Pipeline
 
 ```
-/flow-scout → /flow-build → /flow-review → /flow-merge
-   scout      plan-reviewer   reviewer       ops
-  (haiku)  →   (sonnet)   →  builder  →  (haiku+sonnet) → (haiku)
-                             (sonnet)
+scout → plan-reviewer → builder → reviewer → reviewer-deep → ops
+(haiku)   (sonnet)      (sonnet)   (haiku)     (sonnet)     (haiku)
 
-If builder doesn't finish: /flow-continue → same builder, reads existing PR
+Variants: scout-parser, scout-lsp, scout-dap for domain-specific investigation
+Continuation: spawn builder with /builder-read-pr instead of /builder-read-spec
+Post-merge: wisdom (sonnet) synthesizes learnings
 ```
 
 Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
 Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
-## Agents (10)
+## Agents (11)
 
 ### Pipeline Agents (6)
 
@@ -41,37 +41,32 @@ Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
 | Agent | Model | Domain |
 |-------|-------|--------|
-| scout-parser | sonnet | Error buckets, corpus, parser engine |
-| scout-lsp | sonnet | features.toml, providers, LSP spec |
+| scout-parser | haiku | Error buckets, corpus, parser engine |
+| scout-lsp | haiku | features.toml, providers, LSP spec |
 | scout-dap | sonnet | DAP protocol, bridge mode, security |
 
-### Utility (1)
+### Utility (2)
 
 | Agent | Model | Role |
 |-------|-------|------|
-| research-web | haiku | Web search, doc lookup, fact verification |
+| research-web | sonnet | Web search, doc lookup, fact verification |
+| wisdom | sonnet | Synthesize learnings from issue→PR→merge cycles |
 
-## Step Skills (20)
+## Step Skills (27)
 
 **Scout steps:** scout-dedup, scout-locate, scout-reproduce, scout-root-cause, scout-design, scout-test-spec, scout-report
 
-**Builder steps:** builder-read-spec, builder-write-test, builder-implement
+**Builder steps:** builder-read-spec, builder-read-pr, builder-write-test, builder-implement, builder-self-review
 
 **Reviewer steps:** reviewer-read-handoff, reviewer-check-diff, reviewer-decide
 
 **Reviewer-deep steps:** reviewer-deep-read-spec, reviewer-deep-analyze, reviewer-deep-edges, reviewer-deep-decide
 
-**Ops steps:** ops-check-queue, ops-merge-batch, ops-post-merge
+**Ops steps:** ops-check-queue, ops-merge-batch, ops-post-merge, ops-cleanup
 
-## Flow Commands (5)
+**Wisdom steps:** wisdom-read-trail, wisdom-synthesize, wisdom-document
 
-| Command | What it does |
-|---------|-------------|
-| /flow-scout | Pick scout variant, spawn, get issue |
-| /flow-build | Validate spec (or trigger plan-review first), spawn builder in worktree |
-| /flow-continue | Spawn builder to continue an incomplete PR |
-| /flow-review | Two-tier: reviewer (haiku) → reviewer-deep (sonnet) |
-| /flow-merge | Spawn ops for merge queue |
+**Shared steps:** agent-wrapup
 
 ## Shared Operations (10)
 

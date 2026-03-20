@@ -1,0 +1,255 @@
+================================================================================
+                    CPAN CORPUS COVERAGE: PATH TO 100%
+                              Summary Briefing
+================================================================================
+
+CURRENT STATE (2026-03-18)
+─────────────────────────────────────────────────────────────────────────────
+Total files:              4,355
+Clean files:              3,139 (72.1%)
+Files with errors:        1,212 (27.9%)
+Error buckets:            33 distinct categories
+
+TO REACH:                 Need this many more clean files:
+  75%  =  3,266           127 more
+  80%  =  3,484           345 more
+  85%  =  3,701           562 more
+  90%  =  3,919           780 more ← RECOMMENDED TARGET
+  95%  =  4,137           998 more
+  98%  =  4,268         1,129 more
+ 100%  =  4,355         1,212 more ← UNFIXABLE FLOOR EXISTS
+
+
+TOP 15 ERROR BUCKETS (where the 1,212 errors are)
+─────────────────────────────────────────────────────────────────────────────
+Rank  Bucket Name                       Files  Cumulative  Fixable?
+────  ─────────────────────────────────  ────  ──────────  ──────────
+  1   unexpected_token_in_expr            146      146     75-100%
+  2   unclosed_paren_identifier           140      286     57-79%
+  3   unexpected_question_expr            109      395     64-92%
+  4   unclosed_paren                      106      501     57-80%
+  5   unexpected_rbrace_expr               83      584     72-90%
+  6   unexpected_comma_expr                70      654     71-93%
+  7   expected_left_brace                  66      720     76-91%
+  8   expected_variable                    66      786     61-83%
+  9   unexpected_fat_arrow_expr            66      852     76-98%
+ 10   expected_comma_or_close_paren        55      907     73-91%
+ 11   unclosed_bracket                     38      945     71-89%
+ 12   unclosed_brace                       32      977     75-94%
+ 13   unclosed_brace_semicolon             32    1,009     75-94%
+ 14   expected_identifier                  30    1,039     61-83%
+ 15   unexpected_word_op_or                28    1,067     75-93%
+
+(Top 10 buckets = 74.8% of all failures)
+(Remaining 18 buckets = 145 files)
+
+
+FIXABILITY TIERS
+─────────────────────────────────────────────────────────────────────────────
+TIER 1 - Quick Wins (4-5 weeks, 8-10 builders):
+  Buckets #1-5 = 560+ files = 85-87% coverage
+  Difficulty: EASY-MEDIUM
+  Examples: Keywords as barewords, postfix operators, ternary precedence
+
+TIER 2 - Medium Effort (7-9 weeks additional, 12-15 builders):
+  Buckets #6-10 + selected bucket portions = 220+ more files = 95% coverage
+  Difficulty: MEDIUM
+
+TIER 3 - Edge Cases (3-6 weeks additional, 3-4 builders):
+  Buckets #11-20 = 200+ files = 97-98% coverage
+  Difficulty: MEDIUM-HARD
+
+UNFIXABLE FLOOR (2.4-3.9% = 105-170 files):
+  Source filters (compile-time rewrites) — 0% fixable
+  BEGIN blocks that modify parser — 0% fixable
+  XS module boundaries — 20-50% fixable
+  DSL/Template syntax — 50-70% fixable
+  Genuinely malformed/invalid — 0% fixable
+
+REALISTIC CEILING: 98% (4,268 clean files), not 100%
+
+
+RECOMMENDED STRATEGY
+─────────────────────────────────────────────────────────────────────────────
+Primary Goal:   95% coverage (4,137 files) in 7-9 weeks parallel
+Secondary Goal: 98% coverage (4,268 files) in 11-15 weeks parallel
+"Nice to have":  100% (requires 20-30 additional weeks, minimal ROI)
+
+WHY NOT 100%?
+  - 2-3% is unfixable due to compile-time rewrites and runtime decisions
+  - Last 2% requires 5x more effort than reaching 95%
+  - Better ROI to document limitations than to fight unwinnable battles
+
+
+PHASE A (4-5 weeks) — 90% Coverage
+─────────────────────────────────────────────────────────────────────────────
+Builder #1: Keywords as barewords (EASY)
+  • Bucket: unexpected_token_in_expr (sub-category)
+  • Impact: 25-40 files
+  • Example: my %h = ( format => 'text' );
+  • Parser change: Allow keywords in bareword position (hash key context)
+
+Builder #2: Postfix operators + statement modifiers (MEDIUM)
+  • Bucket: unexpected_token_in_expr (sub-category)
+  • Impact: 20-30 files
+  • Example: $x++ if $condition;
+  • Parser change: Allow modifiers after postfix operators
+
+Builder #3: Unclosed parenthesis with identifier (MEDIUM, requires scout)
+  • Bucket: unclosed_paren_identifier
+  • Impact: 80-110 files
+  • Scout first: Categorize patterns (implicit $_, barewords, interpolation)
+  • Then: Implement fixes targeting root causes
+
+Builder #4: Ternary operator precedence (MEDIUM)
+  • Bucket: unexpected_question_expr
+  • Impact: 70-100 files
+  • Example: $x ? $y ? $a : $b : $c  (right-associativity)
+  • Parser change: Fix precedence and associativity of ?:
+
+Builder #5: Unclosed parenthesis general (MEDIUM, requires scout)
+  • Bucket: unclosed_paren
+  • Impact: 60-85 files
+  • Scout first: Distinguish from bucket #2, categorize patterns
+  • Then: Implement fixes for high-impact patterns
+
+Expected outcome: 90% coverage (3,919+ files), 560+ files fixed, 0 regressions
+
+
+PHASE B (7-9 weeks) — 95% Coverage
+─────────────────────────────────────────────────────────────────────────────
+Builders #6-10 attack buckets #6-10 (comma expr, brace, variable, etc.)
+• 12-15 builders in parallel
+• Similar process: scout (if needed) → implement → test → merge in batches
+• Expected outcome: 95% coverage (4,137+ files)
+
+
+PHASE C (11-15 weeks total) — 98% Coverage
+─────────────────────────────────────────────────────────────────────────────
+Selective Tier 3 bucket fixes + XS/DSL boundary improvements
+• 20+ builders or extended Phase B
+• Expected outcome: 98% coverage (4,268+ files)
+• Remaining 2% is documented as "Known Limitations"
+
+
+CORPUS EXPANSION (Optional, weeks 14-17)
+─────────────────────────────────────────────────────────────────────────────
+Week 14-15: Add Perl 5.38 core modules
+  • +400 files, 95%+ clean (1 week)
+
+Week 16-17: Add popular frameworks (Dancer2, Mojolicious, Catalyst, DBIx)
+  • +200-300 files, 80-90% clean (1-2 weeks)
+
+Week 18+: Top-5000 CPAN (low priority, high effort, unknown return)
+
+
+CI & MERGE COORDINATION
+─────────────────────────────────────────────────────────────────────────────
+Current CI queue: 3-wide (can process 3 PRs concurrently)
+Optimal builder count: 8-10 in parallel
+Beyond 10 builders: Merge queue backs up, CI becomes bottleneck
+
+Merge batching strategy:
+  1. Merge PR #1, #2, #3 together
+  2. Wait 25 minutes for CI
+  3. Check for regressions (corpus sweep)
+  4. Repeat
+
+Never merge more than 3 at a time without waiting.
+
+
+TEST STRATEGY
+─────────────────────────────────────────────────────────────────────────────
+Per-bucket regression tests:
+  • Create test file for each error bucket (33 test files)
+  • Each test: 5-10 real CPAN examples + assertions
+  • Reference corpus file:line for reproducibility
+  • Run as part of cargo test (gates on all PRs)
+
+Corpus baseline integrity:
+  • After every 3-5 merges: run `just cpan-corpus-sweep`
+  • If clean_files decreased: REVERT + investigate
+  • If clean_files increased: Run `just cpan-corpus-ratchet` to lock in gains
+
+Monthly metrics:
+  • Update CURRENT_STATUS.md with coverage %, bucket breakdown
+  • Track builder velocity, PR merge rate, regression rate
+  • Publish weekly progress chart
+
+
+SUCCESS METRICS (Phase A)
+─────────────────────────────────────────────────────────────────────────────
+Target:    90% coverage (3,919+ files)
+Builders:  5/5 complete
+PRs:       5 merged
+Time:      4-5 weeks
+Regressions: 0
+Test coverage: 100% of fixes
+
+
+DECISION MATRIX
+─────────────────────────────────────────────────────────────────────────────
+IF you want quick results:        → Target 90% (Phase A, 4-5 weeks)
+IF you want comprehensive cover:  → Target 95% (Phases A+B, 8-9 weeks)
+IF you need near-complete:        → Target 98% (Phases A+B+C, 12-15 weeks)
+IF customer requires 100%:        → Document why not viable, recommend 98%+
+
+
+RISK SUMMARY
+─────────────────────────────────────────────────────────────────────────────
+High risk:     Unfixable floor will prevent 100%
+Medium risk:   CI queue saturation if >10 builders
+Low risk:      Individual builder PRs (well-scoped work)
+Mitigation:    Scout + scope clearly, batch merges, monitor CI
+
+Recommended risk tolerance: "Acceptable to hit 95-98% and call victory"
+
+
+KEY INSIGHTS
+─────────────────────────────────────────────────────────────────────────────
+1. Top 10 buckets = 74.8% of failures
+   → Hitting 85-87% coverage is fast (5 builders, 4-5 weeks)
+
+2. Diminishing returns start after bucket #5
+   → Bucket #1 = 12% of errors, bucket #11 = 3.1% of errors
+   → Last 2-3% takes disproportionate effort
+
+3. CI is bottleneck, not builders
+   → 8-10 parallel builders is sweet spot
+   → Beyond that, merge queue backs up
+
+4. Unfixable floor is real and understood
+   → Source filters, BEGIN blocks, XS boundaries
+   → These are feature limitations, not bugs
+
+5. Documentation = High ROI
+   → Documenting "Known Limitations" is as valuable as fixing all bugs
+   → Customers care about "What works?", not "What doesn't?"
+
+
+DOCUMENTS
+─────────────────────────────────────────────────────────────────────────────
+.ops-perl-lsp/ROADMAP_100_PERCENT_CPAN_COVERAGE.md
+  → Full strategic analysis, metrics, phased plan, trade-offs
+
+.ops-perl-lsp/BUILDER_SPECS_PHASE_A.md
+  → Actionable specs for 5 Phase A builders
+  → Problem statements, root causes, implementation guides, test templates
+
+.ops-perl-lsp/ROADMAP_SUMMARY.txt
+  → This file (quick reference)
+
+
+NEXT STEPS
+─────────────────────────────────────────────────────────────────────────────
+1. Review roadmap documents
+2. Decide: 90%, 95%, or 98% target?
+3. Assign 5 builders to Phase A
+4. Set merge coordination rules (3-wide batching)
+5. Start Week 1: Scout + builders in parallel
+6. Target completion: Week 4-5 (90% coverage)
+
+
+STATUS: Ready for team decision and builder assignment.
+
+================================================================================

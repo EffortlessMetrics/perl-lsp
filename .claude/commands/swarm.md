@@ -11,11 +11,11 @@ You route work through the pipeline. You never write production code.
 ## Pipeline
 
 ```
-/flow-scout → /flow-build → /flow-review → /flow-merge
-                  ↓ didn't finish?
-             /flow-continue
-                  ↓ merged?
-             /flow-wisdom
+scout → plan-reviewer → builder → reviewer → reviewer-deep → ops
+                           ↓ didn't finish?
+                    builder (with /builder-read-pr)
+                           ↓ merged?
+                         wisdom
 ```
 
 ## Phase 1: Bootstrap
@@ -41,47 +41,49 @@ Check what needs work:
 
 ## Phase 3: Route Work
 
-Use flow commands to move work through the pipeline. Spawn short-lived,
-scoped agents — not long-running teams.
+Spawn short-lived, scoped agents directly. Each agent file has its model,
+todo list, and step skills. Read the agent file if you need a reminder.
 
 ### Scouting (find work)
 ```
-/flow-scout <topic>        — spawn a haiku scout, get an issue back
+Agent(subagent_type: "scout-parser", prompt: "Investigate: <topic>. Follow your todo list.", name: "scout-<topic>")
 ```
+Variants: `scout` (general), `scout-parser`, `scout-lsp`, `scout-dap`
 
 ### Plan review (refine specs)
 For issues labeled `needs-plan-review`:
 ```
-Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN.", name: "plan-review-NNN")
+Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your todo list.", name: "plan-review-NNN")
 ```
 
 ### Building (implement)
 For issues labeled `builder-ready`:
 ```
-/flow-build <issue-number>  — spawn a sonnet builder in worktree
+Agent(subagent_type: "builder", isolation: "worktree", prompt: "Implement issue #NNN. Follow your todo list.", name: "builder-NNN")
 ```
 
 ### Continuing (finish incomplete PRs)
 For draft PRs with "what's next" notes:
 ```
-/flow-continue <pr-number>  — spawn builder to continue from existing PR
+Agent(subagent_type: "builder", isolation: "worktree", prompt: "Continue PR #NNN. Use /builder-read-pr as step 1. Follow your todo list.", name: "builder-continue-NNN")
 ```
 
 ### Reviewing (validate)
-For open PRs:
+Two-tier: haiku standards first, then sonnet correctness:
 ```
-/flow-review <pr-number>    — two-tier: haiku standards + sonnet correctness
+Agent(subagent_type: "reviewer", prompt: "Review PR #NNN. Follow your todo list.", name: "reviewer-NNN")
+Agent(subagent_type: "reviewer-deep", prompt: "Deep review PR #NNN. Follow your todo list.", name: "reviewer-deep-NNN")
 ```
 
 ### Merging
 ```
-/flow-merge                 — spawn ops to merge approved PRs
+Agent(subagent_type: "ops", prompt: "Process the merge queue. Follow your todo list.", name: "ops-merge")
 ```
 
 ### Learning (post-merge)
 After a batch merges:
 ```
-/flow-wisdom <issue-number> — synthesize learnings from a completed cycle
+Agent(subagent_type: "wisdom", prompt: "Read the trail for issue #NNN. Follow your todo list.", name: "wisdom-NNN")
 ```
 
 ## Orchestrator Principles
