@@ -977,10 +977,7 @@ impl LspServer {
         // Single punctuation character after $ (e.g. $!, $/, $\, $$, $;, etc.)
         if sigil == '$' && !next_ch.is_ascii_alphanumeric() && next_ch != b'_' {
             let punct = next_ch as char;
-            if matches!(
-                punct,
-                '!' | '@' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`'
-            ) {
+            if matches!(punct, '!' | '@' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`') {
                 return Some(format!("${}", punct));
             }
         }
@@ -1133,5 +1130,4 @@ impl LspServer {
             },
         }))
     }
-
 }
