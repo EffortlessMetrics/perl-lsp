@@ -1957,4 +1957,37 @@ sub run {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_self_arrow_in_main_package_does_not_resolve() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Edge case: $self-> in the main package should NOT resolve to any package methods.
+        // The guard condition `context.current_package != "main"` prevents incorrect
+        // suggestions when the user is in script-level code.
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyLib.pm")?;
+        let module_code = r#"package MyLib;
+sub new { bless {}, shift }
+sub helper { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string())?;
+
+        // Code is at package main (implicit), so $self-> should not resolve
+        let code = r#"sub run {
+    my $self = shift;
+    $self->"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        // Should NOT suggest MyLib methods just because the variable is named $self
+        assert!(
+            !completions.iter().any(|c| c.label == "helper"),
+            "$self-> in main package should not suggest methods from other packages"
+        );
+        Ok(())
+    }
 }
