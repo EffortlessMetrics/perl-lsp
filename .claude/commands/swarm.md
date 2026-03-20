@@ -50,21 +50,20 @@ step skills — read the agent file if you need a reminder.
 
 ### Large scale (10+ tasks): TeamCreate with sector leads
 
-Create a team and spawn sector leads to manage workers:
+Create a team and spawn pre-baked sector leads:
 ```
 TeamCreate(team_name: "swarm-<focus>", description: "...")
 
-Agent(subagent_type: "sector-lead", team_name: "swarm-<focus>",
-  prompt: "You lead the parser sector. Spawn scout-parser and builder agents for parser corpus work. Track issues and PRs in your sector.",
-  name: "parser-lead")
+Agent(subagent_type: "lead-parser", team_name: "swarm-<focus>", name: "parser-lead",
+  prompt: "Push parser corpus toward 95%. Focus on top error buckets.")
 
-Agent(subagent_type: "sector-lead", team_name: "swarm-<focus>",
-  prompt: "You lead quality. Spawn reviewer, reviewer-deep, and ops agents. Manage the review and merge pipeline.",
-  name: "quality-lead")
+Agent(subagent_type: "lead-quality", team_name: "swarm-<focus>", name: "quality-lead",
+  prompt: "Drain the PR queue. Review and merge everything that's ready.")
 ```
 
-Sector leads spawn workers via Agent(). Workers don't know they're part of
-a team — they just follow their todo list in their worktree.
+Sector leads have pre-baked context (crate paths, data sources, goals).
+They spawn workers via Agent(). Workers follow their todo list in their
+own worktree — they don't know they're part of a team.
 
 ### Scouting (find work)
 ```

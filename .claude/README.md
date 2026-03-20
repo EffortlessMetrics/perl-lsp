@@ -14,8 +14,11 @@ Legacy directories archived to `docs/reference/archive/` during architecture tra
 
 See [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the full inventory.
 
-### Team Agents (TeamCreate — long-running coordinators)
-- `sector-lead` (sonnet) — manages a sector, spawns workers, tracks progress
+### Sector Leads (TeamCreate — long-running coordinators)
+- `lead-parser` (sonnet) — parser/corpus: spawns scout-parser, builder
+- `lead-lsp` (sonnet) — LSP features: spawns scout-lsp, builder
+- `lead-quality` (sonnet) — review/merge: spawns reviewer, reviewer-deep, ops
+- `lead-infra` (sonnet) — tests/deps/docs/DX: spawns scout, builder, wisdom
 
 ### Worker Agents (Agent() — worktree-isolated, one task, exit)
 - `scout` (haiku), `scout-parser` (haiku), `scout-lsp` (haiku), `scout-dap` (sonnet)

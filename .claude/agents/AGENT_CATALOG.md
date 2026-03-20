@@ -6,7 +6,7 @@
 Two interfaces, two agent types:
 
   Agent()     → Worker agents (11) — worktree-isolated, background, one task, exit
-  TeamCreate  → Sector leads (1+) — long-running, shared task list, spawn workers
+  TeamCreate  → Sector leads (4) — long-running, pre-baked sector context, spawn workers
 
 Agent file = identity + objectives + todo list (WHAT to do)
 Step skill = mechanical instructions per todo step (HOW to do it)
@@ -31,13 +31,16 @@ Post-merge: wisdom (sonnet) synthesizes learnings
 Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
 Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
-## Team Agents (TeamCreate)
+## Sector Leads (TeamCreate — long-running coordinators)
 
-| Agent | Model | Role |
-|-------|-------|------|
-| sector-lead | sonnet | Long-running coordinator. Manages a sector by spawning workers, tracking progress, messaging other leads. |
+| Agent | Model | Sector | Workers it spawns |
+|-------|-------|--------|-------------------|
+| lead-parser | sonnet | Parser/corpus | scout-parser, builder, plan-reviewer |
+| lead-lsp | sonnet | LSP features | scout-lsp, builder, plan-reviewer |
+| lead-quality | sonnet | Review/merge pipeline | reviewer, reviewer-deep, ops |
+| lead-infra | sonnet | Tests, deps, docs, security, DX | scout, builder, research-web, wisdom |
 
-Instantiated per sector at scale. Common sectors: parser, LSP, quality (review+merge), infra.
+Each lead has pre-baked sector context (crate paths, data sources, goals). They persist for the session, manage a shared task list, and spawn workers via Agent().
 
 ## Worker Agents (Agent()) — 11
 
