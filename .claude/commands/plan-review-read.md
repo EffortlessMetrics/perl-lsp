@@ -21,7 +21,7 @@ Read the issue that a scout filed and understand the proposed change.
    - **Test spec**: What test does the scout suggest?
    - **Verify command**: How to confirm the fix works?
 
-3. Note any gaps — fields that are vague, missing, or feel uncertain.
+3. Note any gaps — fields that are vague, missing, or feel uncertain. **You'll fill these in step 4**, not punt them back.
 
 ## Output
 

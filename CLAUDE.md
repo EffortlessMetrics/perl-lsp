@@ -6,11 +6,34 @@
 
 The orchestrator routes work to agents, never writes code directly.
 
-- **Code change** -> worktree agent: `Agent(isolation: "worktree", prompt: "Goal: ... Crate: ... Verify: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>. Commit and create PR.")`
-  - Scout before building new features. Use 3:1 scout:builder ratio. Scout output = builder spec (exact files, functions, verify commands).
-- **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "Find ... in crates/...")`
+### Pipeline: Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
+
+Every change flows through this pipeline. Each stage is a cheap pass that catches what the previous one missed.
+
+| Stage | Model | Purpose | Fix forward? |
+|-------|-------|---------|-------------|
+| **Scout** (haiku) | Broad discovery | Find the problem, file roughly-right spec | N/A — files issues |
+| **Plan-review** (sonnet) | Improve the plan | Fill gaps, correct root cause, add edge cases | Yes — complete the spec yourself |
+| **Build** (sonnet) | Execute the spec | TDD: test → implement → verify → PR | Yes — adapt if plan-reviewed; bump back if not |
+| **Review** (haiku/sonnet) | Improve the PR | Push fixes directly to the branch | Yes — always fix forward |
+| **Green** | CI gate | SHA-verified, merge-time fresh check | N/A |
+| **Merge** | Ops | Batch of 3, wait for green, ratchet corpus | N/A |
+| **Wisdom** | Learning | Retrospective, update memory, log patterns | N/A |
+
+**Key principles:**
+- Scouts are honest about uncertainty — plan-reviewers correct. Being roughly right > confidently wrong.
+- Plan-reviewers improve plans, never punt "needs more scout work." They're enhanced scouts with sonnet.
+- Builders fix forward on plan-reviewed work. Bump back on unreviewed non-trivial specs.
+- Reviewers push improvements directly to PR branches. Every PR gets improved.
+- Every agent recommends next steps for the orchestrator.
+- Learning is continuous — every agent-wrapup captures what was learned.
+
+### Routing patterns
+
+- **Code change** -> worktree agent: `Agent(isolation: "worktree", prompt: "...")`
+- **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "...")`
 - **Multiple changes** -> parallel worktree agents, one per crate. Microcrate architecture prevents conflicts.
-  - Reserve 10 agent slots for late-cycle routing. Use SendMessage to repurpose idle agents instead of spawning new ones when roster is full.
+  - Reserve 10 agent slots for late-cycle routing. Use SendMessage to repurpose idle agents.
 
 ### Merge Queue Protocol
 

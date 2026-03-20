@@ -30,6 +30,10 @@ Think adversarially about the scout's recommended approach.
    - Would it fail before the fix and pass after?
    - Are there edge case tests that should be added?
 
+5. **What's missing from the spec?**
+   - Is there enough detail for a builder to execute without research?
+   - If not, **you'll add it in step 4** — note what needs filling in.
+
 ## Output
 
 Record in your task:

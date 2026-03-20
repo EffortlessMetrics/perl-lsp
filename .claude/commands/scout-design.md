@@ -24,6 +24,7 @@ Now that you know the root cause, design the fix.
 3. **Pick a recommendation** — Which option and why?
    - Consider: effort, risk, completeness, future-proofing
    - Default to the simplest fix that handles the common case
+   - **Be honest about confidence.** "I believe Option A is right because..." is better than asserting certainty. The plan-reviewer will verify and improve.
 
 ## Output
 

@@ -42,9 +42,9 @@ Make the change. Minimal diff. Exactly what the spec says.
 ## Scope guard
 
 If you discover something that needs fixing but isn't in the spec:
-- Do NOT fix it
-- Add a comment in your task: "Discovered: <issue> — out of scope"
-- The orchestrator will route it to another builder
+- **Small and on the same code path?** Fix it — you're already here.
+- **Different concern or crate?** Note it for the orchestrator: "Discovered: <issue> — recommend a follow-up scout/builder"
+- **Spec was wrong about the root cause?** If it hasn't been plan-reviewed, consider bumping back. If it has, adapt and fix forward.
 
 ## Output
 
