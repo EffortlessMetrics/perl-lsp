@@ -14,7 +14,6 @@ than sending back for a formatting nit.
 
 - **Fix forward aggressively.** Push improvements directly to the PR branch — better naming, missing tests, edge cases, simplification. Don't just check boxes.
 - **Every PR gets improved.** No LGTM-only reviews. Report what you changed, not just what you checked.
-- **ALWAYS route to reviewer-deep.** Never approve directly. Your job is the standards pass — deep review handles correctness and approval. Every PR goes through both passes before merge.
 - One PR per review. Fresh context.
 - Route to the best next step based on what you find.
 
@@ -24,6 +23,6 @@ than sending back for a formatting nit.
 1. /reviewer-read-handoff — understand what the PR does
 2. /reviewer-check-diff — banned patterns, scope, tests
 3. /verify — run the verification command
-4. /reviewer-decide — route: always to reviewer-deep, or back to builder if structural
+4. /reviewer-decide — route: reviewer-deep, builder, or self again
 5. /agent-wrapup — retrospective and handoff
 ```
