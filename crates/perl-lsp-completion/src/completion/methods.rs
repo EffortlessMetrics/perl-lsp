@@ -2,9 +2,29 @@
 //!
 //! Provides context-aware method completion including DBI methods.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::{auto_import, context::CompletionContext, items::CompletionItem};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 use std::collections::HashSet;
+
+/// Extract the receiver module name from the completion prefix for static calls.
+///
+/// For `LWP::UserAgent->ge` the prefix is `LWP::UserAgent->ge` and we extract
+/// `LWP::UserAgent`.  Returns `None` when the receiver is a variable (`$obj->`)
+/// or when the prefix has no `->`.
+fn static_receiver_module(prefix: &str) -> Option<&str> {
+    let arrow = prefix.rfind("->")?;
+    let receiver = prefix[..arrow].trim();
+    // Static receivers start with an uppercase ASCII letter and contain no sigil.
+    if !receiver.starts_with('$')
+        && !receiver.starts_with('@')
+        && !receiver.starts_with('%')
+        && receiver.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+    {
+        Some(receiver)
+    } else {
+        None
+    }
+}
 
 /// DBI database handle methods
 pub const DBI_DB_METHODS: &[(&str, &str)] = &[
@@ -175,6 +195,19 @@ pub fn add_method_completions(
     // Try to infer the receiver type from context
     let receiver_type = infer_receiver_type(context, source);
 
+    // Determine module for auto-import:
+    // - For static calls like `LWP::UserAgent->` use the prefix receiver.
+    // - For DBI-inferred types use "DBI".
+    let import_module: Option<&str> =
+        static_receiver_module(&context.prefix).or(match receiver_type.as_deref() {
+            Some("DBI::db") | Some("DBI::st") => Some("DBI"),
+            _ => None,
+        });
+
+    // Build an auto-import edit once so all items in this batch share it.
+    let auto_import_edit =
+        import_module.and_then(|m| auto_import::build_auto_import_edit(source, m));
+
     // Choose methods based on inferred type
     let methods: Vec<(&str, &str)> = match receiver_type.as_deref() {
         Some("DBI::db") => DBI_DB_METHODS.to_vec(),
@@ -193,6 +226,8 @@ pub fn add_method_completions(
 
     for (method, desc) in methods {
         if seen.insert(method) {
+            let additional_edits =
+                auto_import_edit.as_ref().map(|e| vec![e.clone()]).unwrap_or_default();
             completions.push(CompletionItem {
                 label: method.to_string(),
                 kind: crate::completion::items::CompletionItemKind::Function,
@@ -201,7 +236,7 @@ pub fn add_method_completions(
                 insert_text: Some(format!("{}()", method)),
                 sort_text: Some(format!("2_{}", method)),
                 filter_text: Some(method.to_string()),
-                additional_edits: vec![],
+                additional_edits,
                 text_edit_range: Some((context.prefix_start, context.position)),
             });
         }
@@ -214,6 +249,8 @@ pub fn add_method_completions(
             ("can", "Check if object can call method"),
         ] {
             if seen.insert(method) {
+                let additional_edits =
+                    auto_import_edit.as_ref().map(|e| vec![e.clone()]).unwrap_or_default();
                 completions.push(CompletionItem {
                     label: method.to_string(),
                     kind: crate::completion::items::CompletionItemKind::Function,
@@ -222,7 +259,7 @@ pub fn add_method_completions(
                     insert_text: Some(format!("{}()", method)),
                     sort_text: Some(format!("9_{}", method)), // Lower priority
                     filter_text: Some(method.to_string()),
-                    additional_edits: vec![],
+                    additional_edits,
                     text_edit_range: Some((context.prefix_start, context.position)),
                 });
             }

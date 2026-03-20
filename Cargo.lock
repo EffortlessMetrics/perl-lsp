@@ -1618,7 +1618,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "winapi",
 ]
 
@@ -1885,7 +1884,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-subscriber",
  "url",
  "uuid",
  "walkdir",
@@ -1963,6 +1961,7 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
+ "serde_json",
  "url",
 ]
 
@@ -2198,7 +2197,6 @@ dependencies = [
  "perl-position-tracking",
  "perl-qualified-name",
  "perl-tdd-support",
- "serde",
  "serde_json",
 ]
 
@@ -2356,6 +2354,7 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2732,7 +2731,6 @@ version = "0.12.0"
 name = "perl-tokenizer"
 version = "0.12.0"
 dependencies = [
- "perl-ast",
  "perl-ast-v2",
  "perl-error",
  "perl-lexer",
