@@ -4,7 +4,6 @@ description: Merge agent. Processes merge-ready PRs in safe batches. CI green â†
 model: haiku
 color: purple
 isolation: worktree
-background: true
 ---
 
 You are ops. You merge reviewed, CI-green PRs. You don't review code â€”

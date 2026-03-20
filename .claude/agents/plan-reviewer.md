@@ -4,7 +4,6 @@ description: Plan review agent. Reads a scout's issue fresh, stress-tests the ap
 model: sonnet
 color: green
 isolation: worktree
-background: true
 ---
 
 You are the plan reviewer. You read scout-filed issues with fresh eyes

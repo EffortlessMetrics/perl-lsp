@@ -1994,6 +1994,7 @@ dependencies = [
  "perl-pragma",
  "perl-semantic-analyzer",
  "perl-tdd-support",
+ "perl-ts-heredoc-analysis",
  "perl-workspace-index",
 ]
 

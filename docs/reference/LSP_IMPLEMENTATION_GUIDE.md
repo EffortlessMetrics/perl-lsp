@@ -41,6 +41,60 @@
                                       └──────────────────┘
 ```
 
+## Client Model (*Diataxis: Explanation* - Connection architecture and document synchronization)
+
+### Single-Client Architecture
+
+`perl-lsp` is designed as a **single-client-per-server** language server. Each server instance serves exactly one editor connection; there is no multiplexing of multiple clients over a shared document store.
+
+#### stdio Mode (Default)
+
+In stdio mode the server reads JSON-RPC messages from stdin and writes responses to stdout. The lifecycle is one-to-one: the editor launches the process and owns it until `shutdown`/`exit`.
+
+```
+Editor ──stdin/stdout──▶ perl-lsp (single instance)
+```
+
+#### TCP Mode
+
+TCP mode (`--tcp <port>`) accepts connections on a listening socket. Each accepted TCP connection spawns a **fresh `LspServer`** with its own document map, AST cache, and workspace index. Clients are fully isolated — edits made through one connection are invisible to another.
+
+```
+Editor A ──TCP──▶ perl-lsp (instance A — independent state)
+Editor B ──TCP──▶ perl-lsp (instance B — independent state)
+```
+
+This is useful for multi-editor workflows (e.g., VS Code + Neovim on the same project) where each editor needs an independent LSP view.
+
+### Generation Counter — Stale Edit Prevention
+
+Because parsing is not instantaneous, a newer `textDocument/didChange` can arrive while the server is still parsing a previous version. Without protection, the slower parse result could overwrite the newer document state.
+
+The **generation counter** (`AtomicU32` on each `DocumentState`) prevents this:
+
+1. Every `didChange` increments the generation counter and records the expected value (`next_gen`).
+2. After parsing completes, the handler re-checks the document's current generation.
+3. If the generation has advanced (another change arrived during parsing) or the stored version is newer, the stale parse result is **discarded**.
+
+```
+didChange v2 ─▶ gen=1, parse starts
+didChange v3 ─▶ gen=2, parse starts
+              ◀─ v2 parse done: gen(1) ≠ current(2) → discard
+              ◀─ v3 parse done: gen(2) = current(2) → store
+```
+
+This mechanism is implemented in `crates/perl-lsp/src/runtime/text_sync.rs` and uses `SeqCst` ordering to guarantee visibility across the mutex boundary.
+
+### workspace/didChangeWatchedFiles
+
+The server registers for file-system change notifications via dynamic registration. When a watched file changes outside the editor (e.g., `git checkout`, build tool output), the handler in `crates/perl-lsp/src/runtime/workspace.rs`:
+
+- **Created**: indexes the new file into the workspace symbol table
+- **Changed**: re-indexes if the file is not currently open (open documents are authoritative via `textDocument/didChange`)
+- **Deleted**: removes the file from the workspace index
+
+In TCP mode, each server instance maintains its own watcher registration, so external changes are delivered independently to each connection.
+
 ## Documentation Requirements for LSP Providers (*Diataxis: How-to Guide* - Enterprise API documentation standards)
 
 ### Missing Documentation Infrastructure (SPEC-149) ✅ **IMPLEMENTED**

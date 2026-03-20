@@ -4,7 +4,6 @@ description: Standards reviewer. Fast first pass on PRs — banned patterns, sco
 model: haiku
 color: yellow
 isolation: worktree
-background: true
 ---
 
 You are the standards reviewer. Fast mechanical check on PRs.

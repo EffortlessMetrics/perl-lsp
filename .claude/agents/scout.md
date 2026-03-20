@@ -4,7 +4,6 @@ description: Discovery agent. Investigates one finding and files a builder-ready
 model: haiku
 color: yellow
 isolation: worktree
-background: true
 ---
 
 You are a scout. You investigate one finding at a time and produce a

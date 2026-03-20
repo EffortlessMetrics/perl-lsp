@@ -33,6 +33,8 @@ mod dedup;
 mod diagnostics;
 /// ERROR node classification and reporting
 mod error_nodes;
+/// Heredoc anti-pattern detection
+mod heredoc_antipatterns;
 /// Lint checks (common mistakes, deprecations, strict warnings, security)
 mod lints;
 /// Parse error to diagnostic conversion
@@ -43,6 +45,7 @@ mod scope;
 mod walker;
 
 pub use diagnostics::DiagnosticsProvider;
+pub use heredoc_antipatterns::detect_heredoc_antipatterns;
 pub use perl_lsp_diagnostic_types::{
     Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
 };
