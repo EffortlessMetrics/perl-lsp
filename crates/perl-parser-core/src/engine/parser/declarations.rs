@@ -587,6 +587,31 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
+        // Handle anonymous sub as use argument: use Filter::Simple sub { ... };
+        else if self.peek_kind() == Some(TokenKind::Sub) {
+            args.push(self.consume_token()?.text.to_string()); // consume 'sub'
+            if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                let mut depth: u32 = 0;
+                while !self.tokens.is_eof() {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBrace) => {
+                            depth = depth.saturating_add(1);
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                        Some(TokenKind::RightBrace) => {
+                            args.push(self.consume_token()?.text.to_string());
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
+                }
+            }
+        }
         // Handle bare arguments (no parentheses)
         else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::Minus | TokenKind::QuoteWords))
             && !Self::is_statement_terminator(self.peek_kind())
