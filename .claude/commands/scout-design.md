@@ -1,5 +1,6 @@
 ---
 description: Scout step 5 — design 2-3 fix options with tradeoffs
+user-invocable: false
 ---
 
 # Scout Design

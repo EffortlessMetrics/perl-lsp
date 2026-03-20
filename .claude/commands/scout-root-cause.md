@@ -1,5 +1,6 @@
 ---
 description: Scout step 4 — trace the root cause of the problem
+user-invocable: false
 ---
 
 # Scout Root Cause

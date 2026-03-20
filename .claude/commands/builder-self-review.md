@@ -1,5 +1,6 @@
 ---
 description: Builder step 5 — re-read your own diff before publishing
+user-invocable: false
 ---
 
 # Builder Self-Review

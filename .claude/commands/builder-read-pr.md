@@ -1,5 +1,6 @@
 ---
 description: Builder step 1 (continuation) — read an existing PR to understand what's done and what's left
+user-invocable: false
 ---
 
 # Builder Read PR (Continuation)

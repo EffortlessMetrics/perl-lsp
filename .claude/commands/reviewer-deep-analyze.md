@@ -1,5 +1,6 @@
 ---
 description: Deep reviewer step 2 — analyze if the diff logic is correct
+user-invocable: false
 ---
 
 # Deep Reviewer Analyze

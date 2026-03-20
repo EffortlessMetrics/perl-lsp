@@ -1,5 +1,6 @@
 ---
 description: Deep reviewer step 1 — read the original issue spec to understand intent
+user-invocable: false
 ---
 
 # Deep Reviewer Read Spec

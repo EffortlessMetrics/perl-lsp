@@ -1,5 +1,6 @@
 ---
 description: Wisdom step 3 — write findings to the right place
+user-invocable: false
 ---
 
 # Wisdom: Document

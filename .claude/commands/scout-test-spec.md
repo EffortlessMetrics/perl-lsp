@@ -1,5 +1,6 @@
 ---
 description: Scout step 6 — write the exact test code that proves the fix works
+user-invocable: false
 ---
 
 # Scout Test Spec

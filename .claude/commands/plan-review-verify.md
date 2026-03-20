@@ -1,5 +1,6 @@
 ---
 description: Plan reviewer step 2 — verify the scout's claims against current code
+user-invocable: false
 ---
 
 # Plan Review: Verify

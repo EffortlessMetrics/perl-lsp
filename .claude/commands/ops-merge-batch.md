@@ -1,5 +1,6 @@
 ---
 description: Ops step 2 — merge a batch of up to 3 PRs
+user-invocable: false
 ---
 
 # Ops Merge Batch

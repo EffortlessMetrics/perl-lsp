@@ -1,5 +1,6 @@
 ---
 description: Plan reviewer step 1 — read the issue and understand the scout's analysis
+user-invocable: false
 ---
 
 # Plan Review: Read

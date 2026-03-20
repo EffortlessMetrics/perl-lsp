@@ -1,5 +1,6 @@
 ---
 description: Scout step 1 — check if this finding is already tracked
+user-invocable: false
 ---
 
 # Scout Dedup Check

@@ -1,5 +1,6 @@
 ---
 description: Ops step 4 — post-merge corpus ratchet and status update
+user-invocable: false
 ---
 
 # Ops Post-Merge

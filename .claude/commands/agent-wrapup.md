@@ -1,5 +1,6 @@
 ---
 description: Final step for every agent — retrospective, documentation, and clean handoff
+user-invocable: false
 ---
 
 # Agent Wrapup

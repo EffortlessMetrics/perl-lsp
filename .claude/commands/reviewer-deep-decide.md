@@ -1,5 +1,6 @@
 ---
 description: Deep reviewer step 4 — approve or send back with analysis
+user-invocable: false
 ---
 
 # Deep Reviewer Decide

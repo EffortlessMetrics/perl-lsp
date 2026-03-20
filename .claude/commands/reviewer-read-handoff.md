@@ -1,5 +1,6 @@
 ---
 description: Reviewer step 1 — read the PR handoff, check knowledge artifact quality
+user-invocable: false
 ---
 
 # Reviewer Read Handoff

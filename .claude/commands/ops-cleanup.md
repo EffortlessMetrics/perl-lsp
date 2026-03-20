@@ -1,5 +1,6 @@
 ---
 description: Ops step 5 — post-merge hygiene and drift check
+user-invocable: false
 ---
 
 # Ops Cleanup

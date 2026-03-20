@@ -1,5 +1,6 @@
 ---
 description: Wisdom step 2 — synthesize patterns and learnings from the trail
+user-invocable: false
 ---
 
 # Wisdom: Synthesize

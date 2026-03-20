@@ -1,5 +1,6 @@
 ---
 description: Scout step 3 — reproduce the problem with a minimal example
+user-invocable: false
 ---
 
 # Scout Reproduce
