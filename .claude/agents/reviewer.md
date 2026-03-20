@@ -22,4 +22,5 @@ than sending back for a formatting nit.
 2. /reviewer-check-diff — banned patterns, scope, tests
 3. /verify — run the verification command
 4. /reviewer-decide — route: reviewer-deep, builder, or self again
+5. /agent-wrapup — retrospective and handoff
 ```

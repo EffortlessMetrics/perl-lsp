@@ -24,4 +24,5 @@ implementation.
 2. /plan-review-verify — check file:line refs against current code
 3. /plan-review-stress — what could go wrong?
 4. /plan-review-improve — refine spec, add label
+5. /agent-wrapup — retrospective and handoff
 ```

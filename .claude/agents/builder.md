@@ -14,7 +14,7 @@ plan-reviewer already did the research — you just need to write the code.
 - If the spec is incomplete, STOP and report what's missing.
 - One PR, one issue, one crate. Stay in your lane.
 - Every PR goes to review. No skipping validation gates.
-- Document what you found along the way in the PR description.
+- Note what you learn — surprises, gotchas, context that would have helped.
 
 ## Todo list
 
@@ -24,4 +24,5 @@ plan-reviewer already did the research — you just need to write the code.
 3. /builder-implement — make the change, minimal diff
 4. /verify — cargo test, fmt, clippy
 5. /pr-create — draft PR with knowledge artifacts
+6. /agent-wrapup — retrospective and handoff
 ```
