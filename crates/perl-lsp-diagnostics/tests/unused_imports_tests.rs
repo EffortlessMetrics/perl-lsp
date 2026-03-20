@@ -32,7 +32,7 @@ fn program(stmts: Vec<Node>) -> Node {
 
 #[test]
 fn unused_module_is_flagged() {
-    let source = "use Foo::Bar;\nmy \$x = 1;\n";
+    let source = "use Foo::Bar;\nmy $x = 1;\n";
     let ast = program(vec![use_node("Foo::Bar", 0, 13)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
@@ -61,7 +61,7 @@ fn method_call_target_not_flagged() {
 
 #[test]
 fn pragma_strict_not_flagged() {
-    let source = "use strict;\nmy \$x = 1;\n";
+    let source = "use strict;\nmy $x = 1;\n";
     let ast = program(vec![use_node("strict", 0, 11)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
@@ -70,7 +70,7 @@ fn pragma_strict_not_flagged() {
 
 #[test]
 fn pragma_warnings_not_flagged() {
-    let source = "use warnings;\nmy \$x = 1;\n";
+    let source = "use warnings;\nmy $x = 1;\n";
     let ast = program(vec![use_node("warnings", 0, 13)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
@@ -97,7 +97,7 @@ fn test_more_not_flagged() {
 
 #[test]
 fn module_with_import_args_not_flagged() {
-    let source = "use Foo::Bar qw(baz);\nmy \$x = baz();\n";
+    let source = "use Foo::Bar qw(baz);\nmy $x = baz();\n";
     let ast = program(vec![use_node_with_args("Foo::Bar", vec!["baz"], 0, 21)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
@@ -106,7 +106,7 @@ fn module_with_import_args_not_flagged() {
 
 #[test]
 fn diagnostic_has_hint_severity_and_unnecessary_tag() {
-    let source = "use Unused::Mod;\nmy \$x = 1;\n";
+    let source = "use Unused::Mod;\nmy $x = 1;\n";
     let ast = program(vec![use_node("Unused::Mod", 0, 16)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
@@ -117,7 +117,7 @@ fn diagnostic_has_hint_severity_and_unnecessary_tag() {
 
 #[test]
 fn multiple_unused_all_flagged() {
-    let source = "use Alpha;\nuse Beta;\nmy \$x = 1;\n";
+    let source = "use Alpha;\nuse Beta;\nmy $x = 1;\n";
     let ast = program(vec![use_node("Alpha", 0, 10), use_node("Beta", 11, 20)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
@@ -145,7 +145,7 @@ fn empty_program_no_diagnostics() {
 
 #[test]
 fn version_import_not_flagged() {
-    let source = "use 5.010;\nmy \$x = 1;\n";
+    let source = "use 5.010;\nmy $x = 1;\n";
     let ast = program(vec![use_node("5.010", 0, 10)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
@@ -154,7 +154,7 @@ fn version_import_not_flagged() {
 
 #[test]
 fn substring_match_does_not_count() {
-    let source = "use Foo;\nmy \$x = FooBar->new();\n";
+    let source = "use Foo;\nmy $x = FooBar->new();\n";
     let ast = program(vec![use_node("Foo", 0, 8)]);
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
