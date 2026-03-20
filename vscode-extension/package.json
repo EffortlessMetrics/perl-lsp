@@ -378,6 +378,12 @@
         "title": "Open Configuration Guide",
         "category": "Perl",
         "icon": "$(book)"
+      },
+      {
+        "command": "perl-lsp.runHealthCheck",
+        "title": "Run Health Check",
+        "category": "Perl",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {

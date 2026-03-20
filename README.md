@@ -20,10 +20,11 @@
 
 ---
 
-> **Public Alpha** -- perl-lsp is usable for daily development but still evolving.
-> [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) and help shape the project.
+> **Public Alpha (v0.12.0)** -- perl-lsp is production-ready for daily use and actively improving.
+> Install in minutes, get completions and navigation immediately.
+> [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) or [join the conversation](https://github.com/EffortlessMetrics/perl-lsp/discussions).
 
-**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with 97 LSP features, validated against 4,355 real-world CPAN modules. Works on Windows, Mac, and Linux out of the box.
+**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with 97 LSP features, validated against thousands of real-world CPAN modules. Works on Windows, Mac, and Linux out of the box.
 
 ## Why perl-lsp?
 
@@ -31,19 +32,11 @@
 - **Fast** -- sub-millisecond incremental parsing, under 50ms LSP response times.
 - **Comprehensive** -- 97 LSP/DAP features including completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging.
 - **Broad syntax coverage** -- parses Perl 5.8 through 5.40 including heredocs, regex, quoting constructs, formats, and OO frameworks.
-- **Validated** -- continuously tested against the top CPAN distributions with a ratchet-only-forward CI gate.
+- **CPAN-validated** -- continuously tested against top CPAN distributions with a ratchet-only-forward CI gate that never allows regressions.
 
 ## Quick Start
 
-```bash
-# Install
-cargo install perl-lsp
-
-# Verify
-perl-lsp --health
-```
-
-### VS Code
+### VS Code (recommended)
 
 Install the extension and open a Perl file -- completions, diagnostics, hover, and navigation work immediately:
 
@@ -51,7 +44,16 @@ Install the extension and open a Perl file -- completions, diagnostics, hover, a
 code --install-extension effortlessmetrics.perl-lsp-rs
 ```
 
-The extension auto-downloads the server binary for your platform. You can also set `perl-lsp.serverPath` to use a specific binary or disable `perl-lsp.autoDownload` for airgapped environments.
+The extension auto-downloads the server binary for your platform.
+
+### Binary install
+
+```bash
+cargo install perl-lsp
+perl-lsp --health
+```
+
+Or download a pre-built binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 
 ### Neovim
 
@@ -91,35 +93,17 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 
 The full feature catalog lives in [`features.toml`](features.toml). For live project metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
-## Install
+## Comparison
 
-### From crates.io
-
-```bash
-cargo install perl-lsp
-perl-lsp --health
-```
-
-### From source
-
-```bash
-git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd perl-lsp
-cargo install --path crates/perl-lsp
-perl-lsp --health
-```
-
-### Pre-built binaries
-
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
-
-### VS Code Extension
-
-Install from the VS Code Marketplace or:
-
-```bash
-code --install-extension effortlessmetrics.perl-lsp-rs
-```
+| | perl-lsp | PerlNavigator | Perl::LanguageServer |
+|---|----------|--------------|---------------------|
+| **Language** | Rust (native binary) | Perl | Perl |
+| **Requires Perl runtime** | No | Yes | Yes |
+| **Windows support** | Native | Via Perl | Limited |
+| **Incremental parsing** | Yes (sub-ms) | N/A | N/A |
+| **Debug adapter** | Built-in (DAP) | No | Built-in |
+| **CPAN corpus validation** | CI-gated, ratchet-forward | N/A | N/A |
+| **Install** | Single binary | CPAN + Perl | CPAN + Perl |
 
 ## Configuration
 
@@ -158,19 +142,37 @@ perl-lsp is configured through your editor's LSP settings (via `didChangeConfigu
 
 For Neovim and other editors, pass these as the LSP `settings` table under the `perl-lsp` key.
 
-## Comparison
+## Install
 
-perl-lsp aims to be the most reliable Perl language server available.
+### From crates.io
 
-| | perl-lsp | PerlNavigator | Perl::LanguageServer |
-|---|----------|--------------|---------------------|
-| **Language** | Rust (native binary) | Perl | Perl |
-| **Requires Perl runtime** | No | Yes | Yes |
-| **Windows support** | Native | Via Perl | Limited |
-| **Incremental parsing** | Yes (sub-ms) | N/A | N/A |
-| **Debug adapter** | Built-in (DAP) | No | Built-in |
-| **CPAN corpus validation** | 4,355 modules, CI-gated | N/A | N/A |
-| **Install** | Single binary | CPAN + Perl | CPAN + Perl |
+```bash
+cargo install perl-lsp
+perl-lsp --health
+```
+
+### From source
+
+```bash
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
+cd perl-lsp
+cargo install --path crates/perl-lsp
+perl-lsp --health
+```
+
+### Pre-built binaries
+
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
+
+### VS Code Extension
+
+Install from the VS Code Marketplace or:
+
+```bash
+code --install-extension effortlessmetrics.perl-lsp-rs
+```
+
+You can set `perl-lsp.serverPath` to use a specific binary, or disable `perl-lsp.autoDownload` for airgapped environments.
 
 ## Parser
 
@@ -238,6 +240,7 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
 | [Contributing](CONTRIBUTING.md) | Development guidelines and workflow |
 | [Changelog](CHANGELOG.md) | Release history and notable changes |
+| **[Report an Issue](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)** | Bug reports, feature requests, parser issues |
 
 ## History
 

@@ -13,6 +13,7 @@ import {
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
+import { OnboardingManager } from './onboarding';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -189,6 +190,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+            { label: '$(pulse) Run Health Check', detail: 'Check Perl, perltidy, and LSP binary', command: 'perl-lsp.runHealthCheck' },
             { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
@@ -202,6 +204,41 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (selection && selection.command && !selection.disabled) {
             vscode.commands.executeCommand(selection.command, ...(selection.args || []));
+        }
+    });
+
+    const runHealthCheckCommand = vscode.commands.registerCommand('perl-lsp.runHealthCheck', async (serverPath?: string | null) => {
+        const resolvedPath = serverPath !== undefined ? serverPath : currentServerPath;
+        const onboarding = new OnboardingManager(context, outputChannel);
+        const results = await onboarding.runSetupHealthCheck(resolvedPath ?? null);
+
+        const errors = results.filter(r => !r.ok && r.status === 'error');
+        const warnings = results.filter(r => !r.ok && r.status === 'warning');
+
+        const lines = results.map(r => {
+            const icon = r.ok ? '$(check)' : r.status === 'warning' ? '$(warning)' : '$(error)';
+            return `${icon} ${r.label}: ${r.detail}`;
+        });
+
+        outputChannel.appendLine('[health-check] Results:');
+        for (const line of lines) {
+            outputChannel.appendLine(`  ${line.replace(/\$\(\w[^)]*\)/g, '')}`);
+        }
+
+        if (errors.length > 0) {
+            const msg = `Health check failed: ${errors.map(e => e.label).join(', ')}`;
+            vscode.window.showErrorMessage(msg, 'Show Output').then(sel => {
+                if (sel === 'Show Output') { outputChannel.show(); }
+            });
+        } else if (warnings.length > 0) {
+            const msg = `Health check passed with warnings: ${warnings.map(w => w.detail).join(' | ')}`;
+            vscode.window.showWarningMessage(msg, 'Show Output').then(sel => {
+                if (sel === 'Show Output') { outputChannel.show(); }
+            });
+        } else {
+            vscode.window.showInformationMessage('Perl LSP health check passed.', 'Show Output').then(sel => {
+                if (sel === 'Show Output') { outputChannel.show(); }
+            });
         }
     });
 
@@ -238,6 +275,7 @@ export async function activate(context: vscode.ExtensionContext) {
         statusMenuCommand,
         reinstallCommand,
         openConfigGuideCommand,
+        runHealthCheckCommand,
         formatOnSaveDisposable,
         configurationWatcher,
     );
@@ -245,6 +283,16 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize debug adapter
     activateDebugger(context);
     await initializeLanguageClient(context);
+
+    // First-run onboarding: show welcome notification once per installation
+    const onboarding = new OnboardingManager(context, outputChannel);
+    if (onboarding.shouldShowWelcome()) {
+        // Fire-and-forget; failures must not block extension startup
+        onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            outputChannel.appendLine(`[onboarding] Error showing welcome: ${msg}`);
+        });
+    }
 }
 
 export async function deactivate() {

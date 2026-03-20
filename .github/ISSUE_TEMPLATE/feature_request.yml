@@ -49,6 +49,27 @@ body:
       render: perl
 
   - type: textarea
+    id: competitor-reference
+    attributes:
+      label: Competitor or Prior Art Reference
+      description: |
+        Does another tool already implement this? Describing how it works there helps us understand the expected behavior and set a quality bar.
+      placeholder: |
+        - rust-analyzer shows type hints inline (inlay hints); it works by ...
+        - PerlNavigator supports goto-definition for @INC modules; example: ...
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: |
+        How will we know this feature is done? List specific, observable outcomes.
+      placeholder: |
+        - [ ] `go to definition` on a `use`d module name navigates to the correct `.pm` file
+        - [ ] Works for both installed modules and local project modules
+        - [ ] Responds in <100ms on a 200-module workspace
+
+  - type: textarea
     id: alternatives
     attributes:
       label: Alternatives Considered
