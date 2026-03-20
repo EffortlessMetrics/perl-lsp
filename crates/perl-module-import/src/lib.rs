@@ -9,12 +9,65 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+/// When a module is loaded relative to program execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadTiming {
+    /// Module is loaded at compile time (e.g. `use`).
+    CompileTime,
+    /// Module is loaded at runtime (e.g. `require`).
+    Runtime,
+}
+
+/// Whether the module's `import` method is called after loading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportBehavior {
+    /// The module's `import` method is called (as with `use`).
+    CallsImport,
+    /// No `import` call is made (as with `require`).
+    NoImport,
+}
+
+/// Semantic description of a `use`/`require` dispatch form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DispatchSemantics {
+    /// When the module load happens.
+    pub load_timing: LoadTiming,
+    /// Whether `import` is called on the loaded module.
+    pub import_behavior: ImportBehavior,
+}
+
+impl DispatchSemantics {
+    /// A short human-readable description suitable for hover text.
+    #[must_use]
+    pub fn hover_description(&self) -> &'static str {
+        match (self.load_timing, self.import_behavior) {
+            (LoadTiming::CompileTime, ImportBehavior::CallsImport) => {
+                "compile-time load; calls import()"
+            }
+            (LoadTiming::Runtime, ImportBehavior::NoImport) => "runtime load; no import() call",
+            (LoadTiming::CompileTime, ImportBehavior::NoImport) => {
+                "compile-time load; no import() call"
+            }
+            (LoadTiming::Runtime, ImportBehavior::CallsImport) => "runtime load; calls import()",
+        }
+    }
+}
+
+/// Distinguishes the two syntactic forms of `require`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RequireForm {
+    /// `require Module::Name` — bare module name.
+    ModuleName,
+    /// `require "path/to/file.pm"` or `require 'path/to/file.pm'` — quoted file path.
+    FilePath,
+}
+
 /// Classifies the import statement form for a parsed line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModuleImportKind {
     /// `use Module::Name;`
     Use,
-    /// `require Module::Name;`
+    /// `require Module::Name;` or `require "file.pm";`
     Require,
     /// `use parent ...`
     UseParent,
@@ -22,23 +75,56 @@ pub enum ModuleImportKind {
     UseBase,
 }
 
+impl ModuleImportKind {
+    /// Returns the dispatch semantics for this import kind.
+    #[must_use]
+    pub fn dispatch_semantics(self) -> DispatchSemantics {
+        match self {
+            ModuleImportKind::Use | ModuleImportKind::UseParent | ModuleImportKind::UseBase => {
+                DispatchSemantics {
+                    load_timing: LoadTiming::CompileTime,
+                    import_behavior: ImportBehavior::CallsImport,
+                }
+            }
+            ModuleImportKind::Require => DispatchSemantics {
+                load_timing: LoadTiming::Runtime,
+                import_behavior: ImportBehavior::NoImport,
+            },
+        }
+    }
+}
+
 /// Parsed leading import token from a `use`/`require` line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModuleImportHead<'a> {
     /// Parsed statement kind.
     pub kind: ModuleImportKind,
-    /// First token after `use` or `require`.
+    /// First token after `use` or `require` (quotes stripped for file-path forms).
     pub token: &'a str,
     /// Inclusive byte start offset of `token` in the full line.
     pub token_start: usize,
     /// Exclusive byte end offset of `token` in the full line.
     pub token_end: usize,
+    /// For `require`, whether the argument was a quoted file path or a bare module name.
+    /// Always `None` for `use` forms.
+    require_form: Option<RequireForm>,
+}
+
+impl<'a> ModuleImportHead<'a> {
+    /// Returns the [`RequireForm`] for `require` statements, or `None` for `use` forms.
+    #[must_use]
+    pub fn require_form(&self) -> Option<RequireForm> {
+        self.require_form
+    }
 }
 
 /// Parse the leading import token of a single Perl source line.
 ///
 /// Returns [`None`] when the line does not start with `use` or `require`
 /// (after leading whitespace) or when no token is present after the keyword.
+///
+/// For `require "file.pm"` and `require 'file.pm'` forms, the surrounding
+/// quotes are stripped and the inner path is returned as `token`.
 ///
 /// # Examples
 ///
@@ -61,19 +147,66 @@ pub fn parse_module_import_head(line: &str) -> Option<ModuleImportHead<'_>> {
             "base" => ModuleImportKind::UseBase,
             _ => ModuleImportKind::Use,
         };
-        return Some(ModuleImportHead { kind, token, token_start, token_end });
+        return Some(ModuleImportHead { kind, token, token_start, token_end, require_form: None });
     }
 
-    if let Some((token, token_start, token_end)) = parse_statement_head(line, "require") {
-        return Some(ModuleImportHead {
-            kind: ModuleImportKind::Require,
-            token,
-            token_start,
-            token_end,
-        });
+    if let Some(result) = parse_require_head(line) {
+        return Some(result);
     }
 
     None
+}
+
+/// Parse a `require` statement, handling both bare module names and quoted file paths.
+fn parse_require_head(line: &str) -> Option<ModuleImportHead<'_>> {
+    let trimmed = line.trim_start();
+    let leading = line.len().saturating_sub(trimmed.len());
+
+    let rest = trimmed.strip_prefix("require")?;
+    if !rest.chars().next().is_some_and(char::is_whitespace) {
+        return None;
+    }
+
+    let after_keyword = leading + "require".len();
+
+    // Check for quoted file-path form: require "..." or require '...'
+    let rest_trimmed = rest.trim_start();
+    let quote_offset = rest.len() - rest_trimmed.len();
+
+    if let Some(inner) = rest_trimmed
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"').or_else(|| s.split('"').next()))
+        .or_else(|| {
+            rest_trimmed
+                .strip_prefix('\'')
+                .and_then(|s| s.strip_suffix('\'').or_else(|| s.split('\'').next()))
+        })
+    {
+        // Quoted form: token is the content inside the quotes, offsets point inside them
+        let quote_char_len = 1usize; // single byte for ' or "
+        let token_start = after_keyword + quote_offset + quote_char_len;
+        let token_end = token_start + inner.len();
+        return Some(ModuleImportHead {
+            kind: ModuleImportKind::Require,
+            token: inner,
+            token_start,
+            token_end,
+            require_form: Some(RequireForm::FilePath),
+        });
+    }
+
+    // Bare module name form
+    let (token, token_rel_start, token_rel_end) = first_token_with_range(rest)?;
+    let token_start = after_keyword + token_rel_start;
+    let token_end = after_keyword + token_rel_end;
+
+    Some(ModuleImportHead {
+        kind: ModuleImportKind::Require,
+        token,
+        token_start,
+        token_end,
+        require_form: Some(RequireForm::ModuleName),
+    })
 }
 
 fn parse_statement_head<'a>(line: &'a str, keyword: &str) -> Option<(&'a str, usize, usize)> {
