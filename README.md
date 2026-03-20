@@ -23,19 +23,15 @@
 > **Public Alpha** -- perl-lsp is usable for daily development but still evolving.
 > [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) and help shape the project.
 
+**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with 97 LSP features, validated against 4,355 real-world CPAN modules. Works on Windows, Mac, and Linux out of the box.
+
 ## Why perl-lsp?
 
 - **No Perl runtime required** -- a single native binary; no dependency on a working Perl installation for IDE features.
 - **Fast** -- sub-millisecond incremental parsing, under 50ms LSP response times.
-- **Comprehensive** -- completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, debugging, and more.
+- **Comprehensive** -- 97 LSP/DAP features including completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging.
 - **Broad syntax coverage** -- parses Perl 5.8 through 5.40 including heredocs, regex, quoting constructs, formats, and OO frameworks.
-
-| | perl-lsp | Perl::LanguageServer | PLS |
-|---|----------|---------------------|-----|
-| **Language** | Rust (native binary) | Perl | Perl |
-| **Requires Perl runtime** | No | Yes | Yes |
-| **Incremental parsing** | Yes (sub-ms) | N/A | N/A |
-| **Debug adapter** | Built-in (DAP) | Built-in | No |
+- **Validated** -- continuously tested against the top CPAN distributions with a ratchet-only-forward CI gate.
 
 ## Quick Start
 
@@ -79,29 +75,19 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 
 ## Features
 
-| Editing | Intelligence | Navigation |
-|---------|-------------|------------|
-| Code completion (symbols, keywords, modules, builtins) | Real-time diagnostics | Go to definition / declaration |
-| Rename across files | Hover docs and signatures | Find all references |
-| Code actions and quick fixes | Semantic highlighting | Document and workspace symbols |
-| Formatting (Perl::Tidy) | Inlay hints | Call and type hierarchy |
-| Import management | Code lens | Selection range |
-
-**Also included:** Debug Adapter Protocol (breakpoints, stepping, variables, watch expressions), folding, linked editing, color decorators, and [more](features.toml).
-
-### How it works
-
-```mermaid
-flowchart TD
-    editor["Editor / IDE"] -->|JSON-RPC over stdio| lsp["perl-lsp\nLanguage Server"]
-    lsp --> providers["LSP providers\ncompletion · hover · diagnostics · rename"]
-    lsp --> index["Workspace index\ndual-indexed symbol graph"]
-    lsp --> dap["perl-dap\nDebug Adapter bridge"]
-    providers --> parser["perl-parser v3\nrecursive-descent parser"]
-    index --> parser
-    dap --> runtime["Perl debug session"]
-    parser --> lexer["perl-lexer\nmode-aware tokenizer"]
-```
+| What you see | What it does |
+|-------------|-------------|
+| **Diagnostics** | Real-time parse error detection as you type |
+| **Completions** | 150+ builtins, workspace symbols, modules, and keywords |
+| **Go to definition** | Cross-file navigation for subs, methods, and modules |
+| **Hover** | Function signatures, documentation, and module info |
+| **Find references** | Locate all usages of a symbol across your workspace |
+| **Rename** | Scoped refactoring across files |
+| **Formatting** | Perl::Tidy integration |
+| **Code actions** | Organize imports, modernize syntax, quick fixes |
+| **Semantic highlighting** | Context-aware syntax coloring |
+| **Debugging** | Built-in DAP: breakpoints, stepping, variables, watch |
+| **And 85+ more...** | Inlay hints, code lens, call hierarchy, folding, color decorators |
 
 The full feature catalog lives in [`features.toml`](features.toml). For live project metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
@@ -134,6 +120,57 @@ Install from the VS Code Marketplace or:
 ```bash
 code --install-extension effortlessmetrics.perl-lsp-rs
 ```
+
+## Configuration
+
+perl-lsp is configured through your editor's LSP settings (via `didChangeConfiguration`). All settings are optional -- defaults work out of the box.
+
+```jsonc
+// VS Code settings.json example
+{
+  "perl-lsp.inlayHints": {
+    "enabled": true,
+    "parameterHints": true,
+    "typeHints": true,
+    "maxLength": 30
+  },
+  "perl-lsp.workspace": {
+    "includePaths": ["lib", ".", "local/lib/perl5"],
+    "useSystemInc": false
+  },
+  "perl-lsp.testRunner": {
+    "enabled": true,
+    "command": "perl",
+    "timeout": 60000
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `inlayHints.enabled` | `true` | Toggle inlay hints globally |
+| `inlayHints.parameterHints` | `true` | Show parameter name hints at call sites |
+| `inlayHints.typeHints` | `true` | Show inferred type hints for variables |
+| `workspace.includePaths` | `["lib", ".", "local/lib/perl5"]` | Module resolution search paths |
+| `workspace.useSystemInc` | `false` | Include system `@INC` paths |
+| `testRunner.command` | `"perl"` | Command for integrated test runner (`perl`, `prove`) |
+| `testRunner.timeout` | `60000` | Test execution timeout (ms) |
+
+For Neovim and other editors, pass these as the LSP `settings` table under the `perl-lsp` key.
+
+## Comparison
+
+perl-lsp aims to be the most reliable Perl language server available.
+
+| | perl-lsp | PerlNavigator | Perl::LanguageServer |
+|---|----------|--------------|---------------------|
+| **Language** | Rust (native binary) | Perl | Perl |
+| **Requires Perl runtime** | No | Yes | Yes |
+| **Windows support** | Native | Via Perl | Limited |
+| **Incremental parsing** | Yes (sub-ms) | N/A | N/A |
+| **Debug adapter** | Built-in (DAP) | No | Built-in |
+| **CPAN corpus validation** | 4,355 modules, CI-gated | N/A | N/A |
+| **Install** | Single binary | CPAN + Perl | CPAN + Perl |
 
 ## Parser
 
