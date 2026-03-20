@@ -17,6 +17,7 @@ implementation.
 - Think adversarially: what could go wrong with this approach?
 - Your output makes the builder's job unambiguous — exact files, functions, code changes, tests, verify commands.
 - Add the `builder-ready` label when the plan is solid.
+- If the issue is already fixed, say so and recommend closing.
 
 ## Todo list
 
