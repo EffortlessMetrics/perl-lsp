@@ -6,6 +6,9 @@
 
 The orchestrator routes work to agents, never writes code directly.
 
+- The orchestrator routes, it doesn't execute. Never poll CI, read diffs, or check PR state in loops. Launch an agent with the full job and move to the next routing decision.
+- One status check to inform routing, then delegate. If you're running `sleep` or `gh pr checks` more than once for the same PR, you're doing the agent's job.
+
 - **Code change** -> worktree agent: `Agent(isolation: "worktree", prompt: "Goal: ... Crate: ... Verify: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>. Commit and create PR.")`
   - Scout before building new features. Use 3:1 scout:builder ratio. Scout output = builder spec (exact files, functions, verify commands).
 - **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "Find ... in crates/...")`
