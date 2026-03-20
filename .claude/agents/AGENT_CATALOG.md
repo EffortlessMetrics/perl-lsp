@@ -6,14 +6,14 @@
 Two interfaces, two agent types:
 
   Agent()     → Worker agents (11) — worktree-isolated, background, one task, exit
-  TeamCreate  → Sector leads (4) — long-running, pre-baked sector context, spawn workers
+  TeamCreate  → Pipeline leads (3) — long-running, pipeline-stage coordinators, spawn workers
 
 Agent file = identity + objectives + todo list (WHAT to do)
 Step skill = mechanical instructions per todo step (HOW to do it)
 Crate CLAUDE.md = domain context carried by the codebase (CONTEXT)
 GitHub Issue = task spec from scout to builder (HANDOFF)
 
-At scale:  User → Orchestrator → Sector leads (TeamCreate) → Workers (Agent())
+At scale:  User → Orchestrator → Pipeline leads (TeamCreate) → Workers (Agent())
 At small:  User → Orchestrator → Workers (Agent()) directly
 ```
 
@@ -31,16 +31,18 @@ Post-merge: wisdom (sonnet) synthesizes learnings
 Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
 Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
-## Sector Leads (TeamCreate — long-running coordinators)
+## Pipeline Leads (TeamCreate — long-running coordinators)
 
-| Agent | Model | Sector | Workers it spawns |
-|-------|-------|--------|-------------------|
-| lead-parser | sonnet | Parser/corpus | scout-parser, builder, plan-reviewer |
-| lead-lsp | sonnet | LSP features | scout-lsp, builder, plan-reviewer |
-| lead-quality | sonnet | Review/merge pipeline | reviewer, reviewer-deep, ops |
-| lead-infra | sonnet | Tests, deps, docs, security, DX | scout, builder, research-web, wisdom |
+| Agent | Model | Pipeline Stage | Workers it spawns |
+|-------|-------|----------------|-------------------|
+| lead-discovery | sonnet | Find work | scout, scout-parser, scout-lsp, scout-dap, plan-reviewer |
+| lead-build | sonnet | Build from specs | builder |
+| lead-review | sonnet | Review and merge | reviewer, reviewer-deep, ops, wisdom |
 
-Each lead has pre-baked sector context (crate paths, data sources, goals). They persist for the session, manage a shared task list, and spawn workers via Agent().
+Each lead coordinates a pipeline stage, not a domain. They persist for the
+session, manage a shared task list, and spawn workers via Agent(). Leads
+never read code or investigate — they only work through subagents.
+disallowedTools (Edit, Write) enforces orchestrator-only role.
 
 ## Worker Agents (Agent()) — 11
 
@@ -98,11 +100,11 @@ security-scout, dap-scout, changelog
 
 ## Design Principles
 
-1. **Two interfaces, two agent types.** Workers via Agent() (worktree-isolated, one task, exit). Sector leads via TeamCreate (long-running, manage workers).
+1. **Two interfaces, two agent types.** Workers via Agent() (worktree-isolated, one task, exit). Pipeline leads via TeamCreate (long-running, manage workers).
 2. **Workers are scoped and short-lived.** One issue, one PR, one task per agent. 20K context > 1M context.
 3. **Every worker runs in its own worktree.** Full isolation = full freedom. Agents can't harm each other.
-4. **Sector leads manage, workers execute.** Leads spawn workers, track progress, coordinate. They never write code.
-5. **Scale by adding sector leads, not by the orchestrator tracking more workers.** Small sessions: direct Agent() calls. Large sessions: TeamCreate with sector leads.
+4. **Pipeline leads manage, workers execute.** Leads spawn workers, track progress, coordinate. They never write code or read code — disallowedTools enforces this.
+5. **Scale by adding pipeline leads, not by the orchestrator tracking more workers.** Small sessions: direct Agent() calls. Large sessions: TeamCreate with pipeline leads.
 6. **Issues carry task specs.** Scouts do 75% of the work; builders execute.
 7. **Every output is a knowledge artifact** — narrate thinking, leave breadcrumbs.
 8. **Model tiering:** haiku for mechanical checks, sonnet for creative analysis and coordination.
