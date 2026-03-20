@@ -520,7 +520,16 @@ impl<'a> Parser<'a> {
                             let is_nullary_without_args = Self::is_nullary_builtin(name)
                                 && self.peek_kind().is_some_and(Self::is_binary_operator);
 
-                            if self.is_at_statement_end() || is_nullary_without_args {
+                            // When a builtin is followed by a comma, it should be treated
+                            // as having no arguments.  The comma belongs to an enclosing
+                            // list context (e.g. `grep defined, @list`).
+                            let is_comma_terminated =
+                                self.peek_kind() == Some(TokenKind::Comma);
+
+                            if self.is_at_statement_end()
+                                || is_nullary_without_args
+                                || is_comma_terminated
+                            {
                                 // Bare builtin with no arguments
                                 expr = Node::new(
                                     NodeKind::FunctionCall { name: name.clone(), args: vec![] },
