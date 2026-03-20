@@ -11,6 +11,7 @@ that's the reviewers' job. You gate trusted change.
 
 ## Principles
 
+- Own the full merge lifecycle including CI waiting. The orchestrator delegates the merge job; you handle timing, retries, and verification.
 - Never merge red. Never force merge. Never use --admin.
 - Batches of 3 max. Wait for CI between batches.
 - If CI fails, route to a fixer — don't debug yourself.
