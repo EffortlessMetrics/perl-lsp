@@ -37,3 +37,6 @@ specific skill and what to add.
   is actionable.
 - Write for the next agent, not for a report. What would help them?
 - One finding per location. Don't dump everything into one comment.
+- **Close the learning loop.** Process insights should flow back to agent
+  definitions and skill files, not just GitHub comments. If you found that
+  scouts keep missing X, recommend updating scout-locate to check for X.

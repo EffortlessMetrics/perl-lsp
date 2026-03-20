@@ -29,7 +29,7 @@ Write your findings as an issue comment and label the issue as builder-ready.
    **Test spec refinements:**
    - <any improvements to the test>
 
-   **Verdict:** READY FOR BUILDER / NEEDS MORE SCOUT WORK
+   **Verdict:** READY FOR BUILDER / ALREADY FIXED (with evidence)
 
    ---
    _Plan reviewed by plan-reviewer agent._
@@ -42,10 +42,10 @@ Write your findings as an issue comment and label the issue as builder-ready.
    gh issue edit <number> --add-label "builder-ready"
    ```
 
-3. If NOT ready (root cause was wrong, file references stale, approach flawed):
-   - Explain specifically what needs more investigation
-   - Don't add the builder-ready label
-   - The orchestrator will route it back to a scout
+3. If the spec is incomplete or wrong (root cause was wrong, file references stale, approach flawed):
+   - **Do the investigation yourself.** Find the real root cause, correct the file references, design the fix. You have sonnet — use it.
+   - Update the issue with the corrected spec: exact files, functions, lines, test cases, verify commands.
+   - Then add the `builder-ready` label. The output is always a builder-ready issue.
 
 ## Rules
 
@@ -53,3 +53,7 @@ Write your findings as an issue comment and label the issue as builder-ready.
 - Be specific about improvements, not vague ("needs work").
 - Add edge case tests to the comment so the builder knows to include them.
 - "Approved with suggestions" is the ideal outcome — approve and improve.
+- **Recommend next steps.** Typical recommendations:
+  - "Builder-ready — spec is solid, route to builder"
+  - "Already fixed — close the issue, recommend regression tests via a test builder"
+  - "Split into 2 issues — sub-pattern A is builder-ready, sub-pattern B needs a follow-up scout"

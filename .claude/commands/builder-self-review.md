@@ -31,7 +31,12 @@ This catches dumb mistakes before a reviewer has to.
    - Any `.clone()` on Copy types?
    - Any commented-out code?
 
-5. If you find issues: fix them now, re-run `/verify`, then continue.
+5. **Fix everything you find** — don't just note it, fix it now. Re-run `/verify`, then continue.
+
+6. **Look for improvements** beyond just correctness:
+   - Can any code be simplified?
+   - Are test names clear and descriptive?
+   - Are there edge cases worth one more test?
 
 ## Output
 
@@ -40,4 +45,9 @@ Record in your task:
 Self-review: CLEAN / FIXED <what>
 Diff size: <lines added/removed>
 Files changed: <count>
+Recommend: <next step, e.g.:
+  - "Ready for review — clean implementation"
+  - "Needs a follow-up builder for edge case X I discovered but is out of scope"
+  - "Recommend accuracy scout — the spec's root cause was wrong, I adapted but want verification"
+>
 ```

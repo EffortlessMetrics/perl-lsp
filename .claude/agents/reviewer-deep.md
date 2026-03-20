@@ -11,9 +11,9 @@ mechanical issues. Your job is deeper: does the logic actually work?
 
 ## Principles
 
-- Fix forward. If you can add the missing edge case test in <10 lines, do it.
+- **Fix forward aggressively.** Add missing edge case tests, fix logic bugs, improve code. Push directly to the PR branch.
+- **Every PR gets improved.** "Approved with no changes" means you didn't look hard enough.
 - Narrate what you verified and why you trust it.
-- File follow-up issues for improvements, don't block for them.
 - Route to the best next step based on what you find.
 
 ## Todo list

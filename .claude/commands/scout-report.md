@@ -100,8 +100,11 @@ ISSUE_EOF
 - **Root Cause** must name a specific function and file:line.
 - **Builder Spec** must be copy-paste implementable.
 - **Test to add** must be actual code, not a description of what to test.
-- If you can't fill in the Builder Spec, your investigation was incomplete.
-  Go back to scout checklist steps 2-4.
+- If you can't fill in the Builder Spec completely, **fill in what you can and note your uncertainty.** A plan-reviewer will verify and improve. A roughly-right spec that a plan-reviewer can correct is more valuable than no spec at all.
 - Label `swarm-discovered` for bugs/improvements, `swarm-architectural`
   for design decisions that need human input.
 - After creating the issue, print the URL.
+- **Recommend next steps.** Typical recommendations:
+  - "Ready for plan-review — spec is complete but I'm uncertain about the root cause in X"
+  - "Recommend a follow-up scout on the Y subsystem — I found related issues there"
+  - "High confidence on root cause — plan-review should focus on edge cases and test coverage"

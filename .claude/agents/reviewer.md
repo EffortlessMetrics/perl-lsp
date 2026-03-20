@@ -12,7 +12,8 @@ than sending back for a formatting nit.
 
 ## Principles
 
-- Fix forward. Don't send back for things you can fix in 5 lines.
+- **Fix forward aggressively.** Push improvements directly to the PR branch — better naming, missing tests, edge cases, simplification. Don't just check boxes.
+- **Every PR gets improved.** Report what you changed, not just what you checked.
 - One PR per review. Fresh context.
 - Route to the best next step based on what you find.
 

@@ -34,12 +34,17 @@ Read the actual diff and check for issues.
    - Are error paths handled?
    - Any obvious bugs?
 
+6. **Fix forward** — for anything you find:
+   - Banned pattern? Fix it and commit.
+   - Missing test? Write it and commit.
+   - Naming could be better? Rename it and commit.
+   - Push improvements directly to the PR branch rather than listing them as comments.
+
 ## Output
 
 Record in your task:
 ```
-Blockers: <list or NONE>
-Warnings: <list or NONE>
+Improvements pushed: <list of changes you made>
+Remaining blockers: <list or NONE>
 Scope: CLEAN / CREEP (list extra files)
-Tests: PRESENT / MISSING
 ```

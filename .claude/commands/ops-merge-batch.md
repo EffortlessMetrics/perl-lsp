@@ -15,21 +15,31 @@ Merge up to 3 PRs from the candidates identified in step 1.
    - Parser fixes before corpus ratchets
    - Infrastructure before features
 
-2. Merge each PR:
+2. **Fresh green check** — immediately before each merge, verify live state:
+   ```bash
+   gh pr view <number> --json isDraft,mergeable,headRefOid,reviewDecision,statusCheckRollup
+   ```
+   All of these must be true AT MERGE TIME (not remembered from earlier):
+   - Not draft
+   - Mergeable now
+   - CI checks green on the current HEAD SHA
+   - No blocking review comments
+
+3. Merge each PR:
    ```bash
    gh pr merge <number> --merge
    ```
 
-3. After each merge, wait a moment for GitHub to process:
+4. After each merge, verify it landed:
    ```bash
-   # Verify it landed
    gh pr view <number> --json state --jq .state
    ```
 
-4. If a merge fails:
+5. If a merge fails or pre-check fails:
    - CONFLICTING → skip, note "needs rebase"
-   - CI red → skip, note "CI failure: <check name>"
-   - Draft → `gh pr ready <number>` first, then retry
+   - CI red or pending → skip, note "CI not green on current HEAD"
+   - CI green on old SHA → skip, note "stale CI — needs rerun"
+   - Draft → skip, note "still in review"
 
 ## Rules
 

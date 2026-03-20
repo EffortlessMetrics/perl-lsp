@@ -29,11 +29,16 @@ Read the diff carefully and verify the logic matches the issue's intent.
    - Could existing callers break?
    - Are there related tests that might need updating?
 
+5. **Fix forward:**
+   - Logic slightly off? Fix it on the branch.
+   - Test only asserts "no crash" instead of behavior? Strengthen the assertion.
+   - Regression risk from an uncovered path? Add a test for it.
+
 ## Output
 
 Record in your task:
 ```
-Logic correct: YES / NO (details)
-Test quality: GOOD / WEAK (details)
+Logic: CORRECT / FIXED <what you changed>
+Tests: GOOD / IMPROVED <what you added>
 Regression risk: LOW / MEDIUM / HIGH (details)
 ```

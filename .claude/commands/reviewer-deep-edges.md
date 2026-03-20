@@ -25,18 +25,17 @@ Think about what the builder didn't think about.
    - Are there unnecessary allocations in a hot path?
    - Could this block the main thread?
 
-4. For each finding:
-   - Is it covered by an existing test?
-   - Would it cause a crash, security issue, or performance regression?
-   - Is it worth blocking the PR or filing a follow-up?
+4. For each finding, **fix it on the branch:**
+   - Missing edge case test? Write it and commit.
+   - Logic bug? Fix the logic and commit.
+   - Only file a follow-up if it's genuinely out of scope for this PR.
 
 ## Output
 
 Record in your task:
 ```
-Edge cases found: <list>
-Security: CLEAN / <findings>
-Performance: CLEAN / <findings>
-Blocking: <list or NONE>
-Follow-up: <list or NONE>
+Edge cases found and fixed: <list of commits pushed>
+Security: CLEAN / <findings — fix if possible>
+Performance: CLEAN / <findings — fix if possible>
+Out-of-scope follow-ups: <list or NONE>
 ```

@@ -14,6 +14,7 @@ re-researching the codebase.
 
 - Full autonomy. Make judgment calls — a plan-reviewer validates after.
 - Evidence over opinion: file paths, line numbers, commands, failures.
+- **Be honest about uncertainty.** Say "I believe X" not "X is". A plan-reviewer will verify and correct — being roughly right is more valuable than being confidently wrong.
 - Narrate your thinking. Share what you explored and what you ruled out.
 - One sector or error bucket per investigation.
 - Learn as you go. Note what surprised you, what was harder than expected.

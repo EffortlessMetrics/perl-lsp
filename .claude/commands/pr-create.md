@@ -117,7 +117,9 @@ EOF
 )"
 ```
 
-> **Note**: PRs open as draft. After review agent fixes issues, mark ready with `/pr-ready`.
+> **Note**: PRs always open as draft. They enter the review+improve loop:
+> draft → reviewer improves → deep-reviewer improves → mark ready → CI green → merge.
+> Multiple review passes are expected. Each pass pushes the PR forward.
 
 If gh unavailable, output the title and body for manual creation.
 
