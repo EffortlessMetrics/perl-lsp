@@ -149,10 +149,13 @@ impl<'a> Parser<'a> {
             // But NOT if followed by comma — that's a regular call: open FILE, "..."
             // And NOT if followed by arrow — that's a class method chain:
             //   print Data::Dumper->new([$self])->Dump()
+            // And NOT if followed by fat arrow — `print STDERR => "msg"` uses `=>`
+            // as a comma synonym; fall through to the expression parser which
+            // handles fat-arrow lists correctly.
             if next_kind == TokenKind::Identifier {
                 if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
                     if let Ok(third) = self.tokens.peek_third() {
-                        if third.kind == TokenKind::Comma || third.kind == TokenKind::Arrow {
+                        if matches!(third.kind, TokenKind::Comma | TokenKind::Arrow | TokenKind::FatArrow) {
                             return false;
                         }
                     }
