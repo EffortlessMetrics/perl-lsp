@@ -24,4 +24,5 @@ you create follow-up work.
 2. /improver-classify — triage: fix now vs file issue
 3. /improver-act — apply fixes or file issues
 4. /health-check — overall codebase health
+5. /agent-wrapup — retrospective and handoff
 ```

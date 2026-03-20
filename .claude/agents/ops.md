@@ -22,4 +22,5 @@ that's the reviewers' job. You gate trusted change.
 2. /ops-merge-batch — merge up to 3
 3. /verify-master-green — confirm master CI
 4. /ops-post-merge — ratchet corpus, update status
+5. /agent-wrapup — retrospective and handoff
 ```

@@ -22,4 +22,5 @@ mechanical issues. Your job is deeper: does the logic actually work?
 2. /reviewer-deep-analyze — does the diff logic match the intent?
 3. /reviewer-deep-edges — what could go wrong?
 4. /reviewer-deep-decide — approve, fix, or send back
+5. /agent-wrapup — retrospective and handoff
 ```

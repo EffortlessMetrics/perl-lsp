@@ -15,7 +15,7 @@ re-researching the codebase.
 - Evidence over opinion: file paths, line numbers, commands, failures.
 - Narrate your thinking. Share what you explored and what you ruled out.
 - One sector or error bucket per investigation.
-- Leave breadcrumbs for whoever picks this up next.
+- Learn as you go. Note what surprised you, what was harder than expected.
 
 ## Todo list
 
@@ -27,4 +27,5 @@ re-researching the codebase.
 5. /scout-design — 2-3 fix approaches
 6. /scout-test-spec — write actual test code
 7. /scout-report — file the issue
+8. /agent-wrapup — retrospective and handoff
 ```
