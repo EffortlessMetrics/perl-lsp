@@ -87,6 +87,10 @@ fn main() {
             let exit_code = run_check(&launch_plan.files);
             process::exit(exit_code);
         }
+        LaunchAction::CheckProject { ref dir } => {
+            let exit_code = run_check_project(dir);
+            process::exit(exit_code);
+        }
         LaunchAction::Completion { ref shell } => {
             if let Some(script) = shell_completion(shell) {
                 print!("{script}");
@@ -160,6 +164,145 @@ fn run_check(files: &[String]) -> i32 {
 fn is_terminal_stdout() -> bool {
     use std::io::IsTerminal;
     env::var("NO_COLOR").is_err() && std::io::stdout().is_terminal()
+}
+
+/// Error details for a single file that failed to parse cleanly.
+struct FileError {
+    path: String,
+    errors: Vec<String>,
+}
+
+/// Run the `--check-project` mode: scan a directory and report parsability.
+fn run_check_project(dir: &str) -> i32 {
+    let extensions: &[&str] = &["pm", "pl", "t"];
+
+    let walker = walkdir::WalkDir::new(dir).follow_links(true).into_iter();
+
+    let mut total = 0usize;
+    let mut clean = 0usize;
+    let mut file_errors: Vec<FileError> = Vec::new();
+    let mut category_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+
+    for entry in walker.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let ext_match = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| extensions.contains(&e))
+            .unwrap_or(false);
+        if !ext_match {
+            continue;
+        }
+
+        total += 1;
+        let path_str = path.display().to_string();
+
+        let source = match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                file_errors
+                    .push(FileError { path: path_str, errors: vec![format!("read error: {e}")] });
+                category_counts.entry("IO error".to_string()).and_modify(|c| *c += 1).or_insert(1);
+                continue;
+            }
+        };
+
+        let mut parser = perl_parser::Parser::new(&source);
+        let parse_result = parser.parse();
+        let recovered_errors = parser.errors();
+
+        let mut errors_for_file: Vec<String> = Vec::new();
+
+        // Collect recovered errors (parser returned Ok but had issues)
+        for err in recovered_errors {
+            let cat = categorize_error(&format!("{err}"));
+            category_counts.entry(cat).and_modify(|c| *c += 1).or_insert(1);
+            errors_for_file.push(format!("{err}"));
+        }
+
+        // Collect catastrophic parse failure
+        if let Err(ref e) = parse_result {
+            let cat = categorize_error(&format!("{e}"));
+            category_counts.entry(cat).and_modify(|c| *c += 1).or_insert(1);
+            errors_for_file.push(format!("{e}"));
+        }
+
+        if errors_for_file.is_empty() {
+            clean += 1;
+        } else {
+            file_errors.push(FileError { path: path_str, errors: errors_for_file });
+        }
+    }
+
+    // Print report
+    println!("Perl Project Parsability Report");
+    println!("===============================");
+    println!();
+    println!("Directory: {dir}");
+    println!("Files scanned: {total}");
+
+    if total == 0 {
+        println!();
+        println!("No Perl files (.pm, .pl, .t) found.");
+        return 0;
+    }
+
+    let pct = if total > 0 { (clean as f64 / total as f64) * 100.0 } else { 0.0 };
+
+    println!("Clean parses: {clean}/{total} ({pct:.1}%)");
+    println!();
+
+    if !file_errors.is_empty() {
+        println!("Parse errors:");
+        for fe in &file_errors {
+            for err in &fe.errors {
+                println!("  {}: {err}", fe.path);
+            }
+        }
+        println!();
+    }
+
+    if !category_counts.is_empty() {
+        let mut cats: Vec<_> = category_counts.into_iter().collect();
+        cats.sort_by(|a, b| b.1.cmp(&a.1));
+        println!("Top issue categories:");
+        for (cat, count) in &cats {
+            println!("  {cat}: {count}");
+        }
+        println!();
+    }
+
+    if pct >= 80.0 {
+        println!("Assessment: PASS ({pct:.1}% parsable)");
+        0
+    } else {
+        println!("Assessment: FAIL ({pct:.1}% parsable, threshold 80%)");
+        1
+    }
+}
+
+/// Categorize an error message into a broad bucket.
+fn categorize_error(msg: &str) -> String {
+    if msg.contains("Unexpected end of input") {
+        "Unexpected EOF".to_string()
+    } else if msg.contains("expected") && msg.contains("found") {
+        "Unexpected token".to_string()
+    } else if msg.contains("Invalid syntax") {
+        "Syntax error".to_string()
+    } else if msg.contains("Lexer error") {
+        "Lexer error".to_string()
+    } else if msg.contains("recursion") || msg.contains("Recursion") {
+        "Recursion limit".to_string()
+    } else if msg.contains("read error") {
+        "IO error".to_string()
+    } else {
+        "Other".to_string()
+    }
 }
 
 fn run_server(launch_config: LaunchConfig) {
