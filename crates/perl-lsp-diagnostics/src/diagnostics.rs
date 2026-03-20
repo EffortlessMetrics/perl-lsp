@@ -7,7 +7,7 @@ use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
-use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolTable};
+use perl_semantic_analyzer::symbol::SymbolExtractor;
 
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
