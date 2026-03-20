@@ -21,7 +21,7 @@ pub fn resolve_perl_path() -> Result<PathBuf> {
     resolve_perl_path_from_path_env(&path_env)
 }
 
-fn resolve_perl_path_from_path_env(path_env: &str) -> Result<PathBuf> {
+pub(crate) fn resolve_perl_path_from_path_env(path_env: &str) -> Result<PathBuf> {
     for path_dir in path_env.split(PATH_SEPARATOR) {
         let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
         if perl_path.exists() && perl_path.is_file() {
@@ -122,5 +122,66 @@ mod tests {
         let env =
             setup_environment(&[PathBuf::from("/workspace/lib"), PathBuf::from("/custom/lib")]);
         assert!(env.contains_key("PERL5LIB"));
+    }
+
+    #[test]
+    fn resolve_from_path_env_finds_perl_in_first_dir() {
+        use std::fs;
+        let tempdir = tempfile::tempdir().unwrap();
+        let bin = tempdir.path().join(PERL_EXECUTABLE);
+        fs::write(&bin, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&bin).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&bin, perms).unwrap();
+        }
+        let path_str = tempdir.path().to_string_lossy().to_string();
+        let result = resolve_perl_path_from_path_env(&path_str);
+        assert!(result.is_ok(), "expected perl found, got: {:?}", result);
+        assert_eq!(result.unwrap(), bin);
+    }
+
+    #[test]
+    fn resolve_from_path_env_empty_path_returns_error() {
+        let result = resolve_perl_path_from_path_env("");
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(
+            msg.contains("perl") || msg.contains("PATH"),
+            "error should mention perl/PATH: {msg}"
+        );
+    }
+
+    #[test]
+    fn resolve_from_path_env_no_perl_on_path_returns_error() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path_str = tempdir.path().to_string_lossy().to_string();
+        let result = resolve_perl_path_from_path_env(&path_str);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn normalize_path_wsl_mnt_translated_to_windows_style() {
+        let wsl_path = std::path::Path::new("/mnt/c/Users/user/script.pl");
+        let normalized = normalize_path(wsl_path);
+        let s = normalized.to_string_lossy();
+        assert!(
+            s.starts_with("C:\\") || s.starts_with("C:/"),
+            "expected Windows-style path, got: {s}"
+        );
+        assert!(s.contains("Users"), "path content preserved: {s}");
+    }
+
+    #[test]
+    fn normalize_path_non_wsl_unix_path_unchanged_on_linux() {
+        let path = std::path::Path::new("/usr/local/bin/perl");
+        let normalized = normalize_path(path);
+        assert!(
+            !normalized.to_string_lossy().contains('\\'),
+            "non-WSL path should not be Windows-escaped"
+        );
     }
 }
