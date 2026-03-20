@@ -84,3 +84,47 @@ write;
 fn prototype_semicolon_not_confused_with_special_var() {
     parse_ok("sub foo($;@) {}");
 }
+
+// ===== $>, $<, $) — process UID/GID special variables =====
+
+#[test]
+fn dollar_gt_effective_uid() {
+    parse_ok("my $uid = $>;");
+}
+
+#[test]
+fn dollar_lt_real_uid() {
+    parse_ok("my $uid = $<;");
+}
+
+#[test]
+fn dollar_rparen_effective_gid() {
+    parse_ok(r#"my ($egid, @supp) = split " ", $);"#);
+}
+
+#[test]
+fn dollar_rparen_in_constant() {
+    parse_ok(r#"use constant GID => (split ' ', $) )[0];"#);
+}
+
+#[test]
+fn dollar_gt_in_getpwuid() {
+    parse_ok(r#"my $user = (getpwuid($>))[0];"#);
+}
+
+#[test]
+fn dollar_rparen_in_grep() {
+    parse_ok(r#"$ok = grep { $_ == $x } split /\s+/, $);"#);
+}
+
+// ===== while () { } — empty condition (infinite loop idiom) =====
+
+#[test]
+fn while_empty_condition() {
+    parse_ok("while () { last; }");
+}
+
+#[test]
+fn while_empty_condition_with_body() {
+    parse_ok("while () { my $line = <STDIN>; last unless defined $line; }");
+}
