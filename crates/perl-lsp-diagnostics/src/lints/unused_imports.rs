@@ -13,7 +13,9 @@
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
-use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
+use perl_lsp_diagnostic_types::{
+    Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
+};
 
 /// Pragmas that should never be flagged as unused (they operate via side effects).
 const PRAGMA_SKIP_LIST: &[&str] = &[
