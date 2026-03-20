@@ -59,6 +59,14 @@ impl<'a> Parser<'a> {
                 ))
             }
 
+            TokenKind::VString => {
+                let token = self.tokens.next()?;
+                Ok(Node::new(
+                    NodeKind::String { value: token.text.to_string(), interpolated: false },
+                    SourceLocation { start: token.start, end: token.end },
+                ))
+            }
+
             TokenKind::String => {
                 let token = self.tokens.next()?;
                 // Check if it's a double-quoted string (interpolated)
