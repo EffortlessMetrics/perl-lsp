@@ -8,6 +8,7 @@
 //! - Linting for common mistakes
 //! - Deprecated feature detection
 //! - Strict warnings
+//! - Security anti-pattern detection
 //!
 //! ## Usage
 //!
@@ -32,7 +33,7 @@ mod dedup;
 mod diagnostics;
 /// ERROR node classification and reporting
 mod error_nodes;
-/// Lint checks (common mistakes, deprecations, strict warnings)
+/// Lint checks (common mistakes, deprecations, strict warnings, security)
 mod lints;
 /// Parse error to diagnostic conversion
 mod parse_errors;
@@ -49,6 +50,7 @@ pub use perl_lsp_diagnostic_types::{
 // Re-export lint checks from the lints module
 pub use lints::common_mistakes;
 pub use lints::deprecated;
+pub use lints::security;
 pub use lints::strict_warnings;
 
 // Re-export dead code detection (when not targeting WASM)
