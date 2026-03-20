@@ -1,5 +1,6 @@
 mod support;
 
+use perl_tdd_support::must_some;
 use serde_json::json;
 use support::lsp_harness::LspHarness;
 
@@ -28,7 +29,7 @@ fn test_hover_inc_array() -> TestResult {
             }),
         )
         .unwrap_or(json!(null));
-    let val = hover_value(&result).expect("Expected hover for @INC");
+    let val = must_some(hover_value(&result));
     assert!(val.contains("Module Search Paths"), "got: {val}");
     Ok(())
 }
@@ -48,7 +49,7 @@ fn test_hover_inc_hash() -> TestResult {
             }),
         )
         .unwrap_or(json!(null));
-    let val = hover_value(&result).expect("Expected hover for %INC");
+    let val = must_some(hover_value(&result));
     assert!(val.contains("Loaded Modules"), "got: {val}");
     Ok(())
 }
@@ -68,7 +69,7 @@ fn test_hover_env_hash() -> TestResult {
             }),
         )
         .unwrap_or(json!(null));
-    let val = hover_value(&result).expect("Expected hover for %ENV");
+    let val = must_some(hover_value(&result));
     assert!(val.contains("Environment Variables"), "got: {val}");
     Ok(())
 }
@@ -88,7 +89,7 @@ fn test_hover_isa_undeclared() -> TestResult {
             }),
         )
         .unwrap_or(json!(null));
-    let val = hover_value(&result).expect("Expected hover for @ISA");
+    let val = must_some(hover_value(&result));
     assert!(val.contains("Inheritance"), "got: {val}");
     Ok(())
 }

@@ -19,10 +19,8 @@ fn test_duplicate_parameter_code_actions() -> Result<(), Box<dyn std::error::Err
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should offer to remove or rename the duplicate
-    let duplicate_actions: Vec<_> = actions
-        .iter()
-        .filter(|a| a.diagnostic_id.as_deref() == Some("duplicate-parameter"))
-        .collect();
+    let duplicate_actions: Vec<_> =
+        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("PL106")).collect();
 
     assert!(duplicate_actions.len() >= 2);
     assert!(duplicate_actions.iter().any(|a| a.title.contains("Remove duplicate")));
@@ -48,10 +46,8 @@ sub process($data) {
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should offer to rename the parameter
-    let shadow_actions: Vec<_> = actions
-        .iter()
-        .filter(|a| a.diagnostic_id.as_deref() == Some("parameter-shadows-global"))
-        .collect();
+    let shadow_actions: Vec<_> =
+        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("PL107")).collect();
 
     assert!(!shadow_actions.is_empty());
     assert!(shadow_actions.iter().any(|a| a.title.contains("Rename parameter")));
@@ -80,7 +76,7 @@ fn test_unused_parameter_code_actions() -> Result<(), Box<dyn std::error::Error>
 
     // Should offer only the safe rename fix
     let unused_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("unused-parameter")).collect();
+        actions.iter().filter(|a| a.diagnostic_id.as_deref() == Some("PL108")).collect();
 
     assert!(!unused_actions.is_empty());
     assert_eq!(unused_actions.len(), 1);
@@ -136,9 +132,9 @@ sub test($x, $y, $x, $unused) {
     let actions = code_actions_provider.get_code_actions((0, source.len()), &diagnostics);
 
     // Should have actions for all issues
-    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("duplicate-parameter")));
-    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("parameter-shadows-global")));
-    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("unused-parameter")));
+    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("PL106")));
+    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("PL107")));
+    assert!(actions.iter().any(|a| a.diagnostic_id.as_deref() == Some("PL108")));
     Ok(())
 }
 

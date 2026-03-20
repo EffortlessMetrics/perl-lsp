@@ -8,6 +8,7 @@ use super::*;
 use crate::features::diagnostics::{
     Diagnostic as InternalDiagnostic, DiagnosticTag as InternalDiagnosticTag,
 };
+use perl_diagnostics_codes::DiagnosticCode;
 
 impl LspServer {
     /// Convert internal diagnostic tags to LSP tag values
@@ -32,7 +33,7 @@ impl LspServer {
     ///
     /// # Arguments
     ///
-    /// * `code` - Optional diagnostic code (e.g., "parse-error", "W001")
+    /// * `code` - Optional diagnostic code (e.g., "PL001", "PC001")
     /// * `message` - The diagnostic message text
     ///
     /// # Returns
@@ -163,7 +164,7 @@ impl LspServer {
                                 "end": {"line": line, "character": character + 1},
                             },
                             "severity": 1, // Error
-                            "code": "parse-error",
+                            "code": DiagnosticCode::ParseError.as_str(),
                             "source": "perl-parser",
                             "message": message,
                         })

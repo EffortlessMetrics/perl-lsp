@@ -1,4 +1,5 @@
 use crate::features::diagnostics::Diagnostic;
+use perl_diagnostics_codes::DiagnosticCode;
 
 mod fixes;
 mod source_utils;
@@ -90,16 +91,47 @@ impl CodeActionsProvider {
     /// Get code actions for a specific diagnostic
     fn get_actions_for_diagnostic(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         match diagnostic.code.as_deref() {
-            Some("undefined-variable" | "undeclared-variable") => {
+            Some(c)
+                if c == DiagnosticCode::UndefinedVariable.as_str()
+                    || c == "undefined-variable"
+                    || c == "undeclared-variable" =>
+            {
                 fixes::fix_undefined_variable(self, diagnostic)
             }
-            Some("unused-variable") => fixes::fix_unused_variable(self, diagnostic),
-            Some("variable-shadowing") => fixes::fix_variable_shadowing(diagnostic),
-            Some("variable-redeclaration") => fixes::fix_variable_redeclaration(self, diagnostic),
-            Some("duplicate-parameter") => fixes::fix_duplicate_parameter(diagnostic),
-            Some("parameter-shadows-global") => fixes::fix_parameter_shadowing(diagnostic),
-            Some("unused-parameter") => fixes::fix_unused_parameter(diagnostic),
-            Some("unquoted-bareword") => fixes::fix_unquoted_bareword(self, diagnostic),
+            Some(c) if c == DiagnosticCode::UnusedVariable.as_str() || c == "unused-variable" => {
+                fixes::fix_unused_variable(self, diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::VariableShadowing.as_str() || c == "variable-shadowing" =>
+            {
+                fixes::fix_variable_shadowing(diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::VariableRedeclaration.as_str()
+                    || c == "variable-redeclaration" =>
+            {
+                fixes::fix_variable_redeclaration(self, diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::DuplicateParameter.as_str()
+                    || c == "duplicate-parameter" =>
+            {
+                fixes::fix_duplicate_parameter(diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::ParameterShadowsGlobal.as_str()
+                    || c == "parameter-shadows-global" =>
+            {
+                fixes::fix_parameter_shadowing(diagnostic)
+            }
+            Some(c) if c == DiagnosticCode::UnusedParameter.as_str() || c == "unused-parameter" => {
+                fixes::fix_unused_parameter(diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::UnquotedBareword.as_str() || c == "unquoted-bareword" =>
+            {
+                fixes::fix_unquoted_bareword(self, diagnostic)
+            }
             Some(code) if code.starts_with("parse-error-") => {
                 fixes::fix_parse_error(self, diagnostic, code)
             }
@@ -116,6 +148,7 @@ impl CodeActionsProvider {
 mod tests {
     use super::*;
     use crate::diagnostics::DiagnosticSeverity;
+    use perl_tdd_support::must_some;
 
     /// Helper to build a diagnostic with minimal boilerplate.
     fn make_diagnostic(
@@ -263,13 +296,11 @@ mod tests {
         );
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
-        let remove = actions
-            .iter()
-            .find(|action| action.title.contains("Remove unused variable"))
-            .expect("remove action should be present");
+        let remove = must_some(
+            actions.iter().find(|action| action.title.contains("Remove unused variable")),
+        );
 
-        let declaration_end =
-            provider.source().find('\n').expect("declaration line should end with newline") + 1;
+        let declaration_end = must_some(provider.source().find('\n')) + 1;
         assert_eq!(remove.edit.range, (0, declaration_end));
         assert!(remove.edit.new_text.is_empty());
     }
@@ -278,7 +309,7 @@ mod tests {
     fn test_unused_variable_remove_action_uses_nearest_same_line_declaration() {
         let source = "my $x = 1; { my $x = 2; }\n".to_string();
         let provider = CodeActionsProvider::new(source.clone());
-        let inner_decl = source.rfind("my $x").expect("inner declaration should be present");
+        let inner_decl = must_some(source.rfind("my $x"));
 
         let diagnostic = make_diagnostic(
             (inner_decl + 3, inner_decl + 5),
@@ -288,10 +319,9 @@ mod tests {
         );
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
-        let remove = actions
-            .iter()
-            .find(|action| action.title.contains("Remove unused variable"))
-            .expect("remove action should be present");
+        let remove = must_some(
+            actions.iter().find(|action| action.title.contains("Remove unused variable")),
+        );
 
         assert_eq!(remove.edit.range.0, inner_decl);
         assert_eq!(&provider.source()[remove.edit.range.0..remove.edit.range.1], "my $x = 2;");
@@ -301,7 +331,7 @@ mod tests {
     fn test_unused_variable_fix_skips_remove_when_declaration_is_not_simple_my() {
         let source = "my ($used, $unused) = @_;\n".to_string();
         let provider = CodeActionsProvider::new(source.clone());
-        let start = source.find("$unused").expect("unused variable should be present");
+        let start = must_some(source.find("$unused"));
 
         let diagnostic = make_diagnostic(
             (start, start + "$unused".len()),
@@ -1032,10 +1062,10 @@ mod tests {
     fn test_find_declaration_range_uses_nearest_same_line_match() {
         let source = "my $x = 1; { my $x = 2; }\n".to_string();
         let provider = CodeActionsProvider::new(source.clone());
-        let inner_decl = source.rfind("my $x").expect("inner declaration should be present");
+        let inner_decl = must_some(source.rfind("my $x"));
 
-        let range = source_utils::find_declaration_range(&provider, "$x", inner_decl + 3)
-            .expect("should find the nearest declaration");
+        let range =
+            must_some(source_utils::find_declaration_range(&provider, "$x", inner_decl + 3));
         assert_eq!(range.0, inner_decl);
         assert_eq!(&provider.source()[range.0..range.1], "my $x = 2;");
     }

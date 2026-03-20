@@ -37,7 +37,7 @@ fn unused_module_is_flagged() {
     let mut diags: Vec<Diagnostic> = Vec::new();
     check_unused_imports(&ast, source, &mut diags);
     assert_eq!(diags.len(), 1);
-    assert_eq!(diags[0].code.as_deref(), Some("unused-import"));
+    assert_eq!(diags[0].code.as_deref(), Some("PL700"));
     assert!(diags[0].message.contains("Foo::Bar"));
 }
 

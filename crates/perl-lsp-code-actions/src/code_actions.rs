@@ -72,6 +72,7 @@ use crate::types::QuickFixDiagnostic;
 
 pub use crate::types::{CodeAction, CodeActionKind};
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_lsp_diagnostics::Diagnostic;
 use perl_parser_core::Node;
 
@@ -110,46 +111,63 @@ impl CodeActionsProvider {
             let qf_diag = to_quick_fix_diagnostic(diagnostic);
             if let Some(code) = &diagnostic.code {
                 match code.as_str() {
-                    "undefined-variable" | "undeclared-variable" => {
+                    // PL103: Undefined/undeclared variable
+                    c if c == DiagnosticCode::UndefinedVariable.as_str() => {
                         actions.extend(quick_fixes::fix_undefined_variable(&self.source, &qf_diag));
                     }
-                    "unused-variable" => {
+                    // PL102: Unused variable
+                    c if c == DiagnosticCode::UnusedVariable.as_str() => {
                         actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
                     }
-                    "assignment-in-condition" => {
+                    // PL403: Assignment in condition
+                    c if c == DiagnosticCode::AssignmentInCondition.as_str() => {
                         actions.extend(quick_fixes::fix_assignment_in_condition(
                             &self.source,
                             &qf_diag,
                         ));
                     }
-                    "missing-strict" => {
+                    // PL100: Missing use strict
+                    c if c == DiagnosticCode::MissingStrict.as_str() => {
                         actions.extend(quick_fixes::add_use_strict());
                     }
-                    "missing-warnings" => {
+                    // PL101: Missing use warnings
+                    c if c == DiagnosticCode::MissingWarnings.as_str() => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
-                    "deprecated-defined" => {
+                    // PL500: Deprecated defined()
+                    c if c == DiagnosticCode::DeprecatedDefined.as_str() => {
                         actions.extend(quick_fixes::fix_deprecated_defined(&self.source, &qf_diag));
                     }
-                    "numeric-undef" => {
+                    // PL404: Numeric comparison with undef
+                    c if c == DiagnosticCode::NumericComparisonWithUndef.as_str() => {
                         actions.extend(quick_fixes::fix_numeric_undef(&self.source, &qf_diag));
                     }
-                    "unquoted-bareword" => {
+                    // PL109: Unquoted bareword
+                    c if c == DiagnosticCode::UnquotedBareword.as_str() => {
                         actions.extend(quick_fixes::fix_bareword(&self.source, &qf_diag));
                     }
+                    // PL001: General parse error (stable code)
+                    c if c == DiagnosticCode::ParseError.as_str() => {
+                        actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, c));
+                    }
+                    // parse-error-* subcodes (legacy subtype codes from error classifier)
                     code if code.starts_with("parse-error-") => {
                         actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, code));
                     }
-                    "unused-parameter" => {
+                    // PL108: Unused parameter
+                    c if c == DiagnosticCode::UnusedParameter.as_str() => {
                         actions.extend(quick_fixes::fix_unused_parameter(&qf_diag));
                     }
-                    "variable-shadowing" => {
+                    // PL104: Variable shadowing
+                    c if c == DiagnosticCode::VariableShadowing.as_str() => {
                         actions.extend(quick_fixes::fix_variable_shadowing(&qf_diag));
                     }
-                    "bareword-filehandle" => {
+                    // PL400: Bareword filehandle
+                    c if c == DiagnosticCode::BarewordFilehandle.as_str() => {
                         actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
                     }
-                    "two-arg-open" => {
+                    // PL401: Two-arg open
+                    c if c == DiagnosticCode::TwoArgOpen.as_str() => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     _ => {}
@@ -199,12 +217,12 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
 
-        // Create a synthetic diagnostic for 'undefined-variable'
+        // Create a synthetic diagnostic for undefined-variable (stable code PL103)
         // "$undefined" starts at byte offset 18 (after "use strict;\nprint ")
         let diagnostics = vec![make_diagnostic(
             18, // start of "$undefined"
             28, // end of "$undefined"
-            "undefined-variable",
+            "PL103",
             "Undefined variable '$undefined'",
         )];
 
@@ -224,12 +242,12 @@ mod tests {
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
 
-        // Create a synthetic diagnostic for 'assignment-in-condition'
+        // Create a synthetic diagnostic for assignment-in-condition (stable code PL403)
         // "$x = 5" is at bytes 4-10
         let diagnostics = vec![make_diagnostic(
             4,  // start of "$x = 5"
             10, // end of "$x = 5"
-            "assignment-in-condition",
+            "PL403",
             "Assignment in condition",
         )];
 

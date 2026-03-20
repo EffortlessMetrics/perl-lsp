@@ -180,9 +180,11 @@ fn provider_no_errors_no_scope_issues() -> Result<(), Box<dyn std::error::Error>
     let diagnostics = provider.get_diagnostics(&ast, &[], source);
     // No parse errors and no undeclared vars → may still have scope issues
     // depending on analyzer, but at minimum we get a Vec back
-    assert!(diagnostics.iter().all(
-        |d| d.severity != DiagnosticSeverity::Error || d.code.as_deref() != Some("parse-error")
-    ));
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| d.severity != DiagnosticSeverity::Error || d.code.as_deref() != Some("PL001"))
+    );
     Ok(())
 }
 
@@ -199,7 +201,7 @@ fn provider_unexpected_token_error() -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty(), "should produce parse-error diagnostics");
 
     let first = &parse_diags[0];
@@ -223,7 +225,7 @@ fn provider_unexpected_token_formats_end_of_input() -> Result<(), Box<dyn std::e
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
 
     let first = &parse_diags[0];
@@ -245,7 +247,7 @@ fn provider_clamps_out_of_bounds_ranges() -> Result<(), Box<dyn std::error::Erro
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
 
     let first = &parse_diags[0];
@@ -263,7 +265,7 @@ fn provider_syntax_error() -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL002")).collect();
     assert!(!parse_diags.is_empty());
 
     let first = &parse_diags[0];
@@ -281,7 +283,7 @@ fn provider_unexpected_eof_error() -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL003")).collect();
     assert!(!parse_diags.is_empty());
 
     let first = &parse_diags[0];
@@ -299,7 +301,7 @@ fn provider_lexer_error() -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert_eq!(parse_diags[0].range.0, 0);
     assert_eq!(parse_diags[0].message, "bad token");
@@ -319,7 +321,7 @@ fn provider_multiple_errors() -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL002")).collect();
     assert!(parse_diags.len() >= 3);
     Ok(())
 }
@@ -337,7 +339,7 @@ fn provider_error_range_is_clamped_to_source_bounds() -> Result<(), Box<dyn std:
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert_eq!(parse_diags[0].range.0, source.len());
     assert_eq!(parse_diags[0].range.1, source.len().saturating_add(1));
@@ -386,8 +388,9 @@ fn deprecated_defined_array() -> Result<(), Box<dyn std::error::Error>> {
     perl_lsp_diagnostics::deprecated::check_deprecated_syntax(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("deprecated-defined")
-            && d.message.contains("@data")),
+        diagnostics
+            .iter()
+            .any(|d| d.code.as_deref() == Some("PL500") && d.message.contains("@data")),
         "Should detect deprecated defined(@array): {diagnostics:?}"
     );
     assert!(diagnostics.iter().any(|d| d.tags.contains(&DiagnosticTag::Deprecated)));
@@ -419,7 +422,7 @@ fn deprecated_defined_scalar_no_warning() -> Result<(), Box<dyn std::error::Erro
 
     // defined($scalar) is NOT deprecated
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("deprecated-defined")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL500")),
         "defined($scalar) should not trigger deprecated warning"
     );
     Ok(())
@@ -433,7 +436,7 @@ fn deprecated_array_base_variable() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::deprecated::check_deprecated_syntax(&root, &mut diagnostics);
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("deprecated-array-base")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL501")));
     assert!(diagnostics.iter().any(|d| d.message.contains("$[")));
     assert!(diagnostics.iter().any(|d| d.tags.contains(&DiagnosticTag::Deprecated)));
     Ok(())
@@ -461,7 +464,7 @@ fn deprecated_related_info_has_suggestion() -> Result<(), Box<dyn std::error::Er
     perl_lsp_diagnostics::deprecated::check_deprecated_syntax(&root, &mut diagnostics);
 
     let dep_diag: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("deprecated-defined")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL500")).collect();
     assert!(!dep_diag.is_empty());
     // Should have related info with suggestion (💡) and explanation (ℹ️)
     assert!(dep_diag[0].related_information.len() >= 2);
@@ -480,8 +483,8 @@ fn strict_warnings_both_missing() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("missing-strict")));
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("missing-warnings")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL100")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL101")));
     // Both should be informational
     for d in &diagnostics {
         assert_eq!(d.severity, DiagnosticSeverity::Information);
@@ -495,8 +498,8 @@ fn strict_warnings_strict_present() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
 
-    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")));
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("missing-warnings")));
+    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("PL100")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL101")));
     Ok(())
 }
 
@@ -506,8 +509,8 @@ fn strict_warnings_warnings_present() -> Result<(), Box<dyn std::error::Error>> 
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("missing-strict")));
-    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL100")));
+    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("PL101")));
     Ok(())
 }
 
@@ -517,8 +520,8 @@ fn strict_warnings_both_present() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
 
-    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")));
-    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")));
+    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("PL100")));
+    assert!(diagnostics.iter().all(|d| d.code.as_deref() != Some("PL101")));
     Ok(())
 }
 
@@ -549,11 +552,11 @@ fn strict_warnings_suppressed_for_moo() -> Result<(), Box<dyn std::error::Error>
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL100")),
         "Moo provides implicit strict - should not fire missing-strict"
     );
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL101")),
         "Moo provides implicit warnings - should not fire missing-warnings"
     );
     Ok(())
@@ -565,11 +568,11 @@ fn strict_warnings_suppressed_for_moose() -> Result<(), Box<dyn std::error::Erro
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL100")),
         "Moose provides implicit strict - should not fire missing-strict"
     );
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL101")),
         "Moose provides implicit warnings - should not fire missing-warnings"
     );
     Ok(())
@@ -593,11 +596,11 @@ fn strict_warnings_suppressed_for_mojo_base() -> Result<(), Box<dyn std::error::
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL100")),
         "Mojo::Base provides implicit strict - should not fire missing-strict"
     );
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL101")),
         "Mojo::Base provides implicit warnings - should not fire missing-warnings"
     );
     Ok(())
@@ -631,7 +634,7 @@ fn common_mistakes_assignment_in_if_condition() -> Result<(), Box<dyn std::error
         &mut diagnostics,
     );
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("assignment-in-condition")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL403")));
     assert!(diagnostics.iter().any(|d| d.message.contains("did you mean")));
     Ok(())
 }
@@ -658,7 +661,7 @@ fn common_mistakes_assignment_in_while_condition() -> Result<(), Box<dyn std::er
         &mut diagnostics,
     );
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("assignment-in-condition")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL403")));
     Ok(())
 }
 
@@ -687,7 +690,7 @@ fn common_mistakes_comparison_in_condition_ok() -> Result<(), Box<dyn std::error
     );
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("assignment-in-condition")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL403")),
         "== comparison should not trigger assignment-in-condition"
     );
     Ok(())
@@ -708,7 +711,7 @@ fn common_mistakes_undef_comparison() -> Result<(), Box<dyn std::error::Error>> 
         &mut diagnostics,
     );
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("numeric-undef")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL404")));
     assert!(diagnostics.iter().any(|d| d.message.contains("==")));
     Ok(())
 }
@@ -728,7 +731,7 @@ fn common_mistakes_ne_undef_comparison() -> Result<(), Box<dyn std::error::Error
         &mut diagnostics,
     );
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("numeric-undef")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL404")));
     assert!(diagnostics.iter().any(|d| d.message.contains("!=")));
     Ok(())
 }
@@ -756,10 +759,8 @@ fn common_mistakes_related_info_for_assignment() -> Result<(), Box<dyn std::erro
         &mut diagnostics,
     );
 
-    let assign_diag: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("assignment-in-condition"))
-        .collect();
+    let assign_diag: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL403")).collect();
     assert!(!assign_diag.is_empty());
     // Should have suggestion + explanation
     assert!(assign_diag[0].related_information.len() >= 2);
@@ -782,7 +783,7 @@ fn common_mistakes_no_warning_for_string_comparison() -> Result<(), Box<dyn std:
     );
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("numeric-undef")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL404")),
         "String comparison should not trigger numeric-undef"
     );
     Ok(())
@@ -911,7 +912,7 @@ fn full_pipeline_fallback_parse_error() -> Result<(), Box<dyn std::error::Error>
 
     // RecursionLimit hits the catch-all arm (location=0, error.to_string())
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert_eq!(parse_diags[0].range.0, 0);
     Ok(())
@@ -934,7 +935,7 @@ fn undeclared_variable_diagnostic_has_suggestion_and_enhanced_message()
     // Verify undeclared-variable diagnostics (if scope analysis produces them)
     // have the expected enhanced fields
     let undeclared: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("undeclared-variable")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL103")).collect();
 
     for d in &undeclared {
         // Enhanced message should mention how to fix
@@ -989,7 +990,7 @@ fn undeclared_variable_related_info_explains_strict() -> Result<(), Box<dyn std:
     let d = Diagnostic {
         range: (10, 14),
         severity: DiagnosticSeverity::Error,
-        code: Some("undeclared-variable".to_string()),
+        code: Some("PL103".to_string()),
         message:
             "Variable '$foo' is used but not declared -- add 'my $foo' to declare it in this scope"
                 .to_string(),
@@ -1027,7 +1028,7 @@ fn missing_semicolon_parse_error_has_suggestion() -> Result<(), Box<dyn std::err
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty(), "Should produce a parse-error diagnostic");
 
     let first = &parse_diags[0];
@@ -1057,7 +1058,7 @@ fn unexpected_eof_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL003")).collect();
     assert!(!parse_diags.is_empty());
 
     let first = &parse_diags[0];
@@ -1087,7 +1088,7 @@ fn found_semicolon_when_expecting_expression_has_suggestion()
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
 
     let first = &parse_diags[0];
@@ -1111,7 +1112,7 @@ fn unused_variable_has_warning_severity_and_unnecessary_tag()
     let d = Diagnostic {
         range: (3, 10),
         severity: DiagnosticSeverity::Warning,
-        code: Some("unused-variable".to_string()),
+        code: Some("PL102".to_string()),
         message: "Variable '$unused' is declared but never used -- prefix with '_' or remove it".to_string(),
         related_information: vec![
             RelatedInformation {
@@ -1167,7 +1168,7 @@ fn unused_variable_through_provider_has_correct_severity() -> Result<(), Box<dyn
     let diagnostics = provider.get_diagnostics(&ast, &[], source);
 
     let unused: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unused-variable")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
 
     for d in &unused {
         assert_eq!(
@@ -1190,7 +1191,7 @@ fn unused_parameter_has_warning_severity_and_unnecessary_tag()
     let d = Diagnostic {
         range: (5, 12),
         severity: DiagnosticSeverity::Warning,
-        code: Some("unused-parameter".to_string()),
+        code: Some("PL108".to_string()),
         message: "Parameter '$param' is never used".to_string(),
         related_information: vec![],
         tags: vec![DiagnosticTag::Unnecessary],
@@ -1210,8 +1211,7 @@ fn unused_parameter_has_warning_severity_and_unnecessary_tag()
 #[test]
 fn suggestion_field_is_populated_for_scope_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
     // The suggestion field should be populated for key diagnostic codes
-    let codes_that_should_have_suggestions =
-        [("undeclared-variable", "my"), ("unused-variable", "_")];
+    let codes_that_should_have_suggestions = [("PL103", "my"), ("PL102", "_")];
 
     for (code, expected_content) in codes_that_should_have_suggestions {
         let d = Diagnostic {
@@ -1294,10 +1294,8 @@ fn full_pipeline_uninitialized_variable_emits_warning() -> Result<(), Box<dyn st
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
 
-    let uninit: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("uninitialized-variable"))
-        .collect();
+    let uninit: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL110")).collect();
 
     assert!(!uninit.is_empty(), "Expected at least one uninitialized-variable diagnostic");
     assert_eq!(
@@ -1319,10 +1317,8 @@ fn full_pipeline_initialized_variable_no_warning() -> Result<(), Box<dyn std::er
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
 
-    let uninit: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("uninitialized-variable"))
-        .collect();
+    let uninit: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL110")).collect();
 
     assert!(
         uninit.is_empty(),
@@ -1342,7 +1338,7 @@ fn misspelled_pragma_structs_suggests_strict() -> Result<(), Box<dyn std::error:
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
 
     let typo_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL111")).collect();
     assert!(!typo_diags.is_empty(), "Should detect 'structs' as a misspelling of 'strict'");
 
     let first = &typo_diags[0];
@@ -1366,7 +1362,7 @@ fn misspelled_pragma_warning_suggests_warnings() -> Result<(), Box<dyn std::erro
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
 
     let typo_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL111")).collect();
     assert!(!typo_diags.is_empty(), "Should detect 'warning' as a misspelling of 'warnings'");
 
     let first = &typo_diags[0];
@@ -1386,7 +1382,7 @@ fn misspelled_pragma_no_false_positive_for_valid_module() -> Result<(), Box<dyn 
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
 
     let typo_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL111")).collect();
     assert!(
         typo_diags.is_empty(),
         "Should NOT flag 'File::Basename' as misspelled: {typo_diags:?}"
@@ -1405,7 +1401,7 @@ fn misspelled_pragma_feaure_suggests_feature() -> Result<(), Box<dyn std::error:
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
 
     let typo_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL111")).collect();
     assert!(!typo_diags.is_empty(), "Should detect 'feaure' as a misspelling of 'feature'");
 
     let first = &typo_diags[0];
@@ -1426,7 +1422,7 @@ fn recursion_limit_error_has_suggestion() -> Result<(), Box<dyn std::error::Erro
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(
         parse_diags[0].suggestion.is_some(),
@@ -1449,7 +1445,7 @@ fn invalid_number_error_has_suggestion() -> Result<(), Box<dyn std::error::Error
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1469,7 +1465,7 @@ fn invalid_string_error_has_suggestion() -> Result<(), Box<dyn std::error::Error
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1489,7 +1485,7 @@ fn invalid_regex_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1509,7 +1505,7 @@ fn unclosed_delimiter_error_has_suggestion() -> Result<(), Box<dyn std::error::E
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1529,7 +1525,7 @@ fn nesting_too_deep_error_has_suggestion() -> Result<(), Box<dyn std::error::Err
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1553,7 +1549,7 @@ fn unexpected_closing_brace_has_helpful_suggestion() -> Result<(), Box<dyn std::
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1574,7 +1570,7 @@ fn syntax_error_with_heredoc_hint_has_suggestion() -> Result<(), Box<dyn std::er
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL002")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1592,7 +1588,7 @@ fn lexer_error_with_unterminated_string_has_suggestion() -> Result<(), Box<dyn s
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
     let parse_diags: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
     assert!(!parse_diags.is_empty());
     assert!(parse_diags[0].suggestion.is_some());
     let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
@@ -1621,12 +1617,12 @@ fn security_two_arg_open_warns() -> Result<(), Box<dyn std::error::Error>> {
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-two-arg-open")),
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("PL401")),
         "Should detect two-arg open: {diagnostics:?}"
     );
     let diag = diagnostics
         .iter()
-        .find(|d| d.code.as_deref() == Some("security-two-arg-open"))
+        .find(|d| d.code.as_deref() == Some("PL401"))
         .ok_or("missing diagnostic")?;
     assert_eq!(diag.severity, DiagnosticSeverity::Warning);
     assert!(diag.message.contains("3-argument open"));
@@ -1646,7 +1642,7 @@ fn security_three_arg_open_no_warning() -> Result<(), Box<dyn std::error::Error>
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-two-arg-open")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL401")),
         "3-arg open should not trigger warning: {diagnostics:?}"
     );
     Ok(())
@@ -1662,7 +1658,7 @@ fn security_one_arg_open_no_warning() -> Result<(), Box<dyn std::error::Error>> 
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-two-arg-open")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL401")),
         "1-arg open should not trigger warning"
     );
     Ok(())
@@ -1678,12 +1674,12 @@ fn security_string_eval_warns() -> Result<(), Box<dyn std::error::Error>> {
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")),
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("PL600")),
         "Should detect string eval: {diagnostics:?}"
     );
     let diag = diagnostics
         .iter()
-        .find(|d| d.code.as_deref() == Some("security-string-eval"))
+        .find(|d| d.code.as_deref() == Some("PL600"))
         .ok_or("missing diagnostic")?;
     assert_eq!(diag.severity, DiagnosticSeverity::Warning);
     assert!(diag.message.contains("security risk"));
@@ -1701,7 +1697,7 @@ fn security_eval_with_variable_warns() -> Result<(), Box<dyn std::error::Error>>
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")),
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("PL600")),
         "Should detect eval with variable: {diagnostics:?}"
     );
     Ok(())
@@ -1717,7 +1713,7 @@ fn security_eval_block_no_warning() -> Result<(), Box<dyn std::error::Error>> {
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-string-eval")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL600")),
         "Block eval should not trigger string-eval warning"
     );
     Ok(())
@@ -1732,12 +1728,12 @@ fn security_backtick_string_warns() -> Result<(), Box<dyn std::error::Error>> {
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-backtick-exec")),
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("PL601")),
         "Should detect backtick command execution: {diagnostics:?}"
     );
     let diag = diagnostics
         .iter()
-        .find(|d| d.code.as_deref() == Some("security-backtick-exec"))
+        .find(|d| d.code.as_deref() == Some("PL601"))
         .ok_or("missing diagnostic")?;
     assert_eq!(diag.severity, DiagnosticSeverity::Information);
     assert!(diag.message.contains("Command execution"));
@@ -1754,7 +1750,7 @@ fn security_normal_string_no_backtick_warning() -> Result<(), Box<dyn std::error
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-backtick-exec")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL601")),
         "Normal interpolated string should not trigger backtick warning"
     );
     Ok(())
@@ -1769,7 +1765,7 @@ fn security_non_interpolated_backtick_no_warning() -> Result<(), Box<dyn std::er
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-backtick-exec")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL601")),
         "Non-interpolated string with backtick chars should not warn"
     );
     Ok(())
@@ -1786,7 +1782,7 @@ fn security_other_function_no_open_warning() -> Result<(), Box<dyn std::error::E
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-two-arg-open")),
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("PL401")),
         "Non-open function should not trigger open warning"
     );
     Ok(())
@@ -1804,7 +1800,7 @@ fn security_eval_with_concatenation_warns() -> Result<(), Box<dyn std::error::Er
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
     assert!(
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")),
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("PL600")),
         "Should detect eval with string concatenation: {diagnostics:?}"
     );
     Ok(())
@@ -1830,9 +1826,9 @@ fn security_related_info_quality() -> Result<(), Box<dyn std::error::Error>> {
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
 
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("security-two-arg-open")));
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")));
-    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("security-backtick-exec")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL401")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL600")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("PL601")));
 
     for d in &diagnostics {
         assert!(

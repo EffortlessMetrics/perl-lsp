@@ -1186,10 +1186,13 @@ fn parse_code_all_valid_pc_codes() {
 
 #[test]
 fn parse_code_gaps_return_none() {
-    // Codes that fall in valid ranges but aren't assigned
+    // Codes that fall in valid ranges but aren't assigned.
+    // Note: PL104-PL111, PL403-PL404, PL500-PL501, PL600-PL601, PL700, PL800-PL806
+    // are now assigned; only truly unassigned gaps are listed here.
     let gaps = [
-        "PL004", "PL050", "PL099", "PL104", "PL150", "PL199", "PL202", "PL250", "PL302", "PL399",
-        "PL403", "PL499", "PC006", "PC010",
+        "PL004", "PL050", "PL099", "PL112", "PL150", "PL199", "PL202", "PL250", "PL302", "PL399",
+        "PL405", "PL499", "PL502", "PL599", "PL602", "PL699", "PL701", "PL799", "PL807", "PL899",
+        "PC006", "PC010",
     ];
     for s in &gaps {
         assert!(DiagnosticCode::parse_code(s).is_none(), "expected None for unassigned code {}", s);

@@ -3,6 +3,7 @@
 //! This module provides functionality for converting scope analyzer issues
 //! into diagnostic messages with pragma-aware severity mapping.
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_semantic_analyzer::scope_analyzer::{IssueKind, ScopeIssue};
 
 use perl_lsp_diagnostic_types::{
@@ -31,15 +32,15 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
         };
 
         let code = match issue.kind {
-            IssueKind::UndeclaredVariable => "undeclared-variable",
-            IssueKind::UnusedVariable => "unused-variable",
-            IssueKind::VariableShadowing => "variable-shadowing",
-            IssueKind::VariableRedeclaration => "variable-redeclaration",
-            IssueKind::DuplicateParameter => "duplicate-parameter",
-            IssueKind::ParameterShadowsGlobal => "parameter-shadows-global",
-            IssueKind::UnusedParameter => "unused-parameter",
-            IssueKind::UnquotedBareword => "unquoted-bareword",
-            IssueKind::UninitializedVariable => "uninitialized-variable",
+            IssueKind::UndeclaredVariable => DiagnosticCode::UndefinedVariable,
+            IssueKind::UnusedVariable => DiagnosticCode::UnusedVariable,
+            IssueKind::VariableShadowing => DiagnosticCode::VariableShadowing,
+            IssueKind::VariableRedeclaration => DiagnosticCode::VariableRedeclaration,
+            IssueKind::DuplicateParameter => DiagnosticCode::DuplicateParameter,
+            IssueKind::ParameterShadowsGlobal => DiagnosticCode::ParameterShadowsGlobal,
+            IssueKind::UnusedParameter => DiagnosticCode::UnusedParameter,
+            IssueKind::UnquotedBareword => DiagnosticCode::UnquotedBareword,
+            IssueKind::UninitializedVariable => DiagnosticCode::UninitializedVariable,
         };
 
         // Build helpful related information based on issue type
@@ -121,7 +122,7 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
         diagnostics.push(Diagnostic {
             range: issue.range,
             severity,
-            code: Some(code.to_string()),
+            code: Some(code.as_str().to_string()),
             message: build_enhanced_scope_message(&issue),
             related_information: related_info,
             tags: if matches!(issue.kind, IssueKind::UnusedVariable | IssueKind::UnusedParameter) {

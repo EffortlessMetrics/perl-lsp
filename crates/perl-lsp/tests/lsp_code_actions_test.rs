@@ -1,3 +1,4 @@
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_lsp::features::code_actions_provider::{
     CodeActionKind as CodeActionKindV2, CodeActionsProvider as CodeActionsProviderV2,
 };
@@ -21,7 +22,11 @@ fn test_undefined_variable_quick_fix() -> Result<(), Box<dyn std::error::Error>>
     // Find undeclared variable diagnostic
     let undefined_diag = diagnostics
         .iter()
-        .find(|d| d.code.as_ref().is_some_and(|c| c == "undeclared-variable"))
+        .find(|d| {
+            d.code.as_ref().is_some_and(|c| {
+                c == DiagnosticCode::UndefinedVariable.as_str() || c == "undeclared-variable"
+            })
+        })
         .ok_or("Should have undeclared variable diagnostic")?;
 
     // Get code actions
@@ -55,7 +60,11 @@ fn test_unused_variable_quick_fix() -> Result<(), Box<dyn std::error::Error>> {
     // Find unused variable diagnostic
     let unused_diag = diagnostics
         .iter()
-        .find(|d| d.code.as_ref().is_some_and(|c| c == "unused-variable"))
+        .find(|d| {
+            d.code.as_ref().is_some_and(|c| {
+                c == DiagnosticCode::UnusedVariable.as_str() || c == "unused-variable"
+            })
+        })
         .ok_or("Should have unused variable diagnostic")?;
 
     // Get code actions
@@ -89,7 +98,11 @@ fn test_variable_shadowing_quick_fix() -> Result<(), Box<dyn std::error::Error>>
     // Find shadowing diagnostic
     let shadow_diag = diagnostics
         .iter()
-        .find(|d| d.code.as_ref().is_some_and(|c| c == "variable-shadowing"))
+        .find(|d| {
+            d.code.as_ref().is_some_and(|c| {
+                c == DiagnosticCode::VariableShadowing.as_str() || c == "variable-shadowing"
+            })
+        })
         .ok_or("Should have variable shadowing diagnostic")?;
 
     // Get code actions
@@ -163,8 +176,11 @@ fn test_multiple_diagnostics_multiple_actions() -> Result<(), Box<dyn std::error
     let diagnostics = diag_provider.get_diagnostics(&ast, &[], source);
 
     // Should have undeclared variable diagnostic
-    let has_undeclared =
-        diagnostics.iter().any(|d| d.code.as_ref().is_some_and(|c| c == "undeclared-variable"));
+    let has_undeclared = diagnostics.iter().any(|d| {
+        d.code.as_ref().is_some_and(|c| {
+            c == DiagnosticCode::UndefinedVariable.as_str() || c == "undeclared-variable"
+        })
+    });
 
     assert!(has_undeclared, "Should have undeclared variable diagnostic");
     // Note: unused variable detection not yet implemented

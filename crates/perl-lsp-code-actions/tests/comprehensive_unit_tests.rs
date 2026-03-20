@@ -56,7 +56,7 @@ fn has_action_matching(actions: &[CodeAction], pred: impl Fn(&CodeAction) -> boo
 #[test]
 fn undefined_variable_produces_my_and_our_declarations() {
     let src = "use strict;\nprint $undefined;";
-    let diags = [make_diag(18, 28, "undefined-variable", "Undefined variable '$undefined'")];
+    let diags = [make_diag(18, 28, "PL103", "Undefined variable '$undefined'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -74,7 +74,7 @@ fn undefined_variable_produces_my_and_our_declarations() {
 #[test]
 fn undefined_variable_preferred_is_my() {
     let src = "print $x;";
-    let diags = [make_diag(6, 8, "undefined-variable", "Undefined variable '$x'")];
+    let diags = [make_diag(6, 8, "PL103", "Undefined variable '$x'")];
     let actions = parse_and_get_actions(src, &diags);
 
     let my_action = actions.iter().find(|a| a.title.contains("my"));
@@ -90,7 +90,7 @@ fn undefined_variable_preferred_is_my() {
 fn undefined_variable_no_quotes_in_message_yields_no_declaration() {
     let src = "print $x;";
     // Message without single-quoted variable name → split('\'').nth(1) is None
-    let diags = [make_diag(6, 8, "undefined-variable", "Undefined variable x")];
+    let diags = [make_diag(6, 8, "PL103", "Undefined variable x")];
     let actions = parse_and_get_actions(src, &diags);
 
     let decl_actions: Vec<_> = actions.iter().filter(|a| a.title.contains("Declare")).collect();
@@ -102,7 +102,7 @@ fn undefined_variable_no_quotes_in_message_yields_no_declaration() {
 #[test]
 fn unused_variable_remove_and_rename() {
     let src = "my $unused = 42;\nprint 1;";
-    let diags = [make_diag(0, 16, "unused-variable", "Unused variable '$unused'")];
+    let diags = [make_diag(0, 16, "PL102", "Unused variable '$unused'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -118,7 +118,7 @@ fn unused_variable_remove_and_rename() {
 #[test]
 fn unused_variable_remove_is_preferred() {
     let src = "my $unused = 42;\nprint 1;";
-    let diags = [make_diag(0, 16, "unused-variable", "Unused variable '$unused'")];
+    let diags = [make_diag(0, 16, "PL102", "Unused variable '$unused'")];
     let actions = parse_and_get_actions(src, &diags);
 
     let remove = actions.iter().find(|a| a.title == "Remove unused variable");
@@ -130,7 +130,7 @@ fn unused_variable_remove_is_preferred() {
 #[test]
 fn assignment_in_condition_comparison_and_paren_fixes() {
     let src = "if ($x = 5) { }";
-    let diags = [make_diag(4, 10, "assignment-in-condition", "Assignment in condition")];
+    let diags = [make_diag(4, 10, "PL403", "Assignment in condition")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -146,7 +146,7 @@ fn assignment_in_condition_comparison_and_paren_fixes() {
 #[test]
 fn assignment_in_condition_comparison_is_preferred() {
     let src = "if ($x = 5) { }";
-    let diags = [make_diag(4, 10, "assignment-in-condition", "Assignment in condition")];
+    let diags = [make_diag(4, 10, "PL403", "Assignment in condition")];
     let actions = parse_and_get_actions(src, &diags);
 
     let comparison = actions.iter().find(|a| a.title.contains("=="));
@@ -160,7 +160,7 @@ fn assignment_in_condition_comparison_is_preferred() {
 #[test]
 fn missing_strict_adds_use_strict() {
     let src = "print 1;";
-    let diags = [make_diag(0, 8, "missing-strict", "Missing use strict")];
+    let diags = [make_diag(0, 8, "PL100", "Missing use strict")];
     let actions = parse_and_get_actions(src, &diags);
 
     let strict = actions.iter().find(|a| a.title.contains("use strict"));
@@ -177,7 +177,7 @@ fn missing_strict_adds_use_strict() {
 #[test]
 fn missing_warnings_adds_use_warnings() {
     let src = "print 1;";
-    let diags = [make_diag(0, 8, "missing-warnings", "Missing use warnings")];
+    let diags = [make_diag(0, 8, "PL101", "Missing use warnings")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(has_action_matching(&actions, |a| a.title.contains("use warnings")));
@@ -188,7 +188,7 @@ fn missing_warnings_adds_use_warnings() {
 #[test]
 fn deprecated_defined_replaces_with_variable() {
     let src = "if (defined @array) { }";
-    let diags = [make_diag(4, 18, "deprecated-defined", "deprecated defined(@array)")];
+    let diags = [make_diag(4, 18, "PL500", "deprecated defined(@array)")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -203,7 +203,7 @@ fn deprecated_defined_replaces_with_variable() {
 #[test]
 fn numeric_undef_adds_defined_check() {
     let src = "$x == 0";
-    let diags = [make_diag(0, 7, "numeric-undef", "Numeric comparison may be undef")];
+    let diags = [make_diag(0, 7, "PL404", "Numeric comparison may be undef")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -215,7 +215,7 @@ fn numeric_undef_adds_defined_check() {
 #[test]
 fn numeric_undef_with_eq_offers_defined_or() {
     let src = "$x == 0";
-    let diags = [make_diag(0, 7, "numeric-undef", "Numeric comparison may be undef")];
+    let diags = [make_diag(0, 7, "PL404", "Numeric comparison may be undef")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -227,7 +227,7 @@ fn numeric_undef_with_eq_offers_defined_or() {
 #[test]
 fn numeric_undef_without_eq_no_defined_or() {
     let src = "$x + 0";
-    let diags = [make_diag(0, 6, "numeric-undef", "Numeric comparison may be undef")];
+    let diags = [make_diag(0, 6, "PL404", "Numeric comparison may be undef")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -241,7 +241,7 @@ fn numeric_undef_without_eq_no_defined_or() {
 #[test]
 fn bareword_produces_single_and_double_quote_fixes() {
     let src = "my $x = foo;";
-    let diags = [make_diag(8, 11, "unquoted-bareword", "Bareword 'foo'")];
+    let diags = [make_diag(8, 11, "PL109", "Bareword 'foo'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -257,7 +257,7 @@ fn bareword_produces_single_and_double_quote_fixes() {
 #[test]
 fn bareword_uppercase_produces_filehandle_option() {
     let src = "print STDOUT;";
-    let diags = [make_diag(6, 12, "unquoted-bareword", "Bareword 'STDOUT'")];
+    let diags = [make_diag(6, 12, "PL109", "Bareword 'STDOUT'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -269,7 +269,7 @@ fn bareword_uppercase_produces_filehandle_option() {
 #[test]
 fn bareword_lowercase_no_filehandle_option() {
     let src = "my $x = foo;";
-    let diags = [make_diag(8, 11, "unquoted-bareword", "Bareword 'foo'")];
+    let diags = [make_diag(8, 11, "PL109", "Bareword 'foo'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -281,7 +281,7 @@ fn bareword_lowercase_no_filehandle_option() {
 #[test]
 fn bareword_single_quote_is_preferred() {
     let src = "my $x = foo;";
-    let diags = [make_diag(8, 11, "unquoted-bareword", "Bareword 'foo'")];
+    let diags = [make_diag(8, 11, "PL109", "Bareword 'foo'")];
     let actions = parse_and_get_actions(src, &diags);
 
     let sq = actions.iter().find(|a| a.title.contains("single quotes"));
@@ -368,7 +368,7 @@ fn parse_error_unknown_code_yields_no_actions_for_that_code() {
 #[test]
 fn unused_parameter_rename_with_underscore() {
     let src = "sub foo { my ($x) = @_; }";
-    let diags = [make_diag(14, 16, "unused-parameter", "Unused parameter '$x'")];
+    let diags = [make_diag(14, 16, "PL108", "Unused parameter '$x'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -380,7 +380,7 @@ fn unused_parameter_rename_with_underscore() {
 #[test]
 fn unused_parameter_no_quotes_yields_no_rename() {
     let src = "sub foo { my ($x) = @_; }";
-    let diags = [make_diag(14, 16, "unused-parameter", "Unused parameter x")];
+    let diags = [make_diag(14, 16, "PL108", "Unused parameter x")];
     let actions = parse_and_get_actions(src, &diags);
 
     let rename_actions: Vec<_> =
@@ -393,13 +393,11 @@ fn unused_parameter_no_quotes_yields_no_rename() {
 #[test]
 fn variable_shadowing_suggests_three_alternatives() {
     let src = "my $x = 1; { my $x = 2; }";
-    let diags = [make_diag(17, 19, "variable-shadowing", "Variable '$x' shadows outer")];
+    let diags = [make_diag(17, 19, "PL104", "Variable '$x' shadows outer")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let shadow_actions: Vec<_> = actions
-        .iter()
-        .filter(|a| a.diagnostics.contains(&"variable-shadowing".to_string()))
-        .collect();
+    let shadow_actions: Vec<_> =
+        actions.iter().filter(|a| a.diagnostics.contains(&"PL104".to_string())).collect();
     assert!(
         shadow_actions.len() >= 3,
         "Expected at least 3 suggestions, got {}",
@@ -413,7 +411,7 @@ fn variable_shadowing_suggests_three_alternatives() {
 #[test]
 fn variable_shadowing_with_array_sigil() {
     let src = "my @arr = (1); { my @arr = (2); }";
-    let diags = [make_diag(21, 25, "variable-shadowing", "Variable '@arr' shadows outer")];
+    let diags = [make_diag(21, 25, "PL104", "Variable '@arr' shadows outer")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -425,7 +423,7 @@ fn variable_shadowing_with_array_sigil() {
 #[test]
 fn variable_shadowing_with_hash_sigil() {
     let src = "my %h = (); { my %h = (); }";
-    let diags = [make_diag(18, 20, "variable-shadowing", "Variable '%h' shadows outer")];
+    let diags = [make_diag(18, 20, "PL104", "Variable '%h' shadows outer")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -437,13 +435,11 @@ fn variable_shadowing_with_hash_sigil() {
 #[test]
 fn variable_shadowing_none_preferred() {
     let src = "my $x = 1; { my $x = 2; }";
-    let diags = [make_diag(17, 19, "variable-shadowing", "Variable '$x' shadows outer")];
+    let diags = [make_diag(17, 19, "PL104", "Variable '$x' shadows outer")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let shadow_actions: Vec<_> = actions
-        .iter()
-        .filter(|a| a.diagnostics.contains(&"variable-shadowing".to_string()))
-        .collect();
+    let shadow_actions: Vec<_> =
+        actions.iter().filter(|a| a.diagnostics.contains(&"PL104".to_string())).collect();
     assert!(
         shadow_actions.iter().all(|a| !a.is_preferred),
         "Shadowing renames should not be preferred"
@@ -466,7 +462,7 @@ fn empty_diagnostics_still_returns_refactoring_actions() {
 #[test]
 fn empty_source_does_not_panic() {
     let src = "";
-    let diags = [make_diag(0, 0, "missing-strict", "Missing use strict")];
+    let diags = [make_diag(0, 0, "PL100", "Missing use strict")];
     let actions = parse_and_get_actions(src, &diags);
 
     // Should return at least the missing-strict action
@@ -513,9 +509,9 @@ fn diagnostic_without_code_produces_no_quick_fix() {
 fn multiple_diagnostics_produce_combined_actions() {
     let src = "print $x;";
     let diags = [
-        make_diag(0, 9, "missing-strict", "Missing use strict"),
-        make_diag(0, 9, "missing-warnings", "Missing use warnings"),
-        make_diag(6, 8, "undefined-variable", "Undefined variable '$x'"),
+        make_diag(0, 9, "PL100", "Missing use strict"),
+        make_diag(0, 9, "PL101", "Missing use warnings"),
+        make_diag(6, 8, "PL103", "Undefined variable '$x'"),
     ];
     let actions = parse_and_get_actions(src, &diags);
 
@@ -679,7 +675,7 @@ fn enhanced_no_utf8_for_ascii_only() {
 #[test]
 fn code_action_edit_has_nonempty_changes() {
     let src = "print $x;";
-    let diags = [make_diag(6, 8, "undefined-variable", "Undefined variable '$x'")];
+    let diags = [make_diag(6, 8, "PL103", "Undefined variable '$x'")];
     let actions = parse_and_get_actions(src, &diags);
 
     for action in &actions {
@@ -694,7 +690,7 @@ fn code_action_edit_has_nonempty_changes() {
 #[test]
 fn text_edit_locations_are_within_source_bounds() {
     let src = "my $unused = 42;\nprint 1;";
-    let diags = [make_diag(0, 16, "unused-variable", "Unused variable '$unused'")];
+    let diags = [make_diag(0, 16, "PL102", "Unused variable '$unused'")];
     let actions = parse_and_get_actions(src, &diags);
 
     for action in &actions {
@@ -730,7 +726,7 @@ fn enhanced_provider_can_be_constructed_with_large_source() {
 #[test]
 fn actions_for_multiline_source() {
     let src = "use strict;\nuse warnings;\nmy $x = 1;\nmy $y = $x + 2;\nprint $y;\n";
-    let diags = [make_diag(26, 36, "unused-variable", "Unused variable '$x'")];
+    let diags = [make_diag(26, 36, "PL102", "Unused variable '$x'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -746,7 +742,7 @@ fn actions_for_multiline_source() {
 #[test]
 fn use_strict_edit_inserts_at_position_zero() {
     let src = "print 1;";
-    let diags = [make_diag(0, 8, "missing-strict", "Missing use strict")];
+    let diags = [make_diag(0, 8, "PL100", "Missing use strict")];
     let actions = parse_and_get_actions(src, &diags);
 
     let strict = actions.iter().find(|a| a.title.contains("use strict"));
@@ -762,7 +758,7 @@ fn use_strict_edit_inserts_at_position_zero() {
 #[test]
 fn use_warnings_edit_inserts_at_position_zero() {
     let src = "print 1;";
-    let diags = [make_diag(0, 8, "missing-warnings", "Missing use warnings")];
+    let diags = [make_diag(0, 8, "PL101", "Missing use warnings")];
     let actions = parse_and_get_actions(src, &diags);
 
     let warnings = actions.iter().find(|a| a.title.contains("use warnings"));
@@ -774,7 +770,7 @@ fn use_warnings_edit_inserts_at_position_zero() {
 #[test]
 fn assignment_in_condition_eq_edit_replaces_single_char() {
     let src = "if ($x = 5) { }";
-    let diags = [make_diag(4, 10, "assignment-in-condition", "Assignment in condition")];
+    let diags = [make_diag(4, 10, "PL403", "Assignment in condition")];
     let actions = parse_and_get_actions(src, &diags);
 
     let eq_action = actions.iter().find(|a| a.title.contains("=="));
@@ -828,7 +824,7 @@ fn bareword_filehandle_offers_lexical_replacement() {
     // "open FILE, ..." uses a bareword filehandle (FILE)
     let src = "open FILE, '<', 'data.txt';";
     // The bareword filehandle "FILE" spans bytes 5..9
-    let diags = [make_diag(5, 9, "bareword-filehandle", "Bareword filehandle 'FILE'")];
+    let diags = [make_diag(5, 9, "PL400", "Bareword filehandle 'FILE'")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -843,13 +839,11 @@ fn bareword_filehandle_offers_lexical_replacement() {
 #[test]
 fn bareword_filehandle_action_is_quickfix_kind() {
     let src = "open FILE, '<', 'data.txt';";
-    let diags = [make_diag(5, 9, "bareword-filehandle", "Bareword filehandle 'FILE'")];
+    let diags = [make_diag(5, 9, "PL400", "Bareword filehandle 'FILE'")];
     let actions = parse_and_get_actions(src, &diags);
 
-    let fh_actions: Vec<_> = actions
-        .iter()
-        .filter(|a| a.diagnostics.contains(&"bareword-filehandle".to_string()))
-        .collect();
+    let fh_actions: Vec<_> =
+        actions.iter().filter(|a| a.diagnostics.contains(&"PL400".to_string())).collect();
     assert!(!fh_actions.is_empty(), "Expected at least one bareword-filehandle action");
     assert!(
         fh_actions.iter().all(|a| a.kind == CodeActionKind::QuickFix),
@@ -860,12 +854,12 @@ fn bareword_filehandle_action_is_quickfix_kind() {
 #[test]
 fn bareword_filehandle_action_is_preferred() {
     let src = "open LOGFILE, '<', 'log.txt';";
-    let diags = [make_diag(5, 12, "bareword-filehandle", "Bareword filehandle 'LOGFILE'")];
+    let diags = [make_diag(5, 12, "PL400", "Bareword filehandle 'LOGFILE'")];
     let actions = parse_and_get_actions(src, &diags);
 
     let preferred: Vec<_> = actions
         .iter()
-        .filter(|a| a.diagnostics.contains(&"bareword-filehandle".to_string()) && a.is_preferred)
+        .filter(|a| a.diagnostics.contains(&"PL400".to_string()) && a.is_preferred)
         .collect();
     assert!(!preferred.is_empty(), "At least one bareword-filehandle action should be preferred");
 }
@@ -878,7 +872,7 @@ fn bareword_filehandle_action_is_preferred() {
 fn two_arg_open_offers_three_arg_upgrade() {
     // "open $fh, $filename" is the two-arg form; should suggest three-arg
     let src = "open my $fh, $filename;";
-    let diags = [make_diag(0, 22, "two-arg-open", "Two-argument open() is unsafe")];
+    let diags = [make_diag(0, 22, "PL401", "Two-argument open() is unsafe")];
     let actions = parse_and_get_actions(src, &diags);
 
     assert!(
@@ -893,11 +887,11 @@ fn two_arg_open_offers_three_arg_upgrade() {
 #[test]
 fn two_arg_open_action_is_quickfix_kind() {
     let src = "open my $fh, $filename;";
-    let diags = [make_diag(0, 22, "two-arg-open", "Two-argument open() is unsafe")];
+    let diags = [make_diag(0, 22, "PL401", "Two-argument open() is unsafe")];
     let actions = parse_and_get_actions(src, &diags);
 
     let open_actions: Vec<_> =
-        actions.iter().filter(|a| a.diagnostics.contains(&"two-arg-open".to_string())).collect();
+        actions.iter().filter(|a| a.diagnostics.contains(&"PL401".to_string())).collect();
     assert!(!open_actions.is_empty(), "Expected at least one two-arg-open action");
     assert!(
         open_actions.iter().all(|a| a.kind == CodeActionKind::QuickFix),
@@ -908,12 +902,12 @@ fn two_arg_open_action_is_quickfix_kind() {
 #[test]
 fn two_arg_open_action_is_preferred() {
     let src = "open my $fh, $filename;";
-    let diags = [make_diag(0, 22, "two-arg-open", "Two-argument open() is unsafe")];
+    let diags = [make_diag(0, 22, "PL401", "Two-argument open() is unsafe")];
     let actions = parse_and_get_actions(src, &diags);
 
     let preferred: Vec<_> = actions
         .iter()
-        .filter(|a| a.diagnostics.contains(&"two-arg-open".to_string()) && a.is_preferred)
+        .filter(|a| a.diagnostics.contains(&"PL401".to_string()) && a.is_preferred)
         .collect();
     assert!(!preferred.is_empty(), "At least one two-arg-open action should be preferred");
 }

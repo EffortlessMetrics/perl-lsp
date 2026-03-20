@@ -14,6 +14,7 @@ use lsp_types::{
 
 use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
@@ -255,7 +256,7 @@ impl PullDiagnosticsProvider {
         LspDiagnostic {
             range,
             severity: Some(LspDiagnosticSeverity::ERROR),
-            code: Some(NumberOrString::String("parse-error".to_string())),
+            code: Some(NumberOrString::String(DiagnosticCode::ParseError.as_str().to_string())),
             code_description: None,
             source: Some("perl-lsp".to_string()),
             message,

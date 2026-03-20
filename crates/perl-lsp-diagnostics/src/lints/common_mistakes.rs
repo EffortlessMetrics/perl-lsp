@@ -10,6 +10,7 @@
 //! | `assignment-in-condition` | Warning | `=` in `if`/`while` condition (likely meant `==`) |
 //! | `numeric-undef` | Warning | `==`/`!=` with potentially undefined value |
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
@@ -41,7 +42,7 @@ pub fn check_common_mistakes(
                     diagnostics.push(Diagnostic {
                         range: (n.location.start, n.location.end),
                         severity: DiagnosticSeverity::Warning,
-                        code: Some("numeric-undef".to_string()),
+                        code: Some(DiagnosticCode::NumericComparisonWithUndef.as_str().to_string()),
                         message: format!("Using '{}' with potentially undefined value -- use 'defined()' to check first", op),
                         related_information: vec![RelatedInformation {
                             location: (n.location.start, n.location.end),
@@ -65,7 +66,7 @@ fn check_assignment_in_condition(condition: &Node, diagnostics: &mut Vec<Diagnos
             diagnostics.push(Diagnostic {
                 range: (condition.location.start, condition.location.end),
                 severity: DiagnosticSeverity::Warning,
-                code: Some("assignment-in-condition".to_string()),
+                code: Some(DiagnosticCode::AssignmentInCondition.as_str().to_string()),
                 message: "Assignment in condition - did you mean '=='?".to_string(),
                 related_information: vec![
                     RelatedInformation {
@@ -85,7 +86,7 @@ fn check_assignment_in_condition(condition: &Node, diagnostics: &mut Vec<Diagnos
             diagnostics.push(Diagnostic {
                 range: (condition.location.start, condition.location.end),
                 severity: DiagnosticSeverity::Warning,
-                code: Some("assignment-in-condition".to_string()),
+                code: Some(DiagnosticCode::AssignmentInCondition.as_str().to_string()),
                 message: "Assignment in condition - did you mean '=='?".to_string(),
                 related_information: vec![
                     RelatedInformation {

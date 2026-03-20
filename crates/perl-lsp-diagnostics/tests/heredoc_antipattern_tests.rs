@@ -13,7 +13,7 @@ eval $code;
     // eval-string heredoc detection is regex-based; this pattern may or may not
     // trigger depending on detector heuristics. If it does, verify the shape.
     for d in &diags {
-        if d.code.as_deref() == Some("heredoc-in-eval") {
+        if d.code.as_deref() == Some("PL805") {
             assert_eq!(d.severity, DiagnosticSeverity::Warning);
             assert!(d.range.0 < source.len());
             assert!(d.range.1 <= source.len());
@@ -38,7 +38,7 @@ fn source_filter_heredoc_detected() {
     let source = "use Filter::Util::Call;\n";
     let diags = detect_heredoc_antipatterns(source);
     for d in &diags {
-        if d.code.as_deref() == Some("heredoc-in-source-filter") {
+        if d.code.as_deref() == Some("PL803") {
             assert!(matches!(d.severity, DiagnosticSeverity::Warning | DiagnosticSeverity::Error));
             return;
         }
@@ -50,7 +50,7 @@ fn format_heredoc_detected() {
     let source = "format STDOUT =\n@<<<< @>>>>\n$name, $value\n.\n";
     let diags = detect_heredoc_antipatterns(source);
     for d in &diags {
-        if d.code.as_deref() == Some("heredoc-in-format") {
+        if d.code.as_deref() == Some("PL800") {
             assert!(d.code.is_some());
             return;
         }

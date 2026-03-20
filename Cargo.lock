@@ -1836,6 +1836,7 @@ dependencies = [
  "parking_lot",
  "perl-content-length-framing",
  "perl-dap",
+ "perl-diagnostics-codes",
  "perl-keywords",
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
@@ -1920,6 +1921,7 @@ dependencies = [
 name = "perl-lsp-code-actions"
 version = "0.12.0"
 dependencies = [
+ "perl-diagnostics-codes",
  "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
  "perl-lsp-import-management",
@@ -2005,6 +2007,7 @@ version = "0.12.0"
 name = "perl-lsp-diagnostics"
 version = "0.12.0"
 dependencies = [
+ "perl-diagnostics-codes",
  "perl-lsp-diagnostic-types",
  "perl-parser",
  "perl-parser-core",

@@ -3,6 +3,7 @@
 //! This module provides functionality for checking ERROR nodes in the AST
 //! and classifying them into appropriate diagnostic messages.
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_parser_core::error_classifier::ErrorClassifier;
 
@@ -54,7 +55,7 @@ pub fn check_error_nodes(
             diagnostics.push(Diagnostic {
                 range: (start, end),
                 severity: DiagnosticSeverity::Error,
-                code: Some(format!("parse-error-{:?}", error_kind).to_lowercase()),
+                code: Some(DiagnosticCode::ParseError.as_str().to_string()),
                 message: full_message,
                 related_information: related_info,
                 tags: Vec::new(),

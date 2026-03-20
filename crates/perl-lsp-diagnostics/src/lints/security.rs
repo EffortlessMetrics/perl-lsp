@@ -12,6 +12,7 @@
 //! | `security-string-eval` | Warning | `eval "$string"` -- string eval is a security risk |
 //! | `security-backtick-exec` | Information | Backtick/qx command execution detected |
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
@@ -37,7 +38,7 @@ pub fn check_security(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 diagnostics.push(Diagnostic {
                     range: (n.location.start, n.location.end),
                     severity: DiagnosticSeverity::Information,
-                    code: Some("security-backtick-exec".to_string()),
+                    code: Some(DiagnosticCode::SecurityBacktickExec.as_str().to_string()),
                     message: "Command execution detected. Ensure input is sanitized.".to_string(),
                     related_information: vec![RelatedInformation {
                         location: (n.location.start, n.location.end),
@@ -68,7 +69,7 @@ fn check_two_arg_open(name: &str, args: &[Node], node: &Node, diagnostics: &mut 
     diagnostics.push(Diagnostic {
         range: (node.location.start, node.location.end),
         severity: DiagnosticSeverity::Warning,
-        code: Some("security-two-arg-open".to_string()),
+        code: Some(DiagnosticCode::TwoArgOpen.as_str().to_string()),
         message: "Use 3-argument open for safety: open(my $fh, '>', 'file')".to_string(),
         related_information: vec![RelatedInformation {
             location: (node.location.start, node.location.end),
@@ -106,7 +107,7 @@ fn check_string_eval(name: &str, args: &[Node], node: &Node, diagnostics: &mut V
     diagnostics.push(Diagnostic {
         range: (node.location.start, node.location.end),
         severity: DiagnosticSeverity::Warning,
-        code: Some("security-string-eval".to_string()),
+        code: Some(DiagnosticCode::SecurityStringEval.as_str().to_string()),
         message: "String eval is a security risk. Consider eval { } for exception handling."
             .to_string(),
         related_information: vec![RelatedInformation {

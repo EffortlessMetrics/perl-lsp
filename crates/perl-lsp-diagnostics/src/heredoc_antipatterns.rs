@@ -1,5 +1,6 @@
 //! Heredoc anti-pattern detection diagnostics
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPattern, AntiPatternDetector, Severity};
 
@@ -51,12 +52,14 @@ fn extract_offset(pattern: &AntiPattern) -> usize {
 
 fn antipattern_code(pattern: &AntiPattern) -> &'static str {
     match pattern {
-        AntiPattern::FormatHeredoc { .. } => "heredoc-in-format",
-        AntiPattern::BeginTimeHeredoc { .. } => "heredoc-in-begin",
-        AntiPattern::DynamicHeredocDelimiter { .. } => "heredoc-dynamic-delimiter",
-        AntiPattern::SourceFilterHeredoc { .. } => "heredoc-in-source-filter",
-        AntiPattern::RegexCodeBlockHeredoc { .. } => "heredoc-in-regex-code",
-        AntiPattern::EvalStringHeredoc { .. } => "heredoc-in-eval",
-        AntiPattern::TiedHandleHeredoc { .. } => "heredoc-tied-handle",
+        AntiPattern::FormatHeredoc { .. } => DiagnosticCode::HeredocInFormat.as_str(),
+        AntiPattern::BeginTimeHeredoc { .. } => DiagnosticCode::HeredocInBegin.as_str(),
+        AntiPattern::DynamicHeredocDelimiter { .. } => {
+            DiagnosticCode::HeredocDynamicDelimiter.as_str()
+        }
+        AntiPattern::SourceFilterHeredoc { .. } => DiagnosticCode::HeredocInSourceFilter.as_str(),
+        AntiPattern::RegexCodeBlockHeredoc { .. } => DiagnosticCode::HeredocInRegexCode.as_str(),
+        AntiPattern::EvalStringHeredoc { .. } => DiagnosticCode::HeredocInEval.as_str(),
+        AntiPattern::TiedHandleHeredoc { .. } => DiagnosticCode::HeredocTiedHandle.as_str(),
     }
 }

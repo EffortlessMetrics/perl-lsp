@@ -62,7 +62,7 @@ fn preferred_action(actions: &[CodeAction]) -> Option<&CodeAction> {
 #[test]
 fn when_cursor_on_unused_variable_offers_remove_action() {
     let source = "my $unused = 42;\nprint 'hello';";
-    let diagnostics = [diag(0, 16, "unused-variable", "Unused variable '$unused'")];
+    let diagnostics = [diag(0, 16, "PL102", "Unused variable '$unused'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -75,7 +75,7 @@ fn when_cursor_on_unused_variable_offers_remove_action() {
 #[test]
 fn when_cursor_on_unused_variable_offers_underscore_rename() {
     let source = "my $unused = 42;\nprint 'hello';";
-    let diagnostics = [diag(0, 16, "unused-variable", "Unused variable '$unused'")];
+    let diagnostics = [diag(0, 16, "PL102", "Unused variable '$unused'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -88,7 +88,7 @@ fn when_cursor_on_unused_variable_offers_underscore_rename() {
 #[test]
 fn when_cursor_on_unused_variable_preferred_action_is_remove() {
     let source = "my $temp = 1;";
-    let diagnostics = [diag(0, 13, "unused-variable", "Unused variable '$temp'")];
+    let diagnostics = [diag(0, 13, "PL102", "Unused variable '$temp'")];
     let actions = actions_for(source, &diagnostics);
 
     let pref = preferred_action(&actions);
@@ -106,7 +106,7 @@ fn when_cursor_on_unused_variable_preferred_action_is_remove() {
 #[test]
 fn when_cursor_on_undefined_variable_offers_my_declaration() {
     let source = "print $missing;";
-    let diagnostics = [diag(6, 14, "undefined-variable", "Undefined variable '$missing'")];
+    let diagnostics = [diag(6, 14, "PL103", "Undefined variable '$missing'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -119,7 +119,7 @@ fn when_cursor_on_undefined_variable_offers_my_declaration() {
 #[test]
 fn when_cursor_on_undefined_variable_offers_our_declaration() {
     let source = "print $missing;";
-    let diagnostics = [diag(6, 14, "undefined-variable", "Undefined variable '$missing'")];
+    let diagnostics = [diag(6, 14, "PL103", "Undefined variable '$missing'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -132,7 +132,7 @@ fn when_cursor_on_undefined_variable_offers_our_declaration() {
 #[test]
 fn when_cursor_on_undefined_variable_my_is_preferred_over_our() {
     let source = "print $missing;";
-    let diagnostics = [diag(6, 14, "undefined-variable", "Undefined variable '$missing'")];
+    let diagnostics = [diag(6, 14, "PL103", "Undefined variable '$missing'")];
     let actions = actions_for(source, &diagnostics);
 
     let pref = preferred_action(&actions);
@@ -146,7 +146,8 @@ fn when_cursor_on_undefined_variable_my_is_preferred_over_our() {
 #[test]
 fn when_cursor_on_undeclared_variable_alias_offers_same_declarations() {
     let source = "print $missing;";
-    let diagnostics = [diag(6, 14, "undeclared-variable", "Undefined variable '$missing'")];
+    // PL103 is the stable code for both undefined-variable and undeclared-variable
+    let diagnostics = [diag(6, 14, "PL103", "Undefined variable '$missing'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(has_action(&actions, "Declare '$missing' with 'my'"));
@@ -160,7 +161,7 @@ fn when_cursor_on_undeclared_variable_alias_offers_same_declarations() {
 #[test]
 fn when_assignment_in_condition_offers_comparison_fix() {
     let source = "if ($x = 5) { }";
-    let diagnostics = [diag(4, 10, "assignment-in-condition", "Assignment in condition")];
+    let diagnostics = [diag(4, 10, "PL403", "Assignment in condition")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -173,7 +174,7 @@ fn when_assignment_in_condition_offers_comparison_fix() {
 #[test]
 fn when_assignment_in_condition_offers_parentheses_wrapper() {
     let source = "if ($x = 5) { }";
-    let diagnostics = [diag(4, 10, "assignment-in-condition", "Assignment in condition")];
+    let diagnostics = [diag(4, 10, "PL403", "Assignment in condition")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -190,7 +191,7 @@ fn when_assignment_in_condition_offers_parentheses_wrapper() {
 #[test]
 fn when_missing_strict_offers_add_use_strict() {
     let source = "my $x = 1;";
-    let diagnostics = [diag(0, 10, "missing-strict", "Missing 'use strict'")];
+    let diagnostics = [diag(0, 10, "PL100", "Missing 'use strict'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -203,7 +204,7 @@ fn when_missing_strict_offers_add_use_strict() {
 #[test]
 fn when_missing_warnings_offers_add_use_warnings() {
     let source = "my $x = 1;";
-    let diagnostics = [diag(0, 10, "missing-warnings", "Missing 'use warnings'")];
+    let diagnostics = [diag(0, 10, "PL101", "Missing 'use warnings'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -217,8 +218,8 @@ fn when_missing_warnings_offers_add_use_warnings() {
 fn when_strict_and_warnings_both_missing_offers_both() {
     let source = "my $x = 1;";
     let diagnostics = [
-        diag(0, 10, "missing-strict", "Missing 'use strict'"),
-        diag(0, 10, "missing-warnings", "Missing 'use warnings'"),
+        diag(0, 10, "PL100", "Missing 'use strict'"),
+        diag(0, 10, "PL101", "Missing 'use warnings'"),
     ];
     let actions = actions_for(source, &diagnostics);
 
@@ -316,7 +317,7 @@ fn when_unclosed_bracket_offers_add_closing_bracket() {
 fn when_deprecated_defined_array_offers_replacement() {
     let source = "if (defined @arr) { }";
     // Range covers "defined @arr"
-    let diagnostics = [diag(4, 16, "deprecated-defined", "deprecated use of defined() on array")];
+    let diagnostics = [diag(4, 16, "PL500", "deprecated use of defined() on array")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -333,7 +334,7 @@ fn when_deprecated_defined_array_offers_replacement() {
 #[test]
 fn when_numeric_comparison_uses_undef_offers_defined_check_and_fallback() {
     let source = "if ($value == undef) { }";
-    let diagnostics = [diag(4, 19, "numeric-undef", "Numeric comparison with undef")];
+    let diagnostics = [diag(4, 19, "PL404", "Numeric comparison with undef")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(has_action(&actions, "Add defined check"));
@@ -343,7 +344,7 @@ fn when_numeric_comparison_uses_undef_offers_defined_check_and_fallback() {
 #[test]
 fn when_numeric_undef_range_has_no_equality_operator_skips_defined_or_fallback() {
     let source = "print $value;";
-    let diagnostics = [diag(6, 12, "numeric-undef", "Numeric comparison with undef")];
+    let diagnostics = [diag(6, 12, "PL404", "Numeric comparison with undef")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(has_action(&actions, "Add defined check"));
@@ -357,7 +358,7 @@ fn when_numeric_undef_range_has_no_equality_operator_skips_defined_or_fallback()
 #[test]
 fn when_unquoted_bareword_offers_single_quote() {
     let source = "my $x = hello;";
-    let diagnostics = [diag(8, 13, "unquoted-bareword", "Bareword 'hello'")];
+    let diagnostics = [diag(8, 13, "PL109", "Bareword 'hello'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -370,7 +371,7 @@ fn when_unquoted_bareword_offers_single_quote() {
 #[test]
 fn when_unquoted_bareword_offers_double_quote() {
     let source = "my $x = hello;";
-    let diagnostics = [diag(8, 13, "unquoted-bareword", "Bareword 'hello'")];
+    let diagnostics = [diag(8, 13, "PL109", "Bareword 'hello'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -383,7 +384,7 @@ fn when_unquoted_bareword_offers_double_quote() {
 #[test]
 fn when_uppercase_bareword_additionally_offers_filehandle_declaration() {
     let source = "my $x = STDOUT;";
-    let diagnostics = [diag(8, 14, "unquoted-bareword", "Bareword 'STDOUT'")];
+    let diagnostics = [diag(8, 14, "PL109", "Bareword 'STDOUT'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -396,7 +397,7 @@ fn when_uppercase_bareword_additionally_offers_filehandle_declaration() {
 #[test]
 fn when_lowercase_bareword_does_not_offer_filehandle_declaration() {
     let source = "my $x = hello;";
-    let diagnostics = [diag(8, 13, "unquoted-bareword", "Bareword 'hello'")];
+    let diagnostics = [diag(8, 13, "PL109", "Bareword 'hello'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -413,7 +414,7 @@ fn when_lowercase_bareword_does_not_offer_filehandle_declaration() {
 #[test]
 fn when_unused_parameter_offers_underscore_rename() {
     let source = "sub foo { my ($bar) = @_; }";
-    let diagnostics = [diag(14, 18, "unused-parameter", "Unused parameter '$bar'")];
+    let diagnostics = [diag(14, 18, "PL108", "Unused parameter '$bar'")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -430,8 +431,7 @@ fn when_unused_parameter_offers_underscore_rename() {
 #[test]
 fn when_variable_shadows_outer_scope_offers_rename_suggestions() {
     let source = "my $x = 1; { my $x = 2; }";
-    let diagnostics =
-        [diag(17, 19, "variable-shadowing", "Variable '$x' shadows outer declaration")];
+    let diagnostics = [diag(17, 19, "PL104", "Variable '$x' shadows outer declaration")];
     let actions = actions_for(source, &diagnostics);
 
     assert!(
@@ -602,8 +602,8 @@ fn when_diagnostic_has_unknown_code_no_action_produced() {
 fn when_multiple_diagnostics_produces_actions_for_each() {
     let source = "print $a;\nprint $b;";
     let diagnostics = [
-        diag(6, 8, "undefined-variable", "Undefined variable '$a'"),
-        diag(16, 18, "undefined-variable", "Undefined variable '$b'"),
+        diag(6, 8, "PL103", "Undefined variable '$a'"),
+        diag(16, 18, "PL103", "Undefined variable '$b'"),
     ];
     let actions = actions_for(source, &diagnostics);
 
@@ -624,7 +624,7 @@ fn when_multiple_diagnostics_produces_actions_for_each() {
 fn diagnostic_driven_quick_fix_actions_have_diagnostic_codes() {
     let source = "use strict;\nuse warnings;\nif ($x = 5) { }";
     // Offset adjusted: "use strict;\nuse warnings;\n" = 26 bytes, "$x = 5" at 30..36
-    let diagnostics = [diag(30, 36, "assignment-in-condition", "Assignment in condition")];
+    let diagnostics = [diag(30, 36, "PL403", "Assignment in condition")];
     let actions = actions_for(source, &diagnostics);
 
     // Filter to only the actions generated in response to the supplied diagnostics
@@ -646,7 +646,7 @@ fn diagnostic_driven_quick_fix_actions_have_diagnostic_codes() {
 #[test]
 fn all_actions_have_non_empty_titles() {
     let source = "print $undefined;";
-    let diagnostics = [diag(6, 16, "undefined-variable", "Undefined variable '$undefined'")];
+    let diagnostics = [diag(6, 16, "PL103", "Undefined variable '$undefined'")];
     let actions = actions_for(source, &diagnostics);
 
     for action in &actions {
@@ -657,7 +657,7 @@ fn all_actions_have_non_empty_titles() {
 #[test]
 fn all_actions_have_non_empty_edits() {
     let source = "my $x = 1;";
-    let diagnostics = [diag(0, 10, "missing-strict", "Missing 'use strict'")];
+    let diagnostics = [diag(0, 10, "PL100", "Missing 'use strict'")];
     let actions = actions_for(source, &diagnostics);
 
     for action in &actions {

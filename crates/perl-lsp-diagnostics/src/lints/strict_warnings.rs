@@ -11,6 +11,7 @@
 //! | `missing-warnings` | Information | `use warnings` pragma not found |
 //! | `misspelled-pragma` | Warning | Pragma name appears misspelled |
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
@@ -75,7 +76,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         diagnostics.push(Diagnostic {
             range: (0, 0),
             severity: DiagnosticSeverity::Information,
-            code: Some("missing-strict".to_string()),
+            code: Some(DiagnosticCode::MissingStrict.as_str().to_string()),
             message: "Consider adding 'use strict;' for better error checking".to_string(),
             related_information: vec![
                 RelatedInformation {
@@ -96,7 +97,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         diagnostics.push(Diagnostic {
             range: (0, 0),
             severity: DiagnosticSeverity::Information,
-            code: Some("missing-warnings".to_string()),
+            code: Some(DiagnosticCode::MissingWarnings.as_str().to_string()),
             message: "Consider adding 'use warnings;' for better error detection".to_string(),
             related_information: vec![
                 RelatedInformation {
@@ -124,7 +125,7 @@ fn check_misspelled_pragma(module: &str, node: &Node, diagnostics: &mut Vec<Diag
             diagnostics.push(Diagnostic {
                 range: (node.location.start, node.location.end),
                 severity: DiagnosticSeverity::Warning,
-                code: Some("misspelled-pragma".to_string()),
+                code: Some(DiagnosticCode::MisspelledPragma.as_str().to_string()),
                 message: format!(
                     "Did you mean 'use {};'? '{}' is not a known pragma",
                     correct, module
