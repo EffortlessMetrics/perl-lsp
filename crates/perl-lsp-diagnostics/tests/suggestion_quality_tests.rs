@@ -23,7 +23,11 @@ fn diagnostics_for(source: &str, errors: Vec<ParseError>) -> Vec<Diagnostic> {
 }
 
 fn parse_diags(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
-    diags.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect()
+    // PL001=ParseError, PL002=SyntaxError, PL003=UnexpectedEof
+    diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")))
+        .collect()
 }
 
 // ---- Enhanced messages ----
@@ -267,7 +271,12 @@ fn all_parse_errors_have_code() -> Result<(), Box<dyn std::error::Error>> {
     let pd = parse_diags(&diags);
     assert!(pd.len() >= 3, "expected at least 3 parse-error diagnostics");
     for d in &pd {
-        assert_eq!(d.code.as_deref(), Some("parse-error"));
+        // Each parse error should have a stable PL-prefixed code
+        assert!(
+            matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")),
+            "Parse error should have stable code PL001/PL002/PL003, got: {:?}",
+            d.code
+        );
     }
     Ok(())
 }

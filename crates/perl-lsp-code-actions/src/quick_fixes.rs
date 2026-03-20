@@ -3,6 +3,7 @@
 //! Provides automated fixes for common Perl issues driven by diagnostic codes.
 
 use crate::types::{CodeAction, CodeActionEdit, CodeActionKind, QuickFixDiagnostic};
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_lsp_ast_utils::{find_declaration_position, get_indent_at};
 use perl_lsp_rename::TextEdit;
 use perl_parser_core::SourceLocation;
@@ -20,7 +21,7 @@ pub fn fix_undefined_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> 
         actions.push(CodeAction {
             title: format!("Declare '{}' with 'my'", var_name),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["undefined-variable".to_string()],
+            diagnostics: vec![DiagnosticCode::UndefinedVariable.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: insert_pos, end: insert_pos },
@@ -34,7 +35,7 @@ pub fn fix_undefined_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> 
         actions.push(CodeAction {
             title: format!("Declare '{}' with 'our'", var_name),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["undefined-variable".to_string()],
+            diagnostics: vec![DiagnosticCode::UndefinedVariable.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: insert_pos, end: insert_pos },
@@ -62,7 +63,7 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
     actions.push(CodeAction {
         title: "Remove unused variable".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["unused-variable".to_string()],
+        diagnostics: vec![DiagnosticCode::UnusedVariable.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
                 location: SourceLocation { start: line_start, end: line_end + 1 },
@@ -77,7 +78,7 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
         actions.push(CodeAction {
             title: format!("Rename to '_{}'", var_name),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["unused-variable".to_string()],
+            diagnostics: vec![DiagnosticCode::UnusedVariable.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
@@ -106,7 +107,7 @@ pub fn fix_assignment_in_condition(
         actions.push(CodeAction {
             title: "Change to comparison (==)".to_string(),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["assignment-in-condition".to_string()],
+            diagnostics: vec![DiagnosticCode::AssignmentInCondition.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: pos, end: pos + 1 },
@@ -120,7 +121,7 @@ pub fn fix_assignment_in_condition(
         actions.push(CodeAction {
             title: "Keep assignment (add parentheses)".to_string(),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["assignment-in-condition".to_string()],
+            diagnostics: vec![DiagnosticCode::AssignmentInCondition.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![
                     TextEdit {
@@ -151,7 +152,7 @@ pub fn add_use_strict() -> Vec<CodeAction> {
     vec![CodeAction {
         title: "Add 'use strict'".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["missing-strict".to_string()],
+        diagnostics: vec![DiagnosticCode::MissingStrict.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
                 location: SourceLocation { start: 0, end: 0 },
@@ -167,7 +168,7 @@ pub fn add_use_warnings() -> Vec<CodeAction> {
     vec![CodeAction {
         title: "Add 'use warnings'".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["missing-warnings".to_string()],
+        diagnostics: vec![DiagnosticCode::MissingWarnings.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
                 location: SourceLocation { start: 0, end: 0 },
@@ -193,7 +194,7 @@ pub fn fix_deprecated_defined(source: &str, diagnostic: &QuickFixDiagnostic) -> 
         actions.push(CodeAction {
             title: format!("Replace with 'if ({})'", arg_text),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["deprecated-defined".to_string()],
+            diagnostics: vec![DiagnosticCode::DeprecatedDefined.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: defined_start, end: diagnostic.range.1 },
@@ -215,7 +216,7 @@ pub fn fix_numeric_undef(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<C
     actions.push(CodeAction {
         title: "Add defined check".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["numeric-undef".to_string()],
+        diagnostics: vec![DiagnosticCode::NumericComparisonWithUndef.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![
                 TextEdit {
@@ -236,7 +237,7 @@ pub fn fix_numeric_undef(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<C
         actions.push(CodeAction {
             title: "Use defined-or operator (//)".to_string(),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["numeric-undef".to_string()],
+            diagnostics: vec![DiagnosticCode::NumericComparisonWithUndef.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
@@ -269,7 +270,7 @@ pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAc
     actions.push(CodeAction {
         title: format!("Quote '{}' with single quotes", bareword),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["unquoted-bareword".to_string()],
+        diagnostics: vec![DiagnosticCode::UnquotedBareword.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
                 location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
@@ -283,7 +284,7 @@ pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAc
     actions.push(CodeAction {
         title: format!("Quote '{}' with double quotes", bareword),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["unquoted-bareword".to_string()],
+        diagnostics: vec![DiagnosticCode::UnquotedBareword.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
                 location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
@@ -302,7 +303,7 @@ pub fn fix_bareword(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAc
         actions.push(CodeAction {
             title: format!("Declare '{}' as filehandle", bareword),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["unquoted-bareword".to_string()],
+            diagnostics: vec![DiagnosticCode::UnquotedBareword.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: insert_pos, end: insert_pos },
@@ -437,7 +438,7 @@ pub fn fix_unused_parameter(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> 
         actions.push(CodeAction {
             title: format!("Rename to '_{}'", param_name),
             kind: CodeActionKind::QuickFix,
-            diagnostics: vec!["unused-parameter".to_string()],
+            diagnostics: vec![DiagnosticCode::UnusedParameter.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
@@ -544,7 +545,7 @@ pub fn fix_variable_shadowing(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction
             actions.push(CodeAction {
                 title: format!("Rename to '{}'", new_name),
                 kind: CodeActionKind::QuickFix,
-                diagnostics: vec!["variable-shadowing".to_string()],
+                diagnostics: vec![DiagnosticCode::VariableShadowing.as_str().to_string()],
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
                         location: SourceLocation {
@@ -575,7 +576,7 @@ pub fn fix_bareword_filehandle(diagnostic: &QuickFixDiagnostic) -> Vec<CodeActio
     vec![CodeAction {
         title: format!("Replace bareword filehandle '{}' with lexical '{}'", fh_name, lexical_name),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["bareword-filehandle".to_string()],
+        diagnostics: vec![DiagnosticCode::BarewordFilehandle.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
                 location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
@@ -595,7 +596,7 @@ pub fn fix_two_arg_open(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     vec![CodeAction {
         title: "Convert to three-argument open() for safety".to_string(),
         kind: CodeActionKind::QuickFix,
-        diagnostics: vec!["two-arg-open".to_string()],
+        diagnostics: vec![DiagnosticCode::TwoArgOpen.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
                 location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },

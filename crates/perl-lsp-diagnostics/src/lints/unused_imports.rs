@@ -10,6 +10,7 @@
 //! |------|----------|-------------|
 //! | `unused-import` | Hint | Module appears to be unused |
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
@@ -152,7 +153,7 @@ pub fn check_unused_imports(node: &Node, source: &str, diagnostics: &mut Vec<Dia
             diagnostics.push(Diagnostic {
                 range: (start, end),
                 severity: DiagnosticSeverity::Hint,
-                code: Some("unused-import".to_string()),
+                code: Some(DiagnosticCode::UnusedImport.as_str().to_string()),
                 message: format!("Module '{}' appears to be unused", module),
                 related_information: vec![RelatedInformation {
                     location: (start, end),

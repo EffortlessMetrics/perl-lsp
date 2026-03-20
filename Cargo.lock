@@ -1618,7 +1618,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "winapi",
 ]
 
@@ -1834,6 +1833,7 @@ dependencies = [
  "parking_lot",
  "perl-content-length-framing",
  "perl-dap",
+ "perl-diagnostics-codes",
  "perl-keywords",
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
@@ -1885,7 +1885,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "tracing-subscriber",
  "url",
  "uuid",
  "walkdir",
@@ -1919,6 +1918,7 @@ dependencies = [
 name = "perl-lsp-code-actions"
 version = "0.12.0"
 dependencies = [
+ "perl-diagnostics-codes",
  "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
  "perl-lsp-import-management",
@@ -1963,6 +1963,7 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
+ "serde_json",
  "url",
 ]
 
@@ -2003,6 +2004,7 @@ version = "0.12.0"
 name = "perl-lsp-diagnostics"
 version = "0.12.0"
 dependencies = [
+ "perl-diagnostics-codes",
  "perl-lsp-diagnostic-types",
  "perl-parser",
  "perl-parser-core",
@@ -2198,7 +2200,6 @@ dependencies = [
  "perl-position-tracking",
  "perl-qualified-name",
  "perl-tdd-support",
- "serde",
  "serde_json",
 ]
 
@@ -2356,6 +2357,7 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2732,7 +2734,6 @@ version = "0.12.0"
 name = "perl-tokenizer"
 version = "0.12.0"
 dependencies = [
- "perl-ast",
  "perl-ast-v2",
  "perl-error",
  "perl-lexer",

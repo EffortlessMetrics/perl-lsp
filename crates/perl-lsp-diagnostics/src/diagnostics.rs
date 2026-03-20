@@ -2,6 +2,7 @@
 //!
 //! This module provides the core diagnostic generation functionality.
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
@@ -70,10 +71,16 @@ impl DiagnosticsProvider {
                 })
                 .unwrap_or_default();
 
+            let code = match error {
+                ParseError::UnexpectedEof => DiagnosticCode::UnexpectedEof,
+                ParseError::SyntaxError { .. } => DiagnosticCode::SyntaxError,
+                _ => DiagnosticCode::ParseError,
+            };
+
             diagnostics.push(Diagnostic {
                 range: (range_start, range_end),
                 severity: DiagnosticSeverity::Error,
-                code: Some("parse-error".to_string()),
+                code: Some(code.as_str().to_string()),
                 message,
                 related_information,
                 tags: Vec::new(),

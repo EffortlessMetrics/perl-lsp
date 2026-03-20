@@ -10,6 +10,7 @@
 //! | `deprecated-defined` | Warning | `defined(@array)` or `defined(%hash)` is deprecated |
 //! | `deprecated-array-base` | Warning | `$[` variable is deprecated since Perl 5.12 |
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
 use super::super::walker::walk_node;
@@ -36,7 +37,7 @@ pub fn check_deprecated_syntax(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                     diagnostics.push(Diagnostic {
                         range: (n.location.start, n.location.end),
                         severity: DiagnosticSeverity::Warning,
-                        code: Some("deprecated-defined".to_string()),
+                        code: Some(DiagnosticCode::DeprecatedDefined.as_str().to_string()),
                         message: format!(
                             "Use of 'defined {}{}' is deprecated",
                             sigil, name
@@ -63,7 +64,7 @@ pub fn check_deprecated_syntax(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                     diagnostics.push(Diagnostic {
                         range: (n.location.start, n.location.start + 2),
                         severity: DiagnosticSeverity::Warning,
-                        code: Some("deprecated-array-base".to_string()),
+                        code: Some(DiagnosticCode::DeprecatedArrayBase.as_str().to_string()),
                         message: "Use of '$[' is deprecated and will be removed".to_string(),
                         related_information: vec![
                             RelatedInformation {

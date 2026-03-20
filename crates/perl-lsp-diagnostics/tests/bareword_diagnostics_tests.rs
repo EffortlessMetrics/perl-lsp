@@ -24,10 +24,7 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
 }
 
 fn bareword_diags(source: &str) -> Vec<Diagnostic> {
-    diagnostics_for(source)
-        .into_iter()
-        .filter(|d| d.code.as_deref() == Some("unquoted-bareword"))
-        .collect()
+    diagnostics_for(source).into_iter().filter(|d| d.code.as_deref() == Some("PL109")).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -51,8 +48,8 @@ fn bareword_diagnostic_has_correct_code() -> Result<(), Box<dyn std::error::Erro
     let source = "use strict;\nuse warnings;\nmy $x = FOO;\n";
     let diags = bareword_diags(source);
     assert!(
-        diags.iter().all(|d| d.code.as_deref() == Some("unquoted-bareword")),
-        "all bareword diagnostics should have code 'unquoted-bareword'"
+        diags.iter().all(|d| d.code.as_deref() == Some("PL109")),
+        "all bareword diagnostics should have stable code PL109"
     );
     Ok(())
 }

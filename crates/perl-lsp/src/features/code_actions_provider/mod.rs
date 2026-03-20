@@ -1,4 +1,5 @@
 use crate::features::diagnostics::Diagnostic;
+use perl_diagnostics_codes::DiagnosticCode;
 
 mod fixes;
 mod source_utils;
@@ -90,16 +91,47 @@ impl CodeActionsProvider {
     /// Get code actions for a specific diagnostic
     fn get_actions_for_diagnostic(&self, diagnostic: &Diagnostic) -> Vec<CodeAction> {
         match diagnostic.code.as_deref() {
-            Some("undefined-variable" | "undeclared-variable") => {
+            Some(c)
+                if c == DiagnosticCode::UndefinedVariable.as_str()
+                    || c == "undefined-variable"
+                    || c == "undeclared-variable" =>
+            {
                 fixes::fix_undefined_variable(self, diagnostic)
             }
-            Some("unused-variable") => fixes::fix_unused_variable(self, diagnostic),
-            Some("variable-shadowing") => fixes::fix_variable_shadowing(diagnostic),
-            Some("variable-redeclaration") => fixes::fix_variable_redeclaration(self, diagnostic),
-            Some("duplicate-parameter") => fixes::fix_duplicate_parameter(diagnostic),
-            Some("parameter-shadows-global") => fixes::fix_parameter_shadowing(diagnostic),
-            Some("unused-parameter") => fixes::fix_unused_parameter(diagnostic),
-            Some("unquoted-bareword") => fixes::fix_unquoted_bareword(self, diagnostic),
+            Some(c) if c == DiagnosticCode::UnusedVariable.as_str() || c == "unused-variable" => {
+                fixes::fix_unused_variable(self, diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::VariableShadowing.as_str() || c == "variable-shadowing" =>
+            {
+                fixes::fix_variable_shadowing(diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::VariableRedeclaration.as_str()
+                    || c == "variable-redeclaration" =>
+            {
+                fixes::fix_variable_redeclaration(self, diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::DuplicateParameter.as_str()
+                    || c == "duplicate-parameter" =>
+            {
+                fixes::fix_duplicate_parameter(diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::ParameterShadowsGlobal.as_str()
+                    || c == "parameter-shadows-global" =>
+            {
+                fixes::fix_parameter_shadowing(diagnostic)
+            }
+            Some(c) if c == DiagnosticCode::UnusedParameter.as_str() || c == "unused-parameter" => {
+                fixes::fix_unused_parameter(diagnostic)
+            }
+            Some(c)
+                if c == DiagnosticCode::UnquotedBareword.as_str() || c == "unquoted-bareword" =>
+            {
+                fixes::fix_unquoted_bareword(self, diagnostic)
+            }
             Some(code) if code.starts_with("parse-error-") => {
                 fixes::fix_parse_error(self, diagnostic, code)
             }

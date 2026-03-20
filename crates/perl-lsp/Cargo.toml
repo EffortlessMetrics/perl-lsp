@@ -39,6 +39,7 @@ perl-lsp-transport = { workspace = true }
 perl-lsp-code-actions = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
+perl-diagnostics-codes = { workspace = true }
 perl-lsp-document-highlight = { workspace = true }
 perl-lsp-inlay-hints = { workspace = true }
 perl-lsp-code-lens = { workspace = true }

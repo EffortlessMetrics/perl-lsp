@@ -105,6 +105,22 @@ pub enum DiagnosticCode {
     UnusedVariable,
     /// Undefined variable
     UndefinedVariable,
+    /// Variable shadowing an outer declaration
+    VariableShadowing,
+    /// Variable redeclared in the same scope
+    VariableRedeclaration,
+    /// Duplicate parameter in a subroutine signature
+    DuplicateParameter,
+    /// Subroutine parameter shadows a global variable
+    ParameterShadowsGlobal,
+    /// Subroutine parameter is declared but never used
+    UnusedParameter,
+    /// Bareword used where a quoted string is expected (under strict)
+    UnquotedBareword,
+    /// Variable used before being initialized
+    UninitializedVariable,
+    /// Pragma name appears to be misspelled
+    MisspelledPragma,
 
     // Package/module (PL200-PL299)
     /// Missing package declaration
@@ -125,6 +141,42 @@ pub enum DiagnosticCode {
     TwoArgOpen,
     /// Implicit return value
     ImplicitReturn,
+    /// Assignment used where a comparison was likely intended
+    AssignmentInCondition,
+    /// Numeric comparison against a potentially undefined value
+    NumericComparisonWithUndef,
+
+    // Deprecated syntax (PL500-PL599)
+    /// Use of deprecated defined(@array) / defined(%hash)
+    DeprecatedDefined,
+    /// Use of deprecated $[ array base variable
+    DeprecatedArrayBase,
+
+    // Security (PL600-PL699)
+    /// String eval is a security risk
+    SecurityStringEval,
+    /// Backtick/qx command execution detected
+    SecurityBacktickExec,
+
+    // Import (PL700-PL799)
+    /// Module appears to be unused
+    UnusedImport,
+
+    // Heredoc anti-patterns (PL800-PL899)
+    /// Heredoc used inside a format block
+    HeredocInFormat,
+    /// Heredoc used inside a BEGIN block
+    HeredocInBegin,
+    /// Heredoc delimiter is dynamic (variable interpolation)
+    HeredocDynamicDelimiter,
+    /// Heredoc used inside a source filter
+    HeredocInSourceFilter,
+    /// Heredoc used inside a regex code block
+    HeredocInRegexCode,
+    /// Heredoc used inside string eval
+    HeredocInEval,
+    /// Heredoc used with a tied filehandle
+    HeredocTiedHandle,
 
     // Perl::Critic violations (PC001-PC005)
     /// Perl::Critic brutal (severity 1) violation
@@ -150,6 +202,14 @@ impl DiagnosticCode {
             DiagnosticCode::MissingWarnings => "PL101",
             DiagnosticCode::UnusedVariable => "PL102",
             DiagnosticCode::UndefinedVariable => "PL103",
+            DiagnosticCode::VariableShadowing => "PL104",
+            DiagnosticCode::VariableRedeclaration => "PL105",
+            DiagnosticCode::DuplicateParameter => "PL106",
+            DiagnosticCode::ParameterShadowsGlobal => "PL107",
+            DiagnosticCode::UnusedParameter => "PL108",
+            DiagnosticCode::UnquotedBareword => "PL109",
+            DiagnosticCode::UninitializedVariable => "PL110",
+            DiagnosticCode::MisspelledPragma => "PL111",
             DiagnosticCode::MissingPackageDeclaration => "PL200",
             DiagnosticCode::DuplicatePackage => "PL201",
             DiagnosticCode::DuplicateSubroutine => "PL300",
@@ -157,6 +217,20 @@ impl DiagnosticCode {
             DiagnosticCode::BarewordFilehandle => "PL400",
             DiagnosticCode::TwoArgOpen => "PL401",
             DiagnosticCode::ImplicitReturn => "PL402",
+            DiagnosticCode::AssignmentInCondition => "PL403",
+            DiagnosticCode::NumericComparisonWithUndef => "PL404",
+            DiagnosticCode::DeprecatedDefined => "PL500",
+            DiagnosticCode::DeprecatedArrayBase => "PL501",
+            DiagnosticCode::SecurityStringEval => "PL600",
+            DiagnosticCode::SecurityBacktickExec => "PL601",
+            DiagnosticCode::UnusedImport => "PL700",
+            DiagnosticCode::HeredocInFormat => "PL800",
+            DiagnosticCode::HeredocInBegin => "PL801",
+            DiagnosticCode::HeredocDynamicDelimiter => "PL802",
+            DiagnosticCode::HeredocInSourceFilter => "PL803",
+            DiagnosticCode::HeredocInRegexCode => "PL804",
+            DiagnosticCode::HeredocInEval => "PL805",
+            DiagnosticCode::HeredocTiedHandle => "PL806",
             DiagnosticCode::CriticSeverity1 => "PC001",
             DiagnosticCode::CriticSeverity2 => "PC002",
             DiagnosticCode::CriticSeverity3 => "PC003",
@@ -167,30 +241,51 @@ impl DiagnosticCode {
 
     /// Get the documentation URL for this code, if available.
     pub fn documentation_url(&self) -> Option<&'static str> {
-        match self {
-            DiagnosticCode::ParseError => Some("https://docs.perl-lsp.org/errors/PL001"),
-            DiagnosticCode::SyntaxError => Some("https://docs.perl-lsp.org/errors/PL002"),
-            DiagnosticCode::UnexpectedEof => Some("https://docs.perl-lsp.org/errors/PL003"),
-            DiagnosticCode::MissingStrict => Some("https://docs.perl-lsp.org/errors/PL100"),
-            DiagnosticCode::MissingWarnings => Some("https://docs.perl-lsp.org/errors/PL101"),
-            DiagnosticCode::UnusedVariable => Some("https://docs.perl-lsp.org/errors/PL102"),
-            DiagnosticCode::UndefinedVariable => Some("https://docs.perl-lsp.org/errors/PL103"),
-            DiagnosticCode::MissingPackageDeclaration => {
-                Some("https://docs.perl-lsp.org/errors/PL200")
-            }
-            DiagnosticCode::DuplicatePackage => Some("https://docs.perl-lsp.org/errors/PL201"),
-            DiagnosticCode::DuplicateSubroutine => Some("https://docs.perl-lsp.org/errors/PL300"),
-            DiagnosticCode::MissingReturn => Some("https://docs.perl-lsp.org/errors/PL301"),
-            DiagnosticCode::BarewordFilehandle => Some("https://docs.perl-lsp.org/errors/PL400"),
-            DiagnosticCode::TwoArgOpen => Some("https://docs.perl-lsp.org/errors/PL401"),
-            DiagnosticCode::ImplicitReturn => Some("https://docs.perl-lsp.org/errors/PL402"),
-            // Perl::Critic codes don't have centralized documentation
-            DiagnosticCode::CriticSeverity1
-            | DiagnosticCode::CriticSeverity2
-            | DiagnosticCode::CriticSeverity3
-            | DiagnosticCode::CriticSeverity4
-            | DiagnosticCode::CriticSeverity5 => None,
+        let code = self.as_str();
+        // Perl::Critic codes don't have centralized documentation
+        if code.starts_with("PC") {
+            return None;
         }
+        // Build URL from stable code string for all PL codes
+        Some(match code {
+            "PL001" => "https://docs.perl-lsp.org/errors/PL001",
+            "PL002" => "https://docs.perl-lsp.org/errors/PL002",
+            "PL003" => "https://docs.perl-lsp.org/errors/PL003",
+            "PL100" => "https://docs.perl-lsp.org/errors/PL100",
+            "PL101" => "https://docs.perl-lsp.org/errors/PL101",
+            "PL102" => "https://docs.perl-lsp.org/errors/PL102",
+            "PL103" => "https://docs.perl-lsp.org/errors/PL103",
+            "PL104" => "https://docs.perl-lsp.org/errors/PL104",
+            "PL105" => "https://docs.perl-lsp.org/errors/PL105",
+            "PL106" => "https://docs.perl-lsp.org/errors/PL106",
+            "PL107" => "https://docs.perl-lsp.org/errors/PL107",
+            "PL108" => "https://docs.perl-lsp.org/errors/PL108",
+            "PL109" => "https://docs.perl-lsp.org/errors/PL109",
+            "PL110" => "https://docs.perl-lsp.org/errors/PL110",
+            "PL111" => "https://docs.perl-lsp.org/errors/PL111",
+            "PL200" => "https://docs.perl-lsp.org/errors/PL200",
+            "PL201" => "https://docs.perl-lsp.org/errors/PL201",
+            "PL300" => "https://docs.perl-lsp.org/errors/PL300",
+            "PL301" => "https://docs.perl-lsp.org/errors/PL301",
+            "PL400" => "https://docs.perl-lsp.org/errors/PL400",
+            "PL401" => "https://docs.perl-lsp.org/errors/PL401",
+            "PL402" => "https://docs.perl-lsp.org/errors/PL402",
+            "PL403" => "https://docs.perl-lsp.org/errors/PL403",
+            "PL404" => "https://docs.perl-lsp.org/errors/PL404",
+            "PL500" => "https://docs.perl-lsp.org/errors/PL500",
+            "PL501" => "https://docs.perl-lsp.org/errors/PL501",
+            "PL600" => "https://docs.perl-lsp.org/errors/PL600",
+            "PL601" => "https://docs.perl-lsp.org/errors/PL601",
+            "PL700" => "https://docs.perl-lsp.org/errors/PL700",
+            "PL800" => "https://docs.perl-lsp.org/errors/PL800",
+            "PL801" => "https://docs.perl-lsp.org/errors/PL801",
+            "PL802" => "https://docs.perl-lsp.org/errors/PL802",
+            "PL803" => "https://docs.perl-lsp.org/errors/PL803",
+            "PL804" => "https://docs.perl-lsp.org/errors/PL804",
+            "PL805" => "https://docs.perl-lsp.org/errors/PL805",
+            "PL806" => "https://docs.perl-lsp.org/errors/PL806",
+            _ => return None,
+        })
     }
 
     /// Get the default severity for this diagnostic code.
@@ -200,12 +295,20 @@ impl DiagnosticCode {
             DiagnosticCode::ParseError
             | DiagnosticCode::SyntaxError
             | DiagnosticCode::UnexpectedEof
-            | DiagnosticCode::UndefinedVariable => DiagnosticSeverity::Error,
+            | DiagnosticCode::UndefinedVariable
+            | DiagnosticCode::VariableRedeclaration
+            | DiagnosticCode::DuplicateParameter
+            | DiagnosticCode::UnquotedBareword => DiagnosticSeverity::Error,
 
             // Warnings
             DiagnosticCode::MissingStrict
             | DiagnosticCode::MissingWarnings
             | DiagnosticCode::UnusedVariable
+            | DiagnosticCode::VariableShadowing
+            | DiagnosticCode::ParameterShadowsGlobal
+            | DiagnosticCode::UnusedParameter
+            | DiagnosticCode::UninitializedVariable
+            | DiagnosticCode::MisspelledPragma
             | DiagnosticCode::MissingPackageDeclaration
             | DiagnosticCode::DuplicatePackage
             | DiagnosticCode::DuplicateSubroutine
@@ -213,11 +316,27 @@ impl DiagnosticCode {
             | DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen
             | DiagnosticCode::ImplicitReturn
+            | DiagnosticCode::AssignmentInCondition
+            | DiagnosticCode::NumericComparisonWithUndef
+            | DiagnosticCode::DeprecatedDefined
+            | DiagnosticCode::DeprecatedArrayBase
+            | DiagnosticCode::SecurityStringEval
+            | DiagnosticCode::SecurityBacktickExec
             | DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
 
-            // Information/Hints
-            DiagnosticCode::CriticSeverity3
+            // Information
+            DiagnosticCode::HeredocInFormat
+            | DiagnosticCode::HeredocInBegin
+            | DiagnosticCode::HeredocDynamicDelimiter
+            | DiagnosticCode::HeredocInSourceFilter
+            | DiagnosticCode::HeredocInRegexCode
+            | DiagnosticCode::HeredocInEval
+            | DiagnosticCode::HeredocTiedHandle => DiagnosticSeverity::Information,
+
+            // Hints
+            DiagnosticCode::UnusedImport
+            | DiagnosticCode::CriticSeverity3
             | DiagnosticCode::CriticSeverity4
             | DiagnosticCode::CriticSeverity5 => DiagnosticSeverity::Hint,
         }
@@ -226,7 +345,12 @@ impl DiagnosticCode {
     /// Get any diagnostic tags associated with this code.
     pub fn tags(&self) -> &'static [DiagnosticTag] {
         match self {
-            DiagnosticCode::UnusedVariable => &[DiagnosticTag::Unnecessary],
+            DiagnosticCode::UnusedVariable
+            | DiagnosticCode::UnusedParameter
+            | DiagnosticCode::UnusedImport => &[DiagnosticTag::Unnecessary],
+            DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
+                &[DiagnosticTag::Deprecated]
+            }
             _ => &[],
         }
     }
@@ -263,6 +387,14 @@ impl DiagnosticCode {
             "PL101" => Some(DiagnosticCode::MissingWarnings),
             "PL102" => Some(DiagnosticCode::UnusedVariable),
             "PL103" => Some(DiagnosticCode::UndefinedVariable),
+            "PL104" => Some(DiagnosticCode::VariableShadowing),
+            "PL105" => Some(DiagnosticCode::VariableRedeclaration),
+            "PL106" => Some(DiagnosticCode::DuplicateParameter),
+            "PL107" => Some(DiagnosticCode::ParameterShadowsGlobal),
+            "PL108" => Some(DiagnosticCode::UnusedParameter),
+            "PL109" => Some(DiagnosticCode::UnquotedBareword),
+            "PL110" => Some(DiagnosticCode::UninitializedVariable),
+            "PL111" => Some(DiagnosticCode::MisspelledPragma),
             "PL200" => Some(DiagnosticCode::MissingPackageDeclaration),
             "PL201" => Some(DiagnosticCode::DuplicatePackage),
             "PL300" => Some(DiagnosticCode::DuplicateSubroutine),
@@ -270,6 +402,20 @@ impl DiagnosticCode {
             "PL400" => Some(DiagnosticCode::BarewordFilehandle),
             "PL401" => Some(DiagnosticCode::TwoArgOpen),
             "PL402" => Some(DiagnosticCode::ImplicitReturn),
+            "PL403" => Some(DiagnosticCode::AssignmentInCondition),
+            "PL404" => Some(DiagnosticCode::NumericComparisonWithUndef),
+            "PL500" => Some(DiagnosticCode::DeprecatedDefined),
+            "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
+            "PL600" => Some(DiagnosticCode::SecurityStringEval),
+            "PL601" => Some(DiagnosticCode::SecurityBacktickExec),
+            "PL700" => Some(DiagnosticCode::UnusedImport),
+            "PL800" => Some(DiagnosticCode::HeredocInFormat),
+            "PL801" => Some(DiagnosticCode::HeredocInBegin),
+            "PL802" => Some(DiagnosticCode::HeredocDynamicDelimiter),
+            "PL803" => Some(DiagnosticCode::HeredocInSourceFilter),
+            "PL804" => Some(DiagnosticCode::HeredocInRegexCode),
+            "PL805" => Some(DiagnosticCode::HeredocInEval),
+            "PL806" => Some(DiagnosticCode::HeredocTiedHandle),
             "PC001" => Some(DiagnosticCode::CriticSeverity1),
             "PC002" => Some(DiagnosticCode::CriticSeverity2),
             "PC003" => Some(DiagnosticCode::CriticSeverity3),
@@ -292,14 +438,22 @@ impl fmt::Display for DiagnosticCode {
 pub enum DiagnosticCategory {
     /// Parser-related diagnostics (PL001-PL099)
     Parser,
-    /// Strict/warnings pragmas (PL100-PL199)
+    /// Strict/warnings pragmas and scope analysis (PL100-PL199)
     StrictWarnings,
     /// Package/module issues (PL200-PL299)
     PackageModule,
     /// Subroutine issues (PL300-PL399)
     Subroutine,
-    /// Best practices (PL400-PL499)
+    /// Best practices and common mistakes (PL400-PL499)
     BestPractices,
+    /// Deprecated syntax (PL500-PL599)
+    Deprecated,
+    /// Security anti-patterns (PL600-PL699)
+    Security,
+    /// Import/use diagnostics (PL700-PL799)
+    Import,
+    /// Heredoc anti-patterns (PL800-PL899)
+    Heredoc,
     /// Perl::Critic violations (PC001-PC005)
     PerlCritic,
 }
@@ -315,7 +469,15 @@ impl DiagnosticCode {
             DiagnosticCode::MissingStrict
             | DiagnosticCode::MissingWarnings
             | DiagnosticCode::UnusedVariable
-            | DiagnosticCode::UndefinedVariable => DiagnosticCategory::StrictWarnings,
+            | DiagnosticCode::UndefinedVariable
+            | DiagnosticCode::VariableShadowing
+            | DiagnosticCode::VariableRedeclaration
+            | DiagnosticCode::DuplicateParameter
+            | DiagnosticCode::ParameterShadowsGlobal
+            | DiagnosticCode::UnusedParameter
+            | DiagnosticCode::UnquotedBareword
+            | DiagnosticCode::UninitializedVariable
+            | DiagnosticCode::MisspelledPragma => DiagnosticCategory::StrictWarnings,
 
             DiagnosticCode::MissingPackageDeclaration | DiagnosticCode::DuplicatePackage => {
                 DiagnosticCategory::PackageModule
@@ -327,7 +489,27 @@ impl DiagnosticCode {
 
             DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen
-            | DiagnosticCode::ImplicitReturn => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::ImplicitReturn
+            | DiagnosticCode::AssignmentInCondition
+            | DiagnosticCode::NumericComparisonWithUndef => DiagnosticCategory::BestPractices,
+
+            DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
+                DiagnosticCategory::Deprecated
+            }
+
+            DiagnosticCode::SecurityStringEval | DiagnosticCode::SecurityBacktickExec => {
+                DiagnosticCategory::Security
+            }
+
+            DiagnosticCode::UnusedImport => DiagnosticCategory::Import,
+
+            DiagnosticCode::HeredocInFormat
+            | DiagnosticCode::HeredocInBegin
+            | DiagnosticCode::HeredocDynamicDelimiter
+            | DiagnosticCode::HeredocInSourceFilter
+            | DiagnosticCode::HeredocInRegexCode
+            | DiagnosticCode::HeredocInEval
+            | DiagnosticCode::HeredocTiedHandle => DiagnosticCategory::Heredoc,
 
             DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2

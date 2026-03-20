@@ -28,9 +28,12 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
     provider.get_diagnostics(&ast, &output.diagnostics, source)
 }
 
-/// Filter to only parse-error diagnostics
+/// Filter to only parse-error diagnostics (PL001=ParseError, PL002=SyntaxError, PL003=UnexpectedEof)
 fn parse_error_diags(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
-    diags.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect()
+    diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003")))
+        .collect()
 }
 
 /// Verify a byte offset falls within [0, source_len] and, optionally, that the
@@ -135,7 +138,7 @@ fn test_severity_missing_strict_is_information() -> Result<(), Box<dyn std::erro
     let diags = diagnostics_for(source);
 
     let missing_strict: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("missing-strict")).collect();
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
 
     // If the linter fires missing-strict, it should be Information
     for d in &missing_strict {
@@ -154,8 +157,7 @@ fn test_severity_unused_variable_is_warning() -> Result<(), Box<dyn std::error::
     let source = "use strict;\nuse warnings;\nmy $unused = 1;\n";
     let diags = diagnostics_for(source);
 
-    let unused: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("unused-variable")).collect();
+    let unused: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
 
     for d in &unused {
         assert_eq!(
@@ -315,7 +317,7 @@ fn test_multiple_diagnostics_mixed_categories() -> Result<(), Box<dyn std::error
     // With an empty Program AST, missing-strict/warnings lint fires.
     let lint_diags: Vec<_> = diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("missing-strict") | Some("missing-warnings")))
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
     // Lint diagnostics may or may not fire depending on the AST content.
     // At minimum, we have the parse-error.
@@ -438,7 +440,7 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&without, &mut diags1);
     let lint1: Vec<_> = diags1
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("missing-strict") | Some("missing-warnings")))
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
     assert!(!lint1.is_empty(), "Should have missing-pragma diagnostics without pragmas");
 
@@ -459,7 +461,7 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&with, &mut diags2);
     let lint2: Vec<_> = diags2
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("missing-strict") | Some("missing-warnings")))
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
     assert!(lint2.is_empty(), "Adding pragmas should clear missing-pragma diagnostics");
     Ok(())
@@ -556,7 +558,7 @@ fn test_full_pipeline_clean_perl_minimal_diagnostics() -> Result<(), Box<dyn std
     // Should not have missing-strict or missing-warnings
     let missing_pragmas: Vec<_> = diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("missing-strict") | Some("missing-warnings")))
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
     assert!(missing_pragmas.is_empty(), "Clean Perl should not have missing-pragma diagnostics");
     Ok(())
@@ -590,10 +592,13 @@ fn test_diagnostic_codes_are_well_formed() -> Result<(), Box<dyn std::error::Err
 
     for d in &diags {
         if let Some(code) = &d.code {
-            // Codes should be lowercase kebab-case
+            // Codes should be stable PL/PC-prefixed codes (e.g., "PL001", "PC001")
+            // or legacy parse-error-* subcodes
             assert!(
-                code.chars().all(|c| c.is_ascii_lowercase() || c == '-'),
-                "Diagnostic code '{}' should be lowercase kebab-case",
+                code.starts_with("PL")
+                    || code.starts_with("PC")
+                    || code.starts_with("parse-error-"),
+                "Diagnostic code '{}' should be a stable PL/PC-prefixed code",
                 code
             );
         }
@@ -630,8 +635,7 @@ fn test_deprecated_tag_for_deprecated_syntax() -> Result<(), Box<dyn std::error:
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::deprecated::check_deprecated_syntax(&root, &mut diagnostics);
 
-    let dep: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("deprecated-defined")).collect();
+    let dep: Vec<_> = diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL500")).collect();
     assert!(!dep.is_empty(), "Should detect deprecated defined(@array)");
     assert!(dep[0].tags.contains(&DiagnosticTag::Deprecated));
     assert_eq!(dep[0].severity, DiagnosticSeverity::Warning);
