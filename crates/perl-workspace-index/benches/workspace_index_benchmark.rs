@@ -681,6 +681,133 @@ fn bench_resource_limit_enforcement(c: &mut Criterion) {
     });
 }
 
+/// Generate a realistic Perl module with ~10 symbols for scale benchmarks.
+fn generate_module(index: usize) -> String {
+    format!(
+        r#"package Gen::Module{idx};
+use strict;
+use warnings;
+
+our $VERSION = '1.00';
+
+sub new {{
+    my $class = shift;
+    return bless {{}}, $class;
+}}
+
+sub method_a_{idx} {{
+    my ($self, $x) = @_;
+    return $x + {idx};
+}}
+
+sub method_b_{idx} {{
+    my ($self, $y) = @_;
+    return $y * {idx};
+}}
+
+sub method_c_{idx} {{
+    my ($self) = @_;
+    return "{idx}";
+}}
+
+sub _private_{idx} {{
+    return {idx};
+}}
+
+1;
+"#,
+        idx = index
+    )
+}
+
+/// Benchmark batch indexing 1000 files (CPAN-scale workload).
+fn bench_batch_index_1000_files(c: &mut Criterion) {
+    c.bench_function("batch index 1000 files", |b| {
+        b.iter_batched(
+            || {
+                let files: Vec<(Url, String)> = (0..1000)
+                    .map(|i| {
+                        let uri = must(Url::parse(&format!("file:///lib/Gen/Module{}.pm", i)));
+                        (uri, generate_module(i))
+                    })
+                    .collect();
+                (WorkspaceIndex::new(), files)
+            },
+            |(index, files)| {
+                let errors = index.index_files_batch(files);
+                black_box(errors);
+                black_box(&index);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+/// Benchmark symbol lookup at scale (after indexing 1000 files / ~5000 symbols).
+fn bench_symbol_lookup_at_scale(c: &mut Criterion) {
+    let index = WorkspaceIndex::new();
+    let files: Vec<(Url, String)> = (0..1000)
+        .map(|i| {
+            let uri = must(Url::parse(&format!("file:///lib/Gen/Module{}.pm", i)));
+            (uri, generate_module(i))
+        })
+        .collect();
+    let _errors = index.index_files_batch(files);
+
+    c.bench_function("symbol lookup at 1000-file scale", |b| {
+        b.iter(|| {
+            let d1 = index.find_definition("Gen::Module0::method_a_0");
+            let d2 = index.find_definition("Gen::Module500::method_b_500");
+            let d3 = index.find_definition("Gen::Module999::_private_999");
+            black_box(d1);
+            black_box(d2);
+            black_box(d3);
+        });
+    });
+}
+
+/// Benchmark search_symbols at scale (substring match across ~5000 symbols).
+fn bench_search_symbols_at_scale(c: &mut Criterion) {
+    let index = WorkspaceIndex::new();
+    let files: Vec<(Url, String)> = (0..1000)
+        .map(|i| {
+            let uri = must(Url::parse(&format!("file:///lib/Gen/Module{}.pm", i)));
+            (uri, generate_module(i))
+        })
+        .collect();
+    let _errors = index.index_files_batch(files);
+
+    c.bench_function("search_symbols at 1000-file scale", |b| {
+        b.iter(|| {
+            let r = index.search_symbols("method_a");
+            black_box(r);
+        });
+    });
+}
+
+/// Benchmark incremental update at scale (re-index 1 file in 1000-file workspace).
+fn bench_incremental_update_at_scale(c: &mut Criterion) {
+    let index = WorkspaceIndex::new();
+    let files: Vec<(Url, String)> = (0..1000)
+        .map(|i| {
+            let uri = must(Url::parse(&format!("file:///lib/Gen/Module{}.pm", i)));
+            (uri, generate_module(i))
+        })
+        .collect();
+    let _errors = index.index_files_batch(files);
+
+    let update_uri = must(Url::parse("file:///lib/Gen/Module500.pm"));
+
+    c.bench_function("incremental update at 1000-file scale", |b| {
+        b.iter(|| {
+            let updated =
+                "package Gen::Module500;\nsub updated_method { return 42; }\n1;\n".to_string();
+            index.index_file(update_uri.clone(), updated).ok();
+            black_box(&index);
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_initial_index_small_workspace,
@@ -695,5 +822,9 @@ criterion_group!(
     bench_parse_storm_detection,
     bench_early_exit_optimization,
     bench_resource_limit_enforcement,
+    bench_batch_index_1000_files,
+    bench_symbol_lookup_at_scale,
+    bench_search_symbols_at_scale,
+    bench_incremental_update_at_scale,
 );
 criterion_main!(benches);

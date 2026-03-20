@@ -57,9 +57,10 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
-| **Current release line** | `v0.12.0` public alpha | Truthful docs and receipts | Active |
+| **Current release line** | `v0.11.0` public alpha | Truthful docs and receipts | Active |
+| **Active milestone** | `v0.12.0` public-alpha hardening sprint | Exit hardening sprint cleanly | In progress |
 | **Merge gate** | `nix develop -c just ci-gate` | Green before merge | Required |
-| **Tier A Tests** | 2675 lib tests (discovered), 2 ignores (tracked) | 100% pass | PASS |
+| **Tier A Tests** | 2248 lib tests (discovered), 0 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 100% | PASS |
@@ -72,7 +73,7 @@ Key terms:
 
 ## What's True Right Now
 
-- **Release posture**: the current release line is `v0.12.0` public alpha
+- **Release posture**: the current release line is `v0.11.0` public alpha; the active milestone is `v0.12.0` hardening, not a shipped release
 - **Status discipline**: this file is for evidence, [ROADMAP.md](ROADMAP.md) is for planning, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `bash scripts/ignored-test-count.sh` is the tracked-test-debt source
@@ -92,7 +93,7 @@ Key terms:
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% overall LSP protocol support (97/97 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (73 `.pl` files)
-- **Test Status**: 2675 lib tests (Tier A), 2 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
+- **Test Status**: 2248 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
@@ -104,7 +105,7 @@ Key terms:
 
 ## What's Next
 
-**Now (v0.12.0 public alpha)**
+**Now (active milestone: v0.12.0 hardening sprint on top of the v0.11.0 release line)**
 - Raise the CPAN top-1000 full-corpus baseline from `72.1%` (`3139/4355`) to `90%+` clean parses while keeping the strict known-clean manifest at `100%`
 - Close repo-corpus coverage gaps (`63/68` NodeKinds currently covered) and retire the remaining parser audit `P2` hang-risk candidate
 - Land Moo/Moose/Class::Accessor, `use parent`/`use base`, and export-list disambiguation work needed for public-alpha expectations

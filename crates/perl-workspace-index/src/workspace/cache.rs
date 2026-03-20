@@ -224,7 +224,8 @@ where
 
         // Check if this key already exists
         if let Some(entry) = entries.get_mut(&key) {
-            // Update existing entry
+            // Update existing entry — track byte delta incrementally
+            let old_size = entry.size_bytes;
             entry.value = value;
             entry.size_bytes = size_bytes;
             entry.touch();
@@ -235,8 +236,8 @@ where
             }
             access_order.push(key.clone());
 
-            // Update stats
-            stats.current_bytes = entries.values().map(|e| e.size_bytes).sum();
+            // Update stats incrementally
+            stats.current_bytes = stats.current_bytes - old_size + size_bytes;
             stats.current_items = entries.len();
             return true;
         }
@@ -270,8 +271,8 @@ where
         entries.insert(key.clone(), CacheEntry::new(value, size_bytes));
         access_order.push(key);
 
-        // Update stats
-        stats.current_bytes = entries.values().map(|e| e.size_bytes).sum();
+        // Update stats incrementally
+        stats.current_bytes += size_bytes;
         stats.current_items = entries.len();
 
         true
