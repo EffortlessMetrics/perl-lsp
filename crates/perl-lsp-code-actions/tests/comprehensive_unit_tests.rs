@@ -818,3 +818,102 @@ fn missing_semicolon_at_end_of_file_no_newline() {
 
     assert!(has_action_matching(&actions, |a| a.title.contains("semicolon")));
 }
+
+// ===========================================================================
+// Quick-fix: bareword-filehandle (PL400)
+// ===========================================================================
+
+#[test]
+fn bareword_filehandle_offers_lexical_replacement() {
+    // "open FILE, ..." uses a bareword filehandle (FILE)
+    let src = "open FILE, '<', 'data.txt';";
+    // The bareword filehandle "FILE" spans bytes 5..9
+    let diags = [make_diag(5, 9, "bareword-filehandle", "Bareword filehandle 'FILE'")];
+    let actions = parse_and_get_actions(src, &diags);
+
+    assert!(
+        has_action_matching(&actions, |a| a.title.contains("lexical")
+            || a.title.contains("my $")
+            || a.title.contains("$fh")),
+        "Expected action to replace bareword filehandle with lexical, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn bareword_filehandle_action_is_quickfix_kind() {
+    let src = "open FILE, '<', 'data.txt';";
+    let diags = [make_diag(5, 9, "bareword-filehandle", "Bareword filehandle 'FILE'")];
+    let actions = parse_and_get_actions(src, &diags);
+
+    let fh_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostics.contains(&"bareword-filehandle".to_string()))
+        .collect();
+    assert!(!fh_actions.is_empty(), "Expected at least one bareword-filehandle action");
+    assert!(
+        fh_actions.iter().all(|a| a.kind == CodeActionKind::QuickFix),
+        "bareword-filehandle actions should be QuickFix kind"
+    );
+}
+
+#[test]
+fn bareword_filehandle_action_is_preferred() {
+    let src = "open LOGFILE, '<', 'log.txt';";
+    let diags = [make_diag(5, 12, "bareword-filehandle", "Bareword filehandle 'LOGFILE'")];
+    let actions = parse_and_get_actions(src, &diags);
+
+    let preferred: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostics.contains(&"bareword-filehandle".to_string()) && a.is_preferred)
+        .collect();
+    assert!(!preferred.is_empty(), "At least one bareword-filehandle action should be preferred");
+}
+
+// ===========================================================================
+// Quick-fix: two-arg-open (PL401)
+// ===========================================================================
+
+#[test]
+fn two_arg_open_offers_three_arg_upgrade() {
+    // "open $fh, $filename" is the two-arg form; should suggest three-arg
+    let src = "open my $fh, $filename;";
+    let diags = [make_diag(0, 22, "two-arg-open", "Two-argument open() is unsafe")];
+    let actions = parse_and_get_actions(src, &diags);
+
+    assert!(
+        has_action_matching(&actions, |a| a.title.contains("three")
+            || a.title.contains("3-arg")
+            || a.title.contains("three-argument")),
+        "Expected action to convert to three-arg open, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn two_arg_open_action_is_quickfix_kind() {
+    let src = "open my $fh, $filename;";
+    let diags = [make_diag(0, 22, "two-arg-open", "Two-argument open() is unsafe")];
+    let actions = parse_and_get_actions(src, &diags);
+
+    let open_actions: Vec<_> =
+        actions.iter().filter(|a| a.diagnostics.contains(&"two-arg-open".to_string())).collect();
+    assert!(!open_actions.is_empty(), "Expected at least one two-arg-open action");
+    assert!(
+        open_actions.iter().all(|a| a.kind == CodeActionKind::QuickFix),
+        "two-arg-open actions should be QuickFix kind"
+    );
+}
+
+#[test]
+fn two_arg_open_action_is_preferred() {
+    let src = "open my $fh, $filename;";
+    let diags = [make_diag(0, 22, "two-arg-open", "Two-argument open() is unsafe")];
+    let actions = parse_and_get_actions(src, &diags);
+
+    let preferred: Vec<_> = actions
+        .iter()
+        .filter(|a| a.diagnostics.contains(&"two-arg-open".to_string()) && a.is_preferred)
+        .collect();
+    assert!(!preferred.is_empty(), "At least one two-arg-open action should be preferred");
+}
