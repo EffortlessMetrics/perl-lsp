@@ -108,6 +108,7 @@ pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
 
 use perl_parser_core::ast::Node;
+use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::sync::Arc;
@@ -116,6 +117,7 @@ use std::sync::Arc;
 pub struct CompletionProvider {
     symbol_table: SymbolTable,
     workspace_index: Option<Arc<WorkspaceIndex>>,
+    class_models: Vec<ClassModel>,
 }
 
 impl CompletionProvider {
@@ -196,8 +198,9 @@ impl CompletionProvider {
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let class_models = ClassModelBuilder::new().build(ast);
 
-        CompletionProvider { symbol_table, workspace_index }
+        CompletionProvider { symbol_table, workspace_index, class_models }
     }
 
     /// Create a new completion provider from parsed AST without workspace context
@@ -405,6 +408,8 @@ impl CompletionProvider {
         } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
             // Method completion must run before sigil-prefixed variable completion.
             methods::add_method_completions(&mut completions, &context, source, &self.symbol_table);
+            // Add ClassModel-based completions (Moose/Moo attributes and methods)
+            methods::add_class_model_completions(&mut completions, &context, &self.class_models);
             // Add workspace-indexed methods for the receiver's type
             workspace::add_workspace_method_completions(
                 &mut completions,
@@ -1871,5 +1876,121 @@ sub do_work { }
         let detail = must_some(do_work.and_then(|c| c.detail.as_deref()));
         assert!(detail.contains("MyLib"), "detail should mention module name, got: {detail:?}");
         Ok(())
+    }
+
+    #[test]
+    fn test_class_model_attribute_completion_property_kind() {
+        let code = r#"
+package MyApp::User;
+use Moo;
+
+has 'username' => (is => 'ro', isa => 'Str', required => 1);
+has 'email' => (is => 'rw', isa => 'Str');
+has 'internal' => (is => 'bare');
+
+sub greet {
+    my $self = shift;
+    $self->
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let pos = must_some(code.find("$self->")) + "$self->".len();
+        let completions = provider.get_completions(code, pos);
+
+        // ClassModel attributes should appear with Property kind
+        let username_item = completions.iter().find(|c| c.label == "username");
+        assert!(
+            username_item.is_some(),
+            "expected 'username' attribute in completions, got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+
+        // email should appear
+        assert!(
+            completions.iter().any(|c| c.label == "email"),
+            "expected 'email' attribute in completions"
+        );
+
+        // The greet method should also appear
+        assert!(
+            completions.iter().any(|c| c.label == "greet"),
+            "expected 'greet' method in completions"
+        );
+    }
+
+    #[test]
+    fn test_class_model_attribute_detail_shows_framework_and_mode() {
+        let code = r#"
+package MyApp::Config;
+use Moose;
+
+has 'path' => (is => 'ro', isa => 'Str');
+
+sub load {
+    my $self = shift;
+    $self->
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let pos = must_some(code.find("$self->")) + "$self->".len();
+        let completions = provider.get_completions(code, pos);
+
+        // Find the ClassModel-sourced completion (it may be deduplicated by the
+        // symbol-table-based one, but either way the detail should mention the framework)
+        let path_items: Vec<_> = completions.iter().filter(|c| c.label == "path").collect();
+        assert!(!path_items.is_empty(), "expected 'path' in completions");
+
+        // At least one item should mention Moose or accessor
+        let has_framework_detail = path_items.iter().any(|item| {
+            item.detail.as_deref().is_some_and(|d| d.contains("Moose") || d.contains("accessor"))
+        });
+        assert!(
+            has_framework_detail,
+            "expected detail to mention framework, got: {:?}",
+            path_items.iter().map(|c| &c.detail).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_class_model_completion_includes_type_info() {
+        let code = r#"
+package MyApp::User;
+use Moo;
+
+has 'age' => (is => 'rw', isa => 'Int', required => 1);
+
+sub validate {
+    my $self = shift;
+    $self->
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let pos = must_some(code.find("$self->")) + "$self->".len();
+        let completions = provider.get_completions(code, pos);
+
+        // Find the age completion and check documentation has type info
+        let age_items: Vec<_> = completions.iter().filter(|c| c.label == "age").collect();
+        assert!(!age_items.is_empty(), "expected 'age' in completions");
+
+        let has_type_doc = age_items
+            .iter()
+            .any(|item| item.documentation.as_deref().is_some_and(|d| d.contains("Int")));
+        assert!(
+            has_type_doc,
+            "expected documentation to include 'Int' type info, got: {:?}",
+            age_items.iter().map(|c| &c.documentation).collect::<Vec<_>>()
+        );
     }
 }

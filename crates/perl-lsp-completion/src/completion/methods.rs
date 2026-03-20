@@ -3,6 +3,7 @@
 //! Provides context-aware method completion including DBI methods.
 
 use super::{context::CompletionContext, items::CompletionItem};
+use perl_semantic_analyzer::class_model::{AccessorType, ClassModel, Framework};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 use std::collections::HashSet;
 
@@ -227,5 +228,114 @@ pub fn add_method_completions(
                 });
             }
         }
+    }
+}
+
+/// Format framework name for display.
+fn framework_label(framework: Framework) -> &'static str {
+    match framework {
+        Framework::Moose => "Moose",
+        Framework::Moo => "Moo",
+        Framework::Mouse => "Mouse",
+        Framework::ClassAccessor => "Class::Accessor",
+        Framework::ObjectPad => "Object::Pad",
+        Framework::Native | Framework::None => "Perl",
+    }
+}
+
+/// Format accessor type for display.
+fn accessor_type_label(is: Option<AccessorType>) -> &'static str {
+    match is {
+        Some(AccessorType::Ro) => "ro",
+        Some(AccessorType::Rw) => "rw",
+        Some(AccessorType::Lazy) => "lazy",
+        Some(AccessorType::Bare) => "bare",
+        None => "accessor",
+    }
+}
+
+/// Add completions from ClassModel data (Moose/Moo attributes and methods).
+///
+/// This supplements the symbol-table-based completions with richer information
+/// from the ClassModel, including accessor type, type constraints, and
+/// framework-specific details. Items already present (by label) are skipped.
+pub fn add_class_model_completions(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    class_models: &[ClassModel],
+) {
+    let method_prefix = context.prefix.rsplit("->").next().unwrap_or(&context.prefix);
+
+    // Collect labels already added to avoid duplicates
+    let existing: HashSet<String> = completions.iter().map(|c| c.label.clone()).collect();
+
+    // Find the class model for the current package
+    let current_model = class_models.iter().find(|m| m.name == context.current_package);
+
+    let Some(model) = current_model else {
+        return;
+    };
+
+    let fw = framework_label(model.framework);
+
+    // Add attribute accessors
+    for attr in &model.attributes {
+        // Skip bare accessors (no accessor generated)
+        if attr.is == Some(AccessorType::Bare) {
+            continue;
+        }
+
+        let accessor = &attr.accessor_name;
+        if !method_prefix.is_empty() && !accessor.starts_with(method_prefix) {
+            continue;
+        }
+        if existing.contains(accessor) {
+            continue;
+        }
+
+        let mode = accessor_type_label(attr.is);
+        let detail = format!("{fw} attribute ({mode})");
+
+        let mut doc = format!("`{fw}` accessor `{accessor}`");
+        if let Some(ref isa) = attr.isa {
+            doc.push_str(&format!("\n\n**Type**: `{isa}`"));
+        }
+        if attr.required {
+            doc.push_str("\n\n**Required**");
+        }
+
+        completions.push(CompletionItem {
+            label: accessor.clone(),
+            kind: crate::completion::items::CompletionItemKind::Property,
+            detail: Some(detail),
+            documentation: Some(doc),
+            insert_text: Some(accessor.clone()),
+            sort_text: Some(format!("0_{accessor}")),
+            filter_text: Some(accessor.clone()),
+            additional_edits: vec![],
+            text_edit_range: Some((context.prefix_start, context.position)),
+        });
+    }
+
+    // Add methods from the class model
+    for method in &model.methods {
+        if !method_prefix.is_empty() && !method.name.starts_with(method_prefix) {
+            continue;
+        }
+        if existing.contains(&method.name) {
+            continue;
+        }
+
+        completions.push(CompletionItem {
+            label: method.name.clone(),
+            kind: crate::completion::items::CompletionItemKind::Function,
+            detail: Some(format!("{fw} method")),
+            documentation: None,
+            insert_text: Some(format!("{}()", method.name)),
+            sort_text: Some(format!("1_{}", method.name)),
+            filter_text: Some(method.name.clone()),
+            additional_edits: vec![],
+            text_edit_range: Some((context.prefix_start, context.position)),
+        });
     }
 }
