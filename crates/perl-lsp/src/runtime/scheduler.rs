@@ -162,6 +162,13 @@ impl Scheduler {
         });
         server.install_diagnostic_debouncer(debouncer);
 
+        // Install file watcher debouncer now that server is wrapped in Arc.
+        let fw_server = Arc::clone(&server);
+        let fw_debouncer = super::file_watcher_debounce::FileWatcherDebouncer::new(move |uris| {
+            fw_server.handle_watched_file_batch(uris);
+        });
+        server.install_file_watcher_debouncer(fw_debouncer);
+
         Self {
             mutation_tx,
             read_tx,
