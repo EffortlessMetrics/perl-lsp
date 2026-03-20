@@ -1319,3 +1319,121 @@ fn variable_assignment_inference_ignores_comparison_operators() {
         items.iter().map(|i| &i.label).collect::<Vec<_>>()
     );
 }
+
+// ===========================================================================
+// 13. Special variable smart completion – issue #2347
+// ===========================================================================
+
+#[test]
+fn special_scalar_child_status() {
+    // $? holds the child process status after system/backtick/waitpid
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$?"), "should suggest $? (child process status)");
+}
+
+#[test]
+fn special_hash_sig() {
+    // %SIG maps signal names to handlers
+    let code = "%";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "%SIG"), "should suggest %SIG (signal handlers)");
+}
+
+#[test]
+fn special_array_argv() {
+    // @ARGV holds command-line arguments
+    let code = "@A";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "@ARGV"), "should suggest @ARGV (command-line args)");
+}
+
+#[test]
+fn special_scalar_child_status_has_rich_documentation() {
+    // $? documentation should mention child / process status
+    let code = "$";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "$?"));
+    let doc = must_some(item.documentation.as_ref());
+    assert!(
+        doc.to_lowercase().contains("child") || doc.to_lowercase().contains("status"),
+        "$? documentation should mention child process status, got: {doc}"
+    );
+}
+
+#[test]
+fn special_scalar_capture_group_one() {
+    // $1 is the first regex capture group - confirm it is in the list
+    let code = "$1";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$1"), "should suggest $1 (first capture group)");
+}
+
+#[test]
+fn special_scalar_child_status_sort_priority() {
+    // Special variables should sort before regular variables (prefix "0_")
+    let code = "$";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "$?"));
+    let sort_text = must_some(item.sort_text.as_ref());
+    assert!(
+        sort_text.starts_with("0_"),
+        "$? sort_text should start with '0_' for high priority, got: {sort_text}"
+    );
+}
+
+#[test]
+fn special_scalar_caret_t_script_start_time() {
+    // $^T holds the epoch time when the script started.
+    // The caret is a word boundary so the completion prefix is "$" (not "$^T").
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$^T"), "should suggest $^T (script start time)");
+}
+
+#[test]
+fn special_scalar_caret_a_format_accumulator() {
+    // $^A is the accumulator for format()/write().
+    // The caret is a word boundary so the completion prefix is "$".
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$^A"), "should suggest $^A (format accumulator)");
+}
+
+#[test]
+fn special_scalar_caret_w_warning_flag() {
+    // $^W is the global warning flag (prefer 'use warnings' for lexical scope).
+    // The caret is a word boundary so the completion prefix is "$".
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$^W"), "should suggest $^W (warning flag)");
+}
+
+#[test]
+fn special_scalar_plus_last_bracket() {
+    // $+ is the last successful regex bracket matched.
+    // The '+' is a word boundary so the completion prefix is "$".
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$+"), "should suggest $+ (last bracket matched)");
+}
+
+#[test]
+fn special_variables_all_have_detail_field() {
+    // Every special variable completion should carry a non-empty detail string
+    let code = "$";
+    let items = completions_at_end(code);
+    let special: Vec<_> = items
+        .iter()
+        .filter(|i| i.sort_text.as_deref().map(|s| s.starts_with("0_")).unwrap_or(false))
+        .collect();
+    assert!(!special.is_empty(), "should have special variables in list");
+    for item in &special {
+        assert!(
+            item.detail.as_deref().map(|d| !d.is_empty()).unwrap_or(false),
+            "special variable {} should have non-empty detail, got: {:?}",
+            item.label,
+            item.detail
+        );
+    }
+}

@@ -1083,10 +1083,13 @@ impl LspServer {
             }
         }
 
-        // Single punctuation character after $ (e.g. $!, $/, $\, $$, $;, etc.)
+        // Single punctuation character after $ (e.g. $!, $?, $/, $\, $$, $;, etc.)
         if sigil == '$' && !next_ch.is_ascii_alphanumeric() && next_ch != b'_' {
             let punct = next_ch as char;
-            if matches!(punct, '!' | '@' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`') {
+            if matches!(
+                punct,
+                '!' | '@' | '?' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`' | '+'
+            ) {
                 return Some(format!("${}", punct));
             }
         }
@@ -1189,6 +1192,13 @@ impl LspServer {
                  match.\n\n\
                  ```perl\n\"Hello World\" =~ /\\s/;\nprint $`;  # \"Hello\"\n```"
             }
+            "$+" => {
+                "**`$+` \u{2014} Last Bracket Matched**\n\n\
+                 Contains the last bracket (capture group) that actually matched \
+                 in the last successful regex. Useful when alternation makes it \
+                 unknown which branch matched.\n\n\
+                 ```perl\n\"1999-12-31\" =~ /(\\d{4})-(\\d{2})-(\\d{2})/;\nprint $+;  # \"31\" (last group)\n```"
+            }
             "@ISA" => {
                 "**`@ISA` \u{2014} Inheritance List**\n\n\
                  Defines the parent classes for method resolution. Perl \
@@ -1228,6 +1238,48 @@ impl LspServer {
                  (e.g. `linux`, `darwin`, `MSWin32`).  Useful for \
                  platform-specific code paths.\n\n\
                  ```perl\nif ($^O eq 'MSWin32') {\n    # Windows-specific\n}\n```"
+            }
+            "$?" => {
+                "**`$?` \u{2014} Child Process Status**\n\n\
+                 Set after `system()`, backtick execution (`` ` ` ``), `wait()`, \
+                 or `waitpid()`. The value is the raw wait status: the exit code \
+                 is `$? >> 8` and the signal number (if any) is `$? & 127`.\n\n\
+                 ```perl\nsystem('ls');\nif ($? == -1) {\n    warn \"fork failed: $!\";\n} elsif ($? >> 8) {\n    warn \"exit status: \", $? >> 8;\n}\n```"
+            }
+            "$^V" => {
+                "**`$^V` \u{2014} Perl Version**\n\n\
+                 The Perl interpreter version as a v-string (e.g. `v5.38.0`). \
+                 Use `use v5.10;` syntax for version requirements or compare \
+                 with `$^V ge v5.10.0`.\n\n\
+                 ```perl\nprint \"Perl \", $^V, \"\\n\";  # e.g. Perl v5.38.0\n```"
+            }
+            "@ARGV" => {
+                "**`@ARGV` \u{2014} Command-Line Arguments**\n\n\
+                 Contains the command-line arguments passed to the script \
+                 (not including the script name, which is in `$0`). \
+                 `shift` without arguments removes and returns the first element.\n\n\
+                 ```perl\nmy $file = shift @ARGV // die \"Usage: $0 <file>\\n\";\n```"
+            }
+            "%SIG" => {
+                "**`%SIG` \u{2014} Signal Handlers**\n\n\
+                 Hash mapping signal names to handler code refs (or `'IGNORE'` / \
+                 `'DEFAULT'`). Use `local %SIG` to temporarily override handlers.\n\n\
+                 ```perl\n$SIG{INT}  = sub { print \"Interrupted\\n\"; exit 1 };\n$SIG{TERM} = 'IGNORE';\n```"
+            }
+            "$^A" => {
+                "**`$^A` \u{2014} Accumulator for `format()`**\n\n\
+                 The write accumulator for `format()` and `write()` output. \
+                 Normally you do not access this directly; the `formline()` \
+                 builtin writes into it and `write()` flushes it to the \
+                 current output filehandle.\n\n\
+                 ```perl\nformline(\"@<<<\", \"hi\");\nprint $^A;  # \"hi \"\n```"
+            }
+            "$^T" => {
+                "**`$^T` \u{2014} Script Start Time**\n\n\
+                 The time (in seconds since the epoch, like `time()`) at which \
+                 the script began running. Used for age calculations relative to \
+                 script startup and for the `-M`, `-A`, `-C` file-test operators.\n\n\
+                 ```perl\nprint \"Running for \", time() - $^T, \" seconds\\n\";\n```"
             }
             _ => return None,
         };
