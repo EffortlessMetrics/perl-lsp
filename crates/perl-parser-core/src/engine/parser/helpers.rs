@@ -611,6 +611,31 @@ impl<'a> Parser<'a> {
     /// - `func other_func(...)` (identifier followed by `(`)
     /// - `func other_func $arg` (chained bare calls)
     ///
+    /// Returns `true` when `name` looks like a user-defined function that
+    /// accepts a block argument: `capture { ... }`, `where { ... }`, etc.
+    ///
+    /// In Perl, hash element access ALWAYS requires a sigil (`\$hash{key}`).
+    /// A bare lowercase identifier followed by `{` is therefore a function
+    /// call with a block argument, not a hash subscript.
+    #[inline]
+    pub(crate) fn looks_like_block_call_name(name: &str) -> bool {
+        // Sigiled names are variables, not function calls
+        if name.starts_with('$')
+            || name.starts_with('@')
+            || name.starts_with('%')
+            || name.starts_with('&')
+            || name.starts_with('*')
+        {
+            return false;
+        }
+        // Qualified names like Tk::catch are always function calls
+        if name.contains("::") {
+            return true;
+        }
+        // Only lowercase/underscore-leading identifiers
+        name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_')
+    }
+
     /// We are conservative: the identifier must be lowercase (uppercase bare
     /// identifiers are more likely to be constants or package names) and
     /// must NOT be a string comparison operator (`eq`, `ne`, `lt`, `gt`, etc.)
