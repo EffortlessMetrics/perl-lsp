@@ -7,7 +7,11 @@ use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
+use perl_semantic_analyzer::symbol::SymbolTable;
 
+use crate::lints::common_mistakes::check_common_mistakes;
+use crate::lints::deprecated::check_deprecated_syntax;
+use crate::lints::strict_warnings::check_strict_warnings;
 use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export diagnostic types from the shared SRP microcrate.
@@ -97,6 +101,12 @@ impl DiagnosticsProvider {
         // Detect heredoc anti-patterns
         let heredoc_diags = crate::heredoc_antipatterns::detect_heredoc_antipatterns(source);
         diagnostics.extend(heredoc_diags);
+
+        // Run lint checks
+        check_strict_warnings(ast, &mut diagnostics);
+        check_deprecated_syntax(ast, &mut diagnostics);
+        let symbol_table = SymbolTable::new();
+        check_common_mistakes(ast, &symbol_table, &mut diagnostics);
 
         diagnostics
     }
