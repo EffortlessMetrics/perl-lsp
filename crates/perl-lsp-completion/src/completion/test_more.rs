@@ -39,7 +39,7 @@ pub const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
 ///
 /// Each entry is `(name, signature, description)`.
 const TEST_MORE_SIGNATURES: &[(&str, &str, &str)] = &[
-    ("ok", "ok(EXPR, $name)", "Test condition is true"),
+    ("ok", "ok($expr, $name)", "Test condition is true"),
     ("is", "is($got, $expected, $name)", "Test values are equal (string comparison)"),
     ("isnt", "isnt($got, $not_expected, $name)", "Test values are not equal"),
     ("like", "like($got, qr/.../, $name)", "Test string matches regex"),
@@ -56,8 +56,12 @@ const TEST_MORE_SIGNATURES: &[(&str, &str, &str)] = &[
     ("todo_skip", "todo_skip($why, $how_many)", "Mark tests as TODO and skip"),
     ("BAIL_OUT", "BAIL_OUT($reason)", "Stop all testing immediately"),
     ("subtest", "subtest $name => sub { ... }", "Run a subtest in its own scope"),
-    ("done_testing", "done_testing($tests)", "Finish testing"),
-    ("plan", "plan tests => $num", "Declare the number of tests"),
+    (
+        "done_testing",
+        "done_testing($tests?)",
+        "Finish testing (optional count; omit to auto-count)",
+    ),
+    ("plan", "plan tests => $num", "Declare the number of tests to run"),
     ("use_ok", "use_ok($module)", "Test that a module loads successfully"),
     ("require_ok", "require_ok($module)", "Test that a module requires successfully"),
     ("is_deeply", "is_deeply($got, $expected, $name)", "Deep structure comparison"),

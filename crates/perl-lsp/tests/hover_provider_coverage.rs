@@ -775,4 +775,124 @@ $name;
 
         Ok(())
     }
+
+    // ── Test::More hover documentation ───────────────────────────────────
+
+    #[test]
+    fn test_hover_test_more_is_shows_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use Test::More;\nis($got, $expected, 'my test');\n";
+        let resp = hover_at(code, "file:///testmore_is.t", "is(", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for Test::More is()")?;
+        assert!(
+            content.contains("Test::More"),
+            "hover should show Test::More heading, got: {content}"
+        );
+        assert!(content.contains("is("), "hover should include is() signature, got: {content}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_test_more_ok_shows_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use Test::More tests => 1;\nok(1 == 1, 'addition');\n";
+        let resp = hover_at(code, "file:///testmore_ok.t", "ok(", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for Test::More ok()")?;
+        assert!(
+            content.contains("Test::More"),
+            "hover should show Test::More heading, got: {content}"
+        );
+        assert!(content.contains("ok("), "hover should include ok() signature, got: {content}");
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_test_more_bail_out_shows_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use Test::More;\nBAIL_OUT('fatal error');\n";
+        let resp = hover_at(code, "file:///testmore_bailout.t", "BAIL_OUT", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for BAIL_OUT")?;
+        assert!(
+            content.contains("Test::More"),
+            "hover on BAIL_OUT should show Test::More heading, got: {content}"
+        );
+        assert!(
+            content.contains("BAIL_OUT"),
+            "hover should include BAIL_OUT in output, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_test_more_not_triggered_without_use() -> Result<(), Box<dyn std::error::Error>> {
+        // File does NOT have `use Test::More` — hovering over `is` should not show Test::More docs
+        let code = "sub is { 1 }\nis('foo', 'foo');\n";
+        let resp = hover_at(code, "file:///no_testmore.pl", "is(", 1)?;
+        let content = hover_content(&resp);
+        if let Some(c) = content {
+            assert!(
+                !c.contains("Test::More"),
+                "hover should NOT show Test::More docs without 'use Test::More', got: {c}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_test2_triggers_test_more_docs() -> Result<(), Box<dyn std::error::Error>> {
+        // `use Test2::V0` should also trigger Test::More documentation
+        let code = "use Test2::V0;\nis('got', 'expected', 'my test');\n";
+        let resp = hover_at(code, "file:///test2_v0.t", "is(", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for Test2::V0 is()")?;
+        assert!(
+            content.contains("Test::More"),
+            "hover with Test2 should show Test::More docs, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_test_more_subtest_shows_signature() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use Test::More;\nsubtest 'my suite' => sub { ok(1) };\n";
+        let resp = hover_at(code, "file:///testmore_subtest.t", "subtest", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for subtest")?;
+        assert!(
+            content.contains("Test::More"),
+            "hover on subtest should show Test::More heading, got: {content}"
+        );
+        assert!(
+            content.contains("subtest"),
+            "hover should include subtest in output, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_test_more_diag_shows_stderr_note() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use Test::More;\ndiag('debug info');\n";
+        let resp = hover_at(code, "file:///testmore_diag.t", "diag", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for diag")?;
+        assert!(
+            content.contains("Test::More"),
+            "hover on diag should show Test::More heading, got: {content}"
+        );
+        assert!(
+            content.contains("STDERR") || content.contains("diag"),
+            "hover on diag should mention STDERR or the function name, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_test_more_unknown_fn_no_test_more_docs() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Even in a test file, hovering on a non-Test::More function should NOT show Test::More docs
+        let code = "use Test::More;\nmy_custom_assertion('foo');\n";
+        let resp = hover_at(code, "file:///testmore_custom.t", "my_custom_assertion", 1)?;
+        let content = hover_content(&resp);
+        if let Some(c) = content {
+            assert!(
+                !c.contains("Test::More\n") || c.contains("my_custom"),
+                "hover on unknown fn should not show Test::More section, got: {c}"
+            );
+        }
+        Ok(())
+    }
 }

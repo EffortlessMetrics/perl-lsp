@@ -473,6 +473,117 @@ fn test_get_test_more_documentation_covers_core_assertions() {
 }
 
 #[test]
+fn test_get_test_more_documentation_covers_all_functions() {
+    // Every function named in the Test::More docs must have an entry
+    let all_fns = [
+        "ok",
+        "is",
+        "isnt",
+        "like",
+        "unlike",
+        "cmp_ok",
+        "isa_ok",
+        "can_ok",
+        "pass",
+        "fail",
+        "diag",
+        "note",
+        "explain",
+        "skip",
+        "todo_skip",
+        "BAIL_OUT",
+        "subtest",
+        "done_testing",
+        "plan",
+        "use_ok",
+        "require_ok",
+        "is_deeply",
+        "new_ok",
+    ];
+    for name in all_fns {
+        let doc = perl_lsp_completion::get_test_more_documentation(name);
+        assert!(doc.is_some(), "'{}' should have Test::More documentation", name);
+    }
+}
+
+#[test]
+fn test_get_test_more_documentation_signatures_are_valid_perl() {
+    // Signatures should not contain LSP snippet syntax (${1:...})
+    let all_fns = [
+        "ok",
+        "is",
+        "isnt",
+        "like",
+        "unlike",
+        "cmp_ok",
+        "isa_ok",
+        "can_ok",
+        "pass",
+        "fail",
+        "diag",
+        "note",
+        "explain",
+        "skip",
+        "todo_skip",
+        "BAIL_OUT",
+        "subtest",
+        "done_testing",
+        "plan",
+        "use_ok",
+        "require_ok",
+        "is_deeply",
+        "new_ok",
+    ];
+    for name in all_fns {
+        let (sig, _desc) = must_some(perl_lsp_completion::get_test_more_documentation(name));
+        assert!(
+            !sig.contains("${"),
+            "'{}' signature contains LSP snippet syntax, should be plain Perl: {}",
+            name,
+            sig
+        );
+    }
+}
+
+#[test]
+fn test_get_test_more_documentation_diag_mentions_stderr() {
+    let (_sig, desc) = must_some(perl_lsp_completion::get_test_more_documentation("diag"));
+    assert!(desc.contains("STDERR"), "diag description should mention STDERR, got: {}", desc);
+}
+
+#[test]
+fn test_get_test_more_documentation_note_mentions_stdout() {
+    let (_sig, desc) = must_some(perl_lsp_completion::get_test_more_documentation("note"));
+    assert!(desc.contains("STDOUT"), "note description should mention STDOUT, got: {}", desc);
+}
+
+#[test]
+fn test_get_test_more_documentation_done_testing_has_optional_param() {
+    let (sig, _desc) = must_some(perl_lsp_completion::get_test_more_documentation("done_testing"));
+    assert!(
+        sig.contains("?"),
+        "done_testing signature should indicate optional parameter, got: {}",
+        sig
+    );
+}
+
+#[test]
+fn test_get_test_more_documentation_empty_string_returns_none() {
+    let doc = perl_lsp_completion::get_test_more_documentation("");
+    assert!(doc.is_none(), "empty string should return None");
+}
+
+#[test]
+fn test_get_test_more_documentation_case_sensitive() {
+    // bail_out (lowercase) is not valid — only BAIL_OUT
+    let doc = perl_lsp_completion::get_test_more_documentation("bail_out");
+    assert!(doc.is_none(), "bail_out (lowercase) should return None");
+    // Uppercase works
+    let doc_upper = perl_lsp_completion::get_test_more_documentation("BAIL_OUT");
+    assert!(doc_upper.is_some(), "BAIL_OUT should return Some");
+}
+
+#[test]
 fn moo_has_option_not_in_value_position() {
     let code = "use Moo;\nhas 'name' => (is => ";
     let items = completions_at_end(code);
