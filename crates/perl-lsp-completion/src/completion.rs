@@ -98,6 +98,7 @@ mod methods;
 mod packages;
 mod regex_patterns;
 pub(crate) mod scope_distance;
+mod snippets;
 mod sort;
 mod test_more;
 mod variables;
@@ -556,6 +557,12 @@ impl CompletionProvider {
                 if is_cancelled() {
                     return vec![];
                 }
+            }
+
+            // Add built-in snippet completions
+            snippets::add_snippet_completions(&mut completions, &context);
+            if is_cancelled() {
+                return vec![];
             }
 
             // Also suggest variables without sigils in some contexts
