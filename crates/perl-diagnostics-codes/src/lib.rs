@@ -231,6 +231,79 @@ impl DiagnosticCode {
         }
     }
 
+    /// Return a human-readable context hint for this diagnostic code.
+    ///
+    /// Hints are short, actionable explanations that help users understand
+    /// what the diagnostic means and how to resolve it.  Perl::Critic codes
+    /// return `None` because their per-policy descriptions already serve this
+    /// purpose.
+    pub fn context_hint(&self) -> Option<&'static str> {
+        match self {
+            DiagnosticCode::ParseError => Some(
+                "The parser could not understand this code. \
+                Check for missing semicolons, unmatched brackets, or incorrect syntax.",
+            ),
+            DiagnosticCode::SyntaxError => Some(
+                "Perl syntax error. Check for typos, missing operators, \
+                or unbalanced parentheses near this location.",
+            ),
+            DiagnosticCode::UnexpectedEof => Some(
+                "The file ended unexpectedly. Check for unclosed blocks `{}`, \
+                heredocs, or multi-line strings.",
+            ),
+            DiagnosticCode::MissingStrict => Some(
+                "Add `use strict;` at the top of your file. \
+                Strict mode catches common variable mistakes at compile time.",
+            ),
+            DiagnosticCode::MissingWarnings => Some(
+                "Add `use warnings;` at the top of your file. \
+                Warnings highlight many common programming mistakes.",
+            ),
+            DiagnosticCode::UnusedVariable => Some(
+                "This variable is declared but never used. \
+                Remove it, or prefix with `_` (e.g., `$_unused`) to suppress.",
+            ),
+            DiagnosticCode::UndefinedVariable => Some(
+                "This variable was not declared with `my`, `our`, or `local`. \
+                Add `use strict;` and declare all variables before use.",
+            ),
+            DiagnosticCode::MissingPackageDeclaration => Some(
+                "This file has no `package` declaration. \
+                Add `package MyModule;` at the top for module files.",
+            ),
+            DiagnosticCode::DuplicatePackage => Some(
+                "This package name is declared more than once in the same file. \
+                Each package should appear once, or split into separate files.",
+            ),
+            DiagnosticCode::DuplicateSubroutine => Some(
+                "A subroutine with this name is defined more than once. \
+                The later definition silently replaces the earlier one.",
+            ),
+            DiagnosticCode::MissingReturn => Some(
+                "This subroutine has no explicit `return` statement. \
+                Add `return $value;` to make the return value clear.",
+            ),
+            DiagnosticCode::BarewordFilehandle => Some(
+                "Bareword filehandles (e.g., `open FH, ...`) are global and unsafe. \
+                Use a lexical filehandle instead: `open my $fh, '<', $file or die $!;`",
+            ),
+            DiagnosticCode::TwoArgOpen => Some(
+                "Two-argument `open()` is vulnerable to injection. \
+                Use three-argument form: `open my $fh, '<', $filename or die $!;`",
+            ),
+            DiagnosticCode::ImplicitReturn => Some(
+                "The return value of this expression is used implicitly. \
+                Make it explicit with `return` or assign it to a variable.",
+            ),
+            // Perl::Critic codes carry per-policy descriptions; no generic hint needed.
+            DiagnosticCode::CriticSeverity1
+            | DiagnosticCode::CriticSeverity2
+            | DiagnosticCode::CriticSeverity3
+            | DiagnosticCode::CriticSeverity4
+            | DiagnosticCode::CriticSeverity5 => None,
+        }
+    }
+
     /// Try to infer a diagnostic code from a message.
     pub fn from_message(msg: &str) -> Option<DiagnosticCode> {
         let msg_lower = msg.to_lowercase();
