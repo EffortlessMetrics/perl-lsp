@@ -161,10 +161,23 @@ impl LspServer {
             }));
         }
 
+        // Check for special/punctuation variables (e.g. $!, $/, $$, $^W)
+        // before falling back to the normal tokenizer which misses them.
+        if let Some(special_var) = Self::extract_special_variable(text, offset) {
+            if let Some(hover) = Self::get_special_variable_hover(&special_var) {
+                return HoverExtracted::Complete(hover);
+            }
+        }
+
         // Fall back to simple token display, with builtin docs
         let hover_text = self.get_token_at_position(text, offset);
 
         if !hover_text.is_empty() {
+            // Check for special variable hover (handles $_, @_, @ISA, %ENV, etc.)
+            if let Some(hover) = Self::get_special_variable_hover(&hover_text) {
+                return HoverExtracted::Complete(hover);
+            }
+
             let bare = hover_text.trim_start_matches(['$', '@', '%']);
             if let Some(builtin_doc) = crate::semantic::get_builtin_documentation(bare) {
                 return HoverExtracted::Complete(json!({
@@ -923,5 +936,198 @@ impl LspServer {
         } else {
             None
         }
+    }
+
+    /// Extract a special/punctuation variable name at the given byte offset.
+    ///
+    /// The normal tokenizer (`get_token_at_position`) only captures `[$@%]` +
+    /// alphanumeric/underscore, so it misses punctuation variables like `$!`,
+    /// `$/`, `$$`, and caret variables like `$^W`.  This function handles those.
+    fn extract_special_variable(text: &str, offset: usize) -> Option<String> {
+        let bytes = text.as_bytes();
+        let len = bytes.len();
+        if offset >= len {
+            return None;
+        }
+
+        // Find the sigil: either at offset or one position before
+        let sigil_pos = if matches!(bytes[offset], b'$' | b'@' | b'%') {
+            Some(offset)
+        } else if offset > 0 && matches!(bytes[offset - 1], b'$' | b'@' | b'%') {
+            Some(offset - 1)
+        } else {
+            None
+        };
+        let sigil_pos = sigil_pos?;
+        let sigil = bytes[sigil_pos] as char;
+        let next_pos = sigil_pos + 1;
+        if next_pos >= len {
+            return None;
+        }
+        let next_ch = bytes[next_pos];
+
+        // $^X pattern (caret variables like $^W, $^O)
+        if sigil == '$' && next_ch == b'^' && next_pos + 1 < len {
+            let caret_ch = bytes[next_pos + 1];
+            if caret_ch.is_ascii_alphabetic() {
+                return Some(format!("$^{}", caret_ch as char));
+            }
+        }
+
+        // Single punctuation character after $ (e.g. $!, $/, $\, $$, $;, etc.)
+        if sigil == '$' && !next_ch.is_ascii_alphanumeric() && next_ch != b'_' {
+            let punct = next_ch as char;
+            if matches!(punct, '!' | '@' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`') {
+                return Some(format!("${}", punct));
+            }
+        }
+
+        None
+    }
+
+    /// Return educational hover documentation for Perl special variables.
+    ///
+    /// Covers the 20 most common special variables that every Perl developer
+    /// encounters.  Returns a JSON hover response with markdown content, or
+    /// `None` if the variable is not in the known set.
+    fn get_special_variable_hover(name: &str) -> Option<Value> {
+        let text: &str = match name {
+            "$_" => {
+                "**`$_` \u{2014} The Default Variable**\n\n\
+                 Used implicitly by many builtins: `foreach`, `map`, `grep`, \
+                 `print`, `chomp`, and more.  The \"it\" of Perl.\n\n\
+                 ```perl\nfor (@items) {\n    print;  # prints $_\n}\n```"
+            }
+            "@_" => {
+                "**`@_` \u{2014} Subroutine Arguments**\n\n\
+                 Contains all arguments passed to the current function. \
+                 Use `shift`, `pop`, or list assignment to unpack.\n\n\
+                 ```perl\nsub greet {\n    my ($name) = @_;\n\
+                     print \"Hello, $name\\n\";\n}\n```"
+            }
+            "$!" => {
+                "**`$!` \u{2014} OS Error (errno)**\n\n\
+                 In numeric context returns the current `errno` value. \
+                 In string context returns the corresponding system error \
+                 message (like `strerror`).\n\n\
+                 ```perl\nopen my $fh, '<', $file\n    or die \"Cannot open $file: $!\";\n```"
+            }
+            "$@" => {
+                "**`$@` \u{2014} Eval Error**\n\n\
+                 Set to the error message when `eval { }` or `eval EXPR` \
+                 catches an exception. Empty string when no error occurred.\n\n\
+                 ```perl\neval { risky_operation() };\nif ($@) {\n    warn \"Caught: $@\";\n}\n```"
+            }
+            "$/" => {
+                "**`$/` \u{2014} Input Record Separator**\n\n\
+                 Controls what constitutes a \"line\" when reading from a \
+                 filehandle.  Defaults to `\\n`.  Set to `undef` to slurp \
+                 an entire file at once.\n\n\
+                 ```perl\nlocal $/;  # enable slurp mode\nmy $content = <$fh>;\n```"
+            }
+            "$\\" => {
+                "**`$\\` \u{2014} Output Record Separator**\n\n\
+                 Appended after every `print` statement.  Defaults to empty \
+                 string (no separator).\n\n\
+                 ```perl\nlocal $\\ = \"\\n\";\nprint \"first\";  # prints \"first\\n\"\n```"
+            }
+            "$$" => {
+                "**`$$` \u{2014} Process ID**\n\n\
+                 The PID of the currently running Perl process.  Read-only.\n\n\
+                 ```perl\nprint \"PID: $$\\n\";\n```"
+            }
+            "$0" => {
+                "**`$0` \u{2014} Program Name**\n\n\
+                 Contains the name of the script being executed.  Assigning \
+                 to it changes the process name visible in `ps`.\n\n\
+                 ```perl\nprint \"Running: $0\\n\";\n$0 = \"my-daemon\";\n```"
+            }
+            "$;" => {
+                "**`$;` \u{2014} Subscript Separator**\n\n\
+                 Used in emulating multidimensional hashes: \
+                 `$hash{$a,$b}` is really `$hash{join($;, $a, $b)}`. \
+                 Defaults to `\\034` (SUBSEP).\n\n\
+                 ```perl\n$h{\"x\",\"y\"} = 1;  # key is \"x\\034y\"\n```"
+            }
+            "$," => {
+                "**`$,` \u{2014} Output Field Separator**\n\n\
+                 Inserted between arguments in a `print` list.  Defaults \
+                 to empty string.\n\n\
+                 ```perl\nlocal $, = \", \";\nprint \"a\", \"b\", \"c\";  # a, b, c\n```"
+            }
+            "$." => {
+                "**`$.` \u{2014} Current Line Number**\n\n\
+                 The line number of the last line read from the most \
+                 recently accessed filehandle.\n\n\
+                 ```perl\nwhile (<$fh>) {\n    print \"Line $.: $_\";\n}\n```"
+            }
+            "$&" => {
+                "**`$&` \u{2014} Matched String**\n\n\
+                 Contains the text matched by the last successful pattern \
+                 match.  Using it anywhere in a program imposes a performance \
+                 penalty on all regexes (mitigated in Perl 5.20+).\n\n\
+                 ```perl\n\"Hello World\" =~ /Wo\\w+/;\nprint $&;  # \"World\"\n```"
+            }
+            "$'" => {
+                "**`$'` \u{2014} Postmatch String**\n\n\
+                 Contains the string following the last successful pattern \
+                 match.\n\n\
+                 ```perl\n\"Hello World\" =~ /\\s/;\nprint $';  # \"World\"\n```"
+            }
+            "$`" => {
+                "**`$\\`` \u{2014} Prematch String**\n\n\
+                 Contains the string preceding the last successful pattern \
+                 match.\n\n\
+                 ```perl\n\"Hello World\" =~ /\\s/;\nprint $`;  # \"Hello\"\n```"
+            }
+            "@ISA" => {
+                "**`@ISA` \u{2014} Inheritance List**\n\n\
+                 Defines the parent classes for method resolution. Perl \
+                 searches `@ISA` (depth-first by default, C3 with `use mro \
+                 'c3'`) when a method is not found in the current package.\n\n\
+                 ```perl\npackage Dog;\nour @ISA = ('Animal');\n```"
+            }
+            "%ENV" => {
+                "**`%ENV` \u{2014} Environment Variables**\n\n\
+                 Hash containing the current environment variables. Changes \
+                 to `%ENV` are inherited by child processes.\n\n\
+                 ```perl\nmy $home = $ENV{HOME};\n$ENV{PATH} .= \":/opt/bin\";\n```"
+            }
+            "@INC" => {
+                "**`@INC` \u{2014} Module Search Paths**\n\n\
+                 List of directories (and code refs) searched when loading \
+                 modules via `use` or `require`.  Modify with `use lib` or \
+                 `PERL5LIB`.  Note: `.` was removed from `@INC` in Perl 5.26.\n\n\
+                 ```perl\nuse lib '/my/modules';\nprint join(\"\\n\", @INC);\n```"
+            }
+            "%INC" => {
+                "**`%INC` \u{2014} Loaded Modules**\n\n\
+                 Records every file loaded by `use`, `require`, or `do`. \
+                 Keys are the module filenames (e.g. `Foo/Bar.pm`), values \
+                 are the full paths.\n\n\
+                 ```perl\nuse Data::Dumper;\nprint $INC{'Data/Dumper.pm'};\n```"
+            }
+            "$^W" => {
+                "**`$^W` \u{2014} Warning Flag**\n\n\
+                 Global flag that enables or disables warnings at runtime. \
+                 Prefer `use warnings` for lexical scoping.\n\n\
+                 ```perl\nlocal $^W = 1;  # enable warnings temporarily\n```"
+            }
+            "$^O" => {
+                "**`$^O` \u{2014} Operating System Name**\n\n\
+                 Contains the OS name the Perl binary was built for \
+                 (e.g. `linux`, `darwin`, `MSWin32`).  Useful for \
+                 platform-specific code paths.\n\n\
+                 ```perl\nif ($^O eq 'MSWin32') {\n    # Windows-specific\n}\n```"
+            }
+            _ => return None,
+        };
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": text,
+            },
+        }))
     }
 }
