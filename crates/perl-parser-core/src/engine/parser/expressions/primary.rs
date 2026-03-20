@@ -402,7 +402,27 @@ impl<'a> Parser<'a> {
                 } else {
                     // Check if it's a quote operator or tie/untie
                     match token.text.as_ref() {
-                        "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" => self.parse_quote_operator(),
+                        "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" => {
+                            // When 's' or 'm' appears immediately before '=>', it is a bareword
+                            // hash key (Perl fat-arrow autoquoting), NOT a quote operator.
+                            // e.g., my %h = (s => 'string', m => 'match');
+                            let next_is_fat_arrow = matches!(
+                                self.tokens.peek_second(),
+                                Ok(t) if t.kind == TokenKind::FatArrow
+                            );
+                            if next_is_fat_arrow {
+                                let tok = self.tokens.next()?;
+                                Ok(Node::new(
+                                    NodeKind::String {
+                                        value: tok.text.to_string(),
+                                        interpolated: false,
+                                    },
+                                    SourceLocation { start: tok.start, end: tok.end },
+                                ))
+                            } else {
+                                self.parse_quote_operator()
+                            }
+                        }
                         "tie" => {
                             let token = self.tokens.next()?;
                             let start = token.start;
@@ -560,7 +580,10 @@ impl<'a> Parser<'a> {
                             );
                         }
                         self.tokens.next()?; // consume =>
-                        elements.push(self.parse_assignment_or_declaration()?);
+                        // The value after => may be followed by a word operator inside the list:
+                        // e.g. `(key => $val or "default")`.
+                        let val = self.parse_assignment_or_declaration()?;
+                        elements.push(self.parse_word_or_expr(val)?);
                     }
 
                     while self.peek_kind() == Some(TokenKind::Comma)
@@ -607,9 +630,14 @@ impl<'a> Parser<'a> {
                             self.consume_token()?; // consume =>
                             elements.push(elem);
                             if self.peek_kind() != Some(TokenKind::RightParen) {
-                                elements.push(self.parse_assignment_or_declaration()?);
+                                // The value after => may be followed by a word operator.
+                                let val = self.parse_assignment_or_declaration()?;
+                                elements.push(self.parse_word_or_expr(val)?);
                             }
                         } else {
+                            // Each list element may be followed by a word operator:
+                            // e.g. `($val or "default")`.
+                            let elem = self.parse_word_or_expr(elem)?;
                             elements.push(elem);
                         }
                     }
