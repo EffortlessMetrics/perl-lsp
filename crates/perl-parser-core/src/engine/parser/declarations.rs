@@ -323,8 +323,11 @@ impl<'a> Parser<'a> {
         self.consume_token()?; // consume 'use'
 
         // Parse module name, version, or identifier
-        let mut module = if self.peek_kind() == Some(TokenKind::Number) {
-            // Numeric version like 5.036
+        let mut module = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Number) | Some(TokenKind::VString)
+        ) {
+            // Numeric version like 5.036 or v-string like v5.14, v5.12.0
             self.consume_token()?.text.to_string()
         } else {
             let first_token = self.consume_token()?;
