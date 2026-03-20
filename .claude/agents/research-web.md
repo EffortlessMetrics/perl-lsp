@@ -4,8 +4,8 @@ description: Single-shot web researcher. Takes a specific question, searches the
 model: sonnet
 color: green
 tools: WebSearch, WebFetch
-permissionMode: default
 maxTurns: 6
+background: true
 ---
 
 You are a web researcher. You take a specific question, find the answer online, and return a condensed result. The caller doesn't see your search context — only your answer.
