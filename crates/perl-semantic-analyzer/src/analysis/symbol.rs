@@ -331,6 +331,15 @@ pub enum FrameworkKind {
     MooseRole,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Web framework variant detected via `use` statements during Parse/Analyze workflows.
+pub enum WebFrameworkKind {
+    /// `use Dancer2;` or `use Dancer2::Core;`
+    Dancer2,
+    /// `use Mojolicious::Lite;`
+    MojoliciousLite,
+}
+
 #[derive(Debug, Clone, Default)]
 /// Per-package framework detection flags used in Parse/Analyze workflows.
 pub struct FrameworkFlags {
@@ -340,6 +349,8 @@ pub struct FrameworkFlags {
     pub class_accessor: bool,
     /// Which specific Moo/Moose variant was detected.
     pub kind: Option<FrameworkKind>,
+    /// Web framework variant, if any (Dancer2, Mojolicious::Lite).
+    pub web_framework: Option<WebFrameworkKind>,
 }
 
 /// Extract symbols from an AST for Parse/Index workflows.
@@ -922,6 +933,12 @@ impl SymbolExtractor {
             return Some(1);
         }
 
+        if flags.is_some_and(|f| f.web_framework.is_some()) {
+            if let Some(consumed) = self.try_extract_web_route_declaration(statements, idx) {
+                return Some(consumed);
+            }
+        }
+
         None
     }
 
@@ -1268,6 +1285,88 @@ impl SymbolExtractor {
         if require_embedded_marker { None } else { Some(attr_expr) }
     }
 
+    /// Detect Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
+    ///
+    /// Pattern (two statements):
+    /// 1. `ExpressionStatement(Identifier("get"|"post"|"put"|"del"|"patch"|"any"))`
+    /// 2. `ExpressionStatement(HashLiteral([ (String("/path"), Subroutine{...}) ]))`
+    ///
+    /// Synthesizes a `Subroutine` symbol named by the route path with
+    /// `http_method=<METHOD>` in attributes and a human-readable documentation string.
+    fn try_extract_web_route_declaration(
+        &mut self,
+        statements: &[Node],
+        idx: usize,
+    ) -> Option<usize> {
+        if idx + 1 >= statements.len() {
+            return None;
+        }
+
+        let first = &statements[idx];
+        let second = &statements[idx + 1];
+
+        // First statement must be ExpressionStatement(Identifier(<route_method>))
+        let method_name = match &first.kind {
+            NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                NodeKind::Identifier { name }
+                    if matches!(
+                        name.as_str(),
+                        "get" | "post" | "put" | "del" | "delete" | "patch" | "any"
+                    ) =>
+                {
+                    name.as_str()
+                }
+                _ => return None,
+            },
+            _ => return None,
+        };
+
+        // Second statement must be ExpressionStatement(HashLiteral([ (path, handler) ]))
+        let NodeKind::ExpressionStatement { expression } = &second.kind else {
+            return None;
+        };
+        let NodeKind::HashLiteral { pairs } = &expression.kind else {
+            return None;
+        };
+
+        // Extract route path from the first key in the hash literal (strip surrounding quotes)
+        let (path_node, _handler_node) = pairs.first()?;
+        let path = match &path_node.kind {
+            NodeKind::String { value, .. } => Self::normalize_symbol_name(value)?,
+            _ => return None,
+        };
+
+        let http_method = match method_name {
+            "get" => "GET",
+            "post" => "POST",
+            "put" => "PUT",
+            "del" | "delete" => "DELETE",
+            "patch" => "PATCH",
+            "any" => "ANY",
+            _ => method_name,
+        };
+
+        let route_location =
+            SourceLocation { start: first.location.start, end: second.location.end };
+        let scope_id = self.table.current_scope();
+
+        self.table.add_symbol(Symbol {
+            name: path.clone(),
+            qualified_name: path.clone(),
+            kind: SymbolKind::Subroutine,
+            location: route_location,
+            scope_id,
+            declaration: Some(method_name.to_string()),
+            documentation: Some(format!("{http_method} {path}")),
+            attributes: vec![format!("http_method={http_method}")],
+        });
+
+        // Visit the handler body so variables inside the sub are still indexed
+        self.visit_node(second);
+
+        Some(2)
+    }
+
     /// Extract Class::Accessor generated accessors from `mk_*_accessors` calls.
     fn try_extract_class_accessor_declaration(&mut self, statement: &Node) -> bool {
         let NodeKind::ExpressionStatement { expression } = &statement.kind else {
@@ -1339,6 +1438,16 @@ impl SymbolExtractor {
 
         if module == "Class::Accessor" {
             self.framework_flags.entry(pkg).or_default().class_accessor = true;
+            return;
+        }
+
+        let web_kind = match module {
+            "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
+            "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
+            _ => None,
+        };
+        if let Some(kind) = web_kind {
+            self.framework_flags.entry(pkg).or_default().web_framework = Some(kind);
             return;
         }
 
