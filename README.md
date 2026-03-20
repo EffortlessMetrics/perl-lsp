@@ -238,6 +238,7 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
 | [Contributing](CONTRIBUTING.md) | Development guidelines and workflow |
 | [Changelog](CHANGELOG.md) | Release history and notable changes |
+| **[Report an Issue](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)** | Bug reports, feature requests, parser issues |
 
 ## History
 
