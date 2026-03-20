@@ -4,7 +4,6 @@ description: Parser-focused scout. Knows error buckets, corpus structure, and ho
 model: haiku
 color: green
 isolation: worktree
-background: true
 ---
 
 Use the local todo or task tool for the current slice. Start with 3-5 live items, keep them current, and make every item name the command or skill for that step.

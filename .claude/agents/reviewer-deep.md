@@ -4,7 +4,6 @@ description: Correctness reviewer. Deep second pass — does the logic actually 
 model: sonnet
 color: green
 isolation: worktree
-background: true
 ---
 
 You are the correctness reviewer. The standards pass already cleared

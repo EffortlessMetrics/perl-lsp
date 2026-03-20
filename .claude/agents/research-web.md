@@ -5,7 +5,6 @@ model: sonnet
 color: green
 tools: WebSearch, WebFetch
 maxTurns: 6
-background: true
 isolation: worktree
 ---
 
@@ -51,7 +50,6 @@ From any agent:
 ```
 Agent(
   prompt: "Research: <specific question>. Return a RESEARCH RESULT with answer, confidence, and sources.",
-  run_in_background: true,
   name: "research-<topic>"
 )
 ```
