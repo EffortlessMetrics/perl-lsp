@@ -14,18 +14,23 @@ GitHub Issue = task spec from scout to builder (HANDOFF)
 
 ```
 /flow-scout → /flow-build → /flow-review → /flow-merge → /flow-improve
-   scout        builder      reviewer       ops          improver
-  (sonnet)     (sonnet)    (haiku+sonnet)  (haiku)       (sonnet)
+   scout      plan-reviewer   reviewer       ops          improver
+  (haiku)  →   (sonnet)   →  builder  →  (haiku+sonnet) → (haiku) → (sonnet)
+                             (sonnet)
 ```
 
-## Agents (10)
+Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
+Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
-### Pipeline Agents (6)
+## Agents (11)
+
+### Pipeline Agents (7)
 
 | Agent | Model | Steps | Role |
 |-------|-------|-------|------|
-| scout | sonnet | 7 | Investigate → file builder-ready issue |
-| builder | sonnet | 5 | Implement from spec → draft PR |
+| scout | haiku | 7 | Broad investigation → file initial plan |
+| plan-reviewer | sonnet | 4 | Refine plan, stress-test, mark builder-ready |
+| builder | sonnet | 5 | Implement from refined spec → draft PR |
 | reviewer | haiku | 4 | Fast standards check (banned patterns, scope) |
 | reviewer-deep | sonnet | 4 | Deep correctness check (logic, edge cases) |
 | ops | haiku | 4 | Merge queue, CI, post-merge validation |
