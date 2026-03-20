@@ -327,6 +327,98 @@ impl TypeHierarchyProvider {
             .collect()
     }
 
+    /// Compute the C3 Method Resolution Order (MRO) for a package.
+    ///
+    /// Returns a linearized list starting with `package` itself, followed by
+    /// ancestors in the order Perl's C3 MRO would search them. Each class
+    /// appears exactly once. If the C3 merge is inconsistent the algorithm
+    /// falls back to a depth-first left-to-right order with deduplication.
+    pub fn c3_mro(&self, ast: &Node, package: &str) -> Vec<String> {
+        let index = self.build_hierarchy_index(ast);
+        let mut result = Vec::new();
+        let mut visited = BTreeSet::new();
+        self.c3_linearize(package, &index, &mut result, &mut visited);
+        result
+    }
+
+    /// Recursive C3 linearization implementation.
+    fn c3_linearize(
+        &self,
+        package: &str,
+        index: &HierarchyIndex,
+        result: &mut Vec<String>,
+        visited: &mut BTreeSet<String>,
+    ) {
+        if visited.contains(package) {
+            return;
+        }
+        visited.insert(package.to_string());
+
+        let parents = index.get_parents(package);
+        if parents.is_empty() {
+            result.push(package.to_string());
+            return;
+        }
+
+        // Build the lists to merge: linearization of each parent + the parents list itself
+        let mut parent_mros: Vec<Vec<String>> = parents
+            .iter()
+            .map(|p| {
+                let mut sub_result = Vec::new();
+                let mut sub_visited = BTreeSet::new();
+                self.c3_linearize(p, index, &mut sub_result, &mut sub_visited);
+                sub_result
+            })
+            .collect();
+        // Append the direct parents list as the last list to merge
+        parent_mros.push(parents.clone());
+
+        // Prepend self
+        result.push(package.to_string());
+
+        // C3 merge
+        loop {
+            // Remove empty lists
+            parent_mros.retain(|list| !list.is_empty());
+            if parent_mros.is_empty() {
+                break;
+            }
+
+            // Find the first head that does not appear in any tail
+            let chosen = parent_mros.iter().find_map(|list| {
+                let candidate = list.first()?;
+                let in_tail =
+                    parent_mros.iter().any(|other| other.iter().skip(1).any(|n| n == candidate));
+                if in_tail { None } else { Some(candidate.clone()) }
+            });
+
+            match chosen {
+                Some(cls) => {
+                    if !result.contains(&cls) {
+                        result.push(cls.clone());
+                    }
+                    // Remove chosen from the front of all lists where it appears
+                    for list in &mut parent_mros {
+                        if list.first().is_some_and(|h| h == &cls) {
+                            list.remove(0);
+                        }
+                    }
+                }
+                None => {
+                    // Inconsistent hierarchy — fall back: take heads left-to-right
+                    for list in &parent_mros.clone() {
+                        if let Some(head) = list.first() {
+                            if !result.contains(head) {
+                                result.push(head.clone());
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     /// Find subtypes (child classes) that inherit from this class
     pub fn find_subtypes(&self, ast: &Node, item: &TypeHierarchyItem) -> Vec<TypeHierarchyItem> {
         let index = self.build_hierarchy_index(ast);
