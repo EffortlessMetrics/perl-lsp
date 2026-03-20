@@ -30,7 +30,7 @@ fn info_shows_version_and_features() {
         .success()
         .stdout(predicates::str::contains("perl-lsp"))
         .stdout(predicates::str::contains("Features:"))
-        .stdout(predicates::str::contains("LSP coverage:"));
+        .stdout(predicates::str::contains("LSP spec coverage:"));
 }
 
 #[test]
