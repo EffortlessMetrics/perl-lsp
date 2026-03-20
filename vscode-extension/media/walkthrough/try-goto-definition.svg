@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect width="800" height="450" fill="#111827"/>
+  <rect x="40" y="20" width="720" height="180" rx="6" fill="#1e293b"/>
+  <text x="60" y="55" font-family="monospace" font-size="13" fill="#6b7280">main.pl</text>
+  <text x="60" y="90" font-family="monospace" font-size="14" fill="#d1d5db">my $result = </text>
+  <text x="200" y="90" font-family="monospace" font-size="14" fill="#60a5fa" text-decoration="underline">calculate</text>
+  <text x="290" y="90" font-family="monospace" font-size="14" fill="#d1d5db">(42);</text>
+  <line x1="200" y1="93" x2="290" y2="93" stroke="#60a5fa" stroke-width="1"/>
+  <text x="60" y="115" font-family="sans-serif" font-size="12" fill="#475569">Ctrl+Click (or F12) on a symbol to jump to its definition</text>
+  <rect x="40" y="220" width="720" height="200" rx="6" fill="#1e293b"/>
+  <text x="60" y="255" font-family="monospace" font-size="13" fill="#6b7280">Utils.pm  (jumped here)</text>
+  <text x="60" y="290" font-family="monospace" font-size="14" fill="#f472b6">sub</text>
+  <text x="90" y="290" font-family="monospace" font-size="14" fill="#fbbf24"> calculate </text>
+  <text x="185" y="290" font-family="monospace" font-size="14" fill="#d1d5db">{</text>
+  <rect x="55" y="275" width="200" height="25" fill="none" stroke="#fbbf24" stroke-width="1" rx="2"/>
+  <text x="60" y="315" font-family="monospace" font-size="14" fill="#34d399">    my</text>
+  <text x="96" y="315" font-family="monospace" font-size="14" fill="#d1d5db"> ($n) = @_;</text>
+  <text x="60" y="338" font-family="monospace" font-size="14" fill="#f472b6">    return</text>
+  <text x="120" y="338" font-family="monospace" font-size="14" fill="#d1d5db"> $n * 2;</text>
+  <text x="60" y="361" font-family="monospace" font-size="14" fill="#d1d5db">}</text>
+</svg>

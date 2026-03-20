@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect width="800" height="450" fill="#111827"/>
+  <rect x="40" y="20" width="720" height="410" rx="6" fill="#1e293b"/>
+  <text x="60" y="55" font-family="monospace" font-size="13" fill="#6b7280">script.pl</text>
+  <text x="60" y="90" font-family="monospace" font-size="14" fill="#f472b6">use</text>
+  <text x="84" y="90" font-family="monospace" font-size="14" fill="#d1d5db"> strict;</text>
+  <text x="60" y="113" font-family="monospace" font-size="14" fill="#f472b6">use</text>
+  <text x="84" y="113" font-family="monospace" font-size="14" fill="#d1d5db"> warnings;</text>
+  <text x="60" y="136" font-family="monospace" font-size="14" fill="#d1d5db"> </text>
+  <text x="60" y="159" font-family="monospace" font-size="14" fill="#34d399">my</text>
+  <text x="84" y="159" font-family="monospace" font-size="14" fill="#d1d5db"> $name = </text>
+  <text x="60" y="182" font-family="monospace" font-size="14" fill="#d1d5db">print</text>
+  <rect x="60" y="192" width="300" height="160" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <rect x="60" y="192" width="300" height="32" rx="4" fill="#1d4ed8"/>
+  <text x="75" y="213" font-family="monospace" font-size="13" fill="white">printf</text>
+  <text x="200" y="213" font-family="monospace" font-size="11" fill="#93c5fd">function</text>
+  <text x="75" y="245" font-family="monospace" font-size="13" fill="#d1d5db">print</text>
+  <text x="200" y="245" font-family="monospace" font-size="11" fill="#6b7280">function</text>
+  <text x="75" y="275" font-family="monospace" font-size="13" fill="#d1d5db">push</text>
+  <text x="200" y="275" font-family="monospace" font-size="11" fill="#6b7280">function</text>
+  <text x="75" y="305" font-family="monospace" font-size="13" fill="#d1d5db">pos</text>
+  <text x="200" y="305" font-family="monospace" font-size="11" fill="#6b7280">function</text>
+  <text x="75" y="335" font-family="monospace" font-size="13" fill="#d1d5db">pack</text>
+  <text x="200" y="335" font-family="monospace" font-size="11" fill="#6b7280">function</text>
+</svg>
