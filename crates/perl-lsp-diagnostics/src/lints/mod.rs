@@ -98,3 +98,5 @@ pub mod common_mistakes;
 pub mod deprecated;
 pub mod security;
 pub mod strict_warnings;
+/// Unused import detection
+pub mod unused_imports;
