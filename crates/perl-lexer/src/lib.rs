@@ -2298,8 +2298,12 @@ impl<'a> PerlLexer<'a> {
         // Handle other operators - simplified
         match ch {
             '.' => {
-                // Check if it's a decimal number like .5
-                if self.peek_char(1).is_some_and(|c| c.is_ascii_digit()) {
+                // Check if it's a decimal number like .5 -- but only when we
+                // expect a term.  In operator position `.5` is concatenation
+                // of the bareword/number on the left with the number `5`.
+                if self.mode != LexerMode::ExpectOperator
+                    && self.peek_char(1).is_some_and(|c| c.is_ascii_digit())
+                {
                     return self.parse_decimal_number(start);
                 }
                 self.advance();

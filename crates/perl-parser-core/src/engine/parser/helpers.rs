@@ -617,7 +617,7 @@ impl<'a> Parser<'a> {
             // List::Util (most common block-taking exports)
             | "first" | "any" | "all" | "none" | "reduce" | "pairfirst" | "pairgrep" | "pairmap"
             // List::MoreUtils / List::Util extensions
-            | "first_index" | "last_index" | "any_u" | "all_u" | "none_u"
+            | "first_index" | "last_index" | "indexes" | "any_u" | "all_u" | "none_u"
         )
     }
 
