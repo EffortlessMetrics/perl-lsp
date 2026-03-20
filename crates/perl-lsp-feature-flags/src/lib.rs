@@ -266,6 +266,9 @@ impl BuildFlags {
         }
         if self.range_formatting {
             ids.push(LSP_RANGE_FORMATTING);
+            // ranges formatting (multi-range, LSP 3.18) is gated on the same flag because
+            // both features require perltidy and the handler already exists.
+            ids.push(LSP_RANGES_FORMATTING);
         }
         if self.folding_range {
             ids.push(LSP_FOLDING_RANGE);
