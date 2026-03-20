@@ -341,11 +341,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         // Control flow
         "die" => Some(BuiltinDoc {
             signature: "die LIST",
-            description: "Raises an exception. If the last element of LIST does not end in a newline, the current script line number and input line number are appended.",
+            description: "Raises an exception. The error is stored in $@ and can be caught with eval {}. If LIST does not end in a newline, the current script file and line number are appended. In modules, prefer Carp::croak to report the error from the caller's perspective.",
         }),
         "warn" => Some(BuiltinDoc {
             signature: "warn LIST",
-            description: "Produces a message on STDERR, like die but does not exit or throw an exception.",
+            description: "Prints a warning message to STDERR without throwing an exception. In modules, prefer Carp::carp to report the warning from the caller's perspective.",
         }),
         "eval" => Some(BuiltinDoc {
             signature: "eval BLOCK\neval EXPR",
@@ -586,6 +586,69 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Declares lexically scoped variables that persist across calls to the enclosing subroutine (like C static variables).",
         }),
 
+        // Carp — stack-aware exception helpers (use Carp)
+        "croak" => Some(BuiltinDoc {
+            signature: "croak LIST",
+            description: "Like die but reports the error from the caller's perspective (one stack level up). Use in modules so the error points at the calling code, not the module internals.",
+        }),
+        "carp" => Some(BuiltinDoc {
+            signature: "carp LIST",
+            description: "Like warn but reports the warning from the caller's perspective (one stack level up). Use in modules so the warning points at the calling code.",
+        }),
+        "confess" => Some(BuiltinDoc {
+            signature: "confess LIST",
+            description: "Like die but includes a full stack trace. Use when deep call chains make croak's single-level context insufficient.",
+        }),
+        "cluck" => Some(BuiltinDoc {
+            signature: "cluck LIST",
+            description: "Like warn but includes a full stack trace. Use when you need a warning with complete call context.",
+        }),
+
+        _ => None,
+    }
+}
+
+/// Structured exception context for die/warn and Carp functions.
+///
+/// Provides IDE guidance about exception semantics: which variable captures the
+/// error and whether a stack-aware alternative is preferred.
+pub struct ExceptionContext {
+    /// The variable that captures the thrown exception, if applicable.
+    /// For `die` this is `$@`; Carp functions do not set a distinct variable.
+    pub error_variable: Option<String>,
+    /// A preferred alternative (e.g. `Carp::croak` instead of `die`).
+    /// `None` when the function is already the preferred form.
+    pub preferred_alternative: Option<String>,
+}
+
+/// Check if a function name belongs to Perl's exception-handling family.
+///
+/// Returns `true` for `die`, `warn`, and all four Carp functions
+/// (`croak`, `carp`, `confess`, `cluck`).
+pub fn is_exception_function(name: &str) -> bool {
+    matches!(name, "die" | "warn" | "croak" | "carp" | "confess" | "cluck")
+}
+
+/// Return exception context for a die/warn/Carp function.
+///
+/// Returns `None` for any function that is not part of the exception family.
+pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
+    match name {
+        "die" => Some(ExceptionContext {
+            error_variable: Some("$@".to_string()),
+            preferred_alternative: Some("Carp::croak".to_string()),
+        }),
+        "warn" => Some(ExceptionContext {
+            error_variable: None,
+            preferred_alternative: Some("Carp::carp".to_string()),
+        }),
+        "croak" | "confess" => Some(ExceptionContext {
+            error_variable: Some("$@".to_string()),
+            preferred_alternative: None,
+        }),
+        "carp" | "cluck" => {
+            Some(ExceptionContext { error_variable: None, preferred_alternative: None })
+        }
         _ => None,
     }
 }
