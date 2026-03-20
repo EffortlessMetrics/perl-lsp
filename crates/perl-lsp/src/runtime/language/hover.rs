@@ -104,8 +104,11 @@ impl LspServer {
                 _ => "Symbol",
             };
 
-            let display_name = if symbol_info.kind == crate::symbol::SymbolKind::Subroutine {
+            let (display_name, complexity_info) = if symbol_info.kind
+                == crate::symbol::SymbolKind::Subroutine
+            {
                 let mut params = Vec::new();
+                let mut complexity = String::new();
                 if let Some(sub_node) = self.find_subroutine_definition(ast, &symbol_info.name) {
                     if let NodeKind::Subroutine { signature: sub_sig, body, .. } = &sub_node.kind {
                         if let Some(sig) = sub_sig {
@@ -118,15 +121,17 @@ impl LspServer {
                             self.extract_params_from_body(body, &mut params);
                         }
                     }
+                    complexity = Self::build_complexity_info(sub_node, text);
                 }
-                if params.is_empty() {
+                let name = if params.is_empty() {
                     format!("sub {}", symbol_info.name)
                 } else {
                     format!("sub {}({})", symbol_info.name, params.join(", "))
-                }
+                };
+                (name, complexity)
             } else {
                 let sigil = symbol_info.kind.sigil().unwrap_or("");
-                format!("{}{}", sigil, symbol_info.name)
+                (format!("{}{}", sigil, symbol_info.name), String::new())
             };
 
             let decl_info = symbol_info
@@ -141,6 +146,12 @@ impl LspServer {
                 format!("\n**Attributes**: {}", symbol_info.attributes.join(", "))
             };
 
+            let complexity_section = if complexity_info.is_empty() {
+                String::new()
+            } else {
+                format!("\n\n{}", complexity_info)
+            };
+
             let doc_info = symbol_info
                 .documentation
                 .as_ref()
@@ -150,11 +161,12 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
                         attrs_info,
+                        complexity_section,
                         doc_info
                     ),
                 },
@@ -726,6 +738,43 @@ impl LspServer {
             }
             _ => {}
         }
+    }
+
+    /// Build a complexity summary string for a subroutine node.
+    fn build_complexity_info(node: &Node, text: &str) -> String {
+        let start = node.location.start;
+        let end = node.location.end.min(text.len());
+        let span = &text[start..end];
+        let lines = span.chars().filter(|&c| c == '\n').count() + 1;
+        let branches = Self::count_branches(node);
+        let complexity = match branches {
+            0..=3 => "Low",
+            4..=8 => "Medium",
+            _ => "High",
+        };
+        format!("**Complexity**: {} | Lines: {} | Branches: {}", complexity, lines, branches)
+    }
+
+    /// Recursively count branch points in an AST subtree.
+    fn count_branches(node: &Node) -> usize {
+        let mut count = match &node.kind {
+            NodeKind::If { elsif_branches, else_branch, .. } => {
+                1 + elsif_branches.len() + usize::from(else_branch.is_some())
+            }
+            NodeKind::Ternary { .. } => 1,
+            NodeKind::When { .. } => 1,
+            NodeKind::Default { .. } => 1,
+            NodeKind::StatementModifier { modifier, .. }
+                if modifier == "if" || modifier == "unless" =>
+            {
+                1
+            }
+            _ => 0,
+        };
+        node.for_each_child(|child| {
+            count += Self::count_branches(child);
+        });
+        count
     }
 
     /// Get function signature for built-in Perl functions
