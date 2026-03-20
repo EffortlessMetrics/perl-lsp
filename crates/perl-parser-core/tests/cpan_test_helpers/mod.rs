@@ -16,22 +16,7 @@ pub fn assert_clean_parse(source: &str) {
     let ast = parse(source);
     let sexp = ast.to_sexp();
 
-    // Check for error sentinels in the sexp output.
-    // We look for the node-kind markers, not arbitrary substrings.
-    let error_markers = [
-        "(error ",
-        "(Error ",
-        "(missing_expression",
-        "(missing_statement",
-        "(missing_identifier",
-        "(missing_block",
-        "MissingExpression",
-        "MissingStatement",
-        "MissingIdentifier",
-        "MissingBlock",
-    ];
-
-    for marker in &error_markers {
+    for marker in ERROR_MARKERS {
         assert!(
             !sexp.contains(marker),
             "Clean-parse assertion failed: found '{}' in sexp for source:\n{}\n\nsexp:\n{}",
