@@ -526,11 +526,7 @@ impl SemanticAnalyzer {
                     let hover = HoverInfo {
                         signature: format!("{} {}{}", declarator, sigil, name),
                         documentation: self.extract_documentation(node.location.start),
-                        details: if attributes.is_empty() {
-                            vec![]
-                        } else {
-                            vec![format!("Attributes: {}", attributes.join(", "))]
-                        },
+                        details: format_attribute_details(attributes),
                     };
 
                     self.hover_info.insert(variable.location, hover);
@@ -611,11 +607,7 @@ impl SemanticAnalyzer {
                     let hover = HoverInfo {
                         signature: signature_str,
                         documentation: self.extract_documentation(node.location.start),
-                        details: if attributes.is_empty() {
-                            vec![]
-                        } else {
-                            vec![format!("Attributes: {}", attributes.join(", "))]
-                        },
+                        details: format_attribute_details(attributes),
                     };
 
                     self.hover_info.insert(node.location, hover);
@@ -639,9 +631,7 @@ impl SemanticAnalyzer {
                     signature_str.push_str(" { ... }");
 
                     let mut details = vec!["Anonymous subroutine (closure)".to_string()];
-                    if !attributes.is_empty() {
-                        details.push(format!("Attributes: {}", attributes.join(", ")));
-                    }
+                    details.extend(format_attribute_details(attributes));
 
                     let hover = HoverInfo {
                         signature: signature_str,
@@ -678,11 +668,7 @@ impl SemanticAnalyzer {
                 let hover = HoverInfo {
                     signature: format!("method {}", name),
                     documentation: self.extract_documentation(node.location.start),
-                    details: if attributes.is_empty() {
-                        vec![]
-                    } else {
-                        vec![format!("Attributes: {}", attributes.join(", "))]
-                    },
+                    details: format_attribute_details(attributes),
                 };
                 self.hover_info.insert(node.location, hover);
 
@@ -918,11 +904,7 @@ impl SemanticAnalyzer {
                         let hover = HoverInfo {
                             signature: format!("{} {}{}", declarator, sigil, name),
                             documentation: self.extract_documentation(var.location.start),
-                            details: if attributes.is_empty() {
-                                vec![]
-                            } else {
-                                vec![format!("Attributes: {}", attributes.join(", "))]
-                            },
+                            details: format_attribute_details(attributes),
                         };
 
                         self.hover_info.insert(var.location, hover);
@@ -2155,6 +2137,101 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
 
         _ => None,
     }
+}
+
+/// Documentation entry for a Perl subroutine or variable attribute.
+///
+/// Provides a human-readable description of what an attribute does, used to
+/// enrich hover tooltips in the IDE with semantic meaning beyond the raw
+/// attribute name.
+pub struct PerlAttributeDoc {
+    /// The canonical attribute name (without leading colon)
+    pub name: &'static str,
+    /// Human-readable description of what the attribute does
+    pub description: &'static str,
+}
+
+/// Get documentation for a Perl subroutine or variable attribute.
+///
+/// Accepts the attribute name with or without a leading colon (`:lvalue` or `lvalue`).
+/// Returns `None` for unknown or custom attributes.
+///
+/// # Built-in Attributes Covered
+/// - `:lvalue` — allows subroutines to be used as lvalues (assigned to)
+/// - `:method` — marks a subroutine as an object method
+/// - `:prototype` — overrides the subroutine's calling prototype
+/// - `:const` — makes a subroutine a compile-time constant
+/// - `:shared` — marks a variable as shared between threads (`threads::shared`)
+/// - `:locked` — acquires a mutex on the variable before invoking the subroutine (deprecated)
+/// - `:unique` — marks a variable as unique across the interpreter (deprecated, removed Perl 5.28)
+pub fn get_attribute_documentation(attr: &str) -> Option<PerlAttributeDoc> {
+    // Strip a leading colon so callers can pass either ":lvalue" or "lvalue"
+    let name = attr.strip_prefix(':').unwrap_or(attr);
+    match name {
+        "lvalue" => Some(PerlAttributeDoc {
+            name: "lvalue",
+            description: "Marks the subroutine as an lvalue: it can appear on the left-hand side \
+                          of an assignment. The subroutine should return a value that can be \
+                          assigned to.",
+        }),
+        "method" => Some(PerlAttributeDoc {
+            name: "method",
+            description: "Marks the subroutine as an object method. Used by some call-sequence \
+                          optimisers and documentation tools; does not change runtime dispatch.",
+        }),
+        "prototype" => Some(PerlAttributeDoc {
+            name: "prototype",
+            description: "Overrides the subroutine's calling prototype. The argument supplies the \
+                          prototype string, e.g. :prototype($$) for two scalar arguments.",
+        }),
+        "const" => Some(PerlAttributeDoc {
+            name: "const",
+            description: "Makes the subroutine a compile-time constant folder. When called with a \
+                          constant argument, the result is inlined at compile time. Implies \
+                          read-only semantics.",
+        }),
+        "shared" => Some(PerlAttributeDoc {
+            name: "shared",
+            description: "Marks the variable as shared between threads (requires threads::shared). \
+                          Access is automatically synchronised across all threads.",
+        }),
+        "locked" => Some(PerlAttributeDoc {
+            name: "locked",
+            description: "Deprecated. Previously caused a mutex to be acquired on the subroutine \
+                          or variable before it was invoked/accessed. Has no effect in modern Perl.",
+        }),
+        "unique" => Some(PerlAttributeDoc {
+            name: "unique",
+            description: "Deprecated. Previously marked a variable as unique across the \
+                          interpreter. Has no effect in modern Perl (removed in Perl 5.28).",
+        }),
+        _ => None,
+    }
+}
+
+/// Build enriched hover detail lines for a list of Perl attributes.
+///
+/// For each attribute in the list this function looks up the semantic
+/// documentation via [`get_attribute_documentation`].  If documentation
+/// is found, the line is formatted as `":name — description"`.  If no
+/// documentation is found (custom/third-party attribute) the raw attribute
+/// name is included unchanged.
+///
+/// Returns an empty `Vec` when `attributes` is empty.
+pub(crate) fn format_attribute_details(attributes: &[String]) -> Vec<String> {
+    if attributes.is_empty() {
+        return Vec::new();
+    }
+    let mut result = Vec::with_capacity(attributes.len() + 1);
+    result.push("Attributes:".to_string());
+    for attr in attributes {
+        let canonical = attr.strip_prefix(':').unwrap_or(attr.as_str());
+        match get_attribute_documentation(canonical) {
+            Some(doc) => result.push(format!("{} — {}", attr, doc.description)),
+            None => result.push(format!("Attribute: {}", attr)),
+        }
+    }
+    result
 }
 
 #[derive(Debug)]
