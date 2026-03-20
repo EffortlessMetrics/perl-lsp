@@ -323,6 +323,7 @@ impl ExecuteCommandProvider {
     ///   1. `t/<stem>.t`  where stem is the hyphen-lowercased module name
     ///   2. `t/<stem>.t`  where stem uses underscores instead of hyphens
     ///   3. `t/<leaf>.t`  where leaf is just the last module component lowercased
+    ///   4. `t/lib/<Foo/Bar>.t`  where the relative path mirrors the module hierarchy
     pub(crate) fn go_to_test(&self, pm_path: &std::path::Path) -> Value {
         let module_name = match self.pm_path_to_module(pm_path) {
             Some(m) => m,
@@ -342,12 +343,19 @@ impl ExecuteCommandProvider {
         let t_dir = workspace_root.join("t");
         let stem_hyphen = self.module_to_test_stem(&module_name);
         let stem_underscore = stem_hyphen.replace('-', "_");
-        let leaf = module_name.split("::").last().unwrap_or(&module_name).to_lowercase();
+        // Leaf component without unwrap: split always produces at least one element.
+        let leaf = match module_name.rsplit_once("::") {
+            Some((_, last)) => last.to_lowercase(),
+            None => module_name.to_lowercase(),
+        };
+        // Mirror path under t/lib/ (e.g. Foo::Bar::Baz -> t/lib/Foo/Bar/Baz.t)
+        let mirror_rel = module_name.replace("::", std::path::MAIN_SEPARATOR_STR) + ".t";
 
         let candidates = [
             t_dir.join(format!("{stem_hyphen}.t")),
             t_dir.join(format!("{stem_underscore}.t")),
             t_dir.join(format!("{leaf}.t")),
+            t_dir.join("lib").join(&mirror_rel),
         ];
 
         for candidate in &candidates {
@@ -381,36 +389,88 @@ impl ExecuteCommandProvider {
             None => return json!({ "found": false }),
         };
 
-        // Well-known modules that are NOT local implementations.
+        // Well-known modules that are NOT local implementations (exact matches).
         const SKIP_MODULES: &[&str] = &[
+            // Core pragmas
             "strict",
             "warnings",
             "utf8",
             "feature",
             "parent",
             "base",
-            "Exporter",
+            "vars",
+            "constant",
+            "overload",
+            "ok",
+            // Core modules
             "Carp",
+            "Exporter",
             "Scalar::Util",
             "List::Util",
+            "Hash::Util",
             "POSIX",
             "Data::Dumper",
+            "Storable",
+            "Encode",
+            "Cwd",
+            "FindBin",
             "File::Basename",
             "File::Path",
             "File::Spec",
             "File::Find",
+            "File::Temp",
+            "File::Copy",
+            "IO::File",
+            "IO::Handle",
+            "IO::Select",
+            "Getopt::Long",
+            "Getopt::Std",
+            // OO frameworks
+            "Moo",
+            "Moose",
+            "Mouse",
+            // Test modules (exact)
             "Test::More",
+            "Test::Simple",
+            "Test::Builder",
             "Test::Deep",
             "Test::Exception",
             "Test::Warn",
             "Test::Fatal",
             "Test::MockObject",
-            "Test::Builder",
-            "Test::Simple",
-            "ok",
-            "vars",
-            "constant",
-            "overload",
+            "Test::MockModule",
+            "Test::Output",
+            "Test::Differences",
+            "Test::Class",
+            "Test::Pod",
+            "Test::Pod::Coverage",
+            "Try::Tiny",
+        ];
+
+        // Module name-space prefixes whose entire hierarchy is non-local.
+        // Any `use` statement whose module starts with one of these prefixes
+        // will be skipped without needing every sub-module listed.
+        const SKIP_PREFIXES: &[&str] = &[
+            "Test2::",  // Test2::V0, Test2::Bundle::*, Test2::Tools::*
+            "MooseX::", // MooseX::Types, MooseX::Declare, etc.
+            "MouseX::",
+            "Moo::Role",
+            "Moose::Role",
+            "Types::",     // Types::Standard, Types::Path::Tiny, etc.
+            "namespace::", // namespace::autoclean, namespace::clean
+            "Sub::",       // Sub::Exporter, Sub::Quote, etc.
+            "Class::MOP",
+            "DBIx::", // DBIx::Class, DBIx::Connector
+            "DBI",
+            "LWP::",
+            "HTTP::",
+            "URI::",
+            "JSON::",
+            "YAML::",
+            "XML::",
+            "DateTime::",
+            "Path::Tiny",
+            "Path::Class",
         ];
 
         for line in content.lines() {
@@ -427,11 +487,17 @@ impl ExecuteCommandProvider {
             if module_name.is_empty() {
                 continue;
             }
+            // Skip version-only pragmas like `use 5.010;` or `use v5.10;`
+            if module_name.chars().next().is_some_and(|c| c.is_ascii_digit() || c == 'v') {
+                continue;
+            }
             if SKIP_MODULES.contains(&module_name.as_str()) {
                 continue;
             }
-            // Skip version-only pragmas like `use 5.010;`
-            if module_name.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+            if SKIP_PREFIXES
+                .iter()
+                .any(|p| module_name.starts_with(p) || module_name == p.trim_end_matches("::"))
+            {
                 continue;
             }
 
@@ -450,12 +516,18 @@ impl ExecuteCommandProvider {
         json!({ "found": false })
     }
 
-    /// Find the workspace root by walking up from `path` until we find a
-    /// directory that has either a `lib/` or `t/` child, or until we hit a
-    /// filesystem root.  Stops at the nearest such ancestor.
+    /// Find the workspace root by walking up from `path`.
+    ///
+    /// Preference order:
+    ///   1. Explicit workspace roots registered with the provider (normal LSP runtime path).
+    ///   2. Nearest ancestor that contains a Perl project marker (`Makefile.PL`,
+    ///      `Build.PL`, `cpanfile`, `dist.ini`, `META.json`, `META.yml`, `.git`).
+    ///   3. Nearest ancestor that contains either a `lib/` or `t/` child directory.
+    ///
+    /// This multi-tier strategy avoids accidentally picking up a distant ancestor
+    /// that happens to have a `lib/` or `t/` directory unrelated to the current project.
     fn find_workspace_root(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
-        // If the provider has explicit workspace roots, use the one that
-        // contains the given path.
+        // Tier 1: explicit workspace roots registered with the provider.
         if !self.workspace_roots.is_empty() {
             let canonical_path = path.canonicalize().ok();
             for root in &self.workspace_roots {
@@ -466,14 +538,33 @@ impl ExecuteCommandProvider {
             }
         }
 
-        // Otherwise walk up the directory tree.
+        // Perl distribution marker files that indicate a project root.
+        const PROJECT_MARKERS: &[&str] =
+            &["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", "META.json", "META.yml", ".git"];
+
         let mut current = path.parent()?;
+
+        // Tier 2: walk up looking for a Perl project marker first.
+        let mut tier3_candidate: Option<std::path::PathBuf> = None;
         loop {
-            if current.join("lib").is_dir() || current.join("t").is_dir() {
+            // Check for definitive project markers.
+            if PROJECT_MARKERS.iter().any(|m| current.join(m).exists()) {
                 return Some(current.to_path_buf());
             }
-            current = current.parent()?;
+            // Remember the first ancestor with lib/ or t/ for tier-3 fallback.
+            if tier3_candidate.is_none()
+                && (current.join("lib").is_dir() || current.join("t").is_dir())
+            {
+                tier3_candidate = Some(current.to_path_buf());
+            }
+            current = match current.parent() {
+                Some(p) => p,
+                None => break,
+            };
         }
+
+        // Tier 3: fall back to the nearest lib/t ancestor found above.
+        tier3_candidate
     }
 
     pub(crate) fn format_command_result(
