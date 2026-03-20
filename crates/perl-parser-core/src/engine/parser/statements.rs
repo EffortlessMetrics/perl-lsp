@@ -177,8 +177,12 @@ impl<'a> Parser<'a> {
             TokenKind::Default => self.parse_default_statement(),
             TokenKind::Try => self.parse_try(),
 
-            // Loop control
-            TokenKind::Next | TokenKind::Last | TokenKind::Redo => self.parse_loop_control(),
+            // Loop control — next/last/redo can be followed by a word operator at statement level,
+            // e.g. `last and die` means `(last) and (die)`.
+            TokenKind::Next | TokenKind::Last | TokenKind::Redo => {
+                let ctrl = self.parse_loop_control()?;
+                Ok(self.parse_word_or_expr(ctrl)?)
+            }
 
             // Subroutines and modern OOP
             TokenKind::Sub => {
@@ -228,8 +232,12 @@ impl<'a> Parser<'a> {
             // Data sections
             TokenKind::DataMarker => self.parse_data_section(),
 
-            // Return statement
-            TokenKind::Return => self.parse_return(),
+            // Return statement — may be followed by a word operator at statement level,
+            // e.g. `return or die` means `(return) or (die)`.
+            TokenKind::Return => {
+                let ret = self.parse_return()?;
+                Ok(self.parse_word_or_expr(ret)?)
+            }
 
             // Goto statement
             TokenKind::Goto => self.parse_goto(),
@@ -266,8 +274,10 @@ impl<'a> Parser<'a> {
                     let text = self.tokens.peek()?.text.clone();
                     if self.is_indirect_call_pattern(&text) {
                         // Parse indirect call but DON'T return early - let it go through
-                        // the same modifier/semicolon handling as other statements
-                        self.parse_indirect_call()
+                        // the same modifier/semicolon handling as other statements.
+                        // Word operators (or, and, xor) may follow: `print $fh "msg" or die`.
+                        let call = self.parse_indirect_call()?;
+                        Ok(self.parse_word_or_expr(call)?)
                     } else {
                         self.parse_expression_statement()
                     }
@@ -518,13 +528,22 @@ impl<'a> Parser<'a> {
             && (self.peek_kind().is_some_and(Self::is_binary_operator)
                 || self.peek_kind() == Some(TokenKind::Slash));
 
-        let args = if self.is_at_statement_end() || omit_optional_arg {
+        // String comparison operators (ne, eq, lt, le, gt, ge) are tokenized as
+        // Identifier tokens, so `is_binary_operator` won't catch them. When a
+        // nullary builtin like `ref` is followed by one of these, don't consume
+        // the operator as an argument -- let it become a binary operator instead.
+        let next_is_str_cmp_op = self.peek_kind() == Some(TokenKind::Identifier)
+            && self.tokens.peek().is_ok_and(|t| {
+                matches!(t.text.as_ref(), "eq" | "ne" | "lt" | "le" | "gt" | "ge")
+            });
+
+        let args = if self.is_at_statement_end() || omit_optional_arg || next_is_str_cmp_op {
             vec![]
         } else {
             vec![self.parse_shift()?]
         };
 
-        if args.is_empty() && !allow_no_args {
+        if args.is_empty() && !allow_no_args && !next_is_str_cmp_op {
             return Err(ParseError::unexpected(
                 "expression".to_string(),
                 format!("{:?}", self.peek_kind()),
