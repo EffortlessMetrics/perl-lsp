@@ -48,7 +48,7 @@ impl LspServer {
     /// Serve LSP requests with worker-queue dispatch.
     ///
     /// The ingress loop reads messages from `rx`, classifies them via
-    /// [`scheduler::classify`], and routes them to dedicated worker queues.
+    /// `scheduler::classify`, and routes them to dedicated worker queues.
     /// No heavy work runs inline — only classification and channel sends.
     ///
     /// Architecture:

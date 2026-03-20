@@ -479,7 +479,7 @@ impl DapServer {
     /// Run the DAP server
     ///
     /// Dispatches to the appropriate transport based on the configured [`DapMode`]:
-    /// - [`DapMode::Native`]: Starts the stdio transport loop via [`DebugAdapter::run`]
+    /// - [`DapMode::Native`]: Starts the stdio transport loop via `DebugAdapter::run`
     /// - [`DapMode::Bridge`]: Spawns Perl::LanguageServer and proxies DAP messages
     ///   via [`BridgeAdapter`] using a tokio async runtime
     pub fn run(&mut self) -> anyhow::Result<()> {
