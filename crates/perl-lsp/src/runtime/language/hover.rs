@@ -104,30 +104,41 @@ impl LspServer {
                 _ => "Symbol",
             };
 
-            let display_name = if symbol_info.kind == crate::symbol::SymbolKind::Subroutine {
-                let mut params = Vec::new();
-                if let Some(sub_node) = self.find_subroutine_definition(ast, &symbol_info.name) {
-                    if let NodeKind::Subroutine { signature: sub_sig, body, .. } = &sub_node.kind {
-                        if let Some(sig) = sub_sig {
-                            if let NodeKind::Signature { parameters } = &sig.kind {
-                                for param in parameters {
-                                    self.extract_signature_params(param, &mut params);
+            let (display_name, complexity_info) =
+                if symbol_info.kind == crate::symbol::SymbolKind::Subroutine {
+                    let mut params = Vec::new();
+                    let mut complexity = String::new();
+                    if let Some(sub_node) =
+                        self.find_subroutine_definition(ast, &symbol_info.name)
+                    {
+                        if let NodeKind::Subroutine {
+                            signature: sub_sig,
+                            body,
+                            ..
+                        } = &sub_node.kind
+                        {
+                            if let Some(sig) = sub_sig {
+                                if let NodeKind::Signature { parameters } = &sig.kind {
+                                    for param in parameters {
+                                        self.extract_signature_params(param, &mut params);
+                                    }
                                 }
+                            } else {
+                                self.extract_params_from_body(body, &mut params);
                             }
-                        } else {
-                            self.extract_params_from_body(body, &mut params);
                         }
+                        complexity = Self::build_complexity_info(sub_node, text);
                     }
-                }
-                if params.is_empty() {
-                    format!("sub {}", symbol_info.name)
+                    let name = if params.is_empty() {
+                        format!("sub {}", symbol_info.name)
+                    } else {
+                        format!("sub {}({})", symbol_info.name, params.join(", "))
+                    };
+                    (name, complexity)
                 } else {
-                    format!("sub {}({})", symbol_info.name, params.join(", "))
-                }
-            } else {
-                let sigil = symbol_info.kind.sigil().unwrap_or("");
-                format!("{}{}", sigil, symbol_info.name)
-            };
+                    let sigil = symbol_info.kind.sigil().unwrap_or("");
+                    (format!("{}{}", sigil, symbol_info.name), String::new())
+                };
 
             let decl_info = symbol_info
                 .declaration
