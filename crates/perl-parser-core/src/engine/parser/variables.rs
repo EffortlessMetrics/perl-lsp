@@ -184,8 +184,9 @@ impl<'a> Parser<'a> {
         // We need to split the sigil from the name
         let text = &token.text;
 
-        // Special handling for @{ and %{ (array/hash dereference)
-        if &**text == "@{" || &**text == "%{" {
+        // Special handling for @{, %{, and ${ (array/hash/scalar dereference)
+        // e.g. @{$ref}, %{$hash}, ${"${pkg}::$sym"}
+        if &**text == "@{" || &**text == "%{" || &**text == "${" {
             let sigil = text
                 .chars()
                 .next()
@@ -230,6 +231,38 @@ impl<'a> Parser<'a> {
                 token.start,
             ));
         };
+
+        // Handle sigil + partial deref: when the lexer produces e.g. `%{shift` as one
+        // token (name starts with `{` but doesn't end with `}`), this is a dereference
+        // expression like `%{shift()}` where the lexer consumed `%{shift` greedily.
+        // We need to create the inner expression from the identifier after `{`, parse
+        // any trailing postfix (like `()` for function calls), then expect `}`.
+        if name.starts_with('{') && !name.ends_with('}') {
+            let inner_name = &name[1..]; // strip leading {
+            let inner_start = token.start + sigil.len() + 1; // after sigil and {
+            let inner_end = token.end;
+
+            // Create an identifier node for the captured name
+            let mut inner = Node::new(
+                NodeKind::Identifier { name: inner_name.to_string() },
+                SourceLocation {
+                    start: inner_start,
+                    end: inner_end,
+                },
+            );
+
+            // Parse postfix chain (handles function call parens, method calls, etc.)
+            inner = self.parse_postfix_chain(inner)?;
+
+            self.expect(TokenKind::RightBrace)?;
+            let end = self.previous_position();
+
+            let op = format!("{}{{}}", sigil);
+            return Ok(Node::new(
+                NodeKind::Unary { op, operand: Box::new(inner) },
+                SourceLocation { start: token.start, end },
+            ));
+        }
 
         // Check if the variable name is followed by :: for package-qualified variables
         let mut full_name = name;
@@ -494,8 +527,11 @@ impl<'a> Parser<'a> {
             }
         };
 
-        // Special handling for @ or % sigil followed by { - array/hash dereference
-        if (sigil == "@" || sigil == "%") && self.peek_kind() == Some(TokenKind::LeftBrace) {
+        // Special handling for @, %, or $ sigil followed by { - array/hash/scalar dereference
+        // e.g. @{$ref}, %{$hash}, ${"${pkg}::$sym"}
+        if (sigil == "@" || sigil == "%" || (sigil == "$" && name.is_empty()))
+            && self.peek_kind() == Some(TokenKind::LeftBrace)
+        {
             self.tokens.next()?; // consume {
 
             // Parse the expression inside the braces
