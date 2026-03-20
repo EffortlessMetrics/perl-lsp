@@ -511,6 +511,26 @@ impl<'a> Parser<'a> {
                                 NodeKind::FunctionCall { name: name.clone(), args },
                                 SourceLocation { start, end },
                             );
+                        } else if !Self::is_builtin_function(name)
+                            && !self.is_at_statement_end()
+                            && self.peek_kind() != Some(TokenKind::FatArrow)
+                            && self.tokens.peek().ok().is_some_and(|t| {
+                                t.text.starts_with('$')
+                                    || t.text.starts_with('@')
+                                    || t.text.starts_with('%')
+                            })
+                        {
+                            // Sigil-peek heuristic: non-builtin identifier followed by a
+                            // sigil-starting argument is a bare function call.
+                            // Handles `blessed $self`, `reftype $x`, `weaken $ref`, etc.
+                            // (imported unary functions that look like builtins at the call site)
+                            let arg = self.parse_ternary()?;
+                            let start = expr.location.start;
+                            let end = arg.location.end;
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name: name.clone(), args: vec![arg] },
+                                SourceLocation { start, end },
+                            );
                         } else if Self::is_builtin_function(name) || self.looks_like_bare_call(name) {
                             // In call argument lists, `builtin => value` should keep the lhs as a
                             // bareword key so parse_args can auto-quote it for fat-comma pairs.
