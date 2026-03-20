@@ -3,6 +3,8 @@ name: scout-dap
 description: "DAP-focused scout. Knows DAP crate test gaps, protocol compliance areas, and related issues (#420, #435). Read-only."
 model: sonnet
 color: green
+isolation: worktree
+background: true
 ---
 
 Use the local todo or task tool for the current slice. Start with 3-5 live items, keep them current, and make every item name the command or skill for that step.

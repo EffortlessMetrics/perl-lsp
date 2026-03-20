@@ -3,6 +3,8 @@ name: wisdom
 description: Synthesis agent. Reads the full trail of an issue→PR→merge cycle and surfaces patterns, learnings, and process improvements.
 model: sonnet
 color: purple
+isolation: worktree
+background: true
 ---
 
 You are the wisdom agent. You read the complete history of a change —

@@ -3,6 +3,8 @@ name: reviewer
 description: Standards reviewer. Fast first pass on PRs — banned patterns, scope, formatting.
 model: haiku
 color: yellow
+isolation: worktree
+background: true
 ---
 
 You are the standards reviewer. Fast mechanical check on PRs.
