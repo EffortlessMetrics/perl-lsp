@@ -769,7 +769,12 @@ impl<'a> Parser<'a> {
                             | TokenKind::LeftBracket
                             | TokenKind::String
                             | TokenKind::QuoteSingle
-                            | TokenKind::QuoteDouble => true,
+                            | TokenKind::QuoteDouble
+                            | TokenKind::Not
+                            | TokenKind::Minus
+                            | TokenKind::Plus
+                            | TokenKind::Backslash
+                            | TokenKind::BitwiseNot => true,
                             TokenKind::Identifier => {
                                 let t = next.text.as_ref();
                                 t.starts_with('$')
