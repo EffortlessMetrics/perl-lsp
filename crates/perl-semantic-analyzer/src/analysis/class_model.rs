@@ -23,6 +23,8 @@ pub enum Framework {
     ObjectPad,
     /// Native Perl OOP (bless-based)
     Native,
+    /// Perl 5.38+ native `class` keyword (RFC 64)
+    NativeClass,
     /// No OO framework detected
     None,
 }
@@ -212,6 +214,23 @@ impl ClassModelBuilder {
                     self.current_methods
                         .push(MethodInfo { name: sub_name.clone(), location: node.location });
                 }
+                self.visit_node(body);
+            }
+
+            // Perl 5.38+ native `class Name { ... }` block.
+            // Flush any previous package/class, then process the body as a
+            // self-contained scope using the NativeClass framework.
+            NodeKind::Class { name, body } => {
+                self.flush_current_package();
+                self.current_package = name.clone();
+                self.current_framework = Framework::NativeClass;
+                self.visit_node(body);
+            }
+
+            // Perl 5.38+ `method name { ... }` inside a class body.
+            NodeKind::Method { name, body, .. } => {
+                self.current_methods
+                    .push(MethodInfo { name: name.clone(), location: node.location });
                 self.visit_node(body);
             }
 

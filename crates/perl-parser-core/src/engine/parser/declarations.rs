@@ -179,11 +179,43 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse class declaration (Perl 5.38+)
+    ///
+    /// Syntax: `class Name [VERSION] [ATTRIBUTES] { ... }`
+    ///
+    /// Supports optional version (`class Foo 1.0`) and class-level attributes
+    /// such as `:isa(Parent)` before the opening brace. Both are consumed and
+    /// discarded at the AST level (the `Class` node stores only name + body).
     fn parse_class(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
         let (name, _) = self.parse_qualified_name(false)?;
+
+        // Optional version number (e.g. `class Foo 1.0 { }` or v-string `class Foo v1.2 { }`)
+        if self.peek_kind() == Some(TokenKind::Number) {
+            self.tokens.next()?; // consume version — not stored in AST
+        } else if let Some(TokenKind::Identifier) = self.peek_kind() {
+            if let Ok(token) = self.tokens.peek() {
+                if token.text.starts_with('v') && token.text.len() > 1 {
+                    self.tokens.next()?; // consume v-string version
+                    // Consume any trailing `.N` segments
+                    while self.peek_kind() == Some(TokenKind::Number) {
+                        if let Ok(num_token) = self.tokens.peek() {
+                            if num_token.text.starts_with('.') {
+                                self.tokens.next()?;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Optional class-level attributes, e.g. `:isa(Parent)` — consumed but not stored
+        let _ = self.parse_declaration_attributes()?;
 
         let body = self.parse_block()?;
 
