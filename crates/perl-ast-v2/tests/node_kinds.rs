@@ -97,6 +97,7 @@ fn test_missing_kind_variant_sexp() {
     let node = make_node(&mut id_gen, NodeKind::Missing(MissingKind::Semicolon));
     let sexp = node.to_sexp();
     assert!(sexp.contains("MISSING"), "expected MISSING in {sexp}");
+    assert!(sexp.contains("Semicolon"), "expected Semicolon variant in {sexp}");
 }
 
 #[test]
@@ -138,9 +139,11 @@ fn test_binary_sexp() {
 fn test_node_equality() {
     let mut id_gen = NodeIdGenerator::new();
     let r = zero_range();
-    let a = Node::new(id_gen.next_id(), NodeKind::Number { value: "5".into() }, r.clone());
+    let a = Node::new(id_gen.next_id(), NodeKind::Number { value: "5".into() }, r);
     let b = Node::new(id_gen.next_id(), NodeKind::Number { value: "5".into() }, r);
     // Same kind/range but different ids — kinds are equal even if ids differ
     assert_eq!(a.kind, b.kind);
     assert_ne!(a.id, b.id);
+    // Full node equality considers id — nodes with different ids are not equal
+    assert_ne!(a, b);
 }

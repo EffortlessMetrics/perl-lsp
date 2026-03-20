@@ -1,3 +1,4 @@
+use perl_tdd_support::must_some;
 use perl_workspace_index_monitoring::{
     EarlyExitReason, EarlyExitRecord, IndexInstrumentation, IndexMetrics, IndexPerformanceCaps,
     IndexPhase, IndexPhaseTransition, IndexResourceLimits, IndexStateKind, IndexStateTransition,
@@ -153,7 +154,7 @@ fn test_instrumentation_multiple_early_exits_accumulate() {
     let snap = inst.snapshot();
     assert_eq!(snap.early_exit_counts.get(&EarlyExitReason::FileLimit), Some(&2));
     // last_early_exit should be the most recent one
-    let last = snap.last_early_exit.unwrap();
+    let last = must_some(snap.last_early_exit);
     assert_eq!(last.elapsed_ms, 200);
 }
 
@@ -162,8 +163,12 @@ fn test_instrumentation_snapshot_contains_current_state_duration() {
     let inst = IndexInstrumentation::new();
     // Even without any transitions, the snapshot should include time in Building state
     let snap = inst.snapshot();
-    let building_ms = snap.state_durations_ms.get(&IndexStateKind::Building).copied().unwrap_or(0);
-    // We can't assert an exact value, but it should be non-negative
+    assert!(
+        snap.state_durations_ms.contains_key(&IndexStateKind::Building),
+        "snapshot must contain Building key in state_durations_ms"
+    );
+    let building_ms = must_some(snap.state_durations_ms.get(&IndexStateKind::Building).copied());
+    // We can't assert an exact value, but it should be small in a unit test
     assert!(building_ms < 10_000, "duration should be small in a unit test: {building_ms}ms");
 }
 

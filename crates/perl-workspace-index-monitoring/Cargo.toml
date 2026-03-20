@@ -17,5 +17,8 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 [dependencies]
 parking_lot = "0.12.5"
 
+[dev-dependencies]
+perl-tdd-support = { path = "../../crates/perl-tdd-support" }
+
 [lints]
 workspace = true
