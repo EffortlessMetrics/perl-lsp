@@ -57,6 +57,16 @@ pub struct Attribute {
     pub accessor_name: String,
     /// Source location of the `has` declaration
     pub location: SourceLocation,
+    /// Builder method name. `builder => 1` derives `_build_<attr>`, a string names the method.
+    pub builder: Option<String>,
+    /// Whether a coercion is applied (`coerce => 1`)
+    pub coerce: bool,
+    /// Predicate method name. `predicate => 1` derives `has_<attr>`.
+    pub predicate: Option<String>,
+    /// Clearer method name. `clearer => 1` derives `clear_<attr>`.
+    pub clearer: Option<String>,
+    /// Whether a trigger is set (`trigger => \&sub`)
+    pub trigger: bool,
 }
 
 /// Information about a method modifier (`before`, `after`, `around`).
@@ -426,12 +436,30 @@ impl ClassModelBuilder {
             || options.contains_key("builder")
             || is == Some(AccessorType::Lazy);
         let required = options.get("required").is_some_and(|v| v == "1" || v == "true");
+        let coerce = options.get("coerce").is_some_and(|v| v == "1" || v == "true");
+        let trigger = options.contains_key("trigger");
 
         // Determine accessor name: explicit accessor/reader overrides default
         let explicit_accessor = options.get("accessor").or_else(|| options.get("reader")).cloned();
 
         for name in names {
             let accessor_name = explicit_accessor.clone().unwrap_or_else(|| name.clone());
+
+            // builder => 1 derives `_build_<attr>`; a string value names the method directly
+            let builder = options
+                .get("builder")
+                .map(|v| if v == "1" { format!("_build_{name}") } else { v.clone() });
+
+            // predicate => 1 derives `has_<attr>`; a string value is used directly
+            let predicate = options
+                .get("predicate")
+                .map(|v| if v == "1" { format!("has_{name}") } else { v.clone() });
+
+            // clearer => 1 derives `clear_<attr>`; a string value is used directly
+            let clearer = options
+                .get("clearer")
+                .map(|v| if v == "1" { format!("clear_{name}") } else { v.clone() });
+
             self.current_attributes.push(Attribute {
                 name: name.clone(),
                 is,
@@ -440,6 +468,11 @@ impl ClassModelBuilder {
                 required,
                 accessor_name,
                 location,
+                builder,
+                coerce,
+                predicate,
+                clearer,
+                trigger,
             });
         }
     }
@@ -795,5 +828,196 @@ has 'config' => (is => 'ro', builder => 1);
 
         let model = &models[0];
         assert!(model.attributes[0].default, "builder option implies default");
+    }
+
+    #[test]
+    fn lazy_builder_with_string_name() {
+        let models = build_models(
+            r#"
+use Moo;
+has 'config' => (is => 'ro', lazy => 1, builder => '_build_config');
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(
+            attr.builder.as_deref(),
+            Some("_build_config"),
+            "builder string should be captured"
+        );
+        assert!(attr.default, "named builder implies default");
+    }
+
+    #[test]
+    fn lazy_builder_with_numeric_one_generates_default_name() {
+        let models = build_models(
+            r#"
+use Moo;
+has 'profile' => (is => 'ro', builder => 1);
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(
+            attr.builder.as_deref(),
+            Some("_build_profile"),
+            "builder => 1 should derive builder name as '_build_<attr>'"
+        );
+    }
+
+    #[test]
+    fn predicate_with_string_name() {
+        let models = build_models(
+            r#"
+use Moo;
+has 'name' => (is => 'ro', predicate => 'has_name');
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(
+            attr.predicate.as_deref(),
+            Some("has_name"),
+            "predicate string name should be captured"
+        );
+    }
+
+    #[test]
+    fn predicate_with_numeric_one_generates_default_name() {
+        let models = build_models(
+            r#"
+use Moo;
+has 'name' => (is => 'ro', predicate => 1);
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(
+            attr.predicate.as_deref(),
+            Some("has_name"),
+            "predicate => 1 should derive predicate name as 'has_<attr>'"
+        );
+    }
+
+    #[test]
+    fn clearer_with_string_name() {
+        let models = build_models(
+            r#"
+use Moo;
+has 'name' => (is => 'rw', clearer => 'clear_name');
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(
+            attr.clearer.as_deref(),
+            Some("clear_name"),
+            "clearer string name should be captured"
+        );
+    }
+
+    #[test]
+    fn clearer_with_numeric_one_generates_default_name() {
+        let models = build_models(
+            r#"
+use Moo;
+has 'name' => (is => 'rw', clearer => 1);
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(
+            attr.clearer.as_deref(),
+            Some("clear_name"),
+            "clearer => 1 should derive clearer name as 'clear_<attr>'"
+        );
+    }
+
+    #[test]
+    fn coerce_flag_true() {
+        let models = build_models(
+            r#"
+use Moose;
+has 'age' => (is => 'rw', isa => 'Int', coerce => 1);
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert!(attr.coerce, "coerce => 1 should set coerce flag");
+    }
+
+    #[test]
+    fn coerce_flag_false_when_absent() {
+        let models = build_models(
+            r#"
+use Moose;
+has 'age' => (is => 'rw', isa => 'Int');
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert!(!attr.coerce, "coerce should be false when not specified");
+    }
+
+    #[test]
+    fn trigger_flag_true() {
+        let models = build_models(
+            r#"
+use Moose;
+has 'name' => (is => 'rw', trigger => \&_on_name_change);
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert!(attr.trigger, "trigger option should set trigger flag");
+    }
+
+    #[test]
+    fn trigger_flag_false_when_absent() {
+        let models = build_models(
+            r#"
+use Moose;
+has 'name' => (is => 'rw');
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert!(!attr.trigger, "trigger should be false when not specified");
+    }
+
+    #[test]
+    fn all_advanced_options_together() {
+        let models = build_models(
+            r#"
+use Moo;
+has 'status' => (
+    is        => 'rw',
+    isa       => 'Str',
+    builder   => '_build_status',
+    coerce    => 1,
+    predicate => 'has_status',
+    clearer   => 'clear_status',
+    trigger   => \&_on_status_change,
+);
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(attr.builder.as_deref(), Some("_build_status"));
+        assert!(attr.coerce);
+        assert_eq!(attr.predicate.as_deref(), Some("has_status"));
+        assert_eq!(attr.clearer.as_deref(), Some("clear_status"));
+        assert!(attr.trigger);
     }
 }
