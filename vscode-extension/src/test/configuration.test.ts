@@ -181,11 +181,68 @@ describe('package.json contributes', () => {
   });
 
   describe('configuration settings', () => {
+    // The configuration is an array of grouped sections; merge all properties
+    // into a single lookup map for backwards-compatible assertions.
     let properties: Record<string, any>;
+    let configSections: any[];
 
     beforeAll(() => {
-      properties = pkg.contributes.configuration.properties;
+      const configuration = pkg.contributes.configuration;
+      // Support both array (grouped) and legacy single-object formats.
+      configSections = Array.isArray(configuration) ? configuration : [configuration];
+      properties = Object.assign(
+        {},
+        ...configSections.map((s: any) => s.properties ?? {})
+      );
     });
+
+    // --- Grouping structure ---
+
+    test('configuration is an array with three named groups', () => {
+      expect(Array.isArray(pkg.contributes.configuration)).toBe(true);
+      const titles: string[] = configSections.map((s: any) => s.title);
+      expect(titles.some(t => /core/i.test(t))).toBe(true);
+      expect(titles.some(t => /editor/i.test(t))).toBe(true);
+      expect(titles.some(t => /advanced/i.test(t))).toBe(true);
+    });
+
+    test('Core group contains serverPath, autoDownload, includePaths, enableDiagnostics', () => {
+      const coreSection = configSections.find((s: any) => /core/i.test(s.title));
+      expect(coreSection).toBeDefined();
+      const keys = Object.keys(coreSection.properties);
+      expect(keys).toContain('perl-lsp.serverPath');
+      expect(keys).toContain('perl-lsp.autoDownload');
+      expect(keys).toContain('perl-lsp.includePaths');
+      expect(keys).toContain('perl-lsp.enableDiagnostics');
+    });
+
+    test('Editor group contains formatting, refactoring, and test integration settings', () => {
+      const editorSection = configSections.find((s: any) => /editor/i.test(s.title));
+      expect(editorSection).toBeDefined();
+      const keys = Object.keys(editorSection.properties);
+      expect(keys).toContain('perl-lsp.enableFormatting');
+      expect(keys).toContain('perl-lsp.formatOnSave');
+      expect(keys).toContain('perl-lsp.enableRefactoring');
+      expect(keys).toContain('perl-lsp.enableTestIntegration');
+    });
+
+    test('Advanced group contains featureProfile, trace.server, channel, downloadBaseUrl', () => {
+      const advancedSection = configSections.find((s: any) => /advanced/i.test(s.title));
+      expect(advancedSection).toBeDefined();
+      const keys = Object.keys(advancedSection.properties);
+      expect(keys).toContain('perl-lsp.featureProfile');
+      expect(keys).toContain('perl-lsp.trace.server');
+      expect(keys).toContain('perl-lsp.channel');
+      expect(keys).toContain('perl-lsp.downloadBaseUrl');
+    });
+
+    test('all settings have an order field', () => {
+      for (const [key, setting] of Object.entries<any>(properties)) {
+        expect(typeof setting.order).toBe('number');
+      }
+    });
+
+    // --- Individual setting contracts ---
 
     test('defines serverPath setting', () => {
       expect(properties['perl-lsp.serverPath']).toBeDefined();
@@ -221,6 +278,16 @@ describe('package.json contributes', () => {
       expect(profile.enum).toContain('all');
     });
 
+    test('featureProfile has enumDescriptions for every enum value', () => {
+      const profile = properties['perl-lsp.featureProfile'];
+      expect(Array.isArray(profile.enumDescriptions)).toBe(true);
+      expect(profile.enumDescriptions.length).toBe(profile.enum.length);
+      for (const desc of profile.enumDescriptions) {
+        expect(typeof desc).toBe('string');
+        expect(desc.length).toBeGreaterThan(0);
+      }
+    });
+
     test('defines enableDiagnostics with default true', () => {
       expect(properties['perl-lsp.enableDiagnostics'].default).toBe(true);
     });
@@ -239,11 +306,49 @@ describe('package.json contributes', () => {
       expect(includePaths.default).toContain('local/lib/perl5');
     });
 
+    test('includePaths markdownDescription mentions module-not-found guidance', () => {
+      const desc: string = properties['perl-lsp.includePaths'].markdownDescription;
+      // Must mention the "Can't locate" symptom so users know what to search for
+      expect(desc).toMatch(/can't locate/i);
+    });
+
+    test('includePaths has items schema typed as string', () => {
+      const includePaths = properties['perl-lsp.includePaths'];
+      expect(includePaths.items).toBeDefined();
+      expect(includePaths.items.type).toBe('string');
+    });
+
     test('defines downloadBaseUrl for internal hosting', () => {
       const setting = properties['perl-lsp.downloadBaseUrl'];
       expect(setting).toBeDefined();
       expect(setting.type).toBe('string');
       expect(setting.scope).toBe('machine');
+    });
+  });
+
+  describe('openConfigurationGuide command', () => {
+    test('registers perl-lsp.openConfigurationGuide command', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.openConfigurationGuide');
+    });
+
+    test('openConfigurationGuide has Perl category', () => {
+      const cmd = pkg.contributes.commands.find(
+        (c: any) => c.command === 'perl-lsp.openConfigurationGuide'
+      );
+      expect(cmd.category).toBe('Perl');
+    });
+
+    test('openConfigurationGuide is listed in commandPalette without language restriction', () => {
+      const palette = pkg.contributes.menus.commandPalette;
+      const entry = palette.find((e: any) => e.command === 'perl-lsp.openConfigurationGuide');
+      expect(entry).toBeDefined();
+      // Should be available globally (no when clause restricting to perl)
+      expect(entry.when ?? '').not.toMatch(/editorLangId/);
+    });
+
+    test('openConfigurationGuide has an activation event', () => {
+      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.openConfigurationGuide');
     });
   });
 
