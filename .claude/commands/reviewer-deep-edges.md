@@ -8,21 +8,25 @@ Think about what the builder didn't think about.
 
 ## Steps
 
-1. For parser fixes, check:
-   - What happens with nested versions of this construct?
-   - What about the construct inside a string/regex/heredoc?
-   - What about the construct with unusual whitespace/comments?
-   - What about empty or minimal versions?
+1. **Functional edge cases:**
+   - For parser: nested constructs, inside string/regex/heredoc, unusual whitespace, empty/minimal
+   - For LSP: empty document, file boundaries, unicode identifiers, files with parse errors
+   - For all: what happens with unexpected input? Does it fail gracefully?
 
-2. For LSP features, check:
-   - What happens with an empty document?
-   - What happens at file boundaries (first/last line)?
-   - What happens with unicode identifiers?
-   - What happens if the file has parse errors?
+2. **Security check** (especially for DAP, subprocess calls, file operations):
+   - Command injection: are any strings interpolated into shell commands?
+   - Path traversal: are file paths validated before use?
+   - Untrusted input: does user-supplied content flow into dangerous operations?
+   - Information leakage: do error messages expose internal paths or state?
 
-3. For each edge case you find:
+3. **Performance check:**
+   - Could this change cause O(n²) behavior on large inputs?
+   - Are there unnecessary allocations in a hot path?
+   - Could this block the main thread?
+
+4. For each finding:
    - Is it covered by an existing test?
-   - Would it cause a crash/panic?
+   - Would it cause a crash, security issue, or performance regression?
    - Is it worth blocking the PR or filing a follow-up?
 
 ## Output
@@ -30,6 +34,8 @@ Think about what the builder didn't think about.
 Record in your task:
 ```
 Edge cases found: <list>
+Security: CLEAN / <findings>
+Performance: CLEAN / <findings>
 Blocking: <list or NONE>
 Follow-up: <list or NONE>
 ```
