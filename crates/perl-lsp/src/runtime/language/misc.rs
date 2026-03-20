@@ -385,13 +385,17 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let provider = CodeLensProvider::new(doc.text.clone());
+                    let provider =
+                        CodeLensProvider::new(doc.text.clone()).with_file_path(uri.to_string());
                     let mut lenses = provider.extract(ast);
 
                     // Add shebang lens if applicable
                     if let Some(shebang_lens) = get_shebang_lens(&doc.text) {
                         lenses.insert(0, shebang_lens);
                     }
+
+                    // Add subtest lenses via text scanning
+                    lenses.extend(CodeLensProvider::extract_subtest_lenses(&doc.text));
 
                     // Apply cap to code lenses
                     if lenses.len() > cap {
