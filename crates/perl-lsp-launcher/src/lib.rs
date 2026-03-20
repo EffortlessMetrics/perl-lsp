@@ -16,7 +16,7 @@ use std::sync::Once;
 use clap::{Args, Parser};
 pub use perl_lsp_feature_governance::{
     FeatureProfile, catalog_advertised_feature_ids, compliance_percent_for_profile,
-    to_json_for_profile,
+    to_json_for_profile, trackable_feature_count_for_grid,
 };
 use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
 use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};
@@ -661,6 +661,7 @@ pub fn format_info_output(
     use_color: bool,
 ) -> String {
     let feature_count = catalog_advertised_feature_ids(profile).len();
+    let spec_total = trackable_feature_count_for_grid();
     let coverage = compliance_percent_for_profile(profile);
 
     let mut out = String::with_capacity(256);
@@ -673,8 +674,8 @@ pub fn format_info_output(
     out.push_str(&format!("Git tag:          {git_tag}\n"));
     out.push_str("Parser:           perl-parser v3 (recursive descent)\n");
     out.push_str(&format!("Profile:          {}\n", profile.as_str()));
-    out.push_str(&format!("Features:         {feature_count} advertised\n"));
-    out.push_str(&format!("LSP coverage:     {coverage:.1}%\n"));
+    out.push_str(&format!("Features:         {feature_count}/{feature_count} active (100%)\n"));
+    out.push_str(&format!("LSP spec coverage: {feature_count}/{spec_total} ({coverage:.0}%)\n"));
     out.push_str(&format!("Executable:       {exe_path}\n"));
 
     out
@@ -872,8 +873,8 @@ mod tests {
         );
         assert!(out.contains("0.10.0"));
         assert!(out.contains("perl-parser v3"));
-        assert!(out.contains("Features:"));
-        assert!(out.contains("LSP coverage:"));
+        assert!(out.contains("active (100%)"));
+        assert!(out.contains("LSP spec coverage:"));
         assert!(out.contains("/usr/bin/perl-lsp"));
     }
 
