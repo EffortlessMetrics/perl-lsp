@@ -47,7 +47,9 @@
       "perl.runCritic",
       "perl.runTest",
       "perl.runTestFile",
-      "perl.debugFile"
+      "perl.debugFile",
+      "perl.goToTest",
+      "perl.goToImplementation"
     ]
   },
   "experimental": {
