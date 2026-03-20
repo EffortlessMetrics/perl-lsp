@@ -15,8 +15,24 @@ use crate::state::DegradationTier;
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 
 impl LspServer {
-    /// Handle textDocument/didOpen notification
+    /// Handle textDocument/didOpen notification.
+    ///
+    /// Delegates to [`Self::handle_did_open_with_cancellation`] with no token.
     pub(crate) fn handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+        self.handle_did_open_with_cancellation(params, None)
+    }
+
+    /// Handle textDocument/didOpen with an optional parser cancellation token.
+    ///
+    /// When a cancellation token is provided the parser is constructed via
+    /// `Parser::new_with_cancellation` so that setting the flag to `true` can
+    /// cooperatively interrupt the parse.  Pass `None` for the legacy
+    /// (non-cancellable) path.
+    pub fn handle_did_open_with_cancellation(
+        &self,
+        params: Option<Value>,
+        cancellation_token: Option<Arc<AtomicBool>>,
+    ) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params
                 .pointer("/textDocument/uri")
@@ -88,7 +104,10 @@ impl LspServer {
             } else {
                 // Parse the document up to __DATA__ or __END__ marker
                 let code_text = crate::util::code_slice(text);
-                let mut parser = Parser::new(code_text);
+                let mut parser = match cancellation_token {
+                    Some(token) => Parser::new_with_cancellation(code_text, token),
+                    None => Parser::new(code_text),
+                };
                 match parser.parse() {
                     Ok(ast) => {
                         let errors = parser.errors().to_vec();
@@ -211,8 +230,24 @@ impl LspServer {
         self.handle_did_open(Some(params))
     }
 
-    /// Handle didChange notification
+    /// Handle didChange notification.
+    ///
+    /// Delegates to [`Self::handle_did_change_with_cancellation`] with no token.
     pub(crate) fn handle_did_change(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
+        self.handle_did_change_with_cancellation(params, None)
+    }
+
+    /// Handle didChange with an optional parser cancellation token.
+    ///
+    /// When a cancellation token is provided the parser is constructed via
+    /// `Parser::new_with_cancellation` so that setting the flag to `true` can
+    /// cooperatively interrupt the parse.  Pass `None` for the legacy
+    /// (non-cancellable) path.
+    pub fn handle_did_change_with_cancellation(
+        &self,
+        params: Option<Value>,
+        cancellation_token: Option<Arc<AtomicBool>>,
+    ) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             let uri = params
                 .pointer("/textDocument/uri")
@@ -332,7 +367,10 @@ impl LspServer {
                 } else {
                     // Parse the document up to __DATA__ or __END__ marker
                     let code_text = crate::util::code_slice(&text);
-                    let mut parser = Parser::new(code_text);
+                    let mut parser = match cancellation_token {
+                        Some(token) => Parser::new_with_cancellation(code_text, token),
+                        None => Parser::new(code_text),
+                    };
                     match parser.parse() {
                         Ok(ast) => {
                             let errors = parser.errors().to_vec();

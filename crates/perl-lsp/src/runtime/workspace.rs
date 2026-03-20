@@ -514,8 +514,9 @@ impl LspServer {
     /// Handle workspace/didChangeWatchedFiles notification
     ///
     /// Deterministic state transitions:
-    /// - File changes notify coordinator (never block handler threads)
-    /// - Index updates happen synchronously but quickly
+    /// - DELETED events are processed immediately (low frequency, state cleanup)
+    /// - CREATED/CHANGED events are debounced to avoid blocking I/O storms during
+    ///   bulk operations (e.g., `git checkout`, formatter rewrites)
     /// - State recovery is handled by coordinator's internal logic
     pub(super) fn handle_did_change_watched_files(
         &self,
@@ -532,97 +533,22 @@ impl LspServer {
             return Ok(None);
         };
 
-        let total_changes = params.changes.len();
-        #[cfg(feature = "workspace")]
-        let mut processed_changes = 0usize;
-        #[cfg(feature = "workspace")]
-        let (incremental_budget_ms, budget_start) = match self.coordinator() {
-            Some(coord) => (coord.performance_caps().incremental_budget_ms, Instant::now()),
-            None => (0, Instant::now()),
-        };
-
         for change in params.changes {
             let uri = change.uri.to_string();
             let change_type = change.typ;
 
             eprintln!("File change detected: {} (type: {:?})", uri, change_type);
 
-            // Notify coordinator of pending change (never block handler threads)
-            #[cfg(feature = "workspace")]
-            if let Some(coordinator) = self.coordinator() {
-                coordinator.notify_change(&uri);
-            }
-
             match change_type {
-                FileChangeType::CREATED => {
-                    // Created
-                    // Re-index the file if it's a Perl file
-                    // Note: Mutation operation - use coordinator.index() directly
-                    #[cfg(feature = "workspace")]
-                    if let Some(coordinator) = self.coordinator() {
-                        let workspace_index = coordinator.index();
-                        if is_perl_source_uri(&uri) {
-                            if let Some(path) = uri_to_fs_path(&uri) {
-                                if let Ok(content) = std::fs::read_to_string(&path) {
-                                    if let Ok(url) = url::Url::parse(&uri) {
-                                        match workspace_index.index_file(url, content) {
-                                            Ok(()) => eprintln!("Indexed new file: {}", uri),
-                                            Err(e) => {
-                                                eprintln!("Failed to index new file {}: {}", uri, e)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                FileChangeType::CHANGED => {
-                    // Changed
-                    // Re-index the file
-                    // Note: Mutation operation - use coordinator.index() directly
-                    #[cfg(feature = "workspace")]
-                    if let Some(coordinator) = self.coordinator() {
-                        let workspace_index = coordinator.index();
-                        if let Some(path) = uri_to_fs_path(&uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
-                                if let Ok(url) = url::Url::parse(&uri) {
-                                    // Clear old index data
-                                    workspace_index.clear_file(&uri);
-                                    // Re-index with new content
-                                    if let Err(e) = workspace_index.index_file(url, content.clone())
-                                    {
-                                        eprintln!("Failed to re-index changed file {}: {}", uri, e);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Also update our internal document store if it exists
-                    #[cfg(feature = "workspace")]
-                    {
-                        let mut documents = self.documents.lock();
-                        if let Some(doc) = self.get_document_mut(&mut documents, &uri) {
-                            // Note: content variable is only available inside the cfg block above
-                            // We'll need to re-read the file or restructure this
-                            if let Some(path) = uri_to_fs_path(&uri) {
-                                if let Ok(content) = std::fs::read_to_string(&path) {
-                                    doc.text = content;
-                                    doc.version += 1;
-                                    // Clear cached AST
-                                    doc.ast = None;
-                                }
-                            }
-                        }
-                    }
-
-                    eprintln!("Re-indexed changed file: {}", uri);
-                }
                 FileChangeType::DELETED => {
-                    // Deleted
+                    // DELETED must be processed immediately — the file is gone and
+                    // stale index data should not linger.
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_change(&uri);
+                    }
+
                     // Remove from index
-                    // Note: Mutation operation - use coordinator.index() directly
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
                         coordinator.index().remove_file(&uri);
@@ -635,41 +561,99 @@ impl LspServer {
                     }
 
                     eprintln!("Removed deleted file from index: {}", uri);
-                }
-                _ => {}
-            }
 
-            // Notify coordinator that file processing is complete
-            #[cfg(feature = "workspace")]
-            if let Some(coordinator) = self.coordinator() {
-                coordinator.notify_parse_complete(&uri);
-            }
-
-            #[cfg(feature = "workspace")]
-            {
-                processed_changes += 1;
-                if incremental_budget_ms > 0 {
-                    let elapsed_ms = budget_start.elapsed().as_millis() as u64;
-                    if elapsed_ms > incremental_budget_ms {
-                        if let Some(coordinator) = self.coordinator() {
-                            coordinator.record_early_exit(
-                                EarlyExitReason::IncrementalTimeBudget,
-                                elapsed_ms,
-                                processed_changes,
-                                total_changes,
-                            );
-                            coordinator.transition_to_degraded(DegradationReason::ScanTimeout {
-                                elapsed_ms,
-                            });
-                        }
-                        break;
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_parse_complete(&uri);
                     }
                 }
+                FileChangeType::CREATED | FileChangeType::CHANGED => {
+                    // CREATED and CHANGED are debounced so that bulk operations
+                    // (git checkout, formatter rewrites, etc.) coalesce into a
+                    // single batch rather than triggering many sequential file reads.
+                    if !self.schedule_file_watcher_uri(&uri) {
+                        // No debouncer installed (unit-test path) — fall through to
+                        // immediate synchronous processing.
+                        self.process_file_watcher_uri_immediate(&uri);
+                    }
+                }
+                _ => {}
             }
         }
 
         // This is a notification, no response needed
         Ok(None)
+    }
+
+    /// Process a debounced batch of file URIs.
+    ///
+    /// Called by the [`FileWatcherDebouncer`] background thread after the quiet
+    /// period expires.  Re-reads and re-indexes each URI.  Files that no longer
+    /// exist on disk are silently skipped — they should have arrived as DELETED
+    /// events and been handled immediately.
+    pub(crate) fn handle_watched_file_batch(&self, uris: Vec<String>) {
+        tracing::debug!("Processing debounced file watcher batch: {} URIs", uris.len());
+        for uri in &uris {
+            self.process_file_watcher_uri_immediate(uri);
+        }
+    }
+
+    /// Re-index a single URI from the file system.
+    ///
+    /// Shared implementation used by both the debounced batch path and the
+    /// immediate fall-through path when no debouncer is installed.
+    fn process_file_watcher_uri_immediate(&self, uri: &str) {
+        // Notify coordinator of pending change
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.coordinator() {
+            coordinator.notify_change(uri);
+        }
+
+        // Re-index the file if it is a Perl source file
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.coordinator() {
+            let workspace_index = coordinator.index();
+            if is_perl_source_uri(uri) {
+                if let Some(path) = uri_to_fs_path(uri) {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Ok(url) = url::Url::parse(uri) {
+                            // Clear old index data before re-indexing
+                            workspace_index.clear_file(uri);
+                            match workspace_index.index_file(url, content.clone()) {
+                                Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
+                                Err(e) => {
+                                    tracing::warn!("Failed to re-index file {}: {}", uri, e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also update our internal document store if the document is open
+        #[cfg(feature = "workspace")]
+        {
+            let mut documents = self.documents.lock();
+            if let Some(doc) = self.get_document_mut(&mut documents, uri) {
+                if let Some(path) = uri_to_fs_path(uri) {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        doc.text = content;
+                        doc.version += 1;
+                        // Clear cached AST so it is regenerated on next access
+                        doc.ast = None;
+                    }
+                }
+            }
+        }
+
+        // Notify coordinator that file processing is complete
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.coordinator() {
+            coordinator.notify_parse_complete(uri);
+        }
+
+        tracing::debug!("Processed file watcher change: {}", uri);
     }
 
     /// Handle workspace/willRenameFiles request

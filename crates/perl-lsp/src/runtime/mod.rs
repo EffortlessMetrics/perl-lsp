@@ -11,6 +11,8 @@ mod dispatch;
 mod document_access;
 /// File discovery abstraction for workspace scanning
 pub mod file_discovery;
+/// File watcher change debouncer for bulk operation handling
+pub mod file_watcher_debounce;
 mod language;
 mod lifecycle;
 mod notebook;
@@ -196,6 +198,8 @@ pub struct LspServer {
     refresh_controller: refresh::RefreshController,
     /// Diagnostic publication debouncer (installed after Arc wrapping in Scheduler::new)
     diagnostic_debouncer: Mutex<Option<diagnostic_debounce::DiagnosticDebouncer>>,
+    /// File watcher change debouncer (installed after Arc wrapping in Scheduler::new)
+    file_watcher_debouncer: Mutex<Option<file_watcher_debounce::FileWatcherDebouncer>>,
     /// Notebook document store (LSP 3.17)
     pub(crate) notebook_store: notebook::NotebookStore,
     /// Trace level set by client via $/setTrace (off, messages, verbose)
@@ -392,6 +396,28 @@ impl LspServer {
         } else {
             drop(guard);
             self.publish_diagnostics(uri);
+        }
+    }
+
+    /// Install the file watcher debouncer (called from Scheduler::new after Arc wrapping).
+    pub(crate) fn install_file_watcher_debouncer(
+        &self,
+        debouncer: file_watcher_debounce::FileWatcherDebouncer,
+    ) {
+        *self.file_watcher_debouncer.lock() = Some(debouncer);
+    }
+
+    /// Schedule a file watcher URI for debounced batch processing.
+    ///
+    /// Returns `true` if a debouncer is installed (production runtime) and the
+    /// URI was queued, `false` if no debouncer is present (unit-test path).
+    pub(crate) fn schedule_file_watcher_uri(&self, uri: &str) -> bool {
+        let guard = self.file_watcher_debouncer.lock();
+        if let Some(ref d) = *guard {
+            d.schedule(uri);
+            true
+        } else {
+            false
         }
     }
 }
