@@ -448,3 +448,107 @@ fn empty_source_returns_empty_subtypes() {
     let provider = TypeHierarchyProvider::new();
     assert!(provider.find_subtypes(&ast, &make_item("Any")).is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// 16. C3 linearization (Method Resolution Order)
+// ---------------------------------------------------------------------------
+
+/// Simple linear chain: Child -> Parent -> GrandParent
+/// C3 MRO: [Child, Parent, GrandParent]
+#[test]
+fn c3_mro_linear_chain() {
+    let code = "\
+package GrandParent;\n\
+package Parent;\n\
+use parent 'GrandParent';\n\
+package Child;\n\
+use parent 'Parent';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let mro = provider.c3_mro(&ast, "Child");
+    // Child itself is first, then Parent, then GrandParent
+    assert_eq!(mro, vec!["Child", "Parent", "GrandParent"]);
+}
+
+/// Diamond inheritance: C3 must deduplicate and preserve correct order.
+///
+///   Base
+///  /    \
+/// Left  Right
+///  \    /
+///   Child
+///
+/// C3 MRO for Child: [Child, Left, Right, Base]
+#[test]
+fn c3_mro_diamond_inheritance() {
+    let code = "\
+package Base;\n\
+package Left;\n\
+use parent 'Base';\n\
+package Right;\n\
+use parent 'Base';\n\
+package Child;\n\
+use parent 'Left', 'Right';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let mro = provider.c3_mro(&ast, "Child");
+    // Child first, then linearized parents, Base appears only once at the end
+    assert_eq!(mro[0], "Child");
+    assert!(mro.contains(&"Left".to_string()));
+    assert!(mro.contains(&"Right".to_string()));
+    assert!(mro.contains(&"Base".to_string()));
+    // Base must appear after both Left and Right
+    let left_pos = mro.iter().position(|n| n == "Left").unwrap_or(usize::MAX);
+    let right_pos = mro.iter().position(|n| n == "Right").unwrap_or(usize::MAX);
+    let base_pos = mro.iter().position(|n| n == "Base").unwrap_or(usize::MAX);
+    assert!(base_pos > left_pos, "Base must come after Left");
+    assert!(base_pos > right_pos, "Base must come after Right");
+    // Base appears exactly once
+    assert_eq!(mro.iter().filter(|n: &&String| n.as_str() == "Base").count(), 1);
+}
+
+/// Class with no parents: MRO is just itself.
+#[test]
+fn c3_mro_no_parents() {
+    let code = "package Standalone;\nsub greet { 1 }\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let mro = provider.c3_mro(&ast, "Standalone");
+    assert_eq!(mro, vec!["Standalone"]);
+}
+
+/// Unknown package (not in file): MRO returns just the name.
+#[test]
+fn c3_mro_unknown_package() {
+    let code = "package Known;\nuse parent 'Base';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let mro = provider.c3_mro(&ast, "Unknown");
+    assert_eq!(mro, vec!["Unknown"]);
+}
+
+/// Multiple direct parents in order: C3 preserves left-to-right order.
+#[test]
+fn c3_mro_multiple_direct_parents_order() {
+    let code = "\
+package A;\n\
+package B;\n\
+package C;\n\
+package Child;\n\
+use parent 'A', 'B', 'C';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let mro = provider.c3_mro(&ast, "Child");
+    assert_eq!(mro[0], "Child");
+    // A before B before C (left-to-right from use parent list)
+    let a_pos = mro.iter().position(|n| n == "A").unwrap_or(usize::MAX);
+    let b_pos = mro.iter().position(|n| n == "B").unwrap_or(usize::MAX);
+    let c_pos = mro.iter().position(|n| n == "C").unwrap_or(usize::MAX);
+    assert!(a_pos < b_pos, "A must come before B");
+    assert!(b_pos < c_pos, "B must come before C");
+}
