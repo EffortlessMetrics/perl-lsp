@@ -312,7 +312,13 @@ impl<'a> Parser<'a> {
             && !self.is_statement_modifier_keyword()
             && !matches!(
                 self.peek_kind(),
-                Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot)
+                Some(
+                    TokenKind::WordOr
+                        | TokenKind::WordAnd
+                        | TokenKind::WordXor
+                        | TokenKind::WordNot
+                        | TokenKind::RightBrace
+                )
             )
         {
             // Use parse_assignment instead of parse_expression to avoid grouping by comma operator
