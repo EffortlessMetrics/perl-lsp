@@ -1,14 +1,22 @@
 ## Summary
-<!-- What and why, 1-3 bullets -->
+<!-- What changed and why. Link the issue: Fixes #NNN -->
 
 ## Changes
-<!-- List of files changed and what each change does -->
+<!-- List changed files and what each change does -->
+
+## Test
+<!-- What test was added? Does it fail before the fix and pass after? -->
 
 ## Verification
-- [ ] `cargo fmt` — clean
+- [ ] `cargo fmt --all` — clean
 - [ ] `cargo clippy -p <crate> --tests` — clean
 - [ ] `cargo test -p <crate>` — pass
 
-## Agent
-<!-- If created by swarm: agent type, branch, handoff path -->
+## What I considered but didn't do
+<!-- Alternative approaches, related issues found, scope decisions -->
 
+## What's next
+<!-- Follow-up work, edge cases to address, related issues to file -->
+
+## Agent
+<!-- If created by swarm: agent type, issue number, model tier -->

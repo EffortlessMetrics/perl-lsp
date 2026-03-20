@@ -1,0 +1,69 @@
+name: Pipeline Labels
+
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request:
+    types: [opened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  auto-label-issues:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-label scout reports
+        if: contains(github.event.issue.labels.*.name, 'swarm-discovered')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Scout-filed issues need plan review before building
+            const labels = context.payload.issue.labels.map(l => l.name);
+            if (!labels.includes('builder-ready') && !labels.includes('needs-plan-review')) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                labels: ['needs-plan-review']
+              });
+            }
+
+  auto-label-prs:
+    if: github.event_name == 'pull_request' && github.event.action == 'ready_for_review'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label PR as in-review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['in-review']
+            });
+
+  auto-label-approved:
+    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label PR as merge-ready on approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Remove in-review, add merge-ready
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: 'in-review'
+              });
+            } catch (e) { /* label might not exist */ }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['merge-ready']
+            });
