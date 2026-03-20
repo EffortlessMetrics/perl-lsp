@@ -298,6 +298,19 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
         return Some(arrow_prefix.to_string());
     }
 
+    // Case 3: Self-call inside a method — `$self->` or `$this->` resolves to the
+    // current package. Standard Perl OO convention: the invocant of `bless` is
+    // assigned to `$self` (or `$this`) via `my $self = shift`.  The RHS is just
+    // `shift`, so Case 2 would not match any constructor pattern.  Instead we
+    // fall back to `context.current_package` which the context analyser already
+    // sets correctly from the surrounding `package` declaration.
+    if matches!(arrow_prefix, "$self" | "$this")
+        && !context.current_package.is_empty()
+        && context.current_package != "main"
+    {
+        return Some(context.current_package.clone());
+    }
+
     // Case 2: Variable method call like `$obj->meth`
     // Try to find the type from assignment context
     if arrow_prefix.starts_with('$') {
