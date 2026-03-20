@@ -86,7 +86,7 @@ impl LspServer {
                 }
 
                 // Add external perlcritic diagnostics (opt-in)
-                self.collect_external_perlcritic_diagnostics(uri, &mut diagnostics);
+                self.collect_external_perlcritic_diagnostics(uri, &doc.text, &mut diagnostics);
 
                 // Add dead code diagnostics from workspace-wide symbol analysis
                 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -239,7 +239,7 @@ impl LspServer {
                         provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                     // Add external perlcritic diagnostics (opt-in)
-                    self.collect_external_perlcritic_diagnostics(uri, &mut diagnostics);
+                    self.collect_external_perlcritic_diagnostics(uri, &doc.text, &mut diagnostics);
 
                     // Add dead code diagnostics from workspace-wide symbol analysis
                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -409,7 +409,7 @@ impl LspServer {
                 let mut diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
 
                 // Add external perlcritic diagnostics (opt-in)
-                self.collect_external_perlcritic_diagnostics(uri_str, &mut diagnostics);
+                self.collect_external_perlcritic_diagnostics(uri_str, &doc.text, &mut diagnostics);
 
                 // Add dead code diagnostics from workspace-wide symbol analysis
                 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -549,16 +549,26 @@ impl LspServer {
     ///
     /// Checks the `perlcritic_enabled` config flag and whether `perlcritic` is
     /// installed on the system. If both conditions are met, runs perlcritic on
-    /// the file and appends violations as Warning-severity diagnostics.
+    /// the file and appends violations with severity mapped from Perl::Critic's
+    /// 1-5 scale to LSP severity levels (Brutal/Cruel -> Error, Harsh ->
+    /// Warning, Stern/Gentle -> Information).
+    ///
     /// Silently skips if perlcritic is not installed or the URI is not a file.
+    /// The `doc_text` parameter is used to convert perlcritic's line/column
+    /// positions into byte offsets for the internal diagnostic range.
     #[cfg(not(target_arch = "wasm32"))]
     fn collect_external_perlcritic_diagnostics(
         &self,
         uri: &str,
+        doc_text: &str,
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
         // Check config: perlcritic must be explicitly enabled (opt-in)
-        if !self.config.lock().perlcritic_enabled {
+        let (enabled, severity, profile) = {
+            let cfg = self.config.lock();
+            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+        };
+        if !enabled {
             return;
         }
 
@@ -573,22 +583,48 @@ impl LspServer {
             return;
         }
 
-        let config = crate::perl_critic::CriticConfig::default();
-        let mut analyzer = crate::perl_critic::CriticAnalyzer::with_os_runtime(config);
+        // Auto-discover .perlcriticrc in the file's directory if no profile is configured
+        let resolved_profile = profile.or_else(|| {
+            file_path.parent().and_then(|dir| {
+                let candidate = dir.join(".perlcriticrc");
+                if candidate.exists() { candidate.to_str().map(|s| s.to_string()) } else { None }
+            })
+        });
+
+        let critic_config = crate::perl_critic::CriticConfig {
+            severity,
+            profile: resolved_profile,
+            ..crate::perl_critic::CriticConfig::default()
+        };
+        let mut analyzer = crate::perl_critic::CriticAnalyzer::with_os_runtime(critic_config);
 
         match analyzer.analyze_file(&file_path) {
             Ok(violations) => {
                 for v in violations {
-                    let severity = match v.severity {
+                    // Map Perl::Critic severity (1-5) to LSP DiagnosticSeverity:
+                    // Brutal(1)/Cruel(2) -> Error, Harsh(3) -> Warning,
+                    // Stern(4)/Gentle(5) -> Information
+                    let internal_severity = match v.severity {
                         crate::perl_critic::Severity::Brutal
-                        | crate::perl_critic::Severity::Cruel => {
-                            InternalDiagnosticSeverity::Warning
+                        | crate::perl_critic::Severity::Cruel => InternalDiagnosticSeverity::Error,
+                        crate::perl_critic::Severity::Harsh => InternalDiagnosticSeverity::Warning,
+                        crate::perl_critic::Severity::Stern
+                        | crate::perl_critic::Severity::Gentle => {
+                            InternalDiagnosticSeverity::Information
                         }
-                        _ => InternalDiagnosticSeverity::Information,
                     };
+
+                    // Convert 0-indexed line/column from CriticAnalyzer to byte offsets.
+                    let line_0 = v.range.start.line;
+                    let col_0 = v.range.start.column;
+                    let start_byte = position_to_offset(doc_text, line_0, col_0).unwrap_or(0);
+                    let end_byte =
+                        position_to_offset(doc_text, v.range.end.line, v.range.end.column)
+                            .unwrap_or(start_byte.saturating_add(1));
+
                     diagnostics.push(InternalDiagnostic {
-                        range: (v.range.start.byte, v.range.end.byte),
-                        severity,
+                        range: (start_byte, end_byte),
+                        severity: internal_severity,
                         code: Some(format!("PC:{}", v.policy)),
                         message: v.description,
                         related_information: Vec::new(),
@@ -608,6 +644,7 @@ impl LspServer {
     fn collect_external_perlcritic_diagnostics(
         &self,
         _uri: &str,
+        _doc_text: &str,
         _diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
     }
