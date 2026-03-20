@@ -153,6 +153,10 @@ pub struct LspArgs {
     #[arg(long)]
     pub check: bool,
 
+    /// Scan a project directory and report parsability summary
+    #[arg(long, conflicts_with = "check")]
+    pub check_project: Option<Option<String>>,
+
     /// Generate shell completions (bash, zsh, fish, powershell)
     #[arg(long)]
     pub completion: Option<String>,
@@ -216,6 +220,11 @@ pub enum LaunchAction {
     Info,
     /// Validate Perl files in batch mode.
     Check,
+    /// Scan a project directory and report parsability summary.
+    CheckProject {
+        /// Directory to scan (defaults to ".").
+        dir: String,
+    },
     /// Generate shell completions for a given shell.
     Completion {
         /// Target shell (bash, zsh, fish, powershell).
@@ -351,6 +360,9 @@ where
                 LaunchAction::Info
             } else if parsed_args.check {
                 LaunchAction::Check
+            } else if let Some(maybe_dir) = parsed_args.check_project {
+                let dir = maybe_dir.unwrap_or_else(|| ".".to_string());
+                LaunchAction::CheckProject { dir }
             } else if let Some(shell) = parsed_args.completion {
                 LaunchAction::Completion { shell }
             } else if parsed_args.features_json {
@@ -479,6 +491,7 @@ pub fn help_text() -> String {
     out.push('\n');
     out.push_str("Usage: perl-lsp [options]\n");
     out.push_str("       perl-lsp --check <file.pl> [file2.pm ...]\n");
+    out.push_str("       perl-lsp --check-project [dir]\n");
     out.push('\n');
     out.push_str("Server options:\n");
     out.push_str("  --stdio              Use stdio for communication (default)\n");
@@ -498,6 +511,7 @@ pub fn help_text() -> String {
     out.push('\n');
     out.push_str("Tool options:\n");
     out.push_str("  --check <files...>   Validate Perl files and report parse errors\n");
+    out.push_str("  --check-project [dir] Scan project directory for parsability report\n");
     out.push_str("  --completion <shell> Generate shell completions (bash, zsh, fish)\n");
     out.push_str("  --help               Show this help message\n");
     out.push('\n');
@@ -507,6 +521,7 @@ pub fn help_text() -> String {
     out.push_str("  perl-lsp --socket --port 9257            # TCP socket mode\n");
     out.push_str("  perl-lsp --stdio --feature-profile=prod  # production profile\n");
     out.push_str("  perl-lsp --check lib/MyModule.pm         # syntax check\n");
+    out.push_str("  perl-lsp --check-project lib/             # project scan\n");
     out.push_str("  perl-lsp --info                          # server information\n");
     out.push_str("  perl-lsp --completion bash >> ~/.bashrc   # install completions\n");
     out.push('\n');
@@ -535,7 +550,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--stdio --socket --port --log --health --info --check --version --features-json --feature-profile --completion --help"
+    opts="--stdio --socket --port --log --health --info --check --check-project --version --features-json --feature-profile --completion --help"
 
     case "${prev}" in
         --port)
@@ -574,6 +589,7 @@ _perl-lsp() {
         '--health[Quick health check]' \
         '--info[Show server info]' \
         '--check[Validate Perl files]:file:_files -g "*.{pl,pm,t}"' \
+        '--check-project[Scan project directory for parsability report]:dir:_directories' \
         '--version[Show version information]' \
         '--features-json[Output features catalog as JSON]' \
         '--feature-profile[Set feature profile]:profile:(ga-lock ga prod production all auto)' \
@@ -592,6 +608,7 @@ complete -c perl-lsp -l log -d 'Enable logging to stderr'
 complete -c perl-lsp -l health -d 'Quick health check'
 complete -c perl-lsp -l info -d 'Show server info'
 complete -c perl-lsp -l check -F -d 'Validate Perl files'
+complete -c perl-lsp -l check-project -d 'Scan project directory for parsability report'
 complete -c perl-lsp -l version -d 'Show version information'
 complete -c perl-lsp -l features-json -d 'Output features catalog as JSON'
 complete -c perl-lsp -l feature-profile -x -a 'ga-lock ga prod production all auto' -d 'Set feature profile'
@@ -610,6 +627,7 @@ const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -Comma
         [CompletionResult]::new('--health', '--health', 'ParameterName', 'Quick health check')
         [CompletionResult]::new('--info', '--info', 'ParameterName', 'Show server info')
         [CompletionResult]::new('--check', '--check', 'ParameterName', 'Validate Perl files')
+        [CompletionResult]::new('--check-project', '--check-project', 'ParameterName', 'Scan project directory for parsability report')
         [CompletionResult]::new('--version', '--version', 'ParameterName', 'Show version information')
         [CompletionResult]::new('--features-json', '--features-json', 'ParameterName', 'Output features catalog as JSON')
         [CompletionResult]::new('--feature-profile', '--feature-profile', 'ParameterName', 'Set feature profile')
@@ -907,6 +925,26 @@ mod tests {
     fn help_mentions_completion_flag() {
         let text = super::help_text();
         assert!(text.contains("--completion"));
+    }
+
+    // -- --check-project flag -----------------------------------------
+
+    #[test]
+    fn parse_check_project_no_dir_defaults_to_dot() {
+        let plan = must(parse_args(["perl-lsp", "--check-project"]));
+        assert_eq!(plan.action, LaunchAction::CheckProject { dir: ".".to_string() });
+    }
+
+    #[test]
+    fn parse_check_project_with_dir() {
+        let plan = must(parse_args(["perl-lsp", "--check-project", "lib/"]));
+        assert_eq!(plan.action, LaunchAction::CheckProject { dir: "lib/".to_string() });
+    }
+
+    #[test]
+    fn help_mentions_check_project_flag() {
+        let text = super::help_text();
+        assert!(text.contains("--check-project"));
     }
 
     // ── InvalidShell error ────────────────────────────────────────
