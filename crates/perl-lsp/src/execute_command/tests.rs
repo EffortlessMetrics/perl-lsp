@@ -6,6 +6,172 @@ use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
 
+// ============= GO-TO-TEST / GO-TO-IMPLEMENTATION TESTS =============
+
+#[test]
+fn test_go_to_test_basic_mapping() -> Result<(), Box<dyn std::error::Error>> {
+    // lib/Foo/Bar.pm -> t/foo-bar.t (canonical hyphen form)
+    let temp_dir = tempdir()?;
+    let lib_dir = temp_dir.path().join("lib").join("Foo");
+    let t_dir = temp_dir.path().join("t");
+    fs::create_dir_all(&lib_dir)?;
+    fs::create_dir_all(&t_dir)?;
+
+    let pm_file = lib_dir.join("Bar.pm");
+    let t_file = t_dir.join("foo-bar.t");
+    fs::write(&pm_file, "package Foo::Bar;\n1;\n")?;
+    fs::write(&t_file, "use Test::More;\nuse Foo::Bar;\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.goToTest",
+        vec![Value::String(pm_file.to_string_lossy().to_string())],
+    );
+
+    assert!(result.is_ok(), "perl.goToTest should execute successfully");
+    let value = result?;
+    assert!(value["found"].as_bool().unwrap_or(false), "Should find the test file");
+    let test_path = value["path"].as_str().ok_or("expected path string")?;
+    assert!(
+        test_path.ends_with("foo-bar.t"),
+        "Should map Foo/Bar.pm to foo-bar.t, got: {test_path}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_go_to_test_not_found() -> Result<(), Box<dyn std::error::Error>> {
+    // When no test file exists, returns found: false
+    let temp_dir = tempdir()?;
+    let lib_dir = temp_dir.path().join("lib").join("My");
+    fs::create_dir_all(&lib_dir)?;
+
+    let pm_file = lib_dir.join("Missing.pm");
+    fs::write(&pm_file, "package My::Missing;\n1;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.goToTest",
+        vec![Value::String(pm_file.to_string_lossy().to_string())],
+    );
+
+    assert!(result.is_ok(), "perl.goToTest should not error when test not found");
+    let value = result?;
+    assert!(!value["found"].as_bool().unwrap_or(true), "Should report not found");
+    Ok(())
+}
+
+#[test]
+fn test_go_to_test_underscore_variant() -> Result<(), Box<dyn std::error::Error>> {
+    // lib/Foo/Bar.pm -> t/foo_bar.t (underscore form is also a valid convention)
+    let temp_dir = tempdir()?;
+    let lib_dir = temp_dir.path().join("lib").join("Foo");
+    let t_dir = temp_dir.path().join("t");
+    fs::create_dir_all(&lib_dir)?;
+    fs::create_dir_all(&t_dir)?;
+
+    let pm_file = lib_dir.join("Bar.pm");
+    let t_file = t_dir.join("foo_bar.t");
+    fs::write(&pm_file, "package Foo::Bar;\n1;\n")?;
+    fs::write(&t_file, "use Test::More;\nuse Foo::Bar;\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.goToTest",
+        vec![Value::String(pm_file.to_string_lossy().to_string())],
+    );
+
+    assert!(result.is_ok(), "perl.goToTest should find underscore variant");
+    let value = result?;
+    assert!(value["found"].as_bool().unwrap_or(false), "Should find the underscore test file");
+    Ok(())
+}
+
+#[test]
+fn test_go_to_implementation_basic() -> Result<(), Box<dyn std::error::Error>> {
+    // From a test file with `use Foo::Bar`, navigate to lib/Foo/Bar.pm
+    let temp_dir = tempdir()?;
+    let lib_dir = temp_dir.path().join("lib").join("Foo");
+    let t_dir = temp_dir.path().join("t");
+    fs::create_dir_all(&lib_dir)?;
+    fs::create_dir_all(&t_dir)?;
+
+    let pm_file = lib_dir.join("Bar.pm");
+    let t_file = t_dir.join("foo-bar.t");
+    fs::write(&pm_file, "package Foo::Bar;\nsub new { bless {}, shift }\n1;\n")?;
+    fs::write(
+        &t_file,
+        "use strict;\nuse warnings;\nuse Foo::Bar;\nuse Test::More;\ndone_testing;\n",
+    )?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.goToImplementation",
+        vec![Value::String(t_file.to_string_lossy().to_string())],
+    );
+
+    assert!(result.is_ok(), "perl.goToImplementation should execute successfully");
+    let value = result?;
+    assert!(value["found"].as_bool().unwrap_or(false), "Should find the implementation file");
+    let impl_path = value["path"].as_str().ok_or("expected path string")?;
+    assert!(impl_path.ends_with("Bar.pm"), "Should navigate to Bar.pm, got: {impl_path}");
+    Ok(())
+}
+
+#[test]
+fn test_go_to_implementation_no_use_statement() -> Result<(), Box<dyn std::error::Error>> {
+    // A test file with no recognizable `use` pointing to a local module
+    let temp_dir = tempdir()?;
+    let t_dir = temp_dir.path().join("t");
+    fs::create_dir_all(&t_dir)?;
+
+    let t_file = t_dir.join("simple.t");
+    fs::write(&t_file, "use Test::More;\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.goToImplementation",
+        vec![Value::String(t_file.to_string_lossy().to_string())],
+    );
+
+    assert!(result.is_ok(), "perl.goToImplementation should not error on no use");
+    let value = result?;
+    assert!(!value["found"].as_bool().unwrap_or(true), "Should report not found");
+    Ok(())
+}
+
+#[test]
+fn test_go_to_test_module_mapping_conversion() {
+    // Unit test for the module name -> test file name conversion logic
+    let provider = ExecuteCommandProvider::new();
+
+    // Foo::Bar -> foo-bar (hyphen form)
+    let hyphen = provider.module_to_test_stem("Foo::Bar");
+    assert_eq!(hyphen, "foo-bar", "Should produce hyphen-separated lowercase stem");
+
+    // My::Very::Deep::Module -> my-very-deep-module
+    let deep = provider.module_to_test_stem("My::Very::Deep::Module");
+    assert_eq!(deep, "my-very-deep-module");
+}
+
+#[test]
+fn test_supported_commands_includes_go_to_test() {
+    let commands = get_supported_commands();
+    assert!(
+        commands.contains(&"perl.goToTest".to_string()),
+        "perl.goToTest should be in supported commands list"
+    );
+    assert!(
+        commands.contains(&"perl.goToImplementation".to_string()),
+        "perl.goToImplementation should be in supported commands list"
+    );
+}
+
 #[test]
 fn test_supported_commands_includes_run_critic() {
     let commands = get_supported_commands();

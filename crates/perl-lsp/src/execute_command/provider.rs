@@ -49,6 +49,14 @@ impl ExecuteCommandProvider {
                 self.debug_tests(&file_path)
             }
             "perl.runCritic" => self.run_critic_secure(&arguments),
+            "perl.goToTest" => {
+                let file_path = self.resolve_path_from_args(&arguments)?;
+                Ok(self.go_to_test(&file_path))
+            }
+            "perl.goToImplementation" => {
+                let file_path = self.resolve_path_from_args(&arguments)?;
+                Ok(self.go_to_implementation(&file_path))
+            }
             _ => Err(format!("Unknown command: {}", command)),
         }
     }
@@ -276,6 +284,196 @@ impl ExecuteCommandProvider {
 
     pub(crate) fn is_test_file(&self, file_path: &str) -> bool {
         file_path.ends_with(".t") || file_path.contains("/t/") || file_path.contains("test")
+    }
+
+    /// Convert a Perl module name to a test file stem.
+    ///
+    /// `Foo::Bar` -> `foo-bar` (canonical hyphen form used by many CPAN distributions)
+    pub fn module_to_test_stem(&self, module_name: &str) -> String {
+        module_name.replace("::", "-").to_lowercase()
+    }
+
+    /// Infer a module name from a `lib/` path component.
+    ///
+    /// `/path/to/lib/Foo/Bar.pm` -> `Foo::Bar`
+    fn pm_path_to_module(&self, pm_path: &std::path::Path) -> Option<String> {
+        // Walk up from the file to find the `lib` directory anchor.
+        let components: Vec<_> = pm_path.components().collect();
+        let lib_pos = components.iter().rposition(|c| c.as_os_str() == "lib")?;
+        let after_lib: Vec<_> = components[lib_pos + 1..].to_vec();
+        if after_lib.is_empty() {
+            return None;
+        }
+        let mut parts = Vec::new();
+        for c in &after_lib {
+            let s = c.as_os_str().to_string_lossy();
+            let part = if s.ends_with(".pm") {
+                s.trim_end_matches(".pm").to_string()
+            } else {
+                s.to_string()
+            };
+            parts.push(part);
+        }
+        Some(parts.join("::"))
+    }
+
+    /// Navigate from a `.pm` implementation file to its companion test file.
+    ///
+    /// Probes (in order):
+    ///   1. `t/<stem>.t`  where stem is the hyphen-lowercased module name
+    ///   2. `t/<stem>.t`  where stem uses underscores instead of hyphens
+    ///   3. `t/<leaf>.t`  where leaf is just the last module component lowercased
+    pub(crate) fn go_to_test(&self, pm_path: &std::path::Path) -> Value {
+        let module_name = match self.pm_path_to_module(pm_path) {
+            Some(m) => m,
+            None => {
+                return json!({ "found": false, "candidates": [] });
+            }
+        };
+
+        // Find workspace root: walk up until we find a `lib` or `t` sibling.
+        let workspace_root = match self.find_workspace_root(pm_path) {
+            Some(r) => r,
+            None => {
+                return json!({ "found": false, "candidates": [] });
+            }
+        };
+
+        let t_dir = workspace_root.join("t");
+        let stem_hyphen = self.module_to_test_stem(&module_name);
+        let stem_underscore = stem_hyphen.replace('-', "_");
+        let leaf = module_name.split("::").last().unwrap_or(&module_name).to_lowercase();
+
+        let candidates = [
+            t_dir.join(format!("{stem_hyphen}.t")),
+            t_dir.join(format!("{stem_underscore}.t")),
+            t_dir.join(format!("{leaf}.t")),
+        ];
+
+        for candidate in &candidates {
+            if candidate.exists() {
+                return json!({
+                    "found": true,
+                    "path": candidate.to_string_lossy(),
+                    "module": module_name,
+                });
+            }
+        }
+
+        let candidate_strings: Vec<_> =
+            candidates.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        json!({ "found": false, "candidates": candidate_strings })
+    }
+
+    /// Navigate from a test file to the first local module it uses.
+    ///
+    /// Scans the test file for `use Foo::Bar;` statements (skipping well-known
+    /// CPAN pragmas and test modules), then maps the first match to
+    /// `lib/Foo/Bar.pm` relative to the workspace root.
+    pub(crate) fn go_to_implementation(&self, test_path: &std::path::Path) -> Value {
+        let content = match std::fs::read_to_string(test_path) {
+            Ok(c) => c,
+            Err(_) => return json!({ "found": false }),
+        };
+
+        let workspace_root = match self.find_workspace_root(test_path) {
+            Some(r) => r,
+            None => return json!({ "found": false }),
+        };
+
+        // Well-known modules that are NOT local implementations.
+        const SKIP_MODULES: &[&str] = &[
+            "strict",
+            "warnings",
+            "utf8",
+            "feature",
+            "parent",
+            "base",
+            "Exporter",
+            "Carp",
+            "Scalar::Util",
+            "List::Util",
+            "POSIX",
+            "Data::Dumper",
+            "File::Basename",
+            "File::Path",
+            "File::Spec",
+            "File::Find",
+            "Test::More",
+            "Test::Deep",
+            "Test::Exception",
+            "Test::Warn",
+            "Test::Fatal",
+            "Test::MockObject",
+            "Test::Builder",
+            "Test::Simple",
+            "ok",
+            "vars",
+            "constant",
+            "overload",
+        ];
+
+        for line in content.lines() {
+            let trimmed = line.trim();
+            // Match `use Module::Name;` or `use Module::Name qw(...);`
+            if !trimmed.starts_with("use ") {
+                continue;
+            }
+            let after_use = trimmed.trim_start_matches("use ").trim();
+            // Extract the module name (stop at first whitespace or semicolon)
+            let module_name: String =
+                after_use.chars().take_while(|c| c.is_alphanumeric() || *c == ':').collect();
+
+            if module_name.is_empty() {
+                continue;
+            }
+            if SKIP_MODULES.contains(&module_name.as_str()) {
+                continue;
+            }
+            // Skip version-only pragmas like `use 5.010;`
+            if module_name.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                continue;
+            }
+
+            // Map Foo::Bar -> lib/Foo/Bar.pm
+            let rel_path = module_name.replace("::", std::path::MAIN_SEPARATOR_STR) + ".pm";
+            let candidate = workspace_root.join("lib").join(&rel_path);
+            if candidate.exists() {
+                return json!({
+                    "found": true,
+                    "path": candidate.to_string_lossy(),
+                    "module": module_name,
+                });
+            }
+        }
+
+        json!({ "found": false })
+    }
+
+    /// Find the workspace root by walking up from `path` until we find a
+    /// directory that has either a `lib/` or `t/` child, or until we hit a
+    /// filesystem root.  Stops at the nearest such ancestor.
+    fn find_workspace_root(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
+        // If the provider has explicit workspace roots, use the one that
+        // contains the given path.
+        if !self.workspace_roots.is_empty() {
+            let canonical_path = path.canonicalize().ok();
+            for root in &self.workspace_roots {
+                let Ok(canonical_root) = root.canonicalize() else { continue };
+                if canonical_path.as_ref().is_some_and(|p| p.starts_with(&canonical_root)) {
+                    return Some(root.clone());
+                }
+            }
+        }
+
+        // Otherwise walk up the directory tree.
+        let mut current = path.parent()?;
+        loop {
+            if current.join("lib").is_dir() || current.join("t").is_dir() {
+                return Some(current.to_path_buf());
+            }
+            current = current.parent()?;
+        }
     }
 
     pub(crate) fn format_command_result(
