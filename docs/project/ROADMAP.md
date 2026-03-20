@@ -6,8 +6,7 @@
 
 ## Current Framing
 
-- Current release line: `v0.11.0` public alpha
-- Active milestone: `v0.12.0` public-alpha hardening sprint
+- Current release line: `v0.12.0` public alpha
 - Canonical local receipt: `nix develop -c just ci-gate`
 
 ## How To Read This File
@@ -16,7 +15,7 @@
 - This roadmap tells you what we are trying to land next.
 - [../../ROADMAP.md](../../ROADMAP.md) and [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) are summaries, not the canonical plan.
 
-## Current Release Line: v0.11.0 Public Alpha
+## Current Release Line: v0.12.0 Public Alpha
 
 The current shipped line is still public alpha. The repo is usable today, but APIs, protocol details, and packaging can still change between minor releases.
 
