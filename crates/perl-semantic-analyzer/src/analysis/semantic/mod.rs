@@ -153,6 +153,11 @@ impl SemanticAnalyzer {
         self.hover_info.get(&location)
     }
 
+    /// Iterate over all hover entries collected during analysis.
+    pub fn all_hover_entries(&self) -> impl Iterator<Item = &HoverInfo> {
+        self.hover_info.values()
+    }
+
     /// Find the symbol at a given location for Navigate workflows.
     ///
     /// Returns the most specific (smallest range) symbol that contains the location.
@@ -1173,6 +1178,91 @@ my %config = (key => "value");
         assert!(
             hover.signature.contains("%config"),
             "Hash hover should show variable name, got: {}",
+            hover.signature
+        );
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Subroutine signature hover tests (issue #2353)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_signature_hover_shows_param_names() -> Result<(), Box<dyn std::error::Error>> {
+        // sub with named scalar parameters — hover must show them by name, not (...)
+        let code = "sub add($x, $y) { $x + $y }";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("add", 0, crate::symbol::SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "symbol 'add' not found");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        assert!(
+            hover.signature.contains("$x"),
+            "hover signature should contain '$x', got: {}",
+            hover.signature
+        );
+        assert!(
+            hover.signature.contains("$y"),
+            "hover signature should contain '$y', got: {}",
+            hover.signature
+        );
+        assert!(
+            !hover.signature.contains("(...)"),
+            "hover signature must not fall back to '(...)', got: {}",
+            hover.signature
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_signature_hover_with_optional_param() -> Result<(), Box<dyn std::error::Error>> {
+        // optional parameter with default value
+        let code = "sub greet($name, $greeting = 'Hello') { \"$greeting, $name\" }";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols =
+            analyzer.symbol_table().find_symbol("greet", 0, crate::symbol::SymbolKind::Subroutine);
+        assert!(!sub_symbols.is_empty(), "symbol 'greet' not found");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        assert!(
+            hover.signature.contains("$name"),
+            "hover signature should contain '$name', got: {}",
+            hover.signature
+        );
+        assert!(
+            hover.signature.contains("$greeting"),
+            "hover signature should contain '$greeting', got: {}",
+            hover.signature
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_signature_hover_with_slurpy_param() -> Result<(), Box<dyn std::error::Error>> {
+        // slurpy array parameter collects remaining args
+        let code = "sub log_all($level, @messages) { print \"$level: @messages\" }";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol(
+            "log_all",
+            0,
+            crate::symbol::SymbolKind::Subroutine,
+        );
+        assert!(!sub_symbols.is_empty(), "symbol 'log_all' not found");
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        assert!(
+            hover.signature.contains("@messages"),
+            "hover signature should contain '@messages', got: {}",
             hover.signature
         );
         Ok(())
