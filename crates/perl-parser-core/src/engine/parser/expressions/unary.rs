@@ -141,10 +141,17 @@ impl<'a> Parser<'a> {
                     let operand = self.parse_unary()?;
                     let end = operand.location.end;
 
-                    return Ok(Node::new(
+                    let node = Node::new(
                         NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
                         SourceLocation { start, end },
-                    ));
+                    );
+
+                    // For typeglob (*), allow postfix chaining: *$self->{field}
+                    if op_token.kind == TokenKind::Star {
+                        return self.parse_postfix_chain(node);
+                    }
+
+                    return Ok(node);
                 }
                 TokenKind::Increment | TokenKind::Decrement => {
                     // Pre-increment and pre-decrement
