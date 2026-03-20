@@ -2871,6 +2871,7 @@ name = "perl-workspace-index-monitoring"
 version = "0.12.0"
 dependencies = [
  "parking_lot",
+ "perl-tdd-support",
 ]
 
 [[package]]
