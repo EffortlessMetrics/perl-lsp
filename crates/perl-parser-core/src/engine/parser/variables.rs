@@ -105,9 +105,26 @@ impl<'a> Parser<'a> {
                 attributes.push(attr_token.text.to_string());
             }
 
-            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
-                self.tokens.next()?; // consume =
-                Some(Box::new(self.parse_expression()?))
+            // Accept both simple `=` and compound operators (`||=`, `//=`, `.=`, etc.)
+            // Perl allows `our $x ||= 0;` and `my $y .= "suffix";`
+            let assign_op = self.peek_compound_assign_op();
+            let initializer = if let Some(op) = assign_op {
+                self.tokens.next()?;
+                let rhs = self.parse_expression()?;
+                if op == "=" {
+                    Some(Box::new(rhs))
+                } else {
+                    let var_clone = variable.clone();
+                    let assign_end = rhs.location.end;
+                    Some(Box::new(Node::new(
+                        NodeKind::Assignment {
+                            op: op.to_string(),
+                            lhs: Box::new(var_clone),
+                            rhs: Box::new(rhs),
+                        },
+                        SourceLocation { start: variable.location.start, end: assign_end },
+                    )))
+                }
             } else {
                 None
             };
@@ -245,10 +262,7 @@ impl<'a> Parser<'a> {
             // Create an identifier node for the captured name
             let mut inner = Node::new(
                 NodeKind::Identifier { name: inner_name.to_string() },
-                SourceLocation {
-                    start: inner_start,
-                    end: inner_end,
-                },
+                SourceLocation { start: inner_start, end: inner_end },
             );
 
             // Parse postfix chain (handles function call parens, method calls, etc.)
@@ -271,21 +285,14 @@ impl<'a> Parser<'a> {
         // Handle $#$ref — last index of dereferenced array
         // The lexer sends `$#` as Identifier("$#"), so sigil="$" name="#"
         if sigil == "$" && full_name == "#" {
-            let next_is_var = self
-                .tokens
-                .peek()
-                .ok()
-                .is_some_and(|t| t.text.starts_with('$'));
+            let next_is_var = self.tokens.peek().ok().is_some_and(|t| t.text.starts_with('$'));
             let next_is_sigil = self.peek_kind() == Some(TokenKind::ScalarSigil);
             if next_is_var || next_is_sigil {
                 // $#$ref — parse the inner variable and wrap
                 let inner = self.parse_variable()?;
                 let inner_end = inner.location.end;
                 return Ok(Node::new(
-                    NodeKind::Unary {
-                        op: "$#".to_string(),
-                        operand: Box::new(inner),
-                    },
+                    NodeKind::Unary { op: "$#".to_string(), operand: Box::new(inner) },
                     SourceLocation { start: token.start, end: inner_end },
                 ));
             } else if self.peek_kind() == Some(TokenKind::LeftBrace) {
@@ -295,10 +302,7 @@ impl<'a> Parser<'a> {
                 self.expect(TokenKind::RightBrace)?;
                 let brace_end = self.previous_position();
                 return Ok(Node::new(
-                    NodeKind::Unary {
-                        op: "$#".to_string(),
-                        operand: Box::new(inner),
-                    },
+                    NodeKind::Unary { op: "$#".to_string(), operand: Box::new(inner) },
                     SourceLocation { start: token.start, end: brace_end },
                 ));
             }
@@ -466,14 +470,8 @@ impl<'a> Parser<'a> {
                                 }
 
                                 (format!("#{}", var_name), var_end)
-                            } else if matches!(
-                                self.peek_kind(),
-                                Some(TokenKind::ScalarSigil)
-                            ) || self
-                                .tokens
-                                .peek()
-                                .ok()
-                                .is_some_and(|t| t.text.starts_with('$'))
+                            } else if matches!(self.peek_kind(), Some(TokenKind::ScalarSigil))
+                                || self.tokens.peek().ok().is_some_and(|t| t.text.starts_with('$'))
                             {
                                 // $#$ref — last index of dereferenced array
                                 // Parse the inner variable expression
@@ -577,10 +575,7 @@ impl<'a> Parser<'a> {
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
             args.push(self.parse_expression()?);
             // Accept both comma and fat arrow as separators
-            if matches!(
-                self.peek_kind(),
-                Some(TokenKind::Comma | TokenKind::FatArrow)
-            ) {
+            if matches!(self.peek_kind(), Some(TokenKind::Comma | TokenKind::FatArrow)) {
                 self.consume_token()?;
             } else if self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
                 return Err(ParseError::syntax(
@@ -752,9 +747,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::SubSigil
                     | TokenKind::GlobSigil => true,
                     // Sigils: peek past to distinguish prototype ($;@%) from signature ($x, @rest)
-                    TokenKind::ScalarSigil
-                    | TokenKind::ArraySigil
-                    | TokenKind::HashSigil => {
+                    TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil => {
                         match self.tokens.peek_third() {
                             Ok(third) => !matches!(third.kind, TokenKind::Identifier),
                             Err(_) => true, // default to prototype on error
@@ -809,7 +802,6 @@ impl<'a> Parser<'a> {
 
         Ok(prototype)
     }
-
 }
 
 #[cfg(test)]
@@ -964,12 +956,7 @@ mod code_dereference_tests {
     fn assert_no_errors(code: &str) {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(
-            !sexp.contains("ERROR"),
-            "Parse of `{}` produced ERROR nodes: {}",
-            code,
-            sexp,
-        );
+        assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp,);
     }
 
     #[test]
@@ -980,11 +967,7 @@ mod code_dereference_tests {
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
         // Should contain the &{} operator and a function call structure
-        assert!(
-            sexp.contains("&{}"),
-            "Expected &{{}} dereference in sexp, got: {}",
-            sexp,
-        );
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
     }
 
     #[test]
@@ -994,16 +977,8 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(
-            sexp.contains("&{}"),
-            "Expected &{{}} dereference in sexp, got: {}",
-            sexp,
-        );
-        assert!(
-            sexp.contains("arg"),
-            "Expected argument in sexp, got: {}",
-            sexp,
-        );
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
+        assert!(sexp.contains("arg"), "Expected argument in sexp, got: {}", sexp,);
     }
 
     #[test]
@@ -1013,16 +988,8 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(
-            sexp.contains("&{}"),
-            "Expected &{{}} dereference in sexp, got: {}",
-            sexp,
-        );
-        assert!(
-            sexp.contains("callback"),
-            "Expected 'callback' key in sexp, got: {}",
-            sexp,
-        );
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
+        assert!(sexp.contains("callback"), "Expected 'callback' key in sexp, got: {}", sexp,);
     }
 
     #[test]
@@ -1032,11 +999,7 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(
-            sexp.contains("call"),
-            "Expected function call in sexp, got: {}",
-            sexp,
-        );
+        assert!(sexp.contains("call"), "Expected function call in sexp, got: {}", sexp,);
     }
 
     #[test]
@@ -1057,11 +1020,7 @@ mod code_dereference_tests {
         assert_no_errors(code);
         let ast = parse_program(code);
         let sexp = ast.to_sexp();
-        assert!(
-            sexp.contains("&{}"),
-            "Expected &{{}} dereference in sexp, got: {}",
-            sexp,
-        );
+        assert!(sexp.contains("&{}"), "Expected &{{}} dereference in sexp, got: {}", sexp,);
     }
 
     #[test]
@@ -1088,10 +1047,7 @@ mod code_dereference_tests {
                 // First arg is the Unary dereference node (&{$coderef}),
                 // remaining args are the actual arguments (may be combined into
                 // a single list node depending on comma parsing)
-                assert!(
-                    !args.is_empty(),
-                    "Expected at least 1 arg (the deref node)",
-                );
+                assert!(!args.is_empty(), "Expected at least 1 arg (the deref node)",);
                 // First arg should be the Unary &{} dereference
                 assert_eq!(
                     args.first().map(|a| a.kind.kind_name()),
