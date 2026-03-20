@@ -1,11 +1,12 @@
 //! Semantic analysis, symbol extraction, and type inference.
 
-/// Dead code detection for Perl workspaces.
-#[cfg(not(target_arch = "wasm32"))]
+/// Class model for Moose/Moo/Mouse intelligence.
+pub mod class_model;
 /// Go-to-declaration support and parent map construction.
-pub mod declaration;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod declaration;
 /// Lightweight workspace symbol index.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod index;
 /// Scope analysis for variable and subroutine resolution.
 #[allow(missing_docs)]

@@ -55,6 +55,7 @@ pub use perl_workspace_index::workspace_index;
 /// Semantic analysis, symbol extraction, and type inference.
 pub mod analysis;
 
+pub use analysis::class_model;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
