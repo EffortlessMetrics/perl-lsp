@@ -1,6 +1,7 @@
 ---
 description: Create PR (perl-lsp)
 argument-hint: "optional like 'closes #123' or 'draft'"
+user-invocable: false
 ---
 
 # Create PR
