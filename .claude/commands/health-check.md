@@ -116,5 +116,5 @@ Overall: OK / NEEDS ATTENTION (<list of BAD checks>)
 ## Notes
 
 - This outputs to stdout only. No GitHub issues are created.
-- For deeper investigation of any failing check, use `/scout <area>` or `/audit <crate>`.
+- For deeper investigation of any failing check, spawn a scout agent for that area.
 - For full swarm state including PR details, use `/swarm-status`.

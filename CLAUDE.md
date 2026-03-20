@@ -142,7 +142,6 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 | Features catalog | `features.toml` |
 | CI config | `.ci/` |
 | Build tooling | `xtask/` |
-| Skills | `.claude/skills/` |
 | Slash commands | `.claude/commands/` |
 | Swarm ops | `.ops-perl-lsp/` |
 
@@ -187,10 +186,10 @@ Run `nix develop -c just ci-gate` before pushing. See [CONTRIBUTING.md](CONTRIBU
 
 **Session start**: Run `just clean-worktrees` to prune stale agent worktrees before spawning new ones.
 
-Start with `/swarm all`. Thin coordinator teammates spawn focused subagents in worktree isolation. ~20% capacity reserved for background improvement.
+Start with `/swarm all`. Orchestrator spawns scoped agents from the catalog in worktree isolation. ~20% capacity reserved for background improvement.
 
-**Key skills**: `/swarm` (start), `/swarm-protocol` (rules), `/coding-standards` (standards), `/verify` (crate gate), `/parser-fix` (TDD fix).
+**Key commands**: `/swarm` (start), `/swarm-protocol` (rules), `/coding-standards` (standards), `/verify` (crate gate), `/parser-fix` (TDD fix).
 
-**PR lifecycle**: Draft PR -> `/review-pr` -> `/pr-ready` -> CI -> `/green-merge`.
+**PR lifecycle**: Draft PR -> reviewer agent -> `/pr-ready` -> CI -> ops agent merges.
 
-**Files**: `.ops-perl-lsp/` (handoffs, metrics), `.claude/agents/` (agent defs and roster), `.claude/skills/` and `.claude/commands/` (skills and slash entrypoints).
+**Files**: `.ops-perl-lsp/` (metrics), `.claude/agents/` (agent defs and catalog), `.claude/commands/` (step skills and shared ops).
