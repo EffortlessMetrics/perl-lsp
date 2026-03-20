@@ -188,21 +188,21 @@ fn test_condition_validation_protocol_injection() {
 
 #[test]
 fn test_timeout_validation_within_bounds() {
-    assert_eq!(validate_timeout(1000), 1000);
-    assert_eq!(validate_timeout(5000), 5000);
-    assert_eq!(validate_timeout(100_000), 100_000);
-    assert_eq!(validate_timeout(DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS);
+    assert_eq!(validate_timeout(1000).unwrap(), 1000);
+    assert_eq!(validate_timeout(5000).unwrap(), 5000);
+    assert_eq!(validate_timeout(100_000).unwrap(), 100_000);
+    assert_eq!(validate_timeout(DEFAULT_TIMEOUT_MS).unwrap(), DEFAULT_TIMEOUT_MS);
 }
 
 #[test]
 fn test_timeout_validation_zero_clamped() {
-    assert_eq!(validate_timeout(0), 1, "Zero timeout should be clamped to 1ms");
+    assert_eq!(validate_timeout(0).unwrap(), 1, "Zero timeout should be clamped to 1ms");
 }
 
 #[test]
-fn test_timeout_validation_excessive_capped() {
-    assert_eq!(validate_timeout(500_000), MAX_TIMEOUT_MS, "Excessive timeout should be capped");
-    assert_eq!(validate_timeout(1_000_000), MAX_TIMEOUT_MS, "Million ms timeout should be capped");
+fn test_timeout_validation_excessive_returns_error() {
+    assert!(validate_timeout(500_000).is_err(), "Excessive timeout should be an error");
+    assert!(validate_timeout(1_000_000).is_err(), "Million ms timeout should be an error");
 }
 
 // ===== Integration Tests =====

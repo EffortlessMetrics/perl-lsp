@@ -23,5 +23,8 @@ include = [
 name = "perl_dap_shell"
 path = "src/lib.rs"
 
+[dependencies]
+perl-dap-command-args = { workspace = true }
+
 [lints]
 workspace = true

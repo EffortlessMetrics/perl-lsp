@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub use perl_dap_command_args::format_command_args;
+
 #[cfg(windows)]
 const PATH_SEPARATOR: char = ';';
 #[cfg(not(windows))]
@@ -23,30 +25,6 @@ pub fn setup_environment(include_paths: &[PathBuf]) -> HashMap<String, String> {
     }
 
     env
-}
-
-/// Format command-line arguments for platform-specific shells.
-pub fn format_command_args(args: &[String]) -> Vec<String> {
-    args.iter()
-        .map(|arg| {
-            if arg.contains(' ') {
-                #[cfg(windows)]
-                {
-                    format!("\"{}\"", arg.replace('"', "\\\""))
-                }
-                #[cfg(not(windows))]
-                {
-                    if arg.contains('\'') {
-                        format!("\"{}\"", arg.replace('"', "\\\""))
-                    } else {
-                        format!("'{}'", arg)
-                    }
-                }
-            } else {
-                arg.clone()
-            }
-        })
-        .collect()
 }
 
 #[cfg(test)]

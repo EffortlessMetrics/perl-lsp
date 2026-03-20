@@ -17,7 +17,7 @@ use perl_path_security::{WorkspacePathError, validate_workspace_path};
 use std::path::{Path, PathBuf};
 
 /// Security validation errors
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum SecurityError {
     /// Path traversal attempt detected
     #[error("Path traversal attempt detected: {0}")]
@@ -78,10 +78,12 @@ pub fn validate_expression(expression: &str) -> Result<(), SecurityError> {
     Ok(())
 }
 
-/// Validate and cap a timeout value
-pub fn validate_timeout(timeout_ms: u32) -> u32 {
-    let timeout = timeout_ms.max(1);
-    timeout.min(MAX_TIMEOUT_MS)
+/// Validate a timeout value, returning an error if it exceeds the maximum allowed.
+pub fn validate_timeout(timeout_ms: u32) -> Result<u32, SecurityError> {
+    if timeout_ms > MAX_TIMEOUT_MS {
+        return Err(SecurityError::ExcessiveTimeout(timeout_ms));
+    }
+    Ok(timeout_ms.max(1))
 }
 
 /// Validate a breakpoint condition for security issues
@@ -236,20 +238,37 @@ mod tests {
 
     #[test]
     fn test_validate_timeout_within_bounds() {
-        assert_eq!(validate_timeout(1000), 1000);
-        assert_eq!(validate_timeout(5000), 5000);
-        assert_eq!(validate_timeout(100_000), 100_000);
+        assert_eq!(validate_timeout(1000).unwrap(), 1000);
+        assert_eq!(validate_timeout(5000).unwrap(), 5000);
+        assert_eq!(validate_timeout(100_000).unwrap(), 100_000);
     }
 
     #[test]
     fn test_validate_timeout_zero() {
-        assert_eq!(validate_timeout(0), 1, "Zero timeout should be capped to 1ms");
+        assert_eq!(validate_timeout(0).unwrap(), 1, "Zero timeout should be clamped to 1ms");
     }
 
     #[test]
     fn test_validate_timeout_excessive() {
-        assert_eq!(validate_timeout(500_000), MAX_TIMEOUT_MS, "Excessive timeout should be capped");
-        assert_eq!(validate_timeout(1_000_000), MAX_TIMEOUT_MS);
+        let result = validate_timeout(500_000);
+        assert!(result.is_err(), "Excessive timeout should be an error");
+        assert_eq!(result.unwrap_err(), SecurityError::ExcessiveTimeout(500_000));
+        assert!(validate_timeout(1_000_000).is_err());
+    }
+
+    #[test]
+    fn test_validate_timeout_boundary_at_max_is_ok() {
+        assert!(validate_timeout(MAX_TIMEOUT_MS).is_ok());
+        assert_eq!(validate_timeout(MAX_TIMEOUT_MS).unwrap(), MAX_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn test_validate_timeout_one_over_max_is_error() {
+        assert!(validate_timeout(MAX_TIMEOUT_MS + 1).is_err());
+        assert_eq!(
+            validate_timeout(MAX_TIMEOUT_MS + 1).unwrap_err(),
+            SecurityError::ExcessiveTimeout(MAX_TIMEOUT_MS + 1)
+        );
     }
 
     #[test]
@@ -291,9 +310,9 @@ mod tests {
 
     #[test]
     fn test_validate_timeout_boundary_values() {
-        assert_eq!(validate_timeout(1), 1);
-        assert_eq!(validate_timeout(MAX_TIMEOUT_MS), MAX_TIMEOUT_MS);
-        assert_eq!(validate_timeout(MAX_TIMEOUT_MS + 1), MAX_TIMEOUT_MS);
+        assert_eq!(validate_timeout(1).unwrap(), 1);
+        assert_eq!(validate_timeout(MAX_TIMEOUT_MS).unwrap(), MAX_TIMEOUT_MS);
+        assert!(validate_timeout(MAX_TIMEOUT_MS + 1).is_err());
     }
 
     #[test]

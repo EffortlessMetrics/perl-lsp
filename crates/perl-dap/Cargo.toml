@@ -89,7 +89,7 @@ nix = { version = "0.31.1", features = ["signal"] }  # For SIGINT handling (AC9)
 winapi = { version = "0.3.9", features = ["processthreadsapi"] }  # For Ctrl+C (AC9)
 
 [features]
-default = []
+default = ["dap-phase1", "dap-phase2"]
 # DAP implementation phases (TDD scaffold tests)
 dap-phase1 = []  # AC1-AC4: Bridge to Perl::LanguageServer
 dap-phase2 = []  # AC5-AC16: Native adapter, integration tests, performance, security
