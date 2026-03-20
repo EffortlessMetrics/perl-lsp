@@ -11,6 +11,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [ZERO_PANIC.md](ZERO_PANIC.md) — reliability, failure handling, and security posture for the language server
 - [PARSING_PERL.md](PARSING_PERL.md) — why Perl is hard to parse and how the parser tackles it
 - [CURIOSITIES.md](CURIOSITIES.md) — unusual records, architectural oddities, and codebase curiosities
+- [REFERENCE_IMPLEMENTATION.md](REFERENCE_IMPLEMENTATION.md) — perl-lsp as a reference implementation of agentic software development
 
 ## Research and Source Material
 
