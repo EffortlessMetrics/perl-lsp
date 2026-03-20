@@ -145,6 +145,12 @@ impl CodeActionsProvider {
                     "variable-shadowing" => {
                         actions.extend(quick_fixes::fix_variable_shadowing(&qf_diag));
                     }
+                    "bareword-filehandle" => {
+                        actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
+                    }
+                    "two-arg-open" => {
+                        actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
+                    }
                     _ => {}
                 }
             }

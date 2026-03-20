@@ -561,3 +561,47 @@ pub fn fix_variable_shadowing(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction
 
     actions
 }
+
+/// Fix bareword filehandle by replacing with lexical filehandle
+///
+/// Bareword filehandles (e.g., `open FILE, ...`) are a common Perl anti-pattern.
+/// This fix suggests replacing the bareword with a lexical variable (`my $fh`).
+pub fn fix_bareword_filehandle(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    // Extract filehandle name from message, e.g. "Bareword filehandle 'FILE'"
+    let fh_name = diagnostic.message.split('\'').nth(1).unwrap_or("FH");
+    // Derive a lowercase lexical name: FILE -> $file_fh, LOGFILE -> $logfile_fh
+    let lexical_name = format!("${}_fh", fh_name.to_lowercase());
+
+    vec![CodeAction {
+        title: format!("Replace bareword filehandle '{}' with lexical '{}'", fh_name, lexical_name),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec!["bareword-filehandle".to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                new_text: format!("my {}", lexical_name),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Suggest upgrading two-argument open() to three-argument form
+///
+/// Two-argument `open($fh, $filename)` is unsafe because `$filename` can
+/// contain shell metacharacters. The three-argument form separates the mode
+/// from the filename, e.g. `open(my $fh, '<', $filename)`.
+pub fn fix_two_arg_open(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    vec![CodeAction {
+        title: "Convert to three-argument open() for safety".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec!["two-arg-open".to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                new_text: "open(my $fh, '<', $filename)".to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
