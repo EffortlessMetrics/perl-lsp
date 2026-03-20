@@ -179,6 +179,50 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Named unary builtins that default to `$_` when called without arguments.
+    ///
+    /// In Perl, `grep defined, @list` means `grep { defined($_) } @list`.
+    /// The comma after a named unary is a list separator, not an argument
+    /// separator.  These builtins implicitly operate on `$_` when bare.
+    fn is_named_unary_defaulting_to_topic(name: &str) -> bool {
+        matches!(
+            name,
+            "defined"
+                | "ref"
+                | "length"
+                | "uc"
+                | "ucfirst"
+                | "lc"
+                | "lcfirst"
+                | "chomp"
+                | "chop"
+                | "chr"
+                | "hex"
+                | "int"
+                | "oct"
+                | "abs"
+                | "ord"
+                | "sqrt"
+                | "cos"
+                | "sin"
+                | "exp"
+                | "log"
+                | "pos"
+                | "quotemeta"
+                | "fc"
+                | "prototype"
+                | "readdir"
+                | "closedir"
+                | "rewinddir"
+                | "telldir"
+                | "alarm"
+                | "chdir"
+                | "rmdir"
+                | "chroot"
+                | "exit"
+        )
+    }
+
     /// Check if a module is a source filter (security risk)
     fn is_filter_module(module: &str) -> bool {
         matches!(

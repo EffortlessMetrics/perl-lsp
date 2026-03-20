@@ -528,7 +528,19 @@ impl<'a> Parser<'a> {
                             let is_nullary_without_args = Self::is_nullary_builtin(name)
                                 && self.peek_kind().is_some_and(Self::is_binary_operator);
 
-                            if self.is_at_statement_end() || is_nullary_without_args {
+                            // Named unary builtins (defined, ref, length, uc, etc.) default to
+                            // $_ when called without arguments.  When followed by a comma, the
+                            // comma is a list separator — not part of the builtin's argument.
+                            // This handles patterns like `grep defined, @list` where `defined`
+                            // means `defined($_)` and the comma separates the EXPR from LIST.
+                            let is_named_unary_before_comma =
+                                Self::is_named_unary_defaulting_to_topic(name)
+                                    && self.peek_kind() == Some(TokenKind::Comma);
+
+                            if self.is_at_statement_end()
+                                || is_nullary_without_args
+                                || is_named_unary_before_comma
+                            {
                                 // Bare builtin with no arguments
                                 expr = Node::new(
                                     NodeKind::FunctionCall { name: name.clone(), args: vec![] },
