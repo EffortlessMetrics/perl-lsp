@@ -404,6 +404,46 @@ impl<'a> Parser<'a> {
             module.push_str(&self.consume_token()?.text);
         }
 
+        // `use if CONDITION, MODULE [, ARGS]` and `use unless ...` are special:
+        // the condition is an arbitrary expression that may contain braces
+        // (e.g. `eval { ... }`), so we need brace-depth-aware token consumption.
+        if module == "if" || module == "unless" {
+            let mut cond_args = Vec::new();
+            let mut brace_depth: usize = 0;
+            while !self.tokens.is_eof() {
+                // At brace depth 0, stop at statement terminators
+                if brace_depth == 0 && Self::is_statement_terminator(self.peek_kind()) {
+                    break;
+                }
+                // At brace depth 0, commas separate arguments — consume the comma
+                // and continue to collect remaining args
+                if self.peek_kind() == Some(TokenKind::Comma) && brace_depth == 0 {
+                    self.consume_token()?; // consume ','
+                    continue;
+                }
+                match self.peek_kind() {
+                    Some(TokenKind::LeftBrace) => {
+                        brace_depth = brace_depth.saturating_add(1);
+                    }
+                    Some(TokenKind::RightBrace) => {
+                        brace_depth = brace_depth.saturating_sub(1);
+                    }
+                    _ => {}
+                }
+                cond_args.push(self.consume_token()?.text.to_string());
+            }
+            let end = self.previous_position();
+            let has_filter_risk = Self::is_filter_module(&module);
+            return Ok(Node::new(
+                NodeKind::Use {
+                    module,
+                    args: cond_args,
+                    has_filter_risk,
+                },
+                SourceLocation { start, end },
+            ));
+        }
+
         // Parse optional import list
         let mut args = Vec::new();
 
