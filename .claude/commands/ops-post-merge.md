@@ -32,6 +32,14 @@ After a merge batch, lock in gains and update metrics.
    gh run list --branch master --limit 3 --json status,conclusion --jq '.[] | "\(.status) \(.conclusion)"'
    ```
 
+4. Note user-visible changes for changelog:
+   For each merged PR, check if it's user-facing (feat, fix affecting behavior).
+   If so, note it for the next CHANGELOG update:
+   ```
+   - feat: <description> (#NNN)
+   - fix: <description> (#NNN)
+   ```
+
 ## Output
 
 Record in your task:
@@ -39,4 +47,5 @@ Record in your task:
 Corpus ratcheted: yes/no (new count)
 Status updated: yes/no
 Master CI: green/red
+Changelog candidates: <list of user-visible PRs>
 ```
