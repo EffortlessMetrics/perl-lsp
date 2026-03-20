@@ -50,6 +50,7 @@ pub use perl_lsp_diagnostic_types::{
 pub use lints::common_mistakes;
 pub use lints::deprecated;
 pub use lints::strict_warnings;
+pub use lints::unused_imports;
 
 // Re-export dead code detection (when not targeting WASM)
 #[cfg(not(target_arch = "wasm32"))]
