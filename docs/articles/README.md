@@ -13,6 +13,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [WHEN_RECEIPTS_LIE.md](WHEN_RECEIPTS_LIE.md) — six real cases where structured evidence was technically correct but operationally misleading
 - [CURIOSITIES.md](CURIOSITIES.md) — unusual records, architectural oddities, and codebase curiosities
 - [REFERENCE_IMPLEMENTATION.md](REFERENCE_IMPLEMENTATION.md) — perl-lsp as a reference implementation of agentic software development
+- [METHODOLOGY_REPLICATION_GUIDE.md](METHODOLOGY_REPLICATION_GUIDE.md) — practical guide for other teams to replicate the swarm methodology
 
 ## Research and Source Material
 
