@@ -342,6 +342,12 @@
         "icon": "$(pulse)"
       },
       {
+        "command": "perl-lsp.openConfigurationGuide",
+        "title": "Open Configuration Guide",
+        "category": "Perl",
+        "icon": "$(book)"
+      },
+      {
         "command": "perl-lsp.showWhatsNew",
         "title": "Show What's New",
         "category": "Perl",
@@ -373,6 +379,9 @@
         {
           "command": "perl-lsp.runTests",
           "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/"
+        },
+        {
+          "command": "perl-lsp.openConfigurationGuide"
         }
       ],
       "editor/title": [
