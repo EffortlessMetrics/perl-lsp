@@ -1,6 +1,7 @@
 ---
 description: Check master branch CI status and block if red
 argument-hint: "[--block] [--verbose]"
+user-invocable: false
 ---
 
 # Verify Master Green
