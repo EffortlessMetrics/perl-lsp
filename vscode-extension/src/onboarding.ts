@@ -1,0 +1,274 @@
+/**
+ * OnboardingManager — first-run setup experience and environment health check.
+ *
+ * Responsibilities:
+ * - Detect first run via `context.globalState` key `perl-lsp.welcomed`.
+ * - Run a multi-step health check: Perl version, perltidy, LSP binary.
+ * - Expose individual check methods so tests can exercise them in isolation.
+ */
+
+import * as fs from 'fs';
+import { execFile } from 'child_process';
+import * as vscode from 'vscode';
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+/** Severity level for a single health-check item. */
+export enum HealthCheckStatus {
+  Ok = 'ok',
+  Warning = 'warning',
+  Error = 'error',
+}
+
+/** Result of one health-check step. */
+export interface HealthCheckResult {
+  /** Short display name shown in the notification/output. */
+  label: string;
+  /** True when the check passed without errors or warnings. */
+  ok: boolean;
+  /** Severity: Ok / Warning / Error. */
+  status: HealthCheckStatus;
+  /** Human-readable detail (version string, error message, etc.). */
+  detail: string;
+}
+
+// ---------------------------------------------------------------------------
+// Internal exec helper type
+// ---------------------------------------------------------------------------
+
+type ExecCheckFn = (
+  cmd: string,
+  args: string[],
+) => Promise<{ stdout: string; stderr: string }>;
+
+// ---------------------------------------------------------------------------
+// OnboardingManager
+// ---------------------------------------------------------------------------
+
+export class OnboardingManager {
+  private readonly context: vscode.ExtensionContext;
+  private readonly outputChannel: vscode.OutputChannel;
+
+  /**
+   * Replaceable exec function.  In production this wraps `child_process.execFile`;
+   * in tests it is replaced with a jest mock via `mgr._execCheck = jest.fn(...)`.
+   */
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  _execCheck: ExecCheckFn;
+
+  constructor(
+    context: vscode.ExtensionContext,
+    outputChannel: vscode.OutputChannel,
+  ) {
+    this.context = context;
+    this.outputChannel = outputChannel;
+    this._execCheck = defaultExecCheck;
+  }
+
+  // ---------------------------------------------------------------------------
+  // First-run state
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns `true` on the very first activation (welcome flag not yet stored).
+   */
+  shouldShowWelcome(): boolean {
+    return !this.context.globalState.get<boolean>('perl-lsp.welcomed', false);
+  }
+
+  /**
+   * Persist the welcomed flag so the welcome view only appears once per install.
+   */
+  async markWelcomed(): Promise<void> {
+    await this.context.globalState.update('perl-lsp.welcomed', true);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Individual checks
+  // ---------------------------------------------------------------------------
+
+  /** Check whether `perl` is on PATH and return its version. */
+  async checkPerlInstalled(): Promise<HealthCheckResult> {
+    const label = 'Perl interpreter';
+    try {
+      const { stdout } = await this._execCheck('perl', [
+        '-e',
+        'print $]',
+      ]);
+      const version = stdout.trim() || '(unknown)';
+      this.outputChannel.appendLine(`[onboarding] Perl version: ${version}`);
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: `Perl ${version} found`,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.outputChannel.appendLine(`[onboarding] Perl not found: ${msg}`);
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Error,
+        detail: `Perl not found on PATH. Install Perl and reload. (${msg})`,
+      };
+    }
+  }
+
+  /**
+   * Check whether `perltidy` is on PATH.
+   *
+   * Perltidy absence is a *warning*, not an error — the LSP works without it
+   * but formatting will be unavailable.
+   */
+  async checkPerltidyInstalled(): Promise<HealthCheckResult> {
+    const label = 'perltidy';
+    try {
+      const { stdout } = await this._execCheck('perltidy', ['--version']);
+      const version = stdout.trim() || '(unknown)';
+      this.outputChannel.appendLine(`[onboarding] perltidy: ${version}`);
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: `perltidy found (${version})`,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.outputChannel.appendLine(
+        `[onboarding] perltidy not found: ${msg}`,
+      );
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Warning,
+        detail:
+          'perltidy not found — document formatting will be unavailable. ' +
+          'Install via: cpanm Perl::Tidy',
+      };
+    }
+  }
+
+  /**
+   * Check whether the LSP binary has been downloaded / located.
+   *
+   * @param serverPath  Path returned by `getServerPath`, or `null` if not found.
+   */
+  checkBinaryDownloaded(serverPath: string | null): HealthCheckResult {
+    const label = 'LSP binary';
+    if (!serverPath) {
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Error,
+        detail: 'perl-lsp binary not found. Check Output for download details.',
+      };
+    }
+    if (!fs.existsSync(serverPath)) {
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Error,
+        detail: `perl-lsp binary path does not exist on disk: ${serverPath}`,
+      };
+    }
+    return {
+      label,
+      ok: true,
+      status: HealthCheckStatus.Ok,
+      detail: `Binary found: ${serverPath}`,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Composite health check
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Run all setup health checks and return an ordered list of results.
+   *
+   * @param serverPath  Path to the LSP binary, or `null` if unavailable.
+   */
+  async runSetupHealthCheck(
+    serverPath: string | null,
+  ): Promise<HealthCheckResult[]> {
+    this.outputChannel.appendLine('[onboarding] Running setup health check...');
+
+    const [perlResult, perltidyResult] = await Promise.all([
+      this.checkPerlInstalled(),
+      this.checkPerltidyInstalled(),
+    ]);
+
+    const binaryResult = this.checkBinaryDownloaded(serverPath);
+
+    const results: HealthCheckResult[] = [
+      perlResult,
+      perltidyResult,
+      binaryResult,
+    ];
+
+    for (const r of results) {
+      const icon =
+        r.status === HealthCheckStatus.Ok
+          ? '[OK]'
+          : r.status === HealthCheckStatus.Warning
+            ? '[WARN]'
+            : '[ERROR]';
+      this.outputChannel.appendLine(
+        `[onboarding] ${icon} ${r.label}: ${r.detail}`,
+      );
+    }
+
+    return results;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Welcome notification
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Show a first-run welcome notification and offer to run the health check.
+   *
+   * @param serverPath  Path to the LSP binary for the health check.
+   */
+  async showWelcomeNotification(serverPath: string | null): Promise<void> {
+    await this.markWelcomed();
+
+    const selection = await vscode.window.showInformationMessage(
+      'Welcome to Perl Language Server! Run a setup health check to verify your environment.',
+      'Run Health Check',
+      'Show Output',
+      'Dismiss',
+    );
+
+    if (selection === 'Run Health Check') {
+      await vscode.commands.executeCommand(
+        'perl-lsp.runHealthCheck',
+        serverPath,
+      );
+    } else if (selection === 'Show Output') {
+      this.outputChannel.show();
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Default exec implementation (production)
+// ---------------------------------------------------------------------------
+
+function defaultExecCheck(
+  cmd: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 5000 }, (err, stdout, stderr) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
