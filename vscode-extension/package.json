@@ -57,6 +57,7 @@
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",
     "onCommand:perl-lsp.reinstall",
+    "onCommand:perl-lsp.openConfigurationGuide",
     "onWalkthrough:perl-lsp.onboarding"
   ],
   "contributes": {
