@@ -168,6 +168,26 @@ describe('package.json contributes', () => {
       expect(commandIds).toContain('perl-lsp.createDebugConfig');
     });
 
+    test('registers refactoring commands', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.extractVariable');
+      expect(commandIds).toContain('perl-lsp.extractMethod');
+      expect(commandIds).toContain('perl-lsp.showRefactoringOptions');
+    });
+
+    test('refactoring commands have descriptive titles', () => {
+      const cmds: any[] = pkg.contributes.commands;
+      const extractVar = cmds.find((c: any) => c.command === 'perl-lsp.extractVariable');
+      const extractMethod = cmds.find((c: any) => c.command === 'perl-lsp.extractMethod');
+      const showRefactoring = cmds.find((c: any) => c.command === 'perl-lsp.showRefactoringOptions');
+      expect(extractVar).toBeDefined();
+      expect(extractVar.title).toBeTruthy();
+      expect(extractMethod).toBeDefined();
+      expect(extractMethod.title).toBeTruthy();
+      expect(showRefactoring).toBeDefined();
+      expect(showRefactoring.title).toBeTruthy();
+    });
+
     test('all commands have a category', () => {
       for (const cmd of pkg.contributes.commands) {
         expect(cmd.category).toBeTruthy();
@@ -389,6 +409,28 @@ describe('package.json contributes', () => {
       expect(commands).toContain('perl-lsp.organizeImports');
       expect(commands).toContain('perl-lsp.runTests');
       expect(commands).toContain('perl-lsp.restart');
+    });
+
+    test('defines Shift+Alt+V keybinding for extractVariable', () => {
+      const keybindings: any[] = pkg.contributes.keybindings;
+      const kb = keybindings.find((k: any) => k.command === 'perl-lsp.extractVariable');
+      expect(kb).toBeDefined();
+      expect(kb.key.toLowerCase()).toBe('shift+alt+v');
+    });
+
+    test('defines Shift+Alt+M keybinding for extractMethod', () => {
+      const keybindings: any[] = pkg.contributes.keybindings;
+      const kb = keybindings.find((k: any) => k.command === 'perl-lsp.extractMethod');
+      expect(kb).toBeDefined();
+      expect(kb.key.toLowerCase()).toBe('shift+alt+m');
+    });
+
+    test('refactoring keybindings are scoped to perl with selection', () => {
+      const keybindings: any[] = pkg.contributes.keybindings;
+      const extractVarKb = keybindings.find((k: any) => k.command === 'perl-lsp.extractVariable');
+      const extractMethodKb = keybindings.find((k: any) => k.command === 'perl-lsp.extractMethod');
+      expect(extractVarKb.when).toContain('editorLangId == perl');
+      expect(extractMethodKb.when).toContain('editorLangId == perl');
     });
 
     test('keybindings are scoped to perl language', () => {
