@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-03-20
+
+This release is the **public alpha launch** -- the first release intended for broad
+external adoption. It spans 590+ commits and 200+ merged PRs, delivering major parser
+improvements (83% to 85.7% CPAN corpus), new LSP features, distribution tooling, and
+comprehensive documentation for first-time users.
+
 ### Added
+- **Graceful Degradation**: Three-tier degradation for partial parse results -- full AST, partial recovery, and graceful fallback (#2219).
+- **Large File Guard**: Skip parsing for oversized files to prevent editor hangs (#2163, #2229).
+- **Hover: Module Path**: Show resolved module path on `use` statement hover (#2211).
+- **DAP Inline Values**: Display variable values inline during debugging sessions (#2212).
+- **Parser: Fix Suggestions**: Helpful fix suggestions in parser error messages (#2200).
+- **Distribution: cargo-binstall**: Pre-built binary installation via `cargo binstall perl-lsp` (#2071, #2209).
+- **Distribution: Man Page**: `man perl-lsp` page generated from CLI definition (#2210).
+- **Distribution: PowerShell Completions**: Shell completion generation for PowerShell (#2075, #2214).
+- **VS Code: Test Explorer**: Test explorer integration for Perl `.t` files (#2033).
+- **VS Code: Extension Polish**: Marketplace metadata, test suite, and documentation for 0.12.0 (#2032, #2034).
+- **First-Run Experience**: Getting-started guide and improved install verification for new users (#1658).
 - **Completion: Import Lists**: `use Module qw(...)` triggers symbol completion from the target module (#1937).
 - **Completion: Regex Literals**: Variable and function completions inside `/…/`, `m/…/`, `qr/…/` patterns (#1925).
 - **Completion: Scope-Ranked Locals**: Local symbols ranked by scope distance for more relevant suggestions (#1983).
@@ -18,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Class Field Declarations**: Parser supports Perl class field declaration syntax (#1808+).
 - **CLI Flags**: `--check`, `--info`, `--completion` flags for scripting and editor integration (#1682).
 - **Diagnostic Accessibility**: Improved error message quality and accessibility in diagnostics (#1672).
-- **Async Runtime with Concurrent Dispatch**: Two-lane scheduler — exclusive worker for mutations + 4-worker read pool for concurrent requests. `$/cancelRequest` processed inline (#1555).
+- **Async Runtime with Concurrent Dispatch**: Two-lane scheduler -- exclusive worker for mutations + 4-worker read pool for concurrent requests. `$/cancelRequest` processed inline (#1555).
 - **Goto AST Node**: Dedicated `Goto` node with full `TokenKind::display_name` support (#1521).
 - **Smarter Selection Range**: Expand/shrink selection chains with semantic awareness (#1545).
 - **Cross-file Go-to-Definition**: Improved navigation for method calls and `use parent`/`base` statements (#1542, #1544).
@@ -35,12 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VS Code Extension**: Trace support, config change detection (#1876), `--health` binary validation before starting LSP client (#1598), Open VSX keywords and metadata (#1879), client refresh behavior fix.
 
 ### Fixed
-- **Parser — Control Flow**: Handle orphaned `else`/`elsif` and `unless`+`else`/`elsif` chains (#1981), allow bare `return` in ternary branches (#1727), handle statement-start nullary builtin precedence (#1724), recover bare list-operator calls in postfix args (#1989).
-- **Parser — Expressions**: Accept fat arrows in expression contexts (#1985), support last-index deref `->$#*` in bracket expressions (#1988), slurp trailing operators after Number/String in `use` import values (#1980), handle `use constant NAME => expr` fully (#1577).
-- **Parser — Disambiguation**: Disambiguate `field` keyword from bareword identifier (#1978), allow keyword barewords as subroutine names (#1986), allow keyword methods and trailing separators (#1993), recover field bareword calls in recovery parser, validate declaration attributes.
-- **Parser — Builtins**: `map`/`grep`/`sort` BLOCK LIST without trailing semicolon (#1623), `tie(VARIABLE, CLASS, LIST)` with parenthesized args (#1630), `defined`/`ref` at statement start (#1618), `push`/`pop` with postfix deref lvalue (#1619), nullary builtins in paren expressions (#1629).
-- **Parser — OO**: Tighten qualified class-name and namespaced class parsing, statement modifiers after complex expressions (#1550), package-qualified variable subscripts (#1548).
-- **Parser — Misc**: Tighten deref parsing (#1884), transliteration delimiter parsing, operator strings in `use overload` (#1492), chained method calls after deref constructs (#1474), ternary then-branch assignments (#1516, #1518).
+- **Parser -- Control Flow**: Handle orphaned `else`/`elsif` and `unless`+`else`/`elsif` chains (#1981), allow bare `return` in ternary branches (#1727), handle statement-start nullary builtin precedence (#1724), recover bare list-operator calls in postfix args (#1989), handle `for`/`foreach` without explicit loop variable (#1700, #2040), handle ternary after named-unary operators (#2025).
+- **Parser -- Expressions**: Accept fat arrows in expression contexts (#1985), support last-index deref `->$#*` in bracket expressions (#1988), slurp trailing operators after Number/String in `use` import values (#1980), handle `use constant NAME => expr` fully (#1577), handle complex expressions in parenthesized arguments (#1704, #2206), accept complex expressions in `use`/`no` import lists (#2184, #2221), audit fat arrow expressions (#1651, #2171), allow postfix operators after typeglob expressions (#2188, #2238).
+- **Parser -- Disambiguation**: Disambiguate `field` keyword from bareword identifier (#1978), allow keyword barewords as subroutine names (#1986), allow keyword methods and trailing separators (#1993), recover field bareword calls in recovery parser, validate declaration attributes.
+- **Parser -- Builtins**: `map`/`grep`/`sort` BLOCK LIST without trailing semicolon (#1623), `tie(VARIABLE, CLASS, LIST)` with parenthesized args (#1630), `defined`/`ref` at statement start (#1618), `push`/`pop` with postfix deref lvalue (#1619), nullary builtins in paren expressions (#1629), improve word operator handling for 43 CPAN files (#1922).
+- **Parser -- OO**: Tighten qualified class-name and namespaced class parsing, statement modifiers after complex expressions (#1550), package-qualified variable subscripts (#1548).
+- **Parser -- Misc**: Tighten deref parsing (#1884), transliteration delimiter parsing, operator strings in `use overload` (#1492), chained method calls after deref constructs (#1474), ternary then-branch assignments (#1516, #1518), guard semicolon break with `at_top_level` in `use` imports (#2237), add `RightBrace` to indirect call argument terminators (#2222, #2236).
 - **Lexer**: Prevent prototype mode leak after `sub` keyword (#1906), disambiguate regex after bare builtins (#1965), recognize special punctuation variables `$~`, `$^`, `$=`, `$%`, `$;`, `$^W` etc. (#1615), disambiguate `$$var` scalar deref from `$$` PID variable (#1572), peek/reset state restoration, make regex parse budget reachable (#1455).
 - **Completion**: Preserve regex interpolation completions (#1925).
 - **Workspace Index**: Rebuild find-definition symbol cache after index updates (#1919).
@@ -51,18 +69,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DAP**: Fix socket default port, harden debugger smoke and timeout handling (#1883), prevent subtraction overflow in inline values (#1515).
 
 ### Changed
-- **Microcrate Extractions**: 8 new microcrates extracted — perl-dap-config, perl-dap-session-model, perl-ast-v2, perl-ts-statement-tracker, perl-lsp-type-hierarchy, perl-perltidy, perl-lsp-completion-filepath, perl-workspace-index-monitor.
-- **God File Splits**: `debug_adapter.rs` (6778 lines) split into focused domain modules (#1666), `lsp_comprehensive_3_17_test.rs` split into feature-specific test files (#1681), `cpan_pattern_tests.rs` split into 16 standalone test files (#1665), runtime `mod.rs` handler groups extracted (#1676).
+- **Microcrate Extractions**: 10 new microcrates extracted -- perl-dap-config, perl-dap-session-model, perl-ast-v2, perl-ts-statement-tracker, perl-lsp-type-hierarchy, perl-perltidy, perl-lsp-completion-filepath, perl-workspace-index-monitor, perl-lsp-code-lens, perl-lsp-document-highlight.
+- **God File Splits**: `debug_adapter.rs` (6778 lines) split into focused domain modules (#1666, #1639, #2208), `lsp_comprehensive_3_17_test.rs` split into feature-specific test files (#1681), `cpan_pattern_tests.rs` split into 16 standalone test files (#1665), runtime `mod.rs` handler groups extracted (#1676).
 - **Refactored Internals**: Execute command modules, code actions provider, perl critic tooling, centralized server startup logging (#1826).
 - **Feature Gating**: Tightened LSP capability feature gating and feature profile normalization.
 - **Native Debt Report**: `xtask` now has a native `debt-report` subcommand (#1528).
 - **Devex Targeted Checks**: Converted from shell script to native Rust xtask subcommand (#1527).
-- **CI**: Auto-fix formatting instead of failing on `cargo fmt` (#1625).
-- **CPAN Corpus**: Baseline ratcheted after merge sessions (#1892).
+- **CI**: Auto-fix formatting instead of failing on `cargo fmt` (#1625), pre-push hook to update test counts (#2128).
+- **CPAN Corpus**: Baseline ratcheted from 83% to 85.7% (6081/7095 files) (#1892, #2233, #2244).
+- **Documentation**: Comprehensive README for 0.12.0 (#2012), launch articles covering development story, reference implementation, AI-native operating model, and case studies (#2203, #2235, #2240, #2242, #2243), contributing guide update (#2010).
 
 ### Performance
 - **find_definition**: Replaced O(n*m) scan with O(1) HashMap lookup in workspace-index (#1919).
 - **LSP Async Scheduling**: Improved read scheduling for lower latency on concurrent requests (#1837).
+- **Completion**: Reduced unnecessary clones in completion hot path (#2073, #2220).
+- **Document Highlight**: Linear dedup for small highlight sets, eliminated clone (#1928).
+- **Workspace Symbols**: Reduced allocations in workspace symbol search (#1908).
+- **Performance Baselines**: Established 0.12.0 performance baselines (#1654, #2166).
 
 ## [0.11.0] - 2026-03-12
 
@@ -99,7 +122,7 @@ repeatable release flow.
 
 ## [0.10.0] - 2026-02-28
 
-A major release campaign spanning 60+ PRs (#845–#911) focused on build reliability,
+A major release campaign spanning 60+ PRs (#845-#911) focused on build reliability,
 security hardening, crates.io publishing readiness, documentation, and code quality.
 
 ### Added
@@ -160,18 +183,18 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 ### Infrastructure
 - **Nightly CI Stabilization**: Fuzz harness panic hardening, coverage test resilience, clippy cleanup (#860).
 - **Release Orchestration**: Turnkey PR-driven 0.x.y release workflow (#872).
-- **Release Tool Installs**: Deterministic git-cliff and cargo-release installation (#873–#877).
+- **Release Tool Installs**: Deterministic git-cliff and cargo-release installation (#873-#877).
 - **crates.io Dry-Run**: Unblocked dry-run packaging for all workspace crates (#865).
 - **Lockfile Maintenance**: Refreshed lockfile for CI deny checks, fuzz lockfile exclusion (#885).
 
 ### Dependencies
-- `rand` 0.9.2 → 0.10.0 (#855).
-- `serial_test` 3.3.1 → 3.4.0 (#854).
-- `uuid` 1.20.0 → 1.21.0 (#856).
-- `toml` 0.9.12 → 1.0.3 (#853).
-- `aquasecurity/trivy-action` 0.34.0 → 0.34.1 (#851).
-- `@types/node` 25.1.0 → 25.3.0 (#849).
-- `@types/tar` 6.1.13 → 7.0.87 (#850).
+- `rand` 0.9.2 -> 0.10.0 (#855).
+- `serial_test` 3.3.1 -> 3.4.0 (#854).
+- `uuid` 1.20.0 -> 1.21.0 (#856).
+- `toml` 0.9.12 -> 1.0.3 (#853).
+- `aquasecurity/trivy-action` 0.34.0 -> 0.34.1 (#851).
+- `@types/node` 25.1.0 -> 25.3.0 (#849).
+- `@types/tar` 6.1.13 -> 7.0.87 (#850).
 - Additional dependency group updates (#852).
 
 ## [0.9.1] - 2026-02-20
