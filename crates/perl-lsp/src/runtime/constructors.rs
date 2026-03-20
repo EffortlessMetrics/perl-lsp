@@ -48,6 +48,7 @@ impl LspServer {
             notebook_store: notebook::NotebookStore::new(),
             trace_level: Arc::new(Mutex::new("off".to_string())),
             feature_profile,
+            pod_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -135,6 +136,7 @@ impl LspServer {
             notebook_store: notebook::NotebookStore::new(),
             trace_level: Arc::new(Mutex::new("off".to_string())),
             feature_profile,
+            pod_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -185,6 +187,7 @@ impl LspServer {
             notebook_store: notebook::NotebookStore::new(),
             trace_level: Arc::new(Mutex::new("off".to_string())),
             feature_profile,
+            pod_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
