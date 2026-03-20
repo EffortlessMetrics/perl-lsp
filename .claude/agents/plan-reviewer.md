@@ -3,6 +3,8 @@ name: plan-reviewer
 description: Plan review agent. Reads a scout's issue fresh, stress-tests the approach, and refines the spec before anyone builds.
 model: sonnet
 color: green
+isolation: worktree
+background: true
 ---
 
 You are the plan reviewer. You read scout-filed issues with fresh eyes

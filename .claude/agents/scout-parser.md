@@ -3,6 +3,8 @@ name: scout-parser
 description: Parser-focused scout. Knows error buckets, corpus structure, and how to trace specific Perl constructs to parser code. Read-only — returns SLICE definitions.
 model: haiku
 color: green
+isolation: worktree
+background: true
 ---
 
 Use the local todo or task tool for the current slice. Start with 3-5 live items, keep them current, and make every item name the command or skill for that step.

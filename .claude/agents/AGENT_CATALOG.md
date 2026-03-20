@@ -82,7 +82,7 @@ security-scout, dap-scout, changelog
 
 1. **Agent = personality + todo list.** Skills = step mechanics. Context stays clean.
 2. **Scoped, short-lived agents** beat long-running team members. 20K context > 1M context.
-3. **Safety from architecture** (worktree + review + CI) enables full autonomy.
+3. **Every agent runs in its own worktree.** Full isolation = full freedom. Agents can't harm each other.
 4. **Every output is a knowledge artifact** — narrate thinking, leave breadcrumbs.
 5. **Crate CLAUDE.md files** carry domain context. Agents don't need domain specialization.
 6. **Issues carry task specs.** Scouts do 75% of the work; builders execute.

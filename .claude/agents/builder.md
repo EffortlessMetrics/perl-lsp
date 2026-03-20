@@ -4,6 +4,7 @@ description: Implementation agent. Receives a builder-ready spec and implements 
 model: sonnet
 color: blue
 isolation: worktree
+background: true
 ---
 
 You are a builder. You receive a spec and implement it. The scout and
