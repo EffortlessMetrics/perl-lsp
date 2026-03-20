@@ -1669,3 +1669,42 @@ lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."
     env RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked -- --test-threads=2
     @echo "LSP Tier C passed"
+
+# ============================================================================
+# Worktree Cleanup
+# ============================================================================
+
+# Clean up stale agent worktrees (safe — only removes worktrees with no uncommitted changes and no open PR)
+clean-worktrees:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Pruning unreferenced worktrees..."
+    git worktree prune
+    echo "Checking .claude/worktrees/ for stale entries..."
+    removed=0
+    kept=0
+    for wt in .claude/worktrees/*/; do
+        [ -d "$wt" ] || continue
+        name=$(basename "$wt")
+        # Check for uncommitted changes
+        if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
+            echo "  KEEP $name (has uncommitted changes)"
+            kept=$((kept + 1))
+            continue
+        fi
+        # Check for open PR
+        branch=$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [ -n "$branch" ] && [ "$branch" != "HEAD" ]; then
+            pr_count=$(gh pr list --head "$branch" --state open --json number --jq length 2>/dev/null || echo "0")
+            if [ "$pr_count" -gt 0 ]; then
+                echo "  KEEP $name (has open PR on $branch)"
+                kept=$((kept + 1))
+                continue
+            fi
+        fi
+        echo "  REMOVE $name"
+        git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+        removed=$((removed + 1))
+    done
+    git worktree prune
+    echo "Done: removed $removed, kept $kept"
