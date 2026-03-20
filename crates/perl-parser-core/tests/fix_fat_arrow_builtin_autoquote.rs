@@ -107,9 +107,7 @@ fn has_acceptors_sub() {
 
 #[test]
 fn has_inactivity_timeout() {
-    assert_clean_parse(
-        r#"has inactivity_timeout => sub { $ENV{MOJO_INACTIVITY_TIMEOUT} // 30 };"#,
-    );
+    assert_clean_parse(r#"has inactivity_timeout => sub { $ENV{MOJO_INACTIVITY_TIMEOUT} // 30 };"#);
 }
 
 #[test]
