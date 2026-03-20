@@ -1,6 +1,12 @@
 //! Text document synchronization
 //!
 //! Handles didOpen, didChange, didClose, didSave notifications.
+//!
+//! We advertise `TextDocumentSyncKind::Incremental` (2): the client sends
+//! range-based text edits which are applied to the in-memory Rope via
+//! [`apply_changes`].  After applying the edits the *entire* document is
+//! reparsed — incremental *parsing* is future work.  The sync kind is about
+//! how document text is transferred, not the parsing strategy.
 
 use super::*;
 use crate::protocol::invalid_params;
