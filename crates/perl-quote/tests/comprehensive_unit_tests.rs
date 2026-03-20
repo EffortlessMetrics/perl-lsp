@@ -821,3 +821,11 @@ fn subst_deeply_nested_braces() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(repl, "d");
     Ok(())
 }
+
+#[test]
+fn test_strict_subst_slash_in_double_quoted_replacement() {
+    let (pat, repl, mods) = strict(r#"s/foo/sprintf("%s/%s", $a, $b)/e"#);
+    assert_eq!(pat, "foo");
+    assert_eq!(repl, r#"sprintf("%s/%s", $a, $b)"#);
+    assert_eq!(mods, "e");
+}

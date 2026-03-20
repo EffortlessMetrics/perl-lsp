@@ -2844,6 +2844,25 @@ impl<'a> PerlLexer<'a> {
                         self.advance();
                     }
                 }
+                // Skip over string literals so that `/` inside "foo/bar" or 'a/b'
+                // is not mistaken for the closing delimiter of the replacement.
+                '"' | '\'' => {
+                    let quote = ch;
+                    self.advance(); // consume opening quote
+                    while let Some(inner) = self.current_char() {
+                        if inner == '\\' {
+                            self.advance();
+                            if self.current_char().is_some() {
+                                self.advance();
+                            }
+                        } else if inner == quote {
+                            self.advance(); // consume closing quote
+                            break;
+                        } else {
+                            self.advance();
+                        }
+                    }
+                }
                 _ if ch == repl_delimiter && repl_is_paired => {
                     repl_depth += 1;
                     self.advance();

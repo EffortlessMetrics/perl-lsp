@@ -101,35 +101,10 @@ pub fn extract_substitution_parts_strict(
             return Err(SubstitutionError::MissingReplacement);
         }
 
-        // Manually parse the replacement
-        let chars = rest1.char_indices();
-        let mut body = String::new();
-        let mut escaped = false;
-        let mut end_pos = rest1.len();
-        let mut found_closing = false;
-
-        for (i, ch) in chars {
-            if escaped {
-                body.push(ch);
-                escaped = false;
-                continue;
-            }
-
-            match ch {
-                '\\' => {
-                    body.push(ch);
-                    escaped = true;
-                }
-                c if c == closing => {
-                    end_pos = i + ch.len_utf8();
-                    found_closing = true;
-                    break;
-                }
-                _ => body.push(ch),
-            }
-        }
-
-        (body, &rest1[end_pos..], found_closing)
+        // Parse replacement, skipping string literals so that delimiter chars
+        // inside "foo/bar" or 'a/b' don't terminate the replacement early.
+        let (body, rest, found_closing) = extract_unpaired_body_skip_strings(rest1, closing);
+        (body, rest, found_closing)
     } else {
         // Paired delimiters
         let trimmed = rest1.trim_start();
@@ -271,8 +246,9 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
     // For paired delimiters, the replacement may use a different delimiter than the pattern
     // e.g., s[pattern]{replacement} is valid Perl
     let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
-        // Non-paired delimiters: manually parse the replacement
-        let (body, rest) = extract_unpaired_body(rest1, closing);
+        // Non-paired delimiters: manually parse the replacement, skipping string literals
+        // so that delimiter chars inside "foo/bar" or 'a/b' don't end the replacement early.
+        let (body, rest, _found) = extract_unpaired_body_skip_strings(rest1, closing);
         (body, Cow::Borrowed(rest))
     } else if !is_paired && !pattern_closed {
         if let Some((fallback_pattern, fallback_replacement, fallback_modifiers)) =
@@ -493,6 +469,57 @@ fn extract_unpaired_body(text: &str, closing: char) -> (String, &str) {
     }
 
     (body, &text[end_pos..])
+}
+
+/// Like `extract_unpaired_body` but skips over string literals (`"..."` / `'...'`)
+/// so that the closing delimiter character inside a string is not mistaken for the
+/// end of the replacement section.  Returns `(body, rest, found_closing)`.
+fn extract_unpaired_body_skip_strings(text: &str, closing: char) -> (String, &str, bool) {
+    let mut body = String::new();
+    let mut escaped = false;
+    let mut end_pos = text.len();
+    let mut found_closing = false;
+    let mut iter = text.char_indices().peekable();
+
+    while let Some((i, ch)) = iter.next() {
+        if escaped {
+            body.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' => {
+                body.push(ch);
+                escaped = true;
+            }
+            // Skip over string literals to avoid treating delimiter chars inside
+            // "foo/bar" or 'a/b' as the closing delimiter of the replacement.
+            '"' | '\'' => {
+                let quote = ch;
+                body.push(ch);
+                let mut inner_escaped = false;
+                for (_, ic) in iter.by_ref() {
+                    body.push(ic);
+                    if inner_escaped {
+                        inner_escaped = false;
+                    } else if ic == '\\' {
+                        inner_escaped = true;
+                    } else if ic == quote {
+                        break;
+                    }
+                }
+            }
+            c if c == closing => {
+                end_pos = i + ch.len_utf8();
+                found_closing = true;
+                break;
+            }
+            _ => body.push(ch),
+        }
+    }
+
+    (body, &text[end_pos..], found_closing)
 }
 
 fn extract_substitution_pattern_with_replacement_hint(
