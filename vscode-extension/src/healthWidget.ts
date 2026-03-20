@@ -74,6 +74,7 @@ export class HealthWidget {
     private _errorCount = 0;
     private _indexingMessage: string | undefined = undefined;
     private _activeTokens = new Set<ProgressToken>();
+    private _version: string | undefined = undefined;
 
     constructor(private readonly item: vscode.StatusBarItem) {
         this._render();
@@ -137,6 +138,12 @@ export class HealthWidget {
         this._render();
     }
 
+    /** Set the server version string from the initialize handshake. */
+    setVersion(version: string): void {
+        this._version = version;
+        this._render();
+    }
+
     /** Current display mode (useful for testing). */
     get mode(): WidgetMode {
         return this._mode;
@@ -150,6 +157,11 @@ export class HealthWidget {
     /** Current error count. */
     get errorCount(): number {
         return this._errorCount;
+    }
+
+    /** Server version from the initialize handshake (undefined until set). */
+    get version(): string | undefined {
+        return this._version;
     }
 
     // -----------------------------------------------------------------------
@@ -178,6 +190,7 @@ export class HealthWidget {
             }
 
             case 'running': {
+                const label = this._version ? `perl-lsp v${this._version}` : 'perl-lsp';
                 const parts: string[] = [];
                 if (this._fileCount !== undefined) {
                     parts.push(`${this._fileCount} files`);
@@ -186,9 +199,10 @@ export class HealthWidget {
                     parts.push(`${this._errorCount} error${this._errorCount === 1 ? '' : 's'}`);
                 }
                 const detail = parts.length > 0 ? `: ${parts.join(' | ')}` : '';
-                this.item.text = `$(check) perl-lsp${detail}`;
+                this.item.text = `$(check) ${label}${detail}`;
+                const versionNote = this._version ? ` v${this._version}` : '';
                 this.item.tooltip =
-                    'Perl Language Server is running (click for options)';
+                    `Perl Language Server${versionNote} is running (click for options)`;
                 this.item.backgroundColor = undefined;
                 break;
             }
