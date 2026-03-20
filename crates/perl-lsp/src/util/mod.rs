@@ -3,7 +3,10 @@
 //! Common text processing helpers used across the LSP implementation.
 //! Includes panic-free accessors for safe string processing.
 
+pub mod command_timeout;
 pub mod uri;
+
+pub use command_timeout::run_command_with_timeout;
 
 use lsp_types::Position;
 use perl_module_reference::extract_module_reference as extract_module_reference_at_cursor;

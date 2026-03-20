@@ -54,14 +54,15 @@ fn fetch_virtual_content(uri: &str) -> Option<String> {
 fn fetch_perldoc(module: &str) -> Option<String> {
     // Run perldoc -T Module::Name to get plain text documentation
     // Use -- to prevent argument injection if module starts with -
-    let output =
-        match std::process::Command::new("perldoc").arg("-T").arg("--").arg(module).output() {
-            Ok(output) => output,
-            Err(e) => {
-                eprintln!("Failed to run perldoc for module {}: {}", module, e);
-                return None;
-            }
-        };
+    let mut cmd = std::process::Command::new("perldoc");
+    cmd.arg("-T").arg("--").arg(module);
+    let output = match crate::util::run_command_with_timeout(cmd, 10) {
+        Ok(output) => output,
+        Err(e) => {
+            eprintln!("Failed to run perldoc for module {}: {}", module, e);
+            return None;
+        }
+    };
 
     if output.status.success() {
         String::from_utf8(output.stdout)

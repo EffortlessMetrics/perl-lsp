@@ -4,8 +4,9 @@
 //! of external processes and isolation from the host system.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use anyhow::{Context, Result, anyhow};
+use crate::util::run_command_with_timeout;
 use serde::{Deserialize, Serialize};
 
 /// Sandbox configuration for process execution
@@ -82,8 +83,9 @@ impl Sandbox {
 
         // Execute and capture output
         let start = std::time::Instant::now();
-        let output = cmd
-            .output()
+        // Use the configured CPU time limit (or 30s as a fallback) as the wall-clock timeout.
+        let timeout_secs = self.config.max_cpu_time.unwrap_or(30);
+        let output = run_command_with_timeout(cmd, timeout_secs)
             .with_context(|| format!("failed to execute sandboxed command: {}", program))?;
         let execution_time = start.elapsed();
 
@@ -100,9 +102,8 @@ impl Sandbox {
     fn execute_unsandboxed(&self, program: &str, args: &[&str]) -> Result<SandboxResult> {
         let mut cmd = Command::new(program);
         cmd.args(args);
-        
-        let output = cmd
-            .output()
+        let timeout_secs = self.config.max_cpu_time.unwrap_or(30);
+        let output = run_command_with_timeout(cmd, timeout_secs)
             .with_context(|| format!("failed to execute command: {}", program))?;
         
         Ok(SandboxResult {
@@ -157,7 +158,9 @@ impl Sandbox {
     #[cfg(target_os = "linux")]
     fn apply_linux_sandbox(&self, cmd: &mut Command) -> Result<()> {
         // Use firejail if available
-        if Command::new("firejail").arg("--version").output().is_ok() {
+        let mut firejail_probe = Command::new("firejail");
+        firejail_probe.arg("--version");
+        if run_command_with_timeout(firejail_probe, 2).is_ok() {
             let mut firejail_cmd = Command::new("firejail");
             
             // Apply memory limits
@@ -206,7 +209,9 @@ impl Sandbox {
     #[cfg(target_os = "macos")]
     fn apply_macos_sandbox(&self, cmd: &mut Command) -> Result<()> {
         // Use sandbox-exec if available
-        if Command::new("sandbox-exec").arg("--version").output().is_ok() {
+        let mut sandbox_probe = Command::new("sandbox-exec");
+        sandbox_probe.arg("--version");
+        if run_command_with_timeout(sandbox_probe, 2).is_ok() {
             let sandbox_profile = self.generate_macos_sandbox_profile();
             
             let mut sandbox_cmd = Command::new("sandbox-exec");

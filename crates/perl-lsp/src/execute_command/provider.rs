@@ -56,7 +56,7 @@ impl ExecuteCommandProvider {
     pub(crate) fn run_tests(&self, file_path: &Path) -> Result<Value, String> {
         let file_path_str = file_path.to_string_lossy();
         let is_test_file = self.is_test_file(&file_path_str);
-        let (command_name, mut cmd) = if is_test_file && self.command_exists("prove") {
+        let (command_name, cmd) = if is_test_file && self.command_exists("prove") {
             ("prove", {
                 let mut cmd = Command::new("prove");
                 cmd.arg("-v").arg("--").arg(file_path.as_os_str());
@@ -70,7 +70,8 @@ impl ExecuteCommandProvider {
             })
         };
 
-        let result = cmd.output().map_err(|e| format!("Failed to run {}: {}", command_name, e))?;
+        let result = crate::util::run_command_with_timeout(cmd, 30)
+            .map_err(|e| format!("Failed to run {}: {}", command_name, e))?;
         Ok(self.format_command_result(result, Some(("command", command_name.into()))))
     }
 
@@ -86,23 +87,18 @@ impl ExecuteCommandProvider {
             }
         "#;
 
-        let result = Command::new("perl")
-            .arg("-e")
-            .arg(perl_code)
-            .arg("--")
-            .arg(file_path.as_os_str())
-            .arg(sub_name)
-            .output()
+        let mut perl_cmd = Command::new("perl");
+        perl_cmd.arg("-e").arg(perl_code).arg("--").arg(file_path.as_os_str()).arg(sub_name);
+        let result = crate::util::run_command_with_timeout(perl_cmd, 30)
             .map_err(|e| format!("Failed to run test subroutine: {}", e))?;
 
         Ok(self.format_command_result(result, Some(("subroutine", sub_name.into()))))
     }
 
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
-        let result = Command::new("perl")
-            .arg("--")
-            .arg(file_path.as_os_str())
-            .output()
+        let mut perl_cmd = Command::new("perl");
+        perl_cmd.arg("--").arg(file_path.as_os_str());
+        let result = crate::util::run_command_with_timeout(perl_cmd, 30)
             .map_err(|e| format!("Failed to run file: {}", e))?;
 
         Ok(self.format_command_result(result, None))
@@ -440,9 +436,9 @@ impl ExecuteCommandProvider {
     }
 
     pub(crate) fn command_exists(&self, command: &str) -> bool {
-        Command::new("which")
-            .arg(command)
-            .output()
+        let mut cmd = Command::new("which");
+        cmd.arg(command);
+        crate::util::run_command_with_timeout(cmd, 2)
             .map(|output| output.status.success())
             .unwrap_or(false)
     }
@@ -450,9 +446,9 @@ impl ExecuteCommandProvider {
 
 /// Check whether a command exists in the current PATH.
 pub fn command_exists(command: &str) -> bool {
-    std::process::Command::new(command)
-        .arg("--version")
-        .output()
+    let mut cmd = std::process::Command::new(command);
+    cmd.arg("--version");
+    crate::util::run_command_with_timeout(cmd, 2)
         .map(|output| output.status.success())
         .unwrap_or(false)
 }
