@@ -11,17 +11,14 @@ import {
     Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger, offerDebugConfigOnFirstPerlOpen } from './debugAdapter';
+import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
-import { HealthWidget, ClientState } from './healthWidget';
-import { OnboardingManager } from './onboarding';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
 let statusBarItem: vscode.StatusBarItem | undefined;
-let healthWidget: HealthWidget | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -29,25 +26,8 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showStatusMenu';
     statusBarItem.show();
-    healthWidget = new HealthWidget(statusBarItem);
+    setStatusBarState(State.Starting);
     context.subscriptions.push(statusBarItem);
-
-    // Track workspace-wide Perl diagnostic errors for the health widget.
-    const diagnosticsDisposable = vscode.languages.onDidChangeDiagnostics(() => {
-        if (!healthWidget) {
-            return;
-        }
-        let errorCount = 0;
-        for (const [, diagnostics] of vscode.languages.getDiagnostics()) {
-            for (const d of diagnostics) {
-                if (d.severity === vscode.DiagnosticSeverity.Error) {
-                    errorCount++;
-                }
-            }
-        }
-        healthWidget.setErrorCount(errorCount);
-    });
-    context.subscriptions.push(diagnosticsDisposable);
 
     // Register showOutput command early so it's available during binary download and initialization
     const showOutputCommand = vscode.commands.registerCommand('perl-lsp.showOutput', () => {
@@ -104,63 +84,76 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
         }
     });
-
-    const openConfigGuideCommand = vscode.commands.registerCommand('perl-lsp.openConfigurationGuide', async () => {
-        const items = [
-            {
-                label: '$(gear) Open Extension Settings',
-                description: 'All perl-lsp settings in the VSCode Settings UI',
-                action: 'settings'
-            },
-            {
-                label: '$(search) Jump to Include Paths',
-                description: 'Fix "Can\'t locate Foo.pm" errors — add your module directories here',
-                action: 'includePaths'
-            },
-            {
-                label: '$(link-external) Online Documentation',
-                description: 'Full configuration reference on GitHub',
-                action: 'docs'
-            }
-        ];
-
-        const selection = await vscode.window.showQuickPick(items, {
-            placeHolder: 'Perl LSP Configuration Guide — choose a destination'
+    
+    const extractVariableCommand = vscode.commands.registerCommand('perl-lsp.extractVariable', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file for extract variable');
+            return;
+        }
+        await vscode.commands.executeCommand('editor.action.codeAction', {
+            kind: 'refactor.extract',
+            preferred: false,
+            apply: 'ifSingle',
         });
+    });
 
-        if (!selection) {
+    const extractMethodCommand = vscode.commands.registerCommand('perl-lsp.extractMethod', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file for extract method');
+            return;
+        }
+        await vscode.commands.executeCommand('editor.action.codeAction', {
+            kind: 'refactor.extract',
+            preferred: false,
+            apply: 'ifSingle',
+        });
+    });
+
+    const showRefactoringOptionsCommand = vscode.commands.registerCommand('perl-lsp.showRefactoringOptions', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file');
             return;
         }
 
-        if (selection.action === 'settings') {
-            void vscode.commands.executeCommand('workbench.action.openSettings', '@ext:EffortlessMetrics.perl-lsp-rs');
-        } else if (selection.action === 'includePaths') {
-            void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.includePaths');
-        } else if (selection.action === 'docs') {
-            void vscode.env.openExternal(
-                vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp#configuration')
-            );
+        interface RefactoringAction extends vscode.QuickPickItem {
+            command: string;
+            args?: unknown[];
+        }
+
+        const items: RefactoringAction[] = [
+            {
+                label: '$(symbol-variable) Extract Variable',
+                description: 'Shift+Alt+V',
+                detail: 'Extract selected expression into a new variable',
+                command: 'perl-lsp.extractVariable',
+            },
+            {
+                label: '$(symbol-method) Extract Method',
+                description: 'Shift+Alt+M',
+                detail: 'Extract selected code into a new subroutine',
+                command: 'perl-lsp.extractMethod',
+            },
+            {
+                label: '$(organization) Organize Use Statements',
+                description: 'Shift+Alt+O',
+                detail: 'Sort and deduplicate use statements',
+                command: 'perl-lsp.organizeImports',
+            },
+        ];
+
+        const selection = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a refactoring action',
+        });
+
+        if (selection) {
+            await vscode.commands.executeCommand(selection.command, ...(selection.args ?? []));
         }
     });
 
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
-        // Prefer the version already obtained from the initialize handshake —
-        // no subprocess needed and the result is instant.
-        const cachedVersion = healthWidget?.version;
-        if (cachedVersion) {
-            const binaryPath = currentServerPath ?? '<unknown>';
-            vscode.window.showInformationMessage(
-                `perl-lsp v${cachedVersion} (${binaryPath})`,
-                'Copy'
-            ).then(selection => {
-                if (selection === 'Copy') {
-                    void vscode.env.clipboard.writeText(`perl-lsp v${cachedVersion}`);
-                }
-            });
-            return;
-        }
-
-        // Fall back to running --version when the server has not yet started.
         if (!currentServerPath) {
             vscode.window.showErrorMessage('Perl LSP server path is unavailable.');
             return;
@@ -226,13 +219,10 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
-            { label: '$(pulse) Run Health Check', detail: 'Check Perl, perltidy, and LSP binary', command: 'perl-lsp.runHealthCheck' },
             { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] },
-            { label: '$(book) Configuration Guide', detail: 'Guided help for includePaths, formatting, and more', command: 'perl-lsp.openConfigurationGuide' },
-            { label: '$(debug-alt) Create Debug Configuration', detail: 'Generate .vscode/launch.json with Perl debug templates', command: 'perl-lsp.createDebugConfig' }
+            { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
@@ -241,41 +231,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (selection && selection.command && !selection.disabled) {
             vscode.commands.executeCommand(selection.command, ...(selection.args || []));
-        }
-    });
-
-    const runHealthCheckCommand = vscode.commands.registerCommand('perl-lsp.runHealthCheck', async (serverPath?: string | null) => {
-        const resolvedPath = serverPath !== undefined ? serverPath : currentServerPath;
-        const onboarding = new OnboardingManager(context, outputChannel);
-        const results = await onboarding.runSetupHealthCheck(resolvedPath ?? null);
-
-        const errors = results.filter(r => !r.ok && r.status === 'error');
-        const warnings = results.filter(r => !r.ok && r.status === 'warning');
-
-        const lines = results.map(r => {
-            const icon = r.ok ? '$(check)' : r.status === 'warning' ? '$(warning)' : '$(error)';
-            return `${icon} ${r.label}: ${r.detail}`;
-        });
-
-        outputChannel.appendLine('[health-check] Results:');
-        for (const line of lines) {
-            outputChannel.appendLine(`  ${line.replace(/\$\(\w[^)]*\)/g, '')}`);
-        }
-
-        if (errors.length > 0) {
-            const msg = `Health check failed: ${errors.map(e => e.label).join(', ')}`;
-            vscode.window.showErrorMessage(msg, 'Show Output').then(sel => {
-                if (sel === 'Show Output') { outputChannel.show(); }
-            });
-        } else if (warnings.length > 0) {
-            const msg = `Health check passed with warnings: ${warnings.map(w => w.detail).join(' | ')}`;
-            vscode.window.showWarningMessage(msg, 'Show Output').then(sel => {
-                if (sel === 'Show Output') { outputChannel.show(); }
-            });
-        } else {
-            vscode.window.showInformationMessage('Perl LSP health check passed.', 'Show Output').then(sel => {
-                if (sel === 'Show Output') { outputChannel.show(); }
-            });
         }
     });
 
@@ -308,35 +263,19 @@ export async function activate(context: vscode.ExtensionContext) {
         restartCommand,
         organizeImportsCommand,
         runTestsCommand,
+        extractVariableCommand,
+        extractMethodCommand,
+        showRefactoringOptionsCommand,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,
-        openConfigGuideCommand,
-        runHealthCheckCommand,
         formatOnSaveDisposable,
         configurationWatcher,
     );
 
     // Initialize debug adapter
     activateDebugger(context);
-
-    // Onboarding: offer debug config creation on first Perl file open
-    const debugConfigOnboarding = vscode.workspace.onDidOpenTextDocument(async (document) => {
-        await offerDebugConfigOnFirstPerlOpen(document);
-    });
-    context.subscriptions.push(debugConfigOnboarding);
-
     await initializeLanguageClient(context);
-
-    // First-run onboarding: show welcome notification once per installation
-    const onboarding = new OnboardingManager(context, outputChannel);
-    if (onboarding.shouldShowWelcome()) {
-        // Fire-and-forget; failures must not block extension startup
-        onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            outputChannel.appendLine(`[onboarding] Error showing welcome: ${msg}`);
-        });
-    }
 }
 
 export async function deactivate() {
@@ -347,28 +286,28 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     // First check user settings
     const config = vscode.workspace.getConfiguration('perl-lsp');
     const userPath = config.get<string>('serverPath');
-
+    
     if (userPath && fs.existsSync(userPath)) {
         outputChannel.appendLine(`Using user-configured perl-lsp: ${userPath}`);
         return userPath;
     }
-
+    
     // Check bundled binary
     const platform = process.platform;
     const arch = process.arch;
     let binaryName = 'perl-lsp';
-
+    
     if (platform === 'win32') {
         binaryName = 'perl-lsp.exe';
     }
-
+    
     const bundledPath = path.join(
         context.extensionPath,
         'bin',
         `${platform}-${arch}`,
         binaryName
     );
-
+    
     if (fs.existsSync(bundledPath)) {
         outputChannel.appendLine(`Using bundled perl-lsp: ${bundledPath}`);
         // Make sure it's executable on Unix-like systems
@@ -377,7 +316,7 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
         }
         return bundledPath;
     }
-
+    
     // Try to find in PATH
     const pathDirs = process.env.PATH?.split(path.delimiter) || [];
     for (const dir of pathDirs) {
@@ -387,15 +326,15 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
             return fullPath;
         }
     }
-
+    
     // Check if auto-download is enabled
     const autoDownload = config.get<boolean>('autoDownload', true);
-
+    
     if (autoDownload) {
         outputChannel.appendLine('perl-lsp not found, attempting to download...');
         const downloader = new BinaryDownloader(context, outputChannel);
         const downloadedPath = await downloader.ensureBinary();
-
+        
         if (downloadedPath) {
             outputChannel.appendLine(`Downloaded perl-lsp to: ${downloadedPath}`);
             return downloadedPath;
@@ -403,17 +342,17 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     } else {
         outputChannel.appendLine('perl-lsp not found and auto-download is disabled');
     }
-
+    
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
 }
 
 async function initializeLanguageClient(context: vscode.ExtensionContext): Promise<boolean> {
-    healthWidget?.onStateChange(ClientState.Starting);
+    setStatusBarState(State.Starting);
 
     currentServerPath = await getServerPath(context);
     if (!currentServerPath) {
-        healthWidget?.onStateChange(ClientState.Stopped);
+        setStatusBarState(State.Stopped);
         const choice = await vscode.window.showErrorMessage(
             'Perl Language Server (perl-lsp) not found.',
             'Install (cargo install perl-lsp)',
@@ -433,7 +372,7 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
 
     const healthOk = await runHealthCheck(currentServerPath);
     if (!healthOk) {
-        healthWidget?.onStateChange(ClientState.Stopped);
+        setStatusBarState(State.Stopped);
         const choice = await vscode.window.showErrorMessage(
             `perl-lsp health check failed. The binary at '${currentServerPath}' does not respond to --health. ` +
             'It may be corrupted or incompatible with your platform.',
@@ -451,47 +390,9 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     client = createLanguageClient(currentServerPath);
     bindClientState(client);
     await client.start();
-    registerProgressHandler(client);
-    const version = client.initializeResult?.serverInfo?.version;
-    if (version && healthWidget) {
-        outputChannel.appendLine(`Perl Language Server version: ${version}`);
-        healthWidget.setVersion(version);
-    }
     await refreshTestAdapter(context);
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
-}
-
-/**
- * Register a $/progress notification handler on the started LSP client.
- *
- * The $/progress notification carries workspace-indexing status messages from
- * the server.  We forward them to the HealthWidget so the status bar reflects
- * indexing progress in real time.
- */
-function registerProgressHandler(languageClient: LanguageClient): void {
-    languageClient.onNotification('$/progress', (params: { token: string | number; value: unknown }) => {
-        const value = params.value as { kind?: string; title?: string; message?: string; percentage?: number } | undefined;
-        if (!value || !healthWidget) {
-            return;
-        }
-        const { kind } = value;
-        if (kind === 'begin') {
-            healthWidget.onProgress(params.token, {
-                kind: 'begin',
-                title: value.title ?? '',
-                message: value.message,
-            });
-        } else if (kind === 'report') {
-            healthWidget.onProgress(params.token, {
-                kind: 'report',
-                message: value.message,
-                percentage: value.percentage,
-            });
-        } else if (kind === 'end') {
-            healthWidget.onProgress(params.token, { kind: 'end', message: value.message });
-        }
-    });
 }
 
 function createLanguageClient(serverPath: string): LanguageClient {
@@ -717,16 +618,31 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
 function bindClientState(languageClient: LanguageClient) {
     stateChangeDisposable?.dispose();
     stateChangeDisposable = languageClient.onDidChangeState(event => {
-        healthWidget?.onStateChange(lspStateToClientState(event.newState));
+        setStatusBarState(event.newState);
     });
 }
 
-/** Map vscode-languageclient State to our local ClientState enum. */
-function lspStateToClientState(state: State): ClientState {
+function setStatusBarState(state: State) {
+    if (!statusBarItem) {
+        return;
+    }
+
     switch (state) {
-        case State.Starting: return ClientState.Starting;
-        case State.Running:  return ClientState.Running;
-        default:             return ClientState.Stopped;
+        case State.Running:
+            statusBarItem.text = '$(check) Perl LSP';
+            statusBarItem.tooltip = 'Perl Language Server is running (click for options)';
+            statusBarItem.backgroundColor = undefined;
+            break;
+        case State.Starting:
+            statusBarItem.text = '$(sync~spin) Perl LSP';
+            statusBarItem.tooltip = 'Perl Language Server is starting... (click for options)';
+            statusBarItem.backgroundColor = undefined;
+            break;
+        case State.Stopped:
+            statusBarItem.text = '$(error) Perl LSP';
+            statusBarItem.tooltip = 'Perl Language Server is stopped (click for options)';
+            statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+            break;
     }
 }
 
