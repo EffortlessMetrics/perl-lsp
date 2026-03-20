@@ -275,7 +275,6 @@ gates:
     required: true
     command: >-
       ./.ci/scripts/check-from-raw.sh &&
-      python3 scripts/update-current-status.py --check &&
       bash ci/check_missing_docs.sh &&
       bash ci/check_parse_errors.sh &&
       python3 scripts/check_features_invariants.py

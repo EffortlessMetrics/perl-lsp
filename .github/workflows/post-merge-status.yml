@@ -1,0 +1,59 @@
+name: Post-Merge Status Regeneration
+
+# Automatically regenerates docs/project/CURRENT_STATUS.md after every merge to master.
+# This eliminates the #1 merge friction point: PRs no longer need to edit CURRENT_STATUS.md
+# themselves, ending the cascade of merge conflicts on that hot shared file.
+# See issue #2296.
+
+on:
+  push:
+    branches:
+      - master
+
+# Only one regeneration at a time; cancel stale runs if a new push lands.
+concurrency:
+  group: post-merge-status-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-status:
+    name: Regenerate CURRENT_STATUS.md
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch full history so git can commit cleanly.
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: post-merge-status-${{ hashFiles('Cargo.lock') }}
+
+      - name: Regenerate CURRENT_STATUS.md and ROADMAP.md
+        run: cargo run -p xtask -- update-status --write
+
+      - name: Commit regenerated files if changed
+        run: |
+          if ! git diff --quiet -- docs/project/CURRENT_STATUS.md docs/project/ROADMAP.md; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add docs/project/CURRENT_STATUS.md docs/project/ROADMAP.md
+            git commit -m "chore(docs): regenerate CURRENT_STATUS.md post-merge [skip ci]"
+            git push
+            echo "::notice::Regenerated CURRENT_STATUS.md and pushed."
+          else
+            echo "::notice::CURRENT_STATUS.md already up to date -- nothing to commit."
+          fi

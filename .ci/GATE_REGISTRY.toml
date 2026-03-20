@@ -80,12 +80,12 @@ name = "Policy Compliance"
 type = "governance"
 blocking = true
 timeout_seconds = 60
-command = "bash ./.ci/scripts/check-from-raw.sh && python3 scripts/update-current-status.py --check"
+command = "bash ./.ci/scripts/check-from-raw.sh"
 evidence_pattern = "^✅"
 threshold = { type = "exit_code", pass = 0 }
 
 [gate.metadata]
-description = "Enforces ExitStatus policy and CURRENT_STATUS.md freshness"
+description = "Enforces ExitStatus policy (CURRENT_STATUS.md is regenerated post-merge via .github/workflows/post-merge-status.yml)"
 docs_url = "docs/ci/LOCAL_CI_PROTOCOL.md#ci-policy"
 cost_tier = "low"  # seconds
 failure_impact = "medium"
