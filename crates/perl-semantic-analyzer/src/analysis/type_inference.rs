@@ -1,5 +1,6 @@
 use crate::ast::{Node, NodeKind};
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 
 /// Represents a Perl type
@@ -52,6 +53,51 @@ pub enum ScalarType {
     Undef,
     /// Mixed scalar type (can be any scalar)
     Mixed,
+}
+
+impl fmt::Display for ScalarType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ScalarType::String => write!(f, "Str"),
+            ScalarType::Integer => write!(f, "Int"),
+            ScalarType::Float => write!(f, "Float"),
+            ScalarType::Boolean => write!(f, "Bool"),
+            ScalarType::Undef => write!(f, "Undef"),
+            ScalarType::Mixed => write!(f, "Scalar"),
+        }
+    }
+}
+
+impl fmt::Display for PerlType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PerlType::Scalar(s) => write!(f, "{s}"),
+            PerlType::Array(elem) => {
+                if matches!(elem.as_ref(), PerlType::Any) {
+                    write!(f, "Array")
+                } else {
+                    write!(f, "Array[{elem}]")
+                }
+            }
+            PerlType::Hash { key, value } => {
+                if matches!(value.as_ref(), PerlType::Any) {
+                    write!(f, "Hash")
+                } else {
+                    write!(f, "Hash[{key} => {value}]")
+                }
+            }
+            PerlType::Reference(inner) => write!(f, "Ref[{inner}]"),
+            PerlType::Subroutine { .. } => write!(f, "Sub"),
+            PerlType::Object(class) => write!(f, "{class}"),
+            PerlType::Glob => write!(f, "Glob"),
+            PerlType::Union(types) => {
+                let labels: Vec<String> = types.iter().map(|t| t.to_string()).collect();
+                write!(f, "{}", labels.join("|"))
+            }
+            PerlType::Any => write!(f, "Any"),
+            PerlType::Void => write!(f, "Void"),
+        }
+    }
 }
 
 /// Type constraint for type checking
@@ -795,6 +841,13 @@ impl TypeInferenceEngine {
     /// Gets the inferred type for a variable by name
     pub fn get_type_at(&self, name: &str) -> Option<PerlType> {
         self.global_env.get_variable(name).cloned()
+    }
+
+    /// Returns a human-readable type label for use in hover text.
+    ///
+    /// Returns `None` if the variable has not been tracked by the engine.
+    pub fn hover_label_for(&self, name: &str) -> Option<String> {
+        self.global_env.get_variable(name).map(|ty| ty.to_string())
     }
 
     /// Gets the inferred type signature for a subroutine
