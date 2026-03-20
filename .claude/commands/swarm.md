@@ -59,13 +59,13 @@ Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your to
 ### Building (implement)
 For issues labeled `builder-ready`:
 ```
-Agent(subagent_type: "builder", isolation: "worktree", prompt: "Implement issue #NNN. Follow your todo list.", name: "builder-NNN")
+Agent(subagent_type: "builder", prompt: "Implement issue #NNN. Follow your todo list.", name: "builder-NNN")
 ```
 
 ### Continuing (finish incomplete PRs)
 For draft PRs with "what's next" notes:
 ```
-Agent(subagent_type: "builder", isolation: "worktree", prompt: "Continue PR #NNN. Use /builder-read-pr as step 1. Follow your todo list.", name: "builder-continue-NNN")
+Agent(subagent_type: "builder", prompt: "Continue PR #NNN. Use /builder-read-pr as step 1. Follow your todo list.", name: "builder-continue-NNN")
 ```
 
 ### Reviewing (validate)
