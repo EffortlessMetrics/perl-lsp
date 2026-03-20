@@ -293,6 +293,22 @@ impl<'a> Parser<'a> {
                 }
 
                 Some(TokenKind::LeftBracket) => {
+                    // Builtin function identifiers treat [ as anonymous-arrayref argument.
+                    if let NodeKind::Identifier { name } = &expr.kind {
+                        if Self::is_builtin_function(name) || self.looks_like_bare_call(name) {
+                            let name = name.clone();
+                            let start = expr.location.start;
+                            let mut args = vec![self.parse_ternary()?];
+                            while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                self.consume_token()?;
+                                if self.is_at_statement_end() { break; }
+                                args.push(self.parse_ternary()?);
+                            }
+                            let end = args.last().map_or(expr.location.end, |a| a.location.end);
+                            expr = Node::new(NodeKind::FunctionCall { name, args }, SourceLocation { start, end });
+                            continue;
+                        }
+                    }
                     // Array indexing - can be a single index or slice with multiple indices
                     self.tokens.next()?; // consume [
 
