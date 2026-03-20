@@ -3,11 +3,18 @@
 ## Architecture
 
 ```
+Two interfaces, two agent types:
+
+  Agent()     → Worker agents (11) — worktree-isolated, background, one task, exit
+  TeamCreate  → Sector leads (1+) — long-running, shared task list, spawn workers
+
 Agent file = identity + objectives + todo list (WHAT to do)
 Step skill = mechanical instructions per todo step (HOW to do it)
 Crate CLAUDE.md = domain context carried by the codebase (CONTEXT)
 GitHub Issue = task spec from scout to builder (HANDOFF)
-Orchestrator = reads catalog + agent files to route work (ROUTING)
+
+At scale:  User → Orchestrator → Sector leads (TeamCreate) → Workers (Agent())
+At small:  User → Orchestrator → Workers (Agent()) directly
 ```
 
 ## Core Pipeline
@@ -24,7 +31,15 @@ Post-merge: wisdom (sonnet) synthesizes learnings
 Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
 Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
-## Agents (11)
+## Team Agents (TeamCreate)
+
+| Agent | Model | Role |
+|-------|-------|------|
+| sector-lead | sonnet | Long-running coordinator. Manages a sector by spawning workers, tracking progress, messaging other leads. |
+
+Instantiated per sector at scale. Common sectors: parser, LSP, quality (review+merge), infra.
+
+## Worker Agents (Agent()) — 11
 
 ### Pipeline Agents (6)
 
@@ -80,11 +95,11 @@ security-scout, dap-scout, changelog
 
 ## Design Principles
 
-1. **Agent = personality + todo list.** Skills = step mechanics. Context stays clean.
-2. **Scoped, short-lived agents** beat long-running team members. 20K context > 1M context.
-3. **Every agent runs in its own worktree.** Full isolation = full freedom. Agents can't harm each other.
-4. **Every output is a knowledge artifact** — narrate thinking, leave breadcrumbs.
-5. **Crate CLAUDE.md files** carry domain context. Agents don't need domain specialization.
+1. **Two interfaces, two agent types.** Workers via Agent() (worktree-isolated, one task, exit). Sector leads via TeamCreate (long-running, manage workers).
+2. **Workers are scoped and short-lived.** One issue, one PR, one task per agent. 20K context > 1M context.
+3. **Every worker runs in its own worktree.** Full isolation = full freedom. Agents can't harm each other.
+4. **Sector leads manage, workers execute.** Leads spawn workers, track progress, coordinate. They never write code.
+5. **Scale by adding sector leads, not by the orchestrator tracking more workers.** Small sessions: direct Agent() calls. Large sessions: TeamCreate with sector leads.
 6. **Issues carry task specs.** Scouts do 75% of the work; builders execute.
-7. **"Not done, but here's what's next"** is a valid success state.
-8. **Model tiering:** haiku for mechanical checks, sonnet for creative analysis.
+7. **Every output is a knowledge artifact** — narrate thinking, leave breadcrumbs.
+8. **Model tiering:** haiku for mechanical checks, sonnet for creative analysis and coordination.

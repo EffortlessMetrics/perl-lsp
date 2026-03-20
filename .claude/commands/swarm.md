@@ -41,8 +41,30 @@ Check what needs work:
 
 ## Phase 3: Route Work
 
-Spawn short-lived, scoped agents directly. Each agent file has its model,
-todo list, and step skills. Read the agent file if you need a reminder.
+Choose routing mode based on session scale:
+
+### Small scale (1-10 tasks): Direct Agent() calls
+
+Spawn workers directly. Each agent file has its model, todo list, and
+step skills — read the agent file if you need a reminder.
+
+### Large scale (10+ tasks): TeamCreate with sector leads
+
+Create a team and spawn sector leads to manage workers:
+```
+TeamCreate(team_name: "swarm-<focus>", description: "...")
+
+Agent(subagent_type: "sector-lead", team_name: "swarm-<focus>",
+  prompt: "You lead the parser sector. Spawn scout-parser and builder agents for parser corpus work. Track issues and PRs in your sector.",
+  name: "parser-lead")
+
+Agent(subagent_type: "sector-lead", team_name: "swarm-<focus>",
+  prompt: "You lead quality. Spawn reviewer, reviewer-deep, and ops agents. Manage the review and merge pipeline.",
+  name: "quality-lead")
+```
+
+Sector leads spawn workers via Agent(). Workers don't know they're part of
+a team — they just follow their todo list in their worktree.
 
 ### Scouting (find work)
 ```
@@ -88,14 +110,14 @@ Agent(subagent_type: "wisdom", prompt: "Read the trail for issue #NNN. Follow yo
 
 ## Orchestrator Principles
 
-- **Spawn scoped, short-lived agents.** One issue, one PR, one task per agent.
-  Don't create long-running teams. Each agent follows its todo list and exits.
+- **Scale with sector leads, not with more direct workers.** At 10+ tasks,
+  create a team with sector leads instead of tracking 30 agents yourself.
 - **Route by label.** `needs-plan-review` → plan-reviewer. `builder-ready` → builder.
   `in-review` → already being reviewed. `merge-ready` → ops.
-- **Don't micromanage.** Agents have autonomy within their scope. The pipeline
-  and guardrails ensure quality. You just route work.
-- **Parallel lanes.** Run scouts, builders, reviewers, and ops simultaneously
-  on different issues/PRs. They don't conflict because of worktree isolation.
+- **Don't micromanage.** Workers have autonomy within their scope. Sector leads
+  have autonomy within their sector. You set direction and monitor.
+- **Parallel lanes.** Workers don't conflict because of worktree isolation.
+  Sector leads don't conflict because they own different sectors.
 - **Can't skip validation.** Every PR goes through review. Every issue goes
   through plan review before building. The pipeline can loop but not skip.
 

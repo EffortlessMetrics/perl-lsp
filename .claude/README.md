@@ -10,26 +10,18 @@ The canonical runtime surfaces are:
 
 Legacy directories archived to `docs/reference/archive/` during architecture transition.
 
-## Canonical Roster
+## Agent Roster
 
 See [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the full inventory.
 
-### Pipeline Agents
-- `scout` (haiku) — investigate, file issues
-- `plan-reviewer` (sonnet) — stress-test plans, mark builder-ready
-- `builder` (sonnet) — implement from spec
-- `reviewer` (haiku) — fast standards check
-- `reviewer-deep` (sonnet) — deep correctness check
-- `ops` (haiku) — merge queue, CI, post-merge
+### Team Agents (TeamCreate — long-running coordinators)
+- `sector-lead` (sonnet) — manages a sector, spawns workers, tracks progress
 
-### Specialized Scouts
-- `scout-parser` (haiku) — error buckets, corpus, parser
-- `scout-lsp` (haiku) — features.toml, providers, LSP spec
-- `scout-dap` (sonnet) — DAP protocol, bridge mode
-
-### Utility
-- `research-web` (sonnet) — web search, doc lookup
-- `wisdom` (sonnet) — synthesize learnings from issue→PR→merge cycles
+### Worker Agents (Agent() — worktree-isolated, one task, exit)
+- `scout` (haiku), `scout-parser` (haiku), `scout-lsp` (haiku), `scout-dap` (sonnet)
+- `plan-reviewer` (sonnet), `builder` (sonnet)
+- `reviewer` (haiku), `reviewer-deep` (sonnet)
+- `ops` (haiku), `research-web` (sonnet), `wisdom` (sonnet)
 
 ## Operating Doctrine
 
@@ -39,12 +31,11 @@ See [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the full inventory.
 - hooks and settings = deterministic enforcement
 - GitHub issues and PRs = persistent work state
 
-Every agent should use the local todo or task tool and name the slash
-entrypoint for each item. The orchestrator reads the agent catalog and
-agent files to route work — no separate flow commands needed. Step skills
-provide mechanical instructions for each todo step. Domain ops
-(`/parser-fix`, `/verify`, `/corpus-ratchet`, etc.) handle specialized
-procedures.
+Two interfaces for two scales: Agent() spawns worktree-isolated workers
+for individual tasks. TeamCreate with sector leads coordinates workers at
+scale (10+ tasks). Step skills provide mechanical instructions for each
+todo step. Domain ops (`/parser-fix`, `/verify`, `/corpus-ratchet`, etc.)
+handle specialized procedures.
 
 The roster mapping lives in
 [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md). It records agent models,
