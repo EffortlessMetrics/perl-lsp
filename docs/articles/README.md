@@ -98,6 +98,27 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/PR_SLICE_SIZE_ARCHAEOLOGY.md](research/PR_SLICE_SIZE_ARCHAEOLOGY.md) — how the PR archive balances many small bounded slices with a smaller number of deliberate umbrella changes
 - [research/PR_WAVE_ARCHAEOLOGY.md](research/PR_WAVE_ARCHAEOLOGY.md) — how the repository moves in bursty PR waves rather than a smooth stream
 
+### Session 3 Research (2026-03-20)
+
+- [research/COMPETITIVE_LANDSCAPE.md](research/COMPETITIVE_LANDSCAPE.md) — Perl tooling market analysis: 78% greenfield, 3 incumbents
+- [research/COST_ROI_ANALYSIS.md](research/COST_ROI_ANALYSIS.md) — session economics: DevLT 3-5 min/PR, $40-79K vs $500K-1.2M traditional
+- [research/COST_ROI_EXECUTIVE_BRIEF.md](research/COST_ROI_EXECUTIVE_BRIEF.md) — executive summary of cost/ROI findings
+- [research/FAILURE_STORIES.md](research/FAILURE_STORIES.md) — 10 documented development failures with cross-cutting patterns
+- [research/VERIFIED_METRICS.md](research/VERIFIED_METRICS.md) — verified metrics with 4 corrections from audit
+- [research/CORPUS_ROADMAP.md](research/CORPUS_ROADMAP.md) — bucket-by-bucket plan from 86.8% to 100% CPAN corpus coverage
+- [research/COUNTER_INTUITIVE_INSIGHTS.md](research/COUNTER_INTUITIVE_INSIGHTS.md) — surprising findings that invert common assumptions
+- [research/HINDSIGHT_FINDINGS.md](research/HINDSIGHT_FINDINGS.md) — things that are obvious in hindsight but were invisible at the time
+- [research/CPAN_CORPUS_AUDIT.md](research/CPAN_CORPUS_AUDIT.md) — detailed CPAN corpus analysis and coverage audit
+- [research/MICROCRATE_EVOLUTION.md](research/MICROCRATE_EVOLUTION.md) — 2 to 132 crates: emergent architecture from swarm development
+- [research/TREE_SITTER_BREAKAGE.md](research/TREE_SITTER_BREAKAGE.md) — 7 tree-sitter breakage patterns and mode-based lexer insight
+- [research/INTERVIEW_QUESTIONS.md](research/INTERVIEW_QUESTIONS.md) — 57 interview questions (35 original + 22 generated from session discoveries)
+- [research/BUILDER_SPECS_PHASE_A.md](research/BUILDER_SPECS_PHASE_A.md) — builder-ready specifications from scout findings
+- [research/SCOUT_CORPUS_TEST_STRATEGY.md](research/SCOUT_CORPUS_TEST_STRATEGY.md) — corpus testing strategy from scout analysis
+- [research/ROADMAP_100_PERCENT_CPAN_COVERAGE.md](research/ROADMAP_100_PERCENT_CPAN_COVERAGE.md) — roadmap to 100% CPAN corpus coverage
+- [research/REFERENCE_IMPLEMENTATION_FULL.md](research/REFERENCE_IMPLEMENTATION_FULL.md) — full reference implementation analysis
+- [research/REPLICATION_GUIDES.md](research/REPLICATION_GUIDES.md) — methodology replication guide for other projects
+- [research/SWARM_IMPROVEMENTS.md](research/SWARM_IMPROVEMENTS.md) — concrete swarm system improvements identified during session
+
 ### Research Maps and Source Drafts
 
 - [research/ARTICLE_EVIDENCE_LINEAGE_ARCHAEOLOGY.md](research/ARTICLE_EVIDENCE_LINEAGE_ARCHAEOLOGY.md) — source map linking future launch-article claims to exact issue/PR/doc evidence chains
