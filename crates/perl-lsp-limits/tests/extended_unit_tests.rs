@@ -507,6 +507,7 @@ fn clone_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>> {
         max_symbols_per_file: 999,
         max_total_symbols: 1111,
         parse_storm_threshold: 2222,
+        max_file_size_bytes: 3333,
         workspace_scan_deadline: Duration::from_secs(30),
         file_index_deadline: Duration::from_secs(5),
         reference_search_deadline: Duration::from_secs(2),

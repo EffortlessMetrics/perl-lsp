@@ -8,8 +8,6 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 
-const MAX_FILE_SIZE_BYTES: usize = 10 * 1024 * 1024;
-
 impl LspServer {
     /// Handle textDocument/didOpen notification
     pub(crate) fn handle_did_open(&self, params: Option<Value>) -> Result<(), JsonRpcError> {
@@ -30,7 +28,7 @@ impl LspServer {
 
             // Large file guard: skip parsing for oversized files
             let file_size = text.len();
-            let size_limit = MAX_FILE_SIZE_BYTES;
+            let size_limit = crate::state::max_file_size_bytes();
             if file_size > size_limit {
                 eprintln!(
                     "WARNING: Skipping parse for {} ({} bytes exceeds {} byte limit)",
@@ -56,7 +54,6 @@ impl LspServer {
                     },
                 );
 
-                // Publish empty diagnostics
                 if let Err(e) = self.notify(
                     "textDocument/publishDiagnostics",
                     json!({
@@ -273,7 +270,7 @@ impl LspServer {
 
                 // Large file guard: skip parsing for oversized files
                 let file_size = text.len();
-                let size_limit = MAX_FILE_SIZE_BYTES;
+                let size_limit = crate::state::max_file_size_bytes();
                 if file_size > size_limit {
                     eprintln!(
                         "WARNING: Skipping parse for {} ({} bytes exceeds {} byte limit)",
@@ -297,7 +294,6 @@ impl LspServer {
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
 
-                    // Publish empty diagnostics
                     if let Err(e) = self.notify(
                         "textDocument/publishDiagnostics",
                         json!({
