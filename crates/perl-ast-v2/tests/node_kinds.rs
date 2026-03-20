@@ -44,7 +44,8 @@ fn test_number_sexp() {
 #[test]
 fn test_string_non_interpolated_sexp() {
     let mut id_gen = NodeIdGenerator::new();
-    let node = make_node(&mut id_gen, NodeKind::String { value: "hello".into(), interpolated: false });
+    let node =
+        make_node(&mut id_gen, NodeKind::String { value: "hello".into(), interpolated: false });
     assert_eq!(node.to_sexp(), r#"(string "hello")"#);
 }
 
