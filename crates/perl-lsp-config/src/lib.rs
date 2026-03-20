@@ -43,6 +43,18 @@ pub struct ServerConfig {
     /// merge violations into the diagnostic stream. Requires `perlcritic` to
     /// be installed on the system; silently skipped if not available.
     pub perlcritic_enabled: bool,
+
+    /// Minimum severity level to report (1-5, where 1 = most severe).
+    ///
+    /// Violations below this threshold are suppressed. Default is 3 (Harsh).
+    /// Equivalent to `perlcritic --severity`.
+    pub perlcritic_severity: u8,
+
+    /// Path to a `.perlcriticrc` profile file.
+    ///
+    /// When `Some`, passes `--profile=<path>` to perlcritic. When `None`,
+    /// the auto-discovery logic looks for `.perlcriticrc` in the workspace root.
+    pub perlcritic_profile: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -59,6 +71,8 @@ impl Default for ServerConfig {
             test_runner_timeout: 60000,
             telemetry_enabled: false,
             perlcritic_enabled: false,
+            perlcritic_severity: 3,
+            perlcritic_profile: None,
         }
     }
 }
@@ -109,6 +123,12 @@ impl ServerConfig {
         if let Some(critic) = settings.get("perlcritic") {
             if let Some(enabled) = critic.get("enabled").and_then(|v| v.as_bool()) {
                 self.perlcritic_enabled = enabled;
+            }
+            if let Some(severity) = critic.get("severity").and_then(|v| v.as_u64()) {
+                self.perlcritic_severity = severity.clamp(1, 5) as u8;
+            }
+            if let Some(profile) = critic.get("profile").and_then(|v| v.as_str()) {
+                self.perlcritic_profile = Some(profile.to_string());
             }
         }
     }
@@ -295,6 +315,72 @@ mod tests {
             "testRunner": { "timeout": 30000 }
         }));
         assert_eq!(config.test_runner_timeout, 30000);
+    }
+
+    // ── Perlcritic extended config ────────────────────────────
+
+    #[test]
+    fn server_config_default_perlcritic_severity_is_three() {
+        let config = ServerConfig::default();
+        assert_eq!(config.perlcritic_severity, 3, "default severity should be 3 (Harsh)");
+    }
+
+    #[test]
+    fn server_config_default_perlcritic_profile_is_none() {
+        let config = ServerConfig::default();
+        assert!(config.perlcritic_profile.is_none(), "profile is None by default");
+    }
+
+    #[test]
+    fn server_config_perlcritic_severity_updated_via_settings() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({ "perlcritic": { "severity": 1 } }));
+        assert_eq!(config.perlcritic_severity, 1);
+    }
+
+    #[test]
+    fn server_config_perlcritic_severity_clamped_to_five() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({ "perlcritic": { "severity": 99 } }));
+        assert_eq!(config.perlcritic_severity, 5, "severity clamped to max 5");
+    }
+
+    #[test]
+    fn server_config_perlcritic_severity_clamped_to_one() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({ "perlcritic": { "severity": 0 } }));
+        assert_eq!(config.perlcritic_severity, 1, "severity clamped to min 1");
+    }
+
+    #[test]
+    fn server_config_perlcritic_profile_updated_via_settings() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({ "perlcritic": { "profile": "/path/to/.perlcriticrc" } }));
+        assert_eq!(config.perlcritic_profile, Some("/path/to/.perlcriticrc".to_string()));
+    }
+
+    #[test]
+    fn server_config_perlcritic_all_fields_together() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({
+            "perlcritic": {
+                "enabled": true,
+                "severity": 2,
+                "profile": "/workspace/.perlcriticrc"
+            }
+        }));
+        assert!(config.perlcritic_enabled);
+        assert_eq!(config.perlcritic_severity, 2);
+        assert_eq!(config.perlcritic_profile, Some("/workspace/.perlcriticrc".to_string()));
+    }
+
+    #[test]
+    fn server_config_perlcritic_partial_update_preserves_other_fields() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({ "perlcritic": { "enabled": true } }));
+        // severity and profile should still be at defaults
+        assert_eq!(config.perlcritic_severity, 3);
+        assert!(config.perlcritic_profile.is_none());
     }
 
     // ── WorkspaceConfig defaults ──────────────────────────────
