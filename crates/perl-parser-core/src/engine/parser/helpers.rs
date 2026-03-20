@@ -28,6 +28,28 @@ impl<'a> Parser<'a> {
         matches!(kind, Some(TokenKind::Increment) | Some(TokenKind::Decrement))
     }
 
+    fn peek_compound_assign_op(&mut self) -> Option<&'static str> {
+        match self.peek_kind()? {
+            TokenKind::Assign => Some("="),
+            TokenKind::PlusAssign => Some("+="),
+            TokenKind::MinusAssign => Some("-="),
+            TokenKind::StarAssign => Some("*="),
+            TokenKind::SlashAssign => Some("/="),
+            TokenKind::PercentAssign => Some("%="),
+            TokenKind::DotAssign => Some(".="),
+            TokenKind::AndAssign => Some("&="),
+            TokenKind::OrAssign => Some("|="),
+            TokenKind::XorAssign => Some("^="),
+            TokenKind::PowerAssign => Some("**="),
+            TokenKind::LeftShiftAssign => Some("<<="),
+            TokenKind::RightShiftAssign => Some(">>="),
+            TokenKind::LogicalAndAssign => Some("&&="),
+            TokenKind::LogicalOrAssign => Some("||="),
+            TokenKind::DefinedOrAssign => Some("//="),
+            _ => None,
+        }
+    }
+
     #[inline]
     fn is_variable_sigil(kind: Option<TokenKind>) -> bool {
         matches!(
@@ -414,7 +436,6 @@ impl<'a> Parser<'a> {
         &self.errors
     }
 
-
     /// Expect a closing delimiter, recovering gracefully if missing.
     /// Records error and returns Ok(()) at sync points instead of Err.
     fn expect_closing_delimiter(&mut self, kind: TokenKind) -> ParseResult<()> {
@@ -469,13 +490,16 @@ impl<'a> Parser<'a> {
         match self.peek_kind() {
             Some(TokenKind::Semicolon) => true,
             Some(TokenKind::RightBrace) => true,
-            Some(TokenKind::My) | Some(TokenKind::Our) | Some(TokenKind::Local) | Some(TokenKind::State) => true,
+            Some(TokenKind::My)
+            | Some(TokenKind::Our)
+            | Some(TokenKind::Local)
+            | Some(TokenKind::State) => true,
             Some(TokenKind::Sub) | Some(TokenKind::Package) | Some(TokenKind::Use) => true,
             Some(TokenKind::If) | Some(TokenKind::Unless) => true,
             Some(TokenKind::Elsif) | Some(TokenKind::Else) => true,
             Some(TokenKind::While) | Some(TokenKind::Until) => true,
             Some(TokenKind::For) | Some(TokenKind::Foreach) => true,
-            None => true,  // EOF is a sync point
+            None => true, // EOF is a sync point
             _ => false,
         }
     }
@@ -511,7 +535,13 @@ impl<'a> Parser<'a> {
     }
 
     /// Create an error node and record the error
-    fn recover_from_error(&mut self, message: String, expected: String, found: String, location: usize) -> Node {
+    fn recover_from_error(
+        &mut self,
+        message: String,
+        expected: String,
+        found: String,
+        location: usize,
+    ) -> Node {
         // Record the error
         let error = ParseError::unexpected(expected, found, location);
         self.record_error(error);
@@ -519,15 +549,10 @@ impl<'a> Parser<'a> {
         // Create error node
         let end = self.current_position();
         let found_token = self.tokens.peek().ok().cloned();
-        
+
         Node::new(
-            NodeKind::Error {
-                message,
-                expected: vec![],
-                found: found_token,
-                partial: None,
-            },
-            SourceLocation { start: location, end }
+            NodeKind::Error { message, expected: vec![], found: found_token, partial: None },
+            SourceLocation { start: location, end },
         )
     }
 
@@ -570,15 +595,10 @@ impl<'a> Parser<'a> {
     fn create_error_node(&mut self, message: String, expected: Vec<TokenKind>) -> Node {
         let start = self.current_position();
         let found = self.tokens.peek().ok().cloned();
-        
+
         Node::new(
-            NodeKind::Error {
-                message,
-                expected,
-                found,
-                partial: None,
-            },
-            SourceLocation { start, end: start }
+            NodeKind::Error { message, expected, found, partial: None },
+            SourceLocation { start, end: start },
         )
     }
 
@@ -640,9 +660,13 @@ impl<'a> Parser<'a> {
 
         match next.kind {
             // Sigiled variables: `func $x`, `func @arr`, `func %hash`
-            TokenKind::Identifier if next.text.starts_with('$')
-                || next.text.starts_with('@')
-                || next.text.starts_with('%') => true,
+            TokenKind::Identifier
+                if next.text.starts_with('$')
+                    || next.text.starts_with('@')
+                    || next.text.starts_with('%') =>
+            {
+                true
+            }
             TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil => true,
 
             // `func other_func(args)` — identifier followed by `(`
@@ -718,8 +742,7 @@ impl<'a> Parser<'a> {
             | TokenKind::WordOr     // sub or { ... }
             | TokenKind::WordNot    // sub not { ... }
             | TokenKind::WordXor    // sub xor { ... }
-            | TokenKind::StringCompare  // sub cmp { ... }
+            | TokenKind::StringCompare // sub cmp { ... }
         )
     }
-
 }

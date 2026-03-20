@@ -718,6 +718,8 @@ impl<'a> Parser<'a> {
             // Control-flow keywords — allowed as barewords in expression context
             // (e.g. `if => 1` or `(for => 2)`)
             | TokenKind::If
+            | TokenKind::Elsif
+            | TokenKind::Else
             | TokenKind::Unless
             | TokenKind::While
             | TokenKind::Until
@@ -773,5 +775,4 @@ impl<'a> Parser<'a> {
             }
         }
     }
-
 }
