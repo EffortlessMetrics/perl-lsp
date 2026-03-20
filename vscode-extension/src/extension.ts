@@ -11,7 +11,7 @@ import {
     Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger } from './debugAdapter';
+import { activateDebugger, offerDebugConfigOnFirstPerlOpen } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { HealthWidget, ClientState } from './healthWidget';
 import { OnboardingManager } from './onboarding';
@@ -214,7 +214,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] },
-            { label: '$(book) Configuration Guide', detail: 'Guided help for includePaths, formatting, and more', command: 'perl-lsp.openConfigurationGuide' }
+            { label: '$(book) Configuration Guide', detail: 'Guided help for includePaths, formatting, and more', command: 'perl-lsp.openConfigurationGuide' },
+            { label: '$(debug-alt) Create Debug Configuration', detail: 'Generate .vscode/launch.json with Perl debug templates', command: 'perl-lsp.createDebugConfig' }
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
@@ -301,6 +302,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize debug adapter
     activateDebugger(context);
+
+    // Onboarding: offer debug config creation on first Perl file open
+    const debugConfigOnboarding = vscode.workspace.onDidOpenTextDocument(async (document) => {
+        await offerDebugConfigOnFirstPerlOpen(document);
+    });
+    context.subscriptions.push(debugConfigOnboarding);
+
     await initializeLanguageClient(context);
 
     // First-run onboarding: show welcome notification once per installation

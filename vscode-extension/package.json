@@ -58,6 +58,7 @@
     "onCommand:perl-lsp.showVersion",
     "onCommand:perl-lsp.reinstall",
     "onCommand:perl-lsp.openConfigurationGuide",
+    "onCommand:perl-lsp.createDebugConfig",
     "onWalkthrough:perl-lsp.onboarding"
   ],
   "contributes": {
@@ -397,6 +398,12 @@
         "title": "Show What's New",
         "category": "Perl",
         "icon": "$(star-full)"
+      },
+      {
+        "command": "perl-lsp.createDebugConfig",
+        "title": "Create Debug Configuration",
+        "category": "Perl",
+        "icon": "$(debug-alt)"
       }
     ],
     "menus": {
@@ -427,6 +434,10 @@
         },
         {
           "command": "perl-lsp.openConfigurationGuide"
+        },
+        {
+          "command": "perl-lsp.createDebugConfig",
+          "when": "workspaceFolderCount >= 1"
         }
       ],
       "editor/title": [

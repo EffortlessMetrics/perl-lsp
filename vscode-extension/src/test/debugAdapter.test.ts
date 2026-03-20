@@ -8,6 +8,10 @@ import * as path from 'path';
 import {
   PerlDebugAdapterDescriptorFactory,
   PerlDebugConfigurationProvider,
+  buildLaunchJsonContent,
+  hasLaunchJson,
+  offerDebugConfigOnFirstPerlOpen,
+  resetDebugConfigPromptFlag,
 } from '../debugAdapter';
 
 // ---------------------------------------------------------------------------
@@ -212,5 +216,159 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     const result = factory.createDebugAdapterDescriptor({} as any, undefined) as any;
 
     expect(result.options.env.RUST_LOG).toBe('debug');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildLaunchJsonContent
+// ---------------------------------------------------------------------------
+describe('buildLaunchJsonContent', () => {
+  test('launch-script template produces valid JSON with perl type', () => {
+    const content = buildLaunchJsonContent('launch-script');
+    const parsed = JSON.parse(content);
+    expect(parsed.version).toBe('0.2.0');
+    expect(Array.isArray(parsed.configurations)).toBe(true);
+    const cfg = parsed.configurations[0];
+    expect(cfg.type).toBe('perl');
+    expect(cfg.request).toBe('launch');
+  });
+
+  test('attach-process template produces attach config with host and port', () => {
+    const content = buildLaunchJsonContent('attach-process');
+    const parsed = JSON.parse(content);
+    const cfg = parsed.configurations[0];
+    expect(cfg.type).toBe('perl');
+    expect(cfg.request).toBe('attach');
+    expect(cfg.host).toBe('localhost');
+    expect(cfg.port).toBe(13603);
+  });
+
+  test('remote-ssh template produces attach config with configurable host', () => {
+    const content = buildLaunchJsonContent('remote-ssh');
+    const parsed = JSON.parse(content);
+    const cfg = parsed.configurations[0];
+    expect(cfg.type).toBe('perl');
+    expect(cfg.request).toBe('attach');
+    expect(typeof cfg.host).toBe('string');
+  });
+
+  test('all template produces multiple configurations', () => {
+    const content = buildLaunchJsonContent('all');
+    const parsed = JSON.parse(content);
+    expect(parsed.configurations.length).toBeGreaterThanOrEqual(3);
+    const types = parsed.configurations.map((c: any) => c.type);
+    expect(types.every((t: string) => t === 'perl')).toBe(true);
+  });
+
+  test('unknown template falls back to launch-script', () => {
+    const content = buildLaunchJsonContent('unknown-template');
+    const parsed = JSON.parse(content);
+    const cfg = parsed.configurations[0];
+    expect(cfg.type).toBe('perl');
+    expect(cfg.request).toBe('launch');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasLaunchJson
+// ---------------------------------------------------------------------------
+describe('hasLaunchJson', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'launch-json-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns false when .vscode/launch.json does not exist', () => {
+    expect(hasLaunchJson(tmpDir)).toBe(false);
+  });
+
+  test('returns false when .vscode directory is missing', () => {
+    expect(hasLaunchJson(path.join(tmpDir, 'nonexistent'))).toBe(false);
+  });
+
+  test('returns true when .vscode/launch.json exists', () => {
+    const vscodDir = path.join(tmpDir, '.vscode');
+    fs.mkdirSync(vscodDir);
+    fs.writeFileSync(path.join(vscodDir, 'launch.json'), '{}');
+    expect(hasLaunchJson(tmpDir)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// offerDebugConfigOnFirstPerlOpen
+// ---------------------------------------------------------------------------
+describe('offerDebugConfigOnFirstPerlOpen', () => {
+  const vscode = require('vscode');
+
+  beforeEach(() => {
+    resetDebugConfigPromptFlag();
+    jest.clearAllMocks();
+    vscode.workspace.workspaceFolders = undefined;
+  });
+
+  afterEach(() => {
+    vscode.workspace.workspaceFolders = undefined;
+  });
+
+  test('does nothing for non-perl documents', async () => {
+    const doc = { languageId: 'javascript' };
+    await offerDebugConfigOnFirstPerlOpen(doc as any);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('does nothing when no workspace folders are open', async () => {
+    vscode.workspace.workspaceFolders = [];
+    const doc = { languageId: 'perl' };
+    await offerDebugConfigOnFirstPerlOpen(doc as any);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('shows onboarding prompt for perl document in workspace without launch.json', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onboard-test-'));
+    try {
+      vscode.workspace.workspaceFolders = [{ uri: { fsPath: tmpDir }, name: 'test' }];
+      const doc = { languageId: 'perl' };
+      await offerDebugConfigOnFirstPerlOpen(doc as any);
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        expect.stringContaining('debug configuration'),
+        expect.any(String),
+        expect.any(String)
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('does not show prompt when launch.json already exists', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onboard-exists-'));
+    try {
+      const vscodDir = path.join(tmpDir, '.vscode');
+      fs.mkdirSync(vscodDir);
+      fs.writeFileSync(path.join(vscodDir, 'launch.json'), '{}');
+      vscode.workspace.workspaceFolders = [{ uri: { fsPath: tmpDir }, name: 'test' }];
+      const doc = { languageId: 'perl' };
+      await offerDebugConfigOnFirstPerlOpen(doc as any);
+      expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('shows prompt only once per session even with multiple perl opens', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onboard-once-'));
+    try {
+      vscode.workspace.workspaceFolders = [{ uri: { fsPath: tmpDir }, name: 'test' }];
+      const doc = { languageId: 'perl' };
+      await offerDebugConfigOnFirstPerlOpen(doc as any);
+      await offerDebugConfigOnFirstPerlOpen(doc as any);
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

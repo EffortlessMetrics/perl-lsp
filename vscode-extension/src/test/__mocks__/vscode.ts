@@ -87,6 +87,7 @@ export const window = {
   showWarningMessage: jest.fn(async () => undefined),
   showInformationMessage: jest.fn(async () => undefined),
   showQuickPick: jest.fn(async () => undefined),
+  showTextDocument: jest.fn(async () => undefined),
   withProgress: jest.fn(async (_options: any, task: any) => {
     const progress = { report: jest.fn() };
     const token = { isCancellationRequested: false };
@@ -114,6 +115,8 @@ export const workspace = {
   onDidChangeConfiguration: jest.fn(),
   textDocuments: [],
   findFiles: jest.fn(async () => []),
+  openTextDocument: jest.fn(async (p: string) => ({ uri: { fsPath: p } })),
+  workspaceFolders: undefined as any[] | undefined,
 };
 
 export const tests = {

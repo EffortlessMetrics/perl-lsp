@@ -165,6 +165,7 @@ describe('package.json contributes', () => {
       expect(commandIds).toContain('perl-lsp.organizeImports');
       expect(commandIds).toContain('perl-lsp.runTests');
       expect(commandIds).toContain('perl-lsp.showStatusMenu');
+      expect(commandIds).toContain('perl-lsp.createDebugConfig');
     });
 
     test('all commands have a category', () => {
@@ -394,6 +395,30 @@ describe('package.json contributes', () => {
       for (const kb of pkg.contributes.keybindings) {
         expect(kb.when).toContain('editorLangId == perl');
       }
+    });
+  });
+
+  describe('createDebugConfig command', () => {
+    test('registers perl-lsp.createDebugConfig command', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.createDebugConfig');
+    });
+
+    test('createDebugConfig has Perl category', () => {
+      const cmd = pkg.contributes.commands.find(
+        (c: any) => c.command === 'perl-lsp.createDebugConfig'
+      );
+      expect(cmd.category).toBe('Perl');
+    });
+
+    test('createDebugConfig is listed in commandPalette', () => {
+      const palette = pkg.contributes.menus.commandPalette;
+      const entry = palette.find((e: any) => e.command === 'perl-lsp.createDebugConfig');
+      expect(entry).toBeDefined();
+    });
+
+    test('createDebugConfig has an activation event', () => {
+      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.createDebugConfig');
     });
   });
 
