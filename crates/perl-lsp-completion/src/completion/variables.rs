@@ -70,6 +70,7 @@ pub fn add_special_variables(
             ("$\\", "Output record separator"),
             ("$!", "Current errno"),
             ("$@", "Last eval error"),
+            ("$?", "Child process status (exit code)"),
             ("$$", "Process ID"),
             ("$0", "Program name"),
             ("$1", "First capture group"),
@@ -79,6 +80,9 @@ pub fn add_special_variables(
             ("$+", "Last capture group"),
             ("$^O", "Operating system name"),
             ("$^V", "Perl version"),
+            ("$^T", "Script start time (epoch seconds)"),
+            ("$^A", "Accumulator for format() output"),
+            ("$^W", "Warning flag (prefer 'use warnings')"),
         ],
         "@" => vec![
             ("@_", "Subroutine arguments"),

@@ -1884,4 +1884,111 @@ sub do_work { }
         assert!(detail.contains("MyLib"), "detail should mention module name, got: {detail:?}");
         Ok(())
     }
+
+    #[test]
+    fn test_self_arrow_resolves_workspace_methods() -> Result<(), Box<dyn std::error::Error>> {
+        // Regression test for issue #2536: $self-> method completion should resolve
+        // workspace-indexed methods from the current package.
+        //
+        // The methods are ONLY in the workspace index (a separate .pm file), not in
+        // the currently-parsed source. This tests the workspace path specifically:
+        // `infer_receiver_package` must return `MyService` for `$self->` when
+        // `context.current_package == "MyService"`.
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyService.pm")?;
+        let module_code = r#"package MyService;
+sub new { bless {}, shift }
+sub process_request { }
+sub validate_input { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string())?;
+
+        // The currently-edited file is in MyService but does NOT define
+        // process_request or validate_input locally — they are workspace-only.
+        let code = r#"package MyService;
+sub run {
+    my $self = shift;
+    $self->"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "process_request"),
+            "$self-> should suggest process_request from workspace index; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "validate_input"),
+            "$self-> should suggest validate_input from workspace index"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_this_arrow_resolves_workspace_methods() -> Result<(), Box<dyn std::error::Error>> {
+        // Same as above but using $this as the invocant variable.
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyHandler.pm")?;
+        let module_code = r#"package MyHandler;
+sub new { bless {}, shift }
+sub handle { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string())?;
+
+        // Only `run` is in the edited file; `handle` lives only in the workspace index.
+        let code = r#"package MyHandler;
+sub run {
+    my $this = shift;
+    $this->"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "handle"),
+            "$this-> should suggest handle from workspace index; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_self_arrow_in_main_package_does_not_resolve() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Edge case: $self-> in the main package should NOT resolve to any package methods.
+        // The guard condition `context.current_package != "main"` prevents incorrect
+        // suggestions when the user is in script-level code.
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyLib.pm")?;
+        let module_code = r#"package MyLib;
+sub new { bless {}, shift }
+sub helper { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string())?;
+
+        // Code is at package main (implicit), so $self-> should not resolve
+        let code = r#"sub run {
+    my $self = shift;
+    $self->"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        // Should NOT suggest MyLib methods just because the variable is named $self
+        assert!(
+            !completions.iter().any(|c| c.label == "helper"),
+            "$self-> in main package should not suggest methods from other packages"
+        );
+        Ok(())
+    }
 }

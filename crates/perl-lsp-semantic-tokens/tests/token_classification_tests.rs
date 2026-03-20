@@ -1125,3 +1125,126 @@ fn test_nested_dbi_call_in_complex_expression() {
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "SQL string in complex nested call should be sql_string token");
 }
+
+// ===========================================================================
+// Special variable semantic tokens – issue #2347
+// ===========================================================================
+
+/// The `defaultLibrary` modifier is bit 3 (value 8) in the modifiers list.
+/// Modifiers: declaration=0(1), definition=1(2), readonly=2(4), defaultLibrary=3(8)
+fn has_default_library_modifier(token: &EncodedToken) -> bool {
+    token[4] & 8 != 0
+}
+
+#[test]
+fn test_special_variable_dollar_underscore_has_default_library_modifier() {
+    // $_ is a built-in special variable and should be marked defaultLibrary.
+    // Wrap in a sub so the parser creates a Variable node the AST walk visits.
+    let code = "sub f { return $_; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_tokens: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        !special_tokens.is_empty(),
+        "$_ should produce a variable token with defaultLibrary modifier (bit 3 = 8), \
+         got variable tokens: {:?}",
+        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_special_variable_at_underscore_has_default_library_modifier() {
+    // @_ is the built-in subroutine argument array
+    let code = "sub f { my @a = @_; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_tokens: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        !special_tokens.is_empty(),
+        "@_ should produce at least one variable token with defaultLibrary modifier, \
+         got variable tokens: {:?}",
+        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_regular_variable_does_not_have_default_library_modifier() {
+    // User-defined variables should NOT have defaultLibrary set
+    let code = "my $user_var = 42;";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let with_default_lib: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        with_default_lib.is_empty(),
+        "user-defined $user_var should NOT have defaultLibrary modifier, got: {:?}",
+        with_default_lib
+    );
+}
+
+#[test]
+fn test_special_variable_env_hash_has_default_library_modifier() {
+    // %ENV accessed as $ENV{HOME} appears in the AST as Variable { sigil: "$", name: "ENV" }.
+    // Wrap in a sub body so the walk visits the Variable node.
+    let code = "sub f { my $h = $ENV{HOME}; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_tokens: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        !special_tokens.is_empty(),
+        "$ENV{{...}} access should produce a variable token with defaultLibrary modifier, \
+         got variable tokens: {:?}",
+        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_special_variable_argv_has_default_library_modifier() {
+    // @ARGV is a built-in special variable receiving the command-line arguments.
+    let code = "sub main { my @args = @ARGV; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_tokens: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        !special_tokens.is_empty(),
+        "@ARGV should produce a variable token with defaultLibrary modifier, \
+         got variable tokens: {:?}",
+        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_special_variable_dollar_question_has_default_library_modifier() {
+    // $? holds child process exit status after system() / backtick / waitpid().
+    let code = "sub f { system('ls'); return $?; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_tokens: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        !special_tokens.is_empty(),
+        "$? should produce a variable token with defaultLibrary modifier, \
+         got variable tokens: {:?}",
+        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_two_special_variables_in_same_expression_both_get_modifier() {
+    // Both $! and $@ are special; check that when both appear in the same
+    // sub body they each get the defaultLibrary modifier.
+    let code = "sub f { eval { die 'boom' }; return $@ || $!; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_count =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).count();
+    assert!(
+        special_count >= 2,
+        "Both $@ and $! should receive defaultLibrary modifier; \
+         got {special_count} special-variable tokens (expected >= 2)"
+    );
+}
