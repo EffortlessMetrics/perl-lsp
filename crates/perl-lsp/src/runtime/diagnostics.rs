@@ -10,6 +10,20 @@ use crate::features::diagnostics::{
 };
 
 impl LspServer {
+    /// Convert internal diagnostic tags to LSP tag values
+    ///
+    /// Maps internal `DiagnosticTag` variants to their LSP numeric equivalents:
+    /// - Unnecessary → 1
+    /// - Deprecated → 2
+    fn diagnostic_tags_to_lsp(tags: &[InternalDiagnosticTag]) -> Vec<i32> {
+        tags.iter()
+            .map(|t| match t {
+                InternalDiagnosticTag::Unnecessary => 1,
+                InternalDiagnosticTag::Deprecated => 2,
+            })
+            .collect()
+    }
+
     /// Generate markdown-formatted diagnostic message (LSP 3.18)
     ///
     /// Creates a rich markdown representation of a diagnostic that includes
@@ -111,15 +125,7 @@ impl LspServer {
                             "message": d.message,
                         });
                         if !d.tags.is_empty() {
-                            diag["tags"] = json!(
-                                d.tags
-                                    .iter()
-                                    .map(|t| match t {
-                                        InternalDiagnosticTag::Unnecessary => 1,
-                                        InternalDiagnosticTag::Deprecated => 2,
-                                    })
-                                    .collect::<Vec<i32>>()
-                            );
+                            diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
                         }
                         diag
                     })
@@ -299,15 +305,7 @@ impl LspServer {
 
                             // Add diagnostic tags (e.g., Unnecessary, Deprecated)
                             if !d.tags.is_empty() {
-                                diag["tags"] = json!(
-                                    d.tags
-                                        .iter()
-                                        .map(|t| match t {
-                                            InternalDiagnosticTag::Unnecessary => 1,
-                                            InternalDiagnosticTag::Deprecated => 2,
-                                        })
-                                        .collect::<Vec<i32>>()
-                                );
+                                diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
                             }
 
                             // Add markdown content if client supports it (LSP 3.18)
@@ -475,15 +473,7 @@ impl LspServer {
                                     "message": d.message,
                                 });
                                 if !d.tags.is_empty() {
-                                    diag["tags"] = json!(
-                                        d.tags
-                                            .iter()
-                                            .map(|t| match t {
-                                                InternalDiagnosticTag::Unnecessary => 1,
-                                                InternalDiagnosticTag::Deprecated => 2,
-                                            })
-                                            .collect::<Vec<i32>>()
-                                    );
+                                    diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
                                 }
                                 diag
                             })
@@ -533,15 +523,7 @@ impl LspServer {
                                 "message": d.message,
                             });
                             if !d.tags.is_empty() {
-                                diag["tags"] = json!(
-                                    d.tags
-                                        .iter()
-                                        .map(|t| match t {
-                                            InternalDiagnosticTag::Unnecessary => 1,
-                                            InternalDiagnosticTag::Deprecated => 2,
-                                        })
-                                        .collect::<Vec<i32>>()
-                                );
+                                diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
                             }
                             diag
                         })
