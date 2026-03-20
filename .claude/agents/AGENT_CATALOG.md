@@ -5,20 +5,20 @@
 ```
 Agent file = identity + objectives + todo list (WHAT to do)
 Step skill = mechanical instructions per todo step (HOW to do it)
-Flow command = spawn the right agent for a pipeline stage (ROUTING)
 Crate CLAUDE.md = domain context carried by the codebase (CONTEXT)
 GitHub Issue = task spec from scout to builder (HANDOFF)
+Orchestrator = reads catalog + agent files to route work (ROUTING)
 ```
 
 ## Core Pipeline
 
 ```
-/flow-scout → /flow-build → /flow-review → /flow-merge
-   scout      plan-reviewer   reviewer       ops
-  (haiku)  →   (sonnet)   →  builder  →  (haiku+sonnet) → (haiku)
-                             (sonnet)
+scout → plan-reviewer → builder → reviewer → reviewer-deep → ops
+(haiku)   (sonnet)      (sonnet)   (haiku)     (sonnet)     (haiku)
 
-If builder doesn't finish: /flow-continue → same builder, reads existing PR
+Variants: scout-parser, scout-lsp, scout-dap for domain-specific investigation
+Continuation: spawn builder with /builder-read-pr instead of /builder-read-spec
+Post-merge: wisdom (sonnet) synthesizes learnings
 ```
 
 Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
@@ -67,17 +67,6 @@ Haiku checks standards. Sonnet checks correctness. Haiku merges.
 **Wisdom steps:** wisdom-read-trail, wisdom-synthesize, wisdom-document
 
 **Shared steps:** agent-wrapup
-
-## Flow Commands (6)
-
-| Command | What it does |
-|---------|-------------|
-| /flow-scout | Pick scout variant, spawn, get issue |
-| /flow-build | Validate spec (or trigger plan-review first), spawn builder in worktree |
-| /flow-continue | Spawn builder to continue an incomplete PR |
-| /flow-review | Two-tier: reviewer (haiku) → reviewer-deep (sonnet) |
-| /flow-merge | Spawn ops for merge queue |
-| /flow-wisdom | Synthesize learnings from completed issue→PR→merge cycle |
 
 ## Shared Operations (10)
 

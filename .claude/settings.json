@@ -101,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Context refresh: Agents follow todo lists with step skills. Flows: /flow-scout → /flow-build → /flow-review → /flow-merge → /flow-wisdom. Agents have autonomy within scope. Crate CLAUDE.md files provide domain context. Issues carry task specs.'"
+            "command": "echo 'Context refresh: Orchestrator spawns agents directly from the catalog. Agents follow todo lists with step skills. Agents have autonomy within scope. Crate CLAUDE.md files provide domain context. Issues carry task specs.'"
           }
         ]
       }

@@ -5,7 +5,7 @@ This repo runs one swarm, not multiple parallel pack stories.
 The canonical runtime surfaces are:
 
 - `.claude/agents/` — agent definitions and role-specific swarm instructions
-- `.claude/commands/` — slash entrypoints (flow commands, step skills, shared ops, domain ops)
+- `.claude/commands/` — slash entrypoints (step skills, shared ops, domain ops)
 - `.claude/settings.json` — shared permissions and hook enforcement
 
 Legacy directories archived to `docs/reference/archive/` during architecture transition.
@@ -40,11 +40,11 @@ See [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the full inventory.
 - GitHub issues and PRs = persistent work state
 
 Every agent should use the local todo or task tool and name the slash
-entrypoint for each item. Flow commands (`/flow-scout`, `/flow-build`,
-`/flow-review`, `/flow-merge`, `/flow-wisdom`, `/flow-continue`) route work
-through the pipeline. Step skills provide mechanical instructions for each
-todo step. Domain ops (`/parser-fix`, `/verify`, `/corpus-ratchet`, etc.)
-handle specialized procedures.
+entrypoint for each item. The orchestrator reads the agent catalog and
+agent files to route work — no separate flow commands needed. Step skills
+provide mechanical instructions for each todo step. Domain ops
+(`/parser-fix`, `/verify`, `/corpus-ratchet`, etc.) handle specialized
+procedures.
 
 The roster mapping lives in
 [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md). It records agent models,
