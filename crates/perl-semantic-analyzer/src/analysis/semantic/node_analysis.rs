@@ -132,8 +132,8 @@ impl SemanticAnalyzer {
 
                     // Add hover info
                     let mut signature_str = format!("sub {}", sub_name);
-                    if signature.is_some() {
-                        signature_str.push_str("(...)");
+                    if let Some(sig_node) = signature {
+                        signature_str.push_str(&format_signature_params(sig_node));
                     }
 
                     let hover = HoverInfo {
@@ -161,8 +161,8 @@ impl SemanticAnalyzer {
 
                     // Add hover info for anonymous subs
                     let mut signature_str = "sub".to_string();
-                    if signature.is_some() {
-                        signature_str.push_str(" (...)");
+                    if let Some(sig_node) = signature {
+                        signature_str.push_str(&format_signature_params(sig_node));
                     }
                     signature_str.push_str(" { ... }");
 
@@ -1139,4 +1139,35 @@ impl SemanticAnalyzer {
             _ => None,
         }
     }
+}
+
+/// Build a parenthesised parameter list string from a `Signature` AST node.
+///
+/// Extracts each parameter variable's sigil and name and joins them with
+/// ", ".  Returns `"(...)"` as a safe fallback for any unrecognised structure.
+fn format_signature_params(sig_node: &Node) -> String {
+    let NodeKind::Signature { parameters } = &sig_node.kind else {
+        return "(...)".to_string();
+    };
+
+    let labels: Vec<String> = parameters
+        .iter()
+        .filter_map(|param| {
+            let var = match &param.kind {
+                NodeKind::MandatoryParameter { variable }
+                | NodeKind::OptionalParameter { variable, .. }
+                | NodeKind::SlurpyParameter { variable }
+                | NodeKind::NamedParameter { variable } => variable.as_ref(),
+                NodeKind::Variable { .. } => param,
+                _ => return None,
+            };
+            if let NodeKind::Variable { sigil, name } = &var.kind {
+                Some(format!("{}{}", sigil, name))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    format!("({})", labels.join(", "))
 }
