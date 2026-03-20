@@ -428,10 +428,16 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'return'
 
-        // Check if we have a value to return - only stop at clear ends or statement modifiers
+        // Check if we have a value to return - only stop at clear ends or statement modifiers.
+        // Word operators (or, and, xor) belong to the enclosing statement, not the return value.
+        // e.g. `return or die` means `(return) or (die)`.
         let value = if Self::is_statement_terminator(self.peek_kind())
             || matches!(self.peek_kind(), Some(TokenKind::RightBrace))
             || matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k))
+            || matches!(
+                self.peek_kind(),
+                Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor)
+            )
         {
             None
         } else {
