@@ -96,7 +96,7 @@ fn test_hover_isa_undeclared() -> TestResult {
 
 #[test]
 fn test_hover_default_variable() -> TestResult {
-    let doc = "print \/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.claude/worktrees/fix-use-eval-rbrace-2223/crates/perl-lsp/src/runtime/language/hover.rs;\n";
+    let doc = "print $_;\n";
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
     harness.open_document("file:///default.pl", doc)?;
