@@ -10,6 +10,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [SWARM_METHODOLOGY.md](SWARM_METHODOLOGY.md) — the agentic swarm methodology and operating model
 - [ZERO_PANIC.md](ZERO_PANIC.md) — reliability, failure handling, and security posture for the language server
 - [PARSING_PERL.md](PARSING_PERL.md) — why Perl is hard to parse and how the parser tackles it
+- [WHEN_RECEIPTS_LIE.md](WHEN_RECEIPTS_LIE.md) — six real cases where structured evidence was technically correct but operationally misleading
 - [CURIOSITIES.md](CURIOSITIES.md) — unusual records, architectural oddities, and codebase curiosities
 
 ## Research and Source Material
