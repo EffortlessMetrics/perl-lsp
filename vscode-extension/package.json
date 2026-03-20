@@ -356,6 +356,12 @@
         "title": "Show Refactoring Options",
         "category": "Perl",
         "icon": "$(wrench)"
+      },
+      {
+        "command": "perl-lsp.showWhatsNew",
+        "title": "Show What's New",
+        "category": "Perl",
+        "icon": "$(star-empty)"
       }
     ],
     "menus": {

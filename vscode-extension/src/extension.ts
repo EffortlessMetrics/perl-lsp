@@ -14,6 +14,7 @@ import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
+import { WhatsNewManager } from './whatsNew';
 import { generateBoilerplate } from './fileCreation';
 
 let client: LanguageClient | undefined;
@@ -204,6 +205,11 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const whatsNewManager = new WhatsNewManager(context, outputChannel);
+    const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
+        await whatsNewManager.showWhatsNew();
+    });
+
     const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument((event) => {
         if (!shouldFormatOnSave(event.document)) {
             return;
@@ -261,6 +267,7 @@ export async function activate(context: vscode.ExtensionContext) {
         statusMenuCommand,
         reinstallCommand,
         runHealthCheckCommand,
+        showWhatsNewCommand,
         formatOnSaveDisposable,
         configurationWatcher,
         fileCreationWatcher,
@@ -277,6 +284,21 @@ export async function activate(context: vscode.ExtensionContext) {
         onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             outputChannel.appendLine(`[onboarding] Error showing welcome: ${msg}`);
+        });
+        // Mark the version seen on first install so the next activation
+        // (after an update) triggers the What's New panel instead of welcome.
+        whatsNewManager.markVersionSeen().catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            outputChannel.appendLine(`[whats-new] Error marking version seen: ${msg}`);
+        });
+    } else if (whatsNewManager.shouldShowWhatsNew()) {
+        // Extension was updated — show What's New panel.
+        // Fire-and-forget; failures must not block extension startup.
+        whatsNewManager.markVersionSeen().then(() => {
+            return whatsNewManager.showWhatsNew();
+        }).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            outputChannel.appendLine(`[whats-new] Error showing What's New: ${msg}`);
         });
     }
 }
