@@ -9,12 +9,20 @@ Implement issue **#$ARGUMENTS** and create a draft PR.
 
 ## Steps
 
-1. Read the issue to verify it's builder-ready:
+1. Read the issue to check if it's been plan-reviewed:
    ```bash
-   gh issue view $ARGUMENTS --json body --jq '.body'
+   gh issue view $ARGUMENTS --json labels --jq '[.labels[].name] | if index("builder-ready") then "READY" else "NEEDS PLAN REVIEW" end'
    ```
-   Check for: file:line, root cause, test code, verify command.
-   If missing any → invoke `/flow-scout` to complete the spec first.
+   If not labeled `builder-ready` → spawn plan-reviewer first:
+   ```
+   Agent(
+     subagent_type: "plan-reviewer",
+     prompt: "Review plan for issue #$ARGUMENTS. Follow your todo list.",
+     model: "sonnet",
+     name: "plan-review-$ARGUMENTS"
+   )
+   ```
+   Wait for plan-reviewer to add the `builder-ready` label.
 
 2. Spawn the builder agent in a worktree:
    ```

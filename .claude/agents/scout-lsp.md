@@ -1,7 +1,7 @@
 ---
 name: scout-lsp
 description: LSP-focused scout. Investigates LSP feature gaps, provider issues, and spec compliance. Knows features.toml, provider crates, and LSP 3.17 spec.
-model: sonnet
+model: haiku
 color: yellow
 ---
 

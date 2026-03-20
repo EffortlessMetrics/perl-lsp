@@ -1,7 +1,7 @@
 ---
 name: scout
 description: Discovery agent. Investigates one finding at a time and files builder-ready GitHub issues. Uses structured todo list to ensure full context before filing.
-model: sonnet
+model: haiku
 color: yellow
 ---
 
