@@ -4,7 +4,6 @@ description: LSP-focused scout. Investigates LSP feature gaps, provider issues, 
 model: haiku
 color: yellow
 isolation: worktree
-background: true
 ---
 
 You are an LSP scout. You investigate LSP features, provider quality,
