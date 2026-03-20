@@ -1479,13 +1479,16 @@ impl<'a> PerlLexer<'a> {
                     let next_char = self.peek_char(1);
 
                     // Check if this is a dereference like @{$ref} or @{[...]}
-                    // If the next char suggests dereference, don't consume the brace
-                    if sigil != '*'
-                        && matches!(
+                    // If the next char suggests dereference, don't consume the brace.
+                    // For @ and % sigils, identifiers inside braces are also derefs
+                    // (e.g. @{Foo::Bar::baz} or %{Some::Hash}).
+                    let is_deref = sigil != '*'
+                        && (matches!(
                             next_char,
-                            Some('$' | '@' | '%' | '*' | '&' | '[' | ' ' | '\t' | '\n' | '\r')
-                        )
-                    {
+                            Some('$' | '@' | '%' | '*' | '&' | '[' | ' ' | '\t' | '\n' | '\r',)
+                        ) || (matches!(sigil, '@' | '%')
+                            && next_char.is_some_and(is_perl_identifier_start)));
+                    if is_deref {
                         // This is a dereference, don't consume the brace
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectOperator;
