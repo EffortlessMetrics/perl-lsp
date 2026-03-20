@@ -81,20 +81,23 @@ pub fn init_logging(default_filter: &str) {
 /// Emit a consistent startup log line for server binaries.
 pub fn log_server_startup(
     server_name: &str,
+    version: &str,
     transport: TransportMode,
     feature_profile: Option<FeatureProfile>,
 ) {
-    tracing::info!(server = server_name, transport = transport.label(), "server starting");
+    tracing::info!(server = server_name, version, transport = transport.label(), "server starting");
 
     if let Some(port) = transport.port() {
         tracing::info!(server = server_name, port, "listening port configured");
     }
 
-    if let Some(feature_profile) = feature_profile {
+    if let Some(profile) = feature_profile {
+        let feature_count = catalog_advertised_feature_ids(profile).len();
         tracing::info!(
             server = server_name,
-            feature_profile = feature_profile.as_str(),
-            "feature profile selected"
+            feature_profile = profile.as_str(),
+            features = feature_count,
+            "feature profile active"
         );
     }
 }
@@ -471,50 +474,47 @@ fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParse
 pub fn help_text() -> String {
     let supported_profiles = feature_profile_supported_tokens().join(", ");
 
-    format!(
-        "Perl Language Server\n\
-\
-Usage: perl-lsp [options]\n\
-       perl-lsp --check <file.pl> [file2.pm ...]\n\
-\
-Options:\n\
-  --stdio          Use stdio for communication (default)\n\
-  --socket         Use TCP socket for communication\n\
-  --port           Port to listen on (default: {DEFAULT_LSP_PORT})\n\
-  --log            Enable logging to stderr\n\
-  --health         Quick health check (prints \'ok <version>\')\n\
-  --info           Show version, features, and coverage info\n\
-  --check          Validate Perl files and report parse errors\n\
-  --version        Show version information\n\
-  --features-json  Output features catalog as JSON\n\
-  --feature-profile <name> Set feature profile\n\
-                   Values: {supported_profiles}\n\
-  --completion <shell> Generate shell completions\n\
-                   Shells: bash, zsh, fish, powershell\n\
-  --help           Show this help message\n\
-\
-Examples:\n\
-  # Run in stdio mode (default)\n\
-  perl-lsp --stdio\n\
-\
-  # Run with production profile\n\
-  perl-lsp --stdio --feature-profile=prod\n\
-\
-  # Run with logging enabled\n\
-  perl-lsp --stdio --log\n\
-\
-  # Run in socket mode\n\
-  perl-lsp --socket --port 9257\n\
-\
-  # Check Perl files for syntax errors\n\
-  perl-lsp --check lib/MyModule.pm script.pl\n\
-\
-  # Show server information\n\
-  perl-lsp --info\n\
-\
-  # Install bash completions\n\
-  perl-lsp --completion bash >> ~/.bashrc\n"
-    )
+    let mut out = String::with_capacity(1024);
+    out.push_str("Perl Language Server\n");
+    out.push('\n');
+    out.push_str("Usage: perl-lsp [options]\n");
+    out.push_str("       perl-lsp --check <file.pl> [file2.pm ...]\n");
+    out.push('\n');
+    out.push_str("Server options:\n");
+    out.push_str("  --stdio              Use stdio for communication (default)\n");
+    out.push_str("  --socket             Use TCP socket for communication\n");
+    out.push_str(&format!(
+        "  --port <port>        Port to listen on (default: {DEFAULT_LSP_PORT})\n"
+    ));
+    out.push_str("  --log                Enable logging to stderr\n");
+    out.push_str("  --feature-profile <name>\n");
+    out.push_str(&format!("                       Set feature profile ({supported_profiles})\n"));
+    out.push('\n');
+    out.push_str("Diagnostic options:\n");
+    out.push_str("  --health             Quick health check (prints 'ok <version>')\n");
+    out.push_str("  --info               Show version, features, and coverage info\n");
+    out.push_str("  --version            Show version information\n");
+    out.push_str("  --features-json      Output features catalog as JSON\n");
+    out.push('\n');
+    out.push_str("Tool options:\n");
+    out.push_str("  --check <files...>   Validate Perl files and report parse errors\n");
+    out.push_str("  --completion <shell> Generate shell completions (bash, zsh, fish)\n");
+    out.push_str("  --help               Show this help message\n");
+    out.push('\n');
+    out.push_str("Examples:\n");
+    out.push_str("  perl-lsp --stdio                        # stdio mode (default)\n");
+    out.push_str("  perl-lsp --stdio --log                   # with logging\n");
+    out.push_str("  perl-lsp --socket --port 9257            # TCP socket mode\n");
+    out.push_str("  perl-lsp --stdio --feature-profile=prod  # production profile\n");
+    out.push_str("  perl-lsp --check lib/MyModule.pm         # syntax check\n");
+    out.push_str("  perl-lsp --info                          # server information\n");
+    out.push_str("  perl-lsp --completion bash >> ~/.bashrc   # install completions\n");
+    out.push('\n');
+    out.push_str("Environment:\n");
+    out.push_str("  PERL_LSP_LOG=1       Enable logging (alternative to --log)\n");
+    out.push_str("  RUST_LOG=<filter>    Set tracing filter (e.g. perl_lsp=debug)\n");
+    out.push_str("  NO_COLOR=1           Disable colored output\n");
+    out
 }
 
 /// Generate shell completion script for the given shell name.
@@ -676,6 +676,7 @@ pub fn format_info_output(
     out.push_str(&format!("Features:         {feature_count} advertised\n"));
     out.push_str(&format!("LSP coverage:     {coverage:.1}%\n"));
     out.push_str(&format!("Executable:       {exe_path}\n"));
+    out.push_str("\nTip: run with --log or set PERL_LSP_LOG=1 for diagnostics\n");
 
     out
 }
