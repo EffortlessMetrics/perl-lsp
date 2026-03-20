@@ -70,6 +70,7 @@ pub fn add_special_variables(
             ("$\\", "Output record separator"),
             ("$!", "Current errno"),
             ("$@", "Last eval error"),
+            ("$?", "Child process status (exit code)"),
             ("$$", "Process ID"),
             ("$0", "Program name"),
             ("$1", "First capture group"),

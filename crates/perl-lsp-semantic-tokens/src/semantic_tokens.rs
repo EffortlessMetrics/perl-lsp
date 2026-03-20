@@ -196,6 +196,51 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
     *leg.map.get(k).unwrap_or(&0)
 }
 
+/// Returns `true` when `full_name` is a well-known Perl built-in special variable.
+///
+/// `full_name` is the sigil concatenated with the bare name, e.g. `"$_"`, `"@_"`,
+/// `"%ENV"`.  These variables exist in every Perl program and are never declared
+/// with `my`/`our`, so they deserve the `defaultLibrary` semantic-token modifier
+/// to let editors colour them distinctly from user-defined variables.
+///
+/// Note: hash elements accessed as `$ENV{KEY}` appear in the AST as
+/// `Variable { sigil: "$", name: "ENV" }`.  We include both `$ENV` and `%ENV`
+/// so that all access forms receive the modifier.
+fn is_special_variable(full_name: &str) -> bool {
+    matches!(
+        full_name,
+        "$_" | "@_"
+            | "$!"
+            | "$@"
+            | "$?"
+            | "$/"
+            | "$\\"
+            | "$$"
+            | "$0"
+            | "$;"
+            | "$,"
+            | "$."
+            | "$&"
+            | "$'"
+            | "$`"
+            | "$+"
+            | "$^W"
+            | "$^O"
+            | "$^V"
+            | "$^T"
+            | "$^A"
+            | "@ISA"
+            | "@INC"
+            | "@ARGV"
+            | "%ENV"
+            | "$ENV"  // hash element access: $ENV{KEY}
+            | "%INC"
+            | "$INC"  // hash element access: $INC{'Foo.pm'}
+            | "%SIG"
+            | "$SIG" // hash element access: $SIG{INT}
+    )
+}
+
 /// Collect semantic tokens for LSP highlighting in the Complete stage.
 ///
 /// # Arguments
@@ -397,13 +442,15 @@ pub fn collect_semantic_tokens(
                 }
             }
             NodeKind::MethodCall { .. } => ("method", 0),
-            NodeKind::Variable { .. } => {
+            NodeKind::Variable { sigil, name } => {
                 let (vs, ve) = (node.location.start, node.location.end);
                 let decl_info = decl_spans.iter().find(|(ds, de, _)| *ds <= vs && ve <= *de);
+                let full_name = format!("{sigil}{name}");
+                let special_mod = if is_special_variable(&full_name) { 8 } else { 0 }; // defaultLibrary
                 let mods = match decl_info {
-                    Some((_, _, true)) => 1 | 4, // declaration | readonly (our)
-                    Some((_, _, false)) => 1,    // declaration (my/local/state)
-                    None => 0,
+                    Some((_, _, true)) => 1 | 4 | special_mod, // declaration | readonly (our)
+                    Some((_, _, false)) => 1 | special_mod,    // declaration (my/local/state)
+                    None => special_mod,
                 };
                 ("variable", mods)
             }

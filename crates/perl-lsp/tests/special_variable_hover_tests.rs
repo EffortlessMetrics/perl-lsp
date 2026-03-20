@@ -137,3 +137,92 @@ fn test_hover_special_variables_return_markdown() -> TestResult {
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// New tests for issue #2347 – extended special variable hover coverage
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_hover_child_process_status() -> TestResult {
+    // $? is set after system(), backtick, or waitpid
+    // "system('ls'); my $rc = $?;\n"
+    //  0123456789012345678901234
+    // $? is at byte offset 23
+    let doc = "system('ls'); my $rc = $?;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///child_status2347.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///child_status2347.pl"},
+                "position": {"line": 0, "character": 23}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = must_some(hover_value(&result));
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("child") || lower.contains("status") || lower.contains("exit"),
+        "$? hover should mention child process status, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_perl_version_variable() -> TestResult {
+    // $^V is the Perl version object (v-string like v5.38.0)
+    // "print $^V;\n"
+    //  0123456789
+    // $^V starts at offset 6
+    let doc = "print $^V;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///version2347.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///version2347.pl"},
+                "position": {"line": 0, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = must_some(hover_value(&result));
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("version") || lower.contains("perl"),
+        "$^V hover should mention Perl version, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_argv_array() -> TestResult {
+    // @ARGV holds command-line arguments
+    // "my $first = shift @ARGV;\n"
+    //  0         1         2
+    //  0123456789012345678901234
+    // @ARGV starts at offset 18
+    let doc = "my $first = shift @ARGV;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///argv2347.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///argv2347.pl"},
+                "position": {"line": 0, "character": 19}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = must_some(hover_value(&result));
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("argv") || lower.contains("command") || lower.contains("argument"),
+        "@ARGV hover should mention command-line arguments, got: {val}"
+    );
+    Ok(())
+}

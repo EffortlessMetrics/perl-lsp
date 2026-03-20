@@ -1319,3 +1319,65 @@ fn variable_assignment_inference_ignores_comparison_operators() {
         items.iter().map(|i| &i.label).collect::<Vec<_>>()
     );
 }
+
+// ===========================================================================
+// 13. Special variable smart completion – issue #2347
+// ===========================================================================
+
+#[test]
+fn special_scalar_child_status() {
+    // $? holds the child process status after system/backtick/waitpid
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$?"), "should suggest $? (child process status)");
+}
+
+#[test]
+fn special_hash_sig() {
+    // %SIG maps signal names to handlers
+    let code = "%";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "%SIG"), "should suggest %SIG (signal handlers)");
+}
+
+#[test]
+fn special_array_argv() {
+    // @ARGV holds command-line arguments
+    let code = "@A";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "@ARGV"), "should suggest @ARGV (command-line args)");
+}
+
+#[test]
+fn special_scalar_child_status_has_rich_documentation() {
+    // $? documentation should mention child / process status
+    let code = "$";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "$?"));
+    let doc = must_some(item.documentation.as_ref());
+    assert!(
+        doc.to_lowercase().contains("child") || doc.to_lowercase().contains("status"),
+        "$? documentation should mention child process status, got: {doc}"
+    );
+}
+
+#[test]
+fn special_scalar_capture_group_one() {
+    // $1 is the first regex capture group - confirm it is in the list
+    let code = "$1";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$1"), "should suggest $1 (first capture group)");
+}
+
+#[test]
+fn special_scalar_child_status_sort_priority() {
+    // Special variables should sort before regular variables (prefix "0_")
+    let code = "$";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "$?"));
+    let sort_text = must_some(item.sort_text.as_ref());
+    assert!(
+        sort_text.starts_with("0_"),
+        "$? sort_text should start with '0_' for high priority, got: {sort_text}"
+    );
+}
