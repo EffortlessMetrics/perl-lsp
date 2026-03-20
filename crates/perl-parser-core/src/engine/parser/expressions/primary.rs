@@ -708,11 +708,16 @@ impl<'a> Parser<'a> {
 
             // Handle 'sub' specially - it might be an anonymous subroutine
             TokenKind::Sub => {
-                // Check if the token AFTER 'sub' is { or ( (anonymous subroutine)
+                // Check if the token AFTER 'sub' starts an anonymous subroutine:
+                //   sub { ... }          — block body
+                //   sub ( ... ) { ... }  — with prototype/signature
+                //   sub :attr { ... }    — with attribute(s), e.g. :lvalue, :shared
                 // We use peek_second() because peek() is still 'sub' (unconsumed)
                 let next = self.tokens.peek_second().ok().map(|t| t.kind);
-                if matches!(next, Some(k) if matches!(k, TokenKind::LeftBrace | TokenKind::LeftParen))
-                {
+                if matches!(
+                    next,
+                    Some(TokenKind::LeftBrace | TokenKind::LeftParen | TokenKind::Colon)
+                ) {
                     // It's an anonymous subroutine
                     self.parse_subroutine()
                 } else {
