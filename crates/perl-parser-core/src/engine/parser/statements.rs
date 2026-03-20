@@ -549,6 +549,13 @@ impl<'a> Parser<'a> {
 
     /// Parse simple statement (print, die, next, last, etc. with their arguments)
     fn parse_simple_statement(&mut self) -> ParseResult<Node> {
+        // In Perl, any bareword before `=>` is autoquoted as a hash key.
+        // When a builtin name (e.g. `log`, `abs`, `die`) appears before `=>`,
+        // skip the builtin dispatch and fall through to expression parsing.
+        // This handles patterns like `has log => sub { ... }`.
+        if self.is_keyword_before_fat_arrow() {
+            return self.parse_expression();
+        }
         // Check if it's a builtin that can take arguments without parens
         if let Ok(token) = self.tokens.peek() {
             let token_text = token.text.clone();
