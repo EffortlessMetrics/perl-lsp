@@ -124,8 +124,8 @@ where
 mod tests {
     use super::*;
     use parking_lot::Mutex;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn debouncer_fires_after_interval() {
