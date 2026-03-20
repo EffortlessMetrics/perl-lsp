@@ -85,6 +85,44 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
+    const openConfigGuideCommand = vscode.commands.registerCommand('perl-lsp.openConfigurationGuide', async () => {
+        const items = [
+            {
+                label: '$(gear) Open Extension Settings',
+                description: 'All perl-lsp settings in the VSCode Settings UI',
+                action: 'settings'
+            },
+            {
+                label: '$(search) Jump to Include Paths',
+                description: 'Fix "Can\'t locate Foo.pm" errors — add your module directories here',
+                action: 'includePaths'
+            },
+            {
+                label: '$(link-external) Online Documentation',
+                description: 'Full configuration reference on GitHub',
+                action: 'docs'
+            }
+        ];
+
+        const selection = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Perl LSP Configuration Guide — choose a destination'
+        });
+
+        if (!selection) {
+            return;
+        }
+
+        if (selection.action === 'settings') {
+            void vscode.commands.executeCommand('workbench.action.openSettings', '@ext:EffortlessMetrics.perl-lsp-rs');
+        } else if (selection.action === 'includePaths') {
+            void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.includePaths');
+        } else if (selection.action === 'docs') {
+            void vscode.env.openExternal(
+                vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp#configuration')
+            );
+        }
+    });
+
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         if (!currentServerPath) {
             vscode.window.showErrorMessage('Perl LSP server path is unavailable.');
@@ -154,7 +192,8 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
+            { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] },
+            { label: '$(book) Configuration Guide', detail: 'Guided help for includePaths, formatting, and more', command: 'perl-lsp.openConfigurationGuide' }
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
@@ -198,6 +237,7 @@ export async function activate(context: vscode.ExtensionContext) {
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,
+        openConfigGuideCommand,
         formatOnSaveDisposable,
         configurationWatcher,
     );
