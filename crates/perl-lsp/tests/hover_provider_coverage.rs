@@ -690,7 +690,8 @@ my $limit = MAX;
 
     #[test]
     #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
-    fn test_hover_blessed_ref_shows_class_type_from_new() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_hover_blessed_ref_shows_class_type_from_new() -> Result<(), Box<dyn std::error::Error>>
+    {
         // This test verifies that hovering on a variable assigned from a blessed reference
         // shows the inferred class type.
         // Currently fails because TypeInferenceEngine is not integrated into hover.
@@ -713,10 +714,7 @@ $obj;
         );
 
         // Should show the variable name
-        assert!(
-            content.contains("$obj"),
-            "hover should include variable name, got: {content}"
-        );
+        assert!(content.contains("$obj"), "hover should include variable name, got: {content}");
 
         // Should show the inferred type (Foo class)
         assert!(
@@ -729,7 +727,8 @@ $obj;
 
     #[test]
     #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
-    fn test_hover_scalar_from_literal_assignment_shows_type() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_hover_scalar_from_literal_assignment_shows_type()
+    -> Result<(), Box<dyn std::error::Error>> {
         // Scalar with integer literal should show Integer type inference
         let code = "my $x = 42;\n$x;";
         let resp = hover_at(code, "file:///int.pl", "$x", 1)?;
@@ -752,7 +751,8 @@ $obj;
 
     #[test]
     #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
-    fn test_hover_shows_inferred_type_from_function_call() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_hover_shows_inferred_type_from_function_call() -> Result<(), Box<dyn std::error::Error>>
+    {
         // Function returning scalar reference should infer reference type
         let code = r#"
 sub get_name { return "Alice"; }

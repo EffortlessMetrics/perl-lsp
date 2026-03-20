@@ -419,6 +419,94 @@ impl DiagnosticCode {
                 "The return value of this expression is used implicitly. \
                 Make it explicit with `return` or assign it to a variable.",
             ),
+            DiagnosticCode::AssignmentInCondition => Some(
+                "This looks like an assignment `=` inside a condition where \
+                a comparison `==` or `eq` was likely intended.",
+            ),
+            DiagnosticCode::NumericComparisonWithUndef => Some(
+                "Comparing a potentially undefined value with a numeric operator \
+                produces a warning at runtime. Check for definedness first with `defined()`.",
+            ),
+            DiagnosticCode::VariableShadowing => Some(
+                "This variable shadows an outer variable with the same name. \
+                Rename it to avoid confusion, or use the outer variable directly.",
+            ),
+            DiagnosticCode::VariableRedeclaration => Some(
+                "This variable is declared again in the same scope. \
+                Remove the duplicate `my` declaration and reuse the existing variable.",
+            ),
+            DiagnosticCode::DuplicateParameter => Some(
+                "This subroutine signature has a duplicate parameter name. \
+                Each parameter must have a unique name.",
+            ),
+            DiagnosticCode::ParameterShadowsGlobal => Some(
+                "This subroutine parameter shadows a global (`our`) variable. \
+                Rename the parameter to avoid confusion with the global.",
+            ),
+            DiagnosticCode::UnusedParameter => Some(
+                "This subroutine parameter is declared but never used. \
+                Remove it or prefix with `_` (e.g., `$_unused`) to suppress.",
+            ),
+            DiagnosticCode::UnquotedBareword => Some(
+                "This bareword is used where a quoted string is expected. \
+                Under `use strict`, barewords are not allowed. Quote it: `'word'`.",
+            ),
+            DiagnosticCode::UninitializedVariable => Some(
+                "This variable is used before being assigned a value. \
+                Initialize it before use to avoid `Use of uninitialized value` warnings.",
+            ),
+            DiagnosticCode::MisspelledPragma => Some(
+                "This pragma name appears to be misspelled. \
+                Check the spelling and ensure the module is installed.",
+            ),
+            DiagnosticCode::DeprecatedDefined => Some(
+                "`defined(@array)` and `defined(%hash)` are deprecated since Perl 5.6. \
+                Use `@array` or `%hash` directly in boolean context instead.",
+            ),
+            DiagnosticCode::DeprecatedArrayBase => Some(
+                "The `$[` variable is deprecated. Array indices always start at 0 \
+                in modern Perl. Remove any assignment to `$[`.",
+            ),
+            DiagnosticCode::SecurityStringEval => Some(
+                "String `eval` executes arbitrary code and is a security risk. \
+                Use block eval `eval { ... }` or safer alternatives.",
+            ),
+            DiagnosticCode::SecurityBacktickExec => Some(
+                "Backticks/`qx()` execute shell commands and can be exploited. \
+                Use `system()` with a list form or IPC::Run for safer execution.",
+            ),
+            DiagnosticCode::UnusedImport => Some(
+                "This module is imported but none of its exports appear to be used. \
+                Remove the `use` statement to reduce unnecessary dependencies.",
+            ),
+            DiagnosticCode::HeredocInFormat => Some(
+                "Heredocs inside `format` blocks can cause subtle parsing issues. \
+                Extract the heredoc content into a variable before the format.",
+            ),
+            DiagnosticCode::HeredocInBegin => Some(
+                "Heredocs inside `BEGIN` blocks may behave unexpectedly due to \
+                compile-time execution. Move the heredoc outside the BEGIN block.",
+            ),
+            DiagnosticCode::HeredocDynamicDelimiter => Some(
+                "The heredoc delimiter contains a variable, making it dynamic. \
+                Use a static delimiter string to avoid surprising behavior.",
+            ),
+            DiagnosticCode::HeredocInSourceFilter => Some(
+                "Heredocs inside source-filtered code may be mangled by the filter. \
+                Avoid combining heredocs with source filters.",
+            ),
+            DiagnosticCode::HeredocInRegexCode => Some(
+                "Heredocs inside regex code blocks `(?{ ... })` can cause parsing failures. \
+                Move the heredoc content outside the regex.",
+            ),
+            DiagnosticCode::HeredocInEval => Some(
+                "Heredocs inside string `eval` are fragile and error-prone. \
+                Use a variable or block eval instead.",
+            ),
+            DiagnosticCode::HeredocTiedHandle => Some(
+                "Heredocs written to tied filehandles may not behave as expected. \
+                The tie interface may not handle multi-line heredoc output correctly.",
+            ),
             // Perl::Critic codes carry per-policy descriptions; no generic hint needed.
             DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2
