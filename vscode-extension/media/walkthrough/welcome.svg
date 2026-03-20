@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect width="800" height="450" fill="#1e3a8a"/>
+  <text x="400" y="180" font-family="sans-serif" font-size="48" font-weight="bold" fill="white" text-anchor="middle">perl-lsp</text>
+  <text x="400" y="240" font-family="sans-serif" font-size="22" fill="#93c5fd" text-anchor="middle">Fast, native Perl 5 language server</text>
+  <text x="400" y="290" font-family="sans-serif" font-size="16" fill="#bfdbfe" text-anchor="middle">Go-to-definition · Completions · Diagnostics · Refactoring · Debugging</text>
+  <text x="400" y="340" font-family="sans-serif" font-size="14" fill="#60a5fa" text-anchor="middle">Zero runtime dependencies · 26+ IDE features</text>
+</svg>
