@@ -332,6 +332,7 @@ impl<'a> Parser<'a> {
                 | NodeKind::Subroutine { .. }
                 | NodeKind::Package { .. }
                 | NodeKind::Block { .. }
+                | NodeKind::PhaseBlock { .. }
         )
     }
 
