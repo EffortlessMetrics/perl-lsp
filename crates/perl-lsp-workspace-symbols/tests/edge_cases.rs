@@ -3,7 +3,11 @@ use perl_parser_core::Parser;
 use perl_tdd_support::must;
 use std::collections::HashMap;
 
-fn parse_and_index(provider: &mut WorkspaceSymbolsProvider, uri: &str, source: &str) -> HashMap<String, String> {
+fn parse_and_index(
+    provider: &mut WorkspaceSymbolsProvider,
+    uri: &str,
+    source: &str,
+) -> HashMap<String, String> {
     let mut source_map = HashMap::new();
     let mut parser = Parser::new(source);
     let ast = must(parser.parse());
