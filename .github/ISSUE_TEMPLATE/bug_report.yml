@@ -74,17 +74,27 @@ body:
     attributes:
       label: LSP Logs / Error Output
       description: |
-        Paste any relevant LSP log output. You can capture logs by starting the server with `perl-lsp --stdio 2>lsp.log`.
+        Paste any relevant LSP log output.
+        - **VS Code**: run the `Perl: Show Output Channel` command (Ctrl+Shift+P → "Perl: Show Output Channel") and paste the contents.
+        - **Other editors**: start the server with `perl-lsp --stdio 2>lsp.log` and paste `lsp.log`.
       render: text
 
   - type: input
     id: version
     attributes:
       label: perl-lsp Version
-      description: Output of `perl-lsp --version`
-      placeholder: "0.10.0"
+      description: |
+        Run `perl-lsp --version` in your terminal, or in VS Code run the `Perl: Show Server Version` command (Ctrl+Shift+P → "Perl: Show Server Version").
+      placeholder: "0.12.0"
     validations:
       required: true
+
+  - type: input
+    id: perl-version
+    attributes:
+      label: Perl Version
+      description: Output of `perl --version` (the first line, e.g. "This is perl 5, version 38...").
+      placeholder: "perl 5.38.2"
 
   - type: input
     id: editor
@@ -94,6 +104,13 @@ body:
       placeholder: "VS Code 1.96, Neovim 0.10, Helix 24.07, etc."
     validations:
       required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code Version (if applicable)
+      description: Help > About in VS Code — only needed if using the VS Code extension.
+      placeholder: "1.96.2"
 
   - type: input
     id: os
