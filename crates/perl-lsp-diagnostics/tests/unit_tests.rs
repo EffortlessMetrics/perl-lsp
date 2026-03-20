@@ -1602,3 +1602,244 @@ fn lexer_error_with_unterminated_string_has_suggestion() -> Result<(), Box<dyn s
     );
     Ok(())
 }
+// =========================================================================
+// 18. lints::security — check_security
+// =========================================================================
+
+fn string_node(value: &str, interpolated: bool, start: usize, end: usize) -> Node {
+    Node::new(NodeKind::String { value: value.to_string(), interpolated }, loc(start, end))
+}
+
+#[test]
+fn security_two_arg_open_warns() -> Result<(), Box<dyn std::error::Error>> {
+    let fh = Node::new(NodeKind::Identifier { name: "FH".to_string() }, loc(5, 7));
+    let file = string_node(">file.txt", true, 9, 20);
+    let call = func_call("open", vec![fh, file], 0, 21);
+    let root = program(vec![expr_stmt(call, 0, 22)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-two-arg-open")),
+        "Should detect two-arg open: {diagnostics:?}"
+    );
+    let diag = diagnostics
+        .iter()
+        .find(|d| d.code.as_deref() == Some("security-two-arg-open"))
+        .ok_or("missing diagnostic")?;
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+    assert!(diag.message.contains("3-argument open"));
+    assert!(diag.suggestion.is_some());
+    Ok(())
+}
+
+#[test]
+fn security_three_arg_open_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let fh = var_node("$", "fh", 5, 8);
+    let mode = string_node(">", false, 10, 13);
+    let file = string_node("file.txt", false, 15, 25);
+    let call = func_call("open", vec![fh, mode, file], 0, 26);
+    let root = program(vec![expr_stmt(call, 0, 27)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-two-arg-open")),
+        "3-arg open should not trigger warning: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_one_arg_open_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let fh = Node::new(NodeKind::Identifier { name: "FH".to_string() }, loc(5, 7));
+    let call = func_call("open", vec![fh], 0, 8);
+    let root = program(vec![expr_stmt(call, 0, 9)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-two-arg-open")),
+        "1-arg open should not trigger warning"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_string_eval_warns() -> Result<(), Box<dyn std::error::Error>> {
+    let code = string_node("$code", true, 5, 12);
+    let call = func_call("eval", vec![code], 0, 13);
+    let root = program(vec![expr_stmt(call, 0, 14)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")),
+        "Should detect string eval: {diagnostics:?}"
+    );
+    let diag = diagnostics
+        .iter()
+        .find(|d| d.code.as_deref() == Some("security-string-eval"))
+        .ok_or("missing diagnostic")?;
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+    assert!(diag.message.contains("security risk"));
+    assert!(diag.suggestion.is_some());
+    Ok(())
+}
+
+#[test]
+fn security_eval_with_variable_warns() -> Result<(), Box<dyn std::error::Error>> {
+    let code = var_node("$", "code_string", 5, 18);
+    let call = func_call("eval", vec![code], 0, 19);
+    let root = program(vec![expr_stmt(call, 0, 20)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")),
+        "Should detect eval with variable: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_eval_block_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let block_body = block(vec![]);
+    let eval = Node::new(NodeKind::Eval { block: Box::new(block_body) }, loc(0, 15));
+    let root = program(vec![expr_stmt(eval, 0, 16)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-string-eval")),
+        "Block eval should not trigger string-eval warning"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_backtick_string_warns() -> Result<(), Box<dyn std::error::Error>> {
+    let cmd = string_node("`ls -la`", true, 0, 8);
+    let root = program(vec![expr_stmt(cmd, 0, 9)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-backtick-exec")),
+        "Should detect backtick command execution: {diagnostics:?}"
+    );
+    let diag = diagnostics
+        .iter()
+        .find(|d| d.code.as_deref() == Some("security-backtick-exec"))
+        .ok_or("missing diagnostic")?;
+    assert_eq!(diag.severity, DiagnosticSeverity::Information);
+    assert!(diag.message.contains("Command execution"));
+    assert!(diag.suggestion.is_some());
+    Ok(())
+}
+
+#[test]
+fn security_normal_string_no_backtick_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let s = string_node("hello world", true, 0, 13);
+    let root = program(vec![expr_stmt(s, 0, 14)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-backtick-exec")),
+        "Normal interpolated string should not trigger backtick warning"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_non_interpolated_backtick_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let s = string_node("`not a command`", false, 0, 16);
+    let root = program(vec![expr_stmt(s, 0, 17)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-backtick-exec")),
+        "Non-interpolated string with backtick chars should not warn"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_other_function_no_open_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let fh = Node::new(NodeKind::Identifier { name: "FH".to_string() }, loc(6, 8));
+    let something = var_node("$", "something", 10, 20);
+    let call = func_call("close", vec![fh, something], 0, 21);
+    let root = program(vec![expr_stmt(call, 0, 22)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("security-two-arg-open")),
+        "Non-open function should not trigger open warning"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_eval_with_concatenation_warns() -> Result<(), Box<dyn std::error::Error>> {
+    let left = string_node("SELECT * FROM ", true, 5, 21);
+    let right = var_node("$", "table", 24, 30);
+    let concat = binary_node(".", left, right, 5, 30);
+    let call = func_call("eval", vec![concat], 0, 31);
+    let root = program(vec![expr_stmt(call, 0, 32)]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(
+        diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")),
+        "Should detect eval with string concatenation: {diagnostics:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn security_related_info_quality() -> Result<(), Box<dyn std::error::Error>> {
+    let fh = Node::new(NodeKind::Identifier { name: "FH".to_string() }, loc(5, 7));
+    let file = string_node(">file", true, 9, 15);
+    let open_call = func_call("open", vec![fh, file], 0, 16);
+
+    let code = string_node("$code", true, 25, 32);
+    let eval_call = func_call("eval", vec![code], 20, 33);
+
+    let backtick = string_node("`cmd`", true, 40, 46);
+
+    let root = program(vec![
+        expr_stmt(open_call, 0, 17),
+        expr_stmt(eval_call, 20, 34),
+        expr_stmt(backtick, 40, 47),
+    ]);
+
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::security::check_security(&root, &mut diagnostics);
+
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("security-two-arg-open")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("security-string-eval")));
+    assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("security-backtick-exec")));
+
+    for d in &diagnostics {
+        assert!(
+            !d.related_information.is_empty(),
+            "Security lint {} should have related info",
+            d.code.as_deref().unwrap_or("")
+        );
+    }
+    Ok(())
+}

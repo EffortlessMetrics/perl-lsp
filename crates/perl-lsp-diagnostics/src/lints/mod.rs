@@ -1,7 +1,7 @@
 //! Lint checks for Perl code analysis
 //!
 //! This module provides various linting checks for detecting deprecated syntax,
-//! strict/warnings issues, and common mistakes in Perl code.
+//! strict/warnings issues, common mistakes, and security anti-patterns in Perl code.
 //!
 //! # Architecture
 //!
@@ -11,6 +11,7 @@
 //! - **strict_warnings**: Missing `use strict` / `use warnings` advisories and
 //!   misspelled pragma detection
 //! - **common_mistakes**: Frequent programming errors (assignment in conditions, etc.)
+//! - **security**: Security anti-patterns (two-arg open, string eval, backtick execution)
 //!
 //! # Diagnostic Code Reference
 //!
@@ -59,6 +60,14 @@
 //! | `assignment-in-condition` | Warning | `=` used where `==` likely intended |
 //! | `numeric-undef` | Warning | `==`/`!=` with potentially undef value |
 //!
+//! ## Security (`security.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `security-two-arg-open` | Warning | `open(FH, ">file")` -- use 3-arg open |
+//! | `security-string-eval` | Warning | `eval "$string"` is a security risk |
+//! | `security-backtick-exec` | Information | Backtick/qx command execution detected |
+//!
 //! ## Dead code (`dead_code.rs`)
 //!
 //! | Code | Severity | Description |
@@ -87,4 +96,5 @@
 
 pub mod common_mistakes;
 pub mod deprecated;
+pub mod security;
 pub mod strict_warnings;
