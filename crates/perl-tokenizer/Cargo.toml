@@ -18,7 +18,6 @@ perl-lexer = { workspace = true }
 perl-token = { workspace = true }
 perl-error = { workspace = true }
 perl-position-tracking = { workspace = true }
-perl-ast = { workspace = true }
 perl-ast-v2 = { workspace = true }
 
 [dev-dependencies]

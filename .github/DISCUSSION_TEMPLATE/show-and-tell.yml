@@ -1,0 +1,37 @@
+title: "[Show & Tell] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share how you use perl-lsp. Neovim configs, CI integration scripts, company setups, Moose workflows, anything you've built or discovered that others might find useful.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What Are You Sharing?
+      description: Describe what you built, configured, or discovered.
+      placeholder: |
+        I've been using perl-lsp with Helix and put together a config that ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: content
+    attributes:
+      label: The Config, Script, or Setup
+      description: Paste your config, script, or a link to it. Code blocks and screenshots welcome.
+      render: text
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Editor / Environment
+      description: Editor, OS, Perl version, and any other context that makes this work.
+      placeholder: "Neovim 0.10 on Ubuntu 24.04, Perl 5.38"
+
+  - type: textarea
+    id: gotchas
+    attributes:
+      label: Gotchas / Tips
+      description: Anything that tripped you up or that would save others time.

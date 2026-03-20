@@ -518,3 +518,39 @@ fn unless_null_in_paren() {
     // unless (null $root)
     assert_clean_parse(r#"unless (null $root) { print "not null" }"#);
 }
+
+// === Sigil-peek heuristic: imported unary functions without parens (#1943) ===
+// These all fail with "expected ')', found identifier" before the fix because
+// `blessed`, `reftype`, etc. are not in the builtin table. The fix adds a
+// sigil-peek heuristic in postfix.rs: if an unknown identifier is immediately
+// followed by a sigil-starting token, treat it as a unary function call.
+
+#[test]
+fn blessed_self_in_if() {
+    // From Moose::Util::TypeConstraints and many CPAN modules
+    assert_clean_parse(r#"if (blessed $self) { $self->foo() }"#);
+}
+
+#[test]
+fn blessed_in_unless() {
+    // unless (blessed $obj)
+    assert_clean_parse(r#"unless (blessed $obj) { die "not an object" }"#);
+}
+
+#[test]
+fn blessed_with_and_chain() {
+    // if (blessed $err and $err->isa("Foo"))
+    assert_clean_parse(r#"if (blessed $err and $err->isa("Foo")) { 1 }"#);
+}
+
+#[test]
+fn reftype_scalar_comparison() {
+    // if (reftype $x eq 'ARRAY')
+    assert_clean_parse(r#"if (reftype $x eq 'ARRAY') { 1 }"#);
+}
+
+#[test]
+fn looks_like_number_sigil() {
+    // looks_like_number $val — common in Type::Tiny and Params::Util
+    assert_clean_parse(r#"return 0 unless looks_like_number $val;"#);
+}

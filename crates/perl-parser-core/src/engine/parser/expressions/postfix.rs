@@ -293,6 +293,22 @@ impl<'a> Parser<'a> {
                 }
 
                 Some(TokenKind::LeftBracket) => {
+                    // Builtin function identifiers treat [ as anonymous-arrayref argument.
+                    if let NodeKind::Identifier { name } = &expr.kind {
+                        if Self::is_builtin_function(name) || self.looks_like_bare_call(name) {
+                            let name = name.clone();
+                            let start = expr.location.start;
+                            let mut args = vec![self.parse_ternary()?];
+                            while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                self.consume_token()?;
+                                if self.is_at_statement_end() { break; }
+                                args.push(self.parse_ternary()?);
+                            }
+                            let end = args.last().map_or(expr.location.end, |a| a.location.end);
+                            expr = Node::new(NodeKind::FunctionCall { name, args }, SourceLocation { start, end });
+                            continue;
+                        }
+                    }
                     // Array indexing - can be a single index or slice with multiple indices
                     self.tokens.next()?; // consume [
 
@@ -509,6 +525,26 @@ impl<'a> Parser<'a> {
                                 .unwrap_or(expr.location.end);
                             expr = Node::new(
                                 NodeKind::FunctionCall { name: name.clone(), args },
+                                SourceLocation { start, end },
+                            );
+                        } else if !Self::is_builtin_function(name)
+                            && !self.is_at_statement_end()
+                            && self.peek_kind() != Some(TokenKind::FatArrow)
+                            && self.tokens.peek().ok().is_some_and(|t| {
+                                t.text.starts_with('$')
+                                    || t.text.starts_with('@')
+                                    || t.text.starts_with('%')
+                            })
+                        {
+                            // Sigil-peek heuristic: non-builtin identifier followed by a
+                            // sigil-starting argument is a bare function call.
+                            // Handles `blessed $self`, `reftype $x`, `weaken $ref`, etc.
+                            // (imported unary functions that look like builtins at the call site)
+                            let arg = self.parse_ternary()?;
+                            let start = expr.location.start;
+                            let end = arg.location.end;
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name: name.clone(), args: vec![arg] },
                                 SourceLocation { start, end },
                             );
                         } else if Self::is_builtin_function(name) || self.looks_like_bare_call(name) {

@@ -1674,6 +1674,9 @@ impl<'a> PerlLexer<'a> {
                                 | ','
                                 | '"'
                                 | ';'
+                                | '>'
+                                | '<'
+                                | ')'
                         )
                     {
                         self.advance(); // consume the special character

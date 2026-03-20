@@ -127,10 +127,36 @@ impl<'a> Parser<'a> {
             match kind {
                 TokenKind::WordOr | TokenKind::WordXor => {
                     let op_token = self.tokens.next()?;
-                    // Parse the right side as a full expression starting with assignment
-                    let right = self.parse_assignment()?;
+                    // Parse the right side as a full expression starting with assignment.
+                    // In Perl, comma has higher precedence than word operators, so
+                    // '\ or \ = 1, 0' parses as '\ or ((\ = 1), 0)'.
+                    // After parsing the first assignment, collect trailing comma elements.
+                    let mut right = self.parse_assignment()?;
                     // Apply any 'and' operators to the right side
-                    let right = self.parse_word_and_expr_with(right)?;
+                    right = self.parse_word_and_expr_with(right)?;
+
+                    // Collect trailing comma-separated elements (comma > or in precedence)
+                    if self.peek_kind() == Some(TokenKind::Comma) {
+                        let mut elements = vec![right];
+                        while self.peek_kind() == Some(TokenKind::Comma) {
+                            self.consume_token()?; // consume ','
+                            match self.peek_kind() {
+                                Some(TokenKind::Semicolon)
+                                | Some(TokenKind::RightParen)
+                                | Some(TokenKind::RightBrace)
+                                | Some(TokenKind::RightBracket)
+                                | None => break,
+                                Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                                _ => {
+                                    let elem = self.parse_assignment()?;
+                                    elements.push(elem);
+                                }
+                            }
+                        }
+                        let r_start = elements[0].location.start;
+                        let r_end = elements[elements.len() - 1].location.end;
+                        right = Self::build_list_or_hash(elements, false, r_start, r_end);
+                    }
 
                     let start = expr.location.start;
                     let end = right.location.end;
@@ -756,7 +782,36 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Identifier => {
                     let peeked = self.tokens.peek()?;
-                    if peeked.text.as_ref() != "x" {
+                    let peeked_text = peeked.text.as_ref();
+                    // Handle fused `x<digits>` token (e.g. `("")x4`): the lexer joins
+                    // the `x` repetition operator with a following digit run into one
+                    // Identifier token when there is no whitespace between them.
+                    // Split them here: synthesize the operator and number nodes directly.
+                    let fused_x_digits = peeked_text.len() > 1
+                        && peeked_text.starts_with('x')
+                        && peeked_text[1..].chars().all(|c| c.is_ascii_digit());
+                    if fused_x_digits {
+                        let op_token = self.tokens.next()?;
+                        let num_str = op_token.text[1..].to_string();
+                        let num_start = op_token.start + 1;
+                        let num_end = op_token.end;
+                        let right = Node::new(
+                            NodeKind::Number { value: num_str },
+                            SourceLocation { start: num_start, end: num_end },
+                        );
+                        let start = expr.location.start;
+                        let end = right.location.end;
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: "x".to_string(),
+                                left: Box::new(expr),
+                                right: Box::new(right),
+                            },
+                            SourceLocation { start, end },
+                        );
+                        continue;
+                    }
+                    if peeked_text != "x" {
                         break;
                     }
                     let is_operand_start = if let Ok(next) = self.tokens.peek_second() {

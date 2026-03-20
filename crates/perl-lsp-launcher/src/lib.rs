@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 use std::io::IsTerminal;
-use std::sync::Once;
+use std::sync::{Once, OnceLock};
 
 use clap::{Args, Parser};
 pub use perl_lsp_feature_governance::{
@@ -19,9 +19,12 @@ pub use perl_lsp_feature_governance::{
     to_json_for_profile, trackable_feature_count_for_grid,
 };
 use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
+use tracing_subscriber::prelude::*;
 use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};
 
 static LOGGING_INIT: Once = Once::new();
+/// Keeps the non-blocking file writer alive for the process lifetime.
+static LOG_FILE_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
 
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
@@ -59,9 +62,11 @@ pub fn logging_filter(
     })
 }
 
-/// Initialize stderr-based tracing once for the current process.
+/// Initialize tracing once for the current process.
 ///
-/// Invalid `RUST_LOG` values fall back to `default_filter`.
+/// When `PERL_LSP_LOG_FILE` is set, logs are written to a daily-rotated file
+/// (max 5 files) **in addition to** stderr. Invalid `RUST_LOG` values fall
+/// back to `default_filter`.
 pub fn init_logging(default_filter: &str) {
     LOGGING_INIT.call_once(|| {
         let filter = EnvFilter::try_from_default_env()
@@ -69,6 +74,43 @@ pub fn init_logging(default_filter: &str) {
             .unwrap_or_else(|_| EnvFilter::new("info"));
 
         let use_ansi = std::env::var("NO_COLOR").is_err() && io::stderr().is_terminal();
+
+        // If PERL_LSP_LOG_FILE is set, add a rolling file appender alongside stderr.
+        if let Ok(log_path) = std::env::var("PERL_LSP_LOG_FILE") {
+            let path = std::path::Path::new(&log_path);
+            let log_dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+            let log_file_prefix = path.file_name().and_then(|f| f.to_str()).unwrap_or("perl-lsp");
+
+            if let Ok(file_appender) = tracing_appender::rolling::RollingFileAppender::builder()
+                .rotation(tracing_appender::rolling::Rotation::DAILY)
+                .filename_prefix(log_file_prefix)
+                .max_log_files(5)
+                .build(log_dir)
+            {
+                let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+                let _ = LOG_FILE_GUARD.set(guard);
+
+                let stderr_layer = tracing_subscriber::fmt::layer()
+                    .with_writer(io::stderr)
+                    .with_ansi(use_ansi)
+                    .with_target(true);
+
+                let file_layer = tracing_subscriber::fmt::layer()
+                    .with_writer(non_blocking)
+                    .with_ansi(false)
+                    .with_target(true);
+
+                let _ = tracing_subscriber::registry()
+                    .with(filter)
+                    .with(stderr_layer)
+                    .with(file_layer)
+                    .try_init();
+
+                return;
+            }
+            // Fall through to stderr-only if file appender fails to build.
+        }
+
         let _ = tracing_fmt()
             .with_env_filter(filter)
             .with_writer(io::stderr)
@@ -527,6 +569,8 @@ pub fn help_text() -> String {
     out.push('\n');
     out.push_str("Environment:\n");
     out.push_str("  PERL_LSP_LOG=1       Enable logging (alternative to --log)\n");
+    out.push_str("  PERL_LSP_LOG_FILE=<path>\n");
+    out.push_str("                       Also log to a daily-rotated file (max 5 files)\n");
     out.push_str("  RUST_LOG=<filter>    Set tracing filter (e.g. perl_lsp=debug)\n");
     out.push_str("  NO_COLOR=1           Disable colored output\n");
     out
@@ -725,6 +769,43 @@ fn parse_feature_profile(raw_profile: &str) -> Result<FeatureProfile, LaunchPars
 mod tests {
     use super::{DEFAULT_LSP_PORT, LaunchAction, TransportMode, parse_args};
     use perl_tdd_support::must;
+
+    #[test]
+    fn init_logging_does_not_panic_without_log_file() {
+        // init_logging is guarded by Once, so calling it multiple times is safe.
+        // This test verifies the stderr-only path does not panic.
+        super::init_logging("warn");
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn init_logging_does_not_panic_with_log_file() {
+        let dir = std::env::temp_dir().join("perl-lsp-test-log-rotation");
+        let _ = std::fs::create_dir_all(&dir);
+        let log_path = dir.join("test.log");
+
+        // Set the env var for this test — init_logging is Once-guarded so the
+        // file path may not actually be used if another test already initialized,
+        // but this must not panic regardless.
+        // SAFETY: test-only, single-threaded access to this env var.
+        unsafe {
+            std::env::set_var("PERL_LSP_LOG_FILE", log_path.to_str().unwrap_or_default());
+        }
+        super::init_logging("debug");
+        // SAFETY: test-only cleanup.
+        unsafe {
+            std::env::remove_var("PERL_LSP_LOG_FILE");
+        }
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn help_mentions_log_file_env_var() {
+        let text = super::help_text();
+        assert!(text.contains("PERL_LSP_LOG_FILE"));
+    }
 
     #[test]
     fn parse_defaults_to_stdio_with_current_profile() {

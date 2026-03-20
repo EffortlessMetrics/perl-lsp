@@ -333,6 +333,12 @@
         "title": "Run Tests in Current File",
         "category": "Perl",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "perl-lsp.runHealthCheck",
+        "title": "Run Health Check",
+        "category": "Perl",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {

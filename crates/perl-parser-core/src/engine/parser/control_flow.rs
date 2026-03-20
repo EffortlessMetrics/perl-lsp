@@ -143,7 +143,14 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LeftParen)?;
 
         // Check if this is a variable declaration in the condition
-        let condition = if matches!(
+        let condition = if self.peek_kind() == Some(TokenKind::RightParen) {
+            // while () { } — empty condition is the infinite-loop idiom, equivalent to while (1)
+            let loc = self.current_position();
+            Node::new(
+                NodeKind::Number { value: "1".to_string() },
+                SourceLocation { start: loc, end: loc },
+            )
+        } else if matches!(
             self.peek_kind(),
             Some(TokenKind::My)
                 | Some(TokenKind::Our)
@@ -421,10 +428,16 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'return'
 
-        // Check if we have a value to return - only stop at clear ends or statement modifiers
+        // Check if we have a value to return - only stop at clear ends or statement modifiers.
+        // Word operators (or, and, xor) belong to the enclosing statement, not the return value.
+        // e.g. `return or die` means `(return) or (die)`.
         let value = if Self::is_statement_terminator(self.peek_kind())
             || matches!(self.peek_kind(), Some(TokenKind::RightBrace))
             || matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k))
+            || matches!(
+                self.peek_kind(),
+                Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor)
+            )
         {
             None
         } else {

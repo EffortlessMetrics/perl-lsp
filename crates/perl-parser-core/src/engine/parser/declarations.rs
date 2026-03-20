@@ -887,8 +887,25 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'no'
 
-        // Parse module name (can include ::)
-        let mut module = self.expect(TokenKind::Identifier)?.text.to_string();
+        // Parse module name — accepts bare identifiers or keyword-named pragmas
+        // (e.g. `no if COND, warnings`, `no feature`).
+        let first_token = self.consume_token()?;
+        let mut module = if first_token.kind == TokenKind::Identifier {
+            first_token.text.to_string()
+        } else if first_token.text.chars().all(|c| c.is_alphanumeric() || c == '_')
+            && !first_token.text.is_empty()
+        {
+            // Keyword-named pragmas: `no if COND, MODULE`, etc.
+            first_token.text.to_string()
+        } else {
+            return Err(ParseError::syntax(
+                format!(
+                    "Expected module name after 'no', found {}",
+                    first_token.kind.display_name()
+                ),
+                first_token.start,
+            ));
+        };
 
         // Handle :: in module names
         // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
@@ -918,6 +935,39 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Number) {
             module.push(' ');
             module.push_str(&self.consume_token()?.text);
+        }
+
+        // `no if CONDITION, MODULE [, ARGS]` and `no unless ...` are special:
+        // the condition is an arbitrary expression that may contain braces
+        // (e.g. `eval { ... }`), so we need brace-depth-aware token consumption.
+        if module == "if" || module == "unless" {
+            let mut cond_args = Vec::new();
+            let mut brace_depth: usize = 0;
+            while !self.tokens.is_eof() {
+                if brace_depth == 0 && Self::is_statement_terminator(self.peek_kind()) {
+                    break;
+                }
+                if self.peek_kind() == Some(TokenKind::Comma) && brace_depth == 0 {
+                    self.consume_token()?;
+                    continue;
+                }
+                match self.peek_kind() {
+                    Some(TokenKind::LeftBrace) => {
+                        brace_depth = brace_depth.saturating_add(1);
+                    }
+                    Some(TokenKind::RightBrace) => {
+                        brace_depth = brace_depth.saturating_sub(1);
+                    }
+                    _ => {}
+                }
+                cond_args.push(self.consume_token()?.text.to_string());
+            }
+            let end = self.previous_position();
+            let has_filter_risk = Self::is_filter_module(&module);
+            return Ok(Node::new(
+                NodeKind::No { module, args: cond_args, has_filter_risk },
+                SourceLocation { start, end },
+            ));
         }
 
         // Parse optional arguments list
