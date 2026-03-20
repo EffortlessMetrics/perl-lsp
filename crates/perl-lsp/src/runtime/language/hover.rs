@@ -207,9 +207,7 @@ impl LspServer {
             // Check Test::More/Test2 function hover when source imports a test framework
             let is_test_source = text.contains("use Test::More") || text.contains("use Test2");
             if is_test_source {
-                if let Some((sig, desc)) =
-                    crate::completion::get_test_more_documentation(bare)
-                {
+                if let Some((sig, desc)) = crate::completion::get_test_more_documentation(bare) {
                     return HoverExtracted::Complete(json!({
                         "contents": {
                             "kind": "markdown",
