@@ -21,6 +21,8 @@ pub struct LexerCheckpoint {
     pub prototype_depth: usize,
     /// Whether we just saw 'sub' and are waiting for a possible prototype
     pub after_sub: bool,
+    /// Whether we just saw '->' (suppresses s/tr/y as substitution)
+    pub after_arrow: bool,
     /// Current position with line/column tracking
     pub current_pos: Position,
     /// Additional context for complex states
@@ -52,6 +54,7 @@ impl LexerCheckpoint {
             in_prototype: false,
             prototype_depth: 0,
             after_sub: false,
+            after_arrow: false,
             current_pos: Position::start(),
             context: CheckpointContext::Normal,
         }
@@ -75,7 +78,8 @@ impl LexerCheckpoint {
             delimiter_stack_changed: self.delimiter_stack != other.delimiter_stack,
             prototype_state_changed: self.in_prototype != other.in_prototype
                 || self.prototype_depth != other.prototype_depth
-                || self.after_sub != other.after_sub,
+                || self.after_sub != other.after_sub
+                || self.after_arrow != other.after_arrow,
             context_changed: self.context != other.context,
         }
     }
@@ -94,6 +98,7 @@ impl LexerCheckpoint {
                 self.in_prototype = false;
                 self.prototype_depth = 0;
                 self.after_sub = false;
+                self.after_arrow = false;
                 self.context = CheckpointContext::Normal;
             }
         }

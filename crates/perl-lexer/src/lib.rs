@@ -248,6 +248,8 @@ pub struct PerlLexer<'a> {
     prototype_depth: usize,
     /// Track if we just saw a 'sub' keyword (waiting for possible prototype)
     after_sub: bool,
+    /// Track if we just saw a '->' operator (to suppress s/tr/y as substitution)
+    after_arrow: bool,
     /// Current position with line/column tracking
     #[allow(dead_code)]
     current_pos: Position,
@@ -285,6 +287,7 @@ impl<'a> PerlLexer<'a> {
             in_prototype: false,
             prototype_depth: 0,
             after_sub: false,
+            after_arrow: false,
             current_pos: Position::start(),
             after_newline: true, // Start of file counts as after newline
             pending_heredocs: Vec::new(),
@@ -690,6 +693,7 @@ impl<'a> PerlLexer<'a> {
         let saved_prototype = self.in_prototype;
         let saved_depth = self.prototype_depth;
         let saved_after_sub = self.after_sub;
+        let saved_after_arrow = self.after_arrow;
         let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
         let saved_pending_heredocs = self.pending_heredocs.clone();
@@ -706,6 +710,7 @@ impl<'a> PerlLexer<'a> {
         self.in_prototype = saved_prototype;
         self.prototype_depth = saved_depth;
         self.after_sub = saved_after_sub;
+        self.after_arrow = saved_after_arrow;
         self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
         self.pending_heredocs = saved_pending_heredocs;
@@ -743,6 +748,7 @@ impl<'a> PerlLexer<'a> {
         self.in_prototype = false;
         self.prototype_depth = 0;
         self.after_sub = false;
+        self.after_arrow = false;
         self.current_pos = Position::start();
         self.after_newline = true;
         self.pending_heredocs.clear();
@@ -1810,13 +1816,16 @@ impl<'a> PerlLexer<'a> {
             // Special case: substitution/transliteration with single-quote delimiter
             // The single quote is considered an identifier continuation, so we need to
             // detect these operators before consuming it as part of an identifier.
-            if ch == 's' && self.peek_char(1) == Some('\'') {
+            if !self.after_arrow && ch == 's' && self.peek_char(1) == Some('\'') {
                 self.advance(); // consume 's'
                 return self.parse_substitution(start);
-            } else if ch == 'y' && self.peek_char(1) == Some('\'') {
+            } else if !self.after_arrow && ch == 'y' && self.peek_char(1) == Some('\'') {
                 self.advance(); // consume 'y'
                 return self.parse_transliteration(start);
-            } else if ch == 't' && self.peek_char(1) == Some('r') && self.peek_char(2) == Some('\'')
+            } else if !self.after_arrow
+                && ch == 't'
+                && self.peek_char(1) == Some('r')
+                && self.peek_char(2) == Some('\'')
             {
                 self.advance(); // consume 't'
                 self.advance(); // consume 'r'
@@ -1917,8 +1926,9 @@ impl<'a> PerlLexer<'a> {
             }
 
             // Check for substitution/transliteration operators
+            // Skip if after '->'  -- these are method names, not operators.
             #[allow(clippy::collapsible_if)]
-            if matches!(text, "s" | "tr" | "y") {
+            if !self.after_arrow && matches!(text, "s" | "tr" | "y") {
                 if let Some(next) = self.current_char() {
                     // Check if followed by a delimiter
                     if matches!(
@@ -1977,7 +1987,8 @@ impl<'a> PerlLexer<'a> {
                         self.after_sub = true;
                     }
                     // Quote operators expect a delimiter next (must be immediately adjacent)
-                    op if quote_handler::is_quote_operator(op) => {
+                    // Skip if after '->' -- these are method names, not operators.
+                    op if !self.after_arrow && quote_handler::is_quote_operator(op) => {
                         // For regex operators like 'm', 's', 'tr', 'y', delimiter must be immediately adjacent
                         // For quote operators like 'q', 'qq', 'qw', 'qr', 'qx', we allow whitespace
                         let next_char = if matches!(op, "m" | "s" | "tr" | "y") {
@@ -2069,6 +2080,7 @@ impl<'a> PerlLexer<'a> {
                 TokenType::Identifier(Arc::from(text))
             };
 
+            self.after_arrow = false;
             Some(Token { token_type, text: Arc::from(text), start, end: self.position })
         } else {
             None
@@ -2355,6 +2367,8 @@ impl<'a> PerlLexer<'a> {
         let text = &self.input[start..self.position];
         // Operator ends prototype window (e.g. `:` for attributes)
         self.after_sub = false;
+        // Track whether this operator is '->' for method name disambiguation
+        self.after_arrow = text == "->";
         // Postfix ++ and -- complete a term expression, so next token is an operator
         // (e.g., "$x++ / 2" → / is division, not regex)
         if (text == "++" || text == "--") && self.mode == LexerMode::ExpectOperator {
@@ -3324,6 +3338,7 @@ impl Checkpointable for PerlLexer<'_> {
             in_prototype: self.in_prototype,
             prototype_depth: self.prototype_depth,
             after_sub: self.after_sub,
+            after_arrow: self.after_arrow,
             current_pos: self.current_pos,
             context,
         }
@@ -3336,6 +3351,7 @@ impl Checkpointable for PerlLexer<'_> {
         self.in_prototype = checkpoint.in_prototype;
         self.prototype_depth = checkpoint.prototype_depth;
         self.after_sub = checkpoint.after_sub;
+        self.after_arrow = checkpoint.after_arrow;
         self.current_pos = checkpoint.current_pos;
 
         // Handle special contexts
