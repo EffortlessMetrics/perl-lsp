@@ -149,10 +149,15 @@ impl<'a> Parser<'a> {
             // But NOT if followed by comma — that's a regular call: open FILE, "..."
             // And NOT if followed by arrow — that's a class method chain:
             //   print Data::Dumper->new([$self])->Dump()
+            // And NOT if followed by fat arrow — that's a hash-style list, NOT indirect:
+            //   print STDERR => "msg"  means  print(STDERR => "msg"), not print to STDERR
             if next_kind == TokenKind::Identifier {
                 if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
                     if let Ok(third) = self.tokens.peek_third() {
-                        if third.kind == TokenKind::Comma || third.kind == TokenKind::Arrow {
+                        if matches!(
+                            third.kind,
+                            TokenKind::Comma | TokenKind::Arrow | TokenKind::FatArrow
+                        ) {
                             return false;
                         }
                     }
@@ -348,6 +353,14 @@ impl<'a> Parser<'a> {
         // Parse remaining arguments
         let mut args = vec![];
 
+        // In Perl, `=>` (fat arrow) is equivalent to `,` everywhere, including
+        // in indirect-call argument lists.  Consume any leading `=>` that
+        // separates the filehandle/object from the first argument:
+        //   print STDERR => "msg";  — STDERR is object, "msg" is first arg
+        if self.peek_kind() == Some(TokenKind::FatArrow) {
+            self.tokens.next()?; // consume =>
+        }
+
         // Continue parsing arguments until we hit a statement terminator
         // Word operators (or, and, not, xor) bind less tightly than list operators,
         // so they terminate argument collection for indirect calls.
@@ -367,9 +380,12 @@ impl<'a> Parser<'a> {
             // Use parse_assignment instead of parse_expression to avoid grouping by comma operator
             args.push(self.parse_assignment()?);
 
-            // Check if we should continue (comma is optional in indirect syntax)
-            if self.peek_kind() == Some(TokenKind::Comma) {
-                self.tokens.next()?; // consume comma
+            // Check if we should continue (comma or fat arrow as separator in indirect syntax)
+            if matches!(
+                self.peek_kind(),
+                Some(TokenKind::Comma | TokenKind::FatArrow)
+            ) {
+                self.tokens.next()?; // consume , or =>
             } else if Self::is_statement_terminator(self.peek_kind())
                 || self.is_statement_modifier_keyword()
             {
