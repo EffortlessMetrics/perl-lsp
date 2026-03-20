@@ -544,6 +544,106 @@ impl LspHarness {
         result
     }
 
+    /// Wait for a `$/progress` notification whose token and kind match.
+    ///
+    /// Actively polls the notification buffer until a `$/progress` message
+    /// matching `token` and `kind` ("begin" | "report" | "end") is found, or
+    /// the timeout expires.  Non-matching messages are left in the buffer.
+    ///
+    /// Returns the full notification value on success, or an error message.
+    pub fn wait_for_progress_kind(
+        &mut self,
+        token: &str,
+        kind: &str,
+        timeout: Duration,
+    ) -> Result<Value, String> {
+        let start = Instant::now();
+
+        loop {
+            // Pump any pending output into the framer and stash parsed messages.
+            {
+                let mut guard = self.output_buffer.lock();
+                if !guard.is_empty() {
+                    let chunk = std::mem::take(&mut *guard);
+                    self.output_framer.push(&chunk);
+                }
+                drop(guard);
+            }
+            while let Some(msg_bytes) = self.try_take_one_framed_message() {
+                if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
+                    self.stash_non_matching_message(msg);
+                }
+            }
+
+            {
+                let mut notifications = self.notification_buffer.lock();
+                if let Some(pos) = notifications.iter().position(|n| {
+                    n.get("method").and_then(|m| m.as_str()) == Some("$/progress")
+                        && n.pointer("/params/token").and_then(|v| v.as_str()) == Some(token)
+                        && n.pointer("/params/value/kind").and_then(|v| v.as_str()) == Some(kind)
+                }) {
+                    let found = notifications.remove(pos).unwrap_or(json!(null));
+                    return Ok(found);
+                }
+            }
+
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                return Err(format!(
+                    "$/progress {kind} for token '{token}' not received within {timeout:?}"
+                ));
+            }
+
+            // Wait for the TestWriter to signal new data.
+            let mut guard = self.output_buffer.lock();
+            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(50)));
+        }
+    }
+
+    /// Drain server-initiated requests from the buffer.
+    ///
+    /// Server-to-client requests (e.g., `window/workDoneProgress/create`) are
+    /// buffered in `server_requests` by `stash_non_matching_message`.  This
+    /// method waits up to `timeout_ms` for at least one request to arrive, then
+    /// drains and returns all of them.
+    pub fn drain_server_requests(&mut self, timeout_ms: u64) -> Vec<Value> {
+        let start = Instant::now();
+        let timeout = Duration::from_millis(timeout_ms);
+
+        // Pump the output buffer so any queued bytes are parsed first.
+        while start.elapsed() < timeout {
+            {
+                let mut guard = self.output_buffer.lock();
+                if !guard.is_empty() {
+                    let chunk = std::mem::take(&mut *guard);
+                    self.output_framer.push(&chunk);
+                }
+                drop(guard);
+            }
+
+            while let Some(msg_bytes) = self.try_take_one_framed_message() {
+                if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
+                    self.stash_non_matching_message(msg);
+                }
+            }
+
+            {
+                let reqs = self.server_requests.lock();
+                if !reqs.is_empty() {
+                    break;
+                }
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let mut reqs = self.server_requests.lock();
+        let mut result = Vec::new();
+        while let Some(req) = reqs.pop_front() {
+            result.push(req);
+        }
+        result
+    }
+
     /// Get performance timing for a request
     pub fn timed_request(
         &mut self,
