@@ -756,7 +756,36 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Identifier => {
                     let peeked = self.tokens.peek()?;
-                    if peeked.text.as_ref() != "x" {
+                    let peeked_text = peeked.text.as_ref();
+                    // Handle fused `x<digits>` token (e.g. `("")x4`): the lexer joins
+                    // the `x` repetition operator with a following digit run into one
+                    // Identifier token when there is no whitespace between them.
+                    // Split them here: synthesize the operator and number nodes directly.
+                    let fused_x_digits = peeked_text.len() > 1
+                        && peeked_text.starts_with('x')
+                        && peeked_text[1..].chars().all(|c| c.is_ascii_digit());
+                    if fused_x_digits {
+                        let op_token = self.tokens.next()?;
+                        let num_str = op_token.text[1..].to_string();
+                        let num_start = op_token.start + 1;
+                        let num_end = op_token.end;
+                        let right = Node::new(
+                            NodeKind::Number { value: num_str },
+                            SourceLocation { start: num_start, end: num_end },
+                        );
+                        let start = expr.location.start;
+                        let end = right.location.end;
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: "x".to_string(),
+                                left: Box::new(expr),
+                                right: Box::new(right),
+                            },
+                            SourceLocation { start, end },
+                        );
+                        continue;
+                    }
+                    if peeked_text != "x" {
                         break;
                     }
                     let is_operand_start = if let Ok(next) = self.tokens.peek_second() {
