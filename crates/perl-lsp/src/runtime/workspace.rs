@@ -53,6 +53,81 @@ fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, rea
     }
 }
 
+/// Token used for workspace indexing progress notifications.
+#[cfg(feature = "workspace")]
+const WORKSPACE_INDEX_PROGRESS_TOKEN: &str = "workspace-index";
+
+/// Send `window/workDoneProgress/create` to register the indexing token.
+///
+/// This is a fire-and-forget request — the client response is not awaited.
+/// Per LSP 3.15+ the server must create the token before sending `$/progress`.
+#[cfg(feature = "workspace")]
+fn send_progress_create(outbound: &super::outbound::OutboundSender, request_id: i64) {
+    if let Err(e) = outbound.send_request(
+        request_id,
+        "window/workDoneProgress/create",
+        json!({ "token": WORKSPACE_INDEX_PROGRESS_TOKEN }),
+    ) {
+        eprintln!("Failed to send workDoneProgress/create: {}", e);
+    }
+}
+
+/// Send a `$/progress` begin notification for workspace indexing.
+#[cfg(feature = "workspace")]
+fn send_progress_begin(outbound: &super::outbound::OutboundSender) {
+    if let Err(e) = outbound.send_notification(
+        "$/progress",
+        json!({
+            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
+            "value": {
+                "kind": "begin",
+                "title": "Indexing workspace",
+                "cancellable": false,
+                "percentage": 0
+            }
+        }),
+    ) {
+        eprintln!("Failed to send progress begin: {}", e);
+    }
+}
+
+/// Send a `$/progress` report notification for workspace indexing.
+#[cfg(feature = "workspace")]
+fn send_progress_report(outbound: &super::outbound::OutboundSender, indexed: usize, total: usize) {
+    let percentage = if total > 0 { (indexed * 100 / total).min(99) as u32 } else { 0 };
+    let message = format!("Indexed {} of {} files", indexed, total);
+    if let Err(e) = outbound.send_notification(
+        "$/progress",
+        json!({
+            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
+            "value": {
+                "kind": "report",
+                "message": message,
+                "percentage": percentage
+            }
+        }),
+    ) {
+        eprintln!("Failed to send progress report: {}", e);
+    }
+}
+
+/// Send a `$/progress` end notification for workspace indexing.
+#[cfg(feature = "workspace")]
+fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) {
+    if let Err(e) = outbound.send_notification(
+        "$/progress",
+        json!({
+            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
+            "value": {
+                "kind": "end",
+                "message": message
+            }
+        }),
+    ) {
+        eprintln!("Failed to send progress end: {}", e);
+    }
+}
+
 impl LspServer {
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
     ///
@@ -968,10 +1043,20 @@ impl LspServer {
         let outbound = self.outbound.clone();
         let limits = coordinator.limits().clone();
         let caps = coordinator.performance_caps().clone();
+        let work_done_progress = self.client_capabilities.lock().work_done_progress_support;
+        // Generate a request ID for the workDoneProgress/create call. Atomically
+        // increment so it doesn't collide with IDs from other server-to-client requests.
+        let progress_create_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
 
         std::thread::spawn(move || {
             let budget_start = Instant::now();
             coordinator.transition_to_scanning();
+
+            // Send progress begin if client supports work done progress.
+            if work_done_progress {
+                send_progress_create(&outbound, progress_create_id);
+                send_progress_begin(&outbound);
+            }
 
             let mut files: Vec<std::path::PathBuf> = Vec::new();
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
@@ -1010,6 +1095,9 @@ impl LspServer {
 
             let mut indexed_files = 0usize;
             let total_files = files.len();
+            // Track the last file count at which a progress report was sent so we
+            // can batch updates every 50 files (avoid flooding small workspaces).
+            let mut last_reported = 0usize;
 
             for path in files {
                 let elapsed_ms = budget_start.elapsed().as_millis() as u64;
@@ -1032,6 +1120,12 @@ impl LspServer {
                 if coordinator.index().index_file(url, content).is_ok() {
                     indexed_files += 1;
                     coordinator.update_building_progress(indexed_files);
+
+                    // Send a progress report every 50 files.
+                    if work_done_progress && indexed_files - last_reported >= 50 {
+                        send_progress_report(&outbound, indexed_files, total_files);
+                        last_reported = indexed_files;
+                    }
                 }
             }
 
@@ -1048,11 +1142,17 @@ impl LspServer {
                             .transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms });
                     }
                 }
+                if work_done_progress {
+                    send_progress_end(&outbound, "Indexing stopped early");
+                }
                 send_index_ready_notification(&outbound, false);
             } else {
                 let file_count = coordinator.index().file_count();
                 let symbol_count = coordinator.index().symbol_count();
                 coordinator.transition_to_ready(file_count, symbol_count);
+                if work_done_progress {
+                    send_progress_end(&outbound, "Indexing complete");
+                }
                 send_index_ready_notification(&outbound, true);
             }
         });
