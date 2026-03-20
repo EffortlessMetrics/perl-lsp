@@ -171,3 +171,55 @@ fn lsp_no_organize_imports_when_no_imports() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn lsp_organize_imports_dedup_edit_content() -> TestResult {
+    let source = "use strict;\nuse Data::Dumper;\nuse warnings;\nuse Data::Dumper;\n\nprint 1;\n";
+
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let provider = CodeActionsProvider::new(source.to_string());
+    let actions = provider.get_code_actions(&ast, (0, source.len()), &[]);
+
+    let organize_action = actions
+        .iter()
+        .find(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports))
+        .ok_or("No organize imports action found")?;
+
+    let new_text = &organize_action.edit.changes[0].new_text;
+    // After dedup and sort: strict, warnings (pragmas), then Data::Dumper (CPAN)
+    assert_eq!(
+        new_text.matches("Data::Dumper").count(),
+        1,
+        "Duplicate imports should be removed, got: {new_text}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn lsp_organize_imports_sort_order_in_edit() -> TestResult {
+    let source = "use JSON;\nuse strict;\nuse File::Path;\nuse warnings;\n\nmy $x = 1;\n";
+
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let provider = CodeActionsProvider::new(source.to_string());
+    let actions = provider.get_code_actions(&ast, (0, source.len()), &[]);
+
+    let organize_action = actions
+        .iter()
+        .find(|a| matches!(a.kind, CodeActionKind::SourceOrganizeImports))
+        .ok_or("No organize imports action found")?;
+
+    let new_text = &organize_action.edit.changes[0].new_text;
+    let lines: Vec<&str> = new_text.lines().collect();
+
+    let strict_pos = lines.iter().position(|l| l.contains("strict"));
+    let json_pos = lines.iter().position(|l| l.contains("JSON"));
+
+    assert!(strict_pos < json_pos, "Pragmas should sort before CPAN modules. Got: {new_text}");
+
+    Ok(())
+}

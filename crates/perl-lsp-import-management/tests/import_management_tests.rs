@@ -68,3 +68,51 @@ fn returns_none_for_sources_without_imports() {
 
     assert_eq!(find_imports_range(source, &lines), None);
 }
+
+#[test]
+fn sort_imports_removes_duplicates() {
+    let sorted = sort_imports(vec![
+        "use Data::Dumper;".to_string(),
+        "use strict;".to_string(),
+        "use Data::Dumper;".to_string(),
+        "use warnings;".to_string(),
+    ]);
+
+    assert_eq!(sorted, vec!["use strict;", "use warnings;", "use Data::Dumper;"]);
+}
+
+#[test]
+fn sort_imports_mixed_pragma_and_cpan() {
+    let sorted = sort_imports(vec![
+        "use JSON;".to_string(),
+        "use File::Path qw(mkpath);".to_string(),
+        "use warnings;".to_string(),
+        "use strict;".to_string(),
+        "use Data::Dumper;".to_string(),
+        "use lib './lib';".to_string(),
+    ]);
+
+    // pragmas first (sorted), then core, then CPAN (sorted), then local
+    assert_eq!(
+        sorted,
+        vec![
+            "use strict;",
+            "use warnings;",
+            "use JSON;",
+            "use Data::Dumper;",
+            "use File::Path qw(mkpath);",
+            "use lib './lib';",
+        ]
+    );
+}
+
+#[test]
+fn sort_imports_trims_whitespace_before_dedup() {
+    let sorted = sort_imports(vec![
+        "  use strict;".to_string(),
+        "use strict;".to_string(),
+        "use warnings;".to_string(),
+    ]);
+
+    assert_eq!(sorted, vec!["use strict;", "use warnings;"]);
+}
