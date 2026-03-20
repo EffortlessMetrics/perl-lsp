@@ -1275,13 +1275,15 @@ impl LspServer {
         while i < len {
             // --- bare /pattern/ ---
             if bytes[i] == b'/' {
-                // Reject division: preceded by alphanumeric, `_`, `)`, `]`, `'`, `"`
+                // Reject division: preceded by alphanumeric, `_`, `)`, `]`, `}`, `'`, `"`
+                // e.g. `$x / 2` or `$hash{key}/2` should not trigger regex detection.
                 let is_division = i > 0 && {
                     let prev = bytes[i - 1];
                     prev.is_ascii_alphanumeric()
                         || prev == b'_'
                         || prev == b')'
                         || prev == b']'
+                        || prev == b'}'
                         || prev == b'\''
                         || prev == b'"'
                 };
@@ -1397,21 +1399,101 @@ impl LspServer {
             match b {
                 b'\\' if i + 1 < len => {
                     let next = bytes[i + 1];
+                    // Handle \p{...} and \P{...} Unicode property escapes.
+                    if (next == b'p' || next == b'P') && i + 2 < len && bytes[i + 2] == b'{' {
+                        let prop_start = i + 3;
+                        let mut k = prop_start;
+                        while k < len && bytes[k] != b'}' {
+                            k += 1;
+                        }
+                        let prop_end = if k < len { k + 1 } else { k };
+                        let prop_str = pattern.get(i..prop_end).unwrap_or(if next == b'p' {
+                            r"\p{}"
+                        } else {
+                            r"\P{}"
+                        });
+                        let desc = if next == b'p' {
+                            "Unicode property — matches characters with this property"
+                        } else {
+                            "Unicode property complement — matches characters WITHOUT this property"
+                        };
+                        i = prop_end;
+                        let prop_owned = prop_str.to_string();
+                        let (final_tok, final_desc) =
+                            Self::apply_quantifier(prop_owned, desc.to_string(), bytes, &mut i);
+                        entries.push((final_tok, final_desc));
+                        continue;
+                    }
+                    // Handle \N{name} — named Unicode character.
+                    if next == b'N' && i + 2 < len && bytes[i + 2] == b'{' {
+                        let name_start = i + 3;
+                        let mut k = name_start;
+                        while k < len && bytes[k] != b'}' {
+                            k += 1;
+                        }
+                        let name_end = if k < len { k + 1 } else { k };
+                        let name_str = pattern.get(i..name_end).unwrap_or(r"\N{}");
+                        i = name_end;
+                        let name_owned = name_str.to_string();
+                        entries.push((name_owned, "Named Unicode character".to_string()));
+                        continue;
+                    }
+                    // Handle \g{name} and \g{n} — named/numbered backreference.
+                    if next == b'g' && i + 2 < len && bytes[i + 2] == b'{' {
+                        let ref_start = i + 3;
+                        let mut k = ref_start;
+                        while k < len && bytes[k] != b'}' {
+                            k += 1;
+                        }
+                        let ref_end = if k < len { k + 1 } else { k };
+                        let ref_str = pattern.get(i..ref_end).unwrap_or(r"\g{}");
+                        i = ref_end;
+                        let ref_owned = ref_str.to_string();
+                        entries.push((ref_owned, "Named or numbered backreference".to_string()));
+                        continue;
+                    }
+                    // Handle \k<name> — named backreference (angle-bracket form).
+                    if next == b'k' && i + 2 < len && bytes[i + 2] == b'<' {
+                        let name_start = i + 3;
+                        let mut k = name_start;
+                        while k < len && bytes[k] != b'>' {
+                            k += 1;
+                        }
+                        let name_end = if k < len { k + 1 } else { k };
+                        let ref_str = pattern.get(i..name_end).unwrap_or(r"\k<>");
+                        i = name_end;
+                        let ref_owned = ref_str.to_string();
+                        entries.push((
+                            ref_owned,
+                            "Named backreference (angle-bracket form)".to_string(),
+                        ));
+                        continue;
+                    }
                     let (tok, desc) = match next {
                         b'd' => (r"\d", "Any decimal digit (0-9)"),
                         b'D' => (r"\D", "Any non-digit character"),
                         b'w' => (r"\w", "Any word character (alphanumeric + underscore)"),
                         b'W' => (r"\W", "Any non-word character"),
-                        b's' => (r"\s", "Any whitespace character"),
+                        b's' => (r"\s", "Any whitespace character (space, tab, newline, etc.)"),
                         b'S' => (r"\S", "Any non-whitespace character"),
                         b'b' => (r"\b", "Word boundary"),
                         b'B' => (r"\B", "Non-word boundary"),
-                        b'A' => (r"\A", "Start of string"),
-                        b'Z' => (r"\Z", "End of string (before optional newline)"),
+                        b'A' => (r"\A", "Start of string (unaffected by multiline mode)"),
+                        b'Z' => (r"\Z", "End of string (allows optional trailing newline)"),
                         b'z' => (r"\z", "Absolute end of string"),
-                        b'n' => (r"\n", "Newline"),
-                        b't' => (r"\t", "Tab"),
-                        b'r' => (r"\r", "Carriage return"),
+                        b'G' => (r"\G", "Where the previous match left off (pos())"),
+                        b'n' => (r"\n", "Newline character"),
+                        b't' => (r"\t", "Tab character"),
+                        b'r' => (r"\r", "Carriage return character"),
+                        b'f' => (r"\f", "Form feed character"),
+                        b'e' => (r"\e", "Escape character"),
+                        b'a' => (r"\a", "Alarm (bell) character"),
+                        b'0' => (r"\0", "Null character"),
+                        b'h' => (r"\h", "Horizontal whitespace (space or tab)"),
+                        b'H' => (r"\H", "Non-horizontal-whitespace character"),
+                        b'v' => (r"\v", "Vertical whitespace character"),
+                        b'V' => (r"\V", "Non-vertical-whitespace character"),
+                        b'X' => (r"\X", "Extended Unicode grapheme cluster"),
                         b'1'..=b'9' => {
                             let n = (next - b'0') as usize;
                             let tok_s = format!("\\{}", n);
@@ -1423,6 +1505,7 @@ impl LspServer {
                             continue;
                         }
                         _ => {
+                            // Escaped literal or unrecognised — skip silently.
                             i += 2;
                             continue;
                         }
@@ -1435,13 +1518,12 @@ impl LspServer {
                     entries.push((final_tok, final_desc));
                 }
                 b'^' => {
-                    let desc = if i == 0 {
-                        "Start of string/line anchor"
-                    } else {
-                        "Negation (inside character class) or literal ^"
-                    };
+                    // Outside a character class (handled separately by `[`), `^`
+                    // is always an anchor — at position 0 it anchors to the start
+                    // of the string/line, and after `(?` it can appear inside
+                    // alternatives such as `(?:^foo|^bar)`.
                     i += 1;
-                    entries.push((r"^".to_string(), desc.to_string()));
+                    entries.push((r"^".to_string(), "Start of string/line anchor".to_string()));
                 }
                 b'$' => {
                     i += 1;
@@ -1456,21 +1538,34 @@ impl LspServer {
                     entries.push((final_tok, final_desc));
                 }
                 b'(' => {
-                    // Check for non-capturing or named group
+                    // Check for non-capturing group, lookaround, or named capture.
                     if i + 2 < len && bytes[i + 1] == b'?' {
                         let kind = bytes[i + 2];
-                        let desc = match kind {
-                            b':' => "Non-capturing group",
-                            b'=' => "Positive lookahead",
-                            b'!' => "Negative lookahead",
-                            b'<' if i + 3 < len && bytes[i + 3] == b'=' => "Positive lookbehind",
-                            b'<' if i + 3 < len && bytes[i + 3] == b'!' => "Negative lookbehind",
-                            b'<' => "Named capture group",
-                            b'\'' => "Named capture group (single-quote form)",
-                            _ => "Special group",
+                        let (prefix, desc, advance) = match kind {
+                            b':' => ("(?:", "Non-capturing group", 3),
+                            b'=' => ("(?=", "Positive lookahead assertion", 3),
+                            b'!' => ("(?!", "Negative lookahead assertion", 3),
+                            b'<' if i + 3 < len && bytes[i + 3] == b'=' => {
+                                ("(?<=", "Positive lookbehind assertion", 4)
+                            }
+                            b'<' if i + 3 < len && bytes[i + 3] == b'!' => {
+                                ("(?<!", "Negative lookbehind assertion", 4)
+                            }
+                            b'<' => ("(?<name>", "Named capture group (angle-bracket form)", 3),
+                            b'\'' => ("(?'name'", "Named capture group (single-quote form)", 3),
+                            b'#' => ("(?#", "Comment — ignored by the regex engine", 3),
+                            b'|' => (
+                                "(?|",
+                                "Branch reset group — resets capture numbering per branch",
+                                3,
+                            ),
+                            b'>' => ("(?>", "Atomic group (no backtracking into this group)", 3),
+                            _ => ("(?", "Special group (inline modifier or other extension)", 2),
                         };
-                        i += 1; // advance past '('
-                        entries.push(("(?)".to_string(), desc.to_string()));
+                        // Advance past the full group-open prefix so we don't
+                        // re-process `?`, `:`, `=`, etc. as standalone tokens.
+                        i += advance;
+                        entries.push((prefix.to_string(), desc.to_string()));
                     } else {
                         i += 1;
                         entries.push((
@@ -1545,34 +1640,66 @@ impl LspServer {
         let suffix = match bytes[*pos] {
             b'+' => {
                 *pos += 1;
-                // possessive? `++`
                 if *pos < len && bytes[*pos] == b'+' {
+                    // `++` possessive quantifier — no backtracking
                     *pos += 1;
-                    ", one or more (possessive)"
+                    ", one or more (possessive — no backtracking)"
+                } else if *pos < len && bytes[*pos] == b'?' {
+                    // `+?` lazy quantifier — matches as few as possible
+                    *pos += 1;
+                    ", one or more (lazy — matches as few as possible)"
                 } else {
-                    ", one or more"
+                    ", one or more (greedy)"
                 }
             }
             b'*' => {
                 *pos += 1;
-                ", zero or more"
+                if *pos < len && bytes[*pos] == b'?' {
+                    // `*?` lazy quantifier
+                    *pos += 1;
+                    ", zero or more (lazy — matches as few as possible)"
+                } else if *pos < len && bytes[*pos] == b'+' {
+                    // `*+` possessive quantifier
+                    *pos += 1;
+                    ", zero or more (possessive — no backtracking)"
+                } else {
+                    ", zero or more (greedy)"
+                }
             }
             b'?' => {
                 *pos += 1;
-                ", zero or one (optional)"
+                if *pos < len && bytes[*pos] == b'?' {
+                    // `??` lazy optional
+                    *pos += 1;
+                    ", zero or one (lazy — prefers zero)"
+                } else {
+                    ", zero or one (optional, greedy)"
+                }
             }
             b'{' => {
-                // {n} or {n,m} — just skip, no suffix in description
-                let start = *pos;
+                // {n} or {n,m} — collect the quantifier text and fold it in.
+                let brace_start = *pos;
                 *pos += 1;
                 while *pos < len && bytes[*pos] != b'}' {
                     *pos += 1;
                 }
                 if *pos < len {
-                    *pos += 1;
+                    *pos += 1; // consume '}'
                 }
-                let range = std::str::from_utf8(&bytes[start..*pos]).unwrap_or("");
-                return (format!("{}{}", tok, range), format!("{}, counted repetition", desc));
+                let brace_end = *pos;
+                // Check for lazy ({n,m}?) or possessive ({n,m}+) suffix.
+                let counted_suffix = if *pos < len && bytes[*pos] == b'?' {
+                    *pos += 1;
+                    ", counted repetition (lazy)"
+                } else if *pos < len && bytes[*pos] == b'+' {
+                    *pos += 1;
+                    ", counted repetition (possessive)"
+                } else {
+                    ", counted repetition"
+                };
+                // All bytes in {…} are ASCII so from_utf8 is infallible here.
+                let range = std::str::from_utf8(&bytes[brace_start..brace_end]).unwrap_or("{n}");
+                return (format!("{}{}", tok, range), format!("{}{}", desc, counted_suffix));
             }
             _ => return (tok, desc),
         };
