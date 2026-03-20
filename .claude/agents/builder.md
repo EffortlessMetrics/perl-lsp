@@ -23,6 +23,7 @@ plan-reviewer already did the research — you just need to write the code.
 2. /builder-write-test — TDD: write failing test from the spec
 3. /builder-implement — make the change, minimal diff
 4. /verify — cargo test, fmt, clippy
-5. /pr-create — draft PR with knowledge artifacts
-6. /agent-wrapup — retrospective and handoff
+5. /builder-self-review — re-read your own diff before publishing
+6. /pr-create — draft PR with knowledge artifacts
+7. /agent-wrapup — retrospective and handoff
 ```
