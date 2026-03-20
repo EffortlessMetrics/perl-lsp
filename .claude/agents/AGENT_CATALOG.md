@@ -1,36 +1,89 @@
 # Agent Catalog
 
-The swarm orchestrator calls agents. The agents are part of the swarm rather
-than an optional historical sidecar.
+## Architecture
 
-Agent files carry the role-specific operating context for each lane:
+```
+Agent file = identity + objectives + todo list (WHAT to do)
+Step skill = mechanical instructions per todo step (HOW to do it)
+Flow command = spawn the right agent for a pipeline stage (ROUTING)
+Crate CLAUDE.md = domain context carried by the codebase (CONTEXT)
+GitHub Issue = task spec from scout to builder (HANDOFF)
+```
 
-- who the agent is
-- what lane or responsibility it owns
-- how it should communicate
-- what its startup and active todo list should contain
+## Core Pipeline
 
-Those todo items then call the specific skills or commands that hold the
-step-by-step procedure for each phase of the work.
+```
+/flow-scout → /flow-build → /flow-review → /flow-merge → /flow-improve
+   scout        builder      reviewer       ops          improver
+  (sonnet)     (sonnet)    (haiku+sonnet)  (haiku)       (sonnet)
+```
 
-Keeping the mechanical substep instructions in skills matters operationally:
-the agent can load the relevant skill when that substep becomes relevant
-mid-run instead of forcing the orchestrator or agent file to front-load every
-procedural detail up front.
+## Agents (10)
 
-That is the actual split:
+### Pipeline Agents (6)
 
-- agent files define role, context, ownership, and expected todo shape
-- skills define the reusable, load-on-demand instructions for the steps in
-  those todos
-- the orchestrator routes work through those agents instead of having to
-  restate each role from scratch every time
+| Agent | Model | Steps | Role |
+|-------|-------|-------|------|
+| scout | sonnet | 7 | Investigate → file builder-ready issue |
+| builder | sonnet | 5 | Implement from spec → draft PR |
+| reviewer | haiku | 4 | Fast standards check (banned patterns, scope) |
+| reviewer-deep | sonnet | 4 | Deep correctness check (logic, edge cases) |
+| ops | haiku | 4 | Merge queue, CI, post-merge validation |
+| improver | sonnet | 4 | Post-merge quality follow-ups |
 
-This catalog documents the main swarm roster:
-- 5 core coordinators (scout, builder, reviewer, ops, improver)
-- 7 reusable workers (bootstrapper, fixer, validator, pr-responder, research-*)
-- 40 specialist workers across implementation, quality, review, explore, scout,
-  and docs/devex categories
+### Specialized Scouts (3)
 
-Older archived agent-iteration directories elsewhere under `.claude/` are
-also intentionally kept for historical comparison and analysis.
+| Agent | Model | Domain |
+|-------|-------|--------|
+| scout-parser | sonnet | Error buckets, corpus, parser engine |
+| scout-lsp | sonnet | features.toml, providers, LSP spec |
+| scout-dap | sonnet | DAP protocol, bridge mode, security |
+
+### Utility (1)
+
+| Agent | Model | Role |
+|-------|-------|------|
+| research-web | haiku | Web search, doc lookup, fact verification |
+
+## Step Skills (20)
+
+**Scout steps:** scout-dedup, scout-locate, scout-reproduce, scout-root-cause, scout-design, scout-test-spec, scout-report
+
+**Builder steps:** builder-read-spec, builder-write-test, builder-implement
+
+**Reviewer steps:** reviewer-read-handoff, reviewer-check-diff, reviewer-decide
+
+**Reviewer-deep steps:** reviewer-deep-read-spec, reviewer-deep-analyze, reviewer-deep-edges, reviewer-deep-decide
+
+**Ops steps:** ops-check-queue, ops-merge-batch, ops-post-merge
+
+## Flow Commands (5)
+
+| Command | What it does |
+|---------|-------------|
+| /flow-scout | Pick scout variant, spawn, get issue |
+| /flow-build | Validate spec, spawn builder in worktree |
+| /flow-review | Two-tier: reviewer (haiku) → reviewer-deep (sonnet) |
+| /flow-merge | Spawn ops for merge queue |
+| /flow-improve | Spawn improver for quality follow-ups |
+
+## Shared Operations (10)
+
+verify, verify-master-green, pr-create, pr-ready, pr-respond,
+coding-standards, health-check, status-drift, rebase-pr, worktree-pr
+
+## Domain Operations (8)
+
+parser-fix, parser-scout, corpus-ratchet, dep-check, dep-clean,
+security-scout, dap-scout, changelog
+
+## Design Principles
+
+1. **Agent = personality + todo list.** Skills = step mechanics. Context stays clean.
+2. **Scoped, short-lived agents** beat long-running team members. 20K context > 1M context.
+3. **Safety from architecture** (worktree + review + CI) enables full autonomy.
+4. **Every output is a knowledge artifact** — narrate thinking, leave breadcrumbs.
+5. **Crate CLAUDE.md files** carry domain context. Agents don't need domain specialization.
+6. **Issues carry task specs.** Scouts do 75% of the work; builders execute.
+7. **"Not done, but here's what's next"** is a valid success state.
+8. **Model tiering:** haiku for mechanical checks, sonnet for creative analysis.
