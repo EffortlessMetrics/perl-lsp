@@ -48,22 +48,29 @@ Choose routing mode based on session scale:
 Spawn workers directly. Each agent file has its model, todo list, and
 step skills — read the agent file if you need a reminder.
 
-### Large scale (10+ tasks): TeamCreate with sector leads
+### Large scale (10+ tasks): TeamCreate with pipeline leads
 
-Create a team and spawn pre-baked sector leads:
+Create a team and spawn pipeline-stage leads:
 ```
 TeamCreate(team_name: "swarm-<focus>", description: "...")
 
-Agent(subagent_type: "lead-parser", team_name: "swarm-<focus>", name: "parser-lead",
-  prompt: "Push parser corpus toward 95%. Focus on top error buckets.")
+Agent(subagent_type: "lead-discovery", team_name: "swarm-<focus>", name: "discovery-lead",
+  prompt: "Find work: scout parser error buckets, LSP feature gaps, test coverage.")
 
-Agent(subagent_type: "lead-quality", team_name: "swarm-<focus>", name: "quality-lead",
+Agent(subagent_type: "lead-build", team_name: "swarm-<focus>", name: "build-lead",
+  prompt: "Build everything in the builder-ready queue.")
+
+Agent(subagent_type: "lead-review", team_name: "swarm-<focus>", name: "review-lead",
   prompt: "Drain the PR queue. Review and merge everything that's ready.")
 ```
 
-Sector leads have pre-baked context (crate paths, data sources, goals).
+Pipeline leads coordinate by stage (discover, build, review), not by domain.
 They spawn workers via Agent(). Workers follow their todo list in their
 own worktree — they don't know they're part of a team.
+
+For domain-heavy sessions (e.g. parser-only or LSP-only), you can still
+spawn domain-specific scout variants (scout-parser, scout-lsp, scout-dap)
+directly instead of using leads.
 
 ### Scouting (find work)
 ```
@@ -109,14 +116,14 @@ Agent(subagent_type: "wisdom", prompt: "Read the trail for issue #NNN. Follow yo
 
 ## Orchestrator Principles
 
-- **Scale with sector leads, not with more direct workers.** At 10+ tasks,
-  create a team with sector leads instead of tracking 30 agents yourself.
+- **Scale with pipeline leads, not with more direct workers.** At 10+ tasks,
+  create a team with pipeline leads instead of tracking 30 agents yourself.
 - **Route by label.** `needs-plan-review` → plan-reviewer. `builder-ready` → builder.
   `in-review` → already being reviewed. `merge-ready` → ops.
-- **Don't micromanage.** Workers have autonomy within their scope. Sector leads
-  have autonomy within their sector. You set direction and monitor.
+- **Don't micromanage.** Workers have autonomy within their scope. Pipeline leads
+  have autonomy within their pipeline stage. You set direction and monitor.
 - **Parallel lanes.** Workers don't conflict because of worktree isolation.
-  Sector leads don't conflict because they own different sectors.
+  Pipeline leads don't conflict because they own different pipeline stages.
 - **Can't skip validation.** Every PR goes through review. Every issue goes
   through plan review before building. The pipeline can loop but not skip.
 

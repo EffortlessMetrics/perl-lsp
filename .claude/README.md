@@ -14,11 +14,10 @@ Legacy directories archived to `docs/reference/archive/` during architecture tra
 
 See [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the full inventory.
 
-### Sector Leads (TeamCreate — long-running coordinators)
-- `lead-parser` (sonnet) — parser/corpus: spawns scout-parser, builder
-- `lead-lsp` (sonnet) — LSP features: spawns scout-lsp, builder
-- `lead-quality` (sonnet) — review/merge: spawns reviewer, reviewer-deep, ops
-- `lead-infra` (sonnet) — tests/deps/docs/DX: spawns scout, builder, wisdom
+### Pipeline Leads (TeamCreate — long-running coordinators)
+- `lead-discovery` (sonnet) — find work: spawns scouts, plan-reviewers
+- `lead-build` (sonnet) — build from specs: spawns builders
+- `lead-review` (sonnet) — review and merge: spawns reviewers, ops, wisdom
 
 ### Worker Agents (Agent() — worktree-isolated, one task, exit)
 - `scout` (haiku), `scout-parser` (haiku), `scout-lsp` (haiku), `scout-dap` (sonnet)
@@ -35,7 +34,7 @@ See [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md) for the full inventory.
 - GitHub issues and PRs = persistent work state
 
 Two interfaces for two scales: Agent() spawns worktree-isolated workers
-for individual tasks. TeamCreate with sector leads coordinates workers at
+for individual tasks. TeamCreate with pipeline leads coordinates workers at
 scale (10+ tasks). Step skills provide mechanical instructions for each
 todo step. Domain ops (`/parser-fix`, `/verify`, `/corpus-ratchet`, etc.)
 handle specialized procedures.
