@@ -589,3 +589,178 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         _ => None,
     }
 }
+
+/// Get documentation for a Moose/Moo/Mouse built-in type constraint.
+///
+/// Accepts both bare types (`Str`, `ArrayRef`) and parametrized forms
+/// (`ArrayRef[Int]`, `Maybe[Str]`).  For parametrized forms the base
+/// type is extracted and used for the lookup.
+///
+/// Returns signature and description suitable for LSP hover display,
+/// or `None` if the type is not a known Moose built-in.
+pub fn get_moose_type_documentation(type_str: &str) -> Option<BuiltinDoc> {
+    // Strip optional parametrization: "ArrayRef[Int]" -> "ArrayRef"
+    let base = type_str.split('[').next().unwrap_or(type_str).trim();
+
+    match base {
+        // Moose::Util::TypeConstraints — Any / Item
+        "Any" => Some(BuiltinDoc {
+            signature: "Any",
+            description: "The root type. Every value passes this constraint.",
+        }),
+        "Item" => Some(BuiltinDoc {
+            signature: "Item",
+            description: "Synonym for Any. Used as a base for the type hierarchy.",
+        }),
+        // Undef / Defined
+        "Undef" => Some(BuiltinDoc { signature: "Undef", description: "Accepts only undef." }),
+        "Defined" => Some(BuiltinDoc {
+            signature: "Defined",
+            description: "Accepts any defined value (anything that is not undef).",
+        }),
+        // Value / Bool
+        "Value" => Some(BuiltinDoc {
+            signature: "Value",
+            description: "Accepts any defined, non-reference value (scalars and strings).",
+        }),
+        "Bool" => Some(BuiltinDoc {
+            signature: "Bool",
+            description: "Accepts 1, 0, the empty string '', or undef — Perl's boolean-ish values.",
+        }),
+        // Strings
+        "Str" => Some(BuiltinDoc {
+            signature: "Str",
+            description: "Accepts any defined, non-reference scalar value (a string or number).",
+        }),
+        "Num" => Some(BuiltinDoc {
+            signature: "Num",
+            description: "Accepts any value that looks like a number (integer or float).",
+        }),
+        "Int" => Some(BuiltinDoc {
+            signature: "Int",
+            description: "Accepts only integer values (no decimal point).",
+        }),
+        "ClassName" => Some(BuiltinDoc {
+            signature: "ClassName",
+            description: "Accepts a string that is the name of a loaded Perl package/class.",
+        }),
+        "RoleName" => Some(BuiltinDoc {
+            signature: "RoleName",
+            description: "Accepts a string that is the name of a loaded Moose role.",
+        }),
+        // References
+        "Ref" => Some(BuiltinDoc { signature: "Ref", description: "Accepts any reference." }),
+        "ScalarRef" => Some(BuiltinDoc {
+            signature: "ScalarRef[TYPE]",
+            description: "Accepts a scalar reference. Optionally parametrized: ScalarRef[Int] requires the referent to satisfy Int.",
+        }),
+        "ArrayRef" => Some(BuiltinDoc {
+            signature: "ArrayRef[TYPE]",
+            description: "Accepts an array reference. Optionally parametrized: ArrayRef[Int] requires all elements to satisfy Int.",
+        }),
+        "HashRef" => Some(BuiltinDoc {
+            signature: "HashRef[TYPE]",
+            description: "Accepts a hash reference. Optionally parametrized: HashRef[Str] requires all values to satisfy Str.",
+        }),
+        "CodeRef" => Some(BuiltinDoc {
+            signature: "CodeRef",
+            description: "Accepts a code reference (subroutine reference).",
+        }),
+        "RegexpRef" => Some(BuiltinDoc {
+            signature: "RegexpRef",
+            description: "Accepts a compiled regular expression reference (qr//).",
+        }),
+        "GlobRef" => {
+            Some(BuiltinDoc { signature: "GlobRef", description: "Accepts a glob reference." })
+        }
+        "FileHandle" => Some(BuiltinDoc {
+            signature: "FileHandle",
+            description: "Accepts an IO object or a glob reference that can be used as a filehandle.",
+        }),
+        // Object / Role
+        "Object" => Some(BuiltinDoc {
+            signature: "Object",
+            description: "Accepts any blessed reference (an object).",
+        }),
+        // Maybe
+        "Maybe" => Some(BuiltinDoc {
+            signature: "Maybe[TYPE]",
+            description: "Accepts undef or any value satisfying TYPE. Useful for optional attributes: Maybe[Str] accepts either a string or undef.",
+        }),
+        // Type::Tiny extras commonly used with Moo
+        "InstanceOf" => Some(BuiltinDoc {
+            signature: "InstanceOf[CLASSNAME]",
+            description: "Accepts a blessed object that is an instance of CLASSNAME.",
+        }),
+        "ConsumerOf" => Some(BuiltinDoc {
+            signature: "ConsumerOf[ROLENAME]",
+            description: "Accepts a blessed object that consumes ROLENAME.",
+        }),
+        "HasMethods" => Some(BuiltinDoc {
+            signature: "HasMethods[METHOD, ...]",
+            description: "Accepts a blessed object that has all the listed methods.",
+        }),
+        "Dict" => Some(BuiltinDoc {
+            signature: "Dict[KEY => TYPE, ...]",
+            description: "Accepts a hash reference matching a specific key/type schema (Type::Tiny).",
+        }),
+        "Tuple" => Some(BuiltinDoc {
+            signature: "Tuple[TYPE, ...]",
+            description: "Accepts an array reference matching a specific positional type schema (Type::Tiny).",
+        }),
+        "Map" => Some(BuiltinDoc {
+            signature: "Map[KEYTYPE, VALUETYPE]",
+            description: "Accepts a hash reference where keys satisfy KEYTYPE and values satisfy VALUETYPE (Type::Tiny).",
+        }),
+        "Enum" => Some(BuiltinDoc {
+            signature: "Enum[VALUE, ...]",
+            description: "Accepts a string that is one of the listed values (Type::Tiny).",
+        }),
+
+        _ => None,
+    }
+}
+
+/// Get documentation for a Perl subroutine or variable attribute.
+///
+/// Attributes are declared with `:name` syntax, e.g. `sub foo :lvalue { ... }`.
+/// Pass the attribute name without the leading colon.
+///
+/// Returns signature and description suitable for LSP hover display,
+/// or `None` if the attribute is not a known built-in.
+pub fn get_attribute_documentation(attr: &str) -> Option<BuiltinDoc> {
+    // Strip leading colon if present
+    let name = attr.trim_start_matches(':');
+
+    match name {
+        "lvalue" => Some(BuiltinDoc {
+            signature: ":lvalue",
+            description: "Marks a subroutine as an lvalue subroutine. The return value can be assigned to, enabling constructs like `foo() = 42;`.",
+        }),
+        "method" => Some(BuiltinDoc {
+            signature: ":method",
+            description: "Marks a subroutine as a method. Used by some attribute handlers to modify dispatch or prototype checking.",
+        }),
+        "prototype" => Some(BuiltinDoc {
+            signature: ":prototype(PROTO)",
+            description: "Sets the prototype of a subroutine. Controls how Perl parses calls to the sub (e.g. `prototype($$)` for two scalar args).",
+        }),
+        "const" => Some(BuiltinDoc {
+            signature: ":const",
+            description: "Marks a subroutine as a constant. The value is computed once and cached; subsequent calls return the cached value immutably.",
+        }),
+        "shared" => Some(BuiltinDoc {
+            signature: ":shared",
+            description: "Marks a variable or subroutine as shared across threads (requires `threads::shared`). The variable is accessible from all threads.",
+        }),
+        "weak_ref" => Some(BuiltinDoc {
+            signature: ":weak_ref",
+            description: "Marks a Moose/Moo attribute as a weak reference. The stored reference will not prevent the referent from being garbage-collected.",
+        }),
+        "overload" => Some(BuiltinDoc {
+            signature: ":overload(OP)",
+            description: "Declares that a subroutine implements an operator overload for OP.",
+        }),
+        _ => None,
+    }
+}
