@@ -23,7 +23,10 @@ mod references;
 mod tokens;
 
 // Public re-exports — downstream consumers see exactly the same surface.
-pub use builtins::{BuiltinDoc, get_builtin_documentation};
+pub use builtins::{
+    BuiltinDoc, get_attribute_documentation, get_builtin_documentation,
+    get_moose_type_documentation,
+};
 pub use hover::HoverInfo;
 pub use model::SemanticModel;
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
