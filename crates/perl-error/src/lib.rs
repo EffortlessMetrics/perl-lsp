@@ -427,6 +427,10 @@ pub enum ParseError {
         /// Maximum allowed depth
         max_depth: usize,
     },
+
+    /// Parsing was cancelled by an external cancellation token
+    #[error("Parsing cancelled")]
+    Cancelled,
 }
 
 /// Error classification and diagnostic generation for parsed Perl code.

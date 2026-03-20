@@ -234,5 +234,6 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
         ParseError::NestingTooDeep { .. } => Some(
             "Reduce nesting depth by extracting inner logic into named subroutines".to_string(),
         ),
+        ParseError::Cancelled => None,
     }
 }

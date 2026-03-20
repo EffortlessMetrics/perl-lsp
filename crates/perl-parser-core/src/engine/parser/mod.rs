@@ -63,6 +63,7 @@ use crate::{
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 // Import enhanced recovery module
@@ -94,6 +95,10 @@ pub struct Parser<'a> {
     heredoc_start_time: Option<Instant>,
     /// Collection of parse errors encountered during parsing (for error recovery)
     errors: Vec<ParseError>,
+    /// Optional cancellation flag for cooperative cancellation from the LSP server.
+    cancellation_flag: Option<Arc<AtomicBool>>,
+    /// Counter to amortize cancellation checks (only check every N statements)
+    cancellation_check_counter: usize,
     // Enhanced error recovery state
     // pub enhanced_recovery: EnhancedRecovery,
 }
@@ -137,6 +142,30 @@ impl<'a> Parser<'a> {
             byte_cursor: 0,
             heredoc_start_time: None,
             errors: Vec::new(),
+            cancellation_flag: None,
+            cancellation_check_counter: 0,
+            // enhanced_recovery: EnhancedRecovery::new(RecoveryConfig::default()),
+        }
+    }
+
+    /// Create a new parser with a cancellation flag for cooperative cancellation.
+    ///
+    /// The parser periodically checks the atomic flag and returns
+    /// `ParseError::Cancelled` if it has been set to `true`.
+    pub fn new_with_cancellation(input: &'a str, cancellation_flag: Arc<AtomicBool>) -> Self {
+        Parser {
+            tokens: TokenStream::new(input),
+            recursion_depth: 0,
+            last_end_position: 0,
+            in_for_loop_init: false,
+            at_stmt_start: true,
+            pending_heredocs: VecDeque::new(),
+            src_bytes: input.as_bytes(),
+            byte_cursor: 0,
+            heredoc_start_time: None,
+            errors: Vec::new(),
+            cancellation_flag: Some(cancellation_flag),
+            cancellation_check_counter: 0,
             // enhanced_recovery: EnhancedRecovery::new(RecoveryConfig::default()),
         }
     }
@@ -175,8 +204,24 @@ impl<'a> Parser<'a> {
             byte_cursor: 0,
             heredoc_start_time: None,
             errors: Vec::new(),
+            cancellation_flag: None,
+            cancellation_check_counter: 0,
             // enhanced_recovery: EnhancedRecovery::new(config),
         }
+    }
+
+    /// Check if parsing has been cancelled.
+    #[inline]
+    fn check_cancelled(&mut self) -> ParseResult<()> {
+        self.cancellation_check_counter += 1;
+        if self.cancellation_check_counter & 63 == 0 {
+            if let Some(ref flag) = self.cancellation_flag {
+                if flag.load(Ordering::Relaxed) {
+                    return Err(ParseError::Cancelled);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Parse the source and return the AST for the Parse stage.
