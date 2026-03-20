@@ -43,3 +43,15 @@ block merges — you create follow-up work.
 - Performance regressions (unnecessary clones, allocations)
 - Repeated patterns that should be extracted
 - Stale TODO comments that can now be resolved
+- Builder PR notes about "what should happen next"
+- Reviewer follow-up suggestions
+
+## Every pass leaves things better
+
+Your follow-up issues are knowledge artifacts too. Include:
+- What you observed in the merged code
+- Why it matters (not just "could be better")
+- Concrete next step for whoever picks it up
+- Link to the PR that prompted the observation
+
+"Not done, but here's what's next" is your entire job description.
