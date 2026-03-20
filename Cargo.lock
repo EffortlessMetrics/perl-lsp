@@ -1850,6 +1850,7 @@ dependencies = [
  "perl-module-rename",
  "perl-module-resolution",
  "perl-parser",
+ "perl-pod",
  "perl-position-tracking",
  "perl-source-file",
  "perl-symbol-cursor",
