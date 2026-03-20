@@ -150,6 +150,12 @@ impl CodeActionsProvider {
             }
         }
 
+        // Source-level lints (not diagnostic-driven)
+        // Only suggest shebang fix when the range includes the first line
+        if range.0 == 0 || self.source[..range.0].lines().count() <= 1 {
+            actions.extend(quick_fixes::fix_hardcoded_shebang(&self.source));
+        }
+
         // Get refactoring actions for selection
         actions.extend(refactors::get_refactoring_actions(&self.source, ast, range));
 
@@ -225,5 +231,121 @@ mod tests {
             "Expected action to change to comparison, got: {:?}",
             actions
         );
+    }
+
+    #[test]
+    fn test_hardcoded_shebang_suggests_portable() {
+        let source = "#!/usr/bin/perl\nuse strict;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+
+        assert_eq!(shebang_actions.len(), 1, "Expected one shebang action");
+        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl");
+    }
+
+    #[test]
+    fn test_hardcoded_shebang_preserves_flags() {
+        let source = "#!/usr/bin/perl -w\nuse strict;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+
+        assert_eq!(shebang_actions.len(), 1);
+        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl -w");
+    }
+
+    #[test]
+    fn test_env_perl_shebang_not_flagged() {
+        let source = "#!/usr/bin/env perl\nuse strict;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+
+        assert!(shebang_actions.is_empty(), "env perl should not be flagged");
+    }
+
+    #[test]
+    fn test_no_shebang_not_flagged() {
+        let source = "use strict;\nuse warnings;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+
+        assert!(shebang_actions.is_empty(), "No shebang should not be flagged");
+    }
+
+    #[test]
+    fn test_local_bin_perl_shebang() {
+        let source = "#!/usr/local/bin/perl\nuse strict;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+
+        assert_eq!(shebang_actions.len(), 1, "Local bin perl should be flagged");
+        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl");
+    }
+
+    #[test]
+    fn test_shebang_with_taint_flag() {
+        let source = "#!/usr/bin/perl -T\nuse strict;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+
+        assert_eq!(shebang_actions.len(), 1);
+        assert_eq!(shebang_actions[0].edit.changes[0].new_text, "#!/usr/bin/env perl -T");
+    }
+
+    #[test]
+    fn test_bash_shebang_not_flagged() {
+        let source = "#!/bin/bash\necho hello\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+
+        assert!(shebang_actions.is_empty(), "Non-perl shebang should not be flagged");
     }
 }

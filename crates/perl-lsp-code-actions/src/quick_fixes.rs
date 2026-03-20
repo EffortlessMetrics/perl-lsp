@@ -451,6 +451,69 @@ pub fn fix_unused_parameter(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> 
     actions
 }
 
+/// Suggest portable shebang line
+///
+/// Detects hardcoded perl paths in shebang lines (e.g., `#!/usr/bin/perl`,
+/// `#!/usr/local/bin/perl`) and suggests replacing with `#!/usr/bin/env perl`
+/// for better portability across systems.
+///
+/// Only triggers on the first line of the file when it starts with `#!` and
+/// contains a path to perl that is not already using `env`.
+pub fn fix_hardcoded_shebang(source: &str) -> Vec<CodeAction> {
+    let first_line = match source.lines().next() {
+        Some(line) => line,
+        None => return Vec::new(),
+    };
+
+    // Must be a shebang line
+    if !first_line.starts_with("#!") {
+        return Vec::new();
+    }
+
+    // Already portable
+    if first_line.contains("/env ") || first_line.contains("/env\t") {
+        return Vec::new();
+    }
+
+    // Must reference perl
+    if !first_line.contains("perl") {
+        return Vec::new();
+    }
+
+    // Extract any flags after the perl path (e.g., -w, -T)
+    let flags = extract_shebang_flags(first_line);
+    let new_shebang = if flags.is_empty() {
+        "#!/usr/bin/env perl".to_string()
+    } else {
+        format!("#!/usr/bin/env perl {}", flags)
+    };
+
+    vec![CodeAction {
+        title: "Use portable shebang (#!/usr/bin/env perl)".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec!["hardcoded-shebang".to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: 0, end: first_line.len() },
+                new_text: new_shebang,
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Extract flags from a shebang line (e.g., `-w` from `#!/usr/bin/perl -w`)
+fn extract_shebang_flags(shebang_line: &str) -> String {
+    // Find "perl" in the line, then grab everything after it
+    if let Some(perl_pos) = shebang_line.find("perl") {
+        let after_perl = &shebang_line[perl_pos + 4..];
+        let trimmed = after_perl.trim();
+        if trimmed.is_empty() { String::new() } else { trimmed.to_string() }
+    } else {
+        String::new()
+    }
+}
+
 /// Fix variable shadowing by suggesting rename
 pub fn fix_variable_shadowing(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();
