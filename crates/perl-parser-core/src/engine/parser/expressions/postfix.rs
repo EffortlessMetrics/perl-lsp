@@ -650,6 +650,10 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Until)
                 | Some(TokenKind::For)
                 | Some(TokenKind::Foreach)
+                | Some(TokenKind::WordAnd)
+                | Some(TokenKind::WordOr)
+                | Some(TokenKind::WordXor)
+                | Some(TokenKind::WordNot)
                 | Some(TokenKind::Eof)
                 | None
         )

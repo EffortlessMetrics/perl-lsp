@@ -140,7 +140,8 @@ impl<'a> Parser<'a> {
 
             // Variable declarations
             TokenKind::My | TokenKind::Our | TokenKind::State => {
-                self.parse_variable_declaration()
+                let decl = self.parse_variable_declaration()?;
+                Ok(self.parse_word_or_expr(decl)?)
             }
             // `field` is a variable declarator only in Perl 5.38+ class bodies.
             // In legacy code it is commonly a regular identifier (function call,
@@ -149,7 +150,8 @@ impl<'a> Parser<'a> {
             // identifier), treat it as a declaration; otherwise fall through
             // to expression parsing.
             TokenKind::Field if self.is_field_declaration_context() => {
-                self.parse_variable_declaration()
+                let decl = self.parse_variable_declaration()?;
+                Ok(self.parse_word_or_expr(decl)?)
             }
             TokenKind::Local => self.parse_local_statement(),
 
