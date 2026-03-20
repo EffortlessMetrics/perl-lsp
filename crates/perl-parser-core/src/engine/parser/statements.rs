@@ -208,7 +208,17 @@ impl<'a> Parser<'a> {
                 })
             }
             TokenKind::Class => self.parse_class(),
-            TokenKind::Method => self.parse_method(),
+            // `method NAME SIGNATURE BLOCK` is a Perl 5.38+ declaration.
+            // Legacy code uses `method` as a function name; disambiguate by
+            // checking the next token is an Identifier (the method name).
+            TokenKind::Method
+                if matches!(
+                    self.tokens.peek_second().map(|t| t.kind),
+                    Ok(TokenKind::Identifier)
+                ) =>
+            {
+                self.parse_method()
+            }
 
             // Package management
             TokenKind::Package => self.parse_package(),
@@ -519,13 +529,22 @@ impl<'a> Parser<'a> {
             && (self.peek_kind().is_some_and(Self::is_binary_operator)
                 || self.peek_kind() == Some(TokenKind::Slash));
 
-        let args = if self.is_at_statement_end() || omit_optional_arg {
+        // String comparison operators (ne, eq, lt, le, gt, ge) are tokenized as
+        // Identifier tokens, so `is_binary_operator` won't catch them. When a
+        // nullary builtin like `ref` is followed by one of these, don't consume
+        // the operator as an argument -- let it become a binary operator instead.
+        let next_is_str_cmp_op = self.peek_kind() == Some(TokenKind::Identifier)
+            && self.tokens.peek().is_ok_and(|t| {
+                matches!(t.text.as_ref(), "eq" | "ne" | "lt" | "le" | "gt" | "ge")
+            });
+
+        let args = if self.is_at_statement_end() || omit_optional_arg || next_is_str_cmp_op {
             vec![]
         } else {
             vec![self.parse_shift()?]
         };
 
-        if args.is_empty() && !allow_no_args {
+        if args.is_empty() && !allow_no_args && !next_is_str_cmp_op {
             return Err(ParseError::unexpected(
                 "expression".to_string(),
                 format!("{:?}", self.peek_kind()),
