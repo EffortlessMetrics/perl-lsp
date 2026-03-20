@@ -2,7 +2,7 @@
 
 This file provides guidance to GitHub Copilot when working with code in this repository.
 
-**Latest Release**: 0.10.0
+**Latest Release**: 0.12.0
 **API Stability**: See [docs/reference/STABILITY.md](docs/reference/STABILITY.md)
 **Metrics**: See [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for computed status
 
@@ -279,3 +279,408 @@ Metrics in this project are **computed, not hand-edited**:
 | CLI enhancements | `/crates/perl-lsp/src/` |
 | DAP features | `/crates/perl-dap/src/` |
 | Tests | `/crates/*/tests/` |
+
+---
+
+## Perl Language Reference
+
+This section helps AI assistants understand the Perl code that perl-lsp parses and serves. The parser
+handles Perl 5.8 through 5.40.
+
+### Variable types and sigils
+
+```perl
+my $scalar  = "string";          # Scalar: holds a single string, number, or reference
+my @array   = (1, 2, 3);         # Array: ordered list of scalars
+my %hash    = (key => "value");   # Hash: unordered key-value pairs
+my $ref     = \$scalar;           # Reference: scalar ref, array ref, hash ref, code ref
+my $aref    = [1, 2, 3];          # Anonymous array ref (common for passing arrays)
+my $href    = { key => "val" };   # Anonymous hash ref (common for passing hashes)
+my $cref    = sub { ... };        # Anonymous subroutine (code ref)
+my *glob    = *Other::symbol;     # Typeglob: aliasing entire symbol table entries
+```
+
+Special variables in common use:
+
+| Variable | Meaning |
+|----------|---------|
+| `$_`     | Default topic variable (loop iteration, `map`, `grep`, `print`) |
+| `@_`     | Subroutine argument list |
+| `$!`     | `errno`: system call error string or number |
+| `$@`     | `eval` error: set after a failed `eval` block |
+| `$0`     | Program name |
+| `$/`     | Input record separator (default: `"\n"`) |
+| `$\`     | Output record separator (appended by `print`) |
+| `$,`     | Output field separator (between `print` args) |
+| `$;`     | Multidimensional hash key separator |
+| `$?`     | Child process status |
+| `$.`     | Current line number of last filehandle read |
+| `@ISA`   | Inheritance list for a package |
+| `@EXPORT_OK` | Symbols a module exports on request |
+
+### Subroutine styles
+
+```perl
+# Traditional: arguments arrive in @_
+sub greet {
+    my ($name, $greeting) = @_;
+    return "$greeting, $name";
+}
+
+# Modern signatures (v5.20+, stable in v5.36)
+use feature 'signatures';
+no warnings 'experimental::signatures';
+sub greet($name, $greeting = "Hello") {
+    return "$greeting, $name";
+}
+
+# Slurpy: remaining args become an array or hash
+sub log_event($level, @messages) { ... }
+sub configure(%opts) { ... }
+
+# Method: first arg is the invocant (object or class name)
+sub new {
+    my ($class, %args) = @_;
+    return bless { %args }, $class;
+}
+sub name { my ($self) = @_; return $self->{name} }
+```
+
+### Object-oriented patterns
+
+#### Traditional bless OO
+
+```perl
+package Animal;
+use strict;
+use warnings;
+
+sub new {
+    my ($class, %args) = @_;
+    return bless {
+        name  => $args{name}  // "Unknown",
+        sound => $args{sound} // "...",
+    }, $class;
+}
+
+sub name  { $_[0]->{name}  }        # Read-only accessor
+sub sound { $_[0]->{sound} }
+
+sub speak {
+    my ($self) = @_;
+    printf "%s says %s\n", $self->name, $self->sound;
+}
+
+1;
+```
+
+#### Moose / Moo (most common in CPAN code)
+
+```perl
+package Cat;
+use Moose;                       # or: use Moo;
+
+extends 'Animal';                # Inheritance
+with 'Role::Printable';          # Role composition
+
+has 'name'  => (is => 'ro',  isa => 'Str', required => 1);
+has 'lives' => (is => 'rw',  isa => 'Int', default => 9);
+has 'owner' => (is => 'ro',  isa => 'Maybe[Str]');
+has 'toys'  => (is => 'ro',  isa => 'ArrayRef[Str]', default => sub { [] });
+
+# Method modifiers
+before 'speak' => sub { print "Preparing to speak...\n" };
+after  'speak' => sub { print "Done speaking.\n" };
+around 'speak' => sub {
+    my ($orig, $self, @args) = @_;
+    $self->$orig(@args);
+};
+
+no Moose;
+__PACKAGE__->meta->make_immutable;
+1;
+```
+
+Moo differences from Moose:
+- No type system by default (add `use Types::Standard` for `Str`, `Int`, etc.)
+- No `before`/`after`/`around` without `Moo::Role` or `Role::Tiny`
+- `BUILD` runs after `new`; `BUILDARGS` transforms constructor arguments
+- Lighter weight, no meta-object protocol
+
+#### Modern Perl 5.38+ class syntax
+
+```perl
+use feature 'class';
+
+class Point {
+    field $x :param = 0;
+    field $y :param = 0;
+
+    method x { $x }
+    method y { $y }
+
+    method distance_to($other) {
+        sqrt(($x - $other->x)**2 + ($y - $other->y)**2)
+    }
+}
+
+class ColorPoint :isa(Point) {
+    field $color :param = 'black';
+    method color { $color }
+}
+```
+
+### Module structure conventions
+
+```perl
+# File path: lib/Foo/Bar.pm  =>  package name: Foo::Bar
+package Foo::Bar;
+
+use strict;
+use warnings;
+
+# Optional version declaration
+our $VERSION = '1.00';
+
+# Exports (choose one style)
+use Exporter 'import';
+our @EXPORT    = qw(always_exported);   # Exported by default
+our @EXPORT_OK = qw(opt_exported);      # Exported on request
+our %EXPORT_TAGS = (
+    all => [@EXPORT, @EXPORT_OK],
+);
+
+sub always_exported { ... }
+sub opt_exported    { ... }
+sub _private_helper { ... }   # Convention: leading _ = private
+
+# Every module must return a true value
+1;
+```
+
+### Error handling patterns
+
+```perl
+# die / eval (core)
+eval {
+    open my $fh, '<', $file or die "Cannot open $file: $!";
+    process($fh);
+};
+if ($@) {
+    warn "Caught error: $@";
+}
+
+# Carp (preferred in library code: errors blame the caller)
+use Carp qw(croak confess carp cluck);
+
+sub validate_arg {
+    my ($arg) = @_;
+    croak "validate_arg: argument must be defined"  unless defined $arg;
+    carp  "validate_arg: argument looks suspicious" if $arg eq '';
+}
+
+# croak  = die  as seen from caller (use in libraries)
+# confess = die  with full stack trace
+# carp   = warn as seen from caller
+# cluck  = warn with full stack trace
+
+# Try::Tiny / Feature::Compat::Try (modern exception objects)
+use Try::Tiny;
+try {
+    do_something_risky();
+} catch {
+    if (ref $_ && $_->isa('My::Exception')) {
+        handle_my_exception($_);
+    } else {
+        die $_;   # Re-throw unknown exceptions
+    }
+} finally {
+    cleanup();
+};
+```
+
+### Common idioms
+
+```perl
+# Defined-or (v5.10+): prefer over || when 0 or "" are valid values
+my $val = $opts{timeout} // 30;
+
+# Chained method calls
+my $result = $obj->set_name("Alice")->set_age(30)->save();
+
+# Dereference styles
+my @copy  = @{$aref};        # Array deref
+my %copy  = %{$href};        # Hash deref
+my $elem  = $aref->[0];      # Arrow notation (preferred)
+my $val   = $href->{key};
+my $ret   = $cref->(1, 2);   # Code ref call
+
+# Context: what you're assigning into changes what expressions return
+my $count = @array;          # Scalar context: array length
+my ($first, @rest) = @array; # List context: split assignment
+scalar @array;               # Force scalar context explicitly
+wantarray() ? @list : $count; # Detect caller's context
+
+# grep / map (functional list processing)
+my @evens  = grep { $_ % 2 == 0 } @numbers;
+my @doubled = map  { $_ * 2 }     @numbers;
+my %by_id  = map  { $_->id => $_ } @objects;
+
+# sort with comparison function
+my @sorted_num = sort { $a <=> $b } @numbers;      # Numeric ascending
+my @sorted_str = sort { $a cmp $b } @strings;      # String ascending
+my @sorted_obj = sort { $a->name cmp $b->name } @objects;
+```
+
+### Regular expressions
+
+```perl
+# Match operator: m//  (m is optional when using / delimiter)
+if ($str =~ /(\w+)\s+(\d+)/) {
+    my ($word, $num) = ($1, $2);
+}
+
+# Named captures (v5.10+)
+if ($str =~ /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/) {
+    printf "%s/%s/%s\n", $+{year}, $+{month}, $+{day};
+}
+
+# Substitution: s///
+(my $clean = $str) =~ s/^\s+|\s+$//g;   # trim (non-destructive copy)
+$str =~ s/foo/bar/gi;                    # global, case-insensitive
+
+# Common modifiers
+# /i  case-insensitive
+# /g  global (all matches)
+# /m  multiline (^ and $ match line boundaries)
+# /s  single-line (. matches \n)
+# /x  extended (whitespace and # comments ignored)
+# /e  evaluate replacement as code
+# /r  non-destructive (return modified copy, v5.14+)
+
+$str =~ s/(\d+)/$1 * 2/ge;   # Double all numbers via /e
+
+# Split and join
+my @fields = split /,/, $csv_line;
+my @words  = split ' ', $sentence;    # Split on any whitespace, trim leading
+my $line   = join(",", @fields);
+```
+
+### File I/O
+
+```perl
+# Three-argument open (always use this form)
+open my $fh, '<',    $file  or die "Cannot read $file: $!";
+open my $fh, '>',    $file  or die "Cannot write $file: $!";
+open my $fh, '>>',   $file  or die "Cannot append $file: $!";
+open my $fh, '<:utf8', $file or die "Cannot read $file: $!";  # with encoding
+
+# Read modes
+my $line  = <$fh>;                # Read one line
+chomp $line;
+chomp(my @lines = <$fh>);         # Slurp all lines, strip newlines
+my $text  = do { local $/; <$fh> }; # Slurp whole file into scalar
+
+# Always close or use a block/scope
+close $fh or warn "close failed: $!";
+```
+
+### Testing conventions (Test::More / Test2)
+
+```perl
+use strict;
+use warnings;
+use Test::More;               # or: use Test2::V0;
+
+# Basic assertions
+ok($value,              "value is true");
+is($got, $expected,     "values match");
+isnt($got, $bad,        "values differ");
+like($str, qr/pattern/, "string matches pattern");
+unlike($str, qr/nope/,  "string does not match");
+cmp_ok($got, '>=', $min, "value in range");
+is_deeply($got_ref, $exp_ref, "deep structure matches");
+
+# Test::Exception
+use Test::Exception;
+throws_ok { risky_call() } qr/expected error/, "dies with right message";
+lives_ok  { safe_call()  }                     "does not die";
+
+# Always end with done_testing or a plan
+done_testing();          # dynamic
+# plan tests => 5;       # static alternative
+```
+
+### Perl version feature markers
+
+```perl
+use v5.10;   # say, //, given/when (deprecated), named captures, state vars
+use v5.14;   # Non-destructive /r modifier, each on arrays
+use v5.18;   # Hash randomization enabled by default
+use v5.20;   # Subroutine signatures (experimental), hash/array slices
+use v5.22;   # Double-diamond <<>> operator, hex/oct in regex
+use v5.26;   # Indented heredocs <<~, /xx modifier, no more $a/$b warnings in sort
+use v5.28;   # Unicode 10, bitwise string operators
+use v5.32;   # Chained comparisons (1 < $x < 10), isa operator
+use v5.34;   # try/catch (experimental), defer (experimental)
+use v5.36;   # Signatures stable (no warning needed), strict+warnings implied by use v5.36
+use v5.38;   # class/method/field syntax (experimental), bareword filehandles warned
+use v5.40;   # class/field/method more stable, :param attribute
+```
+
+`use v5.36` and above automatically enable `use strict` and `use warnings` -- you do not need to add them separately.
+
+### Common CPAN modules (frequently seen in user code)
+
+| Module | Common exports / methods |
+|--------|--------------------------|
+| `Scalar::Util` | `blessed($ref)`, `reftype($ref)`, `looks_like_number($s)`, `weaken($ref)` |
+| `List::Util` | `first { } @list`, `max(@list)`, `min(@list)`, `sum(@list)`, `sum0`, `any { }`, `all { }`, `none { }`, `reduce { $a op $b } @list` |
+| `List::MoreUtils` | `uniq(@list)`, `zip(\@a, \@b)`, `mesh`, `each_array` |
+| `Carp` | `croak`, `confess`, `carp`, `cluck` |
+| `POSIX` | `floor($n)`, `ceil($n)`, `strftime($fmt, localtime)` |
+| `File::Basename` | `basename($path)`, `dirname($path)`, `fileparse($path, @suffixes)` |
+| `File::Path` | `make_path($dir)`, `remove_tree($dir)` |
+| `File::Spec` | `File::Spec->catfile(@parts)`, `->rel2abs($path)`, `->splitpath($path)` |
+| `File::Temp` | `tempfile()`, `tempdir()` |
+| `Storable` | `dclone($ref)` for deep copy |
+| `Data::Dumper` | `Dumper($data)` for debug inspection |
+| `JSON` / `JSON::XS` / `JSON::PP` | `encode_json($ref)`, `decode_json($str)` |
+| `YAML` / `YAML::XS` | `Dump($data)`, `Load($str)`, `DumpFile($path, $data)`, `LoadFile($path)` |
+| `DBI` | `DBI->connect($dsn, $user, $pass)`, `$dbh->prepare($sql)`, `$sth->execute(@bind)`, `$sth->fetchrow_hashref` |
+| `Moose` | `has`, `extends`, `with`, `before`/`after`/`around`, `__PACKAGE__->meta->make_immutable` |
+| `Moo` | `has`, `extends`, `with` (lighter weight, no MOP) |
+| `Mouse` | Drop-in Moose subset, faster loading |
+| `Exporter` | `@EXPORT`, `@EXPORT_OK`, `%EXPORT_TAGS`, `import` |
+| `Getopt::Long` | `GetOptions(\%opts, "verbose!", "file=s", "count=i")` |
+| `Pod::Usage` | `pod2usage(2)` for usage messages from POD |
+
+### What the LSP parser specifically handles
+
+When writing parser tests or fixing parser bugs, note these features:
+
+- **Heredocs**: `<<EOF`, `<<~EOF` (indented), `<<"EOF"` (interpolating), `<<'EOF'` (literal)
+- **Quoting**: `q{}`, `qq{}`, `qw()`, `qr{}`, `qx{}` with any paired or repeated delimiter
+- **Regex**: `m//`, `s///`, `tr///`, `y///` with arbitrary delimiters and all modifiers
+- **Context-sensitive parsing**: `print LIST`, `say LIST`, `push @arr, LIST` vs `grep BLOCK LIST`
+- **Format/write**: `format NAME =` ... `write NAME`
+- **`BEGIN`/`END`/`CHECK`/`INIT`/`UNITCHECK`** phase blocks
+- **`do FILE`**, **`require`**, **`use`** with version and import list
+- **Indirect object syntax**: `new Foo @args` (legacy, still common)
+- **`local`**, **`our`**, **`state`** variable declarations
+- **`AUTOLOAD`**, **`DESTROY`**, **`UNIVERSAL`** special methods
+- **Prototypes**: `sub foo ($$@) { }` and signatures `sub foo($a, $b) { }`
+- **Attributes**: `my $x :shared = 1`, `sub foo :lvalue { }`
+
+### Naming conventions in Perl code
+
+| Kind | Convention | Example |
+|------|------------|---------|
+| Package / class | `TitleCase` with `::` separators | `MyApp::Model::User` |
+| Subroutine / method | `snake_case` | `get_user`, `save_record` |
+| Constant | `UPPER_SNAKE_CASE` | `MAX_RETRIES`, `DEFAULT_PORT` |
+| Private method (convention) | Leading underscore | `_validate`, `_build_cache` |
+| Loop variable | `$_` (default) or descriptive | `for my $item (@items)` |
+| Accessor from Moose/Moo | Matches `has` attribute name | `has 'name' => ...` -> `$obj->name` |
+| Class method | Called on package name | `My::Class->new(...)` |
+| Instance method | Called on object | `$obj->method(...)` |
