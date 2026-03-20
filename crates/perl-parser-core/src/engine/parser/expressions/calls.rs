@@ -10,7 +10,50 @@ impl<'a> Parser<'a> {
     fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
         // Only check for indirect objects at statement start to avoid false positives
         // in contexts like: my $x = 1; if (1) { print $x; }
-        if !self.at_stmt_start && name != "new" {
+        //
+        // Exception: print/say/printf/exec/system with a block filehandle `{ $fh }`
+        // or a `$var VAR` (two consecutive sigiled tokens, no comma) are unambiguous
+        // enough to allow outside statement-start context.
+        let is_filehandle_builtin = matches!(name, "print" | "say" | "printf" | "exec" | "system");
+        if !self.at_stmt_start && !is_filehandle_builtin && name != "new" {
+            return false;
+        }
+        // In non-stmt-start context for print/etc., only allow the unambiguous forms:
+        // 1. `{ $fh }` block-form filehandle
+        // 2. `$var $something` (two sigiled tokens, no comma) — indirect $fh
+        if !self.at_stmt_start && is_filehandle_builtin {
+            // Clone the needed info to avoid multiple borrows of self.tokens.
+            let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+            let next_text = self.tokens.peek_second().ok().map(|t| t.text.to_string());
+            let third_kind = self.tokens.peek_third().ok().map(|t| t.kind);
+            let third_text = self.tokens.peek_third().ok().map(|t| t.text.to_string());
+
+            if let Some(nk) = next_kind {
+                // Form 1: block filehandle `print { $fh } ...`
+                if nk == TokenKind::LeftBrace {
+                    if let Some(ref txt) = third_text {
+                        if txt.starts_with('$') || txt.starts_with('*') {
+                            return true;
+                        }
+                    }
+                }
+                // Form 2: variable filehandle `print $fh $msg` (no comma after $fh)
+                if next_text.as_deref().unwrap_or("").starts_with('$') {
+                    // If next-next starts with $ or @ or is a string, it's likely
+                    // `print $fh $msg` — no comma between filehandle and message.
+                    // A comma means it's a regular `print $var, $other` list.
+                    if third_kind != Some(TokenKind::Comma) {
+                        if let Some(ref txt) = third_text {
+                            if txt.starts_with('$')
+                                || txt.starts_with('@')
+                                || third_kind == Some(TokenKind::String)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
             return false;
         }
 
@@ -480,7 +523,23 @@ impl<'a> Parser<'a> {
 
                 args.push(arg);
 
-                // Accept both comma and fat arrow as separators
+                // Accept both comma and fat arrow as separators.
+                // Special case: a Block or HashLiteral argument (from `exec({ ... } @args)`,
+                // `map({ ... } @list)`, or `map({k => v} keys ...)`) may be followed by the
+                // list without a comma. If we just pushed a Block or HashLiteral and next is
+                // not `)` or a separator, treat the rest as implicit comma-separated arguments.
+                let last_is_block = matches!(
+                    args.last(),
+                    Some(n) if matches!(n.kind, NodeKind::Block { .. } | NodeKind::HashLiteral { .. })
+                );
+                if last_is_block
+                    && s.peek_kind() != Some(TokenKind::RightParen)
+                    && !matches!(s.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow))
+                {
+                    // Continue the while loop to parse more args (implicit comma after block)
+                    continue;
+                }
+
                 match s.peek_kind() {
                     Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
                         s.tokens.next()?;

@@ -695,9 +695,35 @@ impl<'a> Parser<'a> {
             TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil => true,
 
             // `func other_func(args)` — identifier followed by `(`
+            // `func bareword => value` — identifier followed by fat arrow (auto-quoted arg)
             TokenKind::Identifier if !next.text.starts_with(|c: char| c.is_ascii_uppercase()) => {
+                let next_text = next.text.clone();
+                // Block-list functions (map/grep/sort/etc.) as argument: `uniq map { ... } @list`
+                if Self::is_block_list_func(&next_text) {
+                    if let Ok(third) = self.tokens.peek_second() {
+                        return third.kind == TokenKind::LeftBrace
+                            || third.kind == TokenKind::LeftParen;
+                    }
+                }
+                // Builtin functions that take a single sigiled argument as argument:
+                // `max values %hash`, `func keys %h`, `func reverse @list`
+                // These are builtins whose first/only argument is a sigiled expression.
+                if Self::is_builtin_function(&next_text) {
+                    if let Ok(third) = self.tokens.peek_second() {
+                        let third_text: &str = &third.text;
+                        return third_text.starts_with('$')
+                            || third_text.starts_with('@')
+                            || third_text.starts_with('%')
+                            || third.kind == TokenKind::ScalarSigil
+                            || third.kind == TokenKind::ArraySigil
+                            || third.kind == TokenKind::HashSigil;
+                    }
+                }
                 // Check if the next-next token is `(` — that signals a function call
-                self.tokens.peek_second().ok().is_some_and(|t| t.kind == TokenKind::LeftParen)
+                // or `=>` (fat arrow after bareword) — that signals an auto-quoted arg
+                self.tokens.peek_second().ok().is_some_and(|t| {
+                    t.kind == TokenKind::LeftParen || t.kind == TokenKind::FatArrow
+                })
             }
 
             _ => false,

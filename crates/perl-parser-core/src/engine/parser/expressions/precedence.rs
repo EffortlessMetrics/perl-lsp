@@ -174,6 +174,11 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // After processing all or/xor operators, apply any trailing 'and' operators.
+        // This handles patterns like `($a or $b, $c and $d)` where comma collection
+        // inside `or` absorbs `$c` but leaves `and $d` for this level.
+        expr = self.parse_word_and_expr_with(expr)?;
+
         Ok(expr)
     }
 
