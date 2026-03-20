@@ -72,6 +72,7 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
             }
         }
         ParseError::SyntaxError { .. } => None,
+        ParseError::Cancelled => None,
     };
 
     Diagnostic {

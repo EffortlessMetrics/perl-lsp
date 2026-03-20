@@ -369,6 +369,9 @@ fn print_error(error: &ParseError, source: &str) {
         ParseError::NestingTooDeep { depth, max_depth } => {
             writeln!(stderr, "Parse error: Nesting too deep ({} > {})", depth, max_depth).ok();
         }
+        ParseError::Cancelled => {
+            writeln!(stderr, "Parse error: Parsing cancelled").ok();
+        }
     }
 }
 
