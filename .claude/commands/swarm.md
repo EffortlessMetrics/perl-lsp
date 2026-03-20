@@ -1,7 +1,6 @@
 ---
 description: Start a continuous swarm with agent teams for parallel codebase improvement
 argument-hint: "[focus] e.g. 'all', 'parser', 'dap', 'tests', 'cleanup', 'improve'"
-disable-model-invocation: true
 ---
 
 # Swarm: Continuous Agent Team
