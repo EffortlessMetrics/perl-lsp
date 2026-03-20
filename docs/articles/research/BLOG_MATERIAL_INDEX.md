@@ -7,71 +7,33 @@ GitHub namespace note: issues and pull requests share the same ticket number lin
 
 Supplemental archaeology note:
 - `ARCHITECTURAL_SIDECHAIN_ARCHAEOLOGY.md` — the intentional slowdown that built the parser, quality gates, and architectural surfaces later swarms depended on
-- `ALPHA_READINESS_ARCHAEOLOGY.md` — how March 2026 kept shipped release truth separate from `v0.12.0` hardening plans while defining explicit alpha blockers and non-blockers
 - `COPILOT_FLEET_ARCHAEOLOGY.md` — the Feb 27 to Mar 5 Copilot CLI burst, with Feb 28 as the release-campaign and attribution inflection
 - `CONTROL_PLANE_ARCHAEOLOGY.md` — tracked `.claude` and `.jules` lineage showing how orchestration guides, Q3 swarm packs, Jules persona lanes, and the current control plane fit together
-- `CONTROL_PLANE_REPAIR_CHAIN_ARCHAEOLOGY.md` — how concrete self-audit issues route into same-cycle repair PRs, maintainer supersession, or intentionally banked swarm-infra debt
-- `AGENTS4_CANONICAL_Q3_ARCHAEOLOGY.md` — why `agents4` is the clearest perl-lsp-native preserved form of the Q3 three-phase swarm, especially after the 2025-09-24 Perl LSP production-readiness refactor
-- `CONTROL_PLANE_SELF_REPAIR_ARCHAEOLOGY.md` — how March 16-19 turns the swarm operating system into first-class repo work through audit issues, friction logs, swarm-infra discoveries, and follow-up PRs that change skills, hooks, templates, and rosters
-- `HYBRID_CONTROL_PLANE_ARCHAEOLOGY.md` — how March 15 to 17, 2026 turned `swarm-state`, skills, findings, and hooks into the new control plane while leaving a deliberate `.ops-perl-lsp` runtime residue across live commands, agents6, and compatibility surfaces
-- `HOOK_CONTROL_ARCHAEOLOGY.md` — how hook history runs from 2025-09-06 `PreToolUse` interception to the March 2026 lifecycle hook regime, with prompts carrying judgment and hooks carrying invariants
-- `HOOK_RELIABILITY_ARCHAEOLOGY.md` — how hooks also had to be debugged as a subsystem through payload fixes, executable-bit repairs, ADR/live drift, and explicit March 19 debt around incomplete enforcement
-- `PUBLIC_VS_SWARM_INTAKE_ARCHAEOLOGY.md` — how the public GitHub intake stays intentionally thin while the swarm-native layer splits the same work into queue state, dedup, pitfalls, leads, and durable findings
-- `DIRECT_DELIVERY_ARCHAEOLOGY.md` — how the early history still reads as direct delivery before mid-to-late September 2025 turns review, staging, and integration into the delivery model
-- `INSTALL_SURFACE_ARCHAEOLOGY.md` — how install scripts, health/info flags, editor discovery order, and managed downloads became part of the March 2026 launch trust surface
-- `Q3_CONTROL_PLANE_ARCHAEOLOGY.md` — how `agents4` shows the canonical Q3 swarm as an actual phase-aware operating surface, not just a directory of agent prompts
-- `MERGECODE_ARCHAEOLOGY.md` — how `agents2` and `agents3` turned GitHub-native receipts, single ledgers, and explicit three-flow delivery into the doctrine layer before the later swarm control plane
-- `MERGECODE_ROOTS_ARCHAEOLOGY.md` — how `agents3` preserves a MergeCode-derived donor layer, `agents4` specializes it for perl-lsp, and late-September 2025 looks like a composite transplant rather than a pure local invention
 - `ERA5_MIXED_TOOL_ARCHAEOLOGY.md` — March 11 to 19, 2026 as a mixed-tool window where Claude swarm runs and Codex waves overlap
-- `GATE_RECEIPT_FORENSICS_ARCHAEOLOGY.md` — how issue `#210` became the line from scar-story receipts into executable gates, CI statuses, status-drift checks, and forensics auditors
-- `CASEBOOK_FORENSICS_ARCHAEOLOGY.md` — how casebook exhibits, dossier scripts, lessons, and specialist auditors turned postmortems into a reusable evidence pipeline
-- `INSTRUCTION_SURFACE_ARCHAEOLOGY.md` — how prompt-like orchestration guides, project doctrine docs, `.claude`, and `AGENTS.md` became a committed instruction layer
-- `ISSUE_FAMILY_GENEALOGY_ARCHAEOLOGY.md` — how recurring issue families preserve discovery, bridge fixes, implementation PRs, and later learning/article artifacts as recoverable lineages
-- `LEARNING_LOOP_ARCHAEOLOGY.md` — how lessons, forensics, casebook exhibits, swarm-state, and GitHub crosslinks form one durable learning loop
-- `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-oriented bridge era where shipping discipline was strong but maintainer integration was still expensive
+- `Q4_Q1_HANDS_ON_ARCHAEOLOGY.md` — the stable, release-focused, and quality-heavy bridge era where the repo was disciplined but still depended on maintainer integration
 - `AI_NATIVE_OPERATING_MODEL_ARCHAEOLOGY.md` — how the repo’s own docs define and evidence the move from assisted work toward AI-native operation
-- `MODE_SHIFT_ARCHAEOLOGY.md` — the assisted/native/industrialized framework, grounded in repo evidence and the Q4/Q1 nuance that AI-native can still be hands-on
 - `CI_BUDGET_DISCIPLINE_ARCHAEOLOGY.md` — how CI spend, label gates, cancellation, and local-first validation became explicit design constraints
-- `POST_210_GOVERNANCE_ARCHAEOLOGY.md` — how issue `#210` propagated into `.ci` gate policy, receipt schema, `xtask` runtime, status-update/status-check, and later audit culture while leaving visible recurring debt
-- `ISSUE_LABEL_ARCHAEOLOGY.md` — how `swarm-discovered`, `swarm-improve-*`, reserved architectural escalation, and issue-title prefixes turned the issue tracker into typed routing memory
 - `ISSUE_ROUTING_ARCHAEOLOGY.md` — how the issue tracker became a typed overflow queue for `swarm-discovered` findings, self-improvement, and future builder slices
-- `SIGNAL_INTAKE_ARCHAEOLOGY.md` — how generic GitHub issue and PR entry points turned into typed signal intake through forms, gate-aware templates, and swarm-native discovery handoffs
-- `ISSUE_PR_CROSSLINK_ARCHAEOLOGY.md` — how issue bodies and PR bodies became linked swarm memory, with review-summary, learning, ops, and article issues preserving what PRs meant
 - `ISSUE_PR_GENEALOGY_ARCHAEOLOGY.md` — how issues and PRs became a shared lineage ledger, with March 2026 making explicit closure language and PR-backed learning issues normal
 - `MAINTAINER_BRIDGE_ARCHAEOLOGY.md` — how autumn 2025 large PRs acted as maintained bridge bundles before the January `maint/pr-*` naming made the pattern obvious
 - `MAINTAINER_GATEKEEPER_ARCHAEOLOGY.md` — how the maintainer shifted from direct coding toward curation, merge pacing, and trusted-change oversight
 - `MAINTAINER_VISION_ARCHAEOLOGY.md` — how maintainer judgment was repeatedly recast into better agent surfaces, from direct orchestration to skills/hooks/state
-- `MAINTAINER_PR_THREAD_ARCHAEOLOGY.md` — how Q3 lane comments and March 2026 verification reviews made PR threads themselves a maintainer-vision transfer surface
-- `OPERATING_SYSTEM_GAP_ARCHAEOLOGY.md` — why the repo could already have strong review, quality, and specialization while still lacking a sufficiently externalized operating system to make that quality cheap in attention
 - `PR_BRANCH_NAMING_ARCHAEOLOGY.md` — branch families and title conventions as workflow fingerprints across the PR archive
 - `PR_LIFECYCLE_ARCHAEOLOGY.md` — how drafts, closure, and merge became deliberate lifecycle states instead of incidental outcomes
 - `REVIEW_LABEL_ARCHAEOLOGY.md` — how the canonical Q3 swarm used GitHub labels as a review state machine with intake, lanes, gates, and merge readiness alongside `issue-to-draft` / `draft-to-pr` / `pr-to-merge`
-- `REVIEWER_ECOLOGY_ARCHAEOLOGY.md` — how the repo layered human review, bot review, AI-reviewing-AI, and later gate/receipt enforcement instead of keeping review in one place
-- `BOT_REVIEW_NOISE_ARCHAEOLOGY.md` — how autogenerated review chatter saturated many PR threads while the actual decision signal stayed concentrated in maintainer comments, gate outcomes, labels, and verification notes
-- `PR_REVIEW_RECEIPT_ARCHAEOLOGY.md` — how PRs themselves became governance artifacts through labels, receipts, check runs, comments, and review repair
-- `RECEIPT_SURFACE_EVOLUTION_ARCHAEOLOGY.md` — how PR-body receipt bundles, PR templates, issue `#210`, and typed gate receipts formed a layered proof surface instead of one flat “receipt” concept
 - `PR_REVIEW_LOOP_ARCHAEOLOGY.md` — how review cleanup, follow-up PRs, and post-batch repair show up as named first-class work
 - `PR_SLICE_SIZE_ARCHAEOLOGY.md` — how the PR archive favors small bounded slices while still using deliberate large campaign PRs
 - `PROVENANCE_RECEIPTS_ARCHAEOLOGY.md` — how proof moved from prose claims into receipt schemas, evidence docs, and forensics templates
 - `RECEIPTS_LIE_ARCHAEOLOGY.md` — how PR `#209` became the original scar story showing that receipts can be technically true yet still operationally weak
-- `REVIEWER_NETWORK_ARCHAEOLOGY.md` — how reviewer identities themselves act as workflow-era signals, from human-led mixed review to machine-dense review lanes and later thinner gate-era threads
 - `QUEUE_BOTTLENECK_ARCHAEOLOGY.md` — how the merge queue, CI throughput, and issue overflow became the real bottlenecks at swarm scale
 - `PR_WAVE_ARCHAEOLOGY.md` — batch-day signatures in the PR archive, from early codex bursts to release, control-plane, and article waves
-- `TRUTH_SURFACE_ARCHAEOLOGY.md` — how claim drift drove the repo to externalize truth into `features.toml`, `CURRENT_STATUS`, lessons, receipt schemas, `xtask`, and fail-closed checks
-- `VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md` — how corpus gates, helper coverage, parser test helpers, and benchmark baselines were hardened after proof surfaces proved incomplete
 - `Q3_SWARM_PR_ARCHAEOLOGY.md` — the late-September 2025 shift from more direct delivery into a PR-heavy Claude Code swarm
 - `Q3_SWARM_TALK_ARCHAEOLOGY.md` — the Q3 2025 talk as primary-source evidence for trusted change, flows-not-chats, author/critic, receipts, and the later control-plane hardening
 - `SWARM_SURFACE_EVOLUTION.md` — the Jan→Mar 2026 transition where commands predate skills, then hooks and swarm-state turn the current control plane on
-- `WORKTREE_PARALLELISM_ARCHAEOLOGY.md` — how the repo wanted lane-based worktree parallelism early, used `maint/pr-*` as a bridge, and later stabilized deterministic `worktree-agent-*` execution
-- `SWARM_MEMORY_TAXONOMY_ARCHAEOLOGY.md` — how committed swarm-state files and issue-title taxonomy split memory into queue state, pitfalls, findings, learning, and article recovery channels
-- `KNOWLEDGE_COMPOUNDING_ARCHAEOLOGY.md` — how the current swarm compounds knowledge across live queue state, durable findings, operator reports, and preserved scout logs
-- `KNOWLEDGE_PROMOTION_ARCHAEOLOGY.md` — how session output is promoted from volatile execution into tracked ledgers, scout logs, operator summaries, archaeology notes, and source-linked article claims
-- `SCOUT_LOG_ARCHAEOLOGY.md` — how tracked scout logs preserve dated session research as recoverable evidence after findings are absorbed into higher-level archaeology notes
 - `SWARM_STATE_ARCHAEOLOGY.md` — how `swarm-state` became a layered institutional-memory ledger instead of transient coordination notes
 - `TRUSTED_CHANGE_ARCHAEOLOGY.md` — how mutation, fuzz, receipts, drift checks, and durable pitfall tracking made trusted change mechanical
 - `JULES_LANE_ARCHAEOLOGY.md` — how Bolt, Sentinel, and Palette acted as proto-specialist lanes before the current swarm model
 - `MERGE_DISCIPLINE_ARCHAEOLOGY.md` — how merge governance evolved from flow packs into commands, skills, queue pacing, and stateful reporting
-- `ARTICLE_EVIDENCE_LINEAGE_ARCHAEOLOGY.md` — source map linking future launch-article claims to exact issue/PR/doc evidence chains
 
 ---
 
@@ -85,7 +47,7 @@ Supplemental archaeology note:
 - CPAN corpus as error oracle (4,355 modules, 80% clean)
 - Swarm infrastructure (100 agents in Cycle 5, 56 PRs, 80+ issues)
 - Perl-specific parsing challenges (context-sensitive //, special vars, fat-arrow placement)
-- 52 agent definitions plus 2 roster JSON files and the `.claude` lineage: `agents4` (Q3 canonical swarm), `agents5-6` (evolution), `agents/` (current `agents7` layer)
+- 54 archived agent definitions plus `.claude` lineage: `agents4` (Q3 canonical swarm), `agents5-6` (evolution), `agents/` (current `agents7` layer)
 - 97 LSP features implemented
 - 49 TODO/FIXME/HACK comments (pristine codebase)
 - 8 reusable skills, 48 commands, 30+ memory files
@@ -320,7 +282,7 @@ Microcrate Architecture → Isolated Crates → Parallel Agents
 **Data to Highlight**:
 - 0 circular dependencies
 - 97 LSP features (feature.toml)
-- 52 agent definitions plus 2 roster JSON files and the `.claude` lineage that connects Q3 swarm packs to the current `agents7` layer
+- 54 archived agent definitions plus the `.claude` lineage that connects Q3 swarm packs to the current `agents7` layer
 - 8 reusable skills (composable infrastructure)
 
 ---

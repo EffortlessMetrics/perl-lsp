@@ -185,7 +185,6 @@ promoting those discoveries into better control surfaces.
 - [Q3_SWARM_TALK_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/Q3_SWARM_TALK_ARCHAEOLOGY.md)
 - [TRUSTED_CHANGE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/TRUSTED_CHANGE_ARCHAEOLOGY.md)
 - [PROVENANCE_RECEIPTS_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/PROVENANCE_RECEIPTS_ARCHAEOLOGY.md)
-- [VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/VALIDATOR_BLIND_SPOT_ARCHAEOLOGY.md)
 - [CASEBOOK.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/CASEBOOK.md)
 - [CURRENT_STATUS.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/CURRENT_STATUS.md)
 - [PR #209](https://github.com/EffortlessMetrics/perl-lsp/pull/209)

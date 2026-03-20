@@ -78,34 +78,6 @@ Operationally, this era is still prompt-pack heavy:
 
 It is already a swarm. It is just a more ceremonial, pack-defined swarm than the current one.
 
-What makes `agents4` more than a copy of `agents3` is the degree of
-perl-lsp-specific specialization it accumulates immediately after landing.
-
-Commit `46196e37d` on `2025-09-24`
-(`refactor: Update Integrative Flow for Perl LSP production readiness`)
-rewrites the three top-level flow files around perl-lsp-specific concerns:
-
-- parsing SLO validation
-- LSP protocol compliance
-- cross-crate parser / lexer / LSP validation
-- Tree-sitter highlight testing
-- adaptive threading for LSP tests
-- Diataxis documentation layout
-
-The retained files show the resulting specialization clearly:
-
-- `issue-to-draft.md` establishes Perl LSP parsing validation and
-  `parser|lsp|lexer` feature smoke
-- `draft-to-pr.md` reframes Review as a bounded performance-and-readiness stage
-- `pr-to-merge.md` makes Integrative responsible for production parsing SLOs and
-  final LSP stability receipts
-- `agent-customizer-generative.md` explicitly describes adapting generic agents
-  to "Perl LSP's GitHub-native Issue→PR Ledger workflow"
-
-That is why `agents4` matters historically. It is not only the canonical Q3
-swarm pack. It is the point where the three-phase control plane is rewritten to
-fit perl-lsp's actual parser, LSP, and documentation reality.
-
 ---
 
 ## 3. January 2026 Jules Bridge: Persona Lanes
@@ -228,17 +200,13 @@ Today, the swarm lives across:
 
 This is effectively the `agents7` layer.
 
-It is not merely an archived roster dump. It is the current agent-definition
-surface for the swarm:
+It is not the old "load this file as the runtime prompt" surface. Instead, it is the canonical archived roster surface:
 
 - `AGENT_CATALOG.md`
-- role-specific agent files
-- machine-readable roster data
-- agent instructions that name the skills and commands to invoke first
+- `archive/agent-roster.json`
+- 54 archived definitions for reference
 
-The orchestrator still owns routing and spawn decisions, but it routes through
-these agent definitions rather than having to restate every role contract from
-scratch each time.
+The current orchestrator uses these as historical or roster material, not as the sole runtime contract.
 
 ### `.claude/commands/`
 

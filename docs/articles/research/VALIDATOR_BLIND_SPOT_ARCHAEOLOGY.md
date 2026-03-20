@@ -1,189 +1,171 @@
 # Validator Blind Spot Archaeology
-## How The Repo Kept Repairing The Thing That Measured Correctness
+## How the repo kept repairing the thing that measured correctness
 
-The important lesson after PR `#209` was not only that proof matters. It was
-that proof surfaces can have their own blind spots.
+PR `#209` and issue `#210` are the starting point for this history. PR `#209`
+showed that the repo could assemble a dense proof bundle around a large change;
+issue `#210` then turned that experience into a request for merge-blocking gate
+policy, deterministic harnesses, receipt files, artifact uploads, and local
+reproduction. The useful historical pattern is what followed: the repo kept
+discovering that the measuring surfaces themselves also needed repair.
 
-[RECEIPTS_LIE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/RECEIPTS_LIE_ARCHAEOLOGY.md)
-already records `#209` as the canonical scar story: a dense proof bundle can be
-technically true and still operationally weak if the measurement surface is too
-shallow. This note traces what happened next. The repository repeatedly had to
-repair the validator/helper layer itself.
+This note records concrete examples where the validator/helper layer was
+strengthened, or where a blind spot in that layer became visible.
 
 ---
 
-## 1. PR `#209` And Issue `#210` Move Proof Into Governance
+## 1. PR `#209` Turned Proof Into A First-Class Surface
 
-[PR #209](https://github.com/EffortlessMetrics/perl-lsp/pull/209) is the first
-large proof envelope in the repository:
+[PR #209](https://github.com/EffortlessMetrics/perl-lsp/pull/209) merged on
+`2025-10-09` with commit trail entries such as:
 
 - `63aa3050d` `chore(governance): contract review validation for PR #209 (Issue #207)`
 - `5445b566d` `feat: Add comprehensive security and test validation receipts for PR #209`
 - `9ecf3acc8` `feat: Add comprehensive mutation testing summary for PR #209`
 
-That sequence matters because it is not just code plus tests. It is code plus
-an explicit proof stack.
+That sequence matters because it shows the first large proof envelope in the
+repo history: security receipts, test receipts, and mutation summaries were
+attached to one change. The lesson was not that the proof was fake. The lesson
+was that proof could be technically true and still too narrow if the measuring
+surface was shallow.
 
-[Issue #210](https://github.com/EffortlessMetrics/perl-lsp/issues/210) then
-translates that experience into governance:
-
-- merge-blocking gates
-- deterministic scenario harness
-- `receipt.json`
-- artifact uploads
-- check-run lifecycle
-- local reproduction commands
-
-And this is not merely aspirational text left behind in the tracker. The repo
-later grows the exact surfaces issue `#210` asked for:
-
-- [.ci/gate-policy.yaml](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.ci/gate-policy.yaml)
-- [.ci/receipt.schema.json](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.ci/receipt.schema.json)
-- [xtask/src/tasks/gates.rs](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/xtask/src/tasks/gates.rs)
-- [xtask/src/main.rs](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/xtask/src/main.rs)
-
-Historically, that is the key shift: the repo starts treating the measuring
-surface as code and policy, not as prose around a PR.
+[Issue #210](https://github.com/EffortlessMetrics/perl-lsp/issues/210),
+created on `2025-10-13`, made that lesson explicit by asking for formal merge
+gates, `receipt.json`, artifact uploads, check-run lifecycle handling, and
+reproduction commands.
 
 ---
 
-## 2. The Corpus Gate Becomes A Hardened Measurement Surface
+## 2. The Corpus Gate Was Hardened Into A Shared Measurement Surface
 
-One of the clearest later examples is:
+On `2026-03-10`, `d8c1ac325` added the common corpus zero-error gate.
+The commit message is unusually explicit about the hardening:
+
+- manifest mode for a pinned list of Perl modules
+- strict enforcement of `0 unreadable`, `0 errors`, and `0 ERROR nodes`
+- profile-aware receipt naming
+- wiring into `ci-gate` and gate policy as `common_corpus_clean`
+
+That is a clear example of the measurement surface itself being repaired. The
+repo did not just keep checking the corpus; it changed the gate so the corpus
+check became manifest-driven, strict, and receipt-backed.
+
+Relevant evidence:
 
 - `d8c1ac325` `feat(infra): add common corpus zero-error gate`
-
-That commit is important because it is not a parser fix. It is a fix to how the
-repo measures parser reality:
-
-- manifest-driven corpus selection
-- strict `0 unreadable`, `0 errors`, and `0 ERROR nodes`
-- profile-aware receipts
-- explicit gate wiring
-
-The evidence surfaces are concrete:
-
 - `.ci/common-corpus-manifest.txt`
 - `.ci/gate-policy.yaml`
 - `xtask/src/tasks/parser_corpus_sweep.rs`
-- `xtask gates` receipt flow
-
-This is exactly the post-`#210` pattern: the repo is not satisfied with "run
-some corpus checks." It keeps formalizing what a valid corpus measurement looks
-like.
 
 ---
 
-## 3. Helper Utilities Start Getting Tested As A Surface
+## 3. Parser Test Helpers Were Tightened Instead Of Reused Blindly
 
-Another clear step is:
+On `2026-03-18`, `06d1dcd18` refactored the parser test suite to trim imports
+and harden assertions. The concrete change was not cosmetic: many test files
+stopped carrying their own broad import sets, and the assertions were made
+less permissive.
 
-- `21fccfac7` `test(perl-tdd-support): add test coverage for helper utilities (#1950)`
+That kind of cleanup matters historically because it reduces the chance that
+the helper layer itself is masking problems. It is a small but real shift from
+ad hoc test scaffolding toward narrower, more explicit checks.
 
-That change matters because `perl-tdd-support` is part of the testing
-infrastructure itself. The repo stops treating helper utilities as trusted by
-default and starts testing them directly:
-
-- `must`, `must_some`, `must_err`
-- panic formatting
-- `#[track_caller]` behavior
-- workflow-state transitions
-- governance/coverage helper edges
-
-That is a measurement-surface repair, not just more tests. It narrows the gap
-between "helpers are used everywhere" and "helpers are themselves verified."
-
----
-
-## 4. Parser Test Helpers Improve, But The Blind Spot Remains Visible
-
-The most literal example of a validator blind spot is in:
-
-- `f5b449c22` `test(parser-core): add paren recovery test coverage (#1948)`
-
-That commit improves the shared parser test helper surface in
-[cpan_test_helpers/mod.rs](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-parser-core/tests/cpan_test_helpers/mod.rs):
-
-- it adds a shared `ERROR_MARKERS` constant
-- it adds `assert_has_error()`
-- the shared constant includes uppercase `(ERROR `
-
-But the same file still reveals the problem:
-
-- `assert_clean_parse()` keeps its own local marker list
-- that local list still omits uppercase `(ERROR `
-
-That is why the March 2026 learning issues are so valuable:
-
-- [issue #2190](https://github.com/EffortlessMetrics/perl-lsp/issues/2190)
-- [issue #2191](https://github.com/EffortlessMetrics/perl-lsp/issues/2191)
-
-They document that the validator was partially repaired and still not fully
-aligned. The repo had already created the better shared marker list, but the
-clean-parse path had not been wired to use it.
-
-This is the strongest single example of the repository debugging its own
-measurement layer.
-
----
-
-## 5. Test Assertions And Baselines Keep Getting Tightened
-
-The same pattern appears in smaller but still meaningful changes:
+Relevant evidence:
 
 - `06d1dcd18` `refactor(tests): trim imports and harden assertions (#1995)`
-- `7038ba51b` `perf: establish performance baselines for 0.12.0 (#1654)`
-
-These are different kinds of validator hardening:
-
-- `06d1dcd18` narrows and hardens test surfaces so they are less permissive
-- `7038ba51b` promotes benchmark results into an explicit baseline document and
-  repeatable comparison surface
-
-The benchmark side matters because it echoes the original `#209` lesson. If
-proof can overstate readiness, then benchmark categories and baselines need to
-be explicit too.
-
-The relevant documented surfaces include:
-
-- [PERFORMANCE_BASELINES.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/PERFORMANCE_BASELINES.md)
-- [CURRENT_STATUS.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/CURRENT_STATUS.md)
-- [QUALITY_INFRASTRUCTURE.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/QUALITY_INFRASTRUCTURE.md)
+- `crates/perl-parser-core/tests/parser_tests.rs`
+- `crates/perl-parser-core/tests/parse_error_tests.rs`
 
 ---
 
-## 6. The Historical Pattern
+## 4. Helper Utilities Were Tested As A Surface, Not Just Used As One
 
-The useful pattern is not "the repo got perfect at validation." The pattern is
-that the repo kept finding new places where validation itself was incomplete:
+On `2026-03-19`, `21fccfac7` added 70 tests for `perl-tdd-support` helper
+utilities. The scope is important because it covers the helpers that other
+tests rely on:
 
-1. PR `#209` makes proof highly visible
-2. issue `#210` turns proof into policy and code surfaces
-3. corpus gates get hardened
-4. helper utilities get direct coverage
-5. parser test helpers improve but still expose a blind spot
-6. benchmark baselines get formalized instead of implied
+- `must`, `must_some`, and `must_err`
+- panic formatting and `#[track_caller]` behavior
+- TDD workflow state transitions
+- coverage tracker boundaries
+- governance scoring and validation edge cases
 
-That means the repository is not only debugging parser behavior, LSP behavior,
-or DAP behavior. It is also debugging the instruments that claim to measure
-those behaviors.
+This is another measurement-surface repair. Instead of assuming the helper
+library was trustworthy, the repo started treating the helpers themselves as a
+thing worth testing.
 
-That is one of the more distinctive curiosities of this codebase: it keeps
-promoting "the validator was wrong or too weak" into first-class engineering
-work.
+Relevant evidence:
+
+- `21fccfac7` `test(perl-tdd-support): add test coverage for helper utilities (#1950)`
+- `crates/perl-tdd-support/tests/test_helper_coverage.rs`
+
+---
+
+## 5. Error-Detection Helpers Got Centralized, But The Blind Spot Stayed Visible
+
+On `2026-03-19`, `f5b449c22` added a shared `ERROR_MARKERS` constant and a new
+`assert_has_error()` helper in `crates/perl-parser-core/tests/cpan_test_helpers/mod.rs`.
+That change hardened the parser test helper surface in two ways:
+
+- it centralized the marker list for error-node detection
+- it added an explicit inverse helper for malformed input
+- it included uppercase `(ERROR ` in the shared marker list
+
+The same file still shows why this note exists. `assert_clean_parse()` keeps a
+local marker list that does not use the shared constant, and that local list
+still omits uppercase `(ERROR `. In other words, the helper layer improved, but
+the blind spot remained visible in the cleaner path.
+
+Relevant evidence:
+
+- `f5b449c22` `test(parser-core): add paren recovery test coverage (#1948)`
+- `crates/perl-parser-core/tests/cpan_test_helpers/mod.rs`
+
+This is the most literal example of the repository learning that a validator
+can be partially repaired and still not be fully aligned.
+
+---
+
+## 6. Benchmark Baselines Were Promoted Into Documented History
+
+Also on `2026-03-19`, `7038ba51b` established performance baselines for
+`0.12.0`, with new benchmark categories for completion and navigation and a
+new `docs/project/PERFORMANCE_BASELINES.md` file. That is a measurement-surface
+hardening in the same family as the corpus gate:
+
+- benchmark categories became explicit
+- measured numbers were documented instead of implied
+- the repo gained a baseline file for later comparison
+
+Relevant evidence:
+
+- `7038ba51b` `perf: establish performance baselines for 0.12.0 (#1654)`
+- `docs/project/PERFORMANCE_BASELINES.md`
+- `benchmarks/scripts/run-benchmarks.sh`
+
+---
+
+## Historical Reading
+
+The useful pattern is not "the repo got perfect at measurement." It is the
+opposite. The history shows a sequence of repairs where the repo discovered
+that the measurement layer itself could be incomplete:
+
+1. PR `#209` made proof a visible asset.
+2. Issue `#210` turned that into gate policy.
+3. Later work hardened corpus gates, benchmark baselines, parser helpers, and
+   helper utilities.
+4. The `assert_clean_parse()`/`ERROR_MARKERS` split shows that helper repair
+   can still leave a blind spot in place.
+
+That is the recurring archaeology lesson: the repo does not only debug parser
+behavior. It also debugs the tools that claim to measure parser behavior.
 
 ---
 
 ## Evidence Pointers
 
-- [RECEIPTS_LIE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/RECEIPTS_LIE_ARCHAEOLOGY.md)
-- [TRUSTED_CHANGE_ARCHAEOLOGY.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/articles/research/TRUSTED_CHANGE_ARCHAEOLOGY.md)
-- [QUALITY_INFRASTRUCTURE.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/QUALITY_INFRASTRUCTURE.md)
-- [CURRENT_STATUS.md](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/project/CURRENT_STATUS.md)
-- [.ci/gate-policy.yaml](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.ci/gate-policy.yaml)
-- [.ci/receipt.schema.json](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/.ci/receipt.schema.json)
-- [xtask/src/tasks/gates.rs](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/xtask/src/tasks/gates.rs)
-- [cpan_test_helpers/mod.rs](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/crates/perl-parser-core/tests/cpan_test_helpers/mod.rs)
-- [PR #209](https://github.com/EffortlessMetrics/perl-lsp/pull/209)
-- [issue #210](https://github.com/EffortlessMetrics/perl-lsp/issues/210)
+- [RECEIPTS_LIE_ARCHAEOLOGY.md](RECEIPTS_LIE_ARCHAEOLOGY.md)
+- [QUALITY_INFRASTRUCTURE.md](../../project/QUALITY_INFRASTRUCTURE.md)
+- [CURRENT_STATUS.md](../../project/CURRENT_STATUS.md)
+- `87f56b754`, `63aa3050d`, `5445b566d`, `9ecf3acc8`
 - `d8c1ac325`, `06d1dcd18`, `21fccfac7`, `f5b449c22`, `7038ba51b`
