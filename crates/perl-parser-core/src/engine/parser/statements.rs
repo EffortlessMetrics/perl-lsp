@@ -208,7 +208,17 @@ impl<'a> Parser<'a> {
                 })
             }
             TokenKind::Class => self.parse_class(),
-            TokenKind::Method => self.parse_method(),
+            // `method NAME SIGNATURE BLOCK` is a Perl 5.38+ declaration.
+            // Legacy code uses `method` as a function name; disambiguate by
+            // checking the next token is an Identifier (the method name).
+            TokenKind::Method
+                if matches!(
+                    self.tokens.peek_second().map(|t| t.kind),
+                    Ok(TokenKind::Identifier)
+                ) =>
+            {
+                self.parse_method()
+            }
 
             // Package management
             TokenKind::Package => self.parse_package(),
