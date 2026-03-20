@@ -184,3 +184,15 @@ export class EventEmitter {
   fire = jest.fn();
   dispose = jest.fn();
 }
+
+export enum DiagnosticSeverity {
+  Error = 0,
+  Warning = 1,
+  Information = 2,
+  Hint = 3,
+}
+
+export const languages = {
+  onDidChangeDiagnostics: jest.fn(() => ({ dispose: jest.fn() })),
+  getDiagnostics: jest.fn(() => [] as Array<[any, any[]]>),
+};
