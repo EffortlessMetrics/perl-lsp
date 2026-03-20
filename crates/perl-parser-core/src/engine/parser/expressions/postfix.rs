@@ -351,9 +351,17 @@ impl<'a> Parser<'a> {
 
                 Some(TokenKind::LeftBrace) => {
                     // Check if this is a builtin function (or block-list func like first/any/all)
-                    // that needs special handling
+                    // or a user-defined function with a block argument that needs special handling
                     if let NodeKind::Identifier { name } = &expr.kind {
-                        if Self::is_builtin_function(name) || Self::is_block_list_func(name) {
+                        let is_builtin = Self::is_builtin_function(name);
+                        let is_block_list = Self::is_block_list_func(name);
+                        // In Perl, hash element access ALWAYS requires a sigil ($hash{key}).
+                        // A bare lowercase identifier followed by { is a function call with
+                        // a block argument: capture { ... }, where { ... }, etc.
+                        let is_bare_func =
+                            !is_builtin && !is_block_list && Self::looks_like_block_call_name(name);
+
+                        if is_builtin || is_block_list || is_bare_func {
                             // This is a builtin function with {} as argument
                             // Parse arguments without parentheses
                             let mut args = Vec::new();
@@ -370,7 +378,7 @@ impl<'a> Parser<'a> {
                                     }
                                     args.push(self.parse_comma()?);
                                 }
-                            } else if Self::is_block_list_func(name.as_str()) {
+                            } else if is_block_list || is_bare_func {
                                 // Parse block (may contain multiple statements) as first argument
                                 // for map/grep/sort/first/any/all/none/reduce/etc.
                                 args.push(self.parse_builtin_block()?);
