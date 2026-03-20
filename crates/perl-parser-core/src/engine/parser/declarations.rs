@@ -963,7 +963,13 @@ impl<'a> Parser<'a> {
             let kind = self.peek_kind();
             let at_top_level = paren_depth == 0 && bracket_depth == 0 && brace_depth == 0;
 
-            if Self::is_statement_terminator(kind) {
+            // EOF/None: always stop to avoid infinite loops.
+            // Semicolon: only stop at top level so that `eval { ...; ... }`
+            // blocks inside use declarations are consumed fully.
+            if matches!(kind, Some(TokenKind::Eof) | None) {
+                break;
+            }
+            if kind == Some(TokenKind::Semicolon) && at_top_level {
                 break;
             }
 
