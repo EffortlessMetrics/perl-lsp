@@ -1381,3 +1381,59 @@ fn special_scalar_child_status_sort_priority() {
         "$? sort_text should start with '0_' for high priority, got: {sort_text}"
     );
 }
+
+#[test]
+fn special_scalar_caret_t_script_start_time() {
+    // $^T holds the epoch time when the script started.
+    // The caret is a word boundary so the completion prefix is "$" (not "$^T").
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$^T"), "should suggest $^T (script start time)");
+}
+
+#[test]
+fn special_scalar_caret_a_format_accumulator() {
+    // $^A is the accumulator for format()/write().
+    // The caret is a word boundary so the completion prefix is "$".
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$^A"), "should suggest $^A (format accumulator)");
+}
+
+#[test]
+fn special_scalar_caret_w_warning_flag() {
+    // $^W is the global warning flag (prefer 'use warnings' for lexical scope).
+    // The caret is a word boundary so the completion prefix is "$".
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$^W"), "should suggest $^W (warning flag)");
+}
+
+#[test]
+fn special_scalar_plus_last_bracket() {
+    // $+ is the last successful regex bracket matched.
+    // The '+' is a word boundary so the completion prefix is "$".
+    let code = "$";
+    let items = completions_at_end(code);
+    assert!(has_label(&items, "$+"), "should suggest $+ (last bracket matched)");
+}
+
+#[test]
+fn special_variables_all_have_detail_field() {
+    // Every special variable completion should carry a non-empty detail string
+    let code = "$";
+    let items = completions_at_end(code);
+    let special: Vec<_> = items
+        .iter()
+        .filter(|i| i.sort_text.as_deref().map(|s| s.starts_with("0_")).unwrap_or(false))
+        .collect();
+    assert!(!special.is_empty(), "should have special variables in list");
+    for item in &special {
+        assert!(
+            item.detail.as_deref().map(|d| !d.is_empty()).unwrap_or(false),
+            "special variable {} should have non-empty detail, got: {:?}",
+            item.label,
+            item.detail
+        );
+    }
+}

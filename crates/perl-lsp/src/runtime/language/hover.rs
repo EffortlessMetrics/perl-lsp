@@ -1067,7 +1067,7 @@ impl LspServer {
             let punct = next_ch as char;
             if matches!(
                 punct,
-                '!' | '@' | '?' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`'
+                '!' | '@' | '?' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`' | '+'
             ) {
                 return Some(format!("${}", punct));
             }
@@ -1171,6 +1171,13 @@ impl LspServer {
                  match.\n\n\
                  ```perl\n\"Hello World\" =~ /\\s/;\nprint $`;  # \"Hello\"\n```"
             }
+            "$+" => {
+                "**`$+` \u{2014} Last Bracket Matched**\n\n\
+                 Contains the last bracket (capture group) that actually matched \
+                 in the last successful regex. Useful when alternation makes it \
+                 unknown which branch matched.\n\n\
+                 ```perl\n\"1999-12-31\" =~ /(\\d{4})-(\\d{2})-(\\d{2})/;\nprint $+;  # \"31\" (last group)\n```"
+            }
             "@ISA" => {
                 "**`@ISA` \u{2014} Inheritance List**\n\n\
                  Defines the parent classes for method resolution. Perl \
@@ -1237,6 +1244,21 @@ impl LspServer {
                  Hash mapping signal names to handler code refs (or `'IGNORE'` / \
                  `'DEFAULT'`). Use `local %SIG` to temporarily override handlers.\n\n\
                  ```perl\n$SIG{INT}  = sub { print \"Interrupted\\n\"; exit 1 };\n$SIG{TERM} = 'IGNORE';\n```"
+            }
+            "$^A" => {
+                "**`$^A` \u{2014} Accumulator for `format()`**\n\n\
+                 The write accumulator for `format()` and `write()` output. \
+                 Normally you do not access this directly; the `formline()` \
+                 builtin writes into it and `write()` flushes it to the \
+                 current output filehandle.\n\n\
+                 ```perl\nformline(\"@<<<\", \"hi\");\nprint $^A;  # \"hi \"\n```"
+            }
+            "$^T" => {
+                "**`$^T` \u{2014} Script Start Time**\n\n\
+                 The time (in seconds since the epoch, like `time()`) at which \
+                 the script began running. Used for age calculations relative to \
+                 script startup and for the `-M`, `-A`, `-C` file-test operators.\n\n\
+                 ```perl\nprint \"Running for \", time() - $^T, \" seconds\\n\";\n```"
             }
             _ => return None,
         };

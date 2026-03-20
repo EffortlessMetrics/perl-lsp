@@ -109,10 +109,12 @@ fn test_hover_default_variable() -> TestResult {
             }),
         )
         .unwrap_or(json!(null));
-    if !result.is_null() {
-        let val = hover_value(&result);
-        assert!(val.is_some(), "Hover should have content");
-    }
+    let val = hover_value(&result).ok_or("Expected hover content for $_")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("default") || lower.contains("$_"),
+        "$_ hover should mention 'default' or '$_', got: {val}"
+    );
     Ok(())
 }
 
@@ -223,6 +225,117 @@ fn test_hover_argv_array() -> TestResult {
     assert!(
         lower.contains("argv") || lower.contains("command") || lower.contains("argument"),
         "@ARGV hover should mention command-line arguments, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_sig_hash() -> TestResult {
+    // %SIG maps signal names to handlers
+    // "$SIG{INT} = 'IGNORE';\n"
+    //  0123456789
+    // %SIG-like access at $SIG — position 0 is '$', character 1 is 'S'
+    // Use the %SIG form directly:
+    // "my %h = %SIG;\n"  — %SIG starts at offset 8
+    let doc = "my %h = %SIG;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///sig2347.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///sig2347.pl"},
+                "position": {"line": 0, "character": 9}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for %SIG")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("signal") || lower.contains("sig") || lower.contains("handler"),
+        "%SIG hover should mention signal handlers, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_process_id() -> TestResult {
+    // $$ is the process ID
+    // "print $$;\n"  — $$ starts at offset 6
+    let doc = "print $$;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pid2347.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///pid2347.pl"},
+                "position": {"line": 0, "character": 6}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for $$")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("pid") || lower.contains("process"),
+        "$$ hover should mention process ID, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_warning_flag() -> TestResult {
+    // $^W is the global warning flag
+    // "local $^W = 1;\n"  — $^W starts at offset 6
+    let doc = "local $^W = 1;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///warn2347.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///warn2347.pl"},
+                "position": {"line": 0, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for $^W")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("warn") || lower.contains("flag"),
+        "$^W hover should mention warning flag, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_hover_last_bracket_matched() -> TestResult {
+    // $+ is the last successful capture group bracket
+    // "\"foo\" =~ /(o+)/; print $+;\n"
+    //  0         1         2
+    //  0123456789012345678901234567
+    // $+ starts at offset 24
+    let doc = "\"foo\" =~ /(o+)/; print $+;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///lastbracket2347.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///lastbracket2347.pl"},
+                "position": {"line": 0, "character": 23}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for $+")?;
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("bracket") || lower.contains("capture") || lower.contains("last"),
+        "$+ hover should mention last bracket matched, got: {val}"
     );
     Ok(())
 }

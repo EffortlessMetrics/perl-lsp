@@ -1200,3 +1200,51 @@ fn test_special_variable_env_hash_has_default_library_modifier() {
         tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn test_special_variable_argv_has_default_library_modifier() {
+    // @ARGV is a built-in special variable receiving the command-line arguments.
+    let code = "sub main { my @args = @ARGV; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_tokens: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        !special_tokens.is_empty(),
+        "@ARGV should produce a variable token with defaultLibrary modifier, \
+         got variable tokens: {:?}",
+        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_special_variable_dollar_question_has_default_library_modifier() {
+    // $? holds child process exit status after system() / backtick / waitpid().
+    let code = "sub f { system('ls'); return $?; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_tokens: Vec<_> =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
+    assert!(
+        !special_tokens.is_empty(),
+        "$? should produce a variable token with defaultLibrary modifier, \
+         got variable tokens: {:?}",
+        tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_two_special_variables_in_same_expression_both_get_modifier() {
+    // Both $! and $@ are special; check that when both appear in the same
+    // sub body they each get the defaultLibrary modifier.
+    let code = "sub f { eval { die 'boom' }; return $@ || $!; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let special_count =
+        tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).count();
+    assert!(
+        special_count >= 2,
+        "Both $@ and $! should receive defaultLibrary modifier; \
+         got {special_count} special-variable tokens (expected >= 2)"
+    );
+}
