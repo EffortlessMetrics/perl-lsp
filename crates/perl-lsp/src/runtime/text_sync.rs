@@ -30,15 +30,17 @@ impl LspServer {
                 params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
 
-            eprintln!("Document opened: {}", uri);
+            tracing::debug!("Document opened: {}", uri);
 
             // Large file guard: skip parsing for oversized files
             let file_size = text.len();
             let size_limit = crate::state::max_file_size_bytes();
             if file_size > size_limit {
-                eprintln!(
-                    "WARNING: Skipping parse for {} ({} bytes exceeds {} byte limit)",
-                    uri, file_size, size_limit
+                tracing::warn!(
+                    "Skipping parse for {} ({} bytes exceeds {} byte limit)",
+                    uri,
+                    file_size,
+                    size_limit
                 );
 
                 // Store document state without AST
@@ -67,7 +69,7 @@ impl LspServer {
                         "diagnostics": []
                     }),
                 ) {
-                    eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
+                    tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                 }
 
                 return Ok(());
@@ -81,7 +83,7 @@ impl LspServer {
 
             // Check cache first
             let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, text) {
-                eprintln!("Using cached AST for {}", uri);
+                tracing::debug!("Using cached AST for {}", uri);
                 (Some((*cached_ast).clone()), vec![])
             } else {
                 // Parse the document up to __DATA__ or __END__ marker
@@ -176,14 +178,14 @@ impl LspServer {
                                     let symbol_count = workspace_index.symbol_count();
                                     let file_count = workspace_index.file_count();
                                     coordinator.transition_to_ready(file_count, symbol_count);
-                                    eprintln!(
+                                    tracing::info!(
                                         "Index transitioned to Ready after first file (symbols: {})",
                                         symbol_count
                                     );
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Failed to index file {}: {}", uri, e);
+                                tracing::warn!("Failed to index file {}: {}", uri, e);
                             }
                         }
                     }
@@ -257,11 +259,13 @@ impl LspServer {
                     match serde_json::from_value::<TextDocumentContentChangeEvent>(c.clone()) {
                         Ok(change) => lsp_changes.push(change),
                         Err(e) => {
-                            eprintln!(
-                                "ERROR: Failed to deserialize change {} for {}: {}",
-                                i, uri, e
+                            tracing::error!(
+                                "Failed to deserialize change {} for {}: {}",
+                                i,
+                                uri,
+                                e
                             );
-                            eprintln!("Change JSON: {:?}", c);
+                            tracing::error!("Change JSON: {:?}", c);
                             // Continue processing other changes; LSP has no server-initiated
                             // full sync, so logging is critical for diagnosing state issues.
                         }
@@ -272,15 +276,17 @@ impl LspServer {
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
 
                 let text = doc.rope.to_string();
-                eprintln!("Document changed: {} (version {})", uri, version);
+                tracing::debug!("Document changed: {} (version {})", uri, version);
 
                 // Large file guard: skip parsing for oversized files
                 let file_size = text.len();
                 let size_limit = crate::state::max_file_size_bytes();
                 if file_size > size_limit {
-                    eprintln!(
-                        "WARNING: Skipping parse for {} ({} bytes exceeds {} byte limit)",
-                        uri, file_size, size_limit
+                    tracing::warn!(
+                        "Skipping parse for {} ({} bytes exceeds {} byte limit)",
+                        uri,
+                        file_size,
+                        size_limit
                     );
 
                     // Update document state without AST
@@ -307,7 +313,7 @@ impl LspServer {
                             "diagnostics": []
                         }),
                     ) {
-                        eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
+                        tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                     }
 
                     return Ok(());
@@ -321,7 +327,7 @@ impl LspServer {
 
                 // Check cache first
                 let (ast, errors) = if let Some(cached_ast) = self.ast_cache.get(uri, &text) {
-                    eprintln!("Using cached AST for {}", uri);
+                    tracing::debug!("Using cached AST for {}", uri);
                     (Some((*cached_ast).clone()), vec![])
                 } else {
                     // Parse the document up to __DATA__ or __END__ marker
@@ -375,7 +381,7 @@ impl LspServer {
                     if existing_doc.generation.load(Ordering::SeqCst) != next_gen
                         || existing_doc.version > target_version
                     {
-                        eprintln!(
+                        tracing::debug!(
                             "Discarding stale parse result for {} (gen {} != {} or version {} > {})",
                             uri,
                             next_gen,
@@ -414,7 +420,7 @@ impl LspServer {
                                 .map(|d| d.text.clone())
                                 .unwrap_or_default();
                             if let Err(e) = workspace_index.index_file(url, doc_content) {
-                                eprintln!("Failed to index file {}: {}", uri, e);
+                                tracing::warn!("Failed to index file {}: {}", uri, e);
                             }
                         }
                     }
@@ -448,7 +454,7 @@ impl LspServer {
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
             let normalized_uri = self.normalize_uri_key(uri);
 
-            eprintln!("Document closed: {}", uri);
+            tracing::debug!("Document closed: {}", uri);
 
             // Notify coordinator of pending change to track cleanup work
             #[cfg(feature = "workspace")]
@@ -481,7 +487,7 @@ impl LspServer {
                     "diagnostics": []
                 }),
             ) {
-                eprintln!("Failed to clear diagnostics for {}: {}", normalized_uri, e);
+                tracing::warn!("Failed to clear diagnostics for {}: {}", normalized_uri, e);
             }
         }
 
@@ -501,7 +507,7 @@ impl LspServer {
                 .and_then(|v| v.as_i64())
                 .and_then(|v| i32::try_from(v).ok());
 
-            eprintln!("Document saved: {}", uri);
+            tracing::debug!("Document saved: {}", uri);
 
             // Re-run diagnostics on save to catch any changes
             let documents = self.documents.lock();
@@ -543,7 +549,11 @@ impl LspServer {
                             "diagnostics": lsp_diagnostics
                         }),
                     ) {
-                        eprintln!("Failed to publish diagnostics for {}: {}", normalized_uri, e);
+                        tracing::warn!(
+                            "Failed to publish diagnostics for {}: {}",
+                            normalized_uri,
+                            e
+                        );
                     }
                 }
             }
@@ -561,7 +571,7 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let reason = params["reason"].as_u64().unwrap_or(1); // 1 = Manual, 2 = AfterDelay, 3 = FocusOut
 
-            eprintln!("Document will save: {} (reason: {})", uri, reason);
+            tracing::debug!("Document will save: {} (reason: {})", uri, reason);
 
             // Pre-save validation or cleanup can be done here
             // For example: remove trailing whitespace, fix imports, etc.
@@ -579,7 +589,7 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let _reason = params["reason"].as_u64().unwrap_or(1);
 
-            eprintln!("Document will save wait until: {}", uri);
+            tracing::debug!("Document will save wait until: {}", uri);
 
             let documents = self.documents.lock();
             if let Some(doc) = self.get_document(&documents, uri) {
