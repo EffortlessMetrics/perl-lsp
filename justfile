@@ -721,7 +721,6 @@ ci-policy:
     @echo "⚖️  Checking project policies..."
     just ci-check-todos
     @bash ./.ci/scripts/check-from-raw.sh
-    @cargo run -p xtask -- update-status --check
 
 # Check for machine-specific paths in documentation
 ci-doc-paths:

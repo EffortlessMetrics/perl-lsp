@@ -17,7 +17,7 @@ The orchestrator routes work to agents, never writes code directly.
 - Don't rebase PRs unless merge conflicts exist
 - Merge in batches of 3 (CI cancellation cascade -- rapid merges cancel each other's CI runs)
 - Run `just cpan-corpus-ratchet` after parser fix merges
-- Run `python3 scripts/update-current-status.py` if tests were added
+- CURRENT_STATUS.md is regenerated automatically post-merge (no manual step needed)
 
 ## Quick Reference
 
@@ -172,7 +172,7 @@ Invoke `/coding-standards` for full detail.
 - **Prefer**: `.first()` over `.get(0)`, `.push(char)` over `.push_str("x")`, `or_default()` over `or_insert_with(Vec::new)`
 - **Avoid**: unnecessary `.clone()` on Copy types
 - **Regex**: `Option<Regex>` with `.ok()` for graceful degradation
-- After adding tests, run `python3 scripts/update-current-status.py` to prevent `policy_checks` CI failure
+- After adding tests, no manual status update needed — CURRENT_STATUS.md is auto-regenerated post-merge
 
 ## Documentation
 
