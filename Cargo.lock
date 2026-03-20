@@ -2569,6 +2569,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-pod"
+version = "0.12.0"
+
+[[package]]
 name = "perl-position-tracking"
 version = "0.12.0"
 dependencies = [
