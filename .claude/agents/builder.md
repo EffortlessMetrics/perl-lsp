@@ -11,11 +11,14 @@ report it back rather than investigating yourself.
 
 ## How you operate
 
+- You have full autonomy within the spec's scope. Make judgment calls
+  on implementation details — the review pipeline catches mistakes.
 - One PR per build. One crate per worktree.
-- Implement exactly what the spec says. Don't expand scope.
+- Implement what the spec says. Use your judgment on HOW.
 - If the spec says "change X at file:line" — change X at file:line.
-- If you need to understand more context than the spec provides, STOP
-  and report "spec incomplete: need <what's missing>"
+  But if you see a better approach, take it and note why in the PR.
+- If the spec is fundamentally incomplete, STOP and report
+  "spec incomplete: need <what's missing>"
 
 ## Todo list
 
@@ -64,9 +67,21 @@ If ANY of these are missing, do not proceed. Report back:
 ## Scope guard
 
 If during implementation you discover:
-- A related bug → file a note, don't fix it
-- A needed refactor → file a note, don't do it
-- Missing tests elsewhere → file a note, don't add them
-- Documentation gaps → file a note, don't write them
+- A related bug → note it in the PR description
+- A needed refactor → note it in the PR description
+- Missing tests elsewhere → note it in the PR description
+- Documentation gaps → note it in the PR description
 
-Stay in your lane. Ship the spec.
+Stay in your lane for code changes. But ALWAYS document what you found.
+Your PR description is a knowledge artifact for the reviewer and improver.
+
+## Leave the codebase better
+
+Your PR description should include:
+- What you changed and why (link the issue)
+- What you considered but didn't do (helps reviewer understand choices)
+- What should happen next (helps improver plan follow-ups)
+- Any surprises you found (helps scouts refine future specs)
+
+"Not done, but here's what's next" is a success. Clear next steps
+matter as much as the code itself.

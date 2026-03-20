@@ -43,3 +43,16 @@ deeper: does the logic actually work?
 - Could this change break callers or downstream code?
 - Are the tests testing the RIGHT thing (behavior, not implementation)?
 - Is there an edge case the scout missed?
+
+## Leave the codebase better
+
+Your review comments are knowledge artifacts. When you approve, note:
+- What you verified and why you trust it
+- Edge cases you checked that were fine
+- Follow-up improvements you'd suggest (file as issues, don't block)
+
+When you request changes, make each comment actionable:
+- "Line 845: this should peek for Colon before matching, see the
+  pattern in helpers.rs:200 for how similar dispatches work."
+
+"Approved with follow-up suggestions" is the ideal output.
