@@ -180,6 +180,12 @@ fn build_enhanced_scope_message(issue: &ScopeIssue) -> String {
                 name
             )
         }
+        IssueKind::UnquotedBareword => {
+            format!(
+                "Bareword '{}' is not allowed under 'use strict' -- quote it as '{}' or use it as a subroutine call",
+                name, name
+            )
+        }
         // Fall back to the analyzer's original description for other kinds
         _ => issue.description.clone(),
     }
@@ -196,6 +202,9 @@ fn build_scope_suggestion(issue: &ScopeIssue) -> Option<String> {
         }
         IssueKind::VariableRedeclaration => Some("Remove the duplicate 'my' keyword".to_string()),
         IssueKind::UninitializedVariable => Some(format!("Initialize: my {} = ...;", name)),
+        IssueKind::UnquotedBareword => {
+            Some(format!("Quote as '{}' or use qw({}) for lists", name, name))
+        }
         _ => None,
     }
 }
