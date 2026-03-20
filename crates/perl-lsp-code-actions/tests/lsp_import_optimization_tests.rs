@@ -219,10 +219,7 @@ fn lsp_organize_imports_sort_order_in_edit() -> TestResult {
     let strict_pos = lines.iter().position(|l| l.contains("strict"));
     let json_pos = lines.iter().position(|l| l.contains("JSON"));
 
-    assert!(
-        strict_pos < json_pos,
-        "Pragmas should sort before CPAN modules. Got: {new_text}"
-    );
+    assert!(strict_pos < json_pos, "Pragmas should sort before CPAN modules. Got: {new_text}");
 
     Ok(())
 }
