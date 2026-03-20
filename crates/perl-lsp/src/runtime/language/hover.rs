@@ -240,17 +240,20 @@ impl LspServer {
     /// Build a hover response for a `use Module` statement.
     ///
     /// Tries URI-based resolution first, then filesystem-based resolution.
-    /// Shows resolved path on success, or "Not found" with search paths on failure.
+    /// When a module file is found, extracts POD documentation and includes
+    /// it in the hover display. Results are cached per file path.
     fn build_module_hover(&self, module_name: &str) -> Value {
         // Try URI resolution (handles open docs + workspace folders)
         if let Some(uri) = self.resolve_module_to_path(module_name) {
             let display_path = uri.strip_prefix("file://").unwrap_or(&uri);
+            let fs_path = url::Url::parse(&uri).ok().and_then(|u| u.to_file_path().ok());
+            let pod_section =
+                fs_path.as_deref().map(|p| self.format_pod_for_hover(p)).unwrap_or_default();
             return json!({
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{}**\n\nResolved: `{}`\n\n[Go to module]({})",
-                        module_name, display_path, uri
+                        "**{module_name}**\n\n`{display_path}`\n\n[Go to module]({uri}){pod_section}"
                     ),
                 },
             });
@@ -258,14 +261,14 @@ impl LspServer {
 
         // Try filesystem resolution as fallback
         if let Some(path) = self.resolve_module_path(module_name) {
-            let display = path.display();
+            let pod_section = self.format_pod_for_hover(&path);
+            let display = path.display().to_string();
             if let Ok(file_uri) = url::Url::from_file_path(&path) {
                 return json!({
                     "contents": {
                         "kind": "markdown",
                         "value": format!(
-                            "**{}**\n\nResolved: `{}`\n\n[Go to module]({})",
-                            module_name, display, file_uri
+                            "**{module_name}**\n\n`{display}`\n\n[Go to module]({file_uri}){pod_section}"
                         ),
                     },
                 });
@@ -274,8 +277,7 @@ impl LspServer {
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{}**\n\nResolved: `{}`",
-                        module_name, display
+                        "**{module_name}**\n\n`{display}`{pod_section}"
                     ),
                 },
             });
@@ -296,6 +298,43 @@ impl LspServer {
                 ),
             },
         })
+    }
+
+    /// Extract POD documentation from a module file and format it for hover display.
+    ///
+    /// Uses a per-path cache to avoid re-parsing on every hover request.
+    /// Returns an empty string if no POD is found or the file cannot be read.
+    fn format_pod_for_hover(&self, path: &Path) -> String {
+        let pod = {
+            let mut cache = self.pod_cache.lock();
+            if let Some(cached) = cache.get(path) {
+                cached.clone()
+            } else {
+                let doc = perl_pod::extract_pod_from_file(path).unwrap_or_default();
+                cache.insert(path.to_path_buf(), doc.clone());
+                doc
+            }
+        };
+
+        if pod.is_empty() {
+            return String::new();
+        }
+
+        let mut parts = Vec::new();
+
+        if let Some(ref synopsis) = pod.synopsis {
+            parts.push(format!("## Synopsis\n\n```perl\n{synopsis}\n```"));
+        }
+
+        if let Some(ref description) = pod.description {
+            parts.push(format!("## Description\n\n{description}"));
+        }
+
+        if parts.is_empty() {
+            return String::new();
+        }
+
+        format!("\n\n---\n\n{}", parts.join("\n\n"))
     }
 
     /// Handle textDocument/hover request with cancellation support
