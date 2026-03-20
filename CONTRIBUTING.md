@@ -185,8 +185,18 @@ See [STABILITY.md](docs/reference/STABILITY.md) for our API stability policy.
 
 ## Getting Help
 
-- **Issues**: [Browse or create issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
-- **Discussions**: Use [GitHub Discussions](https://github.com/EffortlessMetrics/perl-lsp/discussions) for questions and ideas
+Use the right channel for the fastest response:
+
+| Channel | Use for |
+|---------|---------|
+| [GitHub Discussions - Q&A](https://github.com/EffortlessMetrics/perl-lsp/discussions/categories/q-a) | Editor setup, configuration, how-to questions |
+| [GitHub Discussions - Ideas](https://github.com/EffortlessMetrics/perl-lsp/discussions/categories/ideas) | Feature brainstorming before opening a formal issue |
+| [GitHub Discussions - Show & Tell](https://github.com/EffortlessMetrics/perl-lsp/discussions/categories/show-and-tell) | Configs, workflows, and integrations to share |
+| [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues) | Bug reports and confirmed feature requests |
+
+> Note: Discussions must be enabled in repository settings before the links above are active.
+> See [#2169](https://github.com/EffortlessMetrics/perl-lsp/issues/2169) for the tracking issue.
+
 - **Docs**: See `docs/` for detailed guides -- start with [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md)
 
 ## Code of Conduct
