@@ -229,12 +229,15 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 | Resource | Description |
 |----------|-------------|
 | **[Getting Started](docs/tutorials/GETTING_STARTED.md)** | Installation, editor setup, and first-run walkthrough |
+| [Full Documentation Index](docs/INDEX.md) | Complete guide to all project documentation |
 | [Current Status](docs/project/CURRENT_STATUS.md) | Live project metrics |
 | [Roadmap](docs/project/ROADMAP.md) | Version milestones and planning |
+| [Troubleshooting](docs/how-to/TROUBLESHOOTING.md) | Common issues and solutions |
 | [features.toml](features.toml) | Canonical LSP feature catalog |
 | [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
-| [docs/](docs/README.md) | Full documentation index |
+| [Contributing](CONTRIBUTING.md) | Development guidelines and workflow |
+| [Changelog](CHANGELOG.md) | Release history and notable changes |
 
 ## History
 
