@@ -549,12 +549,18 @@ impl<'a> Parser<'a> {
                         } else if Self::is_nullary_builtin(name) {
                             // Nullary builtins (shift, pop, caller, wantarray, etc.) can also
                             // take an explicit sigil-starting argument, e.g. `shift @arr`.
+                            // Special case: `caller N` — caller accepts an optional stack-level
+                            // number (e.g. `caller 0`, `caller 1`).
                             let next_is_sigil_arg = self.tokens.peek().ok().is_some_and(|t| {
                                 t.text.starts_with('@')
                                     || t.text.starts_with('$')
                                     || t.text.starts_with('%')
                             });
-                            let args = if next_is_sigil_arg && !self.is_at_statement_end() {
+                            let next_is_caller_level = name == "caller"
+                                && self.peek_kind() == Some(TokenKind::Number);
+                            let args = if (next_is_sigil_arg || next_is_caller_level)
+                                && !self.is_at_statement_end()
+                            {
                                 vec![self.parse_ternary()?]
                             } else {
                                 vec![]
@@ -611,9 +617,23 @@ impl<'a> Parser<'a> {
                             let is_comma_terminated =
                                 self.peek_kind() == Some(TokenKind::Comma);
 
+                            // String comparison operators (eq, ne, lt, le, gt, ge) are
+                            // tokenized as Identifiers. A builtin followed by one of these
+                            // should be treated as having no arguments, so that
+                            // `ref eq 'CODE'` parses as `ref() eq 'CODE'` (not `ref(eq)`).
+                            let is_str_op_terminated = self.peek_kind()
+                                == Some(TokenKind::Identifier)
+                                && self.tokens.peek().ok().is_some_and(|t| {
+                                    matches!(
+                                        t.text.as_ref(),
+                                        "eq" | "ne" | "lt" | "le" | "gt" | "ge"
+                                    )
+                                });
+
                             if self.is_at_statement_end()
                                 || is_nullary_without_args
                                 || is_comma_terminated
+                                || is_str_op_terminated
                             {
                                 // Bare builtin with no arguments
                                 expr = Node::new(
