@@ -188,7 +188,11 @@ impl LspServer {
 
         eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
 
-        // Incremental text sync: ropey handles range-based edits correctly
+        // TextDocumentSyncKind::Incremental (2): the client sends incremental
+        // text edits (range + replacement) and the server applies them to its
+        // in-memory Rope.  This is correct even though we do a full reparse
+        // after each edit — the sync kind governs how *text* is transferred,
+        // not whether parsing is incremental.  Incremental parsing is future work.
         let sync_kind = 2;
 
         // Build capabilities using catalog-driven approach
