@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/perl-dap-config"
 keywords = ["perl", "dap", "debug", "configuration", "launch"]
 categories = ["development-tools::debugging", "command-line-interface"]
-include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [lib]
 name = "perl_dap_config"

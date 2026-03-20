@@ -13,6 +13,7 @@ keywords = ["perl", "lsp", "document-highlight", "ide", "language-server"]
 categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
+  "tests/**",
   "Cargo.toml",
   "LICENSE*"
 ]
