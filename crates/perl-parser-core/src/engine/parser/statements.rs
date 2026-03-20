@@ -786,6 +786,19 @@ impl<'a> Parser<'a> {
                                 // ExpectTerm mode so it becomes a regex.
                                 self.tokens.relex_as_term();
                                 args.push(self.parse_assignment()?);
+                            } else if self.peek_kind() == Some(TokenKind::LeftParen)
+                                && (Self::is_block_list_func(func_name.as_ref())
+                                    || matches!(
+                                        func_name.as_ref(),
+                                        "exec" | "system" | "print" | "say" | "printf"
+                                    ))
+                            {
+                                // block-list and filehandle builtins followed by (...) use
+                                // parse_args() so that `map({...} keys ...)` and
+                                // `exec({...} @prog)` work: the block/hash inside the parens
+                                // may be followed by the list without a separating comma.
+                                let paren_args = self.parse_args()?;
+                                args.extend(paren_args);
                             } else {
                                 // For builtins, use parse_assignment_or_declaration to handle
                                 // my/our/local/state declarations inside argument lists

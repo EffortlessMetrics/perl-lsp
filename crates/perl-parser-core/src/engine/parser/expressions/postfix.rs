@@ -418,16 +418,57 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_ternary()?);
                                 }
                             } else {
-                                // Other builtins - parse {} as first argument
+                                // Other builtins - parse {} as first argument (filehandle or hash)
                                 args.push(self.parse_hash_or_block()?);
 
-                                // Parse remaining arguments separated by commas or fat arrows
-                                while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
-                                    self.consume_token()?; // consume comma or fat arrow
-                                    if self.is_at_statement_end() {
-                                        break;
+                                // For print/say/printf/exec/system, `{ $fh } $args` uses
+                                // the block as a filehandle and args follow without a comma.
+                                // Collect trailing args without requiring commas first.
+                                let is_fh_builtin = matches!(
+                                    name.as_str(),
+                                    "print" | "say" | "printf" | "exec" | "system"
+                                );
+                                if is_fh_builtin && !self.is_at_statement_end()
+                                    && !matches!(
+                                        self.peek_kind(),
+                                        Some(TokenKind::Comma | TokenKind::FatArrow)
+                                    )
+                                {
+                                    // No comma — treat the block as a filehandle and parse the list.
+                                    while !self.is_at_statement_end()
+                                        && !matches!(
+                                            self.peek_kind(),
+                                            Some(
+                                                TokenKind::WordOr
+                                                    | TokenKind::WordAnd
+                                                    | TokenKind::WordXor
+                                                    | TokenKind::WordNot
+                                            )
+                                        )
+                                    {
+                                        if matches!(
+                                            self.peek_kind(),
+                                            Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                        ) {
+                                            self.consume_token()?;
+                                        }
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_ternary()?);
                                     }
-                                    args.push(self.parse_comma()?);
+                                } else {
+                                    // Parse remaining arguments separated by commas or fat arrows
+                                    while matches!(
+                                        self.peek_kind(),
+                                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                    ) {
+                                        self.consume_token()?; // consume comma or fat arrow
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_comma()?);
+                                    }
                                 }
                             }
 
@@ -616,6 +657,55 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_ternary()?);
                                     }
+                                } else if name == "sort"
+                                    && matches!(self.peek_kind(), Some(TokenKind::Identifier))
+                                    && self.tokens.peek().ok().is_some_and(|t| {
+                                        // Named comparator: lowercase identifier that's not a
+                                        // binary string op. e.g. `sort cmp_events @list`
+                                        let txt: &str = &t.text;
+                                        !txt.is_empty()
+                                            && txt.starts_with(|c: char| {
+                                                c.is_ascii_lowercase() || c == '_'
+                                            })
+                                            && !matches!(
+                                                txt,
+                                                "eq" | "ne"
+                                                    | "lt"
+                                                    | "le"
+                                                    | "gt"
+                                                    | "ge"
+                                                    | "cmp"
+                                                    | "x"
+                                            )
+                                    })
+                                {
+                                    // sort FUNCNAME LIST — `sort by_name @list`
+                                    // Parse the comparator function name as the first arg,
+                                    // then collect the list to sort.
+                                    args.push(self.parse_ternary()?);
+
+                                    while !self.is_at_statement_end()
+                                        && !matches!(
+                                            self.peek_kind(),
+                                            Some(
+                                                TokenKind::WordOr
+                                                    | TokenKind::WordAnd
+                                                    | TokenKind::WordXor
+                                                    | TokenKind::WordNot
+                                            )
+                                        )
+                                    {
+                                        if matches!(
+                                            self.peek_kind(),
+                                            Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                        ) {
+                                            self.consume_token()?;
+                                        }
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_ternary()?);
+                                    }
                                 } else if name == "bless"
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
@@ -629,6 +719,34 @@ impl<'a> Parser<'a> {
                                             break;
                                         }
                                         args.push(self.parse_assignment()?);
+                                    }
+                                } else if matches!(name.as_str(), "print" | "say" | "printf" | "exec" | "system")
+                                    && self.peek_kind() == Some(TokenKind::LeftBrace)
+                                {
+                                    // print { $fh } ARGS — block-form filehandle in expr context
+                                    // Parse the block as the filehandle, then the remaining args.
+                                    args.push(self.parse_hash_or_block()?);
+                                    while !self.is_at_statement_end()
+                                        && !matches!(
+                                            self.peek_kind(),
+                                            Some(
+                                                TokenKind::WordOr
+                                                    | TokenKind::WordAnd
+                                                    | TokenKind::WordXor
+                                                    | TokenKind::WordNot
+                                            )
+                                        )
+                                    {
+                                        if matches!(
+                                            self.peek_kind(),
+                                            Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                        ) {
+                                            self.consume_token()?;
+                                        }
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_ternary()?);
                                     }
                                 } else if matches!(name.as_str(), "split" | "grep" | "map" | "sort")
                                     && self.peek_kind() == Some(TokenKind::Slash)
@@ -649,6 +767,52 @@ impl<'a> Parser<'a> {
                                 } else {
                                     // Parse the first argument
                                     args.push(self.parse_ternary()?);
+
+                                    // Special case: print/say/printf/exec with indirect filehandle.
+                                    // `print $fh $msg` — $fh is the filehandle (no comma before $msg).
+                                    // After the first arg, if next is a sigil/string without comma,
+                                    // treat first arg as filehandle and continue parsing the list.
+                                    if matches!(
+                                        name.as_str(),
+                                        "print" | "say" | "printf" | "exec" | "system"
+                                    ) && !self.is_at_statement_end()
+                                        && !matches!(
+                                            self.peek_kind(),
+                                            Some(
+                                                TokenKind::Comma
+                                                    | TokenKind::FatArrow
+                                                    | TokenKind::WordOr
+                                                    | TokenKind::WordAnd
+                                                    | TokenKind::WordXor
+                                                    | TokenKind::WordNot
+                                            )
+                                        )
+                                    {
+                                        // No comma after first arg — it's an indirect filehandle.
+                                        // Parse the remaining args (the actual list to print).
+                                        while !self.is_at_statement_end()
+                                            && !matches!(
+                                                self.peek_kind(),
+                                                Some(
+                                                    TokenKind::WordOr
+                                                        | TokenKind::WordAnd
+                                                        | TokenKind::WordXor
+                                                        | TokenKind::WordNot
+                                                )
+                                            )
+                                        {
+                                            if matches!(
+                                                self.peek_kind(),
+                                                Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                            ) {
+                                                self.consume_token()?;
+                                            }
+                                            if self.is_at_statement_end() {
+                                                break;
+                                            }
+                                            args.push(self.parse_ternary()?);
+                                        }
+                                    }
 
                                     // Parse remaining arguments separated by commas or fat arrows
                                     // Perl allows `push @array => $value` as well as commas
