@@ -229,7 +229,23 @@ impl<'a> Parser<'a> {
             // Format declarations
             TokenKind::Format => self.parse_format(),
 
-            // Phase blocks
+            // Phase blocks — but first check for label syntax (CHECK: ..., BEGIN: ..., etc.)
+            // In Perl, phase-block keywords are valid statement labels when followed by `:`.
+            // e.g. `CHECK: for (my $i = 0; ...)` uses CHECK as a loop label, not a phase block.
+            TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .map(|t| t.kind == TokenKind::Colon)
+                    .unwrap_or(false) =>
+            {
+                self.parse_keyword_as_label()
+            }
             TokenKind::Begin
             | TokenKind::End
             | TokenKind::Check
@@ -1046,6 +1062,34 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::LoopControl { op, label },
+            SourceLocation { start, end },
+        ))
+    }
+
+    /// Parse a phase-block keyword token used as a statement label.
+    ///
+    /// Perl allows phase-block keywords (BEGIN, END, CHECK, INIT, UNITCHECK) as
+    /// statement labels when followed by `:`.  Because these tokenise as their own
+    /// `TokenKind` variants rather than `TokenKind::Identifier`, the standard
+    /// `parse_labeled_statement` (which calls `expect(TokenKind::Identifier)`)
+    /// cannot handle them.  This function consumes the keyword token, then the
+    /// `:`, then the subordinate statement, producing a `LabeledStatement` node.
+    fn parse_keyword_as_label(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+
+        // Consume the phase-keyword token (BEGIN / END / CHECK / INIT / UNITCHECK)
+        let label_token = self.consume_token()?;
+        let label = label_token.text.to_string();
+
+        // Consume the `:`
+        self.expect(TokenKind::Colon)?;
+
+        // Parse the statement that follows the label
+        let statement = Box::new(self.parse_statement()?);
+
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::LabeledStatement { label, statement },
             SourceLocation { start, end },
         ))
     }
