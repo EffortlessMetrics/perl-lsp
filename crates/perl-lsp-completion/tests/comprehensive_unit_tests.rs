@@ -437,6 +437,41 @@ fn moo_has_option_after_comma() {
     assert!(has_label(&items, "isa"), "should suggest 'isa' after comma");
 }
 
+// ===========================================================================
+// 9. Test::More hover documentation
+// ===========================================================================
+
+#[test]
+fn test_get_test_more_documentation_for_is() {
+    let doc = perl_lsp_completion::get_test_more_documentation("is");
+    let (sig, desc) = must_some(doc);
+    assert!(sig.contains("is("), "signature should contain 'is('");
+    assert!(!desc.is_empty(), "description should not be empty");
+}
+
+#[test]
+fn test_get_test_more_documentation_for_ok() {
+    let doc = perl_lsp_completion::get_test_more_documentation("ok");
+    let (sig, desc) = must_some(doc);
+    assert!(sig.contains("ok("), "signature should contain 'ok('");
+    assert!(!desc.is_empty(), "description should not be empty");
+}
+
+#[test]
+fn test_get_test_more_documentation_unknown_returns_none() {
+    let doc = perl_lsp_completion::get_test_more_documentation("not_a_test_function");
+    assert!(doc.is_none(), "unknown function should return None");
+}
+
+#[test]
+fn test_get_test_more_documentation_covers_core_assertions() {
+    let core_fns = ["ok", "is", "isnt", "like", "unlike", "is_deeply", "isa_ok", "can_ok"];
+    for name in core_fns {
+        let doc = perl_lsp_completion::get_test_more_documentation(name);
+        assert!(doc.is_some(), "'{}' should have Test::More documentation", name);
+    }
+}
+
 #[test]
 fn moo_has_option_not_in_value_position() {
     let code = "use Moo;\nhas 'name' => (is => ";

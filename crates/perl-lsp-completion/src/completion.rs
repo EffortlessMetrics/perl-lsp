@@ -101,13 +101,14 @@ mod regex_patterns;
 pub(crate) mod scope_distance;
 mod snippets;
 mod sort;
-mod test_more;
+pub(crate) mod test_more;
 mod variables;
 mod workspace;
 
 // Re-export public types
 pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
+pub use self::test_more::get_test_more_documentation;
 
 use perl_parser_core::ast::Node;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
