@@ -198,6 +198,7 @@ impl LspServer {
                         InternalCodeActionKind::Source => "source",
                         InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
                         InternalCodeActionKind::SourceFixAll => "source.fixAll",
+                        InternalCodeActionKind::SourceModernize => "source.modernize",
                     },
                     "edit": {
                         "changes": changes,
@@ -246,6 +247,7 @@ impl LspServer {
                         InternalCodeActionKind::Source => "source",
                         InternalCodeActionKind::SourceOrganizeImports => "source.organizeImports",
                         InternalCodeActionKind::SourceFixAll => "source.fixAll",
+                        InternalCodeActionKind::SourceModernize => "source.modernize",
                     },
                     "edit": {
                         "changes": changes,
