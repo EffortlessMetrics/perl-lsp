@@ -36,6 +36,13 @@ pub struct ServerConfig {
 
     /// Whether telemetry events are enabled.
     pub telemetry_enabled: bool,
+
+    /// Whether external perlcritic diagnostics are enabled (opt-in).
+    ///
+    /// When enabled, the server will run `perlcritic` on open documents and
+    /// merge violations into the diagnostic stream. Requires `perlcritic` to
+    /// be installed on the system; silently skipped if not available.
+    pub perlcritic_enabled: bool,
 }
 
 impl Default for ServerConfig {
@@ -51,6 +58,7 @@ impl Default for ServerConfig {
             test_runner_args: vec![],
             test_runner_timeout: 60000,
             telemetry_enabled: false,
+            perlcritic_enabled: false,
         }
     }
 }
@@ -96,6 +104,12 @@ impl ServerConfig {
             && let Some(enabled) = telemetry.get("enabled").and_then(|v| v.as_bool())
         {
             self.telemetry_enabled = enabled;
+        }
+
+        if let Some(critic) = settings.get("perlcritic") {
+            if let Some(enabled) = critic.get("enabled").and_then(|v| v.as_bool()) {
+                self.perlcritic_enabled = enabled;
+            }
         }
     }
 }
@@ -216,6 +230,21 @@ mod tests {
     fn server_config_default_telemetry_disabled() {
         let config = ServerConfig::default();
         assert!(!config.telemetry_enabled, "telemetry disabled by default");
+    }
+
+    #[test]
+    fn server_config_default_perlcritic_disabled() {
+        let config = ServerConfig::default();
+        assert!(!config.perlcritic_enabled, "perlcritic disabled by default (opt-in)");
+    }
+
+    #[test]
+    fn server_config_perlcritic_enabled_via_update() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({
+            "perlcritic": { "enabled": true }
+        }));
+        assert!(config.perlcritic_enabled);
     }
 
     // ── ServerConfig::update_from_value ──────────────────────

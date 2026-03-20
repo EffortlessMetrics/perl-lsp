@@ -5,6 +5,7 @@
 //! - Pull diagnostics: Client-initiated via `textDocument/diagnostic` and `workspace/diagnostic`
 
 use super::*;
+use crate::features::diagnostics::Diagnostic as InternalDiagnostic;
 
 impl LspServer {
     /// Generate markdown-formatted diagnostic message (LSP 3.18)
@@ -45,6 +46,7 @@ impl LspServer {
     /// - Parse errors from Perl parser
     /// - Unused variable warnings from scope analysis
     /// - Perl::Critic built-in policy violations
+    /// - External perlcritic violations (opt-in via config)
     /// - Semantic errors from type inference
     ///
     /// # Performance
@@ -64,30 +66,11 @@ impl LspServer {
                 let built_in_analyzer = BuiltInAnalyzer::new();
                 let violations = built_in_analyzer.analyze(ast, &doc.text);
                 for violation in violations {
-                    use crate::features::diagnostics::Diagnostic as InternalDiagnostic;
-                    // Convert lsp_types::DiagnosticSeverity to internal DiagnosticSeverity
-                    let lsp_severity = violation.severity.to_diagnostic_severity();
-                    let internal_severity = match lsp_severity {
-                        lsp_types::DiagnosticSeverity::ERROR => InternalDiagnosticSeverity::Error,
-                        lsp_types::DiagnosticSeverity::WARNING => {
-                            InternalDiagnosticSeverity::Warning
-                        }
-                        lsp_types::DiagnosticSeverity::INFORMATION => {
-                            InternalDiagnosticSeverity::Information
-                        }
-                        lsp_types::DiagnosticSeverity::HINT => InternalDiagnosticSeverity::Hint,
-                        _ => InternalDiagnosticSeverity::Hint, // fallback for unknown severities
-                    };
-                    diagnostics.push(InternalDiagnostic {
-                        range: (violation.range.start.byte, violation.range.end.byte),
-                        severity: internal_severity,
-                        code: Some(violation.policy),
-                        message: violation.description,
-                        related_information: Vec::new(),
-                        tags: Vec::new(),
-                        suggestion: None,
-                    });
+                    diagnostics.push(builtin_violation_to_diagnostic(&violation));
                 }
+
+                // Add external perlcritic diagnostics (opt-in)
+                self.collect_external_perlcritic_diagnostics(uri, &mut diagnostics);
 
                 // Convert to LSP diagnostics
                 diagnostics
@@ -218,7 +201,11 @@ impl LspServer {
                 // Get diagnostics from the existing provider
                 if let Some(ast) = &doc.ast {
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+                    let mut diagnostics =
+                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+
+                    // Add external perlcritic diagnostics (opt-in)
+                    self.collect_external_perlcritic_diagnostics(uri, &mut diagnostics);
 
                     // Generate a result ID based on content
                     let result_id = format!("{:x}", md5::compute(&doc.text));
@@ -366,7 +353,10 @@ impl LspServer {
 
             if let Some(ast) = &doc.ast {
                 let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+                let mut diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+
+                // Add external perlcritic diagnostics (opt-in)
+                self.collect_external_perlcritic_diagnostics(uri_str, &mut diagnostics);
 
                 // Generate result ID
                 let result_id = format!("{:x}", md5::compute(&doc.text));
@@ -478,5 +468,95 @@ impl LspServer {
         }
 
         Ok(Some(json!({ "items": items })))
+    }
+
+    /// Collect external perlcritic diagnostics if the feature is enabled.
+    ///
+    /// Checks the `perlcritic_enabled` config flag and whether `perlcritic` is
+    /// installed on the system. If both conditions are met, runs perlcritic on
+    /// the file and appends violations as Warning-severity diagnostics.
+    /// Silently skips if perlcritic is not installed or the URI is not a file.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn collect_external_perlcritic_diagnostics(
+        &self,
+        uri: &str,
+        diagnostics: &mut Vec<InternalDiagnostic>,
+    ) {
+        // Check config: perlcritic must be explicitly enabled (opt-in)
+        if !self.config.lock().perlcritic_enabled {
+            return;
+        }
+
+        // Convert URI to file system path; skip non-file URIs
+        let file_path = match url::Url::parse(uri).ok().and_then(|u| u.to_file_path().ok()) {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Silently skip if perlcritic is not installed
+        if !crate::execute_command::command_exists("perlcritic") {
+            return;
+        }
+
+        let config = crate::perl_critic::CriticConfig::default();
+        let mut analyzer = crate::perl_critic::CriticAnalyzer::with_os_runtime(config);
+
+        match analyzer.analyze_file(&file_path) {
+            Ok(violations) => {
+                for v in violations {
+                    let severity = match v.severity {
+                        crate::perl_critic::Severity::Brutal
+                        | crate::perl_critic::Severity::Cruel => {
+                            InternalDiagnosticSeverity::Warning
+                        }
+                        _ => InternalDiagnosticSeverity::Information,
+                    };
+                    diagnostics.push(InternalDiagnostic {
+                        range: (v.range.start.byte, v.range.end.byte),
+                        severity,
+                        code: Some(format!("PC:{}", v.policy)),
+                        message: v.description,
+                        related_information: Vec::new(),
+                        tags: Vec::new(),
+                        suggestion: None,
+                    });
+                }
+            }
+            Err(e) => {
+                eprintln!("perlcritic failed for {}: {}", uri, e);
+            }
+        }
+    }
+
+    /// No-op stub for WASM targets where subprocess execution is unavailable.
+    #[cfg(target_arch = "wasm32")]
+    fn collect_external_perlcritic_diagnostics(
+        &self,
+        _uri: &str,
+        _diagnostics: &mut Vec<InternalDiagnostic>,
+    ) {
+    }
+}
+
+/// Convert a built-in analyzer violation to an internal diagnostic.
+fn builtin_violation_to_diagnostic(
+    violation: &crate::perl_critic::Violation,
+) -> InternalDiagnostic {
+    let lsp_severity = violation.severity.to_diagnostic_severity();
+    let internal_severity = match lsp_severity {
+        lsp_types::DiagnosticSeverity::ERROR => InternalDiagnosticSeverity::Error,
+        lsp_types::DiagnosticSeverity::WARNING => InternalDiagnosticSeverity::Warning,
+        lsp_types::DiagnosticSeverity::INFORMATION => InternalDiagnosticSeverity::Information,
+        lsp_types::DiagnosticSeverity::HINT => InternalDiagnosticSeverity::Hint,
+        _ => InternalDiagnosticSeverity::Hint,
+    };
+    InternalDiagnostic {
+        range: (violation.range.start.byte, violation.range.end.byte),
+        severity: internal_severity,
+        code: Some(violation.policy.clone()),
+        message: violation.description.clone(),
+        related_information: Vec::new(),
+        tags: Vec::new(),
+        suggestion: None,
     }
 }
