@@ -88,6 +88,7 @@
 //! - **Cancellation aware**: Respects LSP cancellation for responsiveness
 //! - **Memory efficient**: Uses streaming iteration without loading all results
 
+pub(crate) mod auto_import;
 mod builtins;
 mod context;
 mod file_path;
@@ -745,31 +746,34 @@ impl CompletionProvider {
     fn analyze_context(&self, source: &str, position: usize) -> CompletionContext {
         // Find the word being typed
         // Special handling for method calls: include the -> and the receiver
-        let (word_prefix, prefix_start) =
-            if position >= 2 && &source[position.saturating_sub(2)..position] == "->" {
-                // We're right after ->, find the receiver variable
-                let receiver_start = source[..position.saturating_sub(2)]
-                    .rfind(|c: char| {
-                        !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%'
-                    })
-                    .map(|p| p + 1)
-                    .unwrap_or(0);
-                (source[receiver_start..position].to_string(), receiver_start)
-            } else {
-                let word_start = source[..position]
-                    .rfind(|c: char| {
-                        !c.is_alphanumeric()
-                            && c != '_'
-                            && c != ':'
-                            && c != '$'
-                            && c != '@'
-                            && c != '%'
-                            && c != '&'
-                    })
-                    .map(|p| p + 1)
-                    .unwrap_or(0);
-                (source[word_start..position].to_string(), word_start)
-            };
+        let (word_prefix, prefix_start) = if position >= 2
+            && &source[position.saturating_sub(2)..position] == "->"
+        {
+            // We're right after ->, find the receiver variable or package name.
+            // Include ':' so that qualified package names like `My::Package->` are
+            // captured as a single receiver token rather than truncated at `::`.
+            let receiver_start = source[..position.saturating_sub(2)]
+                .rfind(|c: char| {
+                    !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%' && c != ':'
+                })
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            (source[receiver_start..position].to_string(), receiver_start)
+        } else {
+            let word_start = source[..position]
+                .rfind(|c: char| {
+                    !c.is_alphanumeric()
+                        && c != '_'
+                        && c != ':'
+                        && c != '$'
+                        && c != '@'
+                        && c != '%'
+                        && c != '&'
+                })
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            (source[word_start..position].to_string(), word_start)
+        };
 
         // Detect trigger character (trigger chars are ASCII, so byte access is safe)
         let trigger_character = if position > 0 {

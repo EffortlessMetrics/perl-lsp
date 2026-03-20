@@ -439,6 +439,26 @@ impl LspServer {
                             item["commitCharacters"] = json!([";", " ", ")", "]", "}"]);
                         }
 
+                        // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
+                        if !c.additional_edits.is_empty() {
+                            let edits: Vec<Value> = c
+                                .additional_edits
+                                .iter()
+                                .map(|(loc, new_text)| {
+                                    let (sl, sc) = self.offset_to_pos16(doc, loc.start);
+                                    let (el, ec) = self.offset_to_pos16(doc, loc.end);
+                                    json!({
+                                        "range": {
+                                            "start": { "line": sl, "character": sc },
+                                            "end": { "line": el, "character": ec }
+                                        },
+                                        "newText": new_text
+                                    })
+                                })
+                                .collect();
+                            item["additionalTextEdits"] = json!(edits);
+                        }
+
                         item
                     })
                     .collect();
@@ -610,6 +630,26 @@ impl LspServer {
                                 "kind": "markdown",
                                 "value": documentation
                             });
+                        }
+
+                        // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
+                        if !c.additional_edits.is_empty() {
+                            let edits: Vec<Value> = c
+                                .additional_edits
+                                .iter()
+                                .map(|(loc, new_text)| {
+                                    let (sl, sc) = self.offset_to_pos16(doc, loc.start);
+                                    let (el, ec) = self.offset_to_pos16(doc, loc.end);
+                                    json!({
+                                        "range": {
+                                            "start": { "line": sl, "character": sc },
+                                            "end": { "line": el, "character": ec }
+                                        },
+                                        "newText": new_text
+                                    })
+                                })
+                                .collect();
+                            item["additionalTextEdits"] = json!(edits);
                         }
 
                         Some(item)

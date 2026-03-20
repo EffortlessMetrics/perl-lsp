@@ -5,6 +5,7 @@
 //! completion for `->` expressions, and general cross-file symbol completion.
 
 use super::{
+    auto_import,
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
@@ -337,6 +338,8 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
 ///
 /// When the user types `$obj->` or `Package->`, queries the workspace index for
 /// methods defined in the receiver's package and suggests them.
+///
+/// Auto-import edits are attached when the receiver package is not yet imported.
 pub fn add_workspace_method_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -362,6 +365,9 @@ pub fn add_workspace_method_completions(
     let method_prefix = context.prefix.rsplit("->").next().unwrap_or("");
     let members = index.get_package_members(&package_name);
 
+    // Build an auto-import edit once for all methods from this package.
+    let auto_import_edit = auto_import::build_auto_import_edit(source, &package_name);
+
     for symbol in members {
         match symbol.kind {
             WsSymbolKind::Subroutine | WsSymbolKind::Method => {}
@@ -377,6 +383,9 @@ pub fn add_workspace_method_completions(
             continue;
         }
 
+        let additional_edits =
+            auto_import_edit.as_ref().map(|e| vec![e.clone()]).unwrap_or_default();
+
         completions.push(CompletionItem {
             label: symbol.name.clone(),
             kind: CompletionItemKind::Function,
@@ -387,7 +396,7 @@ pub fn add_workspace_method_completions(
             insert_text: Some(format!("{}()", symbol.name)),
             sort_text: Some(format!("2_{}", symbol.name)), // After local, before generic
             filter_text: Some(symbol.name.clone()),
-            additional_edits: vec![],
+            additional_edits,
             text_edit_range: Some((context.prefix_start, context.position)),
         });
     }
