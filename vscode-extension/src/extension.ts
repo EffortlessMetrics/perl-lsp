@@ -144,6 +144,23 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
+        // Prefer the version already obtained from the initialize handshake —
+        // no subprocess needed and the result is instant.
+        const cachedVersion = healthWidget?.version;
+        if (cachedVersion) {
+            const binaryPath = currentServerPath ?? '<unknown>';
+            vscode.window.showInformationMessage(
+                `perl-lsp v${cachedVersion} (${binaryPath})`,
+                'Copy'
+            ).then(selection => {
+                if (selection === 'Copy') {
+                    void vscode.env.clipboard.writeText(`perl-lsp v${cachedVersion}`);
+                }
+            });
+            return;
+        }
+
+        // Fall back to running --version when the server has not yet started.
         if (!currentServerPath) {
             vscode.window.showErrorMessage('Perl LSP server path is unavailable.');
             return;
@@ -427,6 +444,11 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     bindClientState(client);
     await client.start();
     registerProgressHandler(client);
+    const version = client.initializeResult?.serverInfo?.version;
+    if (version && healthWidget) {
+        outputChannel.appendLine(`Perl Language Server version: ${version}`);
+        healthWidget.setVersion(version);
+    }
     await refreshTestAdapter(context);
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;

@@ -252,3 +252,101 @@ describe('HealthWidget — counts', () => {
         expect(widget.errorCount).toBe(7);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Version display (issue #2340)
+// ---------------------------------------------------------------------------
+
+describe('HealthWidget — version display', () => {
+    test('version accessor is undefined before setVersion', () => {
+        const { widget } = makeWidget();
+        expect(widget.version).toBeUndefined();
+    });
+
+    test('setVersion updates the accessor', () => {
+        const { widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        expect(widget.version).toBe('0.12.0');
+    });
+
+    test('running state without version shows plain "perl-lsp"', () => {
+        const { item, widget } = makeWidget();
+        widget.onStateChange(ClientState.Running);
+        expect(item.text).toBe('$(check) perl-lsp');
+    });
+
+    test('running state with version shows "perl-lsp v{version}"', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        widget.onStateChange(ClientState.Running);
+        expect(item.text).toBe('$(check) perl-lsp v0.12.0');
+    });
+
+    test('setVersion while running updates text immediately', () => {
+        const { item, widget } = makeWidget();
+        widget.onStateChange(ClientState.Running);
+        widget.setVersion('0.13.0');
+        expect(item.text).toBe('$(check) perl-lsp v0.13.0');
+    });
+
+    test('version is shown with file count', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        widget.setFileCount(100);
+        widget.onStateChange(ClientState.Running);
+        expect(item.text).toBe('$(check) perl-lsp v0.12.0: 100 files');
+    });
+
+    test('version is shown with error count', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        widget.setErrorCount(3);
+        widget.onStateChange(ClientState.Running);
+        expect(item.text).toBe('$(check) perl-lsp v0.12.0: 3 errors');
+    });
+
+    test('tooltip includes version when set', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        widget.onStateChange(ClientState.Running);
+        expect(item.tooltip).toContain('v0.12.0');
+    });
+
+    test('tooltip does not include version string when not set', () => {
+        const { item, widget } = makeWidget();
+        widget.onStateChange(ClientState.Running);
+        // The tooltip should not contain a version like "v0.12.0"
+        expect(item.tooltip).not.toMatch(/v\d+\.\d+/);
+    });
+
+    test('version does not affect stopped display', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        widget.onStateChange(ClientState.Stopped);
+        expect(item.text).toBe('$(error) perl-lsp: stopped');
+    });
+
+    test('version does not affect starting display', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        // widget is already in starting mode
+        expect(item.text).toBe('$(sync~spin) Perl LSP');
+    });
+
+    test('version does not affect indexing display', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        widget.onProgress('t', { kind: 'begin', title: 'Indexing' });
+        expect(item.text).not.toContain('v0.12.0');
+    });
+
+    test('after progress ends, running shows version again', () => {
+        const { item, widget } = makeWidget();
+        widget.setVersion('0.12.0');
+        widget.onStateChange(ClientState.Running);
+        widget.onProgress('t', { kind: 'begin', title: 'Indexing' });
+        widget.onProgress('t', { kind: 'end' });
+        expect(widget.mode).toBe('running');
+        expect(item.text).toBe('$(check) perl-lsp v0.12.0');
+    });
+});
