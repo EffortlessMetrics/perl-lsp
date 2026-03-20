@@ -498,13 +498,19 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
+            NodeKind::PhaseBlock { phase, phase_span: _, block } => {
                 // Handle BEGIN/END/INIT/CHECK/UNITCHECK blocks
                 self.semantic_tokens.push(SemanticToken {
                     location: node.location,
                     token_type: SemanticTokenType::Keyword,
                     modifiers: vec![],
                 });
+
+                let (signature, documentation) = phase_block_hover(phase);
+                self.hover_info.insert(
+                    node.location,
+                    HoverInfo { signature, documentation: Some(documentation), details: vec![] },
+                );
 
                 self.analyze_node(block, scope_id);
             }
@@ -1138,5 +1144,50 @@ impl SemanticAnalyzer {
 
             _ => None,
         }
+    }
+}
+
+/// Return `(signature, documentation)` for each Perl execution phase block.
+fn phase_block_hover(phase: &str) -> (String, String) {
+    match phase {
+        "BEGIN" => (
+            "BEGIN { ... }".to_string(),
+            "Executed at compile time, immediately when the block is fully compiled. \
+             Use for module loading, constant definition, and compile-time configuration. \
+             Runs before any runtime code in the file."
+                .to_string(),
+        ),
+        "END" => (
+            "END { ... }".to_string(),
+            "Executed during interpreter shutdown, after all runtime code has finished. \
+             Multiple END blocks run in reverse order of definition (LIFO). \
+             Use for cleanup, resource release, and shutdown logging."
+                .to_string(),
+        ),
+        "INIT" => (
+            "INIT { ... }".to_string(),
+            "Executed after compilation is complete but before the main program runs. \
+             Multiple INIT blocks run in order of definition (FIFO). \
+             Use for runtime initialization that must happen after all BEGIN blocks."
+                .to_string(),
+        ),
+        "CHECK" => (
+            "CHECK { ... }".to_string(),
+            "Executed at the end of the compilation phase, before INIT blocks. \
+             Multiple CHECK blocks run in reverse order of definition (LIFO). \
+             Use for compile-time validation and code checks."
+                .to_string(),
+        ),
+        "UNITCHECK" => (
+            "UNITCHECK { ... }".to_string(),
+            "Executed immediately after the compilation unit (file or string eval) finishes compiling. \
+             Runs before CHECK and INIT blocks. \
+             Use for per-unit initialization that depends on that unit being fully compiled."
+                .to_string(),
+        ),
+        other => (
+            format!("{other} {{ ... }}"),
+            format!("Perl execution phase block: {other}"),
+        ),
     }
 }
