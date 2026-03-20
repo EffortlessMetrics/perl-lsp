@@ -13,6 +13,8 @@ import {
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
+import { OnboardingManager } from './onboarding';
+import { generateBoilerplate } from './fileCreation';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -85,74 +87,6 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    const extractVariableCommand = vscode.commands.registerCommand('perl-lsp.extractVariable', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'perl') {
-            vscode.window.showErrorMessage('No active Perl file for extract variable');
-            return;
-        }
-        await vscode.commands.executeCommand('editor.action.codeAction', {
-            kind: 'refactor.extract',
-            preferred: false,
-            apply: 'ifSingle',
-        });
-    });
-
-    const extractMethodCommand = vscode.commands.registerCommand('perl-lsp.extractMethod', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'perl') {
-            vscode.window.showErrorMessage('No active Perl file for extract method');
-            return;
-        }
-        await vscode.commands.executeCommand('editor.action.codeAction', {
-            kind: 'refactor.extract',
-            preferred: false,
-            apply: 'ifSingle',
-        });
-    });
-
-    const showRefactoringOptionsCommand = vscode.commands.registerCommand('perl-lsp.showRefactoringOptions', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'perl') {
-            vscode.window.showErrorMessage('No active Perl file');
-            return;
-        }
-
-        interface RefactoringAction extends vscode.QuickPickItem {
-            command: string;
-            args?: unknown[];
-        }
-
-        const items: RefactoringAction[] = [
-            {
-                label: '$(symbol-variable) Extract Variable',
-                description: 'Shift+Alt+V',
-                detail: 'Extract selected expression into a new variable',
-                command: 'perl-lsp.extractVariable',
-            },
-            {
-                label: '$(symbol-method) Extract Method',
-                description: 'Shift+Alt+M',
-                detail: 'Extract selected code into a new subroutine',
-                command: 'perl-lsp.extractMethod',
-            },
-            {
-                label: '$(organization) Organize Use Statements',
-                description: 'Shift+Alt+O',
-                detail: 'Sort and deduplicate use statements',
-                command: 'perl-lsp.organizeImports',
-            },
-        ];
-
-        const selection = await vscode.window.showQuickPick(items, {
-            placeHolder: 'Select a refactoring action',
-        });
-
-        if (selection) {
-            await vscode.commands.executeCommand(selection.command, ...(selection.args ?? []));
-        }
-    });
-
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         if (!currentServerPath) {
             vscode.window.showErrorMessage('Perl LSP server path is unavailable.');
@@ -219,6 +153,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+            { label: '$(pulse) Run Health Check', detail: 'Check Perl, perltidy, and LSP binary', command: 'perl-lsp.runHealthCheck' },
             { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
@@ -231,6 +166,41 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (selection && selection.command && !selection.disabled) {
             vscode.commands.executeCommand(selection.command, ...(selection.args || []));
+        }
+    });
+
+    const runHealthCheckCommand = vscode.commands.registerCommand('perl-lsp.runHealthCheck', async (serverPath?: string | null) => {
+        const resolvedPath = serverPath !== undefined ? serverPath : currentServerPath;
+        const onboarding = new OnboardingManager(context, outputChannel);
+        const results = await onboarding.runSetupHealthCheck(resolvedPath ?? null);
+
+        const errors = results.filter(r => !r.ok && r.status === 'error');
+        const warnings = results.filter(r => !r.ok && r.status === 'warning');
+
+        const lines = results.map(r => {
+            const icon = r.ok ? '$(check)' : r.status === 'warning' ? '$(warning)' : '$(error)';
+            return `${icon} ${r.label}: ${r.detail}`;
+        });
+
+        outputChannel.appendLine('[health-check] Results:');
+        for (const line of lines) {
+            outputChannel.appendLine(`  ${line.replace(/\$\(\w[^)]*\)/g, '')}`);
+        }
+
+        if (errors.length > 0) {
+            const msg = `Health check failed: ${errors.map(e => e.label).join(', ')}`;
+            vscode.window.showErrorMessage(msg, 'Show Output').then(sel => {
+                if (sel === 'Show Output') { outputChannel.show(); }
+            });
+        } else if (warnings.length > 0) {
+            const msg = `Health check passed with warnings: ${warnings.map(w => w.detail).join(' | ')}`;
+            vscode.window.showWarningMessage(msg, 'Show Output').then(sel => {
+                if (sel === 'Show Output') { outputChannel.show(); }
+            });
+        } else {
+            vscode.window.showInformationMessage('Perl LSP health check passed.', 'Show Output').then(sel => {
+                if (sel === 'Show Output') { outputChannel.show(); }
+            });
         }
     });
 
@@ -258,24 +228,57 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const fileCreationWatcher = vscode.workspace.onDidCreateFiles(async (event) => {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        if (!config.get<boolean>('autoPopulateNewFiles', true)) {
+            return;
+        }
+
+        for (const uri of event.files) {
+            const boilerplate = generateBoilerplate(uri.fsPath);
+            if (!boilerplate) {
+                continue;
+            }
+
+            const doc = await vscode.workspace.openTextDocument(uri);
+            if (doc.getText().length > 0) {
+                // File already has content — don't overwrite
+                continue;
+            }
+
+            const edit = new vscode.WorkspaceEdit();
+            edit.insert(uri, new vscode.Position(0, 0), boilerplate.content);
+            await vscode.workspace.applyEdit(edit);
+        }
+    });
+
     context.subscriptions.push(
         showOutputCommand,
         restartCommand,
         organizeImportsCommand,
         runTestsCommand,
-        extractVariableCommand,
-        extractMethodCommand,
-        showRefactoringOptionsCommand,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,
+        runHealthCheckCommand,
         formatOnSaveDisposable,
         configurationWatcher,
+        fileCreationWatcher,
     );
 
     // Initialize debug adapter
     activateDebugger(context);
     await initializeLanguageClient(context);
+
+    // First-run onboarding: show welcome notification once per installation
+    const onboarding = new OnboardingManager(context, outputChannel);
+    if (onboarding.shouldShowWelcome()) {
+        // Fire-and-forget; failures must not block extension startup
+        onboarding.showWelcomeNotification(currentServerPath).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            outputChannel.appendLine(`[onboarding] Error showing welcome: ${msg}`);
+        });
+    }
 }
 
 export async function deactivate() {

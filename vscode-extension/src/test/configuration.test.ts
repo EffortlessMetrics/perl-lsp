@@ -345,6 +345,13 @@ describe('package.json contributes', () => {
       expect(setting.type).toBe('string');
       expect(setting.scope).toBe('machine');
     });
+
+    test('defines autoPopulateNewFiles with default true', () => {
+      const setting = properties['perl-lsp.autoPopulateNewFiles'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('boolean');
+      expect(setting.default).toBe(true);
+    });
   });
 
   describe('openConfigurationGuide command', () => {

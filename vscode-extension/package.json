@@ -276,6 +276,11 @@
           "default": true,
           "markdownDescription": "Enable `Test::More` and `Test2` integration"
         },
+        "perl-lsp.autoPopulateNewFiles": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Auto-populate new `.pm` files with a `package` declaration and new `.t` files with `Test::More` boilerplate."
+        },
         "perl-lsp.featureProfile": {
           "type": "string",
           "enum": [
