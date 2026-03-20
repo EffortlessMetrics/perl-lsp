@@ -87,6 +87,10 @@ impl DiagnosticsProvider {
         let scope_issues = scope_analyzer.analyze(ast, source, &pragma_map);
         diagnostics.extend(scope_issues_to_diagnostics(scope_issues));
 
+        // Detect heredoc anti-patterns
+        let heredoc_diags = crate::heredoc_antipatterns::detect_heredoc_antipatterns(source);
+        diagnostics.extend(heredoc_diags);
+
         diagnostics
     }
 }

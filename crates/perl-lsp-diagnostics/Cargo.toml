@@ -22,6 +22,7 @@ perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-pragma = { workspace = true }
+perl-ts-heredoc-analysis = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
