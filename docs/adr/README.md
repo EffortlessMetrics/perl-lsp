@@ -56,6 +56,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0034](0034-custom-lsp-runtime.md) | Accepted | 2026-03-18 | Custom LSP Runtime over Framework Adoption | Bespoke protocol/transport/runtime stack kept to support governance, transport reuse, and explicit dispatch control |
 | [ADR-0035](0035-deterministic-module-resolution.md) | Accepted | 2026-03-18 | Deterministic Module Resolution | Canonicalized names, explicit precedence, workspace-safe paths, and lib/ fallback for module lookup |
 | [ADR-0036](0036-marker-framed-debugger-queries.md) | Accepted | 2026-03-18 | Marker-Framed Debugger Queries | Unique debugger output markers plus poison-safe shared state for resilient native DAP queries |
+| [ADR-0038](0038-session-economics.md) | Accepted | 2026-03-19 | Session Economics | Agent lifecycle cost model and swarm wind-down policy to preserve context budget |
 
 ## About ADRs
 
