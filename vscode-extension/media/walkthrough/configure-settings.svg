@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect width="800" height="450" fill="#111827"/>
+  <rect x="40" y="20" width="720" height="410" rx="6" fill="#1e293b"/>
+  <text x="60" y="55" font-family="sans-serif" font-size="13" fill="#6b7280">Settings (Ctrl+,) — search "perl-lsp"</text>
+  <rect x="55" y="70" width="700" height="50" rx="4" fill="#0f172a"/>
+  <text x="75" y="100" font-family="sans-serif" font-size="14" fill="#94a3b8">Perl-lsp: Server Path</text>
+  <text x="75" y="120" font-family="sans-serif" font-size="11" fill="#475569">Leave empty to auto-download the latest release binary</text>
+  <rect x="55" y="130" width="700" height="50" rx="4" fill="#1e293b"/>
+  <text x="75" y="158" font-family="sans-serif" font-size="14" fill="#94a3b8">Perl-lsp: Include Paths</text>
+  <text x="75" y="178" font-family="sans-serif" font-size="11" fill="#475569">Additional @INC paths — default: lib, local/lib/perl5</text>
+  <rect x="55" y="190" width="700" height="50" rx="4" fill="#0f172a"/>
+  <text x="75" y="218" font-family="sans-serif" font-size="14" fill="#94a3b8">Perl-lsp: Enable Diagnostics</text>
+  <text x="75" y="238" font-family="sans-serif" font-size="11" fill="#475569">Enable real-time syntax diagnostics (default: true)</text>
+  <rect x="55" y="250" width="700" height="50" rx="4" fill="#1e293b"/>
+  <text x="75" y="278" font-family="sans-serif" font-size="14" fill="#94a3b8">Perl-lsp: Format On Save</text>
+  <text x="75" y="298" font-family="sans-serif" font-size="11" fill="#475569">Auto-format with perltidy on save (default: false)</text>
+  <rect x="55" y="310" width="700" height="50" rx="4" fill="#0f172a"/>
+  <text x="75" y="338" font-family="sans-serif" font-size="14" fill="#94a3b8">Perl-lsp: Trace Server</text>
+  <text x="75" y="358" font-family="sans-serif" font-size="11" fill="#475569">LSP communication verbosity: off | messages | verbose</text>
+</svg>

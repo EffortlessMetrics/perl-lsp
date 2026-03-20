@@ -56,7 +56,8 @@
     "onLanguage:perl",
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",
-    "onCommand:perl-lsp.reinstall"
+    "onCommand:perl-lsp.reinstall",
+    "onWalkthrough:perl-lsp.onboarding"
   ],
   "contributes": {
     "languages": [
@@ -339,6 +340,12 @@
         "title": "Run Health Check",
         "category": "Perl",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "perl-lsp.showWhatsNew",
+        "title": "Show What's New",
+        "category": "Perl",
+        "icon": "$(star-full)"
       }
     ],
     "menus": {
@@ -430,6 +437,78 @@
             "description": "Arguments to pass to the script"
           }
         }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "perl-lsp.onboarding",
+        "title": "Get Started with Perl LSP",
+        "description": "Set up perl-lsp and discover its key features.",
+        "steps": [
+          {
+            "id": "welcome",
+            "title": "Welcome to perl-lsp",
+            "description": "perl-lsp is a fast, native Perl 5 language server with go-to-definition, completions, diagnostics, refactoring, and debugging \u2014 all with zero runtime dependencies.\n\nThis walkthrough gets you productive in minutes.",
+            "media": {
+              "image": "media/walkthrough/welcome.svg",
+              "altText": "perl-lsp logo and feature summary"
+            }
+          },
+          {
+            "id": "verify-perl",
+            "title": "Verify Perl Is Installed",
+            "description": "perl-lsp requires Perl 5.10 or later.\n\nOpen a terminal and run:\n```\nperl -v\n```\nIf Perl is not installed, visit [perl.org/get.html](https://www.perl.org/get.html) or use **perlbrew** / **plenv** to manage versions.",
+            "media": {
+              "image": "media/walkthrough/verify-perl.svg",
+              "altText": "Terminal showing perl -v output"
+            }
+          },
+          {
+            "id": "open-project",
+            "title": "Open a Perl Project",
+            "description": "Open a folder containing your Perl files (**File > Open Folder...**). perl-lsp automatically activates on any `.pl`, `.pm`, `.t`, or `.psgi` file.\n\nFor best results, open the project root (where your `lib/` and `t/` directories live).",
+            "media": {
+              "image": "media/walkthrough/open-project.svg",
+              "altText": "VS Code Explorer showing a Perl project structure"
+            }
+          },
+          {
+            "id": "try-completion",
+            "title": "Try Code Completion",
+            "description": "Open a `.pl` or `.pm` file and start typing. Press **Ctrl+Space** to trigger completions manually.\n\nperl-lsp provides completions for built-in functions, variables, and symbols defined across your project.",
+            "media": {
+              "image": "media/walkthrough/try-completion.svg",
+              "altText": "Completion popup showing Perl built-in functions"
+            }
+          },
+          {
+            "id": "try-goto-definition",
+            "title": "Try Go-to-Definition",
+            "description": "**Ctrl+Click** (or press **F12**) on any function name or variable to jump to its definition \u2014 even across files in your project.\n\nUse **Alt+Left** to jump back.",
+            "media": {
+              "image": "media/walkthrough/try-goto-definition.svg",
+              "altText": "Go-to-definition jumping from a call site to the sub definition"
+            }
+          },
+          {
+            "id": "configure-settings",
+            "title": "Configure Key Settings",
+            "description": "Open **Settings** (Ctrl+,) and search for `perl-lsp` to customize the extension.\n\nKey settings:\n- **perl-lsp.includePaths** \u2014 extra `@INC` paths\n- **perl-lsp.enableFormatting** \u2014 enable perltidy integration\n- **perl-lsp.formatOnSave** \u2014 auto-format on save\n- **perl-lsp.serverPath** \u2014 use a custom server binary\n\n[Open Perl LSP Settings](command:workbench.action.openSettings?%5B%22perl-lsp%22%5D)",
+            "media": {
+              "image": "media/walkthrough/configure-settings.svg",
+              "altText": "VS Code settings panel showing perl-lsp options"
+            }
+          },
+          {
+            "id": "debug-first-script",
+            "title": "Debug Your First Script",
+            "description": "Set a breakpoint by clicking the gutter next to a line number. Press **F5** to start debugging.\n\nperl-lsp includes a built-in Perl debugger. Add a launch configuration via **Run > Add Configuration...** and choose **Perl: Launch Script**.\n\n[Add Debug Configuration](command:debug.addConfiguration)",
+            "media": {
+              "image": "media/walkthrough/debug-first-script.svg",
+              "altText": "Debugger paused at a breakpoint with variables panel showing"
+            }
+          }
+        ]
       }
     ]
   },
