@@ -6,6 +6,7 @@
 //! hover-position-lookup that can silently pass when hover returns null.
 
 use perl_semantic_analyzer::analysis::semantic::get_builtin_documentation;
+use perl_tdd_support::must_some;
 
 // ---------------------------------------------------------------------------
 // splice
@@ -13,7 +14,7 @@ use perl_semantic_analyzer::analysis::semantic::get_builtin_documentation;
 
 #[test]
 fn test_splice_scalar_context_doc() {
-    let doc = get_builtin_documentation("splice").expect("splice must have documentation");
+    let doc = must_some(get_builtin_documentation("splice"));
     assert!(
         doc.description.contains("scalar context"),
         "splice description must mention scalar context behavior: {}",
@@ -32,7 +33,7 @@ fn test_splice_scalar_context_doc() {
 
 #[test]
 fn test_sort_scalar_context_doc() {
-    let doc = get_builtin_documentation("sort").expect("sort must have documentation");
+    let doc = must_some(get_builtin_documentation("sort"));
     assert!(
         doc.description.contains("scalar context"),
         "sort description must warn about scalar context: {}",
@@ -57,7 +58,7 @@ fn test_sort_scalar_context_doc() {
 
 #[test]
 fn test_map_scalar_context_doc() {
-    let doc = get_builtin_documentation("map").expect("map must have documentation");
+    let doc = must_some(get_builtin_documentation("map"));
     assert!(
         doc.description.contains("scalar context"),
         "map description must mention scalar context behavior: {}",
@@ -71,7 +72,7 @@ fn test_map_scalar_context_doc() {
 
 #[test]
 fn test_grep_scalar_context_doc() {
-    let doc = get_builtin_documentation("grep").expect("grep must have documentation");
+    let doc = must_some(get_builtin_documentation("grep"));
     assert!(
         doc.description.contains("scalar context"),
         "grep description must mention scalar context count behavior: {}",
@@ -90,7 +91,7 @@ fn test_grep_scalar_context_doc() {
 
 #[test]
 fn test_wantarray_void_context_doc() {
-    let doc = get_builtin_documentation("wantarray").expect("wantarray must have documentation");
+    let doc = must_some(get_builtin_documentation("wantarray"));
     assert!(
         doc.description.contains("void context"),
         "wantarray description must mention void context returning undef: {}",
@@ -114,7 +115,7 @@ fn test_wantarray_void_context_doc() {
 
 #[test]
 fn test_keys_scalar_context_doc() {
-    let doc = get_builtin_documentation("keys").expect("keys must have documentation");
+    let doc = must_some(get_builtin_documentation("keys"));
     assert!(
         doc.description.contains("scalar context"),
         "keys description must mention scalar context: {}",
@@ -147,7 +148,7 @@ fn test_keys_scalar_context_doc() {
 
 #[test]
 fn test_values_scalar_context_doc() {
-    let doc = get_builtin_documentation("values").expect("values must have documentation");
+    let doc = must_some(get_builtin_documentation("values"));
     assert!(
         doc.description.contains("scalar context"),
         "values description must mention scalar context: {}",
@@ -166,7 +167,7 @@ fn test_values_scalar_context_doc() {
 
 #[test]
 fn test_each_iterator_reset_doc() {
-    let doc = get_builtin_documentation("each").expect("each must have documentation");
+    let doc = must_some(get_builtin_documentation("each"));
     assert!(
         doc.description.contains("resets") || doc.description.contains("reset"),
         "each description must mention iterator reset behavior: {}",
@@ -191,7 +192,7 @@ fn test_each_iterator_reset_doc() {
 
 #[test]
 fn test_stat_doc() {
-    let doc = get_builtin_documentation("stat").expect("stat must have documentation");
+    let doc = must_some(get_builtin_documentation("stat"));
     assert!(
         doc.description.contains("13"),
         "stat description must mention the 13-element return list: {}",
@@ -213,7 +214,7 @@ fn test_stat_doc() {
 
 #[test]
 fn test_caller_scalar_context_doc() {
-    let doc = get_builtin_documentation("caller").expect("caller must have documentation");
+    let doc = must_some(get_builtin_documentation("caller"));
     assert!(
         doc.description.contains("scalar context"),
         "caller description must mention scalar context (returns package name): {}",
@@ -232,7 +233,7 @@ fn test_caller_scalar_context_doc() {
 
 #[test]
 fn test_gmtime_context_doc() {
-    let doc = get_builtin_documentation("gmtime").expect("gmtime must have documentation");
+    let doc = must_some(get_builtin_documentation("gmtime"));
     assert!(
         doc.description.contains("scalar context"),
         "gmtime description must mention scalar context string form: {}",

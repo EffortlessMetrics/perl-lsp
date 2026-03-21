@@ -8,6 +8,7 @@
 use perl_semantic_analyzer::analysis::semantic::{
     get_attribute_documentation, get_moose_type_documentation,
 };
+use perl_tdd_support::must_some;
 
 // ---------------------------------------------------------------------------
 // get_moose_type_documentation — simple base types
@@ -17,7 +18,7 @@ use perl_semantic_analyzer::analysis::semantic::{
 fn moose_type_doc_str_has_description() {
     let doc = get_moose_type_documentation("Str");
     assert!(doc.is_some(), "Str should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("string")
             || doc.description.to_lowercase().contains("str"),
@@ -30,7 +31,7 @@ fn moose_type_doc_str_has_description() {
 fn moose_type_doc_int_has_description() {
     let doc = get_moose_type_documentation("Int");
     assert!(doc.is_some(), "Int should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("integer")
             || doc.description.to_lowercase().contains("int"),
@@ -43,7 +44,7 @@ fn moose_type_doc_int_has_description() {
 fn moose_type_doc_bool_has_description() {
     let doc = get_moose_type_documentation("Bool");
     assert!(doc.is_some(), "Bool should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("bool")
             || doc.description.to_lowercase().contains("true")
@@ -57,7 +58,7 @@ fn moose_type_doc_bool_has_description() {
 fn moose_type_doc_arrayref_has_description() {
     let doc = get_moose_type_documentation("ArrayRef");
     assert!(doc.is_some(), "ArrayRef should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("array")
             || doc.description.to_lowercase().contains("ref"),
@@ -70,7 +71,7 @@ fn moose_type_doc_arrayref_has_description() {
 fn moose_type_doc_hashref_has_description() {
     let doc = get_moose_type_documentation("HashRef");
     assert!(doc.is_some(), "HashRef should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("hash")
             || doc.description.to_lowercase().contains("ref"),
@@ -83,7 +84,7 @@ fn moose_type_doc_hashref_has_description() {
 fn moose_type_doc_maybe_has_description() {
     let doc = get_moose_type_documentation("Maybe");
     assert!(doc.is_some(), "Maybe should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("undef")
             || doc.description.to_lowercase().contains("maybe")
@@ -97,7 +98,7 @@ fn moose_type_doc_maybe_has_description() {
 fn moose_type_doc_num_has_description() {
     let doc = get_moose_type_documentation("Num");
     assert!(doc.is_some(), "Num should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("num")
             || doc.description.to_lowercase().contains("float")
@@ -111,7 +112,7 @@ fn moose_type_doc_num_has_description() {
 fn moose_type_doc_coderef_has_description() {
     let doc = get_moose_type_documentation("CodeRef");
     assert!(doc.is_some(), "CodeRef should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("code")
             || doc.description.to_lowercase().contains("subroutine")
@@ -136,7 +137,7 @@ fn moose_type_doc_arrayref_int_resolves_base() {
     // "ArrayRef[Int]" should resolve to the ArrayRef documentation
     let doc = get_moose_type_documentation("ArrayRef[Int]");
     assert!(doc.is_some(), "ArrayRef[Int] should resolve to ArrayRef documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("array")
             || doc.description.to_lowercase().contains("ref"),
@@ -150,7 +151,7 @@ fn moose_type_doc_maybe_str_resolves_base() {
     // "Maybe[Str]" should resolve to Maybe documentation
     let doc = get_moose_type_documentation("Maybe[Str]");
     assert!(doc.is_some(), "Maybe[Str] should resolve to Maybe documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("undef")
             || doc.description.to_lowercase().contains("maybe")
@@ -174,7 +175,7 @@ fn moose_type_doc_hashref_str_str_resolves_base() {
 #[test]
 fn moose_type_doc_str_signature_not_empty() {
     let doc = get_moose_type_documentation("Str");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(!doc.signature.is_empty(), "Str signature should not be empty");
 }
 
@@ -206,7 +207,7 @@ fn moose_type_doc_covers_core_types() {
             "Expected documentation for Moose type '{}' but got None",
             type_name
         );
-        let doc = doc.unwrap();
+        let doc = must_some(doc);
         assert!(
             !doc.description.is_empty(),
             "Documentation for Moose type '{}' has empty description",
