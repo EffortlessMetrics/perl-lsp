@@ -6,13 +6,14 @@
 
 The orchestrator routes work to agents, never writes code directly.
 
-### Pipeline: Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
+### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
 
 Every change flows through this pipeline. Each stage is a cheap pass that catches what the previous one missed.
 
 | Stage | Model | Purpose | Fix forward? |
 |-------|-------|---------|-------------|
 | **Scout** (haiku) | Broad discovery | Find the problem, file roughly-right spec | N/A — files issues |
+| **Accuracy-scout** (haiku) | Mechanical fact check | Verify file paths, function names, issue status against master | No — corrects facts, not plans |
 | **Plan-review** (sonnet) | Improve the plan | Fill gaps, correct root cause, add edge cases | Yes — complete the spec yourself |
 | **Build** (sonnet) | Execute the spec | TDD: test → implement → verify → PR | Yes — adapt if plan-reviewed; bump back if not |
 | **Review** (haiku/sonnet) | Improve the PR | Push fixes directly to the branch | Yes — always fix forward |
@@ -24,6 +25,7 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 - The orchestrator routes, it doesn't execute. Never poll CI, read diffs, or check PR state in loops. Launch an agent with the full job and move to the next routing decision.
 - One status check to inform routing, then delegate. When the orchestrator has context (exact edits, file contents), pass it to the agent — don't make agents re-research what you already know.
 - Scouts are honest about uncertainty — plan-reviewers correct. Being roughly right > confidently wrong.
+- Accuracy-scouts verify mechanical facts only (file paths, function names, issue status). They do not redesign the spec or suggest approaches.
 - Plan-reviewers improve plans, never punt "needs more scout work." They're enhanced scouts with sonnet.
 - Builders execute the spec as given. Fix forward on small gaps, bump back if structural.
 - Reviewers push improvements directly to PR branches. Every PR gets improved, no LGTM-only.
