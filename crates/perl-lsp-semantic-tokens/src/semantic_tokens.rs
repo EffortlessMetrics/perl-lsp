@@ -165,6 +165,7 @@ pub fn legend() -> TokensLegend {
         "operator",
         "type",
         "macro",
+        "sql_string", // DBI/SQL string context (Issue #2337)
     ]
     .into_iter()
     .map(|s| s.to_string())
@@ -268,7 +269,11 @@ pub fn collect_semantic_tokens(
     to_pos16: &impl Fn(usize) -> (u32, u32),
 ) -> Vec<EncodedToken> {
     let leg = legend();
-    let mut raw_tokens: Vec<(u32, u32, u32, u32, u32)> = Vec::new(); // (line, char, len, kind, mods)
+    // AST tokens are collected first so that when lexer tokens occupy the same
+    // span (e.g. "method" keyword vs method-name token), the AST token wins
+    // the stable-sort tie-break in remove_overlapping_tokens.
+    let mut ast_tokens: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
+    let mut lexer_tokens: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
 
     // 1) Fast path from lexer categories: conservative single-line emission
     let mut lexer = PerlLexer::new(text);
@@ -322,7 +327,7 @@ pub fn collect_semantic_tokens(
         };
 
         if len > 0 {
-            raw_tokens.push((sl, sc, len, kind_idx(&leg, kind), 0));
+            lexer_tokens.push((sl, sc, len, kind_idx(&leg, kind), 0));
         }
     }
 
@@ -351,7 +356,7 @@ pub fn collect_semantic_tokens(
                 let (el, ec) = to_pos16(name_span.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
-                    raw_tokens.push((
+                    ast_tokens.push((
                         sl,
                         sc,
                         len,
@@ -366,7 +371,7 @@ pub fn collect_semantic_tokens(
                 let (el, ec) = to_pos16(span.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
-                    raw_tokens.push((
+                    ast_tokens.push((
                         sl,
                         sc,
                         len,
@@ -381,7 +386,7 @@ pub fn collect_semantic_tokens(
                 let (el, ec) = to_pos16(node.location.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
-                    raw_tokens.push((
+                    ast_tokens.push((
                         sl,
                         sc,
                         len,
@@ -396,7 +401,7 @@ pub fn collect_semantic_tokens(
                 let (el, ec) = to_pos16(node.location.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
-                    raw_tokens.push((
+                    ast_tokens.push((
                         sl,
                         sc,
                         len,
@@ -411,7 +416,7 @@ pub fn collect_semantic_tokens(
                 let (el, ec) = to_pos16(node.location.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
-                    raw_tokens.push((sl, sc, len, kind_idx(&leg, "class"), 1 /*declaration*/));
+                    ast_tokens.push((sl, sc, len, kind_idx(&leg, "class"), 1 /*declaration*/));
                 }
                 return true;
             }
@@ -420,7 +425,48 @@ pub fn collect_semantic_tokens(
                 let (el, ec) = to_pos16(span.end);
                 let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
                 if len > 0 {
-                    raw_tokens.push((sl, sc, len, kind_idx(&leg, "macro"), 0));
+                    ast_tokens.push((sl, sc, len, kind_idx(&leg, "macro"), 0));
+                }
+                return true;
+            }
+            NodeKind::MethodCall { object, method, args } => {
+                // Emit a narrow token for just the method name, not the entire expression.
+                // object.location.end is the byte offset after the receiver; +2 skips "->".
+                let method_name_start = object.location.end + 2;
+                let method_name_end = method_name_start + method.len();
+                let (sl, sc) = to_pos16(method_name_start);
+                let (el, ec) = to_pos16(method_name_end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    ast_tokens.push((sl, sc, len, kind_idx(&leg, "method"), 0));
+                }
+                // If this is a SQL-bearing DBI method, classify the first string arg as sql_string.
+                let is_sql_method = matches!(
+                    method.as_str(),
+                    "prepare"
+                        | "do"
+                        | "query"
+                        | "selectrow_array"
+                        | "selectrow_arrayref"
+                        | "selectrow_hashref"
+                        | "selectall_arrayref"
+                        | "selectall_hashref"
+                        | "fetchall_arrayref"
+                        | "fetchall_hashref"
+                        | "fetchrow_arrayref"
+                        | "fetchrow_hashref"
+                        | "execute"
+                );
+                if is_sql_method
+                    && let Some(first_arg) = args.first()
+                    && matches!(first_arg.kind, NodeKind::String { .. })
+                {
+                    let (asl, asc) = to_pos16(first_arg.location.start);
+                    let (ael, aec) = to_pos16(first_arg.location.end);
+                    let alen = if asl == ael { aec.saturating_sub(asc) } else { 0 };
+                    if alen > 0 {
+                        ast_tokens.push((asl, asc, alen, kind_idx(&leg, "sql_string"), 0));
+                    }
                 }
                 return true;
             }
@@ -441,7 +487,6 @@ pub fn collect_semantic_tokens(
                     _ => ("function", 0),
                 }
             }
-            NodeKind::MethodCall { .. } => ("method", 0),
             NodeKind::Variable { sigil, name } => {
                 let (vs, ve) = (node.location.start, node.location.end);
                 let decl_info = decl_spans.iter().find(|(ds, de, _)| *ds <= vs && ve <= *de);
@@ -458,15 +503,19 @@ pub fn collect_semantic_tokens(
         };
 
         if len > 0 {
-            raw_tokens.push((sl, sc, len, kind_idx(&leg, kind), mods));
+            ast_tokens.push((sl, sc, len, kind_idx(&leg, kind), mods));
         }
         true
     });
 
-    // 3) Remove overlapping tokens (LSP specification compliance)
+    // 3) Merge: AST tokens first so they win stable-sort ties over same-span lexer tokens
+    let mut raw_tokens = ast_tokens;
+    raw_tokens.extend(lexer_tokens);
+
+    // 4) Remove overlapping tokens (LSP specification compliance)
     let dedup_tokens = remove_overlapping_tokens(raw_tokens);
 
-    // 4) Sort by position and encode with deltas (thread-safe)
+    // 5) Sort by position and encode with deltas (thread-safe)
     encode_raw_tokens_to_deltas(dedup_tokens)
 }
 
