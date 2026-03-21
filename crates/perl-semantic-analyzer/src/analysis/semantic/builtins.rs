@@ -338,6 +338,44 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Returns a reference to the object underlying VARIABLE if it is tied, or undef if not.",
         }),
 
+        // Tie magic methods
+        "TIESCALAR" => Some(BuiltinDoc {
+            signature: "TIESCALAR CLASSNAME, LIST",
+            description: "Constructor called when `tie $scalar, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEARRAY" => Some(BuiltinDoc {
+            signature: "TIEARRAY CLASSNAME, LIST",
+            description: "Constructor called when `tie @array, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEHASH" => Some(BuiltinDoc {
+            signature: "TIEHASH CLASSNAME, LIST",
+            description: "Constructor called when `tie %hash, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEHANDLE" => Some(BuiltinDoc {
+            signature: "TIEHANDLE CLASSNAME, LIST",
+            description: "Constructor called when `tie *FH, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "FETCH" => Some(BuiltinDoc {
+            signature: "FETCH this",
+            description: "Called on every access of a tied scalar or array/hash element. Returns the value.",
+        }),
+        "STORE" => Some(BuiltinDoc {
+            signature: "STORE this, value",
+            description: "Called on every assignment to a tied scalar or array/hash element.",
+        }),
+        "FIRSTKEY" => Some(BuiltinDoc {
+            signature: "FIRSTKEY this",
+            description: "Called when `keys` or `each` is first invoked on a tied hash.",
+        }),
+        "NEXTKEY" => Some(BuiltinDoc {
+            signature: "NEXTKEY this, lastkey",
+            description: "Called during iteration of a tied hash with `each` or `keys`.",
+        }),
+        "DESTROY" => Some(BuiltinDoc {
+            signature: "DESTROY this",
+            description: "Called when the tied object goes out of scope or is explicitly untied.",
+        }),
+
         // Control flow
         "die" => Some(BuiltinDoc {
             signature: "die LIST",
