@@ -101,3 +101,37 @@ fn test_ref_cmp_eq_regression() {
     // With parens and string comparison operator
     assert_clean_parse(r#"if (ref($x) eq 'HASH') { }"#);
 }
+
+// === Stress tests for specific edge cases ===
+
+#[test]
+fn test_defined_hash_subscript() {
+    // defined $hash{key} — subscript after defined, no word op.
+    // With allow_no_args=true, omit_optional_arg fires only for binary ops;
+    // Dollar sigil is not a binary op, so defined still takes $hash{key} as arg.
+    assert_clean_parse(r#"if (defined $hash{key}) { }"#);
+}
+
+#[test]
+fn test_defined_hash_subscript_no_parens() {
+    // Same but at statement level without outer parens
+    assert_clean_parse(r#"defined $hash{key} or die;"#);
+}
+
+#[test]
+fn test_ref_backslash_ref() {
+    // ref \$x — backslash is not a binary op, so ref takes \$x as argument.
+    assert_clean_parse(r#"my $r = ref \$x;"#);
+}
+
+#[test]
+fn test_defined_or_die() {
+    // defined or die — zero-arg defined with word or
+    assert_clean_parse(r#"defined or die "undef";"#);
+}
+
+#[test]
+fn test_defined_paren_arg_then_and() {
+    // defined($x) and — parens path, unaffected by this change
+    assert_clean_parse(r#"defined($x) and length($x);"#);
+}
