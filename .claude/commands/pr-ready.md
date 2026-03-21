@@ -25,7 +25,22 @@ gh pr view $NUMBER --json isDraft,title,state
 If the PR is not a draft, report: "PR #N is already marked ready" and stop.
 If the PR is not open, report the current state and stop.
 
-### 3. Mark ready and signal merge-readiness
+### 3. Verify deep review completed
+
+**Before marking ready, confirm the `reviewed-deep` label is present.** This is a hard gate — no PR can be marked merge-ready without passing deep review.
+
+```bash
+gh pr view $NUMBER --json labels --jq '[.labels[].name] | if (. | contains(["reviewed-deep"])) then "PASS" else "FAIL" end'
+```
+
+If the result is `FAIL`: **STOP.** Report: "PR #$NUMBER cannot be marked ready — missing `reviewed-deep` label. Route to reviewer-deep first."
+
+Optionally validate receipt freshness to ensure the deep review covers the current HEAD:
+```
+/label-receipt-validate pr $NUMBER reviewed-deep
+```
+
+### 4. Mark ready and signal merge-readiness
 
 ```bash
 gh pr ready $NUMBER
@@ -34,7 +49,7 @@ gh pr edit $NUMBER --add-label "merge-ready"
 
 The `merge-ready` label signals the ops agent that this PR has passed review and is cleared for merge pickup.
 
-### 4. Write version-bound receipt
+### 5. Write version-bound receipt
 
 Record the label binding against the current HEAD SHA so the orchestrator can detect staleness:
 
@@ -42,7 +57,7 @@ Record the label binding against the current HEAD SHA so the orchestrator can de
 /label-receipt-write pr $NUMBER merge-ready pr-ready
 ```
 
-### 5. Report
+### 6. Report
 
 Output: "PR #$NUMBER marked ready -- CI will trigger. Labeled merge-ready for ops pickup."
 
