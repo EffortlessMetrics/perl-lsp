@@ -73,6 +73,8 @@ struct HierarchyIndex {
     parents: BTreeMap<String, BTreeSet<String>>,
     /// Map from parent package to its child packages
     children: BTreeMap<String, BTreeSet<String>>,
+    /// Map from package to its composed roles (via `with`)
+    roles: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl HierarchyIndex {
@@ -81,8 +83,16 @@ impl HierarchyIndex {
         self.children.entry(parent.to_string()).or_default().insert(child.to_string());
     }
 
+    fn add_role(&mut self, package: &str, role: &str) {
+        self.roles.entry(package.to_string()).or_default().insert(role.to_string());
+    }
+
     fn get_parents(&self, package: &str) -> Vec<String> {
         self.parents.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
+    }
+
+    fn get_roles(&self, package: &str) -> Vec<String> {
+        self.roles.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
     }
 
     fn get_children(&self, package: &str) -> Vec<String> {
@@ -176,6 +186,24 @@ impl TypeHierarchyProvider {
                     }
                 }
             }
+            // Moose/Moo/Mouse: extends 'Parent', 'Parent2'  and  with 'Role', 'Role2'
+            NodeKind::ExpressionStatement { expression } => {
+                if let NodeKind::FunctionCall { name, args } = &expression.kind {
+                    match name.as_str() {
+                        "extends" => {
+                            for parent in Self::extract_names_from_args(args) {
+                                index.add_inheritance(current_package, &parent);
+                            }
+                        }
+                        "with" => {
+                            for role in Self::extract_names_from_args(args) {
+                                index.add_role(current_package, &role);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     self.index_hierarchy_recursive(stmt, index, current_package);
@@ -223,6 +251,32 @@ impl TypeHierarchyProvider {
         // Remove quotes
         let clean = arg.trim_matches('"').trim_matches('\'').trim_matches('`');
         vec![clean.to_string()]
+    }
+
+    /// Extract package/role names from function call arguments (e.g., `extends 'A', 'B'`).
+    ///
+    /// Handles `String`, `Identifier`, and `ArrayLiteral` nodes. Hash literal
+    /// arguments (e.g., `{ -version => 0.01 }`) are harmlessly skipped.
+    fn extract_names_from_args(args: &[Node]) -> Vec<String> {
+        args.iter().flat_map(Self::collect_symbol_names).collect()
+    }
+
+    /// Collect symbol names from a single AST node (String, Identifier, or ArrayLiteral).
+    fn collect_symbol_names(node: &Node) -> Vec<String> {
+        match &node.kind {
+            NodeKind::String { value, .. } => {
+                let trimmed = value.trim().trim_matches('\'').trim_matches('"').trim();
+                if trimmed.is_empty() { Vec::new() } else { vec![trimmed.to_string()] }
+            }
+            NodeKind::Identifier { name } => {
+                let trimmed = name.trim();
+                if trimmed.is_empty() { Vec::new() } else { vec![trimmed.to_string()] }
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                elements.iter().flat_map(Self::collect_symbol_names).collect()
+            }
+            _ => Vec::new(),
+        }
     }
 
     /// Extract parent classes from @ISA initialization
@@ -308,23 +362,33 @@ impl TypeHierarchyProvider {
         }
     }
 
-    /// Find supertypes (parent classes) via @ISA
+    /// Find supertypes (parent classes and composed roles)
     pub fn find_supertypes(&self, ast: &Node, item: &TypeHierarchyItem) -> Vec<TypeHierarchyItem> {
         let index = self.build_hierarchy_index(ast);
         let parents = index.get_parents(&item.name);
+        let roles = index.get_roles(&item.name);
 
-        parents
-            .into_iter()
-            .map(|name| TypeHierarchyItem {
-                name,
-                kind: TypeHierarchySymbolKind::Class,
-                uri: "file:///current".to_string(),
-                range: WireRange::default(),
-                selection_range: WireRange::default(),
-                detail: Some("Parent Class".to_string()),
-                data: None,
-            })
-            .collect()
+        let parent_items = parents.into_iter().map(|name| TypeHierarchyItem {
+            name,
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///current".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: Some("Parent Class".to_string()),
+            data: None,
+        });
+
+        let role_items = roles.into_iter().map(|name| TypeHierarchyItem {
+            name,
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///current".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: Some("Role".to_string()),
+            data: None,
+        });
+
+        parent_items.chain(role_items).collect()
     }
 
     /// Compute the C3 Method Resolution Order (MRO) for a package.
@@ -639,6 +703,267 @@ our @ISA = qw(Parent1 Parent2 Parent3);
         let supertypes = provider.find_supertypes(&ast, &items[0]);
         // For now just check it doesn't panic - full qw() support needs AST improvements
         let _ = supertypes.len();
+    }
+
+    #[test]
+    fn test_moose_extends_single_parent() {
+        let code = r#"package Animal;
+
+package Dog;
+use Moose;
+extends 'Animal';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let dog_item = TypeHierarchyItem {
+            name: "Dog".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let supertypes = provider.find_supertypes(&ast, &dog_item);
+        assert_eq!(supertypes.len(), 1, "Should find 1 parent via extends");
+        assert_eq!(supertypes[0].name, "Animal");
+        assert_eq!(
+            supertypes[0].detail.as_deref(),
+            Some("Parent Class"),
+            "extends parent should have 'Parent Class' detail"
+        );
+    }
+
+    #[test]
+    fn test_moose_extends_multiple_parents() {
+        let code = r#"package Readable;
+package Writable;
+
+package ReadWriteFile;
+use Moose;
+extends 'Readable', 'Writable';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let item = TypeHierarchyItem {
+            name: "ReadWriteFile".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let supertypes = provider.find_supertypes(&ast, &item);
+        let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"Readable"), "Should find Readable parent");
+        assert!(names.contains(&"Writable"), "Should find Writable parent");
+    }
+
+    #[test]
+    fn test_moose_with_role() {
+        let code = r#"package Printable;
+
+package Document;
+use Moose;
+with 'Printable';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let item = TypeHierarchyItem {
+            name: "Document".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let supertypes = provider.find_supertypes(&ast, &item);
+        let role_types: Vec<&TypeHierarchyItem> =
+            supertypes.iter().filter(|s| s.detail.as_deref() == Some("Role")).collect();
+        assert_eq!(role_types.len(), 1, "Should find 1 role via with");
+        assert_eq!(role_types[0].name, "Printable");
+    }
+
+    #[test]
+    fn test_moose_with_multiple_roles() {
+        let code = r#"package Serializable;
+package Printable;
+
+package Report;
+use Moose;
+with 'Serializable', 'Printable';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let item = TypeHierarchyItem {
+            name: "Report".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let supertypes = provider.find_supertypes(&ast, &item);
+        let role_names: Vec<&str> = supertypes
+            .iter()
+            .filter(|s| s.detail.as_deref() == Some("Role"))
+            .map(|s| s.name.as_str())
+            .collect();
+        assert!(role_names.contains(&"Serializable"), "Should find Serializable role");
+        assert!(role_names.contains(&"Printable"), "Should find Printable role");
+    }
+
+    #[test]
+    fn test_moose_extends_and_with_combined() {
+        let code = r#"package Base;
+package MyRole;
+
+package Child;
+use Moose;
+extends 'Base';
+with 'MyRole';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let item = TypeHierarchyItem {
+            name: "Child".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let supertypes = provider.find_supertypes(&ast, &item);
+
+        let parent_names: Vec<&str> = supertypes
+            .iter()
+            .filter(|s| s.detail.as_deref() == Some("Parent Class"))
+            .map(|s| s.name.as_str())
+            .collect();
+        let role_names: Vec<&str> = supertypes
+            .iter()
+            .filter(|s| s.detail.as_deref() == Some("Role"))
+            .map(|s| s.name.as_str())
+            .collect();
+
+        assert_eq!(parent_names, vec!["Base"], "Should find Base as parent");
+        assert_eq!(role_names, vec!["MyRole"], "Should find MyRole as role");
+    }
+
+    #[test]
+    fn test_moo_extends_with() {
+        let code = r#"package MooParent;
+package MooRole;
+
+package MooChild;
+use Moo;
+extends 'MooParent';
+with 'MooRole';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let item = TypeHierarchyItem {
+            name: "MooChild".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let supertypes = provider.find_supertypes(&ast, &item);
+        let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"MooParent"), "Moo extends should work");
+        assert!(names.contains(&"MooRole"), "Moo with should work");
+    }
+
+    #[test]
+    fn test_mixed_use_parent_and_extends() {
+        let code = r#"package OldBase;
+package MooseBase;
+
+package Mixed;
+use parent 'OldBase';
+use Moose;
+extends 'MooseBase';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let item = TypeHierarchyItem {
+            name: "Mixed".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let supertypes = provider.find_supertypes(&ast, &item);
+        let parent_names: Vec<&str> = supertypes
+            .iter()
+            .filter(|s| s.detail.as_deref() == Some("Parent Class"))
+            .map(|s| s.name.as_str())
+            .collect();
+        assert!(parent_names.contains(&"OldBase"), "use parent should still work");
+        assert!(parent_names.contains(&"MooseBase"), "extends should also work");
+    }
+
+    #[test]
+    fn test_extends_subtypes_reverse() {
+        // Verify that extends also populates the children (subtypes) direction
+        let code = r#"package Animal;
+
+package Dog;
+use Moose;
+extends 'Animal';
+
+package Cat;
+use Moo;
+extends 'Animal';
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let animal_item = TypeHierarchyItem {
+            name: "Animal".to_string(),
+            kind: TypeHierarchySymbolKind::Class,
+            uri: "file:///test".to_string(),
+            range: WireRange::default(),
+            selection_range: WireRange::default(),
+            detail: None,
+            data: None,
+        };
+
+        let subtypes = provider.find_subtypes(&ast, &animal_item);
+        let subtype_names: Vec<&str> = subtypes.iter().map(|s| s.name.as_str()).collect();
+        assert!(subtype_names.contains(&"Dog"), "Dog should be a subtype of Animal");
+        assert!(subtype_names.contains(&"Cat"), "Cat should be a subtype of Animal");
     }
 
     #[test]
