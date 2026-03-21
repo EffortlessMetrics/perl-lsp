@@ -25,15 +25,18 @@ gh pr view $NUMBER --json isDraft,title,state
 If the PR is not a draft, report: "PR #N is already marked ready" and stop.
 If the PR is not open, report the current state and stop.
 
-### 3. Mark ready
+### 3. Mark ready and signal merge-readiness
 
 ```bash
 gh pr ready $NUMBER
+gh pr edit $NUMBER --add-label "merge-ready"
 ```
+
+The `merge-ready` label signals the ops agent that this PR has passed review and is cleared for merge pickup.
 
 ### 4. Report
 
-Output: "PR #$NUMBER marked ready -- CI will trigger."
+Output: "PR #$NUMBER marked ready -- CI will trigger. Labeled merge-ready for ops pickup."
 
 Include the PR URL for convenience:
 ```bash

@@ -11,20 +11,27 @@ for whoever touches this code next.
 
 ## Steps
 
-1. Read the PR description and linked issue:
+1. Claim the PR immediately to prevent double-assignment:
+   ```bash
+   gh pr edit <number> --add-label "in-review"
+   ```
+   Do this BEFORE reading the diff. The `in-review` label tells the orchestrator
+   this PR is actively being reviewed and should not be dispatched to another reviewer.
+
+2. Read the PR description and linked issue:
    ```bash
    gh pr view <number> --json title,body,labels --jq '{title: .title, body: .body}'
    ```
 
-2. If the PR links an issue, read the issue for the original spec:
+3. If the PR links an issue, read the issue for the original spec:
    ```bash
    gh issue view <number> --json body --jq '.body'
    ```
 
-3. Check for a verification receipt — did the builder run tests?
+4. Check for a verification receipt — did the builder run tests?
    Look for verification results in PR description or comments.
 
-4. **Check knowledge artifact quality** — the PR description should have:
+5. **Check knowledge artifact quality** — the PR description should have:
    - Summary: what changed and why (linked to issue)
    - Test: what test was added
    - What I considered but didn't do
@@ -32,7 +39,7 @@ for whoever touches this code next.
    If these are missing or thin, note it — the builder should be
    writing useful context, not just "fixes #NNN."
 
-5. Note what you expect to see in the diff:
+6. Note what you expect to see in the diff:
    - Which files should be changed?
    - What test should be added?
    - What behavior should change?

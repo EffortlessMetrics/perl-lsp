@@ -37,15 +37,18 @@ Write your findings as an issue comment and label the issue as builder-ready.
    )"
    ```
 
-2. If ready for builder, add the label:
+2. If ready for builder, set final labels in a single call:
    ```bash
-   gh issue edit <number> --add-label "builder-ready"
+   gh issue edit <number> --add-label "plan-reviewed" --add-label "builder-ready" --remove-label "needs-plan-review"
    ```
+   All three label changes in one call: `plan-reviewed` and `builder-ready` are added atomically,
+   and `needs-plan-review` is removed so the orchestrator does not re-route this issue to another
+   plan-reviewer on the next swarm pass. (`--remove-label` is a no-op if the label is absent.)
 
 3. If the spec is incomplete or wrong (root cause was wrong, file references stale, approach flawed):
    - **Do the investigation yourself.** Find the real root cause, correct the file references, design the fix. You have sonnet — use it.
    - Update the issue with the corrected spec: exact files, functions, lines, test cases, verify commands.
-   - Then add the `builder-ready` label. The output is always a builder-ready issue.
+   - Then apply the same label transition. The output is always a builder-ready issue.
 
 ## Rules
 

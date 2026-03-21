@@ -32,6 +32,32 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 - Every agent recommends next steps for the orchestrator.
 - Learning is continuous — every agent-wrapup captures what was learned.
 
+### Pipeline State Labels
+
+Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them.
+
+| Label | Set by | Means |
+|-------|--------|-------|
+| `needs-plan-review` | scout (/scout-report) | Awaiting plan-reviewer |
+| `plan-reviewed` | plan-reviewer (/plan-review-improve) | Spec verified |
+| `builder-ready` | plan-reviewer (/plan-review-improve) | Ready for builder pickup |
+| `in-build` | builder (/builder-read-spec) | Builder claimed this issue |
+| `in-review` | reviewer (/reviewer-read-handoff) | PR actively in review — set at review start |
+| `merge-ready` | reviewer (/pr-ready) | Ready for ops merge |
+| `structural-blocker` | any agent | Architecture issue; blocks parallel work |
+| `needs-deep-review` | reviewer | Requires additional deep-review pass |
+| `follow-up-recommended` | wisdom or reviewer | Related follow-up issue needed |
+| `already-fixed` | plan-reviewer or scout | Close without build |
+
+Labels gate entry, not skip execution. Multiple passes of the same agent are normal. Query examples:
+```bash
+gh issue list --label "builder-ready" --state open   # ready to build
+gh issue list --label "in-build" --state open        # builder assigned
+gh issue list --label "structural-blocker" --state open  # blocked work
+```
+
+Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accuracy-scout agent (issue #2628).
+
 ### Routing patterns
 
 - **Code change** -> worktree agent: `Agent(isolation: "worktree", prompt: "...")`
