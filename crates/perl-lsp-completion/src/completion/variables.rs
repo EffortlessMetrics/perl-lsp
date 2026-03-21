@@ -49,6 +49,7 @@ pub fn add_variable_completions(
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
                 });
             }
         }
@@ -111,6 +112,7 @@ pub fn add_special_variables(
                 filter_text: Some(var.to_string()),
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
             });
         }
     }
@@ -149,6 +151,7 @@ pub fn add_all_variables(
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
                         text_edit_range: Some((context.prefix_start, context.position)),
+                        commit_characters: None,
                     });
                 }
             }
