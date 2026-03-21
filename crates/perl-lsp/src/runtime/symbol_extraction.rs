@@ -105,6 +105,50 @@ impl LspServer {
                 }
             }
 
+            // Perl 5.38+ native class declaration
+            NodeKind::Class { name, body } => {
+                let (start_line, start_char) = byte_to_line_col(source, node.location.start);
+                let (end_line, end_char) = byte_to_line_col(source, node.location.end);
+
+                symbols.push(LspWorkspaceSymbol {
+                    name: name.clone(),
+                    kind: 5, // Class
+                    location: WireLocation::new(
+                        uri.to_string(),
+                        WireRange::new(
+                            WirePosition::new(start_line, start_char),
+                            WirePosition::new(end_line, end_char),
+                        ),
+                    ),
+                    container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                });
+
+                // Recurse into body with this class as container
+                self.extract_symbols_recursive(body, source, uri, Some(name.as_str()), symbols);
+            }
+
+            // Perl 5.38+ native method declaration
+            NodeKind::Method { name, body, .. } => {
+                let (start_line, start_char) = byte_to_line_col(source, node.location.start);
+                let (end_line, end_char) = byte_to_line_col(source, node.location.end);
+
+                symbols.push(LspWorkspaceSymbol {
+                    name: name.clone(),
+                    kind: 6, // Method
+                    location: WireLocation::new(
+                        uri.to_string(),
+                        WireRange::new(
+                            WirePosition::new(start_line, start_char),
+                            WirePosition::new(end_line, end_char),
+                        ),
+                    ),
+                    container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                });
+
+                // Recurse into body with this method as container
+                self.extract_symbols_recursive(body, source, uri, Some(name.as_str()), symbols);
+            }
+
             NodeKind::Program { statements } => {
                 for stmt in statements {
                     self.extract_symbols_recursive(stmt, source, uri, container, symbols);
@@ -184,6 +228,50 @@ impl LspServer {
                 if let Some(block) = block {
                     self.extract_simple_symbols(block, source, uri, query, symbols);
                 }
+            }
+
+            // Perl 5.38+ native class declaration
+            NodeKind::Class { name, body } => {
+                if name.to_lowercase().contains(&query_lower) {
+                    let (start_line, start_char) = byte_to_line_col(source, node.location.start);
+                    let (end_line, end_char) = byte_to_line_col(source, node.location.end);
+
+                    symbols.push(json!({
+                        "name": name,
+                        "kind": 5, // Class
+                        "location": {
+                            "uri": uri,
+                            "range": {
+                                "start": {"line": start_line, "character": start_char},
+                                "end": {"line": end_line, "character": end_char}
+                            }
+                        }
+                    }));
+                }
+                // Recurse into body to find methods
+                self.extract_simple_symbols(body, source, uri, query, symbols);
+            }
+
+            // Perl 5.38+ native method declaration
+            NodeKind::Method { name, body, .. } => {
+                if name.to_lowercase().contains(&query_lower) {
+                    let (start_line, start_char) = byte_to_line_col(source, node.location.start);
+                    let (end_line, end_char) = byte_to_line_col(source, node.location.end);
+
+                    symbols.push(json!({
+                        "name": name,
+                        "kind": 6, // Method
+                        "location": {
+                            "uri": uri,
+                            "range": {
+                                "start": {"line": start_line, "character": start_char},
+                                "end": {"line": end_line, "character": end_char}
+                            }
+                        }
+                    }));
+                }
+                // Recurse into body
+                self.extract_simple_symbols(body, source, uri, query, symbols);
             }
 
             NodeKind::Program { statements } => {

@@ -773,7 +773,7 @@ impl SymbolExtractor {
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
-                    kind: SymbolKind::Subroutine,
+                    kind: SymbolKind::Method,
                     location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
@@ -2025,5 +2025,37 @@ sub bar {
         let bar_symbols = &table.symbols["bar"];
         assert_eq!(bar_symbols.len(), 1);
         assert_eq!(bar_symbols[0].kind, SymbolKind::Subroutine);
+    }
+
+    // ── Bug 3 test: NodeKind::Method uses SymbolKind::Method not Subroutine ──
+
+    #[test]
+    fn test_method_node_uses_symbol_kind_method() {
+        let code = r#"
+class MyClass {
+    method greet {
+        return "hello";
+    }
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(table.symbols.contains_key("greet"), "expected 'greet' in symbol table");
+        let greet_symbols = &table.symbols["greet"];
+        assert_eq!(greet_symbols.len(), 1);
+        assert_eq!(
+            greet_symbols[0].kind,
+            SymbolKind::Method,
+            "NodeKind::Method should produce SymbolKind::Method, not Subroutine"
+        );
+        // Also verify the method attribute was pushed
+        assert!(
+            greet_symbols[0].attributes.contains(&"method".to_string()),
+            "method symbol should have 'method' attribute"
+        );
     }
 }
