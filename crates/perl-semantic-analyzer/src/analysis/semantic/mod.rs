@@ -1270,4 +1270,30 @@ my %config = (key => "value");
         );
         Ok(())
     }
+
+    #[test]
+    fn test_find_definition_returns_method_kind_for_native_method()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "class Foo {\n    method bar { return 1; }\n}\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // Find offset of "bar" in "method bar" on line 1
+        let line1 = code.lines().nth(1).ok_or("no line 1")?;
+        let line0_len = code.lines().next().ok_or("no line 0")?.len() + 1;
+        let col = line1.find("bar").ok_or("bar not found on line 1")?;
+        let offset = line0_len + col;
+
+        let sym = analyzer.find_definition(offset).ok_or("no symbol found at 'bar'")?;
+        assert_eq!(sym.name, "bar", "symbol name should be 'bar'");
+        assert_eq!(
+            sym.kind,
+            SymbolKind::Method,
+            "native method should have SymbolKind::Method, got {:?}",
+            sym.kind
+        );
+        Ok(())
+    }
 }

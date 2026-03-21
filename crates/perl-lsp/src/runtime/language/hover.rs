@@ -102,6 +102,7 @@ impl LspServer {
                 crate::symbol::SymbolKind::Variable(VarKind::Array) => "Array Variable",
                 crate::symbol::SymbolKind::Variable(VarKind::Hash) => "Hash Variable",
                 crate::symbol::SymbolKind::Subroutine => "Subroutine",
+                crate::symbol::SymbolKind::Method => "Method",
                 crate::symbol::SymbolKind::Package => "Package",
                 crate::symbol::SymbolKind::Constant => "Constant",
                 crate::symbol::SymbolKind::Label => "Label",
@@ -109,9 +110,12 @@ impl LspServer {
                 _ => "Symbol",
             };
 
-            let (display_name, complexity_info) = if symbol_info.kind
-                == crate::symbol::SymbolKind::Subroutine
-            {
+            let (display_name, complexity_info) = if matches!(
+                symbol_info.kind,
+                crate::symbol::SymbolKind::Subroutine | crate::symbol::SymbolKind::Method
+            ) {
+                let is_method = symbol_info.kind == crate::symbol::SymbolKind::Method;
+                let prefix = if is_method { "method" } else { "sub" };
                 let mut params = Vec::new();
                 let mut complexity = String::new();
                 if let Some(sub_node) = self.find_subroutine_definition(ast, &symbol_info.name) {
@@ -125,13 +129,21 @@ impl LspServer {
                         } else {
                             self.extract_params_from_body(body, &mut params);
                         }
+                    } else if let NodeKind::Method { signature: method_sig, .. } = &sub_node.kind {
+                        if let Some(sig) = method_sig {
+                            if let NodeKind::Signature { parameters } = &sig.kind {
+                                for param in parameters {
+                                    self.extract_signature_params(param, &mut params);
+                                }
+                            }
+                        }
                     }
                     complexity = Self::build_complexity_info(sub_node, text);
                 }
                 let name = if params.is_empty() {
-                    format!("sub {}", symbol_info.name)
+                    format!("{} {}", prefix, symbol_info.name)
                 } else {
-                    format!("sub {}({})", symbol_info.name, params.join(", "))
+                    format!("{} {}({})", prefix, symbol_info.name, params.join(", "))
                 };
                 (name, complexity)
             } else {
@@ -753,6 +765,14 @@ impl LspServer {
                     }
                 }
             }
+            NodeKind::Method { name: method_name, .. } if method_name == name => {
+                return Some(node);
+            }
+            NodeKind::Class { body, .. } => {
+                if let Some(found) = self.find_subroutine_definition(body, name) {
+                    return Some(found);
+                }
+            }
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     if let Some(found) = self.find_subroutine_definition(stmt, name) {
@@ -795,10 +815,25 @@ impl LspServer {
         }
     }
 
-    /// Extract parameter names from a params node (for signature help)
+    /// Extract parameter names from a params node (for signature help).
+    ///
+    /// Handles both bare `NodeKind::Variable` and the wrapper kinds produced by
+    /// `parse_signature`: `MandatoryParameter`, `OptionalParameter`, `NamedParameter`,
+    /// and `SlurpyParameter`, all of which contain an inner `variable` node.
     fn extract_signature_params(&self, params_node: &Node, params: &mut Vec<String>) {
-        if let NodeKind::Variable { sigil, name } = &params_node.kind {
-            params.push(format!("{}{}", sigil, name));
+        match &params_node.kind {
+            NodeKind::Variable { sigil, name } => {
+                params.push(format!("{}{}", sigil, name));
+            }
+            NodeKind::MandatoryParameter { variable }
+            | NodeKind::SlurpyParameter { variable }
+            | NodeKind::NamedParameter { variable } => {
+                self.extract_signature_params(variable, params);
+            }
+            NodeKind::OptionalParameter { variable, .. } => {
+                self.extract_signature_params(variable, params);
+            }
+            _ => {}
         }
     }
 

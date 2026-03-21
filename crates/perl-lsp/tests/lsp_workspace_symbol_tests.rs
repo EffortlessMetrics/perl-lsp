@@ -334,3 +334,74 @@ sub shared_utility {
 
     Ok(())
 }
+
+/// Test that workspace/symbol finds Perl 5.38+ native class and method declarations.
+///
+/// Before the fix in symbol_extraction.rs, NodeKind::Class and NodeKind::Method had no
+/// arms in extract_simple_symbols, so they were silently dropped from workspace search.
+#[test]
+fn test_workspace_symbol_finds_native_class_and_method() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///native_class_ws.pl";
+    harness.open(
+        doc_uri,
+        "class MyPoint {\n    method get_x { return 0; }\n    method get_y { return 0; }\n}\n",
+    )?;
+
+    // Search for "get_" — should match both native methods
+    let response =
+        harness.request("workspace/symbol", json!({ "query": "get_" })).unwrap_or(json!(null));
+
+    if !response.is_null() && response.is_array() {
+        let symbols = response.as_array().ok_or("response is not an array")?;
+        let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+        assert!(
+            names.iter().any(|n| *n == "get_x" || *n == "get_y"),
+            "workspace/symbol should find native methods 'get_x'/'get_y', got: {:?}",
+            names
+        );
+        // Each found method should report kind 6 (Method)
+        for sym in symbols {
+            if let Some(name) = sym["name"].as_str() {
+                if name == "get_x" || name == "get_y" {
+                    assert_eq!(
+                        sym["kind"].as_u64(),
+                        Some(6),
+                        "native method '{}' should have LSP kind 6 (Method), got: {:?}",
+                        name,
+                        sym["kind"]
+                    );
+                }
+            }
+        }
+    }
+
+    // Search for "MyPoint" — should find the class declaration
+    let response2 =
+        harness.request("workspace/symbol", json!({ "query": "MyPoint" })).unwrap_or(json!(null));
+
+    if !response2.is_null() && response2.is_array() {
+        let symbols2 = response2.as_array().ok_or("response2 is not an array")?;
+        let names2: Vec<&str> = symbols2.iter().filter_map(|s| s["name"].as_str()).collect();
+        assert!(
+            names2.iter().any(|n| *n == "MyPoint"),
+            "workspace/symbol should find native class 'MyPoint', got: {:?}",
+            names2
+        );
+        // Class should report kind 5 (Class)
+        for sym in symbols2 {
+            if sym["name"].as_str() == Some("MyPoint") {
+                assert_eq!(
+                    sym["kind"].as_u64(),
+                    Some(5),
+                    "native class 'MyPoint' should have LSP kind 5 (Class), got: {:?}",
+                    sym["kind"]
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
