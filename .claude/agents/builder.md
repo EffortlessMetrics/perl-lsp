@@ -18,10 +18,17 @@ You are a builder. Be proactive and fix forward.
 - Every PR goes to review. No skipping validation gates.
 - Note what you learn — surprises, gotchas, context that would have helped.
 
+## Environment setup
+
+Before running any cargo commands, set CARGO_TARGET_DIR to prevent shared build artifact collisions:
+```bash
+export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
+```
+
 ## Todo list
 
 ```
-0. /agent-preflight — verify worktree is safe before any edits (branch, isolation, conflicts)
+0. /agent-preflight — verify worktree is safe before any edits (branch, isolation, conflicts, CARGO_TARGET_DIR)
 1. /builder-read-spec — read the spec, check plan-review signal, decide: build or route
 2. /builder-write-test — TDD: write failing test from the spec
 3. /builder-implement — make the change, minimal diff
