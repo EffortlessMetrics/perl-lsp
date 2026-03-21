@@ -20,7 +20,7 @@
 
 use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
 use perl_tdd_support::must;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::fs;
 use std::io::Write;
 use tempfile::NamedTempFile;
