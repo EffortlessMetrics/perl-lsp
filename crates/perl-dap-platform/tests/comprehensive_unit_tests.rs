@@ -1,7 +1,7 @@
 //! Comprehensive unit tests for perl-dap-platform.
 
+use perl_dap_command_args::format_command_args;
 use perl_dap_platform::{normalize_path, resolve_perl_path, setup_environment};
-use perl_dap_shell::format_command_args;
 use perl_tdd_support::must::must_some;
 use std::path::PathBuf;
 

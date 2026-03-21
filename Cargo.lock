@@ -1660,7 +1660,7 @@ name = "perl-dap-platform"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "perl-dap-shell",
+ "perl-dap-command-args",
  "perl-tdd-support",
  "tempfile",
 ]
@@ -1681,6 +1681,7 @@ name = "perl-dap-shell"
 version = "0.12.0"
 dependencies = [
  "perl-dap-command-args",
+ "perl-dap-platform",
 ]
 
 [[package]]

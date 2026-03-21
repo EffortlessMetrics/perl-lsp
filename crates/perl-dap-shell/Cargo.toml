@@ -25,6 +25,7 @@ path = "src/lib.rs"
 
 [dependencies]
 perl-dap-command-args = { workspace = true }
+perl-dap-platform = { workspace = true }
 
 [lints]
 workspace = true
