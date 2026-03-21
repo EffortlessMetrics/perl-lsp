@@ -23,6 +23,8 @@ pub enum Framework {
     ObjectPad,
     /// Native Perl OOP (bless-based)
     Native,
+    /// Native Perl 5.38+ class (use feature 'class')
+    NativeClass,
     /// No OO framework detected
     None,
 }
@@ -227,6 +229,20 @@ impl ClassModelBuilder {
 
             NodeKind::Use { module, args, .. } => {
                 self.detect_framework(module, args);
+            }
+
+            NodeKind::Class { name, body } => {
+                self.flush_current_package();
+                self.current_package = name.clone();
+                self.current_framework = Framework::NativeClass;
+                self.framework_map.insert(name.clone(), Framework::NativeClass);
+                self.visit_node(body);
+            }
+
+            NodeKind::Method { name, body, .. } => {
+                self.current_methods
+                    .push(MethodInfo { name: name.clone(), location: node.location });
+                self.visit_node(body);
             }
 
             _ => {
@@ -993,6 +1009,54 @@ has 'name' => (is => 'rw');
         let model = &models[0];
         let attr = &model.attributes[0];
         assert!(!attr.trigger, "trigger should be false when not specified");
+    }
+
+    // ── Bug 4 tests: NativeClass framework (must fail before fix) ─────────
+
+    #[test]
+    fn native_class_produces_model() {
+        let models = build_models(
+            r#"
+class MyApp::Point {
+    field $x :param = 0;
+    field $y :param = 0;
+    method get_x { return $x; }
+    method get_y { return $y; }
+}
+"#,
+        );
+        assert_eq!(models.len(), 1, "expected one ClassModel for MyApp::Point");
+        let model = &models[0];
+        assert_eq!(model.name, "MyApp::Point");
+        assert_eq!(model.framework, Framework::NativeClass);
+        assert_eq!(model.methods.len(), 2);
+        assert!(model.methods.iter().any(|m| m.name == "get_x"));
+        assert!(model.methods.iter().any(|m| m.name == "get_y"));
+    }
+
+    #[test]
+    fn native_class_and_moo_class_do_not_interfere() {
+        let models = build_models(
+            r#"
+class Native::Point {
+    field $x :param = 0;
+    method get_x { return $x; }
+}
+
+package Moo::User;
+use Moo;
+has 'name' => (is => 'ro');
+"#,
+        );
+        assert_eq!(models.len(), 2, "expected 2 ClassModels: Native::Point and Moo::User");
+        let native = models.iter().find(|m| m.name == "Native::Point");
+        assert!(native.is_some(), "expected Native::Point model");
+        let native = native.unwrap();
+        assert_eq!(native.framework, Framework::NativeClass);
+        let moo = models.iter().find(|m| m.name == "Moo::User");
+        assert!(moo.is_some(), "expected Moo::User model");
+        let moo = moo.unwrap();
+        assert_eq!(moo.framework, Framework::Moo);
     }
 
     #[test]
