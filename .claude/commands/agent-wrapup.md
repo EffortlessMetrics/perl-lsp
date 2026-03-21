@@ -77,6 +77,52 @@ clean handoff to whoever picks up next.
 5. **Update task status.** Mark your tasks as completed with the summary
    from step 1.
 
+6. **File your wrapup on GitHub.** Post your retrospective using the right gh command:
+
+   - **Scouts:**
+     ```bash
+     gh issue comment <NUMBER> --body "## Scout Wrapup
+
+     <summary from steps 1-4>"
+     ```
+
+   - **Builders:**
+     ```bash
+     gh pr comment <NUMBER> --body "## Builder Wrapup
+
+     <summary from steps 1-4>"
+     ```
+
+   - **Plan-reviewers:**
+     ```bash
+     gh issue comment <NUMBER> --body "## Plan-Review Wrapup
+
+     <summary from steps 1-4>"
+     ```
+
+   - **Reviewers:**
+     ```bash
+     gh pr comment <NUMBER> --body "## Review Wrapup
+
+     <summary from steps 1-4>"
+     ```
+
+   - **Ops:**
+     ```bash
+     gh pr comment <NUMBER> --body "## Ops Wrapup
+
+     <summary from steps 1-4>"
+     ```
+
+   - **Wisdom:**
+     ```bash
+     gh issue comment <NUMBER> --body "## Wisdom Wrapup
+
+     <summary from steps 1-4>"
+     ```
+
+   > If you don't file the update on GitHub, the work is invisible.
+
 ## Release the control-plane lock (if you acquired it)
 
 If you acquired the lock during this session, release it now:
