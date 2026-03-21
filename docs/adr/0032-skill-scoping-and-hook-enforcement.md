@@ -97,6 +97,20 @@ Instead of every agent prompt repeating "Invoke /coding-standards", context is i
 
 ---
 
+## Divergence from Original Design
+
+As of 2026-03-21, the following items described in this ADR were not implemented.
+Future agents should treat this section as the ground truth, not the decision tables above.
+
+| Hook | ADR Promise | Actual State |
+|------|------------|--------------|
+| `SubagentStart` | Auto-injects condensed coding standards and known pitfalls from `.claude/swarm-state/known-pitfalls.md` | Implemented as a bare `echo` command in `settings.json`; `.claude/swarm-state/` directory and `subagent-start.sh` do not exist |
+| `TaskCompleted` | Blocks completion unless a metrics entry exists in `swarm-metrics.jsonl` | Only checks `cargo fmt` and `CURRENT_STATUS.md`; no metrics gate implemented |
+| `TeammateIdle` | Registered in `settings.json` to block idle state if in-progress tasks exist | Hook script exists in `docs/handoff/swarm-pack/hooks/` but is **not registered** in live `settings.json` |
+| `PreToolUse` | (not in original ADR) | Inline in `settings.json` as of ADR write date; extracted to `.claude/hooks/pre-tool-use.sh` in PR #2297 |
+
+**Consequence for builders:** The metrics compliance guarantee (Decision 2) was never enforced. The original motivation — zero of 30 PRs contained a metrics entry — was not resolved by this ADR's implementation. A follow-up issue should implement the `TaskCompleted` metrics gate as a separate behavioral change requiring swarm-wide coordination.
+
 ## Files Changed
 
 | File | Change |

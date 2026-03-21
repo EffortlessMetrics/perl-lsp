@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r '.tool_input.command // empty'); if echo \"$CMD\" | grep -qE 'git push --force|git push -f |git checkout \\.|git reset --hard|rm -rf /|cargo publish|git clean -fd'; then echo \"Blocked: dangerous command '$CMD'. Use safer alternatives.\" >&2; exit 2; fi; exit 0"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-tool-use.sh"
           }
         ]
       }
