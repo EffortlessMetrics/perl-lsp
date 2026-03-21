@@ -5,7 +5,7 @@
 ```
 Two interfaces, two agent types:
 
-  Agent()     → Worker agents (11) — worktree-isolated, background, one task, exit
+  Agent()     → Worker agents (12) — worktree-isolated, background, one task, exit
   TeamCreate  → Pipeline leads (3) — long-running, pipeline-stage coordinators, spawn workers
 
 Agent file = identity + objectives + todo list (WHAT to do)
@@ -20,8 +20,8 @@ At small:  User → Orchestrator → Workers (Agent()) directly
 ## Core Pipeline
 
 ```
-scout → plan-reviewer → builder → reviewer → reviewer-deep → ops
-(haiku)   (sonnet)      (sonnet)   (haiku)     (sonnet)     (haiku)
+scout → research-verifier → plan-reviewer → builder → reviewer → reviewer-deep → ops
+(haiku)      (haiku)            (sonnet)      (sonnet)   (haiku)     (sonnet)     (haiku)
 
 Variants: scout-parser, scout-lsp, scout-dap for domain-specific investigation
 Continuation: spawn builder with /builder-read-pr instead of /builder-read-spec
@@ -35,7 +35,7 @@ Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
 | Agent | Model | Pipeline Stage | Workers it spawns |
 |-------|-------|----------------|-------------------|
-| lead-discovery | sonnet | Find work | scout, scout-parser, scout-lsp, scout-dap, plan-reviewer |
+| lead-discovery | sonnet | Find work | scout, scout-parser, scout-lsp, scout-dap, research-verifier, plan-reviewer |
 | lead-build | sonnet | Build from specs | builder |
 | lead-review | sonnet | Review and merge | reviewer, reviewer-deep, ops, wisdom |
 
@@ -44,13 +44,14 @@ session, manage a shared task list, and spawn workers via Agent(). Leads
 never read code or investigate — they only work through subagents.
 disallowedTools (Edit, Write) enforces orchestrator-only role.
 
-## Worker Agents (Agent()) — 11
+## Worker Agents (Agent()) — 12
 
-### Pipeline Agents (6)
+### Pipeline Agents (7)
 
 | Agent | Model | Steps | Role |
 |-------|-------|-------|------|
-| scout | haiku | 8 | Broad investigation → file initial plan |
+| scout | haiku | 9 | Broad investigation → file initial plan |
+| research-verifier | haiku | 6 | Verify external claims (Perl/LSP/API), post findings, add label |
 | plan-reviewer | sonnet | 5 | Refine plan, stress-test, mark builder-ready |
 | builder | sonnet | 6 | Implement from spec → draft PR. Also used for continuation via /builder-read-pr |
 | reviewer | haiku | 5 | Fast standards check (banned patterns, scope) |
@@ -69,12 +70,14 @@ disallowedTools (Edit, Write) enforces orchestrator-only role.
 
 | Agent | Model | Role |
 |-------|-------|------|
-| research-web | sonnet | Web search, doc lookup, fact verification |
+| research-web | sonnet | Ad-hoc web research — single question, spawned by other agents |
 | wisdom | sonnet | Synthesize learnings from issue→PR→merge cycles |
 
 ## Step Skills (27)
 
-**Scout steps:** scout-dedup, scout-locate, scout-reproduce, scout-root-cause, scout-design, scout-test-spec, scout-report
+**Scout steps:** scout-dedup, scout-locate, scout-reproduce, scout-root-cause, scout-design, scout-test-spec, scout-verify, scout-report
+
+**Research-verifier steps:** research-read-issue, research-verify-perl, research-verify-spec, research-verify-api, research-comment
 
 **Builder steps:** builder-read-spec, builder-read-pr, builder-write-test, builder-implement, builder-self-review
 
