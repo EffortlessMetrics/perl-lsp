@@ -182,3 +182,31 @@ fn test_for_loop_expression_init_missing_first_semicolon() {
         errs
     );
 }
+
+/// Missing semicolons AND the body is directly after init — `for (my $i = 0) { }`.
+/// When `)` immediately follows the init (no condition, no update, no semicolons),
+/// the parser must not cascade: it should produce a For node with 1 error, not fail.
+#[test]
+fn test_for_loop_no_semicolons_rparen_immediately() {
+    let src = "for (my $i = 0) { print $i; }\nprint 'done';";
+    let (ast, errs) = parse_with_error_count(src);
+    // This is malformed — must produce at least one error
+    assert!(errs > 0, "Expected at least one error when `)` follows init directly");
+    // Must not cascade — the statement after must still parse
+    let count = statement_count(&ast);
+    assert!(count >= 2, "Statement after bad for loop must still parse. Got {} stmts", count);
+    // For node must survive (not become a cascade of Error nodes)
+    let first_kind = first_statement_kind(&ast);
+    assert_eq!(
+        first_kind, "For",
+        "First statement must be a For node, not '{}'. \
+         The `)` guard in condition parsing must prevent cascading.",
+        first_kind
+    );
+    // Only 1 error expected: the missing first semicolon
+    assert!(
+        errs <= 2,
+        "Error count should be 1 (only the missing first `;`), got {}.",
+        errs
+    );
+}
