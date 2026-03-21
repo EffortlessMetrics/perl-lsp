@@ -39,7 +39,7 @@ mod dap_packaging {
         assert!(release_workflow.contains("target: x86_64-unknown-linux-gnu"));
 
         let publish_workflow = read(repo_root().join(".github/workflows/publish-crates.yml"))?;
-        assert!(publish_workflow.contains("- perl-dap"));
+        assert!(publish_workflow.contains("workspace_members"));
         Ok(())
     }
 
@@ -90,7 +90,7 @@ mod dap_packaging {
         assert!(release_workflow.contains("aarch64-unknown-linux-gnu"));
         assert!(release_workflow.contains("x86_64-apple-darwin"));
         assert!(release_workflow.contains("x86_64-pc-windows-msvc"));
-        assert!(release_workflow.contains("cross build"));
+        assert!(release_workflow.contains("use_cross: true"));
         Ok(())
     }
 }

@@ -26,6 +26,7 @@ mod dap_phase2_tests {
         (adapter, rx)
     }
 
+    #[allow(clippy::panic)]
     fn expect_response(msg: DapMessage, command: &str, expected_success: bool) -> Option<Value> {
         match msg {
             DapMessage::Response { success, command: c, body, .. } => {
