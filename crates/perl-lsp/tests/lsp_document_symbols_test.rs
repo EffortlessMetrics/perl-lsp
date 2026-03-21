@@ -555,3 +555,38 @@ fn test_no_pod_unchanged_symbols() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_pod_sections_reject_invalid_levels() -> TestResult {
+    let server = setup_server();
+    let content =
+        "=head0 INVALID LEVEL\n=head1 VALID\n=head5 INVALID LEVEL\n=head2 ALSO VALID\n1;\n";
+    open_document(&server, "file:///test_levels.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_levels.pm" } })),
+        id: Some(json!(14)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    // Valid levels should appear
+    assert!(
+        symbols.iter().any(|s| s["name"] == "VALID" && s["kind"] == 26),
+        "Valid =head1 must appear"
+    );
+    assert!(
+        symbols.iter().any(|s| s["name"] == "ALSO VALID" && s["kind"] == 26),
+        "Valid =head2 must appear"
+    );
+
+    // Invalid levels should NOT appear
+    assert!(
+        !symbols.iter().any(|s| s["name"] == "INVALID LEVEL"),
+        "=head0 and =head5 must be rejected"
+    );
+
+    Ok(())
+}
