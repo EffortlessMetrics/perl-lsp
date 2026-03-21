@@ -426,7 +426,7 @@ impl<'a> Parser<'a> {
                                 // Collect trailing args without requiring commas first.
                                 let is_fh_builtin = matches!(
                                     name.as_str(),
-                                    "print" | "say" | "printf" | "exec" | "system"
+                                    "print" | "say" | "printf" | "exec" | "system" | "send"
                                 );
                                 if is_fh_builtin && !self.is_at_statement_end()
                                     && !matches!(
@@ -720,7 +720,7 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_assignment()?);
                                     }
-                                } else if matches!(name.as_str(), "print" | "say" | "printf" | "exec" | "system")
+                                } else if matches!(name.as_str(), "print" | "say" | "printf" | "exec" | "system" | "send")
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
                                     // print { $fh } ARGS — block-form filehandle in expr context
