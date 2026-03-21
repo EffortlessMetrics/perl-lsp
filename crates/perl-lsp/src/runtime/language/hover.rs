@@ -140,6 +140,16 @@ impl LspServer {
                 .map(|d| format!("\n**Declaration**: `{}`", d))
                 .unwrap_or_default();
 
+            // Check if this variable is tied — scan AST for a matching Tie node.
+            let tied_info = if symbol_info.kind.is_variable() {
+                let sigil = symbol_info.kind.sigil().unwrap_or("");
+                Self::find_tied_class(ast, sigil, &symbol_info.name)
+                    .map(|cls| format!("\n**Tied to**: `{}`", cls))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+
             let attrs_info = if symbol_info.attributes.is_empty() {
                 String::new()
             } else {
@@ -161,10 +171,11 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
+                        tied_info,
                         attrs_info,
                         complexity_section,
                         doc_info
@@ -738,6 +749,36 @@ impl LspServer {
             _ => {}
         }
         None
+    }
+
+    /// Walk the AST to find a `tie` statement whose variable matches `sigil` and `var_name`.
+    /// Returns the class string if the package argument is a string literal, `None` otherwise.
+    /// Handles the first tie encountered for the given name; retie sequences are a known limitation.
+    fn find_tied_class(node: &Node, sigil: &str, var_name: &str) -> Option<String> {
+        match &node.kind {
+            NodeKind::Tie { variable, package, .. } => {
+                let matched = match &variable.kind {
+                    NodeKind::Variable { sigil: s, name: n } => s == sigil && n == var_name,
+                    NodeKind::VariableDeclaration { variable: inner, .. } => {
+                        matches!(&inner.kind, NodeKind::Variable { sigil: s, name: n } if s == sigil && n == var_name)
+                    }
+                    _ => false,
+                };
+                if matched {
+                    if let NodeKind::String { value, .. } = &package.kind {
+                        return Some(value.trim_matches(|c| c == '\'' || c == '"').to_string());
+                    }
+                }
+                None
+            }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                statements.iter().find_map(|s| Self::find_tied_class(s, sigil, var_name))
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                Self::find_tied_class(expression, sigil, var_name)
+            }
+            _ => None,
+        }
     }
 
     /// Extract parameter names from a params node (for signature help)
