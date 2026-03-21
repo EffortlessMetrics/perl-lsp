@@ -2,6 +2,7 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
     use tree_sitter_perl::stateful_parser::StatefulPerlParser;
 
@@ -118,7 +119,7 @@ print <<~EOF;
 print "Done\n";
 "#;
 
-        let _ast = parser.parse(code).unwrap();
+        let _ast = must(parser.parse(code));
         // The stateful parser should properly handle both heredocs and format
     }
 
@@ -187,7 +188,7 @@ my $status = do {
 };
 "#;
 
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
 
         // Verify parsing succeeded with complex real-world patterns

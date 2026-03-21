@@ -19,7 +19,7 @@ print $text;"#;
         }
         assert!(result.is_ok(), "Failed to parse basic heredoc");
 
-        let ast = result.unwrap();
+        let ast = must(result);
         eprintln!("Parse succeeded, AST type: {:?}", std::mem::discriminant(&ast));
 
         eprintln!("Calling parse_to_sexp...");
@@ -27,7 +27,7 @@ print $text;"#;
         if let Err(ref e) = sexp_result {
             eprintln!("S-expression generation failed: {:?}", e);
         }
-        let sexp = sexp_result.unwrap();
+        let sexp = must(sexp_result);
         eprintln!("S-expression generated:\n{}", sexp);
         assert!(sexp.contains("Hello, World"));
     }

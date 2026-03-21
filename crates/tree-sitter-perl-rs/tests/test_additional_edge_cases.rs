@@ -1,4 +1,5 @@
 //! Test additional edge cases mentioned in the audit
+use perl_tdd_support::must_some;
 use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
 
 #[test]
@@ -15,7 +16,7 @@ fn test_number_formats() {
         println!("\n=== Testing {} ===", desc);
         let mut lexer = PerlLexer::new(input);
 
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         println!("Token: {:?}", token);
         assert!(matches!(token.token_type, TokenType::Number(_)));
     }
@@ -78,7 +79,7 @@ fn test_transliteration_operators() {
         println!("\n=== Testing {} ===", desc);
         let mut lexer = PerlLexer::new(input);
 
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         println!("Token: {:?}", token);
 
         // Check if it's recognized as a transliteration
