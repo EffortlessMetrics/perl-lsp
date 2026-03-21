@@ -793,10 +793,15 @@ fn test_all_command_routing_paths() {
         "perl.runTestSub",
         "perl.debugTests",
         "perl.runCritic",
+        "perl.runTest",
+        "perl.runTestFile",
+        "perl.runSubtest",
+        "perl.debugFile",
+        "perl.debugTest",
     ];
 
     for command in commands_to_test {
-        let args = if command == "perl.runTestSub" {
+        let args = if command == "perl.runTestSub" || command == "perl.runSubtest" {
             vec![Value::String("/tmp/test.pl".to_string()), Value::String("test_sub".to_string())]
         } else {
             vec![Value::String("/tmp/test.pl".to_string())]
@@ -1187,5 +1192,174 @@ fn test_execute_command_multi_root_security() -> Result<(), Box<dyn std::error::
     fs::remove_dir_all(&workspace_dir2).ok();
     fs::remove_file(&outside_file).ok();
 
+    Ok(())
+}
+
+// ============= ADVERTISED-BUT-UNHANDLED COMMAND WIRING TESTS =============
+// Issue #2691: perl.runTest, perl.runTestFile, perl.runSubtest, perl.debugFile, perl.debugTest
+// were advertised by get_supported_commands() but hit the "Unknown command" fallback.
+
+#[test]
+fn test_supported_commands_includes_all_advertised() {
+    let commands = get_supported_commands();
+    let required =
+        ["perl.runTest", "perl.runTestFile", "perl.runSubtest", "perl.debugFile", "perl.debugTest"];
+    for cmd in &required {
+        assert!(
+            commands.contains(&cmd.to_string()),
+            "{} should be in supported commands list",
+            cmd
+        );
+    }
+}
+
+#[test]
+fn test_all_supported_commands_are_handled() {
+    // Every command in get_supported_commands() should be recognized by
+    // execute_command() — none should return "Unknown command".
+    let provider = ExecuteCommandProvider::new();
+    let commands = get_supported_commands();
+
+    for command in &commands {
+        // Supply minimal arguments (a bogus path) so we hit the match arm,
+        // not an argument-validation error.  We only care that the error is
+        // NOT "Unknown command".
+        let result =
+            provider.execute_command(command, vec![Value::String("/tmp/test.pl".to_string())]);
+        match &result {
+            Err(e) => {
+                assert!(
+                    !e.contains("Unknown command"),
+                    "Command {} should be handled, but got: {}",
+                    command,
+                    e
+                );
+            }
+            Ok(_) => { /* handled successfully — fine */ }
+        }
+    }
+}
+
+#[test]
+fn test_command_routing_perl_run_test() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_run_test.t");
+    fs::write(&temp_file, "use Test::More;\nok(1);\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider
+        .execute_command("perl.runTest", vec![Value::String(temp_file.display().to_string())]);
+
+    assert!(result.is_ok(), "perl.runTest should dispatch without Unknown command error");
+    let value = result?;
+    assert!(value.is_object(), "Should return a structured result");
+    assert!(value["success"].is_boolean(), "Should have success field");
+    assert!(value["output"].is_string(), "Should have output field");
+    Ok(())
+}
+
+#[test]
+fn test_command_routing_perl_run_test_file() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_run_test_file.t");
+    fs::write(&temp_file, "use Test::More;\nok(1);\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider
+        .execute_command("perl.runTestFile", vec![Value::String(temp_file.display().to_string())]);
+
+    assert!(result.is_ok(), "perl.runTestFile should dispatch without Unknown command error");
+    let value = result?;
+    assert!(value.is_object(), "Should return a structured result");
+    assert!(value["success"].is_boolean(), "Should have success field");
+    assert!(value["output"].is_string(), "Should have output field");
+    Ok(())
+}
+
+#[test]
+fn test_command_routing_perl_run_subtest() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_run_subtest.t");
+    fs::write(
+        &temp_file,
+        "use Test::More;\nsub my_subtest { ok(1); }\nmy_subtest();\ndone_testing;\n",
+    )?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.runSubtest",
+        vec![
+            Value::String(temp_file.display().to_string()),
+            Value::String("my_subtest".to_string()),
+        ],
+    );
+
+    assert!(result.is_ok(), "perl.runSubtest should dispatch without Unknown command error");
+    let value = result?;
+    assert!(value.is_object(), "Should return a structured result");
+    assert!(value["success"].is_boolean(), "Should have success field");
+    assert!(value["subroutine"].is_string(), "Should have subroutine field");
+    Ok(())
+}
+
+#[test]
+fn test_command_routing_perl_debug_file() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_debug_file.pl");
+    fs::write(&temp_file, "print 'debug file';")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider
+        .execute_command("perl.debugFile", vec![Value::String(temp_file.display().to_string())]);
+
+    assert!(result.is_ok(), "perl.debugFile should dispatch without Unknown command error");
+    let value = result?;
+    assert!(value.is_object(), "Should return a structured result");
+    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
+    assert!(value["output"].is_string(), "Should have output field");
+    Ok(())
+}
+
+#[test]
+fn test_command_routing_perl_debug_test() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_debug_test.t");
+    fs::write(&temp_file, "use Test::More;\nok(1);\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider
+        .execute_command("perl.debugTest", vec![Value::String(temp_file.display().to_string())]);
+
+    assert!(result.is_ok(), "perl.debugTest should dispatch without Unknown command error");
+    let value = result?;
+    assert!(value.is_object(), "Should return a structured result");
+    assert_eq!(value["success"], false, "Debug should indicate not yet implemented");
+    assert!(value["output"].is_string(), "Should have output field");
+    Ok(())
+}
+
+#[test]
+fn test_perl_run_subtest_missing_subroutine_arg() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_subtest_no_arg.t");
+    fs::write(&temp_file, "use Test::More;\ndone_testing;\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider
+        .execute_command("perl.runSubtest", vec![Value::String(temp_file.display().to_string())]);
+
+    assert!(result.is_err(), "perl.runSubtest should fail without subroutine name");
+    let err = result.err().ok_or("expected error")?;
+    assert!(
+        err.contains("Missing subroutine name"),
+        "Should report missing subroutine name, got: {}",
+        err
+    );
     Ok(())
 }
