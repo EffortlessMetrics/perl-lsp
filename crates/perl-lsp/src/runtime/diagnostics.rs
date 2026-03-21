@@ -306,6 +306,11 @@ impl LspServer {
                         }
                     }
 
+                    // Snapshot capability flag once before the loop to avoid
+                    // acquiring client_capabilities lock per diagnostic item
+                    let markup_message_support =
+                        self.client_capabilities.lock().markup_message_support;
+
                     // Convert to LSP diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics
                         .into_iter()
@@ -347,7 +352,7 @@ impl LspServer {
                             }
 
                             // Add markdown content if client supports it (LSP 3.18)
-                            if self.client_capabilities.lock().markup_message_support {
+                            if markup_message_support {
                                 let markdown = self
                                     .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
                                 diag["data"] = json!({
