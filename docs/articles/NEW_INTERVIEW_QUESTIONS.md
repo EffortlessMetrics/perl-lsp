@@ -63,11 +63,23 @@ Each question includes: the question itself, why it unlocks an interesting story
 
 **Evidence from codebase**:
 - INTERVIEW_QA.md: "I think we're already there, no? At this point it's about finding ways to make a better user experience."
-- CPAN corpus: 85%+ clean out of 4,355+ files
+- CPAN corpus baseline: 85.4% clean (3,717/4,355 files) as of 2026-03-20
+- Lib-file sweep after March 21 parser fixes: 90.9% clean (3,077/3,386 files)
+- Manifest: 2,052 clean modules explicitly verified
 - docs/issues/corpus/gaps/ lists specific gap categories including source filters and exotic syntax
 - Memory: `scout_unexpected_token_analysis.md` categorizes 146 failing files into 10 subcategories
 
+**Draft answer**:
+
+"There are two numbers. There's the baseline — 85.4% on 4,355 full corpus files — and there's the sweep, which is 90.9% on the lib-file subset after recent parser fixes. The gap between those two numbers is partly real and partly measurement artifact. The full corpus includes test files, scripts, and edge-case modules that nobody deploys. The lib-file sweep is closer to what you'd actually see in a production Perl codebase.
+
+The remaining ~10% breaks into categories. Source filters — code that rewrites itself before parsing — are structurally unfixable for any static parser. Exotic DSL syntax (some Moose patterns, some DBIx::Class query generation) needs semantic awareness, not just parsing. And then there's a long tail of real bugs we haven't fixed yet. The ratchet tracks all three: it just can't tell them apart.
+
+So when I said 'I think we're already there' — I meant for the IDE features that matter: go-to-definition, real-time diagnostics, hover. Those work. The 10% that doesn't parse cleanly mostly generates a degraded experience, not a broken one. The parser produces partial results, and the LSP does its best with what it has. That's different from saying we're done. We're not done. But 'not done' and 'not useful yet' are different claims."
+
 **Follow-up**: Have you profiled what percentage of Perl code in active production codebases falls in that 15%? Is the gap CPAN-specific or representative of what users actually write?
+
+*Updated 2026-03-21: baseline 85.4% (3,717/4,355), manifest 2,052 modules, 90.9% clean on lib-file sweep. Fat-arrow fix (#2613) and defined/ref fix (#2626) merged this session — estimated 80+ newly clean files not yet reflected in baseline JSON.*
 
 ---
 
