@@ -613,7 +613,7 @@ impl<'a> Parser<'a> {
             }
         }
         // Handle bare arguments (no parentheses)
-        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::Minus | TokenKind::QuoteWords))
+        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::Minus | TokenKind::QuoteWords | TokenKind::QuoteSingle | TokenKind::QuoteDouble))
             && !Self::is_statement_terminator(self.peek_kind())
         {
             // Parse bare arguments like: use warnings 'void' or use constant FOO => 42
@@ -667,6 +667,23 @@ impl<'a> Parser<'a> {
                             _ => {
                                 // No separator, just continue
                             }
+                        }
+                    }
+                    Some(TokenKind::QuoteSingle) | Some(TokenKind::QuoteDouble) => {
+                        // Handle q{} / qq{} quote operators in use import lists
+                        // e.g. use overload q{""} => sub { ... };
+                        args.push(self.consume_token()?.text.to_string());
+
+                        // Handle fat arrow after quote key (same as String handling)
+                        match self.peek_kind() {
+                            Some(TokenKind::Comma) => {
+                                self.consume_token()?; // consume comma
+                            }
+                            Some(TokenKind::FatArrow) => {
+                                self.consume_token()?; // consume =>
+                                self.consume_use_import_value(&mut args)?;
+                            }
+                            _ => {}
                         }
                     }
                     Some(TokenKind::QuoteWords) => {
