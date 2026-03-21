@@ -877,6 +877,31 @@ mod tests {
             let doc = docs.get(uri).ok_or("document not stored after didChange")?;
             assert!(doc.text.contains("43"), "document text must be updated");
             assert!(doc.ast.is_some(), "AST must be present after incremental change");
+            // incremental_doc must still be present after a ranged edit
+            assert!(doc.incremental_doc.is_some(), "incremental_doc must survive a ranged edit");
+            // The incremental doc's internal source must reflect the edit.
+            // This catches a silent reinit-instead-of-apply bug: reinit would also hold
+            // "43" in the source, but would not have the version counter bumped from 0.
+            // Checking the source text is the strongest behavioral assertion available
+            // without mocking the apply_edits call itself.
+            let inc = doc.incremental_doc.as_ref().unwrap();
+            assert!(
+                inc.source.contains("43"),
+                "incremental_doc.source must contain the edit result; got: {:?}",
+                inc.source
+            );
+            assert!(
+                !inc.source.contains("42"),
+                "incremental_doc.source must not contain the old value; got: {:?}",
+                inc.source
+            );
+            // version > 0 proves apply_edits was called (increments version), not just reinit
+            // (which starts at version 0 after IncrementalDocument::new).
+            assert!(
+                inc.version > 0,
+                "incremental_doc.version must be > 0 after at least one edit; got {}",
+                inc.version
+            );
         }
         Ok(())
     }
