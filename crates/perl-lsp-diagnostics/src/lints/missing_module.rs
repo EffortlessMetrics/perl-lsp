@@ -65,7 +65,8 @@ pub const CORE_MODULES: &[&str] = &[
     "Carp",
     "Scalar::Util",
     "List::Util",
-    "List::MoreUtils",
+    // Note: List::MoreUtils is NOT a core module (it is a CPAN distribution).
+    // It intentionally does NOT appear here so that missing installations are detected.
     "File::Basename",
     "File::Path",
     "File::Spec",
@@ -342,5 +343,70 @@ mod tests {
         check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
         assert_eq!(diags.len(), 1);
         assert_eq!(diags[0].severity, DiagnosticSeverity::Warning);
+    }
+
+    // --- edge cases ---
+
+    /// `use if COND, 'Module'` stores module="if" in the AST.
+    /// "if" is in CORE_MODULES so it must never emit PL701.
+    #[test]
+    fn use_if_conditional_not_flagged() {
+        // The parser stores module = "if" for the `use if` form.
+        // CORE_MODULES contains "if", so no diagnostic should fire.
+        let source = "use if $^O eq 'MSWin32', 'Win32';\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        assert!(
+            diags.is_empty(),
+            "`use if` conditional form must not emit PL701 (got {} diagnostics)",
+            diags.len()
+        );
+    }
+
+    /// `List::MoreUtils` is a CPAN module, not a Perl core module.
+    /// It must NOT be silently skipped — PL701 should fire when the resolver
+    /// cannot find it.
+    #[test]
+    fn list_more_utils_is_not_core_and_fires_pl701() {
+        let source = "use List::MoreUtils qw(any all);\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        assert_eq!(
+            diags.len(),
+            1,
+            "List::MoreUtils is not a core module; PL701 should fire when the resolver cannot find it"
+        );
+        assert_eq!(diags[0].code.as_deref(), Some("PL701"));
+        assert!(diags[0].message.contains("List::MoreUtils"));
+    }
+
+    /// Resolver returning `false` never causes a panic or double-borrow even when
+    /// called many times in one pass (validates the closure is re-entrant safe).
+    #[test]
+    fn resolver_called_multiple_times_is_stable() {
+        let source = "use A::B;\nuse C::D;\nuse E::F;\nuse G::H;\nuse I::J;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let call_count = std::cell::Cell::new(0u32);
+        check_missing_modules(&ast, source, |_| { call_count.set(call_count.get() + 1); false }, &mut diags);
+        assert_eq!(diags.len(), 5, "five distinct missing modules should each emit PL701");
+        assert_eq!(call_count.get(), 5, "resolver should be called exactly once per non-core module");
+    }
+
+    /// Suggestion text must contain the module name so the user knows what to install.
+    #[test]
+    fn suggestion_contains_module_name() {
+        let source = "use Some::Package;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("Some::Package"),
+            "suggestion should mention the module name; got: {suggestion:?}"
+        );
     }
 }
