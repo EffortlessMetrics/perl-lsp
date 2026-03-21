@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Agent preflight safety checks
+# Run before any edit-capable agent starts work.
+#
+# Exit codes:
+#   0 — all checks pass
+#   1 — branch issue (on master/main or detached HEAD)
+#   2 — worktree issue (not running in an isolated git worktree)
+#   3 — conflict issue (unresolved merge conflicts present)
+#
+# Usage:
+#   bash scripts/agent-preflight.sh
+
+set -uo pipefail
+
+PASS=0
+FAIL=0
+
+ok()  { printf 'OK  %s\n' "$1"; PASS=$((PASS + 1)); }
+err() { printf 'ERR %s\n' "$1"; FAIL=$((FAIL + 1)); }
+
+echo "=== Agent Preflight Checks ==="
+echo ""
+
+# ── Check 1: Not on master or main ───────────────────────────────────────────
+
+CURRENT_BRANCH="$(git branch --show-current 2>/dev/null)"
+
+if [[ -z "$CURRENT_BRANCH" ]]; then
+    err "Detached HEAD state. Agents must work on a named branch."
+    echo "    Fix: git checkout -b agent-<id> or use a worktree with a branch"
+    BRANCH_OK=false
+elif [[ "$CURRENT_BRANCH" == "master" || "$CURRENT_BRANCH" == "main" ]]; then
+    err "On protected branch '$CURRENT_BRANCH'. Agents must not edit master/main directly."
+    echo "    Fix: Work in an isolated worktree with its own branch (isolation: worktree)"
+    BRANCH_OK=false
+else
+    ok "Branch: $CURRENT_BRANCH (not master/main)"
+    BRANCH_OK=true
+fi
+
+# ── Check 2: Running inside a git worktree (not the main checkout) ────────────
+
+GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)"
+GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
+
+if [[ "$GIT_DIR" == "$GIT_COMMON_DIR" ]]; then
+    # git-dir equals common-dir → this IS the main checkout, not a worktree
+    err "Not in an isolated git worktree. Agents require worktree isolation."
+    echo "    Fix: Spawn agent with isolation: worktree in the agent definition"
+    echo "    The main checkout is: $GIT_COMMON_DIR"
+    WORKTREE_OK=false
+else
+    ok "Worktree: isolated (git-dir=$GIT_DIR)"
+    WORKTREE_OK=true
+fi
+
+# ── Check 3: No unresolved merge conflicts ────────────────────────────────────
+
+# Search for conflict markers, skipping the .git directory
+CONFLICT_FILES="$(grep -rl --exclude-dir='.git' '^<<<<<<< ' . 2>/dev/null || true)"
+
+if [[ -n "$CONFLICT_FILES" ]]; then
+    err "Unresolved merge conflict markers found:"
+    while IFS= read -r f; do
+        echo "    $f"
+    done <<< "$CONFLICT_FILES"
+    echo "    Fix: Resolve conflicts, then re-run preflight"
+    CONFLICT_OK=false
+else
+    ok "No unresolved merge conflicts"
+    CONFLICT_OK=true
+fi
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+
+echo ""
+echo "=== $PASS passed, $FAIL failed ==="
+
+if [[ "$BRANCH_OK" == false ]]; then
+    exit 1
+fi
+
+if [[ "$WORKTREE_OK" == false ]]; then
+    exit 2
+fi
+
+if [[ "$CONFLICT_OK" == false ]]; then
+    exit 3
+fi
+
+echo ""
+echo "Preflight passed. Safe to begin work."
+exit 0
