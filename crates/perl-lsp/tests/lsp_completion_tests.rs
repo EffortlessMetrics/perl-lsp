@@ -1303,7 +1303,13 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-/// Test that keyword completions do NOT include commit characters
+/// Test that keyword completions do NOT include commit characters.
+///
+/// Uses "retur" as the prefix because "return" is a plain Keyword (not a snippet),
+/// so it serializes as LSP kind 14 and is guaranteed to appear in the response.
+/// "fore" was the original prefix but it only matches "foreach", which is a
+/// Snippet (kind 15) — the kind-14 filter would find zero items and the test
+/// would pass vacuously.
 #[test]
 fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
@@ -1320,7 +1326,7 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "fore"
+                    "text": "retur"
                 }
             }
         }),
@@ -1334,14 +1340,24 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
             "method": "textDocument/completion",
             "params": {
                 "textDocument": { "uri": uri },
-                "position": { "line": 0, "character": 4 }
+                "position": { "line": 0, "character": 5 }
             }
         }),
     );
 
     let items = completion_items(&response);
-    // LSP kind 14 = Keyword — none should have commitCharacters
-    let kw_items: Vec<_> = items.iter().filter(|item| item["kind"] == 14).collect();
+    // LSP kind 14 = Keyword. Filter to only items whose label starts with "return" so we
+    // don't accidentally match Constant items (which also serialize as kind 14).
+    let kw_items: Vec<_> = items
+        .iter()
+        .filter(|item| item["kind"] == 14 && item["label"].as_str().map(|l| l.starts_with("retur")).unwrap_or(false))
+        .collect();
+
+    assert!(
+        !kw_items.is_empty(),
+        "Expected at least one keyword completion for prefix 'retur' but got none — test would pass vacuously"
+    );
+
     for kw in &kw_items {
         assert!(
             kw.get("commitCharacters").is_none() || kw["commitCharacters"].is_null(),
