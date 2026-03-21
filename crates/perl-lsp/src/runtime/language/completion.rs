@@ -38,13 +38,17 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
 
 /// Returns commit characters for a completion item based on its kind.
 /// Each string is exactly one character, per the LSP 3.x spec.
-fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<Vec<String>> {
+///
+/// Returns a static slice to avoid per-item heap allocation in the completion
+/// serialization hot path (called once per item, up to `completion_cap()` times
+/// per request, on every keypress in editors).
+fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static str]> {
     match kind {
-        CompletionItemKind::Function => Some(vec!["(".into(), ",".into(), ";".into()]),
-        CompletionItemKind::Variable => Some(vec!["[".into(), "{".into(), ".".into(), ";".into()]),
-        CompletionItemKind::Module => Some(vec![";".into()]),
-        CompletionItemKind::Constant => Some(vec!["[".into(), "{".into(), ".".into(), ";".into()]),
-        CompletionItemKind::Property => Some(vec![",".into(), "}".into()]),
+        CompletionItemKind::Function => Some(&["(", ",", ";"]),
+        CompletionItemKind::Variable => Some(&["[", "{", ".", ";"]),
+        CompletionItemKind::Module => Some(&[";"]),
+        CompletionItemKind::Constant => Some(&["[", "{", ".", ";"]),
+        CompletionItemKind::Property => Some(&[",", "}"]),
         _ => None,
     }
 }
