@@ -115,6 +115,10 @@ impl LspServer {
                         self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), errors)
                     }
+                    Err(crate::error::ParseError::Cancelled) => {
+                        tracing::debug!("Parse cancelled for {} — newer change pending", uri);
+                        return Ok(());
+                    }
                     Err(e) => (None, vec![e]),
                 }
             };
@@ -410,6 +414,10 @@ impl LspServer {
                             self.ast_cache.put(uri.to_string(), &text, Arc::clone(&arc_ast));
                             (Some((*arc_ast).clone()), errors)
                         }
+                        Err(crate::error::ParseError::Cancelled) => {
+                            tracing::debug!("Parse cancelled for {} — newer change pending", uri);
+                            return Ok(());
+                        }
                         Err(e) => (None, vec![e]),
                     }
                 };
@@ -554,6 +562,18 @@ impl LspServer {
             // Remove from documents
             let mut documents = self.documents.lock();
             documents.remove(&normalized_uri).or_else(|| documents.remove(uri));
+
+            // Cancel any in-progress parse and clean up the cancellation flag.
+            {
+                let mut flags = self.parse_cancel_flags.lock();
+                if let Some(flag) = flags.remove(&normalized_uri) {
+                    flag.store(true, Ordering::Release);
+                }
+                // Also try raw URI in case normalize produced a different key.
+                if let Some(flag) = flags.remove(uri) {
+                    flag.store(true, Ordering::Release);
+                }
+            }
 
             // Clear from workspace index
             // Note: Mutation operation - use coordinator.index() directly

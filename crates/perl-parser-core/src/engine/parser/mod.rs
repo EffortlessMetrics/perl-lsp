@@ -63,7 +63,7 @@ use crate::{
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 // Import enhanced recovery module
@@ -95,6 +95,10 @@ pub struct Parser<'a> {
     heredoc_start_time: Option<Instant>,
     /// Collection of parse errors encountered during parsing (for error recovery)
     errors: Vec<ParseError>,
+    /// Optional cancellation flag for cooperative cancellation from the LSP server.
+    cancellation_flag: Option<Arc<AtomicBool>>,
+    /// Counter to amortize cancellation checks (only check every 64 statements)
+    cancellation_check_counter: usize,
     // Enhanced error recovery state
     // pub enhanced_recovery: EnhancedRecovery,
 }
@@ -138,16 +142,36 @@ impl<'a> Parser<'a> {
             byte_cursor: 0,
             heredoc_start_time: None,
             errors: Vec::new(),
+            cancellation_flag: None,
+            cancellation_check_counter: 0,
             // enhanced_recovery: EnhancedRecovery::new(RecoveryConfig::default()),
         }
     }
 
     /// Create a new parser with a cancellation flag for cooperative cancellation.
     ///
-    /// Note: the cancellation flag is accepted for API compatibility but is not
-    /// currently polled during parsing.
-    pub fn new_with_cancellation(input: &'a str, _cancellation_flag: Arc<AtomicBool>) -> Self {
-        Parser::new(input)
+    /// When the flag is set to `true`, the parser will return `Err(ParseError::Cancelled)`
+    /// at the next cancellation check point (every 64 statements).
+    pub fn new_with_cancellation(input: &'a str, cancellation_flag: Arc<AtomicBool>) -> Self {
+        let mut p = Parser::new(input);
+        p.cancellation_flag = Some(cancellation_flag);
+        p
+    }
+
+    /// Check for cooperative cancellation, amortised over every 64 calls.
+    ///
+    /// Returns `Err(ParseError::Cancelled)` if the cancellation flag has been set.
+    #[inline]
+    fn check_cancelled(&mut self) -> ParseResult<()> {
+        self.cancellation_check_counter = self.cancellation_check_counter.wrapping_add(1);
+        if self.cancellation_check_counter & 63 == 0 {
+            if let Some(ref flag) = self.cancellation_flag {
+                if flag.load(Ordering::Relaxed) {
+                    return Err(ParseError::Cancelled);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Create a new parser with custom enhanced recovery configuration.
@@ -198,6 +222,12 @@ impl<'a> Parser<'a> {
     /// # Ok::<(), perl_parser_core::ParseError>(())
     /// ```
     pub fn parse(&mut self) -> ParseResult<Node> {
+        // Check cancellation before starting — handles pre-set flags immediately.
+        if let Some(ref flag) = self.cancellation_flag {
+            if flag.load(Ordering::Relaxed) {
+                return Err(ParseError::Cancelled);
+            }
+        }
         self.parse_program()
     }
 
