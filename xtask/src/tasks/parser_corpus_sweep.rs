@@ -66,6 +66,28 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     ("expected expression, found '}'", "unexpected_rbrace_expr"),
     ("expected expression, found ')'", "unexpected_rparen_expr"),
     ("expected expression, found 'end of input'", "unexpected_eof_expr"),
+    // Expression errors — closing bracket
+    ("expected expression, found ']'", "unexpected_rbracket_expr"),
+    // Expression errors — keywords not yet explicitly bucketed
+    ("expected expression, found 'if'", "unexpected_token_if"),
+    ("expected expression, found 'my'", "unexpected_token_my"),
+    ("expected expression, found 'our'", "unexpected_token_our"),
+    ("expected expression, found 'local'", "unexpected_token_local"),
+    ("expected expression, found 'sub'", "unexpected_token_sub"),
+    ("expected expression, found 'package'", "unexpected_token_package"),
+    ("expected expression, found 'eval'", "unexpected_token_eval"),
+    ("expected expression, found 'do'", "unexpected_token_do"),
+    ("expected expression, found 'next'", "unexpected_token_next"),
+    ("expected expression, found 'last'", "unexpected_token_last"),
+    ("expected expression, found 'redo'", "unexpected_token_redo"),
+    // Expression errors — assignment operators ('==' before '=' is defensive: without quotes
+    // "found ==" would contain "found =" as a substring, so the ordering is correct even
+    // though the quoted forms are distinct strings in practice)
+    ("expected expression, found '=='", "unexpected_eq_expr"),
+    ("expected expression, found '=~'", "unexpected_match_expr"),
+    ("expected expression, found '='", "unexpected_assign_expr"),
+    // Expression errors — range operator
+    ("expected expression, found '..'", "unexpected_range_expr"),
     // Catch-all for remaining unexpected expression tokens (MUST remain last)
     ("expected expression, found", "unexpected_token_in_expr"),
     // Unclosed delimiters — user-friendly names ('}', ')', ']')
@@ -924,7 +946,7 @@ mod tests {
     fn test_normalize_error_bucket_trailing_at() {
         // Position suffix stripped, then mapped to semantic bucket
         assert_eq!(
-            normalize_error_bucket("expected RightBracket, found Eof at 42"),
+            normalize_error_bucket("expected ']', found end of input at 42"),
             "unclosed_bracket",
         );
         // Just position stripping, no semantic match
@@ -952,7 +974,7 @@ mod tests {
     #[test]
     fn test_normalize_error_bucket_unclosed_brace_semicolon() {
         assert_eq!(
-            normalize_error_bucket("Unexpected token: expected RightBrace, found Semicolon at 42"),
+            normalize_error_bucket("Unexpected token: expected '}', found ';' at 42"),
             "unclosed_brace_semicolon",
         );
     }
@@ -960,24 +982,25 @@ mod tests {
     #[test]
     fn test_semantic_bucket_mapping() {
         let cases = [
-            ("expected expression, found FatArrow at 10", "unexpected_fat_arrow_expr"),
-            ("expected expression, found Arrow", "unexpected_arrow_expr"),
-            ("expected expression, found Slash at 5", "unexpected_slash_expr"),
-            ("expected expression, found Question", "unexpected_question_expr"),
-            ("expected expression, found Return at 99", "unexpected_return_expr"),
+            // Display-name format (current parser output uses TokenKind::display_name())
+            ("expected expression, found '=>' at 10", "unexpected_fat_arrow_expr"),
+            ("expected expression, found '->'", "unexpected_arrow_expr"),
+            ("expected expression, found '/' at 5", "unexpected_slash_expr"),
+            ("expected expression, found '?'", "unexpected_question_expr"),
+            ("expected expression, found 'return' at 99", "unexpected_return_expr"),
             ("expected expression, found SomeOtherToken", "unexpected_token_in_expr"),
-            ("expected RightBrace, found Eof", "unclosed_brace_eof"),
-            ("expected RightBrace, found Semicolon", "unclosed_brace_semicolon"),
-            ("expected RightBrace, found Something", "unclosed_brace"),
-            ("expected RightParen, found Identifier", "unclosed_paren_identifier"),
-            ("expected RightParen, found Eof", "unclosed_paren"),
-            ("expected RightBracket, found Eof", "unclosed_bracket"),
-            ("expected LeftParen, found Semicolon", "expected_left_paren"),
-            ("expected LeftBrace, found Semicolon", "expected_left_brace"),
-            ("expected Semicolon, found RightBrace", "expected_semicolon"),
-            ("expected Colon, found Semicolon", "expected_colon"),
-            ("expected Identifier, found Number", "expected_identifier"),
-            ("expected Comma, found Semicolon", "expected_comma"),
+            ("expected '}', found end of input", "unclosed_brace_eof"),
+            ("expected '}', found ';'", "unclosed_brace_semicolon"),
+            ("expected '}'", "unclosed_brace"),
+            ("expected ')', found identifier", "unclosed_paren_identifier"),
+            ("expected ')'", "unclosed_paren"),
+            ("expected ']'", "unclosed_bracket"),
+            ("expected '('", "expected_left_paren"),
+            ("expected '{'", "expected_left_brace"),
+            ("expected ';'", "expected_semicolon"),
+            ("expected ':'", "expected_colon"),
+            ("expected identifier", "expected_identifier"),
+            ("expected ','", "expected_comma"),
             ("Expected variable, found something", "expected_variable"),
             ("Expected string or identifier in import list", "expected_import_item"),
             ("Expected comma or closing parenthesis in signature", "signature_param"),
@@ -986,11 +1009,61 @@ mod tests {
             ("Expected '>' to close angle bracket", "unclosed_angle"),
             ("Substitution operator should be s///", "substitution_misparse"),
             ("Invalid syntax at position 42: Expected variable, found X", "expected_variable"),
+            // New entries added by issue #2587
+            ("expected expression, found ']'", "unexpected_rbracket_expr"),
+            ("expected expression, found 'if'", "unexpected_token_if"),
+            ("expected expression, found 'my'", "unexpected_token_my"),
+            ("expected expression, found 'our'", "unexpected_token_our"),
+            ("expected expression, found 'local'", "unexpected_token_local"),
+            ("expected expression, found 'sub'", "unexpected_token_sub"),
+            ("expected expression, found 'package'", "unexpected_token_package"),
+            ("expected expression, found 'eval'", "unexpected_token_eval"),
+            ("expected expression, found 'do'", "unexpected_token_do"),
+            ("expected expression, found 'next'", "unexpected_token_next"),
+            ("expected expression, found 'last'", "unexpected_token_last"),
+            ("expected expression, found 'redo'", "unexpected_token_redo"),
+            ("expected expression, found '='", "unexpected_assign_expr"),
+            ("expected expression, found '=='", "unexpected_eq_expr"),
+            ("expected expression, found '=~'", "unexpected_match_expr"),
+            ("expected expression, found '..'", "unexpected_range_expr"),
         ];
 
         for (input, expected) in cases {
             assert_eq!(normalize_error_bucket(input), expected, "Failed for input: {input}",);
         }
+    }
+
+    #[test]
+    fn test_double_slash_not_swallowed_by_slash_bucket() {
+        // '//' must not match unexpected_slash_expr — the '//' entry must precede '/' in
+        // SEMANTIC_BUCKETS if it is ever added. This test documents the ordering constraint
+        // and will need updating when a '//' bucket entry is added.
+        // NOTE: "expected expression, found '//'" does NOT contain "found '/'" literally —
+        // the quotes around '//' mean it won't match the "'/" substring in the '/' entry.
+        // Verify: '//' is caught by unexpected_token_in_expr (no dedicated entry yet).
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '//'"),
+            "unexpected_token_in_expr",
+        );
+    }
+
+    #[test]
+    fn test_eq_not_swallowed_by_assign_bucket() {
+        // '==' message must map to unexpected_eq_expr, not unexpected_assign_expr.
+        // The quoted form "found '=='" does NOT contain "found '='" as a substring
+        // (the trailing quote disambiguates), but keeping '==' before '=' is defensive
+        // in case the message format ever changes to unquoted tokens.
+        assert_eq!(normalize_error_bucket("expected expression, found '=='"), "unexpected_eq_expr",);
+        // '=~' must also route to its own bucket, not '='
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '=~'"),
+            "unexpected_match_expr",
+        );
+        // '=' itself still routes correctly
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '='"),
+            "unexpected_assign_expr",
+        );
     }
 
     #[test]
@@ -1182,7 +1255,7 @@ mod tests {
         // so inner trailing " at N" is NOT stripped by the second regex
         // (the first regex branch succeeds, so RE_TRAILING_AT is skipped).
         let result = normalize_error_bucket(
-            "Invalid syntax at position 42: expected Semicolon, found Eof at 99",
+            "Invalid syntax at position 42: expected ';', found end of input at 99",
         );
         assert_eq!(result, "expected_semicolon");
     }
@@ -1218,7 +1291,7 @@ mod tests {
     fn test_normalize_error_bucket_whitespace_preserved() {
         // Ensure leading/trailing whitespace in the message is preserved
         // (no implicit trimming)
-        let result = normalize_error_bucket("  expected Semicolon, found Eof  ");
+        let result = normalize_error_bucket("  expected ';', found end of input  ");
         assert_eq!(result, "expected_semicolon");
     }
 
@@ -1237,18 +1310,15 @@ mod tests {
 
     #[test]
     fn test_normalize_error_bucket_first_match_wins() {
-        // "expected expression, found Return" should match the specific
-        // Return bucket, not the generic "unexpected_token_in_expr"
+        // "expected expression, found 'return'" should match the specific
+        // return bucket, not the generic "unexpected_token_in_expr"
         assert_eq!(
-            normalize_error_bucket("expected expression, found Return"),
+            normalize_error_bucket("expected expression, found 'return'"),
             "unexpected_return_expr",
         );
-        // "expected RightBrace, found Semicolon" should match the specific
+        // "expected '}', found ';'" should match the specific
         // semicolon bucket, not the generic "unclosed_brace"
-        assert_eq!(
-            normalize_error_bucket("expected RightBrace, found Semicolon"),
-            "unclosed_brace_semicolon",
-        );
+        assert_eq!(normalize_error_bucket("expected '}', found ';'"), "unclosed_brace_semicolon",);
     }
 
     // ── parse_manifest edge cases ──────────────────────────────────────
