@@ -5,6 +5,8 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
 
         while !self.tokens.is_eof() {
+            self.check_cancelled()?;
+
             // Check for UnknownRest token (lexer budget exceeded)
             if matches!(self.peek_kind(), Some(TokenKind::UnknownRest)) {
                 let t = self.consume_token()?;
@@ -20,8 +22,13 @@ impl<'a> Parser<'a> {
             match stmt_result {
                 Ok(stmt) => statements.push(stmt),
                 Err(e) => {
-                    // Don't recover from recursion/nesting limits - propagate immediately
-                    if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
+                    // Don't recover from these — propagate immediately
+                    if matches!(
+                        e,
+                        ParseError::RecursionLimit
+                            | ParseError::NestingTooDeep { .. }
+                            | ParseError::Cancelled
+                    ) {
                         return Err(e);
                     }
 
@@ -952,6 +959,8 @@ impl<'a> Parser<'a> {
             let mut statements = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightBrace) && !s.tokens.is_eof() {
+                s.check_cancelled()?;
+
                 // Parse statement with error recovery (AC3: Panic Mode Recovery inside blocks)
                 let stmt_result = s.parse_statement();
                 match stmt_result {
@@ -962,8 +971,13 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Err(e) => {
-                        // Don't recover from recursion/nesting limits - propagate immediately
-                        if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
+                        // Don't recover from these — propagate immediately
+                        if matches!(
+                            e,
+                            ParseError::RecursionLimit
+                                | ParseError::NestingTooDeep { .. }
+                                | ParseError::Cancelled
+                        ) {
                             return Err(e);
                         }
 

@@ -10,7 +10,13 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        match self.handle_did_open(params) {
+        let uri = params
+            .as_ref()
+            .and_then(|p| p.pointer("/textDocument/uri"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let token = self.new_parse_token(uri);
+        match self.handle_did_open_with_cancellation(params, Some(token)) {
             Ok(_) => Ok(None),
             Err(e) => Err(e),
         }
@@ -20,7 +26,13 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        match self.handle_did_change(params) {
+        let uri = params
+            .as_ref()
+            .and_then(|p| p.pointer("/textDocument/uri"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let token = self.new_parse_token(uri);
+        match self.handle_did_change_with_cancellation(params, Some(token)) {
             Ok(_) => Ok(None),
             Err(e) => Err(e),
         }
