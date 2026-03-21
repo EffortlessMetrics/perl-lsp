@@ -83,6 +83,9 @@ pub struct Parser<'a> {
     last_end_position: usize,
     /// Context flag for disambiguating for-loop initialization syntax
     in_for_loop_init: bool,
+    /// When true, parse_postfix_chain stops before consuming a bare { that would
+    /// be the body block of an if/unless with a no-paren condition.
+    stop_before_bare_brace: bool,
     /// Statement boundary tracking for indirect object syntax detection
     at_stmt_start: bool,
     /// FIFO queue of pending heredoc declarations awaiting content collection
@@ -132,6 +135,7 @@ impl<'a> Parser<'a> {
             recursion_depth: 0,
             last_end_position: 0,
             in_for_loop_init: false,
+            stop_before_bare_brace: false,
             at_stmt_start: true,
             pending_heredocs: VecDeque::new(),
             src_bytes: input.as_bytes(),

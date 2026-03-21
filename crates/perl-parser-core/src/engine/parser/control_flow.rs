@@ -4,7 +4,12 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'if'
 
-        self.expect(TokenKind::LeftParen)?;
+        let has_parens = self.peek_kind() == Some(TokenKind::LeftParen);
+        if has_parens {
+            self.tokens.next()?; // consume (
+        } else {
+            self.stop_before_bare_brace = true;
+        }
 
         // Check if this is a variable declaration in the condition
         let condition = if matches!(
@@ -20,7 +25,10 @@ impl<'a> Parser<'a> {
             self.parse_expression()?
         };
 
-        self.expect_closing_delimiter(TokenKind::RightParen)?;
+        self.stop_before_bare_brace = false;
+        if has_parens {
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
+        }
 
         let then_branch = self.parse_block()?;
 
@@ -77,10 +85,18 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'unless'
 
-        self.expect(TokenKind::LeftParen)?;
+        let has_parens = self.peek_kind() == Some(TokenKind::LeftParen);
+        if has_parens {
+            self.tokens.next()?; // consume (
+        } else {
+            self.stop_before_bare_brace = true;
+        }
         self.mark_not_stmt_start();
         let condition = self.parse_expression()?;
-        self.expect_closing_delimiter(TokenKind::RightParen)?;
+        self.stop_before_bare_brace = false;
+        if has_parens {
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
+        }
 
         // Negate the condition
         let negated_condition = Node::new(

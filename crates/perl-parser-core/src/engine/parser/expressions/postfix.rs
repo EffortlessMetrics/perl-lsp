@@ -488,7 +488,11 @@ impl<'a> Parser<'a> {
                         }
                     }
 
-                    // Hash element access
+                    // Hash element access — but NOT when we're parsing a paren-less condition
+                    // (the { is the if/unless body, not a subscript).
+                    if self.stop_before_bare_brace {
+                        break;
+                    }
                     self.tokens.next()?; // consume {
                     let key = self.parse_expression()?;
                     self.expect(TokenKind::RightBrace)?;
