@@ -588,7 +588,10 @@ impl<'a> Parser<'a> {
                                 NodeKind::FunctionCall { name: name.clone(), args: vec![arg] },
                                 SourceLocation { start, end },
                             );
-                        } else if Self::is_builtin_function(name) || self.looks_like_bare_call(name) {
+                        } else if Self::is_builtin_function(name)
+                            || Self::core_qualified_builtin_name(name).is_some()
+                            || self.looks_like_bare_call(name)
+                        {
                             // In call argument lists, `builtin => value` should keep the lhs as a
                             // bareword key so parse_args can auto-quote it for fat-comma pairs.
                             // Example: `$obj->on(accept => sub { ... })`.
