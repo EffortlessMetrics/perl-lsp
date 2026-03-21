@@ -390,9 +390,21 @@ mod tests {
         let ast = must(Parser::new(source).parse());
         let mut diags = vec![];
         let call_count = std::cell::Cell::new(0u32);
-        check_missing_modules(&ast, source, |_| { call_count.set(call_count.get() + 1); false }, &mut diags);
+        check_missing_modules(
+            &ast,
+            source,
+            |_| {
+                call_count.set(call_count.get() + 1);
+                false
+            },
+            &mut diags,
+        );
         assert_eq!(diags.len(), 5, "five distinct missing modules should each emit PL701");
-        assert_eq!(call_count.get(), 5, "resolver should be called exactly once per non-core module");
+        assert_eq!(
+            call_count.get(),
+            5,
+            "resolver should be called exactly once per non-core module"
+        );
     }
 
     /// Suggestion text must contain the module name so the user knows what to install.
