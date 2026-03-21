@@ -129,6 +129,10 @@ pub struct SweepReport {
     pub files_with_errors: usize,
     pub total_error_nodes: usize,
     pub first_error_buckets: BTreeMap<String, usize>,
+    /// Files grouped by their primary error bucket — lets scouts look up exact file paths
+    /// per bucket without guessing. Empty for clean-only sweeps.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub files_by_bucket: BTreeMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub file_results: Vec<FileResult>,
     pub elapsed_secs: f64,
@@ -423,6 +427,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut files_with_errors = 0usize;
     let mut total_error_nodes = 0usize;
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
+    let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut file_results: Vec<FileResult> = Vec::new();
 
     for path in &pm_files {
@@ -458,6 +463,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 total_error_nodes += 1;
                 let bucket = "catastrophic_parse_failure".to_string();
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+                files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
                 if config.verbose {
                     file_results.push(FileResult {
                         path: path.display().to_string(),
@@ -490,6 +496,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             let first = summary.first_message.as_deref().unwrap_or("unknown");
             let bucket = normalize_error_bucket(first);
             *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+            files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
             if config.verbose {
                 file_results.push(FileResult {
                     path: path.display().to_string(),
@@ -526,6 +533,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         files_with_errors,
         total_error_nodes,
         first_error_buckets,
+        files_by_bucket,
         file_results: if config.verbose { file_results } else { Vec::new() },
         elapsed_secs: elapsed.as_secs_f64(),
     };
@@ -799,6 +807,7 @@ mod tests {
             files_with_errors,
             total_error_nodes,
             first_error_buckets,
+            files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,
         }
@@ -1370,5 +1379,84 @@ mod tests {
         let report = baseline.clone();
         let violations = enforce_ratchet(&report, &baseline);
         assert!(violations.is_empty(), "Empty baselines should have no violations");
+    }
+
+    // ── files_by_bucket ─────────────────────────────────────────────────────
+
+    /// SweepReport must carry a files_by_bucket map alongside first_error_buckets.
+    #[test]
+    fn test_sweep_report_has_files_by_bucket_field() {
+        let report = test_report(5, 0, 0, 0, BTreeMap::new());
+        assert!(
+            report.files_by_bucket.is_empty(),
+            "files_by_bucket should default to empty for an all-clean report"
+        );
+    }
+
+    #[test]
+    fn test_files_by_bucket_grouping() {
+        let mut report = test_report(
+            2,
+            3,
+            4,
+            0,
+            BTreeMap::from([("unclosed_brace".to_string(), 2), ("unclosed_paren".to_string(), 1)]),
+        );
+        report.files_by_bucket = BTreeMap::from([
+            (
+                "unclosed_brace".to_string(),
+                vec!["Foo/Bar.pm".to_string(), "Baz/Qux.pm".to_string()],
+            ),
+            ("unclosed_paren".to_string(), vec!["Some/Module.pm".to_string()]),
+        ]);
+
+        let brace_files = report.files_by_bucket.get("unclosed_brace");
+        assert!(brace_files.is_some(), "unclosed_brace bucket must be present");
+        assert_eq!(brace_files.map(|v| v.len()), Some(2), "unclosed_brace should contain 2 files");
+
+        let paren_files = report.files_by_bucket.get("unclosed_paren");
+        assert_eq!(paren_files.map(|v| v.len()), Some(1), "unclosed_paren should contain 1 file");
+    }
+
+    #[test]
+    fn test_files_by_bucket_serialization_roundtrip() {
+        let mut report =
+            test_report(1, 1, 1, 0, BTreeMap::from([("unexpected_token_in_expr".to_string(), 1)]));
+        report.files_by_bucket = BTreeMap::from([(
+            "unexpected_token_in_expr".to_string(),
+            vec!["My/Module.pm".to_string()],
+        )]);
+
+        let json = serde_json::to_string(&report).expect("serialize");
+        let decoded: SweepReport = serde_json::from_str(&json).expect("deserialize");
+
+        let first_file = decoded
+            .files_by_bucket
+            .get("unexpected_token_in_expr")
+            .and_then(|v| v.first())
+            .map(String::as_str);
+        assert_eq!(first_file, Some("My/Module.pm"), "files_by_bucket must round-trip through JSON");
+    }
+
+    #[test]
+    fn test_backward_compat_files_by_bucket_absent() {
+        let old_json = r#"{
+            "schema_version": "1.1.0",
+            "commit": "abc",
+            "timestamp": "now",
+            "corpus_roots": ["/usr/lib/perl5"],
+            "total_files": 50,
+            "files_unreadable": 0,
+            "clean_files": 45,
+            "files_with_errors": 5,
+            "total_error_nodes": 7,
+            "first_error_buckets": {"unclosed_brace": 5},
+            "elapsed_secs": 2.0
+        }"#;
+        let report: SweepReport = serde_json::from_str(old_json).expect("should deserialize");
+        assert!(
+            report.files_by_bucket.is_empty(),
+            "Absent files_by_bucket in old JSON should deserialize as empty map"
+        );
     }
 }

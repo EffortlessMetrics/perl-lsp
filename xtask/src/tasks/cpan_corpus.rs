@@ -399,6 +399,75 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
 }
 
 // --------------------------------------------------------------------------
+// files-by-bucket
+// --------------------------------------------------------------------------
+
+/// Run a sweep and write a files-by-bucket JSON breakdown to `output_path`.
+///
+/// The output maps each error bucket name to the list of file paths that had
+/// that bucket as their primary error. Scouts can use this to get exact file
+/// references without guessing from aggregate counts alone.
+pub fn files_by_bucket(config: &CpanCorpusConfig, output_path: PathBuf) -> Result<()> {
+    let lib_perl5 = config.install_dir.join("lib/perl5");
+    if !lib_perl5.exists() {
+        return Err(color_eyre::eyre::eyre!(
+            "CPAN corpus not installed: {} not found. Run `cargo xtask cpan-corpus install` first.",
+            lib_perl5.display(),
+        ));
+    }
+
+    let base_roots = vec![lib_perl5];
+    let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
+
+    let temp_report_path = PathBuf::from("target/cpan-corpus-files-by-bucket-report.json");
+    if let Some(parent) = temp_report_path.parent() {
+        fs::create_dir_all(parent).context("Failed to create report directory")?;
+    }
+
+    let sweep_config = parser_corpus_sweep::SweepConfig {
+        base_roots,
+        corpus_roots,
+        manifest_path: None,
+        manifest_perl5lib: Vec::new(),
+        output_path: Some(temp_report_path.clone()),
+        baseline_path: None,
+        enforce: false,
+        verbose: false,
+        receipt: false,
+    };
+
+    parser_corpus_sweep::run(sweep_config)?;
+
+    let report_json =
+        fs::read_to_string(&temp_report_path).context("Failed to read sweep report")?;
+    let report: parser_corpus_sweep::SweepReport =
+        serde_json::from_str(&report_json).context("Failed to parse sweep report")?;
+
+    let breakdown = &report.files_by_bucket;
+
+    // Print summary sorted by count descending
+    println!("\n--- Files by bucket ---");
+    let mut sorted: Vec<(&String, &Vec<String>)> = breakdown.iter().collect();
+    sorted.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    for (bucket, files) in &sorted {
+        println!("  {:>4}  {}", files.len(), bucket);
+    }
+    println!("Total buckets: {}", breakdown.len());
+
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).context("Failed to create output directory")?;
+    }
+    let json =
+        serde_json::to_string_pretty(breakdown).context("Failed to serialize files-by-bucket")?;
+    fs::write(&output_path, json).context("Failed to write files-by-bucket JSON")?;
+    println!("\nFiles-by-bucket written to: {}", output_path.display());
+
+    let _ = fs::remove_file(&temp_report_path);
+
+    Ok(())
+}
+
+// --------------------------------------------------------------------------
 // ratchet
 // --------------------------------------------------------------------------
 

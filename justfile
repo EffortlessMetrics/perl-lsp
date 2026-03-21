@@ -1663,6 +1663,10 @@ cpan-corpus-check:
 cpan-corpus-ratchet:
     cargo run -p xtask -- cpan-corpus ratchet
 
+# Generate files-by-bucket breakdown for scout routing
+cpan-corpus-files-by-bucket:
+    cargo run -p xtask -- cpan-corpus files-by-bucket
+
 # Tier C: full suite (nightly, all integration tests)
 lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."

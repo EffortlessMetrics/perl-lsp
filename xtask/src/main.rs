@@ -634,6 +634,17 @@ enum CpanCorpusCommand {
         #[arg(long)]
         install_dir: Option<PathBuf>,
     },
+
+    /// Generate a files-by-bucket breakdown for scout routing
+    FilesByBucket {
+        /// Output path for the JSON breakdown (default: .ops-perl-lsp/corpus-files-by-bucket.json)
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Local install directory containing CPAN modules
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -784,6 +795,15 @@ fn main() -> Result<()> {
                     }
                     config.verbose = verbose;
                     cpan_corpus::ratchet(&config)
+                }
+                CpanCorpusCommand::FilesByBucket { output, install_dir } => {
+                    if let Some(id) = install_dir {
+                        config.install_dir = id;
+                    }
+                    let out = output.unwrap_or_else(|| {
+                        PathBuf::from(".ops-perl-lsp/corpus-files-by-bucket.json")
+                    });
+                    cpan_corpus::files_by_bucket(&config, out)
                 }
             }
         }
