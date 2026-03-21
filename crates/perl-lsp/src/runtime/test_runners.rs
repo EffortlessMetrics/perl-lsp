@@ -5,7 +5,6 @@
 
 use super::*;
 
-#[allow(dead_code)]
 impl LspServer {
     /// Run a specific test
     pub(crate) fn run_test(&self, test_id: &str) -> Result<Option<Value>, JsonRpcError> {

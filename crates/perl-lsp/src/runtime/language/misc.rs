@@ -1320,8 +1320,14 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing test ID argument"))?;
                     return self.debug_test(test_id);
                 }
-                // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.runCritic" => {
+                // Commands handled by ExecuteCommandProvider
+                "perl.runTests"
+                | "perl.runFile"
+                | "perl.runTestSub"
+                | "perl.runCritic"
+                | "perl.goToTest"
+                | "perl.goToImplementation"
+                | "perl.debugTests" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
