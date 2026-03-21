@@ -621,12 +621,13 @@ impl<'a> Parser<'a> {
                             // tokenized as Identifiers. A builtin followed by one of these
                             // should be treated as having no arguments, so that
                             // `ref eq 'CODE'` parses as `ref() eq 'CODE'` (not `ref(eq)`).
+                            // `cmp` is also a string comparison operator tokenized as Identifier.
                             let is_str_op_terminated = self.peek_kind()
                                 == Some(TokenKind::Identifier)
                                 && self.tokens.peek().ok().is_some_and(|t| {
                                     matches!(
                                         t.text.as_ref(),
-                                        "eq" | "ne" | "lt" | "le" | "gt" | "ge"
+                                        "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp"
                                     )
                                 });
 

@@ -554,3 +554,177 @@ fn looks_like_number_sigil() {
     // looks_like_number $val — common in Type::Tiny and Params::Util
     assert_clean_parse(r#"return 0 unless looks_like_number $val;"#);
 }
+
+// === caller N edge cases ===
+
+#[test]
+fn caller_zero() {
+    // caller 0 — most common stack-level query
+    assert_clean_parse(r#"my @c = caller 0;"#);
+}
+
+#[test]
+fn caller_one() {
+    // caller 1 — one level up
+    assert_clean_parse(r#"my @c = caller 1;"#);
+}
+
+#[test]
+fn caller_with_parens() {
+    // caller(0) — explicit parens, should still work
+    assert_clean_parse(r#"my @c = caller(0);"#);
+}
+
+#[test]
+fn caller_empty_parens() {
+    // caller() — nullary with explicit empty parens
+    assert_clean_parse(r#"my @c = caller();"#);
+}
+
+#[test]
+fn caller_in_condition() {
+    // Common defensive OO idiom: if (caller ne 'main') { ... }
+    assert_clean_parse(r#"if (caller ne 'main') { run_tests() }"#);
+}
+
+// === ref + string comparison operators (is_str_op_terminated) ===
+
+#[test]
+fn ref_eq_string() {
+    // ref $x eq 'ARRAY' — original motivation
+    assert_clean_parse(r#"if (ref $x eq 'ARRAY') { 1 }"#);
+}
+
+#[test]
+fn ref_ne_string() {
+    assert_clean_parse(r#"if (ref $x ne 'CODE') { 1 }"#);
+}
+
+#[test]
+fn ref_cmp_string() {
+    // ref cmp 'value' — cmp is also a string comparison operator
+    assert_clean_parse(r#"my $ord = ref $x cmp 'ARRAY';"#);
+}
+
+#[test]
+fn defined_eq_string() {
+    // Other builtins also need is_str_op_terminated: defined eq check
+    assert_clean_parse(r#"if (lc $str eq 'hello') { 1 }"#);
+}
+
+// === ** precedence edge cases ===
+
+#[test]
+fn power_in_product() {
+    // 8 * $z**3 must parse as 8 * ($z**3), not (8 * $z)**3
+    assert_clean_parse(r#"my $x = 8 * $z**3;"#);
+}
+
+#[test]
+fn power_both_sides_product() {
+    // $a**2 * $b**2 — power on both sides of multiply
+    assert_clean_parse(r#"my $x = $a**2 * $b**2;"#);
+}
+
+#[test]
+fn power_in_division() {
+    // 1 / $z**2 — power on RHS of division
+    assert_clean_parse(r#"my $x = 1 / $z**2;"#);
+}
+
+#[test]
+fn power_in_complex_formula() {
+    // Multi-term formula from Legendre polynomial approximation
+    assert_clean_parse(r#"$t = 1/(2 * $z) - 1/(8 * $z**3) + 1/(16 * $z**5);"#);
+}
+
+// === String literal as bare-call argument (TokenKind::String => true) ===
+
+#[test]
+fn croak_bare_string() {
+    // croak "message" — Carp import without parens
+    assert_clean_parse(r#"croak "Invalid argument";"#);
+}
+
+#[test]
+fn confess_bare_string() {
+    // confess "message" — Carp import without parens
+    assert_clean_parse(r#"confess "Something went wrong";"#);
+}
+
+#[test]
+fn carp_bare_string() {
+    assert_clean_parse(r#"carp "Warning: deprecated";"#);
+}
+
+#[test]
+fn hash_literal_not_confused_as_call() {
+    // Hash construction must NOT be confused with bare call
+    // 'key' is followed by =>, not a string argument
+    assert_clean_parse(r#"my %h = (name => "Alice", age => 30);"#);
+}
+
+#[test]
+fn list_with_bareword_and_string() {
+    // (key, "value") — bareword in list context followed by comma, then string
+    // The comma prevents TokenKind::String from firing for the bareword
+    assert_clean_parse(r#"my @a = (foo, "bar", baz, "qux");"#);
+}
+
+// === Moo/Moose DSL now parses as FunctionCall — bare string args ===
+
+#[test]
+fn moo_has_bare_string_arg() {
+    // has 'attr' => (is => 'ro') — string literal as first arg
+    assert_clean_parse(r#"has 'name' => (is => 'ro', isa => 'Str');"#);
+}
+
+#[test]
+fn moose_extends_bare_string() {
+    // extends 'Base' — string literal as bare call arg
+    assert_clean_parse(r#"extends 'Moose::Object';"#);
+}
+
+#[test]
+fn moo_with_bare_string() {
+    // with 'Role' — string literal as bare call arg
+    assert_clean_parse(r#"with 'MooseX::Singleton';"#);
+}
+
+#[test]
+fn moo_before_bare_string() {
+    // before 'method' => sub { } — string literal as bare call arg
+    assert_clean_parse(r#"before 'BUILD' => sub { my $self = shift; $self->_init };"#);
+}
+
+#[test]
+fn moo_after_bare_string() {
+    assert_clean_parse(r#"after 'save' => sub { my $self = shift; $self->_notify };"#);
+}
+
+#[test]
+fn moo_around_bare_string() {
+    assert_clean_parse(r#"around 'format' => sub { my ($orig, $self) = @_; $orig->($self) };"#);
+}
+
+#[test]
+fn moo_requires_bare_string() {
+    assert_clean_parse(r#"requires 'serialize';"#);
+}
+
+// === Dancer2 / Mojolicious web route DSL ===
+
+#[test]
+fn dancer_get_route() {
+    assert_clean_parse(r#"get '/users' => sub { return 'ok' };"#);
+}
+
+#[test]
+fn dancer_post_route() {
+    assert_clean_parse(r#"post '/users' => sub { my $body = request->body; };"#);
+}
+
+#[test]
+fn dancer_any_route() {
+    assert_clean_parse(r#"any '/ping' => sub { return 'pong' };"#);
+}
