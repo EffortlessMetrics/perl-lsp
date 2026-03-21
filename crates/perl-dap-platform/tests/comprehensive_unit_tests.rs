@@ -1,7 +1,7 @@
 //! Comprehensive unit tests for perl-dap-platform.
 
+use perl_dap_command_args::format_command_args;
 use perl_dap_platform::{normalize_path, resolve_perl_path, setup_environment};
-use perl_dap_shell::format_command_args;
 use perl_tdd_support::must::must_some;
 use std::path::PathBuf;
 
@@ -184,6 +184,38 @@ fn setup_environment_only_sets_perl5lib() -> Result<(), anyhow::Error> {
     let env = setup_environment(&paths);
     assert_eq!(env.len(), 1, "should only contain PERL5LIB");
     assert!(env.contains_key("PERL5LIB"));
+    Ok(())
+}
+
+#[test]
+fn setup_environment_duplicate_paths_preserved_as_is() -> Result<(), anyhow::Error> {
+    // setup_environment does not deduplicate — duplicates pass through and
+    // Perl resolves them at runtime. This documents the contract explicitly.
+    let paths = [PathBuf::from("/lib/a"), PathBuf::from("/lib/a"), PathBuf::from("/lib/b")];
+    let env = setup_environment(&paths);
+    let perl5lib = must_some(env.get("PERL5LIB"));
+
+    #[cfg(not(windows))]
+    let sep = ':';
+    #[cfg(windows)]
+    let sep = ';';
+
+    let parts: Vec<&str> = perl5lib.split(sep).collect();
+    assert_eq!(parts.len(), 3, "duplicates are NOT removed; all three entries present");
+    assert_eq!(parts[0], "/lib/a");
+    assert_eq!(parts[1], "/lib/a");
+    assert_eq!(parts[2], "/lib/b");
+    Ok(())
+}
+
+#[test]
+fn setup_environment_empty_string_path_is_included() -> Result<(), anyhow::Error> {
+    // PathBuf::from("") is a valid (if degenerate) path. The function must not
+    // panic; it inserts PERL5LIB with an empty component.
+    let paths = [PathBuf::from("")];
+    let env = setup_environment(&paths);
+    // Non-empty slice → PERL5LIB must be set (even if the value is "")
+    assert!(env.contains_key("PERL5LIB"), "single empty-string path still triggers PERL5LIB");
     Ok(())
 }
 

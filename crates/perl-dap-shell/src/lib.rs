@@ -1,35 +1,12 @@
 //! Shell-specific helpers for Perl DAP process launch.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-
 pub use perl_dap_command_args::format_command_args;
-
-#[cfg(windows)]
-const PATH_SEPARATOR: char = ';';
-#[cfg(not(windows))]
-const PATH_SEPARATOR: char = ':';
-
-/// Setup environment variables for Perl execution.
-pub fn setup_environment(include_paths: &[PathBuf]) -> HashMap<String, String> {
-    let mut env = HashMap::new();
-
-    if !include_paths.is_empty() {
-        let perl5lib = include_paths
-            .iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect::<Vec<_>>()
-            .join(&PATH_SEPARATOR.to_string());
-
-        env.insert("PERL5LIB".to_string(), perl5lib);
-    }
-
-    env
-}
+pub use perl_dap_platform::setup_environment;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     // ── setup_environment ──────────────────────────────────────
 
