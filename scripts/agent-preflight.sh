@@ -8,6 +8,7 @@
 #   2 — worktree issue (not running in an isolated git worktree)
 #   3 — conflict issue (unresolved merge conflicts present)
 #   4 — cwd issue (running from the main repo root, not a worktree path)
+#   6 — stash issue (shared stash has entries — cross-contamination risk)
 #
 # Usage:
 #   bash scripts/agent-preflight.sh
@@ -121,6 +122,24 @@ else
     fi
 fi
 
+# ── Check 6: No git stash entries (shared across worktrees) ──────────────────
+
+STASH_COUNT="$(git stash list 2>/dev/null | wc -l)"
+
+if [[ "$STASH_COUNT" -gt 0 ]]; then
+    err "Git stash has $STASH_COUNT entries. Stash is SHARED across all worktrees — cross-contamination risk."
+    echo "    The stash list is a single global list. 'git stash pop' may restore another agent's changes."
+    echo "    Alternatives:"
+    echo "      Discard changes: git restore <file>"
+    echo "      Save WIP:        git commit -m 'wip' on the branch"
+    echo "      Abandon all:     git restore ."
+    echo "    Fix: Run 'git stash clear' to drop all stash entries, then re-run preflight"
+    STASH_OK=false
+else
+    ok "No git stash entries (stash is shared — safe)"
+    STASH_OK=true
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -140,6 +159,10 @@ fi
 
 if [[ "$CWD_OK" == false ]]; then
     exit 4
+fi
+
+if [[ "$STASH_OK" == false ]]; then
+    exit 6
 fi
 
 echo ""

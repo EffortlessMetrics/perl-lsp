@@ -233,8 +233,13 @@ test_current_worktree_passes() {
 
         if [[ "$code" -eq 0 ]]; then
             pass "current worktree passes preflight (exit 0)"
+        elif [[ "$code" -eq 6 ]]; then
+            # Exit 6 = stash entries from other agents (shared stash).
+            # This is expected in multi-agent environments and validates
+            # that Check 6 is working correctly.
+            pass "current worktree passes preflight (exit 6 — stash from other agents, expected)"
         else
-            fail "current worktree should pass preflight — expected exit 0, got $code"
+            fail "current worktree should pass preflight — expected exit 0 or 6, got $code"
         fi
     else
         # We're not in a proper agent worktree. That's OK — test 4 already
@@ -417,6 +422,93 @@ test_cargo_target_dir_contains_branch_name() {
     fi
 }
 
+# ── Test 15: Fails when git stash entries exist ──────────────────────────────
+
+test_fails_with_stash_entries() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-stash-test")"
+
+    # Create a stash entry from the main checkout (simulating cross-contamination)
+    echo "dirty" > "$repo/dirty.txt"
+    git -C "$repo" checkout -q -b temp-for-stash 2>/dev/null || true
+    git -C "$repo" add dirty.txt
+    git -C "$repo" stash push -q -m "stash from another agent"
+
+    # Now preflight should fail in the worktree because the shared stash is non-empty
+    local code
+    code=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    git -C "$repo" stash clear 2>/dev/null || true
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 6 ]]; then
+        pass "fails with stash entries present (exit 6)"
+    else
+        fail "fails with stash entries present — expected exit 6, got $code"
+    fi
+}
+
+# ── Test 16: Passes in worktree with empty stash ─────────────────────────────
+
+test_passes_with_empty_stash() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-stash-empty-test")"
+
+    # Verify no stash entries exist
+    local stash_count
+    stash_count="$(git -C "$wt" stash list 2>/dev/null | wc -l)"
+
+    local code
+    code=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 0 ]]; then
+        pass "passes in worktree with empty stash (exit 0)"
+    else
+        fail "passes in worktree with empty stash — expected exit 0, got $code"
+    fi
+}
+
+# ── Test 17: Stash error message is informative ──────────────────────────────
+
+test_stash_error_message() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-stash-msg-test")"
+
+    # Create a stash entry
+    echo "dirty" > "$repo/dirty.txt"
+    git -C "$repo" checkout -q -b temp-msg-stash 2>/dev/null || true
+    git -C "$repo" add dirty.txt
+    git -C "$repo" stash push -q -m "stash from another agent"
+
+    local output
+    output="$(cd "$wt" && bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" stash clear 2>/dev/null || true
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -qi "stash"; then
+        pass "stash error message mentions stash"
+    else
+        fail "stash error message does not mention stash — got: $output"
+    fi
+}
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 echo "=== agent-preflight test suite ==="
@@ -436,6 +528,9 @@ test_check4_fires_with_git_dir_override
 test_sets_cargo_target_dir_when_unset
 test_respects_existing_cargo_target_dir
 test_cargo_target_dir_contains_branch_name
+test_fails_with_stash_entries
+test_passes_with_empty_stash
+test_stash_error_message
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="
