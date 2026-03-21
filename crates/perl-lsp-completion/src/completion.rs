@@ -2382,17 +2382,18 @@ sub helper { }
 
     #[test]
     fn test_regex_flag_completions_after_close() {
-        // Cursor right after closing `/` — should offer standard flag letters.
+        // Cursor right after closing `/` — should offer all standard flag letters.
         let code = "$x =~ /foo/";
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len());
         let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
-        for flag in &["g", "i", "m", "s", "x"] {
+        // Standard regex flags per Perl documentation
+        for flag in &["g", "i", "m", "s", "x", "e", "r", "a", "p"] {
             assert!(
                 labels.contains(flag),
-                "expected flag '{flag}' in completions; got: {labels:?}"
+                "expected standard regex flag '{flag}' in completions; got: {labels:?}"
             );
         }
     }
