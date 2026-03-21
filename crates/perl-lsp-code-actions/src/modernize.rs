@@ -683,4 +683,37 @@ mod tests {
             "die on its own line after trailing `||` should not be flagged as bare die"
         );
     }
+
+    #[test]
+    fn test_multiple_dies_produce_independent_actions() {
+        // When a module has two bare dies and Carp is not yet imported, each action
+        // is self-contained with its own die->croak edit and use Carp insertion.
+        // LSP applies actions one at a time; after the first apply the file has
+        // use Carp and the second invocation would emit only the die->croak edit.
+        let source = "package Foo;\nuse strict;\ndie \"first error\";\ndie \"second error\";\n";
+        let actions = find_die_in_module(source);
+        assert_eq!(actions.len(), 2, "Two bare dies should produce two actions");
+        // Each action is self-contained: both include a use Carp insertion
+        for action in &actions {
+            assert_eq!(
+                action.edit.changes.len(),
+                2,
+                "Each action should have die->croak and use Carp insertion when Carp not present"
+            );
+        }
+    }
+
+    #[test]
+    fn test_use_carp_heavy_treated_as_carp_present() {
+        // use Carp::Heavy contains "use Carp" as a substring; already_uses_carp = true.
+        // Only the die->croak edit should be emitted, no duplicate Carp insertion.
+        let source = "package Foo;\nuse Carp::Heavy;\ndie \"oops\";\n";
+        let actions = find_die_in_module(source);
+        assert!(!actions.is_empty(), "die in module with Carp::Heavy should still suggest croak");
+        assert_eq!(
+            actions[0].edit.changes.len(),
+            1,
+            "use Carp::Heavy counts as Carp present; no new use Carp should be inserted"
+        );
+    }
 }
