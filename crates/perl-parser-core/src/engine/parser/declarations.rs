@@ -1,6 +1,12 @@
 impl<'a> Parser<'a> {
     fn parse_qualified_name(&mut self, allow_trailing_separator: bool) -> ParseResult<(String, SourceLocation)> {
-        let first = self.expect(TokenKind::Identifier)?;
+        // Accept keywords as package names (e.g., `package if;`, `package next;`)
+        // Same pattern as parse_subroutine — keywords are valid barewords in Perl
+        let first = if self.peek_kind().is_some_and(Self::can_be_sub_name) {
+            self.consume_token()?
+        } else {
+            self.expect(TokenKind::Identifier)?
+        };
         let mut name = first.text.to_string();
         let name_start = first.start;
         let mut name_end = first.end;
@@ -28,8 +34,8 @@ impl<'a> Parser<'a> {
 
             name.push_str("::");
 
-            if self.peek_kind() == Some(TokenKind::Identifier) {
-                let next = self.tokens.next()?;
+            if self.peek_kind().is_some_and(Self::can_be_sub_name) {
+                let next = self.consume_token()?;
                 name_end = next.end;
                 name.push_str(&next.text);
             } else if allow_trailing_separator {
