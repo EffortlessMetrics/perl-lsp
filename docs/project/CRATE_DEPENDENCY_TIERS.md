@@ -81,7 +81,6 @@ everything above. Note: some of these have workspace dev-dependencies (typically
 | `perl-position-tracking` | UTF-8/UTF-16 position tracking and conversion for LSP |
 | `perl-symbol-types` | Unified Perl symbol taxonomy for LSP tooling |
 | `perl-symbol-cursor` | Cursor-based Perl symbol extraction helpers |
-| `perl-symbol-table` | Symbol table and scope management (deps: `perl-symbol-types`, `perl-position-tracking`) |
 | `perl-symbol-index` | Trie + inverted-index symbol search for Perl tooling |
 | `perl-module-boundary` | Module-token boundary matching for single-line scanners (deps: `perl-module-token-core`) |
 | `perl-module-token-core` | Shared parser and boundary primitives for Perl module tokens |
@@ -435,7 +434,6 @@ symbols.
 | `perl-lexer` | 1 |
 | `perl-heredoc` | 1 |
 | `perl-edit` | 1 |
-| `perl-symbol-table` | 1 |
 | `perl-symbol-cursor` | 1 |
 | `perl-pragma` | 1 |
 | `perl-error` | 1 |

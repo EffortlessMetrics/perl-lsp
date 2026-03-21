@@ -169,7 +169,7 @@ dependencies:
 `perl-uri-classify`, `perl-path-normalize`, `perl-path-security`,
 `perl-text-line`, `perl-line-index`, `perl-source-editing`,
 `perl-source-file`, `perl-qualified-name`, `perl-diagnostics-codes`,
-`perl-symbol-types`, `perl-symbol-cursor`, `perl-symbol-table`,
+`perl-symbol-types`, `perl-symbol-cursor`,
 `perl-symbol-index`
 
 These leaf crates are the foundation of the dependency graph, and their

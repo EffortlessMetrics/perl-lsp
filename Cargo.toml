@@ -76,7 +76,6 @@ members = [
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
     "crates/perl-symbol-cursor",
-    "crates/perl-symbol-table",
     "crates/perl-symbol-index",
     "crates/perl-module-boundary",
     "crates/perl-module-token-core",
@@ -178,7 +177,6 @@ allow = [
     "perl-incremental-parsing",
     "perl-symbol-types",
     "perl-symbol-cursor",
-    "perl-symbol-table",
     "perl-symbol-index",
     "perl-uri-classify",
     "perl-uri",
@@ -319,7 +317,6 @@ perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.12.0" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.12.0" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.12.0" }
 perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.12.0" }
-perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.12.0" }
 perl-symbol-index = { path = "crates/perl-symbol-index", version = "0.12.0" }
 perl-module-boundary = { path = "crates/perl-module-boundary", version = "0.12.0" }
 perl-module-token-core = { path = "crates/perl-module-token-core", version = "0.12.0" }
