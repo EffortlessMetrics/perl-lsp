@@ -204,6 +204,7 @@ impl LspServer {
                         documentation: Self::workspace_symbol_documentation(&symbol),
                         additional_edits: Vec::new(),
                         text_edit_range,
+                        commit_characters: None,
                     });
                 }
             }
@@ -742,6 +743,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -762,6 +764,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -778,6 +781,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
                 if "_".starts_with(&prefix) || prefix.is_empty() {
@@ -791,6 +795,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -807,6 +812,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -824,6 +830,7 @@ impl LspServer {
                             sort_text: None,
                             filter_text: None,
                             text_edit_range: None,
+                            commit_characters: None,
                         });
                     }
                 }
