@@ -933,7 +933,9 @@ $name;
         let content = hover_content(&resp).ok_or("INIT hover must return content, not null")?;
         assert!(content.contains("INIT"), "hover content should mention INIT, got: {content}");
         assert!(
-            content.contains("compilation") || content.contains("compile") || content.contains("before"),
+            content.contains("compilation")
+                || content.contains("compile")
+                || content.contains("before"),
             "hover content should describe post-compile execution, got: {content}"
         );
         Ok(())
