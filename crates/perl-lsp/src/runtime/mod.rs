@@ -436,7 +436,7 @@ impl LspServer {
     }
 
     /// Install the file watcher debouncer (called from Scheduler::new after Arc wrapping).
-    pub(crate) fn install_file_watcher_debouncer(
+    pub fn install_file_watcher_debouncer(
         &self,
         debouncer: file_watcher_debounce::FileWatcherDebouncer,
     ) {
@@ -447,7 +447,7 @@ impl LspServer {
     ///
     /// Returns `true` if a debouncer is installed (production runtime) and the
     /// URI was queued, `false` if no debouncer is present (unit-test path).
-    pub(crate) fn schedule_file_watcher_uri(&self, uri: &str) -> bool {
+    pub fn schedule_file_watcher_uri(&self, uri: &str) -> bool {
         let guard = self.file_watcher_debouncer.lock();
         if let Some(ref d) = *guard {
             d.schedule(uri);
