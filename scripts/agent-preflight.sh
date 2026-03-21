@@ -7,6 +7,7 @@
 #   1 — branch issue (on master/main or detached HEAD)
 #   2 — worktree issue (not running in an isolated git worktree)
 #   3 — conflict issue (unresolved merge conflicts present)
+#   4 — cwd issue (running from the main repo root, not a worktree path)
 #
 # Usage:
 #   bash scripts/agent-preflight.sh
@@ -72,6 +73,25 @@ else
     CONFLICT_OK=true
 fi
 
+# ── Check 4: cwd must not be the main repo root ─────────────────────────────
+# An agent in a worktree can still accidentally cd to (or be spawned in) the
+# main checkout path.  The Write/Edit tools resolve absolute paths relative to
+# cwd, so writing from the main checkout puts files in the wrong place.
+
+MAIN_REPO_RAW="$(git rev-parse --git-common-dir 2>/dev/null | sed 's|/\.git$||')"
+# Resolve both paths through readlink/pwd -P so symlinks don't cause mismatches
+MAIN_REPO="$(cd "$MAIN_REPO_RAW" 2>/dev/null && pwd -P)" || MAIN_REPO="$MAIN_REPO_RAW"
+CWD="$(pwd -P)"
+
+if [[ -n "$MAIN_REPO" && "$CWD" = "$MAIN_REPO" ]]; then
+    err "cwd is the main repo root ($MAIN_REPO). Agents must run from their worktree."
+    echo "    Fix: cd \$(git worktree list | grep \$(git branch --show-current) | awk '{print \$1}')"
+    CWD_OK=false
+else
+    ok "cwd is not the main repo root"
+    CWD_OK=true
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -87,6 +107,10 @@ fi
 
 if [[ "$CONFLICT_OK" == false ]]; then
     exit 3
+fi
+
+if [[ "$CWD_OK" == false ]]; then
+    exit 4
 fi
 
 echo ""

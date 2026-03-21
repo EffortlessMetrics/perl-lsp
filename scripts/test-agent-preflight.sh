@@ -243,6 +243,78 @@ test_current_worktree_passes() {
     fi
 }
 
+# ── Test 9: Fails when cwd is the main repo root ─────────────────────────────
+# Even if git-dir != common-dir (worktree detected), the cwd itself must not
+# be the main repo root — that means the agent is writing to the main checkout.
+
+test_fails_when_cwd_is_main_repo_root() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-cwd-test")"
+
+    # Run preflight from the worktree directory (should pass — baseline)
+    local code_wt
+    code_wt=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code_wt=$?
+
+    if [[ "$code_wt" -ne 0 ]]; then
+        fail "baseline worktree should pass — got exit $code_wt"
+        git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+        git -C "$repo" worktree prune 2>/dev/null || true
+        rm -rf "$repo"
+        return
+    fi
+
+    # Now run preflight from the main repo root (simulating an agent that
+    # cd'd back to the main checkout). First create a feature branch so we
+    # don't fail on the master/main check.
+    git -C "$repo" checkout -q -b feature-cwd-check
+
+    local code_main
+    code_main=0
+    (cd "$repo" && bash "$PREFLIGHT" >/dev/null 2>&1) || code_main=$?
+
+    # Cleanup
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    # The main repo root is not a worktree, so check 2 should catch it (exit 2).
+    # But if check 2 somehow passes (e.g. future git version), check 4 should
+    # catch it with exit 4. Either exit 2 or 4 is acceptable.
+    if [[ "$code_main" -eq 2 || "$code_main" -eq 4 ]]; then
+        pass "fails when cwd is main repo root (exit $code_main)"
+    else
+        fail "fails when cwd is main repo root — expected exit 2 or 4, got $code_main"
+    fi
+}
+
+# ── Test 10: Worktree at repo root path prefix doesn't false-positive ────────
+# A worktree whose path starts with the main repo's path should still pass
+# (e.g. /tmp/repo is main, /tmp/repo-worktree-abc is the worktree).
+
+test_worktree_path_prefix_no_false_positive() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-prefix-test")"
+
+    local code
+    code=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 0 ]]; then
+        pass "worktree with path prefix of main repo passes (exit 0)"
+    else
+        fail "worktree with path prefix of main repo — expected exit 0, got $code"
+    fi
+}
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 echo "=== agent-preflight test suite ==="
@@ -256,6 +328,8 @@ test_fails_with_conflicts
 test_fails_in_detached_head
 test_error_messages_on_master
 test_current_worktree_passes
+test_fails_when_cwd_is_main_repo_root
+test_worktree_path_prefix_no_false_positive
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="
