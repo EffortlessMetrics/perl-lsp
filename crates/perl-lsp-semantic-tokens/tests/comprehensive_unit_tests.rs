@@ -112,7 +112,7 @@ fn legend_modifiers_have_no_duplicates() {
 #[test]
 fn legend_token_type_count() {
     let leg = legend();
-    assert_eq!(leg.token_types.len(), 15, "expected 15 token types");
+    assert_eq!(leg.token_types.len(), 16, "expected 16 token types");
 }
 
 #[test]
