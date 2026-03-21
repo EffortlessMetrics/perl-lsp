@@ -112,10 +112,10 @@ The LSP compliance table is auto-generated from `features.toml`.
 | debug | 10 | 10 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
-| text_document | 41 | 41 | 100% |
+| text_document | 42 | 42 | 100% |
 | window | 9 | 9 | 100% |
 | workspace | 26 | 26 | 100% |
-| **Overall** | **97** | **97** | **100%** |
+| **Overall** | **98** | **98** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
 
 For live capability posture, run `just status-check` or read [CURRENT_STATUS.md](CURRENT_STATUS.md).
