@@ -15,6 +15,7 @@ pub fn get_modernize_actions(source: &str) -> Vec<CodeAction> {
     actions.extend(find_deprecated_defined(source));
     actions.extend(find_legacy_require_version(source));
     actions.extend(find_missing_strict_warnings(source));
+    actions.extend(find_die_in_module(source));
 
     actions
 }
@@ -265,6 +266,63 @@ fn find_missing_strict_warnings(source: &str) -> Vec<CodeAction> {
     actions
 }
 
+/// Detect bare `die` calls in module files and suggest upgrading to `Carp::croak`.
+///
+/// Only fires when the source contains a `package` declaration (i.e. a module, not
+/// a script). The `or die` and `|| die` idioms used for system-call error handling
+/// are explicitly excluded — those are idiomatic and correct as-is.
+fn find_die_in_module(source: &str) -> Vec<CodeAction> {
+    // Only relevant in module files
+    if !source.contains("package ") {
+        return Vec::new();
+    }
+
+    let already_uses_carp = source.contains("use Carp");
+    let mut actions = Vec::new();
+
+    for (line_idx, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+
+        // Skip `or die` and `|| die` idioms — correct for system calls
+        if trimmed.contains(" or die") || trimmed.contains("|| die") {
+            continue;
+        }
+
+        // Match bare die call at start of trimmed line
+        if !trimmed.starts_with("die ") && !trimmed.starts_with("die;") {
+            continue;
+        }
+
+        let line_start = line_start_offset(source, line_idx);
+        let indent_len = line.len() - trimmed.len();
+        let die_start = line_start + indent_len;
+        let die_end = die_start + 3; // len("die")
+
+        let mut changes = vec![TextEdit {
+            location: SourceLocation { start: die_start, end: die_end },
+            new_text: "croak".to_string(),
+        }];
+
+        if !already_uses_carp {
+            let insert_pos = find_pragma_insert_pos(source);
+            changes.push(TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: "use Carp qw(croak);\n".to_string(),
+            });
+        }
+
+        actions.push(CodeAction {
+            title: "Modernize: use Carp::croak instead of die (preserves caller stack)".to_string(),
+            kind: CodeActionKind::SourceModernize,
+            diagnostics: Vec::new(),
+            edit: CodeActionEdit { changes },
+            is_preferred: false,
+        });
+    }
+
+    actions
+}
+
 // ---- helpers ----------------------------------------------------------------
 
 fn count_commas_outside_quotes(s: &str) -> usize {
@@ -484,5 +542,73 @@ mod tests {
         assert_eq!(extract_mode_and_filename(">>log"), (">>", "log"));
         assert_eq!(extract_mode_and_filename("<input"), ("<", "input"));
         assert_eq!(extract_mode_and_filename("data.txt"), ("<", "data.txt"));
+    }
+
+    // ---- find_die_in_module tests -------------------------------------------
+
+    #[test]
+    fn test_die_in_module_suggests_croak() {
+        let source = "package Foo;\nuse strict;\ndie \"Something failed\";\n";
+        let actions = get_modernize_actions(source);
+        assert!(
+            actions.iter().any(|a| a.title.contains("croak")),
+            "Expected croak suggestion in module context, got: {:?}",
+            actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_die_in_script_not_flagged() {
+        let source = "#!/usr/bin/env perl\nuse strict;\ndie \"Something failed\";\n";
+        let actions = find_die_in_module(source);
+        assert!(actions.is_empty(), "die in script should not suggest croak");
+    }
+
+    #[test]
+    fn test_or_die_not_flagged() {
+        let source = "package Foo;\nopen(my $fh, '<', 'f') or die \"open failed: $!\";\n";
+        let actions = find_die_in_module(source);
+        assert!(actions.is_empty(), "or die idiom should not be flagged");
+    }
+
+    #[test]
+    fn test_pipe_die_not_flagged() {
+        let source = "package Foo;\nopen(my $fh, '<', 'f') || die \"open failed: $!\";\n";
+        let actions = find_die_in_module(source);
+        assert!(actions.is_empty(), "|| die idiom should not be flagged");
+    }
+
+    #[test]
+    fn test_die_in_module_inserts_use_carp() {
+        let source = "package Foo;\nuse strict;\ndie \"oops\";\n";
+        let actions = find_die_in_module(source);
+        assert!(!actions.is_empty(), "Expected croak action for die in module");
+        let action = &actions[0];
+        assert_eq!(action.edit.changes.len(), 2, "Should emit die->croak edit AND use Carp insert");
+        assert!(
+            action.edit.changes.iter().any(|e| e.new_text.contains("use Carp")),
+            "One change should insert use Carp"
+        );
+    }
+
+    #[test]
+    fn test_die_in_module_already_uses_carp_no_duplicate() {
+        let source = "package Foo;\nuse Carp qw(croak);\ndie \"oops\";\n";
+        let actions = find_die_in_module(source);
+        assert!(!actions.is_empty(), "Expected croak action even when Carp already used");
+        let action = &actions[0];
+        assert_eq!(
+            action.edit.changes.len(),
+            1,
+            "Should only emit die->croak, no duplicate use Carp"
+        );
+    }
+
+    #[test]
+    fn test_die_in_module_action_kind_is_modernize() {
+        let source = "package Foo;\ndie \"oops\";\n";
+        let actions = find_die_in_module(source);
+        assert!(!actions.is_empty());
+        assert_eq!(actions[0].kind, CodeActionKind::SourceModernize);
     }
 }
