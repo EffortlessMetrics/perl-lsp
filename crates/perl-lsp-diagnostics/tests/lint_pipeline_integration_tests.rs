@@ -223,3 +223,106 @@ fn lint_pipeline_strict_inside_init_suppresses_pl100() {
         missing_strict.len()
     );
 }
+
+// =========================================================================
+// 10. Security lint: string eval fires through the full pipeline (#2693)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_string_eval_emits_pl600() {
+    // eval("code") -- string eval is a security risk, should emit PL600
+    let source = "use strict;\nuse warnings;\neval(\"system('rm -rf /');\");\n";
+    let diags = diagnostics_for(source);
+
+    let security: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL600")).collect();
+
+    assert!(
+        !security.is_empty(),
+        "Expected security-string-eval (PL600) diagnostic from get_diagnostics(), \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        security[0].severity,
+        DiagnosticSeverity::Warning,
+        "security-string-eval should be Warning severity"
+    );
+    assert!(security[0].suggestion.is_some(), "security-string-eval should carry a suggestion");
+}
+
+// =========================================================================
+// 11. Unused imports lint fires through the full pipeline (#2694)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_unused_import_emits_pl700() {
+    // `use Some::Module;` with no reference to Some::Module elsewhere -- should emit PL700
+    let source = "use strict;\nuse warnings;\nuse Some::Module;\nmy $x = 1;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+
+    let unused: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL700")).collect();
+
+    assert!(
+        !unused.is_empty(),
+        "Expected unused-import (PL700) diagnostic from get_diagnostics(), \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        unused[0].severity,
+        DiagnosticSeverity::Hint,
+        "unused-import should be Hint severity"
+    );
+    assert!(
+        unused[0].tags.contains(&DiagnosticTag::Unnecessary),
+        "unused-import should carry DiagnosticTag::Unnecessary"
+    );
+}
+
+// =========================================================================
+// 12. Used import does NOT fire PL700 (#2694)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_used_import_no_pl700() {
+    // `use Some::Module;` WITH a reference to Some::Module -- should NOT emit PL700
+    let source = "use strict;\nuse warnings;\nuse Some::Module;\nmy $obj = Some::Module->new();\n";
+    let diags = diagnostics_for(source);
+
+    let unused: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL700")).collect();
+
+    assert!(
+        unused.is_empty(),
+        "Should NOT get unused-import (PL700) when module is referenced, \
+         got: {:?}",
+        unused.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+}
+
+// =========================================================================
+// 13. Dedup removes duplicate diagnostics (#2696)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_dedup_removes_exact_duplicates() {
+    // The dedup stage runs at the end of get_diagnostics(). We verify that no
+    // two diagnostics in the output share the same (range, severity, code, message).
+    let source = "use strict;\nuse warnings;\nmy $x = 1;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+
+    for (i, a) in diags.iter().enumerate() {
+        for b in diags.iter().skip(i + 1) {
+            let is_dup = a.range == b.range
+                && a.severity == b.severity
+                && a.code == b.code
+                && a.message == b.message;
+            assert!(
+                !is_dup,
+                "Found duplicate diagnostics after dedup: code={:?}, message={:?}",
+                a.code, a.message
+            );
+        }
+    }
+}

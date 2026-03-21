@@ -74,6 +74,9 @@ where
         NodeKind::PhaseBlock { block, .. } => {
             walk_node(block, func);
         }
+        NodeKind::Eval { block } => {
+            walk_node(block, func);
+        }
         _ => {} // Other nodes don't have children or are handled differently
     }
 }

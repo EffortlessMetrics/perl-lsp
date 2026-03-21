@@ -32,6 +32,13 @@ pub fn check_security(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 check_string_eval(name, args, n, diagnostics);
             }
 
+            // The parser produces Eval { block } for both `eval { ... }` and
+            // `eval "string"`.  Block evals are safe (exception handling);
+            // string/variable evals are a security risk.
+            NodeKind::Eval { block } => {
+                check_eval_node(block, n, diagnostics);
+            }
+
             // Backtick strings: the parser stores `cmd` and qx(cmd) as
             // String { value: "`cmd`", interpolated: true }
             NodeKind::String { value, interpolated: true } if is_backtick_string(value) => {
@@ -54,6 +61,37 @@ pub fn check_security(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
             _ => {}
         }
+    });
+}
+
+/// Detect string `eval` from `NodeKind::Eval` nodes.
+///
+/// The parser produces `Eval { block }` for both `eval { ... }` and
+/// `eval "string"`. Block evals (`eval { ... }`) are safe exception handling;
+/// string/variable evals are a security risk.
+fn check_eval_node(block: &Node, eval_node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    let is_string_eval = matches!(&block.kind, NodeKind::String { .. } | NodeKind::Variable { .. })
+        || matches!(&block.kind, NodeKind::Binary { op, .. } if op == ".");
+
+    if !is_string_eval {
+        return;
+    }
+
+    diagnostics.push(Diagnostic {
+        range: (eval_node.location.start, eval_node.location.end),
+        severity: DiagnosticSeverity::Warning,
+        code: Some(DiagnosticCode::SecurityStringEval.as_str().to_string()),
+        message: "String eval is a security risk. Consider eval { } for exception handling."
+            .to_string(),
+        related_information: vec![RelatedInformation {
+            location: (eval_node.location.start, eval_node.location.end),
+            message: "String eval executes arbitrary Perl code at runtime. If the string contains user input, this allows code injection.".to_string(),
+        }],
+        tags: Vec::new(),
+        suggestion: Some(
+            "Use eval { } for exception handling, or consider safer alternatives like Try::Tiny"
+                .to_string(),
+        ),
     });
 }
 
