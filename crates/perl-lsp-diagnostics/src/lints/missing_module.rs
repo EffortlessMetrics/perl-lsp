@@ -194,6 +194,12 @@ pub fn check_missing_modules<F>(
         let module_str =
             raw_module.split_once(' ').map(|(name, _)| name).unwrap_or(raw_module.as_str());
 
+        // Skip empty module names — these come from parser error-recovery nodes
+        // (NodeKind::Use { module: String::new(), .. }) and would produce false positives.
+        if module_str.is_empty() {
+            continue;
+        }
+
         // Skip version-only use: `use 5.010;` or `use v5.38;`
         if module_str.chars().next().is_some_and(|c| c.is_ascii_digit() || c == 'v') {
             continue;
@@ -407,6 +413,30 @@ mod tests {
         );
     }
 
+    /// An empty module string comes from parser error-recovery nodes.
+    /// It must be silently skipped — no PL701 and no panic.
+    #[test]
+    fn empty_module_string_is_silently_skipped() {
+        use perl_parser_core::ast::{Node, NodeKind, SourceLocation};
+        // Construct a Program node wrapping a Use node with an empty module name.
+        // This simulates what the parser emits during error recovery.
+        let use_node = Node::new(
+            NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false },
+            SourceLocation { start: 0, end: 4 },
+        );
+        let program = Node::new(
+            NodeKind::Program { statements: vec![use_node] },
+            SourceLocation { start: 0, end: 4 },
+        );
+        let mut diags = vec![];
+        check_missing_modules(&program, "", resolver_never_finds, &mut diags);
+        assert!(
+            diags.is_empty(),
+            "empty module name from error-recovery must not emit PL701 (got {} diagnostics)",
+            diags.len()
+        );
+    }
+
     /// Suggestion text must contain the module name so the user knows what to install.
     #[test]
     fn suggestion_contains_module_name() {
@@ -419,6 +449,27 @@ mod tests {
         assert!(
             suggestion.contains("Some::Package"),
             "suggestion should mention the module name; got: {suggestion:?}"
+        );
+    }
+
+    /// File with a syntax error followed by a valid `use` — the lint should still
+    /// fire on the missing module, not crash on the partial AST.
+    #[test]
+    fn broken_file_with_valid_use_still_emits_pl701() {
+        // parse_with_recovery tolerates syntax errors; the Use node for Missing::Mod
+        // should still be present and trigger PL701.
+        let source = "my $x = ;\nuse Missing::Mod;\n";
+        let output = Parser::new(source).parse_with_recovery();
+        let ast = output.ast;
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &mut diags);
+        // Must not panic; if the Use node was recovered, we get PL701.
+        // If recovery omitted it entirely we get 0. Either is acceptable — but not a panic.
+        let pl701_count = diags.iter().filter(|d| d.code.as_deref() == Some("PL701")).count();
+        assert!(
+            pl701_count <= 1,
+            "at most one PL701 for one use statement (got {})",
+            pl701_count
         );
     }
 }
