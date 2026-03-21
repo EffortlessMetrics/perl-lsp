@@ -94,7 +94,14 @@ impl<'a> Parser<'a> {
                 self.parse_assignment()?
             } else {
                 // For my/our/state, parse a simple variable
-                self.parse_variable()?
+                let var = self.parse_variable()?;
+                // If -> follows the declared variable, treat it as an lvalue subscript chain
+                // e.g. my $cache->{key} = expr  or  my $foo->method()
+                if self.peek_kind() == Some(TokenKind::Arrow) {
+                    self.parse_postfix_chain(var)?
+                } else {
+                    var
+                }
             };
 
             // Parse optional attributes
