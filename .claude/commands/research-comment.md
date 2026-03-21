@@ -53,9 +53,16 @@ plan-review.
    )"
    ```
 
-3. **Add the `research-verified` label:**
+3. **Ensure the `research-verified` label exists, then apply it:**
 
    ```bash
+   # Create the label if it doesn\'t exist (idempotent)
+   gh label create "research-verified" \
+     --color "0075ca" \
+     --description "Facts verified by research-verifier agent" \
+     2>/dev/null || true
+
+   # Apply the label to the issue
    gh issue edit <number> --add-label "research-verified"
    ```
 
