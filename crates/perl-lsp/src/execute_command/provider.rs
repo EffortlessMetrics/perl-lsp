@@ -744,5 +744,17 @@ pub fn command_exists(command: &str) -> bool {
 
 /// Return the supported executeCommand identifiers.
 pub fn get_supported_commands() -> Vec<String> {
-    crate::protocol::capabilities::get_supported_commands()
+    // Keep in sync with perl_lsp_protocol::capabilities::get_supported_commands
+    vec![
+        "perl.runTests".to_string(),
+        "perl.runFile".to_string(),
+        "perl.runTestSub".to_string(),
+        "perl.runCritic".to_string(),
+        "perl.runTest".to_string(),
+        "perl.runTestFile".to_string(),
+        "perl.runSubtest".to_string(),
+        "perl.debugFile".to_string(),
+        "perl.goToTest".to_string(),
+        "perl.goToImplementation".to_string(),
+    ]
 }

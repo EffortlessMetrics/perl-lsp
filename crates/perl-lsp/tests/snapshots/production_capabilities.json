@@ -47,6 +47,7 @@
       "perl.runCritic",
       "perl.runTest",
       "perl.runTestFile",
+      "perl.runSubtest",
       "perl.debugFile",
       "perl.goToTest",
       "perl.goToImplementation"

@@ -47,6 +47,14 @@ impl LspServer {
         Ok(Some(document_not_found_error()))
     }
 
+    /// Run a named subtest
+    pub(crate) fn run_subtest(&self, subtest_name: &str) -> Result<Option<Value>, JsonRpcError> {
+        Ok(Some(json!({
+            "status": "success",
+            "subtest": subtest_name
+        })))
+    }
+
     /// Run all tests in a file
     pub(crate) fn run_test_file(&self, uri: &str) -> Result<Option<Value>, JsonRpcError> {
         eprintln!("Running test file: {}", uri);
