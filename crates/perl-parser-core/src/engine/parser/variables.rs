@@ -371,8 +371,9 @@ impl<'a> Parser<'a> {
         let next_kind = self.peek_kind();
 
         let (name, end) = if next_kind == Some(TokenKind::Identifier) ||
-                             // Keywords that can be used as subroutine names with & sigil
-                             (sigil == "&" && matches!(next_kind, Some(k) if Self::can_be_sub_name(k)))
+                             // Keywords can be used as variable names with any sigil
+                             // e.g., %try, $default, @for, &try are all valid Perl
+                             matches!(next_kind, Some(k) if Self::can_be_sub_name(k))
         {
             let name_token = self.tokens.next()?;
             let mut name = name_token.text.to_string();
