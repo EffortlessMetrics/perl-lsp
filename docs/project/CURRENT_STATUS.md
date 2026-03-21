@@ -60,10 +60,10 @@ Key terms:
 | **Current release line** | `v0.11.0` public alpha | Truthful docs and receipts | Active |
 | **Active milestone** | `v0.12.0` public-alpha hardening sprint | Exit hardening sprint cleanly | In progress |
 | **Merge gate** | `nix develop -c just ci-gate` | Green before merge | Required |
-| **Tier A Tests** | 2673 lib tests (discovered), 6 ignores (tracked) | 100% pass | PASS |
+| **Tier A Tests** | 2733 lib tests (discovered), 5 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
-| **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 100% | PASS |
+| **LSP Coverage** | 100% (54/54 advertised features, `features.toml`) | 100% | PASS |
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser hardening** | CPAN baseline, repo corpus, and hang-risk receipts tracked below | 90%+ CPAN clean next | Active |
 | **DAP stance** | Native + Bridge preview | Harden preview flows | Active |
@@ -90,10 +90,10 @@ Key terms:
 ### Computed Metrics (auto-updated by `just status-update`)
 
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
-- **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
-- **Protocol Compliance**: 100% overall LSP protocol support (97/97 including plumbing)
+- **LSP Coverage**: 100% user-visible feature coverage (54/54 advertised features from `features.toml`)
+- **Protocol Compliance**: 100% overall LSP protocol support (98/98 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (73 `.pl` files)
-- **Test Status**: 2673 lib tests (Tier A), 6 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
+- **Test Status**: 2733 lib tests (Tier A), 5 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
