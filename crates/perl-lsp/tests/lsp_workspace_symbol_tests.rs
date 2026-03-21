@@ -351,14 +351,12 @@ fn test_workspace_symbol_finds_native_class_and_method() -> TestResult {
     )?;
 
     // Search for "get_" — should match both native methods
-    let response = harness
-        .request("workspace/symbol", json!({ "query": "get_" }))
-        .unwrap_or(json!(null));
+    let response =
+        harness.request("workspace/symbol", json!({ "query": "get_" })).unwrap_or(json!(null));
 
     if !response.is_null() && response.is_array() {
         let symbols = response.as_array().ok_or("response is not an array")?;
-        let names: Vec<&str> =
-            symbols.iter().filter_map(|s| s["name"].as_str()).collect();
+        let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
         assert!(
             names.iter().any(|n| *n == "get_x" || *n == "get_y"),
             "workspace/symbol should find native methods 'get_x'/'get_y', got: {:?}",
@@ -381,14 +379,12 @@ fn test_workspace_symbol_finds_native_class_and_method() -> TestResult {
     }
 
     // Search for "MyPoint" — should find the class declaration
-    let response2 = harness
-        .request("workspace/symbol", json!({ "query": "MyPoint" }))
-        .unwrap_or(json!(null));
+    let response2 =
+        harness.request("workspace/symbol", json!({ "query": "MyPoint" })).unwrap_or(json!(null));
 
     if !response2.is_null() && response2.is_array() {
         let symbols2 = response2.as_array().ok_or("response2 is not an array")?;
-        let names2: Vec<&str> =
-            symbols2.iter().filter_map(|s| s["name"].as_str()).collect();
+        let names2: Vec<&str> = symbols2.iter().filter_map(|s| s["name"].as_str()).collect();
         assert!(
             names2.iter().any(|n| *n == "MyPoint"),
             "workspace/symbol should find native class 'MyPoint', got: {:?}",
