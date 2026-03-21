@@ -188,6 +188,7 @@ pub fn add_method_completions(
                 filter_text: Some(name.clone()),
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
             });
         }
     }
@@ -238,6 +239,7 @@ pub fn add_method_completions(
                 filter_text: Some(method.to_string()),
                 additional_edits,
                 text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
             });
         }
     }
@@ -261,6 +263,7 @@ pub fn add_method_completions(
                     filter_text: Some(method.to_string()),
                     additional_edits,
                     text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
                 });
             }
         }

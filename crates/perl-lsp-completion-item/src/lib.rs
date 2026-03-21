@@ -48,6 +48,9 @@ pub struct CompletionItem {
     pub additional_edits: Vec<(SourceLocation, String)>,
     /// Range to replace in the document (for proper prefix handling).
     pub text_edit_range: Option<(usize, usize)>, // (start, end) offsets
+    /// Commit characters that trigger auto-insertion (LSP 3.0+).
+    /// Each entry must be exactly one character per LSP spec.
+    pub commit_characters: Option<Vec<String>>,
 }
 
 /// Remove duplicates and sort completions with stable, deterministic ordering.
@@ -134,6 +137,7 @@ mod tests {
             filter_text: None,
             additional_edits: Vec::new(),
             text_edit_range: None,
+            commit_characters: None,
         }
     }
 

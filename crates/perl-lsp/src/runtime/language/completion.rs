@@ -36,6 +36,23 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
     SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
 }
 
+/// Returns commit characters for a completion item based on its kind.
+/// Each string is exactly one character, per the LSP 3.x spec.
+///
+/// Returns a static slice to avoid per-item heap allocation in the completion
+/// serialization hot path (called once per item, up to `completion_cap()` times
+/// per request, on every keypress in editors).
+fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static str]> {
+    match kind {
+        CompletionItemKind::Function => Some(&["(", ",", ";"]),
+        CompletionItemKind::Variable => Some(&["[", "{", ".", ";"]),
+        CompletionItemKind::Module => Some(&[";"]),
+        CompletionItemKind::Constant => Some(&["[", "{", ".", ";"]),
+        CompletionItemKind::Property => Some(&[",", "}"]),
+        _ => None,
+    }
+}
+
 impl LspServer {
     fn split_sigil(name: &str) -> (Option<char>, &str) {
         let mut chars = name.chars();
@@ -187,6 +204,7 @@ impl LspServer {
                         documentation: Self::workspace_symbol_documentation(&symbol),
                         additional_edits: Vec::new(),
                         text_edit_range,
+                        commit_characters: None,
                     });
                 }
             }
@@ -427,16 +445,8 @@ impl LspServer {
                             });
                         }
 
-                        // Only add commit characters for functions and variables, not keywords
-                        let needs_commit_chars = matches!(
-                            c.kind,
-                            CompletionItemKind::Function
-                                | CompletionItemKind::Variable
-                                | CompletionItemKind::Module
-                                | CompletionItemKind::Constant
-                        );
-                        if needs_commit_chars {
-                            item["commitCharacters"] = json!([";", " ", ")", "]", "}"]);
+                        if let Some(chars) = commit_chars_for_kind(c.kind) {
+                            item["commitCharacters"] = json!(chars);
                         }
 
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
@@ -632,6 +642,10 @@ impl LspServer {
                             });
                         }
 
+                        if let Some(chars) = commit_chars_for_kind(c.kind) {
+                            item["commitCharacters"] = json!(chars);
+                        }
+
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
                         if !c.additional_edits.is_empty() {
                             let edits: Vec<Value> = c
@@ -729,6 +743,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -749,6 +764,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -765,6 +781,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
                 if "_".starts_with(&prefix) || prefix.is_empty() {
@@ -778,6 +795,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -794,6 +812,7 @@ impl LspServer {
                         sort_text: None,
                         filter_text: None,
                         text_edit_range: None,
+                        commit_characters: None,
                     });
                 }
             }
@@ -811,6 +830,7 @@ impl LspServer {
                             sort_text: None,
                             filter_text: None,
                             text_edit_range: None,
+                            commit_characters: None,
                         });
                     }
                 }
