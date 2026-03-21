@@ -168,6 +168,13 @@ fn signature_help_retrigger_characters() -> Result<(), Box<dyn std::error::Error
         .ok_or("missing retriggerCharacters")?;
     let retrigger_strs: Vec<&str> = retriggers.iter().filter_map(|t| t.as_str()).collect();
     assert!(retrigger_strs.contains(&","), "should retrigger on comma");
+    assert!(retrigger_strs.contains(&"@"), "should retrigger on @ (array arg)");
+    assert!(retrigger_strs.contains(&"%"), "should retrigger on % (hash arg)");
+    assert!(retrigger_strs.contains(&"{"), "should retrigger on {{ (hash subscript)");
+    assert!(retrigger_strs.contains(&"["), "should retrigger on [ (array subscript)");
+    // Closing brackets should NOT be retriggers (end of context, not new parameter)
+    assert!(!retrigger_strs.contains(&"}"), "should NOT retrigger on }}");
+    assert!(!retrigger_strs.contains(&"]"), "should NOT retrigger on ]");
     Ok(())
 }
 

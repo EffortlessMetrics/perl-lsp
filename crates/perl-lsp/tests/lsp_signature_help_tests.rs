@@ -327,5 +327,40 @@ fn test_signature_help_capability_advertised() -> TestResult {
         );
     }
 
+    // Retrigger characters should include ',', '@', '%', '{', '['
+    if let Some(retriggers) = provider.get("retriggerCharacters") {
+        assert!(retriggers.is_array(), "retriggerCharacters should be an array");
+        let retrigger_arr =
+            retriggers.as_array().ok_or("Expected array for retriggerCharacters")?;
+        let retrigger_strs: Vec<&str> =
+            retrigger_arr.iter().filter_map(|t| t.as_str()).collect();
+
+        assert!(
+            retrigger_strs.contains(&","),
+            "retriggerCharacters should include ',', got: {:?}",
+            retrigger_strs
+        );
+        assert!(
+            retrigger_strs.contains(&"@"),
+            "retriggerCharacters should include '@' (array arg), got: {:?}",
+            retrigger_strs
+        );
+        assert!(
+            retrigger_strs.contains(&"%"),
+            "retriggerCharacters should include '%' (hash arg), got: {:?}",
+            retrigger_strs
+        );
+        assert!(
+            retrigger_strs.contains(&"{"),
+            "retriggerCharacters should include '{{' (hash subscript), got: {:?}",
+            retrigger_strs
+        );
+        assert!(
+            retrigger_strs.contains(&"["),
+            "retriggerCharacters should include '[' (array subscript), got: {:?}",
+            retrigger_strs
+        );
+    }
+
     Ok(())
 }
