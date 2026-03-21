@@ -84,7 +84,9 @@ Larry Wall said "only perl can parse Perl," and he wasn't exaggerating. The char
 
 **Q: How do you measure "correct enough"?**
 
-We parse the CPAN corpus. 7,000+ real-world Perl files from published modules. The parse rate ratchets -- CI blocks any change that would lower it. We started at around 50%. We're above 85% now. Every session either improves the number or leaves it unchanged. Regressions are structurally impossible.
+We parse the CPAN corpus. 4,355 real-world Perl files from published modules. The parse rate ratchets -- CI blocks any change that would lower it. We started at around 50%. We're at 85.4% on the full corpus baseline, and 90.9% clean on the lib-file sweep after recent parser fixes. Every session either improves the number or leaves it unchanged. Regressions are structurally impossible.
+
+*Updated 2026-03-21: baseline 85.4% (3,717/4,355 files), manifest 2,052 clean modules. The March 21 session merged fat-arrow (#2613) and defined/ref (#2626) parser fixes — the lib-file sweep shows 90.9% clean (3,077/3,386). The baseline JSON will reset on next ratchet run.*
 
 ---
 

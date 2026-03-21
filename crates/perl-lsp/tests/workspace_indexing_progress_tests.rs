@@ -203,3 +203,41 @@ fn work_done_progress_create_sent_to_client() -> TestResult {
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Test 7: racing workspace folder change during initial indexing does not
+//         produce duplicate $/progress begin notifications (issue #2641).
+// ---------------------------------------------------------------------------
+#[test]
+fn no_duplicate_progress_begin_on_concurrent_reindex() -> TestResult {
+    let ws = make_workspace_with_files(5)?;
+    let mut harness = LspHarness::new_raw();
+    harness.initialize_with_root(&ws.root_uri, Some(caps_with_progress()))?;
+
+    // Immediately send workspace folder change to race with initial indexing.
+    harness.notify(
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": { "added": [], "removed": [] } }),
+    );
+
+    // Wait for indexing to complete.
+    let _ = harness.wait_for_progress_kind("workspace-index", "end", progress_timeout());
+
+    // Collect all $/progress notifications.
+    let notifications = harness.drain_notifications(Some("$/progress"), 3_000);
+    let begins: Vec<_> = notifications
+        .iter()
+        .filter(|n| {
+            n.pointer("/params/token").and_then(|v| v.as_str()) == Some("workspace-index")
+                && n.pointer("/params/value/kind").and_then(|v| v.as_str()) == Some("begin")
+        })
+        .collect();
+
+    // Must have at most one begin for the workspace-index token.
+    assert!(
+        begins.len() <= 1,
+        "expected at most 1 progress begin, got {}: {begins:?}",
+        begins.len()
+    );
+    Ok(())
+}

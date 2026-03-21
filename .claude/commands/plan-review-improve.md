@@ -45,6 +45,12 @@ Write your findings as an issue comment and label the issue as builder-ready.
    and `needs-plan-review` is removed so the orchestrator does not re-route this issue to another
    plan-reviewer on the next swarm pass. (`--remove-label` is a no-op if the label is absent.)
 
+   After setting labels, write version-bound receipts for both:
+   ```
+   /label-receipt-write issue <number> plan-reviewed plan-reviewer
+   /label-receipt-write issue <number> builder-ready plan-reviewer
+   ```
+
 3. If the spec is incomplete or wrong (root cause was wrong, file references stale, approach flawed):
    - **Do the investigation yourself.** Find the real root cause, correct the file references, design the fix. You have sonnet — use it.
    - Update the issue with the corrected spec: exact files, functions, lines, test cases, verify commands.

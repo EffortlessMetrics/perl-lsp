@@ -7,9 +7,15 @@
 #   1 — branch issue (on master/main or detached HEAD)
 #   2 — worktree issue (not running in an isolated git worktree)
 #   3 — conflict issue (unresolved merge conflicts present)
+#   4 — cwd issue (running from the main repo root, not a worktree path)
+#   6 — stash issue (shared stash has entries — cross-contamination risk)
 #
 # Usage:
 #   bash scripts/agent-preflight.sh
+#
+# Check 5 computes the recommended CARGO_TARGET_DIR and prints it.
+# Agents should set CARGO_TARGET_DIR before running cargo commands:
+#   export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
 
 set -uo pipefail
 
@@ -72,6 +78,68 @@ else
     CONFLICT_OK=true
 fi
 
+# ── Check 4: cwd must not be the main repo root ─────────────────────────────
+# An agent in a worktree can still accidentally cd to (or be spawned in) the
+# main checkout path.  The Write/Edit tools resolve absolute paths relative to
+# cwd, so writing from the main checkout puts files in the wrong place.
+
+MAIN_REPO_RAW="$(git rev-parse --git-common-dir 2>/dev/null | sed 's|/\.git$||; s|^\.git$|.|')"
+# Resolve both paths through readlink/pwd -P so symlinks don't cause mismatches
+if [[ -n "$MAIN_REPO_RAW" ]]; then
+    MAIN_REPO="$(cd "$MAIN_REPO_RAW" 2>/dev/null && pwd -P)" || MAIN_REPO=""
+else
+    MAIN_REPO=""
+fi
+CWD="$(pwd -P)"
+
+if [[ -n "$MAIN_REPO" && "$CWD" = "$MAIN_REPO" ]]; then
+    err "cwd is the main repo root ($MAIN_REPO). Agents must run from their worktree."
+    echo "    Fix: cd \$(git worktree list | grep \$(git branch --show-current) | awk '{print \$1}')"
+    CWD_OK=false
+else
+    ok "cwd is not the main repo root"
+    CWD_OK=true
+fi
+
+# ── Check 5: CARGO_TARGET_DIR isolation ─────────────────────────────────────
+# Shared target/ across worktrees causes phantom test failures from stale
+# artifacts. Each agent needs its own CARGO_TARGET_DIR.
+
+if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+    ok "CARGO_TARGET_DIR already set: $CARGO_TARGET_DIR"
+else
+    BRANCH_SLUG="$(git branch --show-current 2>/dev/null | tr '/' '-')"
+    if [[ -n "$BRANCH_SLUG" ]]; then
+        RECOMMENDED_TARGET="/tmp/agent-${BRANCH_SLUG}-target"
+        ok "Recommended CARGO_TARGET_DIR=$RECOMMENDED_TARGET"
+        echo "    Run: export CARGO_TARGET_DIR=\"$RECOMMENDED_TARGET\""
+    else
+        # Detached HEAD — use a hash-based fallback
+        HEAD_SHORT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+        RECOMMENDED_TARGET="/tmp/agent-detached-${HEAD_SHORT}-target"
+        ok "Recommended CARGO_TARGET_DIR=$RECOMMENDED_TARGET (detached HEAD fallback)"
+        echo "    Run: export CARGO_TARGET_DIR=\"$RECOMMENDED_TARGET\""
+    fi
+fi
+
+# ── Check 6: No git stash entries (shared across worktrees) ──────────────────
+
+STASH_COUNT="$(git stash list 2>/dev/null | wc -l)"
+
+if [[ "$STASH_COUNT" -gt 0 ]]; then
+    err "Git stash has $STASH_COUNT entries. Stash is SHARED across all worktrees — cross-contamination risk."
+    echo "    The stash list is a single global list. 'git stash pop' may restore another agent's changes."
+    echo "    Alternatives:"
+    echo "      Discard changes: git restore <file>"
+    echo "      Save WIP:        git commit -m 'wip' on the branch"
+    echo "      Abandon all:     git restore ."
+    echo "    Fix: Run 'git stash clear' to drop all stash entries, then re-run preflight"
+    STASH_OK=false
+else
+    ok "No git stash entries (stash is shared — safe)"
+    STASH_OK=true
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -87,6 +155,14 @@ fi
 
 if [[ "$CONFLICT_OK" == false ]]; then
     exit 3
+fi
+
+if [[ "$CWD_OK" == false ]]; then
+    exit 4
+fi
+
+if [[ "$STASH_OK" == false ]]; then
+    exit 6
 fi
 
 echo ""

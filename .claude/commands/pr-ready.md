@@ -34,7 +34,15 @@ gh pr edit $NUMBER --add-label "merge-ready"
 
 The `merge-ready` label signals the ops agent that this PR has passed review and is cleared for merge pickup.
 
-### 4. Report
+### 4. Write version-bound receipt
+
+Record the label binding against the current HEAD SHA so the orchestrator can detect staleness:
+
+```
+/label-receipt-write pr $NUMBER merge-ready pr-ready
+```
+
+### 5. Report
 
 Output: "PR #$NUMBER marked ready -- CI will trigger. Labeled merge-ready for ops pickup."
 

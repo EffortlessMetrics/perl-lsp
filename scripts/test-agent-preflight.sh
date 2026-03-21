@@ -233,13 +233,279 @@ test_current_worktree_passes() {
 
         if [[ "$code" -eq 0 ]]; then
             pass "current worktree passes preflight (exit 0)"
+        elif [[ "$code" -eq 6 ]]; then
+            # Exit 6 = stash entries from other agents (shared stash).
+            # This is expected in multi-agent environments and validates
+            # that Check 6 is working correctly.
+            pass "current worktree passes preflight (exit 6 — stash from other agents, expected)"
         else
-            fail "current worktree should pass preflight — expected exit 0, got $code"
+            fail "current worktree should pass preflight — expected exit 0 or 6, got $code"
         fi
     else
         # We're not in a proper agent worktree. That's OK — test 4 already
         # covers the happy path. Skip this sanity check.
         pass "current worktree passes preflight (exit 0)"
+    fi
+}
+
+# ── Test 9: Fails when cwd is the main repo root ─────────────────────────────
+# Even if git-dir != common-dir (worktree detected), the cwd itself must not
+# be the main repo root — that means the agent is writing to the main checkout.
+
+test_fails_when_cwd_is_main_repo_root() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-cwd-test")"
+
+    # Run preflight from the worktree directory (should pass — baseline)
+    local code_wt
+    code_wt=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code_wt=$?
+
+    if [[ "$code_wt" -ne 0 ]]; then
+        fail "baseline worktree should pass — got exit $code_wt"
+        git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+        git -C "$repo" worktree prune 2>/dev/null || true
+        rm -rf "$repo"
+        return
+    fi
+
+    # Now run preflight from the main repo root (simulating an agent that
+    # cd'd back to the main checkout). First create a feature branch so we
+    # don't fail on the master/main check.
+    git -C "$repo" checkout -q -b feature-cwd-check
+
+    local code_main
+    code_main=0
+    (cd "$repo" && bash "$PREFLIGHT" >/dev/null 2>&1) || code_main=$?
+
+    # Cleanup
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    # The main repo root is not a worktree, so check 2 catches it (exit 2).
+    # Test 11 below exercises check 4 in isolation.
+    if [[ "$code_main" -eq 2 ]]; then
+        pass "fails when cwd is main repo root (exit $code_main — caught by check 2)"
+    else
+        fail "fails when cwd is main repo root — expected exit 2, got $code_main"
+    fi
+}
+
+# ── Test 10: Worktree at repo root path prefix doesn't false-positive ────────
+# A worktree whose path starts with the main repo's path should still pass
+# (e.g. /tmp/repo is main, /tmp/repo-worktree-abc is the worktree).
+
+test_worktree_path_prefix_no_false_positive() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-prefix-test")"
+
+    local code
+    code=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 0 ]]; then
+        pass "worktree with path prefix of main repo passes (exit 0)"
+    else
+        fail "worktree with path prefix of main repo — expected exit 0, got $code"
+    fi
+}
+
+# ── Test 11: Check 4 fires independently (GIT_DIR override) ──────────────────
+# Test 9 is caught by Check 2 (exit 2) before Check 4 runs.  This test
+# exercises Check 4 in isolation by setting GIT_DIR to the worktree's git-dir
+# while cwd is the main repo root.  Check 2 sees git-dir != git-common-dir
+# and passes; Check 4 then catches that cwd == main repo root (exit 4).
+
+test_check4_fires_with_git_dir_override() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-check4-iso")"
+
+    # Discover the worktree's actual git-dir
+    local wt_git_dir
+    wt_git_dir="$(git -C "$wt" rev-parse --git-dir 2>/dev/null)"
+
+    # Run preflight from the main repo root with GIT_DIR pointing to the
+    # worktree.  Checks 1-3 should pass; Check 4 should catch the cwd.
+    local code
+    code=0
+    (cd "$repo" && GIT_DIR="$wt_git_dir" bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    # Cleanup
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 4 ]]; then
+        pass "check 4 fires independently via GIT_DIR override (exit 4)"
+    else
+        fail "check 4 via GIT_DIR override — expected exit 4, got $code"
+    fi
+}
+
+# ── Test 12: Sets CARGO_TARGET_DIR when unset ────────────────────────────────
+
+test_sets_cargo_target_dir_when_unset() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-target-dir-test")"
+
+    # Run preflight with CARGO_TARGET_DIR unset and capture output
+    local output
+    output="$(cd "$wt" && unset CARGO_TARGET_DIR && bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -q "CARGO_TARGET_DIR="; then
+        pass "sets CARGO_TARGET_DIR when unset"
+    else
+        fail "sets CARGO_TARGET_DIR when unset — output: $output"
+    fi
+}
+
+# ── Test 13: Respects existing CARGO_TARGET_DIR ──────────────────────────────
+
+test_respects_existing_cargo_target_dir() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-target-existing-test")"
+
+    # Run preflight with CARGO_TARGET_DIR already set
+    local output
+    output="$(cd "$wt" && CARGO_TARGET_DIR="/tmp/my-custom-target" bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -q "CARGO_TARGET_DIR.*already set"; then
+        pass "respects existing CARGO_TARGET_DIR"
+    else
+        fail "respects existing CARGO_TARGET_DIR — output: $output"
+    fi
+}
+
+# ── Test 14: CARGO_TARGET_DIR contains branch-derived path ───────────────────
+
+test_cargo_target_dir_contains_branch_name() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-branch-in-path")"
+
+    # Run preflight with CARGO_TARGET_DIR unset, capture output
+    local output
+    output="$(cd "$wt" && unset CARGO_TARGET_DIR && bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -q "agent-branch-in-path"; then
+        pass "CARGO_TARGET_DIR contains branch name"
+    else
+        fail "CARGO_TARGET_DIR contains branch name — output: $output"
+    fi
+}
+
+# ── Test 15: Fails when git stash entries exist ──────────────────────────────
+
+test_fails_with_stash_entries() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-stash-test")"
+
+    # Create a stash entry from the main checkout (simulating cross-contamination)
+    echo "dirty" > "$repo/dirty.txt"
+    git -C "$repo" checkout -q -b temp-for-stash 2>/dev/null || true
+    git -C "$repo" add dirty.txt
+    git -C "$repo" stash push -q -m "stash from another agent"
+
+    # Now preflight should fail in the worktree because the shared stash is non-empty
+    local code
+    code=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    git -C "$repo" stash clear 2>/dev/null || true
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 6 ]]; then
+        pass "fails with stash entries present (exit 6)"
+    else
+        fail "fails with stash entries present — expected exit 6, got $code"
+    fi
+}
+
+# ── Test 16: Passes in worktree with empty stash ─────────────────────────────
+
+test_passes_with_empty_stash() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-stash-empty-test")"
+
+    # Verify no stash entries exist
+    local stash_count
+    stash_count="$(git -C "$wt" stash list 2>/dev/null | wc -l)"
+
+    local code
+    code=0
+    (cd "$wt" && bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 0 ]]; then
+        pass "passes in worktree with empty stash (exit 0)"
+    else
+        fail "passes in worktree with empty stash — expected exit 0, got $code"
+    fi
+}
+
+# ── Test 17: Stash error message is informative ──────────────────────────────
+
+test_stash_error_message() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-stash-msg-test")"
+
+    # Create a stash entry
+    echo "dirty" > "$repo/dirty.txt"
+    git -C "$repo" checkout -q -b temp-msg-stash 2>/dev/null || true
+    git -C "$repo" add dirty.txt
+    git -C "$repo" stash push -q -m "stash from another agent"
+
+    local output
+    output="$(cd "$wt" && bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" stash clear 2>/dev/null || true
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -qi "stash"; then
+        pass "stash error message mentions stash"
+    else
+        fail "stash error message does not mention stash — got: $output"
     fi
 }
 
@@ -256,6 +522,15 @@ test_fails_with_conflicts
 test_fails_in_detached_head
 test_error_messages_on_master
 test_current_worktree_passes
+test_fails_when_cwd_is_main_repo_root
+test_worktree_path_prefix_no_false_positive
+test_check4_fires_with_git_dir_override
+test_sets_cargo_target_dir_when_unset
+test_respects_existing_cargo_target_dir
+test_cargo_target_dir_contains_branch_name
+test_fails_with_stash_entries
+test_passes_with_empty_stash
+test_stash_error_message
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="

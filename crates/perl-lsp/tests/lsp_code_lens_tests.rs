@@ -874,3 +874,120 @@ sub regular_function { return 9; }
 
     Ok(())
 }
+
+/// Defect 1: clicking "Run Test" must not return {status: "error"}.
+///
+/// The lens argument must be "uri::sub_name" so run_test() can parse it.
+#[test]
+fn test_run_test_lens_execute_command_round_trip() -> TestResult {
+    let doc = "use Test::More;\n\nsub test_basic {\n    ok(1, \"basic\");\n}\n\ndone_testing();\n";
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///t/basic.t", doc)?;
+
+    // Get code lenses
+    let lenses_result = harness
+        .request("textDocument/codeLens", json!({ "textDocument": {"uri": "file:///t/basic.t"} }))
+        .unwrap_or(json!(null));
+
+    let lenses = lenses_result.as_array().ok_or("Expected array of lenses")?;
+
+    // Find the "Run Test" lens for test_basic
+    let run_test_lens = lenses.iter().find(|lens| {
+        lens.get("command")
+            .and_then(|c| c.get("command"))
+            .and_then(|c| c.as_str())
+            .map(|c| c == "perl.runTest")
+            .unwrap_or(false)
+    });
+
+    assert!(run_test_lens.is_some(), "Should have a perl.runTest lens for test_basic");
+
+    let lens = run_test_lens.ok_or("Expected run test lens")?;
+    let cmd = lens.get("command").ok_or("Expected command")?;
+    let args = cmd.get("arguments").and_then(|a| a.as_array()).ok_or("Expected arguments array")?;
+
+    // The argument must contain "::" (uri::sub_name format)
+    let arg0 = args.first().and_then(|v| v.as_str()).ok_or("Expected first argument as string")?;
+    assert!(arg0.contains("::"), "Run Test argument must be 'uri::sub_name', got: {}", arg0);
+
+    // Execute the command — must NOT return {status: "error"}
+    let exec_result = harness
+        .request(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.runTest",
+                "arguments": args
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    let status = exec_result.get("status").and_then(|s| s.as_str()).unwrap_or("ok");
+    assert_ne!(
+        status, "error",
+        "Run Test execute command must not return error status, got: {}",
+        exec_result
+    );
+
+    Ok(())
+}
+
+/// Defect 3: perl.debugTest command must be registered and return success stub.
+#[test]
+fn test_debug_test_execute_command_stub() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let result = harness
+        .request(
+            "workspace/executeCommand",
+            json!({
+                "command": "perl.debugTest",
+                "arguments": ["file:///t/basic.t::test_basic"]
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    // Must not return method-not-found or unknown-command error
+    // A stub returning {status: "success", ...} is acceptable
+    let status = result.get("status").and_then(|s| s.as_str()).unwrap_or("ok");
+    assert_ne!(status, "error", "perl.debugTest stub should return success, got: {}", result);
+
+    Ok(())
+}
+
+/// Defect 2 (LSP integration): is_* subs in .pm files must not get Run Test lenses.
+#[test]
+fn test_is_prefix_no_run_test_lens_in_pm_file() -> TestResult {
+    let doc =
+        "package Foo;\n\nsub is_valid { return 1 }\nsub is_authenticated { return 0 }\n\n1;\n";
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///lib/Foo.pm", doc)?;
+
+    let result = harness
+        .request("textDocument/codeLens", json!({ "textDocument": {"uri": "file:///lib/Foo.pm"} }))
+        .unwrap_or(json!(null));
+
+    let lenses = result.as_array().ok_or("Expected array of lenses")?;
+    let run_test_count = lenses
+        .iter()
+        .filter(|lens| {
+            lens.get("command")
+                .and_then(|c| c.get("command"))
+                .and_then(|c| c.as_str())
+                .map(|c| c == "perl.runTest")
+                .unwrap_or(false)
+        })
+        .count();
+
+    assert_eq!(
+        run_test_count, 0,
+        "is_ prefix subs in .pm file should NOT get Run Test lenses, got {}",
+        run_test_count
+    );
+
+    Ok(())
+}

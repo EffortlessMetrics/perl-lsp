@@ -47,6 +47,11 @@ gh pr edit <number> --add-label "needs-deep-review"
 
 Post a comment explaining what you'd like the deep-reviewer to focus on, then route to the deep-review agent. Do not approve yet.
 
+After adding `needs-deep-review`, write a version-bound receipt:
+```
+/label-receipt-write pr <number> needs-deep-review reviewer
+```
+
 ### Non-trivial issues → Fix forward if you can
 Most "non-trivial" issues are still fixable on the branch. You're a sonnet-grade agent on an isolated branch — fix it, don't send it back. Bumping back is a full round trip through the queue.
 

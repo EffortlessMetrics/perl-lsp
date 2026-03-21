@@ -15,8 +15,14 @@ impl<'a> Parser<'a> {
                             let test_token = self.tokens.next()?;
                             let file_test = format!("-{}", test_token.text);
 
-                            // File test can be used without operand (tests $_)
-                            let operand = if self.is_at_statement_end() {
+                            // File test can be used without operand (tests $_).
+                            // Treat a following comma as end-of-expression so that
+                            // `grep -e, @INC` and `grep !/pat/ && -d, @list` parse
+                            // correctly: the comma is the EXPR/LIST separator for
+                            // grep/map, not an argument to the file-test operator.
+                            let operand = if self.is_at_statement_end()
+                                || self.peek_kind() == Some(TokenKind::Comma)
+                            {
                                 // No operand, test $_
                                 Node::new(
                                     NodeKind::Variable {

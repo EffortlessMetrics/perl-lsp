@@ -981,7 +981,9 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     let op_token = self.tokens.next()?;
-                    let right = self.parse_unary()?;
+                    // Use parse_power() so that `a x b**c` parses as `a x (b**c)`.
+                    // Exponentiation binds more tightly than repetition in Perl.
+                    let right = self.parse_power()?;
                     let start = expr.location.start;
                     let end = right.location.end;
 

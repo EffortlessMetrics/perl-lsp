@@ -205,6 +205,8 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 
 **LSP threading**: `RUST_TEST_THREADS=2`, `CARGO_BUILD_JOBS=1`, `RUSTC_WRAPPER=""`.
 
+**Worktree stash prohibition**: Never use `git stash` in a worktree agent. The stash list is shared across all worktrees and the main checkout — `git stash pop` may silently restore another agent's changes. Use `git restore <file>` to discard changes, or `git commit -m "wip"` to save work in progress.
+
 ## Truth Sources
 
 Metrics are **computed, not hand-edited**:

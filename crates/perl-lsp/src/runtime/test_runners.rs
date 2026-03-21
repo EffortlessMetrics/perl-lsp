@@ -55,6 +55,14 @@ impl LspServer {
         })))
     }
 
+    /// Debug a specific test — stub that returns success with the test ID for client-side handling
+    pub(crate) fn debug_test(&self, test_id: &str) -> Result<Option<Value>, JsonRpcError> {
+        Ok(Some(json!({
+            "status": "success",
+            "debugTest": test_id
+        })))
+    }
+
     /// Run all tests in a file
     pub(crate) fn run_test_file(&self, uri: &str) -> Result<Option<Value>, JsonRpcError> {
         eprintln!("Running test file: {}", uri);

@@ -150,6 +150,21 @@ impl<'a> Parser<'a> {
             && !Self::is_keyword_handled_builtin(name)
     }
 
+    /// Strip `CORE::` prefix from a name and return the bare builtin name if it
+    /// is a known builtin function.  Returns `None` if the prefix is absent or
+    /// if the bare name is not a builtin.
+    ///
+    /// This allows `CORE::select`, `CORE::print`, etc. to be recognised as
+    /// function calls with bare arguments just like their unqualified forms.
+    fn core_qualified_builtin_name(name: &str) -> Option<&str> {
+        let bare = name.strip_prefix("CORE::")?;
+        if Self::is_builtin_function(bare) || Self::is_nullary_builtin(bare) {
+            Some(bare)
+        } else {
+            None
+        }
+    }
+
     /// Builtins that have dedicated keyword token kinds or parser handlers and
     /// must NOT be matched by the generic `is_builtin_function` guard.
     fn is_keyword_handled_builtin(name: &str) -> bool {

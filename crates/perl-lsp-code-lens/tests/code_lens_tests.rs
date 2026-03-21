@@ -190,18 +190,20 @@ fn test_extract_references_lenses_for_packages() {
 
 #[test]
 fn test_extract_is_sub_prefix_detected_as_test() {
+    // is_ is only a test pattern inside .t files (Defect 2 fix)
     let source = "sub is_valid { ok(1) }\n";
-    let lenses = parse_and_extract(source);
+    let lenses = parse_and_extract_with_path(source, "t/basic.t");
     let count = commands_with_name(&lenses, "perl.runTest");
-    assert_eq!(count, 1, "is_ prefix should be detected as test sub");
+    assert_eq!(count, 1, "is_ prefix in .t file should be detected as test sub");
 }
 
 #[test]
 fn test_extract_can_prefix_detected_as_test() {
+    // can_ is only a test pattern inside .t files (Defect 2 fix)
     let source = "sub can_frobnicate { ok(1) }\n";
-    let lenses = parse_and_extract(source);
+    let lenses = parse_and_extract_with_path(source, "t/basic.t");
     let count = commands_with_name(&lenses, "perl.runTest");
-    assert_eq!(count, 1, "can_ prefix should be detected as test sub");
+    assert_eq!(count, 1, "can_ prefix in .t file should be detected as test sub");
 }
 
 #[test]
@@ -243,6 +245,114 @@ fn test_extract_subtest_lenses_no_subtests_in_regular_code() {
     let source = "sub helper { return 42 }\nmy $x = 1;\n";
     let lenses = CodeLensProvider::extract_subtest_lenses(source);
     assert!(lenses.is_empty(), "no subtest lenses for code without subtest calls");
+}
+
+// ── Defect 2: broad prefix false positives ────────────────────────────────────
+
+/// sub is_valid in a .pm file must NOT get a "Run Test" lens (Defect 2)
+#[test]
+fn test_is_prefix_no_run_test_in_pm_file() {
+    let source = "sub is_valid { return 1 }\n";
+    let lenses = parse_and_extract_with_path(source, "lib/Foo.pm");
+    let count = commands_with_name(&lenses, "perl.runTest");
+    assert_eq!(count, 0, "is_ prefix in .pm file should NOT get a run-test lens");
+}
+
+/// sub is_valid in a .t file MUST get a "Run Test" lens (Defect 2)
+#[test]
+fn test_is_prefix_run_test_in_t_file() {
+    let source = "sub is_valid { ok(1) }\n";
+    let lenses = parse_and_extract_with_path(source, "t/basic.t");
+    let count = commands_with_name(&lenses, "perl.runTest");
+    assert_eq!(count, 1, "is_ prefix in .t file SHOULD get a run-test lens");
+}
+
+/// sub can_read in a .pm file must NOT get a "Run Test" lens (Defect 2)
+#[test]
+fn test_can_prefix_no_run_test_in_pm_file() {
+    let source = "sub can_read { return 1 }\n";
+    let lenses = parse_and_extract_with_path(source, "lib/Foo.pm");
+    let count = commands_with_name(&lenses, "perl.runTest");
+    assert_eq!(count, 0, "can_ prefix in .pm file should NOT get a run-test lens");
+}
+
+/// sub ok_result in a .pm file must NOT get a "Run Test" lens (Defect 2)
+#[test]
+fn test_ok_prefix_no_run_test_in_pm_file() {
+    let source = "sub ok_result { return 1 }\n";
+    let lenses = parse_and_extract_with_path(source, "lib/Foo.pm");
+    let count = commands_with_name(&lenses, "perl.runTest");
+    assert_eq!(count, 0, "ok_ prefix in .pm file should NOT get a run-test lens");
+}
+
+/// sub like_pattern in a .pm file must NOT get a "Run Test" lens (Defect 2)
+#[test]
+fn test_like_prefix_no_run_test_in_pm_file() {
+    let source = "sub like_pattern { return 1 }\n";
+    let lenses = parse_and_extract_with_path(source, "lib/Foo.pm");
+    let count = commands_with_name(&lenses, "perl.runTest");
+    assert_eq!(count, 0, "like_ prefix in .pm file should NOT get a run-test lens");
+}
+
+/// sub test_ in a .pm file MUST still get a "Run Test" lens (core patterns always apply)
+#[test]
+fn test_test_prefix_always_gets_run_test_lens() {
+    let source = "sub test_basic { return 1 }\n";
+    let lenses = parse_and_extract_with_path(source, "lib/Foo.pm");
+    let count = commands_with_name(&lenses, "perl.runTest");
+    assert_eq!(count, 1, "test_ prefix always gets a run-test lens regardless of file type");
+}
+
+// ── Defect 1: run test argument format ────────────────────────────────────────
+
+/// "Run Test" lens argument must be "uri::sub_name" not bare "sub_name" (Defect 1)
+#[test]
+fn test_run_test_lens_argument_includes_uri() {
+    let source = "sub test_basic { ok(1) }\n";
+    let lenses = parse_and_extract_with_path(source, "t/basic.t");
+    let run_test =
+        lenses.iter().find(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runTest"));
+    let lens = must_some(run_test.cloned());
+    let cmd = must_some(lens.command);
+    let args = must_some(cmd.arguments);
+    let arg = must_some(args.first().cloned());
+    let arg_str = must_some(arg.as_str().map(|s| s.to_string()));
+    assert!(arg_str.contains("::"), "Run Test argument must be 'uri::sub_name', got: {}", arg_str);
+    assert!(
+        arg_str.ends_with("::test_basic"),
+        "Run Test argument must end with '::test_basic', got: {}",
+        arg_str
+    );
+}
+
+// ── Defect 3: debug test lens ─────────────────────────────────────────────────
+
+/// "Debug Test" lens must appear alongside "Run Test" for test subs (Defect 3)
+#[test]
+fn test_debug_test_lens_present_for_test_sub() {
+    let source = "sub test_basic { ok(1) }\n";
+    let lenses = parse_and_extract_with_path(source, "t/basic.t");
+    let count = commands_with_name(&lenses, "perl.debugTest");
+    assert_eq!(count, 1, "test sub should have a 'Debug Test' lens (perl.debugTest)");
+}
+
+/// "Debug Test" lens argument must also be "uri::sub_name" (Defect 3)
+#[test]
+fn test_debug_test_lens_argument_includes_uri() {
+    let source = "sub test_basic { ok(1) }\n";
+    let lenses = parse_and_extract_with_path(source, "t/basic.t");
+    let debug_lens =
+        lenses.iter().find(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.debugTest"));
+    let lens = must_some(debug_lens.cloned());
+    let cmd = must_some(lens.command);
+    let args = must_some(cmd.arguments);
+    let arg = must_some(args.first().cloned());
+    let arg_str = must_some(arg.as_str().map(|s| s.to_string()));
+    assert!(
+        arg_str.ends_with("::test_basic"),
+        "Debug Test argument must end with '::test_basic', got: {}",
+        arg_str
+    );
 }
 
 // ── combined scenarios ────────────────────────────────────────────────────────

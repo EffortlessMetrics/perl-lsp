@@ -720,6 +720,7 @@ fn supported_commands_have_expected_set() {
         "perl.runTestFile",
         "perl.runSubtest",
         "perl.debugFile",
+        "perl.debugTest",
         "perl.goToTest",
         "perl.goToImplementation",
     ];

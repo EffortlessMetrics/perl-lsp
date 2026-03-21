@@ -30,7 +30,7 @@ fn statement_count(ast: &perl_parser_core::Node) -> usize {
     }
 }
 
-fn first_statement_kind<'a>(ast: &'a perl_parser_core::Node) -> &'a str {
+fn first_statement_kind(ast: &perl_parser_core::Node) -> &str {
     match &ast.kind {
         NodeKind::Program { statements } => {
             statements.first().map(|s| s.kind.kind_name()).unwrap_or("(none)")
