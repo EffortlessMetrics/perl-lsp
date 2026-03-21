@@ -85,6 +85,8 @@ pub struct CriticConfig {
     pub verbose: bool,
     /// Color output
     pub color: bool,
+    /// Timeout in seconds for the perlcritic subprocess. Default: 30.
+    pub timeout_secs: u64,
 }
 
 impl Default for CriticConfig {
@@ -97,6 +99,7 @@ impl Default for CriticConfig {
             theme: None,
             verbose: false,
             color: false,
+            timeout_secs: 30,
         }
     }
 }
