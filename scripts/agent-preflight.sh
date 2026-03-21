@@ -133,7 +133,11 @@ if [[ "$STASH_COUNT" -gt 0 ]]; then
     echo "      Discard changes: git restore <file>"
     echo "      Save WIP:        git commit -m 'wip' on the branch"
     echo "      Abandon all:     git restore ."
+<<<<<<< HEAD
     echo "    Fix: Run 'git stash clear' to clear stash entries, then re-run preflight"
+=======
+    echo "    Fix: Run 'git stash clear' to drop all stash entries, then re-run preflight"
+>>>>>>> dab7d4a86 (fix(preflight): use git stash clear instead of git stash drop in fix instructions)
     STASH_OK=false
 else
     ok "No git stash entries (stash is shared — safe)"

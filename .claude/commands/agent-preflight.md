@@ -32,10 +32,15 @@ The script checks:
   - Fix: Add `isolation: worktree` to the agent definition and respawn.
 - **Exit 3 (conflict issue)**: Unresolved merge conflicts present.
   - Fix: Resolve conflicts manually, then re-run preflight.
+<<<<<<< HEAD
 - **Exit 4 (cwd issue)**: Running from the main repo root instead of the worktree.
   - Fix: cd to the worktree path.
 - **Exit 5 (stash issue)**: Shared stash has entries from this or other worktrees.
   - Fix: Run `git stash clear` to clear entries. Never use `git stash` -- use `git restore <file>` to discard changes or `git commit -m "wip"` to save work.
+=======
+- **Exit 4 (stash issue)**: Shared stash has entries from this or other worktrees.
+  - Fix: Run `git stash clear` to drop all entries. Never use `git stash` -- use `git restore <file>` to discard changes or `git commit -m "wip"` to save work.
+>>>>>>> dab7d4a86 (fix(preflight): use git stash clear instead of git stash drop in fix instructions)
 
 ## On failure
 
