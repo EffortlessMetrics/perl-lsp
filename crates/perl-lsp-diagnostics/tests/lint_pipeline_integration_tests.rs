@@ -19,7 +19,7 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
     let output = Parser::new(source).parse_with_recovery();
     let ast = Arc::new(output.ast);
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    provider.get_diagnostics(&ast, &output.diagnostics, source)
+    provider.get_diagnostics(&ast, &output.diagnostics, source, None)
 }
 
 // =========================================================================
@@ -33,11 +33,11 @@ fn lint_pipeline_missing_strict_emits_pl100() {
     let diags = diagnostics_for(source);
 
     let missing_strict: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("missing-strict")).collect();
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
 
     assert!(
         !missing_strict.is_empty(),
-        "Expected missing-strict diagnostic from get_diagnostics(), \
+        "Expected missing-strict (PL100) diagnostic from get_diagnostics(), \
          got {} total diags with codes: {:?}",
         diags.len(),
         diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
@@ -59,11 +59,11 @@ fn lint_pipeline_missing_warnings_emits_pl101() {
     let diags = diagnostics_for(source);
 
     let missing_warnings: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("missing-warnings")).collect();
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
 
     assert!(
         !missing_warnings.is_empty(),
-        "Expected missing-warnings diagnostic, \
+        "Expected missing-warnings (PL101) diagnostic, \
          got {} total diags: {:?}",
         diags.len(),
         diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
@@ -82,12 +82,12 @@ fn lint_pipeline_strict_and_warnings_present_no_pl100_pl101() {
 
     let pragma_diags: Vec<_> = diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("missing-strict") | Some("missing-warnings")))
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
 
     assert!(
         pragma_diags.is_empty(),
-        "Should get no missing-strict/missing-warnings when strict+warnings are present, \
+        "Should get no missing-strict (PL100)/missing-warnings (PL101) when strict+warnings are present, \
          got: {:?}",
         pragma_diags.iter().map(|d| d.code.as_deref()).collect::<Vec<_>>()
     );
@@ -103,12 +103,11 @@ fn lint_pipeline_deprecated_defined_array_emits_pl500() {
     let source = "use strict;\nuse warnings;\nmy @arr = (1, 2, 3);\nif (defined @arr) { }\n";
     let diags = diagnostics_for(source);
 
-    let deprecated: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("deprecated-defined")).collect();
+    let deprecated: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL500")).collect();
 
     assert!(
         !deprecated.is_empty(),
-        "Expected deprecated-defined diagnostic, \
+        "Expected deprecated-defined (PL500) diagnostic, \
          got {} total diags: {:?}",
         diags.len(),
         diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
@@ -130,12 +129,11 @@ fn lint_pipeline_assignment_in_if_emits_pl403() {
     let source = "use strict;\nuse warnings;\nmy $x;\nif ($x = 1) { print $x; }\n";
     let diags = diagnostics_for(source);
 
-    let assign_warn: Vec<_> =
-        diags.iter().filter(|d| d.code.as_deref() == Some("assignment-in-condition")).collect();
+    let assign_warn: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL403")).collect();
 
     assert!(
         !assign_warn.is_empty(),
-        "Expected assignment-in-condition diagnostic, \
+        "Expected assignment-in-condition (PL403) diagnostic, \
          got {} total diags: {:?}",
         diags.len(),
         diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
@@ -159,12 +157,12 @@ fn lint_pipeline_moose_suppresses_pl100_pl101() {
 
     let pragma_diags: Vec<_> = diags
         .iter()
-        .filter(|d| matches!(d.code.as_deref(), Some("missing-strict") | Some("missing-warnings")))
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
 
     assert!(
         pragma_diags.is_empty(),
-        "Moose provides implicit strict+warnings, expected no missing-strict/missing-warnings, \
+        "Moose provides implicit strict+warnings, expected no missing-strict (PL100)/missing-warnings (PL101), \
          got: {:?}",
         pragma_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
     );

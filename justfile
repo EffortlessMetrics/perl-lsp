@@ -440,7 +440,9 @@ ci-gate:
     just ci-semantic-frameworks && \
     just ci-dap-smoke-e2e && \
     just ci-parser-features-check && \
-    just ci-features-invariants
+    just ci-features-invariants && \
+    just hook-check && \
+    just hook-registry-check
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -721,6 +723,18 @@ ci-policy:
     @echo "⚖️  Checking project policies..."
     just ci-check-todos
     @bash ./.ci/scripts/check-from-raw.sh
+
+# Check all registered hook scripts are executable
+hook-check:
+    @bash ./.ci/scripts/check-hook-executable.sh
+
+# Check hook registry in settings.json matches files on disk
+hook-registry-check:
+    @bash ./.ci/scripts/check-hook-registry.sh
+
+# Run all hook tests (behavior, registry, executable-bit)
+hook-tests:
+    @bash ./.ci/scripts/test-hooks.sh
 
 # Check for machine-specific paths in documentation
 ci-doc-paths:

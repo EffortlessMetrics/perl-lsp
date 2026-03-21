@@ -25,6 +25,7 @@ fn item(label: &str, kind: CompletionItemKind, sort_text: Option<&str>) -> Compl
         filter_text: None,
         additional_edits: Vec::new(),
         text_edit_range: None,
+        commit_characters: None,
     }
 }
 

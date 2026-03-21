@@ -177,7 +177,7 @@ fn provider_no_errors_no_scope_issues() -> Result<(), Box<dyn std::error::Error>
     let ast = Arc::new(program(vec![use_node("strict", 0, 12), use_node("warnings", 13, 27)]));
     let source = "use strict;\nuse warnings;\n";
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = provider.get_diagnostics(&ast, &[], source, None);
     // No parse errors and no undeclared vars → may still have scope issues
     // depending on analyzer, but at minimum we get a Vec back
     assert!(
@@ -198,7 +198,7 @@ fn provider_unexpected_token_error() -> Result<(), Box<dyn std::error::Error>> {
         found: ";".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -222,7 +222,7 @@ fn provider_unexpected_token_formats_end_of_input() -> Result<(), Box<dyn std::e
         found: "<EOF>".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -244,7 +244,7 @@ fn provider_clamps_out_of_bounds_ranges() -> Result<(), Box<dyn std::error::Erro
         found: "foo".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -262,7 +262,7 @@ fn provider_syntax_error() -> Result<(), Box<dyn std::error::Error>> {
     let source = "invalid perl";
     let errors = vec![ParseError::SyntaxError { location: 3, message: "bad syntax".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL002")).collect();
@@ -280,7 +280,7 @@ fn provider_unexpected_eof_error() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = ";
     let errors = vec![ParseError::UnexpectedEof];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL003")).collect();
@@ -298,7 +298,7 @@ fn provider_lexer_error() -> Result<(), Box<dyn std::error::Error>> {
     let source = "";
     let errors = vec![ParseError::LexerError { message: "bad token".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -318,7 +318,7 @@ fn provider_multiple_errors() -> Result<(), Box<dyn std::error::Error>> {
         ParseError::SyntaxError { location: 6, message: "err3".to_string() },
     ];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL002")).collect();
@@ -336,7 +336,7 @@ fn provider_error_range_is_clamped_to_source_bounds() -> Result<(), Box<dyn std:
         found: "b".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -361,7 +361,7 @@ fn provider_scope_analysis_runs() -> Result<(), Box<dyn std::error::Error>> {
     let ast = Arc::new(program(vec![]));
     let source = "";
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = provider.get_diagnostics(&ast, &[], source, None);
     // Should not panic, returns a Vec
     let _ = diagnostics.len();
     Ok(())
@@ -896,7 +896,7 @@ fn full_pipeline_empty_source() -> Result<(), Box<dyn std::error::Error>> {
     let ast = Arc::new(program(vec![]));
     let source = "";
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = provider.get_diagnostics(&ast, &[], source, None);
     // Should not panic; returns a valid Vec
     let _ = diagnostics;
     Ok(())
@@ -908,7 +908,7 @@ fn full_pipeline_fallback_parse_error() -> Result<(), Box<dyn std::error::Error>
     let source = "broken";
     let errors = vec![ParseError::RecursionLimit];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     // RecursionLimit hits the catch-all arm (location=0, error.to_string())
     let parse_diags: Vec<_> =
@@ -930,7 +930,7 @@ fn undeclared_variable_diagnostic_has_suggestion_and_enhanced_message()
     let ast = Arc::new(program(vec![use_node("strict", 0, 12), use_node("warnings", 13, 27)]));
     let source = "use strict;\nuse warnings;\n";
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = provider.get_diagnostics(&ast, &[], source, None);
 
     // Verify undeclared-variable diagnostics (if scope analysis produces them)
     // have the expected enhanced fields
@@ -984,7 +984,7 @@ fn undeclared_variable_related_info_explains_strict() -> Result<(), Box<dyn std:
     let ast = Arc::new(program(vec![]));
     let source = "";
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let _diagnostics = provider.get_diagnostics(&ast, &[], source);
+    let _diagnostics = provider.get_diagnostics(&ast, &[], source, None);
 
     // Verify the Diagnostic struct supports suggestion field
     let d = Diagnostic {
@@ -1025,7 +1025,7 @@ fn missing_semicolon_parse_error_has_suggestion() -> Result<(), Box<dyn std::err
         found: "print".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1055,7 +1055,7 @@ fn unexpected_eof_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = ";
     let errors = vec![ParseError::UnexpectedEof];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL003")).collect();
@@ -1085,7 +1085,7 @@ fn found_semicolon_when_expecting_expression_has_suggestion()
         found: ";".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1165,7 +1165,7 @@ fn unused_variable_through_provider_has_correct_severity() -> Result<(), Box<dyn
     let ast = Arc::new(program(vec![use_node("strict", 0, 12), use_node("warnings", 13, 27)]));
     let source = "use strict;\nuse warnings;\n";
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = provider.get_diagnostics(&ast, &[], source, None);
 
     let unused: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
@@ -1292,7 +1292,7 @@ fn full_pipeline_uninitialized_variable_emits_warning() -> Result<(), Box<dyn st
     let output = perl_parser::Parser::new(source).parse_with_recovery();
     let ast = Arc::new(output.ast);
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
+    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source, None);
 
     let uninit: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL110")).collect();
@@ -1315,7 +1315,7 @@ fn full_pipeline_initialized_variable_no_warning() -> Result<(), Box<dyn std::er
     let output = perl_parser::Parser::new(source).parse_with_recovery();
     let ast = Arc::new(output.ast);
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
+    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source, None);
 
     let uninit: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL110")).collect();
@@ -1419,7 +1419,7 @@ fn recursion_limit_error_has_suggestion() -> Result<(), Box<dyn std::error::Erro
     let source = "broken";
     let errors = vec![ParseError::RecursionLimit];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1442,7 +1442,7 @@ fn invalid_number_error_has_suggestion() -> Result<(), Box<dyn std::error::Error
     let source = "my $x = 0xGG;";
     let errors = vec![ParseError::InvalidNumber { literal: "0xGG".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1462,7 +1462,7 @@ fn invalid_string_error_has_suggestion() -> Result<(), Box<dyn std::error::Error
     let source = "my $x = \"hello";
     let errors = vec![ParseError::InvalidString];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1482,7 +1482,7 @@ fn invalid_regex_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>
     let source = "my $x =~ /(/;";
     let errors = vec![ParseError::InvalidRegex { message: "unmatched parenthesis".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1502,7 +1502,7 @@ fn unclosed_delimiter_error_has_suggestion() -> Result<(), Box<dyn std::error::E
     let source = "my @arr = (1, 2";
     let errors = vec![ParseError::UnclosedDelimiter { delimiter: ')' }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1522,7 +1522,7 @@ fn nesting_too_deep_error_has_suggestion() -> Result<(), Box<dyn std::error::Err
     let source = "deeply nested";
     let errors = vec![ParseError::NestingTooDeep { depth: 300, max_depth: 256 }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1546,7 +1546,7 @@ fn unexpected_closing_brace_has_helpful_suggestion() -> Result<(), Box<dyn std::
         found: "}".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();
@@ -1567,7 +1567,7 @@ fn syntax_error_with_heredoc_hint_has_suggestion() -> Result<(), Box<dyn std::er
     let errors =
         vec![ParseError::SyntaxError { location: 8, message: "unterminated heredoc".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL002")).collect();
@@ -1585,7 +1585,7 @@ fn lexer_error_with_unterminated_string_has_suggestion() -> Result<(), Box<dyn s
     let errors =
         vec![ParseError::LexerError { message: "unterminated string literal".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);
 
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL001")).collect();

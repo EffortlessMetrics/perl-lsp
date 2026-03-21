@@ -135,8 +135,9 @@ impl<'a> Parser<'a> {
                         (trimmed, delim)
                     };
 
-                    // Split into words
-                    let words: Vec<Node> = content_str
+                    // Split into words, stripping # line comments first (perlop).
+                    let cleaned = strip_qw_comments(content_str);
+                    let words: Vec<Node> = cleaned
                         .split_whitespace()
                         .map(|word| {
                             Node::new(

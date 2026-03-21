@@ -463,6 +463,81 @@ my $circumference = 2 * PI * $radius;
 }
 
 #[cfg(test)]
+mod tied_variable_hover_tests {
+    use crate::common::test_utils::TestServerBuilder;
+    use serde_json::Value;
+
+    fn hover_content(resp: &Value) -> Option<String> {
+        let result = resp.get("result")?;
+        if result.is_null() {
+            return None;
+        }
+        let contents = result.get("contents")?;
+        let value = contents.get("value")?.as_str()?;
+        Some(value.to_string())
+    }
+
+    fn find_pos(
+        code: &str,
+        needle: &str,
+        target_line: usize,
+    ) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+        let line = code
+            .lines()
+            .nth(target_line)
+            .ok_or_else(|| format!("no line {} in test code", target_line))?;
+        let col = line
+            .find(needle)
+            .ok_or_else(|| format!("could not find `{needle}` on line {target_line}"))?;
+        Ok((target_line as u32, col as u32))
+    }
+
+    /// Hover on a tied scalar variable at usage site should mention the tied class.
+    #[test]
+    fn test_hover_on_tied_variable_shows_class() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "tie my $counter, 'Tie::Counter';\nmy $x = $counter;\n";
+        let uri = "file:///test_tied.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        // Hover over $counter on line 1 (the usage site)
+        let (line, character) = find_pos(code, "$counter", 1)?;
+        let response = server.get_hover(uri, line, character);
+        println!("TIED SCALAR HOVER RESPONSE: {response:#}");
+
+        let content = hover_content(&response).ok_or("expected hover content for tied $counter")?;
+
+        assert!(
+            content.contains("Tie::Counter"),
+            "hover should mention tied class 'Tie::Counter', got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on a tied variable when the class is given as a runtime variable should
+    /// not panic and should gracefully degrade (no class shown is acceptable).
+    #[test]
+    fn test_hover_on_tied_variable_unknown_class_does_not_panic()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $cls = 'Tie::Counter';\ntie my $x, $cls;\nmy $y = $x;\n";
+        let uri = "file:///test_tied_dynamic.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        // Hover over $x on line 2 (the usage site) — must not panic
+        let (line, character) = find_pos(code, "$x", 2)?;
+        let response = server.get_hover(uri, line, character);
+        println!("TIED DYNAMIC CLASS HOVER RESPONSE: {response:#}");
+
+        // Must not panic; result may be null or generic — both acceptable
+        let _ = hover_content(&response);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
 mod module_hover_tests {
     use crate::common::test_utils::TestServerBuilder;
     use serde_json::Value;

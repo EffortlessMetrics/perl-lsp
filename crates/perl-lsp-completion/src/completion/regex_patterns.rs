@@ -298,6 +298,7 @@ pub fn add_regex_completions(
                 filter_text: Some(suggestion.label.to_string()),
                 additional_edits: vec![],
                 text_edit_range: Some((replace_start, context.position)),
+                commit_characters: None,
             });
         }
     }

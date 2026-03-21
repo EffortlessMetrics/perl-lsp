@@ -165,6 +165,7 @@ pub fn add_builtin_completions(
                 filter_text: Some(builtin.to_string()),
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
             });
         }
     }

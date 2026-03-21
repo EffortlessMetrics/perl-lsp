@@ -1179,3 +1179,195 @@ $prefi"#
 
     Ok(())
 }
+
+/// Test that function completions include context-aware commit characters
+#[test]
+fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_commit_fn.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "sub my_function { }\nsub my_other { }\nmy_"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": 3 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    // Find a Function-kind item (LSP kind 3 = Function)
+    let fn_item = items.iter().find(|item| item["kind"] == 3);
+    let fn_item = fn_item.ok_or("Should have at least one function completion")?;
+
+    let commit_chars = fn_item["commitCharacters"]
+        .as_array()
+        .ok_or("Function completions must have commitCharacters")?;
+
+    assert!(commit_chars.iter().any(|c| c == "("), "Function commit chars should include '('");
+    assert!(commit_chars.iter().any(|c| c == ";"), "Function commit chars should include ';'");
+
+    // Verify each entry is exactly one character per LSP spec
+    for ch in commit_chars {
+        let s = ch.as_str().ok_or("commit char must be string")?;
+        assert_eq!(
+            s.chars().count(),
+            1,
+            "Commit char '{s}' must be a single character per LSP spec"
+        );
+    }
+
+    Ok(())
+}
+
+/// Test that variable completions include context-aware commit characters
+#[test]
+fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_commit_var.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $my_var = 1;\nmy $my_other = 2;\n$my_"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": 4 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    // Find a Variable-kind item (LSP kind 6 = Variable)
+    let var_item = items.iter().find(|item| item["kind"] == 6);
+    let var_item = var_item.ok_or("Should have at least one variable completion")?;
+
+    let commit_chars = var_item["commitCharacters"]
+        .as_array()
+        .ok_or("Variable completions must have commitCharacters")?;
+
+    assert!(commit_chars.iter().any(|c| c == "["), "Variable commit chars should include '['");
+    assert!(commit_chars.iter().any(|c| c == "{"), "Variable commit chars should include '{{'");
+    assert!(commit_chars.iter().any(|c| c == ";"), "Variable commit chars should include ';'");
+
+    // Verify each entry is exactly one character per LSP spec
+    for ch in commit_chars {
+        let s = ch.as_str().ok_or("commit char must be string")?;
+        assert_eq!(
+            s.chars().count(),
+            1,
+            "Commit char '{s}' must be a single character per LSP spec"
+        );
+    }
+
+    Ok(())
+}
+
+/// Test that keyword completions do NOT include commit characters.
+///
+/// Uses "retur" as the prefix because "return" is a plain Keyword (not a snippet),
+/// so it serializes as LSP kind 14 and is guaranteed to appear in the response.
+/// "fore" was the original prefix but it only matches "foreach", which is a
+/// Snippet (kind 15) — the kind-14 filter would find zero items and the test
+/// would pass vacuously.
+#[test]
+fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_commit_kw.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "retur"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 0, "character": 5 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    // LSP kind 14 = Keyword. Filter to only items whose label starts with "return" so we
+    // don't accidentally match Constant items (which also serialize as kind 14).
+    let kw_items: Vec<_> = items
+        .iter()
+        .filter(|item| {
+            item["kind"] == 14
+                && item["label"].as_str().map(|l| l.starts_with("retur")).unwrap_or(false)
+        })
+        .collect();
+
+    assert!(
+        !kw_items.is_empty(),
+        "Expected at least one keyword completion for prefix 'retur' but got none — test would pass vacuously"
+    );
+
+    for kw in &kw_items {
+        assert!(
+            kw.get("commitCharacters").is_none() || kw["commitCharacters"].is_null(),
+            "Keyword '{}' should not have commitCharacters",
+            kw["label"]
+        );
+    }
+
+    Ok(())
+}

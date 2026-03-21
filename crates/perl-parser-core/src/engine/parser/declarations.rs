@@ -688,8 +688,9 @@ impl<'a> Parser<'a> {
                                 None
                             }
                         }) {
-                            // Reformat as "qw(FOO BAR)" for consistency
-                            let words: Vec<&str> = content.split_whitespace().collect();
+                            // Reformat as "qw(FOO BAR)" for consistency, stripping # comments first.
+                            let cleaned = strip_qw_comments(content);
+                            let words: Vec<&str> = cleaned.split_whitespace().collect();
                             let qw_str = format!("qw({})", words.join(" "));
                             args.push(qw_str);
                         } else {

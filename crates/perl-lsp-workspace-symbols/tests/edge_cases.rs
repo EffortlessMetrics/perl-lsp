@@ -148,7 +148,7 @@ fn workspace_symbol_serializes_to_valid_json() {
         container_name: Some("MyPackage".to_string()),
     };
 
-    let json = serde_json::to_string(&sym).expect("should serialize");
+    let json = must(serde_json::to_string(&sym));
     assert!(json.contains("\"name\":\"test_fn\""));
     assert!(json.contains("\"kind\":12"));
     assert!(json.contains("\"containerName\":\"MyPackage\""));
@@ -166,7 +166,7 @@ fn workspace_symbol_without_container_omits_container_name_field() {
         container_name: None,
     };
 
-    let json = serde_json::to_string(&sym).expect("should serialize");
+    let json = must(serde_json::to_string(&sym));
     // skip_serializing_if = "Option::is_none" means absent when None
     assert!(!json.contains("containerName"), "containerName should be absent when None");
 }

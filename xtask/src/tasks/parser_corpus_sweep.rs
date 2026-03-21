@@ -66,6 +66,28 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     ("expected expression, found '}'", "unexpected_rbrace_expr"),
     ("expected expression, found ')'", "unexpected_rparen_expr"),
     ("expected expression, found 'end of input'", "unexpected_eof_expr"),
+    // Expression errors — closing bracket
+    ("expected expression, found ']'", "unexpected_rbracket_expr"),
+    // Expression errors — keywords not yet explicitly bucketed
+    ("expected expression, found 'if'", "unexpected_token_if"),
+    ("expected expression, found 'my'", "unexpected_token_my"),
+    ("expected expression, found 'our'", "unexpected_token_our"),
+    ("expected expression, found 'local'", "unexpected_token_local"),
+    ("expected expression, found 'sub'", "unexpected_token_sub"),
+    ("expected expression, found 'package'", "unexpected_token_package"),
+    ("expected expression, found 'eval'", "unexpected_token_eval"),
+    ("expected expression, found 'do'", "unexpected_token_do"),
+    ("expected expression, found 'next'", "unexpected_token_next"),
+    ("expected expression, found 'last'", "unexpected_token_last"),
+    ("expected expression, found 'redo'", "unexpected_token_redo"),
+    // Expression errors — assignment operators ('==' before '=' is defensive: without quotes
+    // "found ==" would contain "found =" as a substring, so the ordering is correct even
+    // though the quoted forms are distinct strings in practice)
+    ("expected expression, found '=='", "unexpected_eq_expr"),
+    ("expected expression, found '=~'", "unexpected_match_expr"),
+    ("expected expression, found '='", "unexpected_assign_expr"),
+    // Expression errors — range operator
+    ("expected expression, found '..'", "unexpected_range_expr"),
     // Catch-all for remaining unexpected expression tokens (MUST remain last)
     ("expected expression, found", "unexpected_token_in_expr"),
     // Unclosed delimiters — user-friendly names ('}', ')', ']')
@@ -129,6 +151,8 @@ pub struct SweepReport {
     pub files_with_errors: usize,
     pub total_error_nodes: usize,
     pub first_error_buckets: BTreeMap<String, usize>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub files_by_bucket: BTreeMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub file_results: Vec<FileResult>,
     pub elapsed_secs: f64,
@@ -423,6 +447,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut files_with_errors = 0usize;
     let mut total_error_nodes = 0usize;
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
+    let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut file_results: Vec<FileResult> = Vec::new();
 
     for path in &pm_files {
@@ -458,6 +483,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 total_error_nodes += 1;
                 let bucket = "catastrophic_parse_failure".to_string();
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+                files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
                 if config.verbose {
                     file_results.push(FileResult {
                         path: path.display().to_string(),
@@ -490,6 +516,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             let first = summary.first_message.as_deref().unwrap_or("unknown");
             let bucket = normalize_error_bucket(first);
             *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+            files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
             if config.verbose {
                 file_results.push(FileResult {
                     path: path.display().to_string(),
@@ -509,7 +536,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let commit = get_git_commit();
 
     let report = SweepReport {
-        schema_version: "1.1.0".to_string(),
+        schema_version: "1.2.0".to_string(),
         commit,
         timestamp: chrono::Utc::now().to_rfc3339(),
         corpus_profile: corpus_profile.clone(),
@@ -526,6 +553,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         files_with_errors,
         total_error_nodes,
         first_error_buckets,
+        files_by_bucket,
         file_results: if config.verbose { file_results } else { Vec::new() },
         elapsed_secs: elapsed.as_secs_f64(),
     };
@@ -786,7 +814,7 @@ mod tests {
         first_error_buckets: BTreeMap<String, usize>,
     ) -> SweepReport {
         SweepReport {
-            schema_version: "1.1.0".to_string(),
+            schema_version: "1.2.0".to_string(),
             commit: "abc".to_string(),
             timestamp: "now".to_string(),
             corpus_profile: "system".to_string(),
@@ -799,6 +827,7 @@ mod tests {
             files_with_errors,
             total_error_nodes,
             first_error_buckets,
+            files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,
         }
@@ -917,7 +946,7 @@ mod tests {
     fn test_normalize_error_bucket_trailing_at() {
         // Position suffix stripped, then mapped to semantic bucket
         assert_eq!(
-            normalize_error_bucket("expected RightBracket, found Eof at 42"),
+            normalize_error_bucket("expected ']', found end of input at 42"),
             "unclosed_bracket",
         );
         // Just position stripping, no semantic match
@@ -945,7 +974,7 @@ mod tests {
     #[test]
     fn test_normalize_error_bucket_unclosed_brace_semicolon() {
         assert_eq!(
-            normalize_error_bucket("Unexpected token: expected RightBrace, found Semicolon at 42"),
+            normalize_error_bucket("Unexpected token: expected '}', found ';' at 42"),
             "unclosed_brace_semicolon",
         );
     }
@@ -953,24 +982,25 @@ mod tests {
     #[test]
     fn test_semantic_bucket_mapping() {
         let cases = [
-            ("expected expression, found FatArrow at 10", "unexpected_fat_arrow_expr"),
-            ("expected expression, found Arrow", "unexpected_arrow_expr"),
-            ("expected expression, found Slash at 5", "unexpected_slash_expr"),
-            ("expected expression, found Question", "unexpected_question_expr"),
-            ("expected expression, found Return at 99", "unexpected_return_expr"),
+            // Display-name format (current parser output uses TokenKind::display_name())
+            ("expected expression, found '=>' at 10", "unexpected_fat_arrow_expr"),
+            ("expected expression, found '->'", "unexpected_arrow_expr"),
+            ("expected expression, found '/' at 5", "unexpected_slash_expr"),
+            ("expected expression, found '?'", "unexpected_question_expr"),
+            ("expected expression, found 'return' at 99", "unexpected_return_expr"),
             ("expected expression, found SomeOtherToken", "unexpected_token_in_expr"),
-            ("expected RightBrace, found Eof", "unclosed_brace_eof"),
-            ("expected RightBrace, found Semicolon", "unclosed_brace_semicolon"),
-            ("expected RightBrace, found Something", "unclosed_brace"),
-            ("expected RightParen, found Identifier", "unclosed_paren_identifier"),
-            ("expected RightParen, found Eof", "unclosed_paren"),
-            ("expected RightBracket, found Eof", "unclosed_bracket"),
-            ("expected LeftParen, found Semicolon", "expected_left_paren"),
-            ("expected LeftBrace, found Semicolon", "expected_left_brace"),
-            ("expected Semicolon, found RightBrace", "expected_semicolon"),
-            ("expected Colon, found Semicolon", "expected_colon"),
-            ("expected Identifier, found Number", "expected_identifier"),
-            ("expected Comma, found Semicolon", "expected_comma"),
+            ("expected '}', found end of input", "unclosed_brace_eof"),
+            ("expected '}', found ';'", "unclosed_brace_semicolon"),
+            ("expected '}'", "unclosed_brace"),
+            ("expected ')', found identifier", "unclosed_paren_identifier"),
+            ("expected ')'", "unclosed_paren"),
+            ("expected ']'", "unclosed_bracket"),
+            ("expected '('", "expected_left_paren"),
+            ("expected '{'", "expected_left_brace"),
+            ("expected ';'", "expected_semicolon"),
+            ("expected ':'", "expected_colon"),
+            ("expected identifier", "expected_identifier"),
+            ("expected ','", "expected_comma"),
             ("Expected variable, found something", "expected_variable"),
             ("Expected string or identifier in import list", "expected_import_item"),
             ("Expected comma or closing parenthesis in signature", "signature_param"),
@@ -979,11 +1009,61 @@ mod tests {
             ("Expected '>' to close angle bracket", "unclosed_angle"),
             ("Substitution operator should be s///", "substitution_misparse"),
             ("Invalid syntax at position 42: Expected variable, found X", "expected_variable"),
+            // New entries added by issue #2587
+            ("expected expression, found ']'", "unexpected_rbracket_expr"),
+            ("expected expression, found 'if'", "unexpected_token_if"),
+            ("expected expression, found 'my'", "unexpected_token_my"),
+            ("expected expression, found 'our'", "unexpected_token_our"),
+            ("expected expression, found 'local'", "unexpected_token_local"),
+            ("expected expression, found 'sub'", "unexpected_token_sub"),
+            ("expected expression, found 'package'", "unexpected_token_package"),
+            ("expected expression, found 'eval'", "unexpected_token_eval"),
+            ("expected expression, found 'do'", "unexpected_token_do"),
+            ("expected expression, found 'next'", "unexpected_token_next"),
+            ("expected expression, found 'last'", "unexpected_token_last"),
+            ("expected expression, found 'redo'", "unexpected_token_redo"),
+            ("expected expression, found '='", "unexpected_assign_expr"),
+            ("expected expression, found '=='", "unexpected_eq_expr"),
+            ("expected expression, found '=~'", "unexpected_match_expr"),
+            ("expected expression, found '..'", "unexpected_range_expr"),
         ];
 
         for (input, expected) in cases {
             assert_eq!(normalize_error_bucket(input), expected, "Failed for input: {input}",);
         }
+    }
+
+    #[test]
+    fn test_double_slash_not_swallowed_by_slash_bucket() {
+        // '//' must not match unexpected_slash_expr — the '//' entry must precede '/' in
+        // SEMANTIC_BUCKETS if it is ever added. This test documents the ordering constraint
+        // and will need updating when a '//' bucket entry is added.
+        // NOTE: "expected expression, found '//'" does NOT contain "found '/'" literally —
+        // the quotes around '//' mean it won't match the "'/" substring in the '/' entry.
+        // Verify: '//' is caught by unexpected_token_in_expr (no dedicated entry yet).
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '//'"),
+            "unexpected_token_in_expr",
+        );
+    }
+
+    #[test]
+    fn test_eq_not_swallowed_by_assign_bucket() {
+        // '==' message must map to unexpected_eq_expr, not unexpected_assign_expr.
+        // The quoted form "found '=='" does NOT contain "found '='" as a substring
+        // (the trailing quote disambiguates), but keeping '==' before '=' is defensive
+        // in case the message format ever changes to unquoted tokens.
+        assert_eq!(normalize_error_bucket("expected expression, found '=='"), "unexpected_eq_expr",);
+        // '=~' must also route to its own bucket, not '='
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '=~'"),
+            "unexpected_match_expr",
+        );
+        // '=' itself still routes correctly
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '='"),
+            "unexpected_assign_expr",
+        );
     }
 
     #[test]
@@ -1175,7 +1255,7 @@ mod tests {
         // so inner trailing " at N" is NOT stripped by the second regex
         // (the first regex branch succeeds, so RE_TRAILING_AT is skipped).
         let result = normalize_error_bucket(
-            "Invalid syntax at position 42: expected Semicolon, found Eof at 99",
+            "Invalid syntax at position 42: expected ';', found end of input at 99",
         );
         assert_eq!(result, "expected_semicolon");
     }
@@ -1211,7 +1291,7 @@ mod tests {
     fn test_normalize_error_bucket_whitespace_preserved() {
         // Ensure leading/trailing whitespace in the message is preserved
         // (no implicit trimming)
-        let result = normalize_error_bucket("  expected Semicolon, found Eof  ");
+        let result = normalize_error_bucket("  expected ';', found end of input  ");
         assert_eq!(result, "expected_semicolon");
     }
 
@@ -1230,18 +1310,15 @@ mod tests {
 
     #[test]
     fn test_normalize_error_bucket_first_match_wins() {
-        // "expected expression, found Return" should match the specific
-        // Return bucket, not the generic "unexpected_token_in_expr"
+        // "expected expression, found 'return'" should match the specific
+        // return bucket, not the generic "unexpected_token_in_expr"
         assert_eq!(
-            normalize_error_bucket("expected expression, found Return"),
+            normalize_error_bucket("expected expression, found 'return'"),
             "unexpected_return_expr",
         );
-        // "expected RightBrace, found Semicolon" should match the specific
+        // "expected '}', found ';'" should match the specific
         // semicolon bucket, not the generic "unclosed_brace"
-        assert_eq!(
-            normalize_error_bucket("expected RightBrace, found Semicolon"),
-            "unclosed_brace_semicolon",
-        );
+        assert_eq!(normalize_error_bucket("expected '}', found ';'"), "unclosed_brace_semicolon",);
     }
 
     // ── parse_manifest edge cases ──────────────────────────────────────
@@ -1370,5 +1447,72 @@ mod tests {
         let report = baseline.clone();
         let violations = enforce_ratchet(&report, &baseline);
         assert!(violations.is_empty(), "Empty baselines should have no violations");
+    }
+
+    // ── files_by_bucket tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_files_by_bucket_populated_for_error_files() {
+        // A report where files_by_bucket has known content
+        let mut fbb = BTreeMap::new();
+        fbb.insert("unclosed_brace".to_string(), vec!["Foo.pm".to_string(), "Bar.pm".to_string()]);
+        let report = SweepReport {
+            files_by_bucket: fbb,
+            ..test_report(8, 2, 3, 0, BTreeMap::from([("unclosed_brace".to_string(), 2)]))
+        };
+        let files = report.files_by_bucket.get("unclosed_brace").expect("bucket should exist");
+        assert_eq!(files.len(), 2);
+        assert!(files.contains(&"Foo.pm".to_string()));
+    }
+
+    #[test]
+    fn test_files_by_bucket_serde_roundtrip() {
+        let mut fbb = BTreeMap::new();
+        fbb.insert("expected_semicolon".to_string(), vec!["Some/Module.pm".to_string()]);
+        let report = SweepReport {
+            files_by_bucket: fbb,
+            ..test_report(9, 1, 1, 0, BTreeMap::from([("expected_semicolon".to_string(), 1)]))
+        };
+        let json = serde_json::to_string(&report).expect("serialize");
+        let back: SweepReport = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.files_by_bucket, report.files_by_bucket);
+    }
+
+    #[test]
+    fn test_files_by_bucket_absent_in_old_schema_deserializes_empty() {
+        // The existing backward-compat JSON (schema 1.0.0) has no files_by_bucket
+        // field — must deserialize as empty BTreeMap.
+        let old_json = r#"{
+            "schema_version": "1.0.0",
+            "commit": "abc",
+            "timestamp": "now",
+            "corpus_roots": ["/usr/share/perl"],
+            "total_files": 100,
+            "files_unreadable": 0,
+            "clean_files": 80,
+            "files_with_errors": 20,
+            "total_error_nodes": 30,
+            "first_error_buckets": {},
+            "elapsed_secs": 1.0
+        }"#;
+        let report: SweepReport = serde_json::from_str(old_json).expect("deserialize old schema");
+        assert!(report.files_by_bucket.is_empty(), "files_by_bucket should default to empty");
+    }
+
+    #[test]
+    fn test_files_by_bucket_not_examined_by_ratchet() {
+        // Different file lists in files_by_bucket with identical counts should not trigger
+        // violations — files_by_bucket is informational only, not part of the ratchet.
+        let mut fbb_a = BTreeMap::new();
+        fbb_a.insert("unclosed_brace".to_string(), vec!["A.pm".to_string()]);
+        let mut fbb_b = BTreeMap::new();
+        fbb_b.insert("unclosed_brace".to_string(), vec!["B.pm".to_string()]);
+        let baseline = SweepReport {
+            files_by_bucket: fbb_a,
+            ..test_report(9, 1, 1, 0, BTreeMap::from([("unclosed_brace".to_string(), 1)]))
+        };
+        let report = SweepReport { files_by_bucket: fbb_b, ..baseline.clone() };
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "files_by_bucket changes should not affect ratchet");
     }
 }

@@ -317,7 +317,10 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.runCritic".to_string(),
         "perl.runTest".to_string(),
         "perl.runTestFile".to_string(),
+        "perl.runSubtest".to_string(),
         "perl.debugFile".to_string(),
+        "perl.goToTest".to_string(),
+        "perl.goToImplementation".to_string(),
     ]
 }
 
@@ -418,6 +421,16 @@ mod tests {
         assert!(
             json.get("documentRangesFormattingProvider").is_none(),
             "documentRangesFormattingProvider must not be present when range_formatting is disabled"
+        );
+    }
+
+    /// Verify that `perl.runSubtest` is included in the supported commands list.
+    #[test]
+    fn test_subtest_lens_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.runSubtest"),
+            "perl.runSubtest must be in get_supported_commands"
         );
     }
 

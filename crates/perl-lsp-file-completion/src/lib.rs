@@ -104,6 +104,7 @@ pub fn complete_file_paths(
             filter_text: Some(completion_path.clone()),
             additional_edits: Vec::new(),
             text_edit_range: Some((context.prefix_start, context.position)),
+            commit_characters: None,
         });
 
         if completions.len() >= 50 {

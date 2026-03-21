@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use perl_parser_core::{NodeKind, Parser};
+use perl_parser_core::{Node, NodeKind, Parser};
 use perl_tdd_support::must;
 
 /// Parse the given source and return the top-level AST node.
@@ -10,37 +10,40 @@ pub fn parse(source: &str) -> perl_parser_core::Node {
     must(parser.parse())
 }
 
-/// Assert that a parsed AST has no Error / Missing* nodes anywhere in the
-/// S-expression representation. This is a conservative "clean parse" check.
-pub fn assert_clean_parse(source: &str) {
-    let ast = parse(source);
-    let sexp = ast.to_sexp();
-
-    for marker in ERROR_MARKERS {
-        assert!(
-            !sexp.contains(marker),
-            "Clean-parse assertion failed: found '{}' in sexp for source:\n{}\n\nsexp:\n{}",
-            marker,
-            source,
-            sexp,
-        );
+/// Walk the AST recursively and return the kind_name of the first error or
+/// missing node found, or `None` if the tree is clean.
+fn find_first_error(node: &Node) -> Option<&'static str> {
+    match &node.kind {
+        NodeKind::Error { .. }
+        | NodeKind::MissingExpression
+        | NodeKind::MissingStatement
+        | NodeKind::MissingIdentifier
+        | NodeKind::MissingBlock => return Some(node.kind.kind_name()),
+        _ => {}
     }
+    for child in node.children() {
+        if let Some(name) = find_first_error(child) {
+            return Some(name);
+        }
+    }
+    None
 }
 
-/// Error markers used by both `assert_clean_parse` and `assert_has_error`.
-const ERROR_MARKERS: &[&str] = &[
-    "(error ",
-    "(Error ",
-    "(ERROR ",
-    "(missing_expression",
-    "(missing_statement",
-    "(missing_identifier",
-    "(missing_block",
-    "MissingExpression",
-    "MissingStatement",
-    "MissingIdentifier",
-    "MissingBlock",
-];
+/// Assert that a parsed AST has no Error / Missing* nodes anywhere in the
+/// tree. Uses AST node walking rather than sexp string matching to avoid
+/// false-positives on valid Perl that contains "ERROR" as an identifier.
+pub fn assert_clean_parse(source: &str) {
+    let ast = parse(source);
+    let error_kind = find_first_error(&ast);
+    let sexp = ast.to_sexp();
+    assert!(
+        error_kind.is_none(),
+        "Clean-parse assertion failed: found '{}' node in AST for source:\n{}\n\nsexp:\n{}",
+        error_kind.unwrap_or(""),
+        source,
+        sexp,
+    );
+}
 
 /// Assert that a parsed AST contains at least one Error or Missing* node
 /// whose sexp representation contains the given `needle` substring.
@@ -53,8 +56,8 @@ pub fn assert_has_error(source: &str, needle: &str) {
     let sexp_lower = sexp.to_lowercase();
     let needle_lower = needle.to_lowercase();
 
-    // First verify there IS an error node somewhere.
-    let has_any_error = ERROR_MARKERS.iter().any(|marker| sexp.contains(marker));
+    // First verify there IS an error node somewhere using AST walk.
+    let has_any_error = find_first_error(&ast).is_some();
     assert!(has_any_error, "Expected an error node for source:\n{}\n\nsexp:\n{}", source, sexp,);
 
     // Then verify the needle appears (case-insensitive) in the sexp.
