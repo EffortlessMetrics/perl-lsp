@@ -109,13 +109,15 @@ if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
 else
     BRANCH_SLUG="$(git branch --show-current 2>/dev/null | tr '/' '-')"
     if [[ -n "$BRANCH_SLUG" ]]; then
-        export CARGO_TARGET_DIR="/tmp/agent-${BRANCH_SLUG}-target"
-        ok "Set CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
+        RECOMMENDED_TARGET="/tmp/agent-${BRANCH_SLUG}-target"
+        ok "Recommended CARGO_TARGET_DIR=$RECOMMENDED_TARGET"
+        echo "    Run: export CARGO_TARGET_DIR=\"$RECOMMENDED_TARGET\""
     else
         # Detached HEAD — use a hash-based fallback
         HEAD_SHORT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-        export CARGO_TARGET_DIR="/tmp/agent-detached-${HEAD_SHORT}-target"
-        ok "Set CARGO_TARGET_DIR=$CARGO_TARGET_DIR (detached HEAD fallback)"
+        RECOMMENDED_TARGET="/tmp/agent-detached-${HEAD_SHORT}-target"
+        ok "Recommended CARGO_TARGET_DIR=$RECOMMENDED_TARGET (detached HEAD fallback)"
+        echo "    Run: export CARGO_TARGET_DIR=\"$RECOMMENDED_TARGET\""
     fi
 fi
 
