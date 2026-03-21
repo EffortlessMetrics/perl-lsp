@@ -284,7 +284,18 @@ impl<'a> Parser<'a> {
 
             Some(Box::new(expr))
         };
-        self.expect(TokenKind::Semicolon)?;
+        // First internal semicolon (after init) — recover inline instead of hard-failing.
+        // A hard `?` here cascades into multiple spurious errors because the expression
+        // parser has already consumed tokens; recovering inline keeps the For node intact.
+        if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        } else {
+            let pos = self.current_position();
+            self.errors.push(ParseError::syntax(
+                "Missing ';' after for-loop init — recovered".to_string(),
+                pos,
+            ));
+        }
 
         // Parse condition
         let condition = if self.peek_kind() == Some(TokenKind::Semicolon) {
@@ -293,7 +304,16 @@ impl<'a> Parser<'a> {
             self.mark_not_stmt_start();
             Some(Box::new(self.parse_expression()?))
         };
-        self.expect(TokenKind::Semicolon)?;
+        // Second internal semicolon (after condition) — same inline recovery pattern.
+        if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        } else {
+            let pos = self.current_position();
+            self.errors.push(ParseError::syntax(
+                "Missing ';' after for-loop condition — recovered".to_string(),
+                pos,
+            ));
+        }
 
         // Parse update
         let update = if self.peek_kind() == Some(TokenKind::RightParen) {
