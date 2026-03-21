@@ -220,6 +220,13 @@ pub struct LspServer {
     /// setting the old flag to `true` interrupts the in-progress parse
     /// cooperatively (via `Parser::check_cancelled`).
     pub(crate) parse_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    /// Guard that prevents concurrent workspace indexing scans.
+    ///
+    /// Set to `true` when `start_workspace_indexing` spawns a background thread,
+    /// cleared to `false` when that thread completes (via RAII drop guard in all
+    /// exit paths including panics).
+    #[cfg(feature = "workspace")]
+    indexing_in_progress: Arc<AtomicBool>,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains

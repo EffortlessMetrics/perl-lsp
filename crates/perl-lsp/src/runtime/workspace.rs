@@ -128,6 +128,19 @@ fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) 
     }
 }
 
+/// RAII guard that clears the `indexing_in_progress` flag on drop.
+///
+/// Ensures the flag is always cleared, even if the indexing thread panics.
+#[cfg(feature = "workspace")]
+struct IndexingGuard(Arc<AtomicBool>);
+
+#[cfg(feature = "workspace")]
+impl Drop for IndexingGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 impl LspServer {
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
     ///
@@ -1017,8 +1030,24 @@ impl LspServer {
     }
 
     /// Start a background workspace indexing scan
+    ///
+    /// Uses a compare-exchange guard on `indexing_in_progress` to ensure only
+    /// one scan runs at a time.  If a scan is already running the call is
+    /// silently skipped (logged via `eprintln!`).
     #[cfg(feature = "workspace")]
     pub(super) fn start_workspace_indexing(&self) {
+        // Guard: if already indexing, skip.  compare_exchange ensures only one
+        // thread wins the race.
+        if self
+            .indexing_in_progress
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            eprintln!("Workspace indexing already in progress, skipping concurrent scan");
+            return;
+        }
+        let indexing_guard = IndexingGuard(Arc::clone(&self.indexing_in_progress));
+
         let Some(coordinator) = self.coordinator().map(Arc::clone) else {
             return;
         };
@@ -1036,6 +1065,7 @@ impl LspServer {
         let progress_create_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
 
         std::thread::spawn(move || {
+            let _guard = indexing_guard; // moved into closure, drops when closure exits
             let budget_start = Instant::now();
             coordinator.transition_to_scanning();
 
