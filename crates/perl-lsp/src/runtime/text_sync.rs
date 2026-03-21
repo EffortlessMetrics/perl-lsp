@@ -960,6 +960,72 @@ mod tests {
         Ok(())
     }
 
+    /// Verify that an empty contentChanges array does not crash and leaves the document intact.
+    /// The server must handle no-op change notifications gracefully.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_empty_content_changes() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_empty_changes.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Send a didChange with an empty contentChanges array (no-op notification)
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": []
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after empty change")?;
+        // Text must be unchanged
+        assert_eq!(doc.text, text, "empty contentChanges must not modify document text");
+        // incremental_doc must still be present (reinit from same text is fine)
+        assert!(
+            doc.incremental_doc.is_some(),
+            "incremental_doc must be present after no-op change"
+        );
+        Ok(())
+    }
+
+    /// Verify that an edit at the very end of the document (zero-length insertion) is handled.
+    /// This is the most common case for autocompletion triggers.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_insert_at_end_of_document() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_insert_end.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Insert a new line at the end (line 1, char 0 — past the only line)
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 1, "character": 0 },
+                    "end":   { "line": 1, "character": 0 }
+                },
+                "text": "my $y = 2;\n"
+            }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after end-of-doc insert")?;
+        assert!(doc.text.contains("$y"), "new line must appear in document text");
+        assert!(
+            doc.incremental_doc.is_some(),
+            "incremental_doc must survive end-of-document insert"
+        );
+        Ok(())
+    }
+
     /// Verify that UTF-16 position conversion handles multi-byte characters correctly.
     /// LSP clients send UTF-16 code unit indices; characters like emoji or CJK take 2 units
     /// but 4+ UTF-8 bytes. The byte offset calculation must account for this.
