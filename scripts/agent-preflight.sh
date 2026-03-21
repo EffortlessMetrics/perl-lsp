@@ -78,9 +78,13 @@ fi
 # main checkout path.  The Write/Edit tools resolve absolute paths relative to
 # cwd, so writing from the main checkout puts files in the wrong place.
 
-MAIN_REPO_RAW="$(git rev-parse --git-common-dir 2>/dev/null | sed 's|/\.git$||')"
+MAIN_REPO_RAW="$(git rev-parse --git-common-dir 2>/dev/null | sed 's|/\.git$||; s|^\.git$|.|')"
 # Resolve both paths through readlink/pwd -P so symlinks don't cause mismatches
-MAIN_REPO="$(cd "$MAIN_REPO_RAW" 2>/dev/null && pwd -P)" || MAIN_REPO="$MAIN_REPO_RAW"
+if [[ -n "$MAIN_REPO_RAW" ]]; then
+    MAIN_REPO="$(cd "$MAIN_REPO_RAW" 2>/dev/null && pwd -P)" || MAIN_REPO=""
+else
+    MAIN_REPO=""
+fi
 CWD="$(pwd -P)"
 
 if [[ -n "$MAIN_REPO" && "$CWD" = "$MAIN_REPO" ]]; then
