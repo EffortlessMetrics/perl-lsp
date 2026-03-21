@@ -167,7 +167,7 @@ dependencies:
 `perl-error`, `perl-keywords`, `perl-position-tracking`, `perl-percentile`,
 `perl-content-length-framing`, `perl-subprocess-runtime`, `perl-uri`,
 `perl-uri-classify`, `perl-path-normalize`, `perl-path-security`,
-`perl-text-line`, `perl-line-index`, `perl-source-editing`,
+`perl-text-line`, `perl-line-index`,
 `perl-source-file`, `perl-qualified-name`, `perl-diagnostics-codes`,
 `perl-symbol-types`, `perl-symbol-cursor`, `perl-symbol-table`,
 `perl-symbol-index`
