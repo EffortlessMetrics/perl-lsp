@@ -332,8 +332,7 @@ fn test_signature_help_capability_advertised() -> TestResult {
         assert!(retriggers.is_array(), "retriggerCharacters should be an array");
         let retrigger_arr =
             retriggers.as_array().ok_or("Expected array for retriggerCharacters")?;
-        let retrigger_strs: Vec<&str> =
-            retrigger_arr.iter().filter_map(|t| t.as_str()).collect();
+        let retrigger_strs: Vec<&str> = retrigger_arr.iter().filter_map(|t| t.as_str()).collect();
 
         assert!(
             retrigger_strs.contains(&","),
