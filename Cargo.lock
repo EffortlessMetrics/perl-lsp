@@ -2646,10 +2646,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-source-editing"
-version = "0.12.0"
-
-[[package]]
 name = "perl-source-file"
 version = "0.12.0"
 
