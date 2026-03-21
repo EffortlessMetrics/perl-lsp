@@ -1,5 +1,5 @@
 //! Test reference operator
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
 
 #[test]
@@ -17,20 +17,20 @@ fn test_reference_operator_basic() {
         let mut lexer = PerlLexer::new(input);
 
         // Should get backslash as operator
-        let token1 = lexer.next_token().unwrap();
+        let token1 = must_some(lexer.next_token());
         println!("Token 1: {:?}", token1);
         assert!(matches!(token1.token_type, TokenType::Operator(_)));
         assert_eq!(token1.text.as_ref(), "\\");
 
         // Should get the variable or operator
-        let token2 = lexer.next_token().unwrap();
+        let token2 = must_some(lexer.next_token());
         println!("Token 2: {:?}", token2);
 
         // For &sub, it's tokenized as & operator
         if input.contains("&") {
             assert!(matches!(token2.token_type, TokenType::Operator(_)));
             // Get the subroutine name
-            let token3 = lexer.next_token().unwrap();
+            let token3 = must_some(lexer.next_token());
             println!("Token 3: {:?}", token3);
             assert!(matches!(token3.token_type, TokenType::Identifier(_)));
         } else {

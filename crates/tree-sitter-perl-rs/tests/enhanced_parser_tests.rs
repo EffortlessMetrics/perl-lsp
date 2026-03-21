@@ -1,5 +1,6 @@
 #[cfg(all(test, feature = "pure-rust"))]
 mod enhanced_parser_tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::EnhancedFullParser;
 
     #[test]
@@ -340,7 +341,7 @@ EOF
         assert!(result.is_ok());
 
         // The content should be preserved with original formatting
-        let ast = result.unwrap();
+        let ast = must(result);
         // Just verify the AST was created successfully
         // Content preservation is handled internally
         assert!(!format!("{:?}", ast).is_empty());
