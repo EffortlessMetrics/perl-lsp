@@ -65,7 +65,7 @@ impl<'a> Parser<'a> {
                                 // ->@[...] array slice
                                 self.tokens.next()?; // consume [
                                 let index = self.parse_expression()?;
-                                self.expect(TokenKind::RightBracket)?;
+                                self.expect_closing_delimiter(TokenKind::RightBracket)?;
 
                                 let start = expr.location.start;
                                 let end = self.previous_position();
@@ -249,7 +249,7 @@ impl<'a> Parser<'a> {
                             // Arrow array dereference: $ref->[index]
                             self.tokens.next()?; // consume [
                             let index = self.parse_expression()?;
-                            self.expect(TokenKind::RightBracket)?;
+                            self.expect_closing_delimiter(TokenKind::RightBracket)?;
 
                             let start = expr.location.start;
                             let end = self.previous_position();
@@ -321,7 +321,7 @@ impl<'a> Parser<'a> {
                         indices.push(self.parse_expression()?);
                     }
 
-                    self.expect(TokenKind::RightBracket)?;
+                    self.expect_closing_delimiter(TokenKind::RightBracket)?;
 
                     // Create the index node - either single index or array of indices
                     let index = if indices.len() == 1 {
