@@ -525,8 +525,8 @@ mod tests {
             .map_err(|_| "failed to create doc URI")?
             .to_string();
 
-        let result = server
-            .resolve_module_path_with_uri("Evil::Secrets", Some(doc_text), Some(&doc_uri));
+        let result =
+            server.resolve_module_path_with_uri("Evil::Secrets", Some(doc_text), Some(&doc_uri));
 
         // Result must be None (file doesn't exist inside workspace) or a path inside workspace.
         if let Some(ref path) = result {
