@@ -284,6 +284,101 @@ const SNIPPETS: &[Snippet] = &[
         detail: "say to filehandle",
         doc: "Say to a specific filehandle.",
     },
+    // ── Regex operators ──────────────────────────────────────────────────────
+    Snippet {
+        trigger: "mbasic",
+        label: "mbasic",
+        body: "m/${1:pattern}/${0:g}",
+        detail: "match operator",
+        doc: "Basic match with optional flags (g=global, i=ignore case, m=multiline).",
+    },
+    Snippet {
+        trigger: "sbasic",
+        label: "sbasic",
+        body: "s/${1:pattern}/${2:replacement}/${0:g}",
+        detail: "substitution operator",
+        doc: "Replace first (or all with /g) occurrences of pattern.",
+    },
+    Snippet {
+        trigger: "qrbasic",
+        label: "qrbasic",
+        body: "qr/${1:pattern}/${0}",
+        detail: "compiled regex",
+        doc: "Compile regex for reuse. Returns a regex object.",
+    },
+    // ── Regex: captures ──────────────────────────────────────────────────────
+    Snippet {
+        trigger: "namedcap",
+        label: "namedcap",
+        body: "/(?<${1:name}>${2:pattern})/${0}",
+        detail: "named capture group",
+        doc: "Named capture group (Perl 5.10+). Access via $+{name}.",
+    },
+    // ── Regex: lookahead / lookbehind ────────────────────────────────────────
+    Snippet {
+        trigger: "lookahead",
+        label: "lookahead",
+        body: "/(?=${1:pattern})${0}/",
+        detail: "positive lookahead",
+        doc: "Assert that pattern follows without consuming characters.",
+    },
+    Snippet {
+        trigger: "neglookahead",
+        label: "neglookahead",
+        body: "/(?!${1:pattern})${0}/",
+        detail: "negative lookahead",
+        doc: "Assert that pattern does NOT follow.",
+    },
+    Snippet {
+        trigger: "lookbehind",
+        label: "lookbehind",
+        body: "/(?<=${1:pattern})${0}/",
+        detail: "positive lookbehind",
+        doc: "Assert that pattern precedes without consuming characters.",
+    },
+    Snippet {
+        trigger: "neglookbehind",
+        label: "neglookbehind",
+        body: "/(?<!${1:pattern})${0}/",
+        detail: "negative lookbehind",
+        doc: "Assert that pattern does NOT precede.",
+    },
+    // ── Regex: flags ─────────────────────────────────────────────────────────
+    Snippet {
+        trigger: "rxglobal",
+        label: "rxglobal",
+        body: "/${1:pattern}/g${0}",
+        detail: "flag: /g (global)",
+        doc: "Match all occurrences, not just the first.",
+    },
+    Snippet {
+        trigger: "rxcase",
+        label: "rxcase",
+        body: "/${1:pattern}/i${0}",
+        detail: "flag: /i (ignore case)",
+        doc: "Case-insensitive match.",
+    },
+    Snippet {
+        trigger: "rxmulti",
+        label: "rxmulti",
+        body: "/${1:pattern}/m${0}",
+        detail: "flag: /m (multiline)",
+        doc: "^ and $ match line boundaries, not just string boundaries.",
+    },
+    Snippet {
+        trigger: "rxdots",
+        label: "rxdots",
+        body: "/${1:pattern}/s${0}",
+        detail: "flag: /s (dotall)",
+        doc: "Dot (.) matches newlines.",
+    },
+    Snippet {
+        trigger: "rxverbose",
+        label: "rxverbose",
+        body: "m/\n    ${1:pattern}  # ${2:comment}\n    ${0}\n/x",
+        detail: "flag: /x (verbose)",
+        doc: "Allow whitespace and comments in pattern for readability.",
+    },
 ];
 
 /// Add snippet completions to the completion list.
@@ -322,7 +417,7 @@ mod tests {
         let ctx = make_context("");
         let mut items = Vec::new();
         add_snippet_completions(&mut items, &ctx);
-        assert!(items.len() >= 30, "expected >=30, got {}", items.len());
+        assert!(items.len() >= 50, "expected >=50, got {}", items.len());
     }
 
     #[test]
@@ -368,5 +463,75 @@ mod tests {
         let before = triggers.len();
         triggers.dedup();
         assert_eq!(before, triggers.len(), "duplicate triggers");
+    }
+
+    #[test]
+    fn regex_operator_snippets_exist() {
+        let ctx = make_context("");
+        let mut items = Vec::new();
+        add_snippet_completions(&mut items, &ctx);
+        let triggers: Vec<&str> = items.iter().filter_map(|i| i.filter_text.as_deref()).collect();
+        // Basic operators
+        assert!(triggers.contains(&"mbasic"), "mbasic snippet missing");
+        assert!(triggers.contains(&"sbasic"), "sbasic snippet missing");
+        assert!(triggers.contains(&"qrbasic"), "qrbasic snippet missing");
+        // Named captures
+        assert!(triggers.contains(&"namedcap"), "namedcap snippet missing");
+        // Lookahead / lookbehind
+        assert!(triggers.contains(&"lookahead"), "lookahead snippet missing");
+        assert!(triggers.contains(&"neglookahead"), "neglookahead snippet missing");
+        assert!(triggers.contains(&"lookbehind"), "lookbehind snippet missing");
+        assert!(triggers.contains(&"neglookbehind"), "neglookbehind snippet missing");
+        // Flag variants
+        assert!(triggers.contains(&"rxglobal"), "rxglobal snippet missing");
+        assert!(triggers.contains(&"rxcase"), "rxcase snippet missing");
+        assert!(triggers.contains(&"rxmulti"), "rxmulti snippet missing");
+        assert!(triggers.contains(&"rxdots"), "rxdots snippet missing");
+        assert!(triggers.contains(&"rxverbose"), "rxverbose snippet missing");
+    }
+
+    #[test]
+    fn regex_snippet_filter_by_prefix() {
+        let ctx = make_context("mba");
+        let mut items = Vec::new();
+        add_snippet_completions(&mut items, &ctx);
+        assert!(items.iter().any(|i| i.label == "mbasic"), "mbasic not returned for prefix 'mba'");
+        assert!(!items.iter().any(|i| i.label == "sbasic"), "sbasic should not match 'mba'");
+    }
+
+    #[test]
+    fn regex_snippet_bodies_are_correct() {
+        // Verify the actual regex syntax inside snippet bodies is spelled correctly.
+        // Existence tests confirm triggers fire; this test confirms the body text
+        // delivered to the LSP client contains valid Perl regex constructs.
+        let body = |trigger: &str| -> String {
+            SNIPPETS
+                .iter()
+                .find(|s| s.trigger == trigger)
+                .map(|s| s.body.to_string())
+                .unwrap_or_else(|| panic!("snippet '{trigger}' not found"))
+        };
+        assert!(body("namedcap").contains("(?<"), "namedcap must contain named-capture opener (?<");
+        assert!(body("lookahead").contains("(?="), "lookahead must contain positive lookahead (?=");
+        assert!(
+            body("neglookahead").contains("(?!"),
+            "neglookahead must contain negative lookahead (?!"
+        );
+        assert!(
+            body("lookbehind").contains("(?<="),
+            "lookbehind must contain positive lookbehind (?<="
+        );
+        assert!(
+            body("neglookbehind").contains("(?<!"),
+            "neglookbehind must contain negative lookbehind (?<!"
+        );
+        assert!(body("rxglobal").contains("/g"), "rxglobal must embed /g flag");
+        assert!(body("rxcase").contains("/i"), "rxcase must embed /i flag");
+        assert!(body("rxmulti").contains("/m"), "rxmulti must embed /m flag");
+        assert!(body("rxdots").contains("/s"), "rxdots must embed /s flag");
+        assert!(body("rxverbose").contains("/x"), "rxverbose must embed /x flag");
+        assert!(body("mbasic").starts_with("m/"), "mbasic body must start with m/");
+        assert!(body("sbasic").starts_with("s/"), "sbasic body must start with s/");
+        assert!(body("qrbasic").starts_with("qr/"), "qrbasic body must start with qr/");
     }
 }
