@@ -396,9 +396,9 @@ impl ImplementationProvider {
     }
 }
 
-#[allow(dead_code)]
 enum ImplementationTarget {
     Package(String),
     Method { package: String, method: String },
+    #[allow(dead_code)]
     BlessedType(String),
 }
