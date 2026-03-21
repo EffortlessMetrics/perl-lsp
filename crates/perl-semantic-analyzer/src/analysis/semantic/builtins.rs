@@ -640,6 +640,38 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             signature: "state VARLIST",
             description: "Declares lexically scoped variables that persist across calls to the enclosing subroutine (like C static variables).",
         }),
+        "BEGIN" => Some(BuiltinDoc {
+            signature: "BEGIN { BLOCK }",
+            description: "Executed at **compile time**, before the rest of the program runs. \
+                          Used to initialize modules, set up the symbol table, or run code \
+                          that must complete before compilation continues. Multiple BEGIN \
+                          blocks run in the order they appear in source.",
+        }),
+        "END" => Some(BuiltinDoc {
+            signature: "END { BLOCK }",
+            description: "Executed at **program exit**, after the main program finishes (including \
+                          `die` and `exit`). Used for cleanup. Multiple END blocks run in \
+                          reverse order of definition. `$?` holds the exit status.",
+        }),
+        "INIT" => Some(BuiltinDoc {
+            signature: "INIT { BLOCK }",
+            description: "Executed after compilation completes but **before** the main program \
+                          runs. Runs in first-seen order. Unlike BEGIN, INIT sees the fully \
+                          compiled symbol table.",
+        }),
+        "CHECK" => Some(BuiltinDoc {
+            signature: "CHECK { BLOCK }",
+            description: "Executed at the **end of compilation**, after all BEGIN blocks. Runs \
+                          in reverse order of definition. Used by modules that need to inspect \
+                          or modify the compiled program before it runs (e.g. B::* modules).",
+        }),
+        "UNITCHECK" => Some(BuiltinDoc {
+            signature: "UNITCHECK { BLOCK }",
+            description: "Executed at the **end of the compilation unit** that defined it \
+                          (file, string eval, or require). Runs in reverse order of definition \
+                          within that unit. More granular than CHECK — each required file's \
+                          UNITCHECK runs before the requiring file's UNITCHECK.",
+        }),
 
         _ => None,
     }
@@ -891,5 +923,65 @@ pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
             Some(ExceptionContext { error_variable: None, preferred_alternative: None })
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_builtin_documentation;
+
+    #[test]
+    fn test_get_builtin_documentation_begin() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("BEGIN").ok_or("BEGIN should have docs")?;
+        assert!(
+            doc.description.contains("compile time") || doc.description.contains("compile-time"),
+            "BEGIN doc should mention compile time, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_end() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("END").ok_or("END should have docs")?;
+        assert!(
+            doc.description.contains("exit") || doc.description.contains("cleanup"),
+            "END doc should mention exit or cleanup, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_check() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("CHECK").ok_or("CHECK should have docs")?;
+        assert!(
+            doc.description.contains("compilation") || doc.description.contains("compile"),
+            "CHECK doc should mention compilation, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_init() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("INIT").ok_or("INIT should have docs")?;
+        assert!(
+            doc.description.contains("compilation") || doc.description.contains("before"),
+            "INIT doc should mention post-compile execution, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_unitcheck() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("UNITCHECK").ok_or("UNITCHECK should have docs")?;
+        assert!(
+            doc.description.contains("compilation unit") || doc.description.contains("unit"),
+            "UNITCHECK doc should mention compilation unit scope, got: {}",
+            doc.description
+        );
+        Ok(())
     }
 }
