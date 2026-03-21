@@ -22,9 +22,10 @@ git push
 After pushing improvements, ALWAYS route to deep review:
 ```bash
 gh pr edit <number> --add-label "needs-deep-review"
+gh pr comment <number> --body "Standards review complete. Improved: <list of changes>. Deep reviewer: focus on <areas of concern>."
 ```
 
-Post a comment summarizing what you improved and what the deep reviewer should focus on. Then write a version-bound receipt:
+Then write a version-bound receipt:
 ```
 /label-receipt-write pr <number> needs-deep-review reviewer
 ```
