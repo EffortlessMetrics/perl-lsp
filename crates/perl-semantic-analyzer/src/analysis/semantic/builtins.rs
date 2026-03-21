@@ -259,7 +259,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "sort" => Some(BuiltinDoc {
             signature: "sort SUBNAME LIST\nsort BLOCK LIST\nsort LIST",
-            description: "Sorts LIST and returns the sorted list. BLOCK or SUBNAME provides a custom comparison function using $a and $b. Only valid in list context; using in scalar context returns undef or count (avoid).",
+            description: "Sorts LIST and returns the sorted list. BLOCK or SUBNAME provides a custom comparison function using $a and $b. Only valid in list context; using sort in scalar context returns undef (avoid).",
         }),
         "reverse" => Some(BuiltinDoc {
             signature: "reverse LIST",
@@ -285,7 +285,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         // Hash
         "keys" => Some(BuiltinDoc {
             signature: "keys HASH\nkeys ARRAY",
-            description: "In list context, returns all keys of the named hash or indices of an array. In scalar context, returns a string like '3/8' (used/total buckets) — use `scalar keys %h` to get a count, which evaluates as the number of keys.",
+            description: "In list context, returns all keys of the named hash or indices of an array. In scalar context, returns the number of keys (an integer count). Note: `scalar keys %h` is the idiomatic way to count hash entries.",
         }),
         "values" => Some(BuiltinDoc {
             signature: "values HASH\nvalues ARRAY",
@@ -293,7 +293,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "each" => Some(BuiltinDoc {
             signature: "each HASH\neach ARRAY",
-            description: "Returns the next key-value pair from the hash as a two-element list, or an empty list when exhausted. The iterator resets after reaching the end or when the hash is modified. Call in a while loop: `while (my ($k, $v) = each %h) { ... }`",
+            description: "Returns the next key-value pair from the hash as a two-element list, or an empty list when exhausted. The iterator resets when the list is exhausted, when keys() or values() is called on the hash, or when the hash is modified. Call in a while loop: `while (my ($k, $v) = each %h) { ... }`",
         }),
         "exists" => Some(BuiltinDoc {
             signature: "exists EXPR",
