@@ -402,6 +402,10 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     } catch (startError: unknown) {
         const msg = startError instanceof Error ? startError.message : String(startError);
         outputChannel.appendLine(`[startup] Language client failed to start: ${msg}`);
+        stateChangeDisposable?.dispose();
+        stateChangeDisposable = undefined;
+        try { client.dispose(); } catch { /* already dead */ }
+        client = undefined;
         setStatusBarState(State.Stopped);
         const choice = await vscode.window.showErrorMessage(
             `Perl Language Server failed to start. The binary at '${currentServerPath}' may be corrupted or incompatible.`,
