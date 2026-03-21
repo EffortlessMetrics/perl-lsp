@@ -19,7 +19,10 @@ gh pr checkout <number>
 git push
 gh pr review <number> --approve --body "Improved: <list>. Verified: <what you checked>."
 gh pr ready <number>  # if still draft
+gh pr edit <number> --add-label "in-review"
 ```
+
+The `in-review` label signals to the orchestrator that this PR is actively being reviewed and should not be double-assigned.
 
 ### Trivial issues only (typos, formatting, <5 lines) → Fix in place
 1. Check out the branch:
@@ -29,7 +32,12 @@ gh pr ready <number>  # if still draft
 2. Apply the fixes
 3. Commit with: `fix(review): <what you fixed>`
 4. Push
-5. Approve and mark ready
+5. Approve and mark ready:
+   ```bash
+   gh pr review <number> --approve
+   gh pr ready <number>
+   gh pr edit <number> --add-label "in-review"
+   ```
 
 ### Non-trivial issues → Fix forward if you can
 Most "non-trivial" issues are still fixable on the branch. You're a sonnet-grade agent on an isolated branch — fix it, don't send it back. Bumping back is a full round trip through the queue.

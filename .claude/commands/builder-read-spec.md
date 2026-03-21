@@ -31,13 +31,21 @@ Read the issue and figure out what to build. Be proactive and fix forward.
    - Report back: "Recommend plan-reviewer for #NNN"
    - STOP — let the pipeline do its job
 
-5. If proceeding to build, fill any spec gaps yourself:
+5. If proceeding to build, claim the issue immediately to prevent double-assignment:
+   ```bash
+   gh issue edit <number> --add-label "in-build" --remove-label "builder-ready"
+   ```
+   The `in-build` label tells the orchestrator this issue is taken. The `--remove-label "builder-ready"` removes it from the builder queue. (`--remove-label` is a no-op if the label is absent, so this is always safe.)
+
+   Note: this label is informational, not a mutex. If two builders race before either sets `in-build`, both may proceed. The orchestrator should check `in-build` issues before spawning new builders to detect this condition.
+
+6. Fill any spec gaps yourself:
    - **File:line** — if not provided, use Grep/Glob to find the right files
    - **Change** — if vague, read the code and figure out the right approach
    - **Test code** — if not provided, write your own based on the description
    - **Verify command** — default to `cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>`
 
-6. If you get stuck mid-implementation on an architectural question:
+7. If you get stuck mid-implementation on an architectural question:
    - Post your **specific questions** as a comment on the GitHub issue
    - Add `needs-plan-review` label
    - Report back: "Recommend plan-reviewer for #NNN — questions posted on issue"
