@@ -54,7 +54,7 @@ Clears the lock regardless of who holds it. Use only when an agent crashed and l
 2. Edit `.claude/agents/<file>` or `.claude/commands/<file>` or `CLAUDE.md`
 3. `scripts/control-plane-lock.sh release <agent-id>`
 
-If acquire fails, wait and retry — or report contention to the orchestrator.
+If acquire fails, do not retry in a loop. File your safe edits (per-crate CLAUDE.md, issue comments) and report contention to the orchestrator.
 
 ## Important notes
 
