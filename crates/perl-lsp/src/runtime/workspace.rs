@@ -199,16 +199,45 @@ impl LspServer {
             }
         }
 
+        // Use SymbolIndex trie as a fast pre-filter for the open-document
+        // fallback path.  The trie is populated on every didOpen/didChange and
+        // provides O(prefix-len) lookups instead of scanning every symbol name.
+        let trie_hint: Option<std::collections::HashSet<String>> = if !query.is_empty() {
+            let idx = self.symbol_index.lock();
+            let mut names = idx.search_prefix(query);
+            if names.is_empty() {
+                names = idx.search_fuzzy(query);
+            }
+            if names.is_empty() {
+                None
+            } else {
+                eprintln!(
+                    "Workspace symbol: SymbolIndex returned {} trie hits for '{}'",
+                    names.len(),
+                    query
+                );
+                Some(names.into_iter().collect())
+            }
+        } else {
+            None
+        };
+
         // Fallback/degraded path: search open documents only
-        self.search_open_documents_for_symbols(query, cap)
+        self.search_open_documents_for_symbols_with_hints(query, cap, trie_hint.as_ref())
     }
 
-    /// Search only open documents for symbols (degraded/fallback path)
+    /// Search open documents for symbols with optional trie-based pre-filter hints.
+    ///
+    /// When `trie_hint` is `Some`, symbols whose names appear in the hint set are
+    /// sorted to the front of the result list.  This lets the fast SymbolIndex trie
+    /// (populated on every didOpen/didChange) improve relevance of the open-document
+    /// fallback path without changing the overall scan logic.
     #[cfg(feature = "workspace")]
-    fn search_open_documents_for_symbols(
+    fn search_open_documents_for_symbols_with_hints(
         &self,
         query: &str,
         cap: usize,
+        trie_hint: Option<&std::collections::HashSet<String>>,
     ) -> Result<Option<Value>, JsonRpcError> {
         let mut all_symbols = Vec::new();
 
@@ -251,6 +280,17 @@ impl LspServer {
                 let remaining = cap.saturating_sub(all_symbols.len());
                 all_symbols.extend(text_symbols.into_iter().take(remaining));
             }
+        }
+
+        // When trie hints are available, sort symbols so that trie-matched names
+        // appear first.  This improves relevance for prefix queries without
+        // discarding any results.
+        if let Some(hints) = trie_hint {
+            all_symbols.sort_by(|a, b| {
+                let a_hit = hints.contains(&a.name);
+                let b_hit = hints.contains(&b.name);
+                b_hit.cmp(&a_hit)
+            });
         }
 
         // Truncate to cap in case we went slightly over

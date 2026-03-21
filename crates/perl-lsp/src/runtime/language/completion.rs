@@ -162,6 +162,18 @@ impl LspServer {
                     .rev()
                     .collect::<String>();
 
+                // Fast-path: use SymbolIndex trie for prefix filtering when
+                // the prefix is a simple identifier (no sigils/colons).
+                let trie_hints: Option<std::collections::HashSet<String>> = {
+                    let bare = prefix.trim_start_matches(['$', '@', '%']);
+                    if !bare.is_empty() && !bare.contains(':') {
+                        let hits = self.symbol_index.lock().search_prefix(bare);
+                        if !hits.is_empty() { Some(hits.into_iter().collect()) } else { None }
+                    } else {
+                        None
+                    }
+                };
+
                 let qualified_variable_symbols =
                     Self::qualified_variable_workspace_symbols(index, &prefix);
                 let replace_prefix_range = (offset.saturating_sub(prefix.len()), offset);
@@ -194,12 +206,24 @@ impl LspServer {
                     };
                     seen.insert(label.clone());
 
+                    // Promote symbols that appear in the SymbolIndex trie by
+                    // assigning a sort_text that sorts earlier ('0' < '1').
+                    let sort_text = if let Some(ref hints) = trie_hints {
+                        if hints.contains(&label) {
+                            Some(format!("0{}", label))
+                        } else {
+                            Some(format!("1{}", label))
+                        }
+                    } else {
+                        None
+                    };
+
                     completions.push(crate::completion::CompletionItem {
                         label,
                         kind: Self::workspace_symbol_kind(&symbol),
                         detail,
                         insert_text,
-                        sort_text: None,
+                        sort_text,
                         filter_text: None,
                         documentation: Self::workspace_symbol_documentation(&symbol),
                         additional_edits: Vec::new(),
