@@ -132,6 +132,15 @@ pub struct DocumentState {
     /// Computed from `ast` and `parse_errors` after each parse. Feature
     /// providers should check this before attempting AST-dependent operations.
     pub degradation_tier: DegradationTier,
+
+    /// Incremental document state for fast re-parsing on keystrokes.
+    ///
+    /// Initialized on didOpen and updated on every didChange. When `None`
+    /// the LSP falls back to a full reparse. Only compiled when the
+    /// `incremental` feature is enabled.
+    #[cfg(feature = "incremental")]
+    pub incremental_doc:
+        Option<perl_incremental_parsing::incremental::incremental_document::IncrementalDocument>,
 }
 
 impl DocumentState {
@@ -151,6 +160,8 @@ impl DocumentState {
             line_starts,
             generation: Arc::new(AtomicU32::new(0)),
             degradation_tier: DegradationTier::Minimal,
+            #[cfg(feature = "incremental")]
+            incremental_doc: None,
         }
     }
 
@@ -165,6 +176,10 @@ impl DocumentState {
         self.line_starts = LineStartsCache::new(content);
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.degradation_tier = DegradationTier::Minimal;
+        #[cfg(feature = "incremental")]
+        {
+            self.incremental_doc = None;
+        }
     }
 
     /// Get the current generation number

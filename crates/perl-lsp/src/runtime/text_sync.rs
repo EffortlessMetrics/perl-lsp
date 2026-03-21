@@ -75,6 +75,8 @@ impl LspServer {
                         line_starts,
                         generation: Arc::new(AtomicU32::new(0)),
                         degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
                     },
                 );
 
@@ -141,6 +143,16 @@ impl LspServer {
 
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
+
+            // Initialize incremental document from the already-parsed text (didOpen).
+            // code_slice is applied here to match what the full parser sees.
+            #[cfg(feature = "incremental")]
+            let incremental_doc = {
+                use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
+                let code_text = crate::util::code_slice(text);
+                IncrementalDocument::new(code_text.to_string()).ok()
+            };
+
             self.documents.lock().insert(
                 normalized_uri.clone(),
                 DocumentState {
@@ -153,6 +165,8 @@ impl LspServer {
                     line_starts,
                     generation: Arc::new(AtomicU32::new(0)),
                     degradation_tier,
+                    #[cfg(feature = "incremental")]
+                    incremental_doc,
                 },
             );
 
@@ -307,6 +321,8 @@ impl LspServer {
                         line_starts: LineStartsCache::new(""),
                         generation: Arc::new(AtomicU32::new(0)),
                         degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
                     });
 
                 // Increment generation counter for this change
@@ -339,6 +355,45 @@ impl LspServer {
                     }
                 }
 
+                // Build incremental edits from the OLD source BEFORE mutating the rope.
+                // UTF-16 line/char → byte conversion must use the pre-change line index.
+                #[cfg(feature = "incremental")]
+                let incremental_edits_opt: Option<
+                    perl_incremental_parsing::incremental::incremental_edit::IncrementalEditSet,
+                > = {
+                    use perl_incremental_parsing::incremental::incremental_edit::{
+                        IncrementalEdit, IncrementalEditSet,
+                    };
+                    let mut edit_set = IncrementalEditSet::new();
+                    let mut all_ranged = true;
+                    for change in &lsp_changes {
+                        if let Some(range) = change.range {
+                            // Convert UTF-16 line/char to byte offsets using the pre-change
+                            // line_starts (populated from the rope before apply_changes runs).
+                            let start_byte = doc_state.line_starts.position_to_offset_rope(
+                                &doc_state.rope,
+                                range.start.line,
+                                range.start.character,
+                            );
+                            let old_end_byte = doc_state.line_starts.position_to_offset_rope(
+                                &doc_state.rope,
+                                range.end.line,
+                                range.end.character,
+                            );
+                            edit_set.add(IncrementalEdit::new(
+                                start_byte,
+                                old_end_byte,
+                                change.text.clone(),
+                            ));
+                        } else {
+                            // Full-document replace — not a ranged edit; reset below
+                            all_ranged = false;
+                            break;
+                        }
+                    }
+                    if all_ranged && !edit_set.is_empty() { Some(edit_set) } else { None }
+                };
+
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
 
@@ -369,6 +424,8 @@ impl LspServer {
                         line_starts,
                         generation: doc_state.generation.clone(),
                         degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
                     };
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
@@ -433,6 +490,29 @@ impl LspServer {
                 // Compute degradation tier before moving errors
                 let degradation_tier = DegradationTier::from_parse_result(&ast_arc, &errors);
 
+                // Update or reinitialize IncrementalDocument for the new text.
+                // - Ranged edits: apply to existing incremental_doc (fast path).
+                // - Full replace or no existing doc: reinitialize from new text (fallback).
+                #[cfg(feature = "incremental")]
+                let incremental_doc = {
+                    use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
+                    let code_text = crate::util::code_slice(&text);
+                    match (doc_state.incremental_doc.take(), incremental_edits_opt) {
+                        (Some(mut inc), Some(edits)) => {
+                            // Try applying the incremental edits to the existing tree
+                            match inc.apply_edits(&edits) {
+                                Ok(()) => Some(inc),
+                                Err(_) => {
+                                    // Fallback: reinitialize from the post-change source
+                                    IncrementalDocument::new(code_text.to_string()).ok()
+                                }
+                            }
+                        }
+                        // Full-document replace or no prior incremental state: reinitialize
+                        _ => IncrementalDocument::new(code_text.to_string()).ok(),
+                    }
+                };
+
                 // Update document state with properly updated content
                 doc_state = DocumentState {
                     rope: doc.rope.clone(),
@@ -444,6 +524,8 @@ impl LspServer {
                     line_starts,
                     generation: doc_state.generation.clone(), // Preserve the generation counter
                     degradation_tier,
+                    #[cfg(feature = "incremental")]
+                    incremental_doc,
                 };
 
                 // Check if a newer change arrived while we were parsing
@@ -750,6 +832,104 @@ impl LspServer {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Verify that a ranged didChange initializes and preserves incremental_doc.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_path_taken_on_ranged_change() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_incremental.pl";
+        let text = "my $x = 42;\nmy $y = 99;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Verify incremental_doc was initialized on didOpen
+        {
+            let docs = server.documents.lock();
+            let doc = docs.get(uri).ok_or("document not stored after didOpen")?;
+            assert!(
+                doc.incremental_doc.is_some(),
+                "incremental_doc must be initialized on didOpen"
+            );
+        }
+
+        // Apply a ranged change: replace "42" with "43"
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 0, "character": 8 },
+                    "end":   { "line": 0, "character": 10 }
+                },
+                "text": "43"
+            }]
+        })))?;
+
+        // Document must still be stored with updated content and a present AST
+        {
+            let docs = server.documents.lock();
+            let doc = docs.get(uri).ok_or("document not stored after didChange")?;
+            assert!(doc.text.contains("43"), "document text must be updated");
+            assert!(doc.ast.is_some(), "AST must be present after incremental change");
+        }
+        Ok(())
+    }
+
+    /// Verify that a full-document replace (no range) re-initializes incremental_doc.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_full_replace_reinitializes_incremental_doc() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_replace.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Full-document replace (no range field)
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "my $y = 2;\n" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after full replace")?;
+        assert!(
+            doc.incremental_doc.is_some(),
+            "incremental_doc must be re-initialized on full replace"
+        );
+        assert!(doc.text.contains("$y"), "text must be updated to new content");
+        Ok(())
+    }
+
+    /// Verify that broken syntax does not panic and leaves the document in a valid state.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_fallback_on_parse_error() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_error.pl";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1,
+                              "text": "my $x = 42;\n" }
+        }))?;
+
+        // Replace with broken syntax — must not panic; document must survive
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": { "start": { "line": 0, "character": 0 },
+                           "end":   { "line": 0, "character": 11 } },
+                "text": "sub { !!!"
+            }]
+        })))?;
+
+        assert!(server.documents.lock().contains_key(uri), "document must survive broken syntax");
+        Ok(())
+    }
 
     /// Verify that `did_open` and `did_change` return with the document stored
     /// and that the `pending_index_tasks()` counter is accessible (issue #2352).
