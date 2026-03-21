@@ -239,8 +239,12 @@ impl LspServer {
                 if let Some(ast) = &doc.ast {
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
                     let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
-                    let mut diagnostics =
-                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, Some(&resolver));
+                    let mut diagnostics = provider.get_diagnostics(
+                        ast,
+                        &doc.parse_errors,
+                        &doc.text,
+                        Some(&resolver),
+                    );
 
                     // Add external perlcritic diagnostics (opt-in)
                     self.collect_external_perlcritic_diagnostics(uri, &doc.text, &mut diagnostics);
