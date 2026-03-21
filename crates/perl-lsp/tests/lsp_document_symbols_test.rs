@@ -590,3 +590,71 @@ fn test_pod_sections_reject_invalid_levels() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_pod_sections_stop_at_end_block() -> TestResult {
+    // __END__ is the other data-marker; the scan must stop there too.
+    let server = setup_server();
+    let content =
+        "package Bar;\n\n=head1 BEFORE\n\n=cut\n\n1;\n\n__END__\n\n=head1 AFTER END\n\nShould not appear.\n";
+    open_document(&server, "file:///test_end_pod.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_end_pod.pm" } })),
+        id: Some(json!(15)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    assert!(
+        symbols.iter().any(|s| s["name"] == "BEFORE" && s["kind"] == 26),
+        "Section before __END__ must appear"
+    );
+    assert!(
+        !symbols.iter().any(|s| s["name"] == "AFTER END"),
+        "Section after __END__ must not appear in document symbols"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_pod_section_unicode_heading() -> TestResult {
+    // Unicode in POD headings is valid (perldoc frequently uses it).
+    // Verify the symbol name round-trips correctly and byte_to_utf16_col
+    // produces a non-zero end character for multi-byte characters.
+    let server = setup_server();
+    let content = "=head1 Ñoño\n\nSpanish section.\n\n=head2 日本語\n\nJapanese section.\n\n=cut\n1;\n";
+    open_document(&server, "file:///test_unicode_pod.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_unicode_pod.pm" } })),
+        id: Some(json!(16)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    // Names must be the full Unicode string, not garbled bytes
+    assert!(
+        symbols.iter().any(|s| s["name"] == "Ñoño" && s["kind"] == 26),
+        "Latin-extended POD heading must round-trip correctly"
+    );
+    assert!(
+        symbols.iter().any(|s| s["name"] == "日本語" && s["kind"] == 26),
+        "CJK POD heading must round-trip correctly"
+    );
+
+    // The end character must be > 0 (multi-byte content means nonzero columns)
+    let cjk_sym = symbols
+        .iter()
+        .find(|s| s["name"] == "日本語" && s["kind"] == 26)
+        .ok_or("CJK heading not found")?;
+    let end_char = cjk_sym["range"]["end"]["character"].as_u64().ok_or("no end char")?;
+    assert!(end_char > 0, "end character must be > 0 for multi-byte heading");
+
+    Ok(())
+}
