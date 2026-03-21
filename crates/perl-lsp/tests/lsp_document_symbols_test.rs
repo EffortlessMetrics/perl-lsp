@@ -595,8 +595,7 @@ fn test_pod_sections_reject_invalid_levels() -> TestResult {
 fn test_pod_sections_stop_at_end_block() -> TestResult {
     // __END__ is the other data-marker; the scan must stop there too.
     let server = setup_server();
-    let content =
-        "package Bar;\n\n=head1 BEFORE\n\n=cut\n\n1;\n\n__END__\n\n=head1 AFTER END\n\nShould not appear.\n";
+    let content = "package Bar;\n\n=head1 BEFORE\n\n=cut\n\n1;\n\n__END__\n\n=head1 AFTER END\n\nShould not appear.\n";
     open_document(&server, "file:///test_end_pod.pm", content);
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -626,7 +625,8 @@ fn test_pod_section_unicode_heading() -> TestResult {
     // Verify the symbol name round-trips correctly and byte_to_utf16_col
     // produces a non-zero end character for multi-byte characters.
     let server = setup_server();
-    let content = "=head1 Ñoño\n\nSpanish section.\n\n=head2 日本語\n\nJapanese section.\n\n=cut\n1;\n";
+    let content =
+        "=head1 Ñoño\n\nSpanish section.\n\n=head2 日本語\n\nJapanese section.\n\n=cut\n1;\n";
     open_document(&server, "file:///test_unicode_pod.pm", content);
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
