@@ -157,26 +157,39 @@ impl CodeLensProvider {
 
     /// Check if a subroutine is a test
     fn is_test_subroutine(&self, name: &str) -> bool {
-        name.starts_with("test_")
+        let core = name.starts_with("test_")
             || name.ends_with("_test")
             || name.starts_with("t_")
-            || name == "test"
-            || name.starts_with("ok_")
-            || name.starts_with("is_")
-            || name.starts_with("like_")
-            || name.starts_with("can_")
+            || name == "test";
+        let test_file_only = self.file_path.as_deref().map(is_test_file).unwrap_or(false)
+            && (name.starts_with("ok_")
+                || name.starts_with("is_")
+                || name.starts_with("like_")
+                || name.starts_with("can_"));
+        core || test_file_only
     }
 
-    /// Add a "Run Test" code lens
+    /// Add "Run Test" and "Debug Test" code lenses
     fn add_run_test_lens(&self, node: &Node, name: &str, lenses: &mut Vec<CodeLens>) {
         let range =
             WireRange::from_byte_offsets(&self.source, node.location.start, node.location.end);
+        let file_path_str = self.file_path.as_deref().unwrap_or("");
+        let test_id = format!("{}::{}", file_path_str, name);
         lenses.push(CodeLens {
             range,
             command: Some(Command {
                 title: "\u{25b6} Run Test".to_string(),
                 command: "perl.runTest".to_string(),
-                arguments: Some(vec![json!(name)]),
+                arguments: Some(vec![json!(test_id)]),
+            }),
+            data: None,
+        });
+        lenses.push(CodeLens {
+            range,
+            command: Some(Command {
+                title: "\u{1f41e} Debug Test".to_string(),
+                command: "perl.debugTest".to_string(),
+                arguments: Some(vec![json!(test_id)]),
             }),
             data: None,
         });
@@ -407,10 +420,12 @@ mod tests {
             .find(|lens| {
                 lens.command.as_ref().is_some_and(|command| {
                     command.command == "perl.runTest"
-                        && command
-                            .arguments
-                            .as_ref()
-                            .is_some_and(|arguments| arguments == &[json!("test_basic")])
+                        && command.arguments.as_ref().is_some_and(|arguments| {
+                            arguments
+                                .first()
+                                .and_then(|v| v.as_str())
+                                .is_some_and(|s| s.ends_with("::test_basic"))
+                        })
                 })
             })
             .ok_or("missing run test lens for test_basic")?;
