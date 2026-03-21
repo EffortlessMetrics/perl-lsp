@@ -782,7 +782,7 @@ impl<'a> Parser<'a> {
                                 return self.parse_named_unary_statement_call(
                                     start,
                                     func_name.as_ref(),
-                                    false,
+                                    true,
                                 );
                             }
 

@@ -211,6 +211,13 @@ fn regex_suggestions() -> &'static [RegexSuggestion] {
             doc: "Negative lookbehind",
             sort_key: "3_group_neg_lookbehind",
         },
+        RegexSuggestion {
+            label: "(?<name>...)",
+            insert: "(?<${1:name}>${2})",
+            detail: "group",
+            doc: "Named capture group (Perl 5.10+). Capture is available as $+{name}.",
+            sort_key: "3_group_named_capture",
+        },
         // ── Common patterns ───────────────────────────────────────────
         RegexSuggestion {
             label: "\\d+",
@@ -270,6 +277,76 @@ fn find_regex_prefix_start(line_prefix: &str) -> Option<usize> {
     }
 
     None
+}
+
+/// Add regex flag completions when the cursor is positioned after the closing
+/// delimiter of a regex literal (e.g., `$x =~ /foo/|` or `m/foo/i|`).
+///
+/// Flags are operator-aware:
+/// - `tr`/`y` operators accept only `c`, `d`, `s`.
+/// - All other operators (`m`, `s`, `qr`, bare `/`) accept the standard
+///   Perl regex flag set.
+///
+/// Already-typed flag characters are excluded from suggestions.
+///
+/// Non-`/` delimiters (`m{...}`, `m!...!`, etc.) are not detected by
+/// `is_in_regex_flags` and are out of scope for this implementation.
+pub fn add_regex_flag_completions(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    source: &str,
+) {
+    let flag_chars: &[char] = &['g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c'];
+    let before = &source[..context.position];
+    let without_flags = before.trim_end_matches(|c: char| flag_chars.contains(&c));
+    let already_typed: &str = &before[without_flags.len()..];
+
+    // Detect whether the operator is tr/y. Walk the whitespace-separated tokens
+    // looking for one that is exactly `tr` or `y` followed by `/...`, or a
+    // combined form like `tr/a-z/A-Z` (the whole first slash-delimited segment).
+    // This handles bare `tr/...`, `y/...`, and binding forms `$x =~ tr/...`.
+    let before_close = without_flags.trim_end_matches('/');
+    let is_tr = before_close.split_whitespace().any(|token| {
+        token == "tr" || token == "y" || token.starts_with("tr/") || token.starts_with("y/")
+    });
+
+    let flags: &[(&str, &str)] = if is_tr {
+        &[
+            ("c", "complement the search list"),
+            ("d", "delete characters not in replacement list"),
+            ("s", "squash duplicate replaced characters"),
+        ]
+    } else {
+        &[
+            ("g", "global — match/substitute all occurrences"),
+            ("i", "case-insensitive match"),
+            ("m", "multi-line — ^ and $ match line boundaries"),
+            ("s", "single-line — . matches newline"),
+            ("x", "extended — allow whitespace and comments in pattern"),
+            ("e", "evaluate replacement as Perl expression (s/// only)"),
+            ("r", "return modified copy, don't modify original (5.14+)"),
+            ("a", "restrict \\d, \\s, \\w to ASCII"),
+            ("p", "preserve pre/post match strings in $`, $&, $'"),
+        ]
+    };
+
+    for (flag, doc) in flags {
+        if already_typed.contains(flag) {
+            continue; // skip already-used flags
+        }
+        completions.push(CompletionItem {
+            label: flag.to_string(),
+            kind: CompletionItemKind::Keyword,
+            detail: Some("regex flag".to_string()),
+            documentation: Some(doc.to_string()),
+            insert_text: Some(flag.to_string()),
+            sort_text: Some(format!("5_flag_{flag}")),
+            filter_text: Some(flag.to_string()),
+            additional_edits: vec![],
+            text_edit_range: Some((context.position, context.position)),
+            commit_characters: None,
+        });
+    }
 }
 
 pub fn add_regex_completions(

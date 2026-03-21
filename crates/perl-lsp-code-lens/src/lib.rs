@@ -143,6 +143,12 @@ impl CodeLensProvider {
                 self.visit_node(expression, lenses);
             }
 
+            NodeKind::FunctionCall { name, args } => {
+                if name == "subtest" {
+                    self.add_subtest_lens(node, args, lenses);
+                }
+            }
+
             _ => {
                 self.visit_children(node, lenses);
             }
@@ -170,6 +176,30 @@ impl CodeLensProvider {
             command: Some(Command {
                 title: "\u{25b6} Run Test".to_string(),
                 command: "perl.runTest".to_string(),
+                arguments: Some(vec![json!(name)]),
+            }),
+            data: None,
+        });
+    }
+
+    /// Add a "Run Subtest" code lens for `subtest "name" => sub { ... }`
+    fn add_subtest_lens(&self, node: &Node, args: &[Node], lenses: &mut Vec<CodeLens>) {
+        let subtest_name = args.first().and_then(|arg| match &arg.kind {
+            NodeKind::String { value, .. } => {
+                // Token text includes surrounding quotes (e.g. `"basic math"`);
+                // strip them to get the bare label.
+                Some(extract_quoted_string(value.as_str()).unwrap_or(value.as_str()))
+            }
+            _ => None,
+        });
+        let name = subtest_name.unwrap_or("<anonymous>");
+        let range =
+            WireRange::from_byte_offsets(&self.source, node.location.start, node.location.end);
+        lenses.push(CodeLens {
+            range,
+            command: Some(Command {
+                title: format!("\u{25b6} Run Subtest: {name}"),
+                command: "perl.runSubtest".to_string(),
                 arguments: Some(vec![json!(name)]),
             }),
             data: None,
@@ -294,18 +324,14 @@ mod tests {
         let mut parser = perl_parser::Parser::new(source);
         let ast = parser.parse().map_err(|e| format!("parse error: {}", e))?;
         let provider = CodeLensProvider::new(source.to_string());
-        let mut lenses = provider.extract(&ast);
-        lenses.extend(CodeLensProvider::extract_subtest_lenses(source));
-        Ok(lenses)
+        Ok(provider.extract(&ast))
     }
 
     fn extract_lenses_with_path(source: &str, path: &str) -> Result<Vec<CodeLens>, String> {
         let mut parser = perl_parser::Parser::new(source);
         let ast = parser.parse().map_err(|e| format!("parse error: {}", e))?;
         let provider = CodeLensProvider::new(source.to_string()).with_file_path(path.to_string());
-        let mut lenses = provider.extract(&ast);
-        lenses.extend(CodeLensProvider::extract_subtest_lenses(source));
-        Ok(lenses)
+        Ok(provider.extract(&ast))
     }
 
     #[test]

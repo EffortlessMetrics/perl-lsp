@@ -113,51 +113,103 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(mut hint) = params {
-            // If hint already has a tooltip, return as-is
-            if hint.get("tooltip").is_some() {
+            // If hint already has both tooltip and labelDetails, return as-is
+            if hint.get("tooltip").is_some() && hint.get("labelDetails").is_some() {
                 return Ok(Some(hint));
             }
 
-            // Extract hint properties for tooltip generation
-            let label = hint.get("label").and_then(|l| l.as_str()).unwrap_or("");
+            // Extract hint properties for tooltip and label location generation
+            let label = hint.get("label").and_then(|l| l.as_str()).unwrap_or("").to_string();
             let kind = hint.get("kind").and_then(|k| k.as_u64()).unwrap_or(0);
 
-            // Generate tooltip based on hint kind and label
-            let tooltip = match kind {
-                1 => {
-                    // Type hint
-                    if label.contains("Str") {
-                        "String value".to_string()
-                    } else if label.contains("Num") {
-                        "Numeric value".to_string()
-                    } else if label.contains("Array") || label.contains("ARRAY") {
-                        "Array reference".to_string()
-                    } else if label.contains("Hash") || label.contains("HASH") {
-                        "Hash reference".to_string()
-                    } else if label.contains("Regex") {
-                        "Regular expression".to_string()
-                    } else if label.contains("CodeRef") {
-                        "Code reference (anonymous subroutine)".to_string()
-                    } else {
-                        "Type annotation".to_string()
+            // Add tooltip if not already present
+            if hint.get("tooltip").is_none() {
+                let tooltip = match kind {
+                    1 => {
+                        // Type hint
+                        if label.contains("Str") {
+                            "String value".to_string()
+                        } else if label.contains("Num") {
+                            "Numeric value".to_string()
+                        } else if label.contains("Array") || label.contains("ARRAY") {
+                            "Array reference".to_string()
+                        } else if label.contains("Hash") || label.contains("HASH") {
+                            "Hash reference".to_string()
+                        } else if label.contains("Regex") {
+                            "Regular expression".to_string()
+                        } else if label.contains("CodeRef") {
+                            "Code reference (anonymous subroutine)".to_string()
+                        } else {
+                            "Type annotation".to_string()
+                        }
+                    }
+                    2 => {
+                        let param_name = label.trim_end_matches(':').trim();
+                        format!("Parameter: {}", param_name)
+                    }
+                    _ => "Inlay hint".to_string(),
+                };
+                if let Some(obj) = hint.as_object_mut() {
+                    obj.insert("tooltip".to_string(), json!(tooltip));
+                }
+            }
+
+            // Add labelDetails.location for parameter hints (kind=2) if not already present
+            if hint.get("labelDetails").is_none() && kind == 2 {
+                if let Some(label_location) = self.resolve_hint_label_location(&hint) {
+                    if let Some(obj) = hint.as_object_mut() {
+                        obj.insert(
+                            "labelDetails".to_string(),
+                            json!({ "location": label_location }),
+                        );
                     }
                 }
-                2 => {
-                    // Parameter hint
-                    let param_name = label.trim_end_matches(':').trim();
-                    format!("Parameter: {}", param_name)
-                }
-                _ => "Inlay hint".to_string(),
-            };
-
-            // Add tooltip to hint
-            if let Some(obj) = hint.as_object_mut() {
-                obj.insert("tooltip".to_string(), json!(tooltip));
             }
 
             Ok(Some(hint))
         } else {
             Err(invalid_params("Missing inlay hint parameter"))
+        }
+    }
+
+    /// Resolve the LSP Location for an inlay hint label, enabling click-to-definition.
+    ///
+    /// Extracts the document URI and function name from the hint's `data` field,
+    /// looks up the open document, walks the AST to find the subroutine definition,
+    /// and converts its byte-offset location to an LSP `{ uri, range }` object.
+    ///
+    /// Returns `None` when the document is not open, the function is not found,
+    /// or the hint data is missing required fields.
+    fn resolve_hint_label_location(&self, hint: &Value) -> Option<Value> {
+        let data = hint.get("data")?;
+        let uri = data.get("uri").and_then(|u| u.as_str())?;
+        let function_name = data.get("function").and_then(|f| f.as_str())?;
+
+        let documents = self.documents_guard();
+        let doc = self.get_document(&documents, uri)?;
+        let ast = doc.ast.as_ref()?;
+
+        let sub_node = Self::find_subroutine_node(ast, function_name)?;
+        let (start_line, start_char) = self.offset_to_pos16(doc, sub_node.location.start);
+        let (end_line, end_char) = self.offset_to_pos16(doc, sub_node.location.end);
+
+        Some(json!({
+            "uri": uri,
+            "range": {
+                "start": { "line": start_line, "character": start_char },
+                "end":   { "line": end_line,   "character": end_char   }
+            }
+        }))
+    }
+
+    /// Walk the AST to find a top-level subroutine node with the given name.
+    fn find_subroutine_node<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
+        match &node.kind {
+            NodeKind::Subroutine { name: Some(sub_name), .. } if sub_name == name => Some(node),
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                statements.iter().find_map(|s| Self::find_subroutine_node(s, name))
+            }
+            _ => None,
         }
     }
 
@@ -394,9 +446,6 @@ impl LspServer {
                         lenses.insert(0, shebang_lens);
                     }
 
-                    // Add subtest lenses via text scanning
-                    lenses.extend(CodeLensProvider::extract_subtest_lenses(&doc.text));
-
                     // Apply cap to code lenses
                     if lenses.len() > cap {
                         eprintln!("CodeLens: capping from {} to {}", lenses.len(), cap);
@@ -407,6 +456,8 @@ impl LspServer {
                 } else {
                     // Text-based fallback when AST is not available
                     let mut text_lenses = self.extract_text_based_code_lenses(&doc.text, uri);
+                    // Add subtest lenses via text scanning (AST not available)
+                    text_lenses.extend(CodeLensProvider::extract_subtest_lenses(&doc.text));
                     // Apply cap to text-based lenses
                     if text_lenses.len() > cap {
                         eprintln!("CodeLens (text): capping from {} to {}", text_lenses.len(), cap);

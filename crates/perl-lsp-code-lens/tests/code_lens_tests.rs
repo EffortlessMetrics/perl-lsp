@@ -16,18 +16,14 @@ fn parse_and_extract(source: &str) -> Vec<CodeLens> {
     let mut parser = Parser::new(source);
     let ast = must(parser.parse());
     let provider = CodeLensProvider::new(source.to_string());
-    let mut lenses = provider.extract(&ast);
-    lenses.extend(CodeLensProvider::extract_subtest_lenses(source));
-    lenses
+    provider.extract(&ast)
 }
 
 fn parse_and_extract_with_path(source: &str, path: &str) -> Vec<CodeLens> {
     let mut parser = Parser::new(source);
     let ast = must(parser.parse());
     let provider = CodeLensProvider::new(source.to_string()).with_file_path(path.to_string());
-    let mut lenses = provider.extract(&ast);
-    lenses.extend(CodeLensProvider::extract_subtest_lenses(source));
-    lenses
+    provider.extract(&ast)
 }
 
 fn commands_with_name(lenses: &[CodeLens], cmd: &str) -> usize {

@@ -23,6 +23,8 @@ pub enum Framework {
     ObjectPad,
     /// Native Perl OOP (bless-based)
     Native,
+    /// Native Perl 5.38+ class (use feature 'class')
+    NativeClass,
     /// No OO framework detected
     None,
 }
@@ -229,6 +231,20 @@ impl ClassModelBuilder {
                 self.detect_framework(module, args);
             }
 
+            NodeKind::Class { name, body } => {
+                self.flush_current_package();
+                self.current_package = name.clone();
+                self.current_framework = Framework::NativeClass;
+                self.framework_map.insert(name.clone(), Framework::NativeClass);
+                self.visit_node(body);
+            }
+
+            NodeKind::Method { name, body, .. } => {
+                self.current_methods
+                    .push(MethodInfo { name: name.clone(), location: node.location });
+                self.visit_node(body);
+            }
+
             _ => {
                 // Recurse into children for other node types
                 self.visit_children(node);
@@ -381,6 +397,28 @@ impl ClassModelBuilder {
             }
         }
 
+        // Form C: FunctionCall { name: "has", args: [name_expr, HashLiteral { ... }] }
+        // Produced when the parser recognises `has 'name' => (is => 'ro', ...)` as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && name == "has"
+            && !args.is_empty()
+        {
+            // The last arg that is a HashLiteral holds the options.
+            let options_hash_idx =
+                args.iter().rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
+            if let Some(opts_idx) = options_hash_idx {
+                if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
+                    let names: Vec<String> =
+                        args[..opts_idx].iter().flat_map(collect_symbol_names).collect();
+                    if !names.is_empty() {
+                        self.extract_has_with_names(&names, pairs, first.location);
+                        return Some(1);
+                    }
+                }
+            }
+        }
+
         None
     }
 
@@ -479,11 +517,41 @@ impl ClassModelBuilder {
 
     /// Extract method modifiers (before/after/around).
     fn try_extract_modifier(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        let first = &statements[idx];
+
+        // FunctionCall form: `before 'save' => sub { }` parsed as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+        {
+            let modifier_kind = match name.as_str() {
+                "before" => Some(ModifierKind::Before),
+                "after" => Some(ModifierKind::After),
+                "around" => Some(ModifierKind::Around),
+                _ => None,
+            };
+            if let Some(modifier_kind) = modifier_kind {
+                // args[0] is the method name (String or ArrayLiteral), rest is the impl.
+                let method_names: Vec<String> =
+                    args.first().map(collect_symbol_names).unwrap_or_default();
+                if !method_names.is_empty() {
+                    for method_name in method_names {
+                        self.current_modifiers.push(MethodModifier {
+                            kind: modifier_kind,
+                            method_name,
+                            location: first.location,
+                        });
+                    }
+                    return Some(1);
+                }
+            }
+        }
+
+        // Two-statement legacy form:
+        // 1) ExpressionStatement(Identifier("before"/"after"/"around"))
+        // 2) ExpressionStatement(HashLiteral((method_name, Subroutine)))
         if idx + 1 >= statements.len() {
             return None;
         }
-
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         let modifier_kind = match &first.kind {
@@ -526,11 +594,31 @@ impl ClassModelBuilder {
 
     /// Extract `extends 'Parent'` and `with 'Role'` declarations.
     fn try_extract_extends_with(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        let first = &statements[idx];
+
+        // Form: FunctionCall { name: "extends"/"with", args: [...] }
+        // Produced when `extends 'Parent'` / `with 'Role'` are parsed as bare calls.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && matches!(name.as_str(), "extends" | "with")
+        {
+            let names: Vec<String> = args.iter().flat_map(collect_symbol_names).collect();
+            if !names.is_empty() {
+                if name == "extends" {
+                    self.current_parent = names.into_iter().next();
+                } else {
+                    self.current_roles.extend(names);
+                }
+                return Some(1);
+            }
+        }
+
+        // Two-statement form (legacy parser output):
+        // 1) ExpressionStatement(Identifier("extends"/"with"))
+        // 2) ExpressionStatement(String/ArrayLiteral)
         if idx + 1 >= statements.len() {
             return None;
         }
-
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         let keyword = match &first.kind {
@@ -993,6 +1081,54 @@ has 'name' => (is => 'rw');
         let model = &models[0];
         let attr = &model.attributes[0];
         assert!(!attr.trigger, "trigger should be false when not specified");
+    }
+
+    // ── Bug 4 tests: NativeClass framework (must fail before fix) ─────────
+
+    #[test]
+    fn native_class_produces_model() {
+        let models = build_models(
+            r#"
+class MyApp::Point {
+    field $x :param = 0;
+    field $y :param = 0;
+    method get_x { return $x; }
+    method get_y { return $y; }
+}
+"#,
+        );
+        assert_eq!(models.len(), 1, "expected one ClassModel for MyApp::Point");
+        let model = &models[0];
+        assert_eq!(model.name, "MyApp::Point");
+        assert_eq!(model.framework, Framework::NativeClass);
+        assert_eq!(model.methods.len(), 2);
+        assert!(model.methods.iter().any(|m| m.name == "get_x"));
+        assert!(model.methods.iter().any(|m| m.name == "get_y"));
+    }
+
+    #[test]
+    fn native_class_and_moo_class_do_not_interfere() {
+        let models = build_models(
+            r#"
+class Native::Point {
+    field $x :param = 0;
+    method get_x { return $x; }
+}
+
+package Moo::User;
+use Moo;
+has 'name' => (is => 'ro');
+"#,
+        );
+        assert_eq!(models.len(), 2, "expected 2 ClassModels: Native::Point and Moo::User");
+        let native = models.iter().find(|m| m.name == "Native::Point");
+        assert!(native.is_some(), "expected Native::Point model");
+        let native = native.unwrap();
+        assert_eq!(native.framework, Framework::NativeClass);
+        let moo = models.iter().find(|m| m.name == "Moo::User");
+        assert!(moo.is_some(), "expected Moo::User model");
+        let moo = moo.unwrap();
+        assert_eq!(moo.framework, Framework::Moo);
     }
 
     #[test]

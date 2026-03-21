@@ -293,6 +293,27 @@ const SNIPPETS: &[Snippet] = &[
         doc: "Basic match with optional flags (g=global, i=ignore case, m=multiline).",
     },
     Snippet {
+        trigger: "mregex",
+        label: "mregex",
+        body: "m/${1:pattern}/${0:gi}",
+        detail: "match regex",
+        doc: "Perl match operator with flags.",
+    },
+    Snippet {
+        trigger: "ssubst",
+        label: "ssubst",
+        body: "s/${1:pattern}/${2:replacement}/${0:g}",
+        detail: "substitution regex",
+        doc: "Perl substitution operator.",
+    },
+    Snippet {
+        trigger: "qrpat",
+        label: "qrpat",
+        body: "qr/${1:pattern}/${0:i}",
+        detail: "compiled regex",
+        doc: "Compile regex into a qr// object.",
+    },
+    Snippet {
         trigger: "sbasic",
         label: "sbasic",
         body: "s/${1:pattern}/${2:replacement}/${0:g}",
@@ -509,7 +530,7 @@ mod tests {
                 .iter()
                 .find(|s| s.trigger == trigger)
                 .map(|s| s.body.to_string())
-                .unwrap_or_else(|| panic!("snippet '{trigger}' not found"))
+                .unwrap_or_else(|| format!("SNIPPET_MISSING:{trigger}"))
         };
         assert!(body("namedcap").contains("(?<"), "namedcap must contain named-capture opener (?<");
         assert!(body("lookahead").contains("(?="), "lookahead must contain positive lookahead (?=");

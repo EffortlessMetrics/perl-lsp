@@ -39,10 +39,19 @@ Merge up to 3 PRs from the candidates identified in step 1.
    gh pr merge <number> --squash --subject "<title> (#<number>)" --body "<summary>"
    ```
 
-5. After each merge, verify it landed:
+5. After each merge, verify it landed and clean up labels:
    ```bash
    gh pr view <number> --json state --jq .state
+   # Remove merge-ready from the now-merged PR
+   gh pr edit <number> --remove-label "merge-ready"
+   # Remove in-build from the linked issue (if any)
+   CLOSING_ISSUE=$(gh pr view <number> --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
+   if [ -n "$CLOSING_ISSUE" ]; then
+     gh issue edit "$CLOSING_ISSUE" --remove-label "in-build"
+   fi
    ```
+   Label cleanup prevents stale `merge-ready` and `in-build` labels from
+   misleading future orchestrator queries.
 
 6. If a merge fails or pre-check fails:
    - CONFLICTING → skip, note "needs rebase"
