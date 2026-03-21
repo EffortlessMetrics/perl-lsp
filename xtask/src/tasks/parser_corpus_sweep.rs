@@ -1435,7 +1435,11 @@ mod tests {
             .get("unexpected_token_in_expr")
             .and_then(|v| v.first())
             .map(String::as_str);
-        assert_eq!(first_file, Some("My/Module.pm"), "files_by_bucket must round-trip through JSON");
+        assert_eq!(
+            first_file,
+            Some("My/Module.pm"),
+            "files_by_bucket must round-trip through JSON"
+        );
     }
 
     #[test]
