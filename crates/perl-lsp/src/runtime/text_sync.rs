@@ -387,6 +387,10 @@ impl LspServer {
                             ));
                         } else {
                             // Full-document replace — not a ranged edit; reset below
+                            tracing::trace!(
+                                "Full-document replace detected for {} — incremental edits not supported",
+                                uri
+                            );
                             all_ranged = false;
                             break;
                         }
@@ -928,6 +932,48 @@ mod tests {
         })))?;
 
         assert!(server.documents.lock().contains_key(uri), "document must survive broken syntax");
+        Ok(())
+    }
+
+    /// Verify that UTF-16 position conversion handles multi-byte characters correctly.
+    /// LSP clients send UTF-16 code unit indices; characters like emoji or CJK take 2 units
+    /// but 4+ UTF-8 bytes. The byte offset calculation must account for this.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_utf16_multi_byte_character_positions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_utf16.pl";
+        // Line 0: "my $emoji = 😀;\n" (😀 is U+1F600, takes 2 UTF-16 units, 4 UTF-8 bytes)
+        // UTF-16 positions: m(0) y(1) space(2) $(3) e(4) m(5) o(6) j(7) i(8) space(9) =(10) space(11) 😀(12-13) ;(14)
+        // UTF-8 bytes: "my $emoji = " (12 bytes) + "😀" (4 bytes) + ";\n"
+        let text = "my $emoji = 😀;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Replace the emoji (UTF-16: start=12, end=14) with the ASCII "xx"
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 0, "character": 12 },
+                    "end":   { "line": 0, "character": 14 }
+                },
+                "text": "xx"
+            }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after UTF-16 edit")?;
+        // Should have replaced emoji with "xx"
+        assert!(
+            doc.text.contains("xx"),
+            "UTF-16 multi-byte replacement failed: expected 'xx' in text"
+        );
+        // The emoji should no longer be there
+        assert!(!doc.text.contains("😀"), "UTF-16 multi-byte removal failed: emoji should be gone");
         Ok(())
     }
 
