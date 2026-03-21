@@ -395,26 +395,33 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         return false;
     }
 
-    const healthOk = await runHealthCheck(currentServerPath);
-    if (!healthOk) {
+    client = createLanguageClient(currentServerPath);
+    bindClientState(client);
+    try {
+        await client.start();
+    } catch (startError: unknown) {
+        const msg = startError instanceof Error ? startError.message : String(startError);
+        outputChannel.appendLine(`[startup] Language client failed to start: ${msg}`);
+        stateChangeDisposable?.dispose();
+        stateChangeDisposable = undefined;
+        try { client.dispose(); } catch { /* already dead */ }
+        client = undefined;
         setStatusBarState(State.Stopped);
         const choice = await vscode.window.showErrorMessage(
-            `perl-lsp health check failed. The binary at '${currentServerPath}' does not respond to --health. ` +
-            'It may be corrupted or incompatible with your platform.',
+            `Perl Language Server failed to start. The binary at '${currentServerPath}' may be corrupted or incompatible.`,
             'Show Output',
-            'Reinstall'
+            'Reinstall',
+            'Run Health Check'
         );
         if (choice === 'Show Output') {
             outputChannel.show();
         } else if (choice === 'Reinstall') {
             await reinstallServerBinary(context);
+        } else if (choice === 'Run Health Check') {
+            await vscode.commands.executeCommand('perl-lsp.runHealthCheck', currentServerPath);
         }
         return false;
     }
-
-    client = createLanguageClient(currentServerPath);
-    bindClientState(client);
-    await client.start();
     await refreshTestAdapter(context);
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
