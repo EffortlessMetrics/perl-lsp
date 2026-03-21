@@ -157,6 +157,8 @@ Labels are the authoritative state of every issue and PR. Agents write labels; t
 
 **Key principle:** Labels gate entry, not skip execution. Multiple passes of the same agent are normal — a reviewer may see `in-review` and still choose to do another pass if quality warrants it.
 
+**Label freshness:** Labels are version-bound via receipt comments (see `.ops-perl-lsp/receipts/README.md`). When an artifact changes after a label is set, the label becomes stale. Use `/label-receipt-validate` to check freshness before routing. Labels without receipts (set before the receipt system) should be treated as potentially stale.
+
 **Note on `needs-accuracy-scout` and `accuracy-reviewed`:** These labels are reserved for the accuracy-scout agent (issue #2628) and are intentionally not listed here until that agent ships.
 
 ## Orchestrator Principles

@@ -39,6 +39,11 @@ Read the issue and figure out what to build. Be proactive and fix forward.
 
    Note: this label is informational, not a mutex. If two builders race before either sets `in-build`, both may proceed. The orchestrator should check `in-build` issues before spawning new builders to detect this condition.
 
+   After claiming, write a version-bound receipt:
+   ```
+   /label-receipt-write issue <number> in-build builder
+   ```
+
 6. Fill any spec gaps yourself:
    - **File:line** — if not provided, use Grep/Glob to find the right files
    - **Change** — if vague, read the code and figure out the right approach

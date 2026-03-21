@@ -18,6 +18,11 @@ for whoever touches this code next.
    Do this BEFORE reading the diff. The `in-review` label tells the orchestrator
    this PR is actively being reviewed and should not be dispatched to another reviewer.
 
+   After claiming, write a version-bound receipt:
+   ```
+   /label-receipt-write pr <number> in-review reviewer
+   ```
+
 2. Read the PR description and linked issue:
    ```bash
    gh pr view <number> --json title,body,labels --jq '{title: .title, body: .body}'
