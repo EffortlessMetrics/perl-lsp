@@ -491,6 +491,8 @@ mod tests {
                 line_starts,
                 generation: Arc::new(AtomicU32::new(0)),
                 degradation_tier: crate::state::DegradationTier::Minimal,
+                #[cfg(feature = "incremental")]
+                incremental_doc: None,
             },
         );
 

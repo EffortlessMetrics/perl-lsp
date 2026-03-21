@@ -1838,6 +1838,7 @@ dependencies = [
  "perl-content-length-framing",
  "perl-dap",
  "perl-diagnostics-codes",
+ "perl-incremental-parsing",
  "perl-keywords",
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
