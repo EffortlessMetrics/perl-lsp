@@ -896,7 +896,7 @@ impl LspServer {
         let module = token_under_cursor(&text, line, ch).filter(|s| s.contains("::"));
 
         if let Some(m) = module {
-            if let Some(path) = self.resolve_module_path(&m) {
+            if let Some(path) = self.resolve_module_path_with_uri(&m, Some(&text), Some(uri)) {
                 let loc = location_from_path(&path);
                 return Ok(serde_json::json!([loc]));
             }

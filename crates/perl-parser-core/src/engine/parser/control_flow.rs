@@ -284,16 +284,41 @@ impl<'a> Parser<'a> {
 
             Some(Box::new(expr))
         };
-        self.expect(TokenKind::Semicolon)?;
+        // First internal semicolon (after init) — recover inline instead of hard-failing.
+        // A hard `?` here cascades into multiple spurious errors because the expression
+        // parser has already consumed tokens; recovering inline keeps the For node intact.
+        if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        } else {
+            let pos = self.current_position();
+            self.errors.push(ParseError::syntax(
+                "Missing ';' after for-loop init — recovered".to_string(),
+                pos,
+            ));
+        }
 
-        // Parse condition
-        let condition = if self.peek_kind() == Some(TokenKind::Semicolon) {
+        // Parse condition — also treat `)` as empty condition to avoid cascading
+        // errors when both semicolons are missing and we've consumed the init already.
+        let condition = if self.peek_kind() == Some(TokenKind::Semicolon)
+            || self.peek_kind() == Some(TokenKind::RightParen)
+        {
             None
         } else {
             self.mark_not_stmt_start();
             Some(Box::new(self.parse_expression()?))
         };
-        self.expect(TokenKind::Semicolon)?;
+        // Second internal semicolon (after condition) — same inline recovery pattern.
+        // Skip the error if the next token is `)` — we already skipped condition as
+        // empty in that case and there is nothing meaningful to report here.
+        if self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        } else if self.peek_kind() != Some(TokenKind::RightParen) {
+            let pos = self.current_position();
+            self.errors.push(ParseError::syntax(
+                "Missing ';' after for-loop condition — recovered".to_string(),
+                pos,
+            ));
+        }
 
         // Parse update
         let update = if self.peek_kind() == Some(TokenKind::RightParen) {

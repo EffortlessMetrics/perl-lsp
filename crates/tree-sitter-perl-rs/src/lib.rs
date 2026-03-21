@@ -101,7 +101,8 @@ pub use perl_ts_statement_tracker as statement_tracker;
 pub use perl_ts_logos_lexer::context_lexer_simple;
 #[cfg(feature = "token-parser")]
 pub use perl_ts_logos_lexer::context_lexer_v2;
-#[cfg(feature = "pure-rust")]
+// regex_parser is used by parser_v2 (compiled in pure-rust builds)
+#[cfg(any(feature = "pure-rust", feature = "token-parser"))]
 pub use perl_ts_logos_lexer::regex_parser;
 #[cfg(feature = "token-parser")]
 pub use perl_ts_logos_lexer::simple_parser;

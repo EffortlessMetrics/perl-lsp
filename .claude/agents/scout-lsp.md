@@ -26,7 +26,8 @@ Same as base scout — work through in order:
 4. `/scout-root-cause` — explain why the feature is absent or wrong
 5. `/scout-design` — 2-3 implementation approaches
 6. `/scout-test-spec` — write test code (RUST_TEST_THREADS=2 for LSP tests)
-7. `/scout-report` — file builder-ready issue
+7. `/scout-verify` — verify all file paths and function names exist
+8. `/scout-report` — file builder-ready issue
 
 ## Domain context
 

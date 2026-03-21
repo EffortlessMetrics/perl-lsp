@@ -1191,7 +1191,7 @@ fn parse_code_gaps_return_none() {
     // are now assigned; only truly unassigned gaps are listed here.
     let gaps = [
         "PL004", "PL050", "PL099", "PL112", "PL150", "PL199", "PL202", "PL250", "PL302", "PL399",
-        "PL405", "PL499", "PL502", "PL599", "PL602", "PL699", "PL701", "PL799", "PL807", "PL899",
+        "PL405", "PL499", "PL502", "PL599", "PL602", "PL699", "PL702", "PL799", "PL807", "PL899",
         "PC006", "PC010",
     ];
     for s in &gaps {

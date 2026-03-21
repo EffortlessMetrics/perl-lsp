@@ -78,8 +78,8 @@ fn find_pair(text: &str, start_byte: usize) -> Option<(usize, usize)> {
         if ch == open {
             // quotes handled above; this branch covers the case we landed on a closer
         }
-        // bracket close: scan backward
-        let mut depth = 0usize;
+        // bracket close: scan backward; start at 1 to count the close bracket we're sitting on
+        let mut depth = 1usize;
         let mut i = pos;
         loop {
             if let Some((j, c)) = prev_char_pos(text, i) {

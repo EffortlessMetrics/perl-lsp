@@ -94,7 +94,14 @@ impl<'a> Parser<'a> {
                 self.parse_assignment()?
             } else {
                 // For my/our/state, parse a simple variable
-                self.parse_variable()?
+                let var = self.parse_variable()?;
+                // If -> follows the declared variable, treat it as an lvalue subscript chain
+                // e.g. my $cache->{key} = expr  or  my $foo->method()
+                if self.peek_kind() == Some(TokenKind::Arrow) {
+                    self.parse_postfix_chain(var)?
+                } else {
+                    var
+                }
             };
 
             // Parse optional attributes
@@ -517,6 +524,11 @@ impl<'a> Parser<'a> {
                     // $0, $1, $2, etc. - numbered capture groups
                     let num_token = self.tokens.next()?;
                     (num_token.text.to_string(), num_token.end)
+                }
+                Some(TokenKind::DoubleColon) => {
+                    // $:: — the main namespace stash
+                    let dc_token = self.tokens.next()?; // consume ::
+                    ("::".to_string(), dc_token.end)
                 }
                 _ => {
                     // Empty variable name (just the sigil)

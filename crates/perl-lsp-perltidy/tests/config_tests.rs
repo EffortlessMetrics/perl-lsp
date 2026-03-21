@@ -127,6 +127,7 @@ fn config_none_fields_omit_flags() {
         block_comment_indentation: None,
         profile: None,
         extra_args: Vec::new(),
+        timeout_secs: 10,
     };
     let args = config.to_args();
     assert!(args.is_empty());

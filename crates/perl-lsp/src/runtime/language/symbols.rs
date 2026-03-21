@@ -10,6 +10,7 @@ use std::sync::OnceLock;
 
 static SUB_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 static PACKAGE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+static HEAD_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 fn get_sub_regex() -> Option<&'static regex::Regex> {
     SUB_REGEX.get_or_init(|| regex::Regex::new(r"^\s*sub\s+([a-zA-Z_]\w*)\b")).as_ref().ok()
@@ -20,6 +21,46 @@ fn get_package_regex() -> Option<&'static regex::Regex> {
         .get_or_init(|| regex::Regex::new(r"^\s*package\s+([a-zA-Z_][\w:]*)\b"))
         .as_ref()
         .ok()
+}
+
+fn get_head_regex() -> Option<&'static regex::Regex> {
+    HEAD_REGEX.get_or_init(|| regex::Regex::new(r"^=(head[1-4])\s+(.+)$")).as_ref().ok()
+}
+
+/// Scan source text for POD =head1..=head4 directives and return them as document symbols.
+/// Stops scanning at __DATA__ or __END__ blocks. Uses LSP SymbolKind 26 (TypeParameter).
+fn pod_section_symbols(source: &str) -> Vec<Value> {
+    let Some(head_regex) = get_head_regex() else {
+        return Vec::new();
+    };
+    let mut symbols = Vec::new();
+    for (line_num, line) in source.lines().enumerate() {
+        if line == "__DATA__" || line == "__END__" {
+            break;
+        }
+        if let Some(caps) = head_regex.captures(line) {
+            let name = caps.get(2).map(|m| m.as_str().trim()).unwrap_or("").to_string();
+            if name.is_empty() {
+                continue;
+            }
+            let line_end_char = byte_to_utf16_col(line, line.len());
+            symbols.push(json!({
+                "name": name,
+                "detail": "",
+                "kind": 26,  // TypeParameter -- used for POD sections
+                "range": {
+                    "start": { "line": line_num, "character": 0 },
+                    "end": { "line": line_num, "character": line_end_char }
+                },
+                "selectionRange": {
+                    "start": { "line": line_num, "character": 0 },
+                    "end": { "line": line_num, "character": line_end_char }
+                },
+                "children": []
+            }));
+        }
+    }
+    symbols
 }
 
 impl LspServer {
@@ -140,6 +181,9 @@ impl LspServer {
                         document_symbols.push(symbol_info);
                     }
 
+                    // Append POD section symbols from a direct line scan
+                    document_symbols.extend(pod_section_symbols(&doc.text));
+
                     // Apply cap to document symbols
                     if document_symbols.len() > cap {
                         eprintln!(
@@ -155,6 +199,8 @@ impl LspServer {
                     // Fallback: Extract symbols via regex when parse fails
                     eprintln!("Using fallback symbol extraction for {}", uri);
                     let mut symbols = self.extract_symbols_fallback(&doc.text);
+                    // Append POD section symbols from a direct line scan
+                    symbols.extend(pod_section_symbols(&doc.text));
                     // Apply cap to fallback symbols
                     if symbols.len() > cap {
                         eprintln!(

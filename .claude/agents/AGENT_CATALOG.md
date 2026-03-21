@@ -70,12 +70,14 @@ disallowedTools (Edit, Write) enforces orchestrator-only role.
 
 | Agent | Model | Role |
 |-------|-------|------|
-| research-web | sonnet | Web search, doc lookup, fact verification |
+| research-web | sonnet | Ad-hoc web research — single question, spawned by other agents |
 | wisdom | sonnet | Synthesize learnings from issue→PR→merge cycles |
 
 ## Step Skills (32)
 
-**Scout steps:** scout-dedup, scout-locate, scout-reproduce, scout-root-cause, scout-design, scout-test-spec, scout-report
+**Scout steps:** scout-dedup, scout-locate, scout-reproduce, scout-root-cause, scout-design, scout-test-spec, scout-verify, scout-report
+
+**Research-verifier steps:** research-read-issue, research-verify-perl, research-verify-spec, research-verify-api, research-comment
 
 **Accuracy-scout steps:** accuracy-read-issue, accuracy-verify-files, accuracy-verify-claims, accuracy-verify-status, accuracy-comment
 

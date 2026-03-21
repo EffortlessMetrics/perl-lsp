@@ -255,11 +255,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "splice" => Some(BuiltinDoc {
             signature: "splice ARRAY, OFFSET, LENGTH, LIST\nsplice ARRAY, OFFSET, LENGTH\nsplice ARRAY, OFFSET\nsplice ARRAY",
-            description: "Removes LENGTH elements from ARRAY starting at OFFSET, replacing them with LIST. Returns the removed elements.",
+            description: "Removes LENGTH elements from ARRAY starting at OFFSET, replacing them with LIST. Returns the removed elements. In scalar context, returns the last removed element.",
         }),
         "sort" => Some(BuiltinDoc {
             signature: "sort SUBNAME LIST\nsort BLOCK LIST\nsort LIST",
-            description: "Sorts LIST and returns the sorted list. BLOCK or SUBNAME provides a custom comparison function using $a and $b.",
+            description: "Sorts LIST and returns the sorted list. BLOCK or SUBNAME provides a custom comparison function using $a and $b. Only valid in list context; using sort in scalar context returns undef (avoid).",
         }),
         "reverse" => Some(BuiltinDoc {
             signature: "reverse LIST",
@@ -267,11 +267,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "map" => Some(BuiltinDoc {
             signature: "map BLOCK LIST\nmap EXPR, LIST",
-            description: "Evaluates the BLOCK or EXPR for each element of LIST (locally setting $_ to each element) and composes a list of the results.",
+            description: "Evaluates the BLOCK or EXPR for each element of LIST (locally setting $_ to each element) and composes a list of the results. In scalar context, returns the number of elements the expression would produce.",
         }),
         "grep" => Some(BuiltinDoc {
             signature: "grep BLOCK LIST\ngrep EXPR, LIST",
-            description: "Evaluates BLOCK or EXPR for each element of LIST and returns the list of elements for which the expression is true.",
+            description: "Evaluates BLOCK or EXPR for each element of LIST and returns the list of elements for which the expression is true. In scalar context, returns the number of matching elements rather than the list.",
         }),
         "scalar" => Some(BuiltinDoc {
             signature: "scalar EXPR",
@@ -279,21 +279,21 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "wantarray" => Some(BuiltinDoc {
             signature: "wantarray",
-            description: "Returns true if the currently executing subroutine is expected to return a list value.",
+            description: "Returns true if the subroutine is called in list context, false (defined but false) in scalar context, and undef in void context. Use to write context-sensitive subs: `return wantarray ? @list : $count;`",
         }),
 
         // Hash
         "keys" => Some(BuiltinDoc {
             signature: "keys HASH\nkeys ARRAY",
-            description: "Returns a list of all the keys of the named hash, or the indices of an array.",
+            description: "In list context, returns all keys of the named hash or indices of an array. In scalar context, returns the number of keys (an integer count). Note: `scalar keys %h` is the idiomatic way to count hash entries.",
         }),
         "values" => Some(BuiltinDoc {
             signature: "values HASH\nvalues ARRAY",
-            description: "Returns a list of all the values of the named hash, or values of an array.",
+            description: "In list context, returns all values of the named hash or values of an array. In scalar context, returns the number of values (same as scalar keys).",
         }),
         "each" => Some(BuiltinDoc {
             signature: "each HASH\neach ARRAY",
-            description: "Returns a two-element list of the next (key, value) pair from the hash.",
+            description: "Returns the next key-value pair from the hash as a two-element list, or an empty list when exhausted. The iterator resets when the list is exhausted, when keys() or values() is called on the hash, or when the hash is modified. Call in a while loop: `while (my ($k, $v) = each %h) { ... }`",
         }),
         "exists" => Some(BuiltinDoc {
             signature: "exists EXPR",
@@ -338,18 +338,73 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Returns a reference to the object underlying VARIABLE if it is tied, or undef if not.",
         }),
 
+        // Tie magic methods
+        "TIESCALAR" => Some(BuiltinDoc {
+            signature: "TIESCALAR CLASSNAME, LIST",
+            description: "Constructor called when `tie $scalar, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEARRAY" => Some(BuiltinDoc {
+            signature: "TIEARRAY CLASSNAME, LIST",
+            description: "Constructor called when `tie @array, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEHASH" => Some(BuiltinDoc {
+            signature: "TIEHASH CLASSNAME, LIST",
+            description: "Constructor called when `tie %hash, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEHANDLE" => Some(BuiltinDoc {
+            signature: "TIEHANDLE CLASSNAME, LIST",
+            description: "Constructor called when `tie *FH, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "FETCH" => Some(BuiltinDoc {
+            signature: "FETCH this",
+            description: "Called on every access of a tied scalar or array/hash element. Returns the value.",
+        }),
+        "STORE" => Some(BuiltinDoc {
+            signature: "STORE this, value",
+            description: "Called on every assignment to a tied scalar or array/hash element.",
+        }),
+        "FIRSTKEY" => Some(BuiltinDoc {
+            signature: "FIRSTKEY this",
+            description: "Called when `keys` or `each` is first invoked on a tied hash.",
+        }),
+        "NEXTKEY" => Some(BuiltinDoc {
+            signature: "NEXTKEY this, lastkey",
+            description: "Called during iteration of a tied hash with `each` or `keys`.",
+        }),
+        "DESTROY" => Some(BuiltinDoc {
+            signature: "DESTROY this",
+            description: "Called when the tied object goes out of scope or is explicitly untied.",
+        }),
+
         // Control flow
         "die" => Some(BuiltinDoc {
             signature: "die LIST",
-            description: "Raises an exception. If the last element of LIST does not end in a newline, the current script line number and input line number are appended.",
+            description: "Raises an exception. If LIST does not end in '\\n', Perl appends the script name and line number. In modules, prefer Carp::croak() to preserve the caller's stack frame. The exception is available in $@ after an eval block.",
         }),
         "warn" => Some(BuiltinDoc {
             signature: "warn LIST",
-            description: "Produces a message on STDERR, like die but does not exit or throw an exception.",
+            description: "Prints a warning to STDERR. Does not exit. If the message does not end in '\\n', Perl appends the script name and line number. In modules, prefer Carp::carp() to report from the caller's perspective.",
         }),
         "eval" => Some(BuiltinDoc {
             signature: "eval BLOCK\neval EXPR",
-            description: "Evaluates EXPR or BLOCK and traps any errors, making them available in $@.",
+            description: "Evaluates BLOCK or EXPR and traps exceptions. After the eval, check $@ for errors: if ($@) { ... }. BLOCK form is preferred — EXPR form (string eval) is a security risk and triggers the PL600 diagnostic.",
+        }),
+        // Carp module functions
+        "croak" => Some(BuiltinDoc {
+            signature: "croak LIST",
+            description: "Like die but reports the error from the caller's perspective. Part of the Carp module. Use instead of die in library code so the stack trace points to the caller, not the module internals.",
+        }),
+        "carp" => Some(BuiltinDoc {
+            signature: "carp LIST",
+            description: "Like warn but reports the warning from the caller's perspective. Part of the Carp module. Prefer over warn in library code.",
+        }),
+        "confess" => Some(BuiltinDoc {
+            signature: "confess LIST",
+            description: "Like croak but includes a full stack trace. Part of the Carp module. Use when the full call chain is needed for debugging.",
+        }),
+        "cluck" => Some(BuiltinDoc {
+            signature: "cluck LIST",
+            description: "Like carp but includes a full stack trace. Part of the Carp module. Use for warnings that benefit from call chain context.",
         }),
         "return" => Some(BuiltinDoc {
             signature: "return EXPR\nreturn",
@@ -373,7 +428,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "caller" => Some(BuiltinDoc {
             signature: "caller EXPR\ncaller",
-            description: "Returns information about the calling subroutine's context. Returns (package, filename, line) in list context.",
+            description: "Without argument, returns (package, filename, line) in list context or the package name in scalar context. With EXPR returns additional call-frame info: (package, filename, line, subroutine, hasargs, wantarray, evaltext, is_require, hints, bitmask, hinthash).",
         }),
         "exit" => Some(BuiltinDoc {
             signature: "exit EXPR\nexit",
@@ -439,7 +494,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         // File tests and operations
         "stat" => Some(BuiltinDoc {
             signature: "stat FILEHANDLE\nstat EXPR",
-            description: "Returns a 13-element list giving the status info for a file. (dev, ino, mode, nlink, uid, gid, rdev, size, atime, mtime, ctime, blksize, blocks).",
+            description: "Returns a 13-element list (dev, ino, mode, nlink, uid, gid, rdev, size, atime, mtime, ctime, blksize, blocks) or an empty list on failure.",
         }),
         "lstat" => Some(BuiltinDoc {
             signature: "lstat FILEHANDLE\nlstat EXPR",
@@ -561,7 +616,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "gmtime" => Some(BuiltinDoc {
             signature: "gmtime EXPR\ngmtime",
-            description: "Like localtime but uses Greenwich Mean Time (UTC).",
+            description: "Like localtime but uses Greenwich Mean Time (UTC). In list context returns a 9-element time list (sec, min, hour, mday, mon, year, wday, yday, isdst). In scalar context returns a ctime(3)-style string.",
         }),
 
         // Misc
@@ -584,6 +639,38 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         "state" => Some(BuiltinDoc {
             signature: "state VARLIST",
             description: "Declares lexically scoped variables that persist across calls to the enclosing subroutine (like C static variables).",
+        }),
+        "BEGIN" => Some(BuiltinDoc {
+            signature: "BEGIN { BLOCK }",
+            description: "Executed at **compile time**, before the rest of the program runs. \
+                          Used to initialize modules, set up the symbol table, or run code \
+                          that must complete before compilation continues. Multiple BEGIN \
+                          blocks run in the order they appear in source.",
+        }),
+        "END" => Some(BuiltinDoc {
+            signature: "END { BLOCK }",
+            description: "Executed at **program exit**, after the main program finishes (including \
+                          `die` and `exit`). Used for cleanup. Multiple END blocks run in \
+                          reverse order of definition. `$?` holds the exit status.",
+        }),
+        "INIT" => Some(BuiltinDoc {
+            signature: "INIT { BLOCK }",
+            description: "Executed after compilation completes but **before** the main program \
+                          runs. Runs in first-seen order. Unlike BEGIN, INIT sees the fully \
+                          compiled symbol table.",
+        }),
+        "CHECK" => Some(BuiltinDoc {
+            signature: "CHECK { BLOCK }",
+            description: "Executed at the **end of compilation**, after all BEGIN blocks. Runs \
+                          in reverse order of definition. Used by modules that need to inspect \
+                          or modify the compiled program before it runs (e.g. B::* modules).",
+        }),
+        "UNITCHECK" => Some(BuiltinDoc {
+            signature: "UNITCHECK { BLOCK }",
+            description: "Executed at the **end of the compilation unit** that defined it \
+                          (file, string eval, or require). Runs in reverse order of definition \
+                          within that unit. More granular than CHECK — each required file's \
+                          UNITCHECK runs before the requiring file's UNITCHECK.",
         }),
 
         _ => None,
@@ -762,5 +849,139 @@ pub fn get_attribute_documentation(attr: &str) -> Option<BuiltinDoc> {
             description: "Declares that a subroutine implements an operator overload for OP.",
         }),
         _ => None,
+    }
+}
+
+/// Structured exception context for exception-family functions.
+///
+/// Used by code actions and semantic analysis to understand exception
+/// handling semantics — upgrade paths (die → croak) and associated
+/// error variables.
+#[derive(Debug, Clone)]
+pub struct ExceptionContext {
+    /// Special variable that captures the exception after an eval block (e.g. `$@`).
+    pub error_variable: Option<String>,
+    /// Recommended replacement function, if the current function is not preferred
+    /// (e.g. `die` → `Carp::croak`, `warn` → `Carp::carp`).
+    pub preferred_alternative: Option<String>,
+}
+
+/// Check if a function name is in the Perl exception family.
+///
+/// Returns `true` for: `die`, `warn`, `croak`, `carp`, `confess`, `cluck`.
+///
+/// This is a classification helper for future diagnostic and code-action use.
+/// It is not currently called from any LSP code path — callers may use it to
+/// decide whether to invoke [`get_exception_context`].
+///
+/// # Examples
+/// ```
+/// use perl_semantic_analyzer::analysis::semantic::is_exception_function;
+///
+/// assert!(is_exception_function("die"));
+/// assert!(is_exception_function("croak"));
+/// assert!(!is_exception_function("print"));
+/// ```
+pub fn is_exception_function(name: &str) -> bool {
+    matches!(name, "die" | "warn" | "croak" | "carp" | "confess" | "cluck")
+}
+
+/// Get exception context for upgrade suggestions and error variables.
+///
+/// Returns metadata about exception handling semantics:
+/// - `error_variable`: special variable capturing the exception (`$@`)
+/// - `preferred_alternative`: recommended upgrade path (`die` → `Carp::croak`)
+///
+/// Returns `None` for non-exception functions (e.g. `eval`, `print`).
+///
+/// # Examples
+/// ```
+/// use perl_semantic_analyzer::analysis::semantic::get_exception_context;
+///
+/// let die_ctx = get_exception_context("die").unwrap();
+/// assert_eq!(die_ctx.error_variable, Some("$@".to_string()));
+/// assert_eq!(die_ctx.preferred_alternative, Some("Carp::croak".to_string()));
+///
+/// let croak_ctx = get_exception_context("croak").unwrap();
+/// assert_eq!(croak_ctx.preferred_alternative, None);  // already preferred
+/// ```
+pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
+    match name {
+        "die" => Some(ExceptionContext {
+            error_variable: Some("$@".to_string()),
+            preferred_alternative: Some("Carp::croak".to_string()),
+        }),
+        "warn" => Some(ExceptionContext {
+            error_variable: None,
+            preferred_alternative: Some("Carp::carp".to_string()),
+        }),
+        "croak" | "confess" => Some(ExceptionContext {
+            error_variable: Some("$@".to_string()),
+            preferred_alternative: None,
+        }),
+        "carp" | "cluck" => {
+            Some(ExceptionContext { error_variable: None, preferred_alternative: None })
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_builtin_documentation;
+
+    #[test]
+    fn test_get_builtin_documentation_begin() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("BEGIN").ok_or("BEGIN should have docs")?;
+        assert!(
+            doc.description.contains("compile time") || doc.description.contains("compile-time"),
+            "BEGIN doc should mention compile time, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_end() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("END").ok_or("END should have docs")?;
+        assert!(
+            doc.description.contains("exit") || doc.description.contains("cleanup"),
+            "END doc should mention exit or cleanup, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_check() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("CHECK").ok_or("CHECK should have docs")?;
+        assert!(
+            doc.description.contains("compilation") || doc.description.contains("compile"),
+            "CHECK doc should mention compilation, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_init() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("INIT").ok_or("INIT should have docs")?;
+        assert!(
+            doc.description.contains("compilation") || doc.description.contains("before"),
+            "INIT doc should mention post-compile execution, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_unitcheck() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("UNITCHECK").ok_or("UNITCHECK should have docs")?;
+        assert!(
+            doc.description.contains("compilation unit") || doc.description.contains("unit"),
+            "UNITCHECK doc should mention compilation unit scope, got: {}",
+            doc.description
+        );
+        Ok(())
     }
 }

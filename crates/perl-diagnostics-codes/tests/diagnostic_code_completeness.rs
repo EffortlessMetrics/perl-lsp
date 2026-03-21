@@ -195,6 +195,24 @@ fn unused_import_code_exists() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn module_not_found_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::ModuleNotFound;
+    assert_eq!(code.as_str(), "PL701", "ModuleNotFound should have code PL701");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        "ModuleNotFound should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "ModuleNotFound should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL701"),
+        Some(DiagnosticCode::ModuleNotFound),
+        "parse_code('PL701') should return ModuleNotFound"
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Heredoc anti-pattern codes
 // ---------------------------------------------------------------------------

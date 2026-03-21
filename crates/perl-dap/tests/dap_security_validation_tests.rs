@@ -7,8 +7,8 @@
 //! - Secure defaults
 
 use perl_dap::security::{
-    DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS, SecurityError, validate_condition, validate_expression,
-    validate_path, validate_timeout,
+    DEFAULT_TIMEOUT_MS, SecurityError, validate_condition, validate_expression, validate_path,
+    validate_timeout,
 };
 use perl_tdd_support::must;
 use std::path::PathBuf;

@@ -711,7 +711,10 @@ fn supported_commands_have_expected_set() {
         "perl.runCritic",
         "perl.runTest",
         "perl.runTestFile",
+        "perl.runSubtest",
         "perl.debugFile",
+        "perl.goToTest",
+        "perl.goToImplementation",
     ];
     for exp in &expected {
         assert!(cmds.contains(&exp.to_string()), "supported commands should include '{exp}'");

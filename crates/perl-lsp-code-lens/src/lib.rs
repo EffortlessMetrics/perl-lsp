@@ -143,12 +143,6 @@ impl CodeLensProvider {
                 self.visit_node(expression, lenses);
             }
 
-            NodeKind::FunctionCall { name, args } => {
-                if name == "subtest" {
-                    self.add_subtest_lens(node, args, lenses);
-                }
-            }
-
             _ => {
                 self.visit_children(node, lenses);
             }
@@ -176,26 +170,6 @@ impl CodeLensProvider {
             command: Some(Command {
                 title: "\u{25b6} Run Test".to_string(),
                 command: "perl.runTest".to_string(),
-                arguments: Some(vec![json!(name)]),
-            }),
-            data: None,
-        });
-    }
-
-    /// Add a "Run Subtest" code lens for `subtest "name" => sub { ... }`
-    fn add_subtest_lens(&self, node: &Node, args: &[Node], lenses: &mut Vec<CodeLens>) {
-        let subtest_name = args.first().and_then(|arg| match &arg.kind {
-            NodeKind::String { value, .. } => Some(value.as_str()),
-            _ => None,
-        });
-        let name = subtest_name.unwrap_or("<anonymous>");
-        let range =
-            WireRange::from_byte_offsets(&self.source, node.location.start, node.location.end);
-        lenses.push(CodeLens {
-            range,
-            command: Some(Command {
-                title: format!("\u{25b6} Run Subtest: {name}"),
-                command: "perl.runSubtest".to_string(),
                 arguments: Some(vec![json!(name)]),
             }),
             data: None,
@@ -525,5 +499,22 @@ mod tests {
         assert_eq!(extract_quoted_string("\"hello\" => sub"), Some("hello"));
         assert_eq!(extract_quoted_string("'world' => sub"), Some("world"));
         assert_eq!(extract_quoted_string("no_quotes => sub"), None);
+    }
+
+    #[test]
+    fn test_no_duplicate_subtest_lenses_comma_style() -> Result<(), String> {
+        let source = "use Test::More;\nsubtest \"my test\", sub { ok(1) };\ndone_testing();\n";
+        let lenses = extract_lenses(source)?;
+        let subtest_lenses: Vec<_> = lenses
+            .iter()
+            .filter(|l| l.command.as_ref().is_some_and(|c| c.command == "perl.runSubtest"))
+            .collect();
+        assert_eq!(
+            subtest_lenses.len(),
+            1,
+            "comma-style subtest should produce exactly 1 lens, got {}",
+            subtest_lenses.len()
+        );
+        Ok(())
     }
 }

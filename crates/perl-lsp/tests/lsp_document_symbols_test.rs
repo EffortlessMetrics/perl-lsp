@@ -432,3 +432,229 @@ sub child_method {
 
     Ok(())
 }
+
+// ---- POD section tests (issue #2341) ----
+
+#[test]
+fn test_pod_sections_as_document_symbols() -> TestResult {
+    let server = setup_server();
+    let content = "package MyLib;\n\n=head1 NAME\n\nMyLib - Example library\n\n=head1 SYNOPSIS\n\n    use MyLib;\n\n=head2 process\n\nProcesses data.\n\n=cut\n\nsub process { }\n1;\n";
+    open_document(&server, "file:///test_pod.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_pod.pm" } })),
+        id: Some(json!(10)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    // Code symbols must still be present
+    assert!(symbols.iter().any(|s| s["name"] == "MyLib"), "Missing package symbol");
+    assert!(
+        symbols.iter().any(|s| s["name"] == "process" && s["kind"] == 12),
+        "Missing sub symbol (kind 12)"
+    );
+
+    // POD section symbols must appear
+    assert!(symbols.iter().any(|s| s["name"] == "NAME"), "Missing =head1 NAME");
+    assert!(symbols.iter().any(|s| s["name"] == "SYNOPSIS"), "Missing =head1 SYNOPSIS");
+
+    // POD section kind must be 26 (TypeParameter)
+    let name_sym = symbols.iter().find(|s| s["name"] == "NAME").ok_or("NAME not found")?;
+    assert_eq!(name_sym["kind"], 26, "POD section kind must be 26 (TypeParameter)");
+
+    // Line ordering: NAME must appear before SYNOPSIS
+    let name_line = symbols
+        .iter()
+        .find(|s| s["name"] == "NAME" && s["kind"] == 26)
+        .and_then(|s| s["range"]["start"]["line"].as_u64())
+        .ok_or("NAME line not found")?;
+    let synopsis_line = symbols
+        .iter()
+        .find(|s| s["name"] == "SYNOPSIS" && s["kind"] == 26)
+        .and_then(|s| s["range"]["start"]["line"].as_u64())
+        .ok_or("SYNOPSIS line not found")?;
+    assert!(name_line < synopsis_line, "NAME must appear before SYNOPSIS");
+
+    Ok(())
+}
+
+#[test]
+fn test_pod_sections_stop_at_data_block() -> TestResult {
+    let server = setup_server();
+    let content = "package Foo;\n\n=head1 NAME\n\nFoo - real module\n\n=cut\n\nsub new { bless {}, shift }\n1;\n\n__DATA__\n\n=head1 SHOULD NOT APPEAR\n\nThis section is in __DATA__ and must not show up.\n";
+    open_document(&server, "file:///test_data_pod.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_data_pod.pm" } })),
+        id: Some(json!(11)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    assert!(
+        symbols.iter().any(|s| s["name"] == "NAME" && s["kind"] == 26),
+        "Real NAME section must appear"
+    );
+    assert!(
+        !symbols.iter().any(|s| s["name"] == "SHOULD NOT APPEAR"),
+        "POD in __DATA__ block must not appear in symbols"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_pod_section_multiword_title() -> TestResult {
+    let server = setup_server();
+    let content = "=head1 SEE ALSO\n\nSee L<Other::Module>.\n\n=cut\n1;\n";
+    open_document(&server, "file:///test_multiword.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_multiword.pm" } })),
+        id: Some(json!(12)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    assert!(
+        symbols.iter().any(|s| s["name"] == "SEE ALSO" && s["kind"] == 26),
+        "Multi-word POD heading must appear as full string"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_no_pod_unchanged_symbols() -> TestResult {
+    let server = setup_server();
+    let content = "package Bar;\nsub baz { }\n1;\n";
+    open_document(&server, "file:///test_nopod.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_nopod.pm" } })),
+        id: Some(json!(13)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    assert!(symbols.iter().any(|s| s["name"] == "Bar"), "Package symbol must remain");
+    assert!(symbols.iter().any(|s| s["name"] == "baz"), "Sub symbol must remain");
+    assert!(
+        !symbols.iter().any(|s| s["kind"] == 26),
+        "No POD symbols should appear for file with no POD"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_pod_sections_reject_invalid_levels() -> TestResult {
+    let server = setup_server();
+    let content =
+        "=head0 INVALID LEVEL\n=head1 VALID\n=head5 INVALID LEVEL\n=head2 ALSO VALID\n1;\n";
+    open_document(&server, "file:///test_levels.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_levels.pm" } })),
+        id: Some(json!(14)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    // Valid levels should appear
+    assert!(
+        symbols.iter().any(|s| s["name"] == "VALID" && s["kind"] == 26),
+        "Valid =head1 must appear"
+    );
+    assert!(
+        symbols.iter().any(|s| s["name"] == "ALSO VALID" && s["kind"] == 26),
+        "Valid =head2 must appear"
+    );
+
+    // Invalid levels should NOT appear
+    assert!(
+        !symbols.iter().any(|s| s["name"] == "INVALID LEVEL"),
+        "=head0 and =head5 must be rejected"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_pod_sections_stop_at_end_block() -> TestResult {
+    // __END__ is the other data-marker; the scan must stop there too.
+    let server = setup_server();
+    let content = "package Bar;\n\n=head1 BEFORE\n\n=cut\n\n1;\n\n__END__\n\n=head1 AFTER END\n\nShould not appear.\n";
+    open_document(&server, "file:///test_end_pod.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_end_pod.pm" } })),
+        id: Some(json!(15)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    assert!(
+        symbols.iter().any(|s| s["name"] == "BEFORE" && s["kind"] == 26),
+        "Section before __END__ must appear"
+    );
+    assert!(
+        !symbols.iter().any(|s| s["name"] == "AFTER END"),
+        "Section after __END__ must not appear in document symbols"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_pod_section_unicode_heading() -> TestResult {
+    // Unicode in POD headings is valid (perldoc frequently uses it).
+    // Verify the symbol name round-trips correctly and byte_to_utf16_col
+    // produces a non-zero end character for multi-byte characters.
+    let server = setup_server();
+    let content =
+        "=head1 Ñoño\n\nSpanish section.\n\n=head2 日本語\n\nJapanese section.\n\n=cut\n1;\n";
+    open_document(&server, "file:///test_unicode_pod.pm", content);
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "textDocument/documentSymbol".to_string(),
+        params: Some(json!({ "textDocument": { "uri": "file:///test_unicode_pod.pm" } })),
+        id: Some(json!(16)),
+    };
+    let response = server.handle_request(request).ok_or("No response")?;
+    let result = response.result.ok_or("Missing result")?;
+    let symbols = result.as_array().ok_or("Not an array")?;
+
+    // Names must be the full Unicode string, not garbled bytes
+    assert!(
+        symbols.iter().any(|s| s["name"] == "Ñoño" && s["kind"] == 26),
+        "Latin-extended POD heading must round-trip correctly"
+    );
+    assert!(
+        symbols.iter().any(|s| s["name"] == "日本語" && s["kind"] == 26),
+        "CJK POD heading must round-trip correctly"
+    );
+
+    // The end character must be > 0 (multi-byte content means nonzero columns)
+    let cjk_sym = symbols
+        .iter()
+        .find(|s| s["name"] == "日本語" && s["kind"] == 26)
+        .ok_or("CJK heading not found")?;
+    let end_char = cjk_sym["range"]["end"]["character"].as_u64().ok_or("no end char")?;
+    assert!(end_char > 0, "end character must be > 0 for multi-byte heading");
+
+    Ok(())
+}
