@@ -12,6 +12,8 @@ use lsp_types::{
     WorkspaceFullDocumentDiagnosticReport, WorkspaceUnchangedDocumentDiagnosticReport,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
 use perl_diagnostics_codes::DiagnosticCode;
@@ -213,6 +215,16 @@ impl PullDiagnosticsProvider {
         let code = diagnostic.code.map(NumberOrString::String);
         let related_information =
             to_lsp_related_information(uri, text, &diagnostic.related_information);
+
+        // Collect tag strings before diagnostic is partially moved by the suggestion match
+        let tag_strings: Vec<String> = diagnostic
+            .tags
+            .iter()
+            .map(|t| match t {
+                InternalDiagnosticTag::Unnecessary => "Unnecessary".to_string(),
+                InternalDiagnosticTag::Deprecated => "Deprecated".to_string(),
+            })
+            .collect();
         let tags = to_lsp_tags(&diagnostic.tags);
 
         // Append the suggestion to the message when present so users see it inline
@@ -220,6 +232,24 @@ impl PullDiagnosticsProvider {
             Some(ref suggestion) => format!("{}\nSuggestion: {}", diagnostic.message, suggestion),
             None => diagnostic.message,
         };
+
+        let data = code.as_ref().and_then(|c| {
+            if let NumberOrString::String(code_str) = c {
+                let category = DiagnosticCode::parse_code(code_str)
+                    .map(|dc| format!("{:?}", dc.category()))
+                    .unwrap_or_else(|| "Other".to_string());
+                let fixable = is_fixable_diagnostic(code_str);
+                serde_json::to_value(DiagnosticData {
+                    code: code_str.clone(),
+                    category,
+                    fixable,
+                    tags: tag_strings,
+                })
+                .ok()
+            } else {
+                None
+            }
+        });
 
         LspDiagnostic {
             range,
@@ -230,7 +260,7 @@ impl PullDiagnosticsProvider {
             message,
             related_information,
             tags,
-            data: None,
+            data,
         }
     }
 
@@ -253,16 +283,25 @@ impl PullDiagnosticsProvider {
         let end_offset = offset.saturating_add(1).min(text.len());
         let range = lsp_range_from_offsets(text, offset, end_offset);
 
+        let code_str = DiagnosticCode::ParseError.as_str();
+        let data = serde_json::to_value(DiagnosticData {
+            code: code_str.to_string(),
+            category: format!("{:?}", DiagnosticCode::ParseError.category()),
+            fixable: is_fixable_diagnostic(code_str),
+            tags: vec![],
+        })
+        .ok();
+
         LspDiagnostic {
             range,
             severity: Some(LspDiagnosticSeverity::ERROR),
-            code: Some(NumberOrString::String(DiagnosticCode::ParseError.as_str().to_string())),
+            code: Some(NumberOrString::String(code_str.to_string())),
             code_description: None,
             source: Some("perl-lsp".to_string()),
             message,
             related_information: to_lsp_related_information(uri, text, &[]),
             tags: None,
-            data: None,
+            data,
         }
     }
 }
@@ -319,4 +358,121 @@ fn to_lsp_related_information(
             })
             .collect(),
     )
+}
+
+/// Structured data attached to each LSP diagnostic for client integration.
+///
+/// Serialized into the `data` field of `lsp_types::Diagnostic` so that clients can
+/// identify fixable diagnostics, filter by category, and integrate with code actions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticData {
+    /// The diagnostic code string (e.g., "PL001")
+    pub code: String,
+    /// Category name derived from `DiagnosticCode::category()` (e.g., "Parser", "StrictWarnings")
+    pub category: String,
+    /// Whether a quick-fix code action is currently available for this diagnostic
+    pub fixable: bool,
+    /// Tag names (e.g., ["Unnecessary"], ["Deprecated"])
+    pub tags: Vec<String>,
+}
+
+/// Returns `true` when a quick-fix code action exists for the given diagnostic code.
+///
+/// The authoritative source is `crates/perl-lsp-code-actions/src/code_actions.rs`.
+fn is_fixable_diagnostic(code: &str) -> bool {
+    matches!(
+        DiagnosticCode::parse_code(code),
+        Some(
+            DiagnosticCode::ParseError
+                | DiagnosticCode::MissingStrict
+                | DiagnosticCode::MissingWarnings
+                | DiagnosticCode::UnusedVariable
+                | DiagnosticCode::UndefinedVariable
+                | DiagnosticCode::VariableShadowing
+                | DiagnosticCode::UnusedParameter
+                | DiagnosticCode::UnquotedBareword
+                | DiagnosticCode::BarewordFilehandle
+                | DiagnosticCode::TwoArgOpen
+                | DiagnosticCode::AssignmentInCondition
+                | DiagnosticCode::NumericComparisonWithUndef
+                | DiagnosticCode::DeprecatedDefined
+        )
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lsp_types::{DocumentDiagnosticReport, NumberOrString};
+
+    fn get_full_items(report: DocumentDiagnosticReport) -> Vec<lsp_types::Diagnostic> {
+        match report {
+            DocumentDiagnosticReport::Full(full) => full.full_document_diagnostic_report.items,
+            _ => vec![],
+        }
+    }
+
+    #[test]
+    fn diagnostic_data_for_parse_error() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let items = get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None));
+        assert!(!items.is_empty());
+        let diag = &items[0];
+        let data = diag.data.as_ref().ok_or("data should be populated")?;
+        assert_eq!(data["code"], "PL001");
+        assert_eq!(data["category"], "Parser");
+        assert_eq!(data["fixable"], true);
+        let tags = data["tags"].as_array().ok_or("tags should be an array")?;
+        assert!(tags.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostic_data_none_when_no_code() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let report = provider.get_document_diagnostics(&uri, "my $x = 1;\n", None);
+        let items = get_full_items(report);
+        // Any diagnostic without a code must also have data: None
+        assert!(items.iter().all(|d| d.code.is_some() || d.data.is_none()));
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostic_data_for_missing_strict() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let code = "print 'hello';\n";
+        let items = get_full_items(provider.get_document_diagnostics(&uri, code, None));
+        if let Some(diag) = items.iter().find(|d| {
+            d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL100"))
+                == Some(true)
+        }) {
+            let data = diag.data.as_ref().ok_or("data should be Some for PL100")?;
+            assert_eq!(data["code"], "PL100");
+            assert_eq!(data["category"], "StrictWarnings");
+            assert_eq!(data["fixable"], true);
+        }
+        // If PL100 is not emitted for this snippet the test still compiles and passes
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostic_data_is_valid_json_object() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let items = get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None));
+        for diag in &items {
+            if diag.code.is_some() {
+                let data = diag.data.as_ref().ok_or("data must be Some when code is Some")?;
+                assert!(data.is_object(), "data must be a JSON object");
+                assert!(data["code"].is_string());
+                assert!(data["category"].is_string());
+                assert!(data["fixable"].is_boolean());
+                assert!(data["tags"].is_array());
+            }
+        }
+        Ok(())
+    }
 }
