@@ -98,6 +98,8 @@ pub mod common_mistakes;
 pub mod deprecated;
 /// Missing module detection (PL701)
 pub mod missing_module;
+/// printf/sprintf format specifier arity validation (PL405)
+pub mod printf_format;
 pub mod security;
 pub mod strict_warnings;
 /// Unused import detection
