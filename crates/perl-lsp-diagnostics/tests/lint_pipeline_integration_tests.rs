@@ -186,3 +186,40 @@ fn lint_pipeline_strict_inside_begin_suppresses_pl100() {
         missing_strict.len()
     );
 }
+
+// =========================================================================
+// 8. use warnings inside END block suppresses missing-warnings (issue #2360)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_warnings_inside_end_suppresses_pl101() {
+    // use warnings declared inside END { } must still suppress PL101.
+    // All 5 phase keyword bodies are walked by the PhaseBlock fix.
+    let source = "use strict;\nEND { use warnings; }\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_warnings: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
+    assert!(
+        missing_warnings.is_empty(),
+        "use warnings inside END should suppress PL101, got {} missing-warnings diags",
+        missing_warnings.len()
+    );
+}
+
+// =========================================================================
+// 9. use strict inside non-BEGIN phase block (INIT) suppresses PL100 (#2360)
+// =========================================================================
+
+#[test]
+fn lint_pipeline_strict_inside_init_suppresses_pl100() {
+    // All phase block keywords (not just BEGIN) must be recursed into.
+    let source = "INIT { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    assert!(
+        missing_strict.is_empty(),
+        "use strict inside INIT should suppress PL100, got {} missing-strict diags",
+        missing_strict.len()
+    );
+}

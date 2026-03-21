@@ -932,6 +932,10 @@ $name;
         let resp = hover_at(code, "file:///init_hover.pl", "INIT", 0)?;
         let content = hover_content(&resp).ok_or("INIT hover must return content, not null")?;
         assert!(content.contains("INIT"), "hover content should mention INIT, got: {content}");
+        assert!(
+            content.contains("compilation") || content.contains("compile") || content.contains("before"),
+            "hover content should describe post-compile execution, got: {content}"
+        );
         Ok(())
     }
 
@@ -942,6 +946,10 @@ $name;
         let resp = hover_at(code, "file:///check_hover.pl", "CHECK", 0)?;
         let content = hover_content(&resp).ok_or("CHECK hover must return content, not null")?;
         assert!(content.contains("CHECK"), "hover content should mention CHECK, got: {content}");
+        assert!(
+            content.contains("compilation") || content.contains("compile"),
+            "hover content should describe end-of-compilation execution, got: {content}"
+        );
         Ok(())
     }
 
@@ -954,6 +962,10 @@ $name;
         assert!(
             content.contains("UNITCHECK"),
             "hover content should mention UNITCHECK, got: {content}"
+        );
+        assert!(
+            content.contains("compilation unit") || content.contains("unit"),
+            "hover content should describe compilation-unit scope, got: {content}"
         );
         Ok(())
     }

@@ -826,7 +826,33 @@ mod tests {
     #[test]
     fn test_get_builtin_documentation_check() -> Result<(), Box<dyn std::error::Error>> {
         let doc = get_builtin_documentation("CHECK").ok_or("CHECK should have docs")?;
-        assert!(!doc.description.is_empty(), "CHECK should have non-empty description");
+        assert!(
+            doc.description.contains("compilation") || doc.description.contains("compile"),
+            "CHECK doc should mention compilation, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_init() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("INIT").ok_or("INIT should have docs")?;
+        assert!(
+            doc.description.contains("compilation") || doc.description.contains("before"),
+            "INIT doc should mention post-compile execution, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_builtin_documentation_unitcheck() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_builtin_documentation("UNITCHECK").ok_or("UNITCHECK should have docs")?;
+        assert!(
+            doc.description.contains("compilation unit") || doc.description.contains("unit"),
+            "UNITCHECK doc should mention compilation unit scope, got: {}",
+            doc.description
+        );
         Ok(())
     }
 }
