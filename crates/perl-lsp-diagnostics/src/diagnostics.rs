@@ -7,7 +7,7 @@ use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
-use perl_semantic_analyzer::symbol::SymbolTable;
+use perl_semantic_analyzer::symbol::SymbolExtractor;
 
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
@@ -105,7 +105,7 @@ impl DiagnosticsProvider {
         // Run lint checks
         check_strict_warnings(ast, &mut diagnostics);
         check_deprecated_syntax(ast, &mut diagnostics);
-        let symbol_table = SymbolTable::new();
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         check_common_mistakes(ast, &symbol_table, &mut diagnostics);
 
         diagnostics
