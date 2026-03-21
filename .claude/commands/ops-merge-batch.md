@@ -42,11 +42,13 @@ Merge up to 3 PRs from the candidates identified in step 1.
 5. After each merge, verify it landed and clean up labels:
    ```bash
    gh pr view <number> --json state --jq .state
-   # Remove merge-ready label from the now-merged PR
+   # Remove merge-ready from the now-merged PR
    gh pr edit <number> --remove-label "merge-ready"
-   # If the PR closes an issue, remove in-build from that issue
-   # Find the closing issue number from the PR body ("Closes #NNN") and run:
-   # gh issue edit <issue-number> --remove-label "in-build"
+   # Remove in-build from the linked issue (if any)
+   CLOSING_ISSUE=$(gh pr view <number> --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
+   if [ -n "$CLOSING_ISSUE" ]; then
+     gh issue edit "$CLOSING_ISSUE" --remove-label "in-build"
+   fi
    ```
    Label cleanup prevents stale `merge-ready` and `in-build` labels from
    misleading future orchestrator queries.

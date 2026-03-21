@@ -47,8 +47,14 @@ Read the issue and figure out what to build. Be proactive and fix forward.
 
 7. If you get stuck mid-implementation on an architectural question:
    - Post your **specific questions** as a comment on the GitHub issue
-   - Add `needs-plan-review` label
+   - Remove `in-build` and add `needs-plan-review` so the orchestrator sees a clean state:
+     ```bash
+     gh issue edit <number> --remove-label "in-build" --add-label "needs-plan-review"
+     ```
    - Report back: "Recommend plan-reviewer for #NNN — questions posted on issue"
+
+   Removing `in-build` here is important: the issue is no longer being actively built,
+   and leaving it would cause the orchestrator to treat it as a stalled builder.
 
 ## Output
 
