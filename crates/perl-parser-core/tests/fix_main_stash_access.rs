@@ -59,3 +59,9 @@ fn main_stash_hash_sigil() {
     // %:: is the main symbol table as a hash — should parse without error
     assert_clean_parse(r#"my %stash = %::;"#);
 }
+
+#[test]
+fn main_stash_array_sigil() {
+    // @:: is the list of symbol names in the main package
+    assert_clean_parse(r#"my @syms = @::;"#);
+}
