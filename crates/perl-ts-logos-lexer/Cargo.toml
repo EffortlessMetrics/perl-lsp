@@ -19,11 +19,6 @@ ignored = ["regex"]  # Used by logos #[regex(...)] proc-macro attributes
 [dependencies]
 logos = "0.16.0"
 regex = "1.12.2"
-chumsky = "0.12.0"
-perl-parser-pest = { path = "../perl-parser-pest" }
-
-[features]
-logos-tokens = []
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }
