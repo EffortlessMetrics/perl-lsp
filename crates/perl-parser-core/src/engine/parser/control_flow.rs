@@ -241,6 +241,21 @@ impl<'a> Parser<'a> {
             return self.parse_foreach_style_for();
         }
 
+        // Parenthesized: could be C-style `for (init; cond; update)` or
+        // implicit-$_ foreach `for (LIST)`. Delegate to shared helper.
+        self.parse_c_style_or_implicit_foreach(start)
+    }
+
+    /// Shared parser for C-style `for/foreach (init; cond; update) BLOCK` and
+    /// implicit-$_ foreach `for/foreach (LIST) BLOCK`.
+    ///
+    /// Called after the keyword (`for` or `foreach`) has been consumed and we
+    /// know the next token is `(`. Handles both syntaxes because in Perl `for`
+    /// and `foreach` are fully interchangeable.
+    fn parse_c_style_or_implicit_foreach(
+        &mut self,
+        start: usize,
+    ) -> ParseResult<Node> {
         self.expect(TokenKind::LeftParen)?;
 
         // Parse init (or check if it's a foreach)
@@ -351,6 +366,15 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'foreach'
 
+        // In Perl, `for` and `foreach` are fully interchangeable. When the
+        // next token is `(`, it could be either:
+        //   - C-style:  foreach (my $i=0; $i<10; $i++) { ... }
+        //   - List:     foreach (@list) { ... }
+        // Delegate to the shared helper that disambiguates via semicolons.
+        if self.peek_kind() == Some(TokenKind::LeftParen) {
+            return self.parse_c_style_or_implicit_foreach(start);
+        }
+
         // Set flag to prevent semicolon consumption in variable declaration
         self.in_for_loop_init = true;
         let variable = if matches!(
@@ -361,12 +385,6 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::State)
         ) {
             self.parse_variable_declaration()?
-        } else if self.peek_kind() == Some(TokenKind::LeftParen) {
-            // foreach (LIST) — implicit $_ topic variable
-            Node::new(
-                NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
-                SourceLocation { start, end: start },
-            )
         } else {
             // foreach $var (LIST) — bare scalar without my
             self.parse_variable()?
