@@ -25,7 +25,7 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
     let output = Parser::new(source).parse_with_recovery();
     let ast = Arc::new(output.ast);
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    provider.get_diagnostics(&ast, &output.diagnostics, source)
+    provider.get_diagnostics(&ast, &output.diagnostics, source, None)
 }
 
 /// Filter to only parse-error diagnostics (PL001=ParseError, PL002=SyntaxError, PL003=UnexpectedEof)
@@ -284,7 +284,7 @@ fn test_range_accuracy_eof_offset() -> Result<(), Box<dyn std::error::Error>> {
     ));
     let errors = vec![ParseError::UnexpectedEof];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diags = provider.get_diagnostics(&ast, &errors, source);
+    let diags = provider.get_diagnostics(&ast, &errors, source, None);
 
     let pe = parse_error_diags(&diags);
     if let Some(d) = pe.first() {
@@ -308,7 +308,7 @@ fn test_multiple_diagnostics_mixed_categories() -> Result<(), Box<dyn std::error
     ));
     let errors = vec![ParseError::SyntaxError { location: 8, message: "bad syntax".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diags = provider.get_diagnostics(&ast, &errors, source);
+    let diags = provider.get_diagnostics(&ast, &errors, source, None);
 
     let pe = parse_error_diags(&diags);
     assert!(!pe.is_empty(), "Should have parse-error diagnostics from synthetic error");
@@ -355,7 +355,7 @@ fn test_multiple_diagnostics_each_has_distinct_range() -> Result<(), Box<dyn std
         ParseError::SyntaxError { location: 10, message: "error at ccc".to_string() },
     ];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diags = provider.get_diagnostics(&ast, &errors, source);
+    let diags = provider.get_diagnostics(&ast, &errors, source, None);
     let pe = parse_error_diags(&diags);
 
     assert!(pe.len() >= 3, "Three distinct errors should produce at least 3 diagnostics");
@@ -401,7 +401,7 @@ fn test_clearing_on_fix_synthetic_error_then_none() -> Result<(), Box<dyn std::e
         found: "print".to_string(),
     }];
     let provider = DiagnosticsProvider::new(&ast, broken.to_string());
-    let diags_broken = provider.get_diagnostics(&ast, &errors, broken);
+    let diags_broken = provider.get_diagnostics(&ast, &errors, broken, None);
     let pe_broken = parse_error_diags(&diags_broken);
     assert!(!pe_broken.is_empty(), "Broken source with explicit error should produce diagnostics");
 
@@ -480,7 +480,7 @@ fn test_suggestion_present_for_eof_error() -> Result<(), Box<dyn std::error::Err
     ));
     let errors = vec![ParseError::UnexpectedEof];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diags = provider.get_diagnostics(&ast, &errors, source);
+    let diags = provider.get_diagnostics(&ast, &errors, source, None);
     let pe = parse_error_diags(&diags);
 
     if let Some(d) = pe.first() {
@@ -498,7 +498,7 @@ fn test_suggestion_present_for_unclosed_delimiter() -> Result<(), Box<dyn std::e
     ));
     let errors = vec![ParseError::UnclosedDelimiter { delimiter: ')' }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diags = provider.get_diagnostics(&ast, &errors, source);
+    let diags = provider.get_diagnostics(&ast, &errors, source, None);
     let pe = parse_error_diags(&diags);
 
     if let Some(d) = pe.first() {

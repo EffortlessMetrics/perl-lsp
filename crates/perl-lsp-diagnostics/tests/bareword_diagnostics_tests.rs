@@ -20,7 +20,7 @@ fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
     let output = Parser::new(source).parse_with_recovery();
     let ast = Arc::new(output.ast);
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    provider.get_diagnostics(&ast, &output.diagnostics, source)
+    provider.get_diagnostics(&ast, &output.diagnostics, source, None)
 }
 
 fn bareword_diags(source: &str) -> Vec<Diagnostic> {

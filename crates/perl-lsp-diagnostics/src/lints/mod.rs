@@ -96,6 +96,8 @@
 
 pub mod common_mistakes;
 pub mod deprecated;
+/// Missing module detection (PL701)
+pub mod missing_module;
 pub mod security;
 pub mod strict_warnings;
 /// Unused import detection

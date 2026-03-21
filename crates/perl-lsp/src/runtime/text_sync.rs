@@ -690,7 +690,8 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+                    let diagnostics =
+                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, None);
 
                     // Convert diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics

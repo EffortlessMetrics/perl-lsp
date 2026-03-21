@@ -19,7 +19,7 @@ fn empty_program() -> Arc<Node> {
 fn diagnostics_for(source: &str, errors: Vec<ParseError>) -> Vec<Diagnostic> {
     let ast = empty_program();
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
-    provider.get_diagnostics(&ast, &errors, source)
+    provider.get_diagnostics(&ast, &errors, source, None)
 }
 
 fn parse_diags(diags: &[Diagnostic]) -> Vec<&Diagnostic> {

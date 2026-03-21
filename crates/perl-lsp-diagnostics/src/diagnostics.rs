@@ -36,11 +36,17 @@ impl DiagnosticsProvider {
     ///
     /// Analyzes the AST and parse errors to produce a list of diagnostics
     /// including parse errors, semantic issues, and lint warnings.
+    ///
+    /// `module_resolver` is an optional callback used by the missing-module lint
+    /// (PL701). When `Some`, it is called with a bare module name and should return
+    /// `true` if the module is resolvable (workspace or configured include paths).
+    /// When `None`, the missing-module lint is skipped entirely.
     pub fn get_diagnostics(
         &self,
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
+        module_resolver: Option<&dyn Fn(&str) -> bool>,
     ) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         let source_len = source.len();
@@ -107,6 +113,16 @@ impl DiagnosticsProvider {
         check_deprecated_syntax(ast, &mut diagnostics);
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         check_common_mistakes(ast, &symbol_table, &mut diagnostics);
+
+        // Missing module lint (PL701) — only when a resolver is provided
+        if let Some(resolver) = module_resolver {
+            crate::lints::missing_module::check_missing_modules(
+                ast,
+                source,
+                resolver,
+                &mut diagnostics,
+            );
+        }
 
         diagnostics
     }
