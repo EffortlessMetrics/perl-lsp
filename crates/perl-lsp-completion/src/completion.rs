@@ -469,6 +469,14 @@ impl CompletionProvider {
 
         let mut completions = Vec::new();
 
+        // After regex close delimiter: offer flag completions.
+        // This check MUST precede the in_regex check because the cursor after
+        // the closing '/' is not itself inside the regex body.
+        if Self::is_in_regex_flags(source, position) {
+            regex_patterns::add_regex_flag_completions(&mut completions, &context, source);
+            return sort::deduplicate_and_sort(completions);
+        }
+
         // Regex context: suggest regex constructs when inside a regex literal,
         // but keep sigil-prefixed symbol completions available for interpolated
         // variables like `/^$fo/`.
@@ -1184,6 +1192,97 @@ impl CompletionProvider {
         false
     }
 
+    /// Return true when the cursor is positioned in the flag region after a
+    /// closing regex delimiter — e.g., `$x =~ /foo/|` or `m/foo/i|`.
+    ///
+    /// Algorithm:
+    /// 1. Strip any trailing flag characters from the text before the cursor.
+    /// 2. The stripped text must end with `/` (the closing delimiter).
+    /// 3. The text before the closing `/` must look like a regex body:
+    ///    - For single-delimiter operators (`/…/`, `m/…/`, `qr/…/`): the
+    ///      character just before the closing `/` must be inside a regex body
+    ///      per `is_in_regex`.
+    ///    - For multi-delimiter operators (`s/…/…/`, `tr/…/…/`, `y/…/…/`):
+    ///      count the number of unescaped `/` chars; an even count (≥2) with
+    ///      a known operator keyword confirms the closing delimiter.
+    ///
+    /// The `is_in_regex_flags` check MUST be dispatched before `is_in_regex`
+    /// in the completion pipeline, because the cursor after the closing `/` is
+    /// not itself `in_regex`.
+    pub(crate) fn is_in_regex_flags(source: &str, position: usize) -> bool {
+        if position == 0 || position > source.len() {
+            return false;
+        }
+        let before = &source[..position];
+        let flag_chars: &[char] =
+            &['g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c'];
+        let without_flags = before.trim_end_matches(|c: char| flag_chars.contains(&c));
+        // Must end with the closing delimiter '/'.
+        if !without_flags.ends_with('/') {
+            return false;
+        }
+        let close_pos = without_flags.len();
+        if close_pos < 2 {
+            return false;
+        }
+
+        // Fast path for single-delimiter operators: the position just before the
+        // closing '/' must be inside a regex body per is_in_regex.
+        if Self::is_in_regex(source, close_pos - 1) {
+            return true;
+        }
+
+        // Slow path for multi-delimiter operators (s///, tr///, y///):
+        // count unescaped '/' chars in `without_flags`. If there are exactly 3
+        // (i.e., op/pattern/replacement/) and the operator is s/tr/y, we are
+        // in flags position.
+        let body = without_flags.trim();
+        Self::is_multi_delim_regex_at_close(body)
+    }
+
+    /// Return true when `text` looks like `s/…/…/`, `tr/…/…/`, or `y/…/…/`
+    /// with a complete closing delimiter (three `/` chars for s, tr, y).
+    fn is_multi_delim_regex_at_close(text: &str) -> bool {
+        // Identify whether the text starts with a known multi-delimiter operator.
+        let (op_len, required_slashes) = if text.starts_with("tr/") || text.starts_with("y/") {
+            let op = if text.starts_with("tr/") { 2 } else { 1 };
+            (op, 3usize) // tr/search/replacement/ has 3 '/'
+        } else if text.starts_with("s/") {
+            (1, 3usize) // s/pattern/replacement/ has 3 '/'
+        } else {
+            // Not a multi-delimiter operator we handle — also try with a
+            // binding operator prefix like `$x =~ s/…/…/`.
+            let stripped = text
+                .find("=~")
+                .map(|p| text[p + 2..].trim_start())
+                .or_else(|| text.find("!~").map(|p| text[p + 2..].trim_start()));
+            if let Some(rhs) = stripped {
+                return Self::is_multi_delim_regex_at_close(rhs);
+            }
+            return false;
+        };
+        // Count unescaped '/' characters in the operator body.
+        let body_after_op = &text[op_len..];
+        let slash_count = Self::count_unescaped_slashes(body_after_op);
+        slash_count == required_slashes
+    }
+
+    /// Count the number of unescaped `/` characters in `s`.
+    fn count_unescaped_slashes(s: &str) -> usize {
+        let mut count = 0usize;
+        let mut escaped = false;
+        for ch in s.chars() {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '/' {
+                count += 1;
+            }
+        }
+        count
+    }
+
     /// Simple heuristic to check if position is in a comment
     fn is_in_comment(&self, source: &str, position: usize) -> bool {
         let line_start = source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
@@ -1791,12 +1890,16 @@ has 'name' => (re
 
     #[test]
     fn test_regex_completion_preserves_sigil_completions_in_interpolation() {
+        // Cursor is inside the regex body at the end of `$fo` — before the
+        // closing `/`. Variable completions must be offered, not flag completions.
         let code = r#"my $foo = 1; my $bar = qr/^$fo/"#;
+        // Position just before the closing '/'
+        let pos = code.len() - 1;
 
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
         let provider = CompletionProvider::new(&ast);
-        let completions = provider.get_completions(code, code.len());
+        let completions = provider.get_completions(code, pos);
 
         assert!(
             completions.iter().any(|item| item.label == "$foo"),
@@ -2273,5 +2376,217 @@ sub helper { }
             completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
         Ok(())
+    }
+
+    // ── Gap 1: Named capture group in regex_patterns ─────────────────────────
+
+    #[test]
+    fn test_regex_named_capture_completion() {
+        // Cursor inside an empty regex body — named capture should be offered.
+        let code = r#"$x =~ /"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "(?<name>...)"),
+            "expected named capture group in regex completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_regex_named_capture_prefix_disambig() {
+        // Typing `(?<` inside a regex → both lookbehind and named capture offered.
+        let code = r#"$x =~ /(?<"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "(?<=...)"),
+            "expected lookbehind when prefix is (?<"
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "(?<name>...)"),
+            "expected named capture when prefix is (?<"
+        );
+    }
+
+    #[test]
+    fn test_regex_named_capture_prefix_lookbehind_only() {
+        // Typing `(?<=` — only the lookbehind should match (named capture label
+        // does not start with `(?<=`).
+        let code = r#"$x =~ /(?<="#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "(?<=...)"),
+            "expected lookbehind for prefix (?<="
+        );
+        assert!(
+            !completions.iter().any(|c| c.label == "(?<name>...)"),
+            "named capture should NOT appear for prefix (?<= (label doesn't start with (?<=)"
+        );
+    }
+
+    // ── Gap 2: is_in_regex_flags heuristic ───────────────────────────────────
+
+    #[test]
+    fn test_is_in_regex_flags_after_close_slash() {
+        // Cursor immediately after the closing `/` of a regex.
+        let code = "$x =~ /foo/";
+        assert!(
+            CompletionProvider::is_in_regex_flags(code, code.len()),
+            "cursor right after closing / should be in regex-flags context"
+        );
+    }
+
+    #[test]
+    fn test_is_in_regex_flags_after_partial_flag() {
+        // Cursor after one already-typed flag character.
+        let code = "m/foo/i";
+        assert!(
+            CompletionProvider::is_in_regex_flags(code, code.len()),
+            "cursor after /i should still be in regex-flags context"
+        );
+    }
+
+    #[test]
+    fn test_is_in_regex_flags_s_operator() {
+        let code = "s/foo/bar/g";
+        assert!(
+            CompletionProvider::is_in_regex_flags(code, code.len()),
+            "s/// with /g flag should be in regex-flags context"
+        );
+    }
+
+    #[test]
+    fn test_is_not_in_regex_flags_division() {
+        // Plain division — must not be treated as regex flags.
+        let code = "my $x = $a / $b /";
+        assert!(
+            !CompletionProvider::is_in_regex_flags(code, code.len()),
+            "division should not be detected as regex-flags context"
+        );
+    }
+
+    #[test]
+    fn test_regex_flag_completions_after_close() {
+        // Cursor right after closing `/` — should offer all standard flag letters.
+        let code = "$x =~ /foo/";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        // Standard regex flags per Perl documentation
+        for flag in &["g", "i", "m", "s", "x", "e", "r", "a", "p"] {
+            assert!(
+                labels.contains(flag),
+                "expected standard regex flag '{flag}' in completions; got: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_regex_flag_completions_skip_already_typed() {
+        // `g` already typed — completions should include `i` but not `g`.
+        let code = "$x =~ /foo/g";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        assert!(!labels.contains(&"g"), "already-typed flag 'g' should be excluded");
+        assert!(labels.contains(&"i"), "flag 'i' should still be offered");
+    }
+
+    #[test]
+    fn test_regex_tr_flag_completions() {
+        // tr/// should offer only c, d, s — not g, i, e.
+        let code = "tr/a-z/A-Z/";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        for flag in &["c", "d", "s"] {
+            assert!(
+                labels.contains(flag),
+                "tr/// flag '{flag}' should be offered; got: {labels:?}"
+            );
+        }
+        for flag in &["g", "i", "e"] {
+            assert!(!labels.contains(flag), "tr/// should NOT offer '{flag}'; got: {labels:?}");
+        }
+    }
+
+    #[test]
+    fn test_regex_tr_binding_operator_flag_completions() {
+        // `$x =~ tr/.../` should also offer only c, d, s (binding form).
+        let code = "$x =~ tr/a-z/A-Z/";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        for flag in &["c", "d", "s"] {
+            assert!(
+                labels.contains(flag),
+                "tr/// binding flag '{flag}' should be offered; got: {labels:?}"
+            );
+        }
+        assert!(!labels.contains(&"g"), "tr/// should NOT offer 'g'; got: {labels:?}");
+    }
+
+    // ── Gap 3: Statement-level regex operator snippets ───────────────────────
+
+    #[test]
+    fn test_regex_operator_snippets_present() {
+        let code = "";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, 0);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        assert!(labels.contains(&"mregex"), "mregex snippet missing; got: {labels:?}");
+        assert!(labels.contains(&"ssubst"), "ssubst snippet missing; got: {labels:?}");
+        assert!(labels.contains(&"qrpat"), "qrpat snippet missing; got: {labels:?}");
+    }
+
+    #[test]
+    fn test_regex_operator_snippet_bodies() {
+        // Verify the insert_text for each new snippet is syntactically correct.
+        let code = "mregex";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        let mregex = must_some(completions.iter().find(|c| c.label == "mregex"));
+        let insert = mregex.insert_text.as_deref().unwrap_or_default();
+        assert!(insert.starts_with("m/"), "mregex body must start with m/; got: {insert:?}");
+
+        // Also verify ssubst and qrpat with explicit prefix lookup
+        let code2 = "ssubst";
+        let mut parser2 = Parser::new(code2);
+        let ast2 = must(parser2.parse());
+        let provider2 = CompletionProvider::new(&ast2);
+        let completions2 = provider2.get_completions(code2, code2.len());
+        let ssubst = must_some(completions2.iter().find(|c| c.label == "ssubst"));
+        let insert2 = ssubst.insert_text.as_deref().unwrap_or_default();
+        assert!(insert2.starts_with("s/"), "ssubst body must start with s/; got: {insert2:?}");
+
+        let code3 = "qrpat";
+        let mut parser3 = Parser::new(code3);
+        let ast3 = must(parser3.parse());
+        let provider3 = CompletionProvider::new(&ast3);
+        let completions3 = provider3.get_completions(code3, code3.len());
+        let qrpat = must_some(completions3.iter().find(|c| c.label == "qrpat"));
+        let insert3 = qrpat.insert_text.as_deref().unwrap_or_default();
+        assert!(insert3.starts_with("qr/"), "qrpat body must start with qr/; got: {insert3:?}");
     }
 }

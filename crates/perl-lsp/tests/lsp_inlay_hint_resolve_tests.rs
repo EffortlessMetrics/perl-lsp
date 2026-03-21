@@ -164,6 +164,101 @@ fn lsp_inlay_hint_resolve_no_op_when_complete() -> Result<(), Box<dyn std::error
     Ok(())
 }
 
+/// Test that inlayHint/resolve adds labelDetails.location for click-to-definition
+///
+/// When a client advertises "label.location" in resolveSupport and the hint has
+/// a data.uri pointing to an open document with a matching subroutine, the resolved
+/// hint must include labelDetails.location with uri and range fields.
+#[test]
+fn lsp_inlay_hint_resolve_adds_label_location() -> Result<(), Box<dyn std::error::Error>> {
+    let srv = LspServer::new();
+
+    // Initialize with both tooltip and label.location in resolveSupport
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "initialize".into(),
+        params: Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {
+                        "resolveSupport": {
+                            "properties": ["tooltip", "label.location"]
+                        }
+                    }
+                }
+            }
+        })),
+    };
+    srv.handle_request(init);
+
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: Some(json!({})),
+    };
+    srv.handle_request(initialized);
+
+    // Open a document with a named subroutine definition
+    let doc_uri = "file:///test_label_location.pl";
+    let text = "sub my_func { my ($x) = @_; return $x; }";
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": doc_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })),
+    };
+    srv.handle_request(open);
+
+    // Resolve a parameter hint referencing that subroutine
+    let hint = json!({
+        "position": {"line": 0, "character": 15},
+        "label": "x:",
+        "kind": 2,
+        "paddingLeft": false,
+        "paddingRight": true,
+        "data": {
+            "uri": doc_uri,
+            "function": "my_func",
+            "paramIndex": 0
+        }
+    });
+
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "inlayHint/resolve".into(),
+        params: Some(hint),
+    };
+
+    let res = srv.handle_request(req).ok_or("Failed to handle inlayHint/resolve request")?;
+    let result = res.result.ok_or("No result in inlayHint/resolve response")?;
+
+    // Must have labelDetails with a location field
+    let label_details = result.get("labelDetails").ok_or("labelDetails field missing")?;
+    let location = label_details.get("location").ok_or("labelDetails.location field missing")?;
+
+    // location must have uri and range
+    assert!(location.get("uri").is_some(), "labelDetails.location must have uri, got: {location}");
+    assert!(
+        location.get("range").is_some(),
+        "labelDetails.location must have range, got: {location}"
+    );
+
+    // Tooltip should still be present (no regression)
+    assert!(result.get("tooltip").is_some(), "tooltip should still be populated");
+
+    Ok(())
+}
+
 /// Test that resolve handles missing params gracefully
 #[test]
 fn lsp_inlay_hint_resolve_handles_invalid_params() -> Result<(), Box<dyn std::error::Error>> {

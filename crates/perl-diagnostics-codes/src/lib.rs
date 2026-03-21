@@ -145,6 +145,8 @@ pub enum DiagnosticCode {
     AssignmentInCondition,
     /// Numeric comparison against a potentially undefined value
     NumericComparisonWithUndef,
+    /// printf/sprintf format specifier count does not match argument count
+    PrintfFormatMismatch,
 
     // Deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -221,6 +223,7 @@ impl DiagnosticCode {
             DiagnosticCode::ImplicitReturn => "PL402",
             DiagnosticCode::AssignmentInCondition => "PL403",
             DiagnosticCode::NumericComparisonWithUndef => "PL404",
+            DiagnosticCode::PrintfFormatMismatch => "PL405",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::SecurityStringEval => "PL600",
@@ -275,6 +278,7 @@ impl DiagnosticCode {
             "PL402" => "https://docs.perl-lsp.org/errors/PL402",
             "PL403" => "https://docs.perl-lsp.org/errors/PL403",
             "PL404" => "https://docs.perl-lsp.org/errors/PL404",
+            "PL405" => "https://docs.perl-lsp.org/errors/PL405",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
@@ -322,6 +326,7 @@ impl DiagnosticCode {
             | DiagnosticCode::ImplicitReturn
             | DiagnosticCode::AssignmentInCondition
             | DiagnosticCode::NumericComparisonWithUndef
+            | DiagnosticCode::PrintfFormatMismatch
             | DiagnosticCode::DeprecatedDefined
             | DiagnosticCode::DeprecatedArrayBase
             | DiagnosticCode::SecurityStringEval
@@ -431,6 +436,10 @@ impl DiagnosticCode {
             DiagnosticCode::NumericComparisonWithUndef => Some(
                 "Comparing a potentially undefined value with a numeric operator \
                 produces a warning at runtime. Check for definedness first with `defined()`.",
+            ),
+            DiagnosticCode::PrintfFormatMismatch => Some(
+                "The number of format specifiers does not match the number of arguments. \
+                Each %s/%d/%f/etc. consumes one argument (except %% which consumes none).",
             ),
             DiagnosticCode::VariableShadowing => Some(
                 "This variable shadows an outer variable with the same name. \
@@ -574,6 +583,7 @@ impl DiagnosticCode {
             "PL402" => Some(DiagnosticCode::ImplicitReturn),
             "PL403" => Some(DiagnosticCode::AssignmentInCondition),
             "PL404" => Some(DiagnosticCode::NumericComparisonWithUndef),
+            "PL405" => Some(DiagnosticCode::PrintfFormatMismatch),
             "PL500" => Some(DiagnosticCode::DeprecatedDefined),
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
@@ -662,7 +672,8 @@ impl DiagnosticCode {
             | DiagnosticCode::TwoArgOpen
             | DiagnosticCode::ImplicitReturn
             | DiagnosticCode::AssignmentInCondition
-            | DiagnosticCode::NumericComparisonWithUndef => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::NumericComparisonWithUndef
+            | DiagnosticCode::PrintfFormatMismatch => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 DiagnosticCategory::Deprecated

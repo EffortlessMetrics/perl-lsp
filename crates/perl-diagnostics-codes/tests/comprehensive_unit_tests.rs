@@ -29,6 +29,7 @@ const ALL_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::BarewordFilehandle,
     DiagnosticCode::TwoArgOpen,
     DiagnosticCode::ImplicitReturn,
+    DiagnosticCode::PrintfFormatMismatch,
     DiagnosticCode::CriticSeverity1,
     DiagnosticCode::CriticSeverity2,
     DiagnosticCode::CriticSeverity3,
@@ -1159,8 +1160,8 @@ fn unused_variable_tag_is_exactly_unnecessary() {
 // --- Cross-cutting: ALL_CODES count ---
 
 #[test]
-fn all_codes_count_is_19() {
-    assert_eq!(ALL_CODES.len(), 19, "expected 19 diagnostic codes total");
+fn all_codes_count_is_20() {
+    assert_eq!(ALL_CODES.len(), 20, "expected 20 diagnostic codes total");
 }
 
 // --- DiagnosticCode: parse_code boundary values ---
@@ -1191,8 +1192,8 @@ fn parse_code_gaps_return_none() {
     // are now assigned; only truly unassigned gaps are listed here.
     let gaps = [
         "PL004", "PL050", "PL099", "PL112", "PL150", "PL199", "PL202", "PL250", "PL302", "PL399",
-        "PL405", "PL499", "PL502", "PL599", "PL602", "PL699", "PL702", "PL799", "PL807", "PL899",
-        "PC006", "PC010",
+        "PL499", "PL502", "PL599", "PL602", "PL699", "PL702", "PL799", "PL807", "PL899", "PC006",
+        "PC010",
     ];
     for s in &gaps {
         assert!(DiagnosticCode::parse_code(s).is_none(), "expected None for unassigned code {}", s);

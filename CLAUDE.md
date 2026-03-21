@@ -6,14 +6,14 @@
 
 The orchestrator routes work to agents, never writes code directly.
 
-### Pipeline: Scout → Research-Verify → Plan-Review → Build → Review → Green → Merge → Wisdom
+### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
 
 Every change flows through this pipeline. Each stage is a cheap pass that catches what the previous one missed.
 
 | Stage | Model | Purpose | Fix forward? |
 |-------|-------|---------|-------------|
 | **Scout** (haiku) | Broad discovery | Find the problem, file roughly-right spec | N/A — files issues |
-| **Research-verify** (haiku) | Fact verification | Check external claims, post findings, add `research-verified` label | No — observational only |
+| **Accuracy-scout** (haiku) | Mechanical fact check | Verify file paths, function names, issue status against master | No — corrects facts, not plans |
 | **Plan-review** (sonnet) | Improve the plan | Fill gaps, correct root cause, add edge cases | Yes — complete the spec yourself |
 | **Build** (sonnet) | Execute the spec | TDD: test → implement → verify → PR | Yes — adapt if plan-reviewed; bump back if not |
 | **Review** (haiku/sonnet) | Improve the PR | Push fixes directly to the branch | Yes — always fix forward |
@@ -25,12 +25,38 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 - The orchestrator routes, it doesn't execute. Never poll CI, read diffs, or check PR state in loops. Launch an agent with the full job and move to the next routing decision.
 - One status check to inform routing, then delegate. When the orchestrator has context (exact edits, file contents), pass it to the agent — don't make agents re-research what you already know.
 - Scouts are honest about uncertainty — plan-reviewers correct. Being roughly right > confidently wrong.
-- Research-verifiers check external facts only (Perl docs, LSP spec, crate APIs). They do not redesign the spec.
+- Accuracy-scouts verify mechanical facts only (file paths, function names, issue status). They do not redesign the spec or suggest approaches.
 - Plan-reviewers improve plans, never punt "needs more scout work." They're enhanced scouts with sonnet.
 - Builders execute the spec as given. Fix forward on small gaps, bump back if structural.
 - Reviewers push improvements directly to PR branches. Every PR gets improved, no LGTM-only.
 - Every agent recommends next steps for the orchestrator.
 - Learning is continuous — every agent-wrapup captures what was learned.
+
+### Pipeline State Labels
+
+Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them.
+
+| Label | Set by | Means |
+|-------|--------|-------|
+| `needs-plan-review` | scout (/scout-report) | Awaiting plan-reviewer |
+| `plan-reviewed` | plan-reviewer (/plan-review-improve) | Spec verified |
+| `builder-ready` | plan-reviewer (/plan-review-improve) | Ready for builder pickup |
+| `in-build` | builder (/builder-read-spec) | Builder claimed this issue |
+| `in-review` | reviewer (/reviewer-read-handoff) | PR actively in review — set at review start |
+| `merge-ready` | reviewer (/pr-ready) | Ready for ops merge |
+| `structural-blocker` | any agent | Architecture issue; blocks parallel work |
+| `needs-deep-review` | reviewer | Requires additional deep-review pass |
+| `follow-up-recommended` | wisdom or reviewer | Related follow-up issue needed |
+| `already-fixed` | plan-reviewer or scout | Close without build |
+
+Labels gate entry, not skip execution. Multiple passes of the same agent are normal. Query examples:
+```bash
+gh issue list --label "builder-ready" --state open   # ready to build
+gh issue list --label "in-build" --state open        # builder assigned
+gh issue list --label "structural-blocker" --state open  # blocked work
+```
+
+Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accuracy-scout agent (issue #2628).
 
 ### Routing patterns
 

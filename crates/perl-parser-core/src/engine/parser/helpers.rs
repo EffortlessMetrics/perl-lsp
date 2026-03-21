@@ -694,10 +694,32 @@ impl<'a> Parser<'a> {
             }
             TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil => true,
 
+            // `func "string"` or `func 'string'` — bare function call with a string literal arg.
+            // Handles: `croak "error message"`, `_estr "fmt"`, `die "msg"`, etc.
+            // Imported functions that behave like builtins often take string args without parens.
+            TokenKind::String => true,
+
             // `func other_func(args)` — identifier followed by `(`
             // `func bareword => value` — identifier followed by fat arrow (auto-quoted arg)
-            TokenKind::Identifier if !next.text.starts_with(|c: char| c.is_ascii_uppercase()) => {
+            // Also: `func Qualified::Name->method(...)` — qualified name as arg (Sub-pattern A).
+            // The `!starts_with_uppercase` guard is relaxed for names that contain `::` so that
+            // `func File::Spec->catfile(...)` is recognised as a bare call.
+            TokenKind::Identifier => {
                 let next_text = next.text.clone();
+                // Allow qualified names (e.g. `File::Spec`, `Scalar::Util`) as arguments.
+                // They start with uppercase but the `::` disambiguates them from constants.
+                if next_text.contains("::") {
+                    // Qualified name — check that the following token is `->` or `(`.
+                    if let Ok(third) = self.tokens.peek_second() {
+                        return third.kind == TokenKind::Arrow
+                            || third.kind == TokenKind::LeftParen;
+                    }
+                    return false;
+                }
+                if next_text.starts_with(|c: char| c.is_ascii_uppercase()) {
+                    // Plain uppercase identifier (e.g. constant) — not an argument.
+                    return false;
+                }
                 // Block-list functions (map/grep/sort/etc.) as argument: `uniq map { ... } @list`
                 if Self::is_block_list_func(&next_text) {
                     if let Ok(third) = self.tokens.peek_second() {

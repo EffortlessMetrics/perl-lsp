@@ -20,22 +20,22 @@ At small:  User → Orchestrator → Workers (Agent()) directly
 ## Core Pipeline
 
 ```
-scout → research-verifier → plan-reviewer → builder → reviewer → reviewer-deep → ops
-(haiku)      (haiku)            (sonnet)      (sonnet)   (haiku)     (sonnet)     (haiku)
+scout → accuracy-scout → plan-reviewer → builder → reviewer → reviewer-deep → ops
+(haiku)    (haiku)         (sonnet)      (sonnet)   (haiku)     (sonnet)     (haiku)
 
 Variants: scout-parser, scout-lsp, scout-dap for domain-specific investigation
 Continuation: spawn builder with /builder-read-pr instead of /builder-read-spec
 Post-merge: wisdom (sonnet) synthesizes learnings
 ```
 
-Haiku does the broad sweep cheaply. Sonnet refines the plan and builds.
-Haiku checks standards. Sonnet checks correctness. Haiku merges.
+Haiku does the broad sweep cheaply. Accuracy-scout verifies mechanical facts cheaply.
+Sonnet refines the plan and builds. Haiku checks standards. Sonnet checks correctness. Haiku merges.
 
 ## Pipeline Leads (TeamCreate — long-running coordinators)
 
 | Agent | Model | Pipeline Stage | Workers it spawns |
 |-------|-------|----------------|-------------------|
-| lead-discovery | sonnet | Find work | scout, scout-parser, scout-lsp, scout-dap, research-verifier, plan-reviewer |
+| lead-discovery | sonnet | Find work | scout, accuracy-scout, scout-parser, scout-lsp, scout-dap, plan-reviewer |
 | lead-build | sonnet | Build from specs | builder |
 | lead-review | sonnet | Review and merge | reviewer, reviewer-deep, ops, wisdom |
 
@@ -50,8 +50,8 @@ disallowedTools (Edit, Write) enforces orchestrator-only role.
 
 | Agent | Model | Steps | Role |
 |-------|-------|-------|------|
-| scout | haiku | 9 | Broad investigation → file initial plan |
-| research-verifier | haiku | 6 | Verify external claims (Perl/LSP/API), post findings, add label |
+| scout | haiku | 8 | Broad investigation → file initial plan |
+| accuracy-scout | haiku | 5 | Verify mechanical facts (file paths, functions, issue status) before plan-review |
 | plan-reviewer | sonnet | 5 | Refine plan, stress-test, mark builder-ready |
 | builder | sonnet | 6 | Implement from spec → draft PR. Also used for continuation via /builder-read-pr |
 | reviewer | haiku | 5 | Fast standards check (banned patterns, scope) |
@@ -73,11 +73,13 @@ disallowedTools (Edit, Write) enforces orchestrator-only role.
 | research-web | sonnet | Ad-hoc web research — single question, spawned by other agents |
 | wisdom | sonnet | Synthesize learnings from issue→PR→merge cycles |
 
-## Step Skills (27)
+## Step Skills (32)
 
 **Scout steps:** scout-dedup, scout-locate, scout-reproduce, scout-root-cause, scout-design, scout-test-spec, scout-verify, scout-report
 
 **Research-verifier steps:** research-read-issue, research-verify-perl, research-verify-spec, research-verify-api, research-comment
+
+**Accuracy-scout steps:** accuracy-read-issue, accuracy-verify-files, accuracy-verify-claims, accuracy-verify-status, accuracy-comment
 
 **Builder steps:** builder-read-spec, builder-read-pr, builder-write-test, builder-implement, builder-self-review
 

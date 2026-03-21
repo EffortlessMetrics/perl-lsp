@@ -323,3 +323,133 @@ fn test_hover_capability_advertised() -> TestResult {
 
     Ok(())
 }
+
+/// Tests feature spec: navigation.rs#hover-builtin-context-sensitive-docs
+///
+/// Validates that dual-context builtins (gmtime, keys, wantarray, grep, caller)
+/// include scalar context information in their hover documentation.
+#[test]
+fn test_hover_builtin_context_sensitive_docs() -> TestResult {
+    let doc = "gmtime();\nkeys %h;\nwantarray();\ngrep { 1 } @a;\ncaller();\n";
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///context_builtins.pl", doc)?;
+
+    // gmtime at line 0
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///context_builtins.pl"},
+                "position": {"line": 0, "character": 2}
+            }),
+        )
+        .unwrap_or(json!(null));
+    if !result.is_null() {
+        let value = result
+            .get("contents")
+            .and_then(|c| c.get("value"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(
+            value.contains("scalar context"),
+            "gmtime hover must mention scalar context: {}",
+            value
+        );
+    }
+
+    // keys at line 1
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///context_builtins.pl"},
+                "position": {"line": 1, "character": 2}
+            }),
+        )
+        .unwrap_or(json!(null));
+    if !result.is_null() {
+        let value = result
+            .get("contents")
+            .and_then(|c| c.get("value"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(
+            value.contains("scalar context"),
+            "keys hover must mention scalar context: {}",
+            value
+        );
+    }
+
+    // wantarray at line 2
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///context_builtins.pl"},
+                "position": {"line": 2, "character": 2}
+            }),
+        )
+        .unwrap_or(json!(null));
+    if !result.is_null() {
+        let value = result
+            .get("contents")
+            .and_then(|c| c.get("value"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(
+            value.contains("scalar context") || value.contains("void context"),
+            "wantarray hover must mention context variants: {}",
+            value
+        );
+    }
+
+    // grep at line 3
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///context_builtins.pl"},
+                "position": {"line": 3, "character": 2}
+            }),
+        )
+        .unwrap_or(json!(null));
+    if !result.is_null() {
+        let value = result
+            .get("contents")
+            .and_then(|c| c.get("value"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(
+            value.contains("scalar context"),
+            "grep hover must mention scalar context count behavior: {}",
+            value
+        );
+    }
+
+    // caller at line 4
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///context_builtins.pl"},
+                "position": {"line": 4, "character": 2}
+            }),
+        )
+        .unwrap_or(json!(null));
+    if !result.is_null() {
+        let value = result
+            .get("contents")
+            .and_then(|c| c.get("value"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        assert!(
+            value.contains("scalar context") || value.contains("package"),
+            "caller hover must mention scalar form: {}",
+            value
+        );
+    }
+
+    Ok(())
+}

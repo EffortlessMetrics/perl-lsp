@@ -11,6 +11,7 @@ use perl_semantic_analyzer::symbol::SymbolExtractor;
 
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
+use crate::lints::printf_format::check_printf_format;
 use crate::lints::strict_warnings::check_strict_warnings;
 use crate::scope::scope_issues_to_diagnostics;
 
@@ -113,6 +114,7 @@ impl DiagnosticsProvider {
         check_deprecated_syntax(ast, &mut diagnostics);
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         check_common_mistakes(ast, &symbol_table, &mut diagnostics);
+        check_printf_format(ast, &mut diagnostics);
 
         // Missing module lint (PL701) — only when a resolver is provided
         if let Some(resolver) = module_resolver {

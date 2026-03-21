@@ -773,7 +773,7 @@ impl SymbolExtractor {
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: format!("{}::{}", self.table.current_package, name),
-                    kind: SymbolKind::Subroutine,
+                    kind: SymbolKind::Method,
                     location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
@@ -1023,6 +1023,28 @@ impl SymbolExtractor {
             }
         }
 
+        // Form C: FunctionCall { name: "has", args: [name_expr, HashLiteral { ... }] }
+        // Produced when the parser recognises `has 'name' => (is => 'ro', ...)` as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && name == "has"
+            && !args.is_empty()
+        {
+            let options_hash_idx =
+                args.iter().rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
+            if let Some(opts_idx) = options_hash_idx {
+                if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
+                    let names: Vec<String> =
+                        args[..opts_idx].iter().flat_map(Self::collect_symbol_names).collect();
+                    if !names.is_empty() {
+                        self.synthesize_moo_has_attrs_with_options(&names, pairs, first.location);
+                        self.visit_node(first);
+                        return Some(1);
+                    }
+                }
+            }
+        }
+
         None
     }
 
@@ -1031,12 +1053,44 @@ impl SymbolExtractor {
     /// Pattern (two statements):
     /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`)
     /// 2. `ExpressionStatement(HashLiteral([ (method_name, Subroutine{...}) ]))`
+    ///
+    /// Also handles FunctionCall form: `around 'name' => sub { }` (post parser fix).
     fn try_extract_method_modifier(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        let first = &statements[idx];
+
+        // FunctionCall form: `around 'name' => sub { }` parsed as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && matches!(name.as_str(), "around" | "before" | "after")
+        {
+            let modifier_name = name.as_str();
+            let method_names: Vec<String> =
+                args.first().map(Self::collect_symbol_names).unwrap_or_default();
+            if !method_names.is_empty() {
+                let scope_id = self.table.current_scope();
+                let package = self.table.current_package.clone();
+                for method_name in method_names {
+                    self.table.add_symbol(Symbol {
+                        name: method_name.clone(),
+                        qualified_name: format!("{package}::{method_name}"),
+                        kind: SymbolKind::Subroutine,
+                        location: first.location,
+                        scope_id,
+                        declaration: Some(modifier_name.to_string()),
+                        documentation: Some(format!(
+                            "Method modifier `{modifier_name}` for `{method_name}`"
+                        )),
+                        attributes: vec![format!("modifier={modifier_name}")],
+                    });
+                }
+                return Some(1);
+            }
+        }
+
         if idx + 1 >= statements.len() {
             return None;
         }
 
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         // Check: first is ExpressionStatement(Identifier("around"|"before"|"after"))
@@ -1094,12 +1148,38 @@ impl SymbolExtractor {
     /// Pattern (two statements):
     /// 1. `ExpressionStatement(Identifier("extends"))` or `ExpressionStatement(Identifier("with"))`
     /// 2. `ExpressionStatement(String(...))` or `ExpressionStatement(ArrayLiteral(...))`
+    ///
+    /// Also handles FunctionCall form: `extends 'Parent'` (post parser fix).
     fn try_extract_extends_with(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        let first = &statements[idx];
+
+        // FunctionCall form: `extends 'Parent'` / `with 'Role'` parsed as bare calls.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && matches!(name.as_str(), "extends" | "with")
+        {
+            let keyword = name.as_str();
+            let names: Vec<String> = args.iter().flat_map(Self::collect_symbol_names).collect();
+            if !names.is_empty() {
+                let ref_kind =
+                    if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
+                for ref_name in names {
+                    self.table.add_reference(SymbolReference {
+                        name: ref_name,
+                        kind: ref_kind,
+                        location: first.location,
+                        scope_id: self.table.current_scope(),
+                        is_write: false,
+                    });
+                }
+                return Some(1);
+            }
+        }
+
         if idx + 1 >= statements.len() {
             return None;
         }
 
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         // Check: first is ExpressionStatement(Identifier("extends"|"with"))
@@ -1144,12 +1224,40 @@ impl SymbolExtractor {
     ///
     /// Pattern:
     /// `ExpressionStatement(Identifier("requires"))` followed by `ExpressionStatement(String(...))` or similar
+    ///
+    /// Also handles FunctionCall form: `requires 'method'` (post parser fix).
     fn try_extract_role_requires(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        let first = &statements[idx];
+
+        // FunctionCall form: `requires 'method'` parsed as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && name == "requires"
+        {
+            let names: Vec<String> = args.iter().flat_map(Self::collect_symbol_names).collect();
+            if !names.is_empty() {
+                let scope_id = self.table.current_scope();
+                let package = self.table.current_package.clone();
+                for method_name in names {
+                    self.table.add_symbol(Symbol {
+                        name: method_name.clone(),
+                        qualified_name: format!("{package}::{method_name}"),
+                        kind: SymbolKind::Subroutine,
+                        location: first.location,
+                        scope_id,
+                        declaration: Some("requires".to_string()),
+                        documentation: Some(format!("Required method `{method_name}` from role")),
+                        attributes: vec!["requires=true".to_string()],
+                    });
+                }
+                return Some(1);
+            }
+        }
+
         if idx + 1 >= statements.len() {
             return None;
         }
 
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         // Check: first is ExpressionStatement(Identifier("requires"))
@@ -1298,11 +1406,49 @@ impl SymbolExtractor {
         statements: &[Node],
         idx: usize,
     ) -> Option<usize> {
+        let first = &statements[idx];
+
+        // FunctionCall form: `get '/path' => sub { }` parsed as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && matches!(name.as_str(), "get" | "post" | "put" | "del" | "delete" | "patch" | "any")
+        {
+            let method_name = name.as_str();
+            // args[0] is the route path (String), rest is the handler
+            if let Some(path_node) = args.first() {
+                if let NodeKind::String { value, .. } = &path_node.kind {
+                    if let Some(path) = Self::normalize_symbol_name(value) {
+                        let http_method = match method_name {
+                            "get" => "GET",
+                            "post" => "POST",
+                            "put" => "PUT",
+                            "del" | "delete" => "DELETE",
+                            "patch" => "PATCH",
+                            "any" => "ANY",
+                            _ => method_name,
+                        };
+                        let scope_id = self.table.current_scope();
+                        self.table.add_symbol(Symbol {
+                            name: path.clone(),
+                            qualified_name: path.clone(),
+                            kind: SymbolKind::Subroutine,
+                            location: first.location,
+                            scope_id,
+                            declaration: Some(method_name.to_string()),
+                            documentation: Some(format!("{http_method} {path}")),
+                            attributes: vec![format!("http_method={http_method}")],
+                        });
+                        self.visit_node(first);
+                        return Some(1);
+                    }
+                }
+            }
+        }
+
         if idx + 1 >= statements.len() {
             return None;
         }
 
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         // First statement must be ExpressionStatement(Identifier(<route_method>))
@@ -2025,5 +2171,37 @@ sub bar {
         let bar_symbols = &table.symbols["bar"];
         assert_eq!(bar_symbols.len(), 1);
         assert_eq!(bar_symbols[0].kind, SymbolKind::Subroutine);
+    }
+
+    // ── Bug 3 test: NodeKind::Method uses SymbolKind::Method not Subroutine ──
+
+    #[test]
+    fn test_method_node_uses_symbol_kind_method() {
+        let code = r#"
+class MyClass {
+    method greet {
+        return "hello";
+    }
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(table.symbols.contains_key("greet"), "expected 'greet' in symbol table");
+        let greet_symbols = &table.symbols["greet"];
+        assert_eq!(greet_symbols.len(), 1);
+        assert_eq!(
+            greet_symbols[0].kind,
+            SymbolKind::Method,
+            "NodeKind::Method should produce SymbolKind::Method, not Subroutine"
+        );
+        // Also verify the method attribute was pushed
+        assert!(
+            greet_symbols[0].attributes.contains(&"method".to_string()),
+            "method symbol should have 'method' attribute"
+        );
     }
 }

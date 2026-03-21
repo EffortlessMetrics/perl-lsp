@@ -52,8 +52,27 @@ where
                 walk_node(arg, func);
             }
         }
+        NodeKind::IndirectCall { object, args, .. } => {
+            walk_node(object, func);
+            for arg in args {
+                walk_node(arg, func);
+            }
+        }
         NodeKind::ExpressionStatement { expression } => {
             walk_node(expression, func);
+        }
+        NodeKind::Assignment { lhs, rhs, .. } => {
+            walk_node(lhs, func);
+            walk_node(rhs, func);
+        }
+        NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
+            walk_node(init, func);
+        }
+        NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
+            walk_node(init, func);
+        }
+        NodeKind::PhaseBlock { block, .. } => {
+            walk_node(block, func);
         }
         _ => {} // Other nodes don't have children or are handled differently
     }

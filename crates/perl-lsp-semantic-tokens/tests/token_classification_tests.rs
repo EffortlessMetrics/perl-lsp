@@ -985,11 +985,6 @@ fn test_dbi_prepare_with_sql_string_is_sql_token() {
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
 
-    // Skip test if sql_string token type doesn't exist yet (pre-implementation)
-    if sql_idx == u32::MAX {
-        return;
-    }
-
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "prepare() first argument should be sql_string token");
 }
@@ -999,10 +994,6 @@ fn test_dbi_do_with_sql_string_is_sql_token() {
     let code = r#"$dbh->do("INSERT INTO logs (event) VALUES (?)")"#;
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
-
-    if sql_idx == u32::MAX {
-        return;
-    }
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "do() first argument should be sql_string token");
@@ -1014,10 +1005,6 @@ fn test_dbi_query_with_sql_string_is_sql_token() {
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
 
-    if sql_idx == u32::MAX {
-        return;
-    }
-
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "query() first argument should be sql_string token");
 }
@@ -1027,10 +1014,6 @@ fn test_dbi_selectrow_arrayref_with_sql_string() {
     let code = r#"my $row = $dbh->selectrow_arrayref("SELECT * FROM users")"#;
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
-
-    if sql_idx == u32::MAX {
-        return;
-    }
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "selectrow_arrayref() first argument should be sql_string token");
@@ -1042,10 +1025,6 @@ fn test_dbi_selectall_arrayref_with_sql_string() {
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
 
-    if sql_idx == u32::MAX {
-        return;
-    }
-
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "selectall_arrayref() first argument should be sql_string token");
 }
@@ -1055,10 +1034,6 @@ fn test_non_sql_method_call_string_not_sql_token() {
     let code = r#"my $result = $obj->format("some regular text")"#;
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
-
-    if sql_idx == u32::MAX {
-        return;
-    }
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(!has_sql_token, "non-SQL method calls should not classify strings as sql_string");
@@ -1070,10 +1045,6 @@ fn test_regular_string_literal_not_sql_token() {
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
 
-    if sql_idx == u32::MAX {
-        return;
-    }
-
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(!has_sql_token, "standalone string literals should not be sql_string tokens");
 }
@@ -1084,10 +1055,6 @@ fn test_dbi_prepare_with_interpolated_string_still_sql_token() {
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
 
-    if sql_idx == u32::MAX {
-        return;
-    }
-
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "interpolated SQL strings should still be sql_string tokens");
 }
@@ -1097,10 +1064,6 @@ fn test_dbi_do_multiple_arguments_first_is_sql() {
     let code = r#"$dbh->do("UPDATE users SET active = 1 WHERE id = ?", undef, $user_id)"#;
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
-
-    if sql_idx == u32::MAX {
-        return;
-    }
 
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "first argument of do() with multiple args should be sql_string");
@@ -1118,12 +1081,29 @@ fn test_nested_dbi_call_in_complex_expression() {
     let tokens = tokens_for(code);
     let sql_idx = type_idx("sql_string");
 
-    if sql_idx == u32::MAX {
-        return;
-    }
-
     let has_sql_token = tokens.iter().any(|t| t[3] == sql_idx);
     assert!(has_sql_token, "SQL string in complex nested call should be sql_string token");
+}
+
+#[test]
+fn test_dbi_prepare_still_produces_method_token_for_method_name() {
+    // Verify the method name itself still gets a "method" token after the
+    // special-cased MethodCall arm is introduced.
+    let code = r#"my $sth = $dbh->prepare("SELECT 1")"#;
+    let tokens = tokens_for(code);
+    let meth_idx = type_idx("method");
+    let has_method = tokens.iter().any(|t| t[3] == meth_idx);
+    assert!(has_method, "method name 'prepare' should still produce a method token");
+}
+
+#[test]
+fn test_non_sql_method_call_still_produces_method_token() {
+    // Non-SQL method calls must still produce a method token after refactor.
+    let code = r#"my $result = $obj->format("text")"#;
+    let tokens = tokens_for(code);
+    let meth_idx = type_idx("method");
+    let has_method = tokens.iter().any(|t| t[3] == meth_idx);
+    assert!(has_method, "non-SQL method call should still produce a method token");
 }
 
 // ===========================================================================
