@@ -40,7 +40,7 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `plan-reviewed` | plan-reviewer (/plan-review-improve) | Spec verified |
 | `builder-ready` | plan-reviewer (/plan-review-improve) | Ready for builder pickup |
 | `in-build` | builder (/builder-read-spec) | Builder claimed this issue |
-| `in-review` | reviewer (/reviewer-decide) | PR actively in review |
+| `in-review` | reviewer (/reviewer-read-handoff) | PR actively in review — set at review start |
 | `merge-ready` | reviewer (/pr-ready) | Ready for ops merge |
 | `structural-blocker` | any agent | Architecture issue; blocks parallel work |
 | `needs-deep-review` | reviewer | Requires additional deep-review pass |

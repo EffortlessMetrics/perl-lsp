@@ -148,7 +148,7 @@ Labels are the authoritative state of every issue and PR. Agents write labels; t
 | `plan-reviewed` | plan-reviewer (/plan-review-improve) | orchestrator | Spec verified |
 | `builder-ready` | plan-reviewer (/plan-review-improve) | orchestrator, builder | Ready for builder pickup |
 | `in-build` | builder (/builder-read-spec) | orchestrator | Builder claimed this issue |
-| `in-review` | reviewer (/reviewer-decide) | orchestrator | PR actively in review |
+| `in-review` | reviewer (/reviewer-read-handoff) | orchestrator | PR actively in review — set at review start |
 | `merge-ready` | reviewer (/pr-ready) | ops agent | Ready for merge pickup |
 | `structural-blocker` | any agent | orchestrator | Blocks parallel work |
 | `needs-deep-review` | reviewer | orchestrator | Needs additional deep-review pass |

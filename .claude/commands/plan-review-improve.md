@@ -37,17 +37,18 @@ Write your findings as an issue comment and label the issue as builder-ready.
    )"
    ```
 
-2. If ready for builder, add both labels together:
+2. If ready for builder, add both labels in a single call:
    ```bash
-   gh issue edit <number> --add-label "plan-reviewed"
-   gh issue edit <number> --add-label "builder-ready"
+   gh issue edit <number> --add-label "plan-reviewed" --add-label "builder-ready"
    ```
-   Both labels must be set — `plan-reviewed` records that the spec passed review, `builder-ready` gates builder pickup.
+   Both labels in one call is atomic — either both are set or neither is, preventing
+   the partial state where `plan-reviewed` exists without `builder-ready`.
+   `plan-reviewed` records that the spec passed review; `builder-ready` gates builder pickup.
 
 3. If the spec is incomplete or wrong (root cause was wrong, file references stale, approach flawed):
    - **Do the investigation yourself.** Find the real root cause, correct the file references, design the fix. You have sonnet — use it.
    - Update the issue with the corrected spec: exact files, functions, lines, test cases, verify commands.
-   - Then add both `plan-reviewed` and `builder-ready` labels. The output is always a builder-ready issue.
+   - Then add both `plan-reviewed` and `builder-ready` labels in a single call. The output is always a builder-ready issue.
 
 ## Rules
 

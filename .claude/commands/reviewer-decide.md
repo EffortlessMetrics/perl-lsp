@@ -19,10 +19,9 @@ gh pr checkout <number>
 git push
 gh pr review <number> --approve --body "Improved: <list>. Verified: <what you checked>."
 gh pr ready <number>  # if still draft
-gh pr edit <number> --add-label "in-review"
 ```
 
-The `in-review` label signals to the orchestrator that this PR is actively being reviewed and should not be double-assigned.
+Note: `in-review` was already set in step 1 (/reviewer-read-handoff). No label change needed here.
 
 ### Trivial issues only (typos, formatting, <5 lines) → Fix in place
 1. Check out the branch:
@@ -36,7 +35,6 @@ The `in-review` label signals to the orchestrator that this PR is actively being
    ```bash
    gh pr review <number> --approve
    gh pr ready <number>
-   gh pr edit <number> --add-label "in-review"
    ```
 
 ### Non-trivial issues → Fix forward if you can
