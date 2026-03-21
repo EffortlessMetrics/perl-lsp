@@ -4,6 +4,11 @@
 //! blocks) followed by a word operator (`and`, `or`, `xor`), the parser was
 //! requiring an argument because `allow_no_args=false`. Fix: pass `true` so the
 //! existing word-operator guard in `parse_named_unary_statement_call` can fire.
+//!
+//! The fix is applied ONLY when there are no parentheses (line 779 of statements.rs:
+//! `if self.peek_kind() != Some(TokenKind::LeftParen)`). Thus `defined($x)` and
+//! `ref($obj)` with explicit parens are unaffected — they always fall through to
+//! normal argument parsing. The change only affects the no-paren no-arg path.
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
@@ -69,4 +74,30 @@ fn test_defined_with_argument_still_works() {
 #[test]
 fn test_ref_with_argument_still_works() {
     assert_clean_parse(r#"map { ref $_ eq 'ARRAY' } @items;"#);
+}
+
+// === Additional regression guards: parenthesized versions ===
+
+#[test]
+fn test_defined_with_parens_and_arg() {
+    // Parens should always work—they delimit, so `allow_no_args=false` doesn't matter
+    assert_clean_parse(r#"my $x = defined($y);"#);
+}
+
+#[test]
+fn test_ref_with_parens_and_arg() {
+    // Parens should always work
+    assert_clean_parse(r#"my $r = ref($obj);"#);
+}
+
+#[test]
+fn test_defined_no_parens_with_arg_after_if() {
+    // No parens, but has explicit argument
+    assert_clean_parse(r#"if (defined $x) { }"#);
+}
+
+#[test]
+fn test_ref_cmp_eq_regression() {
+    // With parens and string comparison operator
+    assert_clean_parse(r#"if (ref($x) eq 'HASH') { }"#);
 }
