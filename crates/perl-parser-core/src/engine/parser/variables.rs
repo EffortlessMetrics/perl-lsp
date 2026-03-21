@@ -518,6 +518,11 @@ impl<'a> Parser<'a> {
                     let num_token = self.tokens.next()?;
                     (num_token.text.to_string(), num_token.end)
                 }
+                Some(TokenKind::DoubleColon) => {
+                    // $:: — the main namespace stash
+                    let dc_token = self.tokens.next()?; // consume ::
+                    ("::".to_string(), dc_token.end)
+                }
                 _ => {
                     // Empty variable name (just the sigil)
                     (String::new(), self.previous_position())
