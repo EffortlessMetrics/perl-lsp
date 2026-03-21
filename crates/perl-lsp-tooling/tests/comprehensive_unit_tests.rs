@@ -474,6 +474,7 @@ fn critic_analyzer_passes_config_args() -> Result<(), String> {
         exclude: vec!["ExcludeMe".to_string()],
         verbose: false,
         color: false,
+        timeout_secs: 30,
     };
     let mut analyzer = CriticAnalyzer::new(config, runtime.clone());
     analyzer.analyze_file(Path::new("x.pl"))?;
@@ -1190,6 +1191,7 @@ fn critic_config_serialize_deserialize() -> Result<(), Box<dyn std::error::Error
         theme: Some("core".to_string()),
         verbose: true,
         color: true,
+        timeout_secs: 30,
     };
 
     let json = serde_json::to_string(&config)?;
@@ -1679,6 +1681,7 @@ fn perltidy_config_all_none_produces_no_args() {
         block_comment_indentation: None,
         profile: None,
         extra_args: Vec::new(),
+        timeout_secs: 10,
     };
 
     // Use formatter to inspect args (to_args is private)
@@ -2103,4 +2106,12 @@ fn critic_diagnostics_have_perlcritic_source() {
     if let Some(lsp_types::NumberOrString::String(ref code)) = diags[0].code {
         assert_eq!(code, "P");
     }
+}
+
+// ──────────────────────────── CriticConfig: timeout field ──────────────────
+
+#[test]
+fn critic_config_default_has_timeout() {
+    let config = CriticConfig::default();
+    assert_eq!(config.timeout_secs, 30);
 }

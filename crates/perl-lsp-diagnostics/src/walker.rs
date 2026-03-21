@@ -55,6 +55,9 @@ where
         NodeKind::ExpressionStatement { expression } => {
             walk_node(expression, func);
         }
+        NodeKind::PhaseBlock { block, .. } => {
+            walk_node(block, func);
+        }
         _ => {} // Other nodes don't have children or are handled differently
     }
 }

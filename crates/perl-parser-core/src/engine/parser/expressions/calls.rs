@@ -374,6 +374,8 @@ impl<'a> Parser<'a> {
                         | TokenKind::WordXor
                         | TokenKind::WordNot
                         | TokenKind::RightBrace
+                        | TokenKind::RightParen
+                        | TokenKind::RightBracket
                 )
             )
         {

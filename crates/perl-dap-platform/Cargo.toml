@@ -25,9 +25,9 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.102"
-perl-dap-shell = { workspace = true }
 
 [dev-dependencies]
+perl-dap-command-args = { workspace = true }
 perl-tdd-support = { workspace = true }
 tempfile = "3.24.0"
 

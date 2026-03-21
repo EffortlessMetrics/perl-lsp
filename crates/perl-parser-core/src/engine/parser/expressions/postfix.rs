@@ -426,7 +426,7 @@ impl<'a> Parser<'a> {
                                 // Collect trailing args without requiring commas first.
                                 let is_fh_builtin = matches!(
                                     name.as_str(),
-                                    "print" | "say" | "printf" | "exec" | "system"
+                                    "print" | "say" | "printf" | "exec" | "system" | "send"
                                 );
                                 if is_fh_builtin && !self.is_at_statement_end()
                                     && !matches!(
@@ -720,7 +720,7 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_assignment()?);
                                     }
-                                } else if matches!(name.as_str(), "print" | "say" | "printf" | "exec" | "system")
+                                } else if matches!(name.as_str(), "print" | "say" | "printf" | "exec" | "system" | "send")
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
                                     // print { $fh } ARGS — block-form filehandle in expr context
@@ -768,13 +768,14 @@ impl<'a> Parser<'a> {
                                     // Parse the first argument
                                     args.push(self.parse_ternary()?);
 
-                                    // Special case: print/say/printf/exec with indirect filehandle.
-                                    // `print $fh $msg` — $fh is the filehandle (no comma before $msg).
-                                    // After the first arg, if next is a sigil/string without comma,
-                                    // treat first arg as filehandle and continue parsing the list.
+                                    // Special case: print/say/printf/exec/send with indirect object.
+                                    // `print $fh $msg` / `send $sock $msg` — first arg is the
+                                    // filehandle/socket (no comma before remaining args).
+                                    // After the first arg, if next is not a comma/terminator,
+                                    // treat first arg as indirect object and continue parsing the list.
                                     if matches!(
                                         name.as_str(),
-                                        "print" | "say" | "printf" | "exec" | "system"
+                                        "print" | "say" | "printf" | "exec" | "system" | "send"
                                     ) && !self.is_at_statement_end()
                                         && !matches!(
                                             self.peek_kind(),
@@ -788,8 +789,9 @@ impl<'a> Parser<'a> {
                                             )
                                         )
                                     {
-                                        // No comma after first arg — it's an indirect filehandle.
-                                        // Parse the remaining args (the actual list to print).
+                                        // No comma after first arg — it's an indirect object
+                                        // (filehandle for print/say/printf, socket for send).
+                                        // Parse the remaining args.
                                         while !self.is_at_statement_end()
                                             && !matches!(
                                                 self.peek_kind(),

@@ -75,6 +75,8 @@ impl LspServer {
                         line_starts,
                         generation: Arc::new(AtomicU32::new(0)),
                         degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
                     },
                 );
 
@@ -115,6 +117,10 @@ impl LspServer {
                         self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
                         (Some((*arc_ast).clone()), errors)
                     }
+                    Err(crate::error::ParseError::Cancelled) => {
+                        tracing::debug!("Parse cancelled for {} — newer change pending", uri);
+                        return Ok(());
+                    }
                     Err(e) => (None, vec![e]),
                 }
             };
@@ -141,6 +147,16 @@ impl LspServer {
 
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
+
+            // Initialize incremental document from the already-parsed text (didOpen).
+            // code_slice is applied here to match what the full parser sees.
+            #[cfg(feature = "incremental")]
+            let incremental_doc = {
+                use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
+                let code_text = crate::util::code_slice(text);
+                IncrementalDocument::new(code_text.to_string()).ok()
+            };
+
             self.documents.lock().insert(
                 normalized_uri.clone(),
                 DocumentState {
@@ -153,6 +169,8 @@ impl LspServer {
                     line_starts,
                     generation: Arc::new(AtomicU32::new(0)),
                     degradation_tier,
+                    #[cfg(feature = "incremental")]
+                    incremental_doc,
                 },
             );
 
@@ -307,6 +325,8 @@ impl LspServer {
                         line_starts: LineStartsCache::new(""),
                         generation: Arc::new(AtomicU32::new(0)),
                         degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
                     });
 
                 // Increment generation counter for this change
@@ -339,6 +359,49 @@ impl LspServer {
                     }
                 }
 
+                // Build incremental edits from the OLD source BEFORE mutating the rope.
+                // UTF-16 line/char → byte conversion must use the pre-change line index.
+                #[cfg(feature = "incremental")]
+                let incremental_edits_opt: Option<
+                    perl_incremental_parsing::incremental::incremental_edit::IncrementalEditSet,
+                > = {
+                    use perl_incremental_parsing::incremental::incremental_edit::{
+                        IncrementalEdit, IncrementalEditSet,
+                    };
+                    let mut edit_set = IncrementalEditSet::new();
+                    let mut all_ranged = true;
+                    for change in &lsp_changes {
+                        if let Some(range) = change.range {
+                            // Convert UTF-16 line/char to byte offsets using the pre-change
+                            // line_starts (populated from the rope before apply_changes runs).
+                            let start_byte = doc_state.line_starts.position_to_offset_rope(
+                                &doc_state.rope,
+                                range.start.line,
+                                range.start.character,
+                            );
+                            let old_end_byte = doc_state.line_starts.position_to_offset_rope(
+                                &doc_state.rope,
+                                range.end.line,
+                                range.end.character,
+                            );
+                            edit_set.add(IncrementalEdit::new(
+                                start_byte,
+                                old_end_byte,
+                                change.text.clone(),
+                            ));
+                        } else {
+                            // Full-document replace — not a ranged edit; reset below
+                            tracing::trace!(
+                                "Full-document replace detected for {} — incremental edits not supported",
+                                uri
+                            );
+                            all_ranged = false;
+                            break;
+                        }
+                    }
+                    if all_ranged && !edit_set.is_empty() { Some(edit_set) } else { None }
+                };
+
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
 
@@ -369,6 +432,8 @@ impl LspServer {
                         line_starts,
                         generation: doc_state.generation.clone(),
                         degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
                     };
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
@@ -410,6 +475,10 @@ impl LspServer {
                             self.ast_cache.put(uri.to_string(), &text, Arc::clone(&arc_ast));
                             (Some((*arc_ast).clone()), errors)
                         }
+                        Err(crate::error::ParseError::Cancelled) => {
+                            tracing::debug!("Parse cancelled for {} — newer change pending", uri);
+                            return Ok(());
+                        }
                         Err(e) => (None, vec![e]),
                     }
                 };
@@ -433,6 +502,29 @@ impl LspServer {
                 // Compute degradation tier before moving errors
                 let degradation_tier = DegradationTier::from_parse_result(&ast_arc, &errors);
 
+                // Update or reinitialize IncrementalDocument for the new text.
+                // - Ranged edits: apply to existing incremental_doc (fast path).
+                // - Full replace or no existing doc: reinitialize from new text (fallback).
+                #[cfg(feature = "incremental")]
+                let incremental_doc = {
+                    use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
+                    let code_text = crate::util::code_slice(&text);
+                    match (doc_state.incremental_doc.take(), incremental_edits_opt) {
+                        (Some(mut inc), Some(edits)) => {
+                            // Try applying the incremental edits to the existing tree
+                            match inc.apply_edits(&edits) {
+                                Ok(()) => Some(inc),
+                                Err(_) => {
+                                    // Fallback: reinitialize from the post-change source
+                                    IncrementalDocument::new(code_text.to_string()).ok()
+                                }
+                            }
+                        }
+                        // Full-document replace or no prior incremental state: reinitialize
+                        _ => IncrementalDocument::new(code_text.to_string()).ok(),
+                    }
+                };
+
                 // Update document state with properly updated content
                 doc_state = DocumentState {
                     rope: doc.rope.clone(),
@@ -444,6 +536,8 @@ impl LspServer {
                     line_starts,
                     generation: doc_state.generation.clone(), // Preserve the generation counter
                     degradation_tier,
+                    #[cfg(feature = "incremental")]
+                    incremental_doc,
                 };
 
                 // Check if a newer change arrived while we were parsing
@@ -555,6 +649,18 @@ impl LspServer {
             let mut documents = self.documents.lock();
             documents.remove(&normalized_uri).or_else(|| documents.remove(uri));
 
+            // Cancel any in-progress parse and clean up the cancellation flag.
+            {
+                let mut flags = self.parse_cancel_flags.lock();
+                if let Some(flag) = flags.remove(&normalized_uri) {
+                    flag.store(true, Ordering::Release);
+                }
+                // Also try raw URI in case normalize produced a different key.
+                if let Some(flag) = flags.remove(uri) {
+                    flag.store(true, Ordering::Release);
+                }
+            }
+
             // Clear from workspace index
             // Note: Mutation operation - use coordinator.index() directly
             #[cfg(feature = "workspace")]
@@ -604,7 +710,8 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                    let diagnostics = provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+                    let diagnostics =
+                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, None);
 
                     // Convert diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics
@@ -751,6 +858,237 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// Verify that a ranged didChange initializes and preserves incremental_doc.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_path_taken_on_ranged_change() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_incremental.pl";
+        let text = "my $x = 42;\nmy $y = 99;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Verify incremental_doc was initialized on didOpen
+        {
+            let docs = server.documents.lock();
+            let doc = docs.get(uri).ok_or("document not stored after didOpen")?;
+            assert!(
+                doc.incremental_doc.is_some(),
+                "incremental_doc must be initialized on didOpen"
+            );
+        }
+
+        // Apply a ranged change: replace "42" with "43"
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 0, "character": 8 },
+                    "end":   { "line": 0, "character": 10 }
+                },
+                "text": "43"
+            }]
+        })))?;
+
+        // Document must still be stored with updated content and a present AST
+        {
+            let docs = server.documents.lock();
+            let doc = docs.get(uri).ok_or("document not stored after didChange")?;
+            assert!(doc.text.contains("43"), "document text must be updated");
+            assert!(doc.ast.is_some(), "AST must be present after incremental change");
+            // incremental_doc must still be present after a ranged edit
+            assert!(doc.incremental_doc.is_some(), "incremental_doc must survive a ranged edit");
+            // The incremental doc's internal source must reflect the edit.
+            // This catches a silent reinit-instead-of-apply bug: reinit would also hold
+            // "43" in the source, but would not have the version counter bumped from 0.
+            // Checking the source text is the strongest behavioral assertion available
+            // without mocking the apply_edits call itself.
+            let inc = doc.incremental_doc.as_ref().unwrap();
+            assert!(
+                inc.source.contains("43"),
+                "incremental_doc.source must contain the edit result; got: {:?}",
+                inc.source
+            );
+            assert!(
+                !inc.source.contains("42"),
+                "incremental_doc.source must not contain the old value; got: {:?}",
+                inc.source
+            );
+            // version > 0 proves apply_edits was called (increments version), not just reinit
+            // (which starts at version 0 after IncrementalDocument::new).
+            assert!(
+                inc.version > 0,
+                "incremental_doc.version must be > 0 after at least one edit; got {}",
+                inc.version
+            );
+        }
+        Ok(())
+    }
+
+    /// Verify that a full-document replace (no range) re-initializes incremental_doc.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_full_replace_reinitializes_incremental_doc() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_replace.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Full-document replace (no range field)
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "my $y = 2;\n" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after full replace")?;
+        assert!(
+            doc.incremental_doc.is_some(),
+            "incremental_doc must be re-initialized on full replace"
+        );
+        assert!(doc.text.contains("$y"), "text must be updated to new content");
+        Ok(())
+    }
+
+    /// Verify that broken syntax does not panic and leaves the document in a valid state.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_fallback_on_parse_error() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_error.pl";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1,
+                              "text": "my $x = 42;\n" }
+        }))?;
+
+        // Replace with broken syntax — must not panic; document must survive
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": { "start": { "line": 0, "character": 0 },
+                           "end":   { "line": 0, "character": 11 } },
+                "text": "sub { !!!"
+            }]
+        })))?;
+
+        assert!(server.documents.lock().contains_key(uri), "document must survive broken syntax");
+        Ok(())
+    }
+
+    /// Verify that an empty contentChanges array does not crash and leaves the document intact.
+    /// The server must handle no-op change notifications gracefully.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_empty_content_changes() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_empty_changes.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Send a didChange with an empty contentChanges array (no-op notification)
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": []
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after empty change")?;
+        // Text must be unchanged
+        assert_eq!(doc.text, text, "empty contentChanges must not modify document text");
+        // incremental_doc must still be present (reinit from same text is fine)
+        assert!(
+            doc.incremental_doc.is_some(),
+            "incremental_doc must be present after no-op change"
+        );
+        Ok(())
+    }
+
+    /// Verify that an edit at the very end of the document (zero-length insertion) is handled.
+    /// This is the most common case for autocompletion triggers.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_insert_at_end_of_document() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_insert_end.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Insert a new line at the end (line 1, char 0 — past the only line)
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 1, "character": 0 },
+                    "end":   { "line": 1, "character": 0 }
+                },
+                "text": "my $y = 2;\n"
+            }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after end-of-doc insert")?;
+        assert!(doc.text.contains("$y"), "new line must appear in document text");
+        assert!(
+            doc.incremental_doc.is_some(),
+            "incremental_doc must survive end-of-document insert"
+        );
+        Ok(())
+    }
+
+    /// Verify that UTF-16 position conversion handles multi-byte characters correctly.
+    /// LSP clients send UTF-16 code unit indices; characters like emoji or CJK take 2 units
+    /// but 4+ UTF-8 bytes. The byte offset calculation must account for this.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_utf16_multi_byte_character_positions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_utf16.pl";
+        // Line 0: "my $emoji = 😀;\n" (😀 is U+1F600, takes 2 UTF-16 units, 4 UTF-8 bytes)
+        // UTF-16 positions: m(0) y(1) space(2) $(3) e(4) m(5) o(6) j(7) i(8) space(9) =(10) space(11) 😀(12-13) ;(14)
+        // UTF-8 bytes: "my $emoji = " (12 bytes) + "😀" (4 bytes) + ";\n"
+        let text = "my $emoji = 😀;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Replace the emoji (UTF-16: start=12, end=14) with the ASCII "xx"
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": 0, "character": 12 },
+                    "end":   { "line": 0, "character": 14 }
+                },
+                "text": "xx"
+            }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after UTF-16 edit")?;
+        // Should have replaced emoji with "xx"
+        assert!(
+            doc.text.contains("xx"),
+            "UTF-16 multi-byte replacement failed: expected 'xx' in text"
+        );
+        // The emoji should no longer be there
+        assert!(!doc.text.contains("😀"), "UTF-16 multi-byte removal failed: emoji should be gone");
+        Ok(())
+    }
+
     /// Verify that `did_open` and `did_change` return with the document stored
     /// and that the `pending_index_tasks()` counter is accessible (issue #2352).
     ///
@@ -788,6 +1126,137 @@ mod tests {
 
         assert!(server.documents.lock().contains_key(uri));
         assert_eq!(server.pending_index_tasks(), 0);
+
+        Ok(())
+    }
+
+    /// `new_parse_token` must cancel the previous flag when called a second time
+    /// for the same URI and return a fresh `false` flag.
+    #[test]
+    fn test_new_parse_token_cancels_previous_flag() {
+        let server = LspServer::new();
+        let uri = "file:///test_cancel_token.pl";
+
+        let first = server.new_parse_token(uri);
+        assert!(!first.load(Ordering::Relaxed), "first token must start false");
+
+        // Second call for same URI must set the first flag to true.
+        let second = server.new_parse_token(uri);
+        assert!(first.load(Ordering::Relaxed), "first token must be cancelled after second call");
+        assert!(!second.load(Ordering::Relaxed), "second token must start false");
+
+        // Third call cancels second, returns fresh third.
+        let third = server.new_parse_token(uri);
+        assert!(second.load(Ordering::Relaxed), "second token must be cancelled after third call");
+        assert!(!third.load(Ordering::Relaxed), "third token must start false");
+    }
+
+    /// Different URIs must not interfere with each other's cancellation tokens.
+    #[test]
+    fn test_new_parse_token_is_per_uri() {
+        let server = LspServer::new();
+        let uri_a = "file:///a.pl";
+        let uri_b = "file:///b.pl";
+
+        let token_a = server.new_parse_token(uri_a);
+        let token_b = server.new_parse_token(uri_b);
+
+        // Issuing a second token for uri_b must not affect uri_a's token.
+        let _token_b2 = server.new_parse_token(uri_b);
+        assert!(
+            !token_a.load(Ordering::Relaxed),
+            "uri_a token must not be cancelled by uri_b activity"
+        );
+        assert!(
+            token_b.load(Ordering::Relaxed),
+            "uri_b first token must be cancelled by uri_b second token"
+        );
+    }
+
+    /// `handle_did_close` must cancel the in-flight parse flag and remove it from
+    /// the map so that the entry does not leak after the document is closed.
+    #[test]
+    fn test_did_close_cancels_and_removes_flag() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_close_cancel.pl";
+
+        // Simulate a parse token being registered for this URI.
+        let token = server.new_parse_token(uri);
+        assert!(!token.load(Ordering::Relaxed), "token must start false");
+
+        // Open document so did_close has something to clean up.
+        server.handle_did_open_with_cancellation(
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;"
+                }
+            })),
+            None,
+        )?;
+
+        // Now issue a new token (as dispatch would do) — replaces the previous one.
+        let in_flight_token = server.new_parse_token(uri);
+
+        // Close the document.
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+
+        // The in-flight token must have been cancelled by did_close.
+        assert!(
+            in_flight_token.load(Ordering::Relaxed),
+            "did_close must set the in-flight parse flag to true"
+        );
+
+        // The flags map must be empty for this URI — no leak.
+        assert!(
+            !server.parse_cancel_flags.lock().contains_key(uri),
+            "did_close must remove the URI entry from parse_cancel_flags"
+        );
+
+        Ok(())
+    }
+
+    /// A parse cancelled via a pre-set flag must return Ok(()) and not store
+    /// a document, so the caller behaves as if the parse simply didn't happen.
+    #[test]
+    fn test_cancelled_open_returns_ok_without_storing_document()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicBool;
+
+        let server = LspServer::new();
+        let uri = "file:///test_cancelled_open.pl";
+
+        // Pre-set the cancellation flag — the parse must be skipped immediately.
+        let flag = Arc::new(AtomicBool::new(true));
+
+        // Build a source large enough that parse() wouldn't return instantly
+        // on its own — we rely on the pre-parse check in parse().
+        let text: String = (0..200).map(|i| format!("my $x{} = {};\n", i, i)).collect();
+
+        let result = server.handle_did_open_with_cancellation(
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text
+                }
+            })),
+            Some(flag),
+        );
+
+        // The handler must return Ok (not propagate Cancelled as a JsonRpcError).
+        assert!(result.is_ok(), "cancelled open must return Ok(()): {:?}", result);
+
+        // The document must NOT have been stored (cancelled parse = no result).
+        let normalized = server.normalize_uri_key(uri);
+        assert!(
+            !server.documents.lock().contains_key(&normalized),
+            "cancelled parse must not store document state"
+        );
 
         Ok(())
     }

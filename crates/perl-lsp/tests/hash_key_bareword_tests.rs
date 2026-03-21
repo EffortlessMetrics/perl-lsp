@@ -24,7 +24,7 @@ print FOO;
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
@@ -49,7 +49,7 @@ print STDERR;
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
@@ -77,7 +77,7 @@ my @values = @h{$k1, $k2};
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // No bareword errors expected - variables are used as keys
     let bareword_errors: Vec<_> =
@@ -116,7 +116,7 @@ print BAREWORD;
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
@@ -144,7 +144,7 @@ my @values = @h{ @arr };
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // No bareword errors expected - map expression inside hash slice
     let bareword_errors: Vec<_> =
@@ -166,7 +166,7 @@ my @values = @h{ get_keys() };
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Function calls in hash slices should not trigger bareword warnings
     let bareword_errors: Vec<_> =
@@ -188,7 +188,7 @@ print INVALID;
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
@@ -221,7 +221,7 @@ print BAREWORD_WARNING;
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
@@ -251,7 +251,7 @@ print SHOULD_WARN;
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
@@ -278,7 +278,7 @@ print NORMAL_BAREWORD;
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();
@@ -311,7 +311,7 @@ delete $hash{delete_key};
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     let bareword_errors: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("unquoted-bareword")).collect();

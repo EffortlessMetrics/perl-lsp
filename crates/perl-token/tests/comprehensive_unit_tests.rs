@@ -284,8 +284,6 @@ fn all_token_kinds() -> Vec<TokenKind> {
         // Special
         TokenKind::Eof,
         TokenKind::Unknown,
-        // Class field keyword
-        TokenKind::Field,
     ]
 }
 
@@ -426,8 +424,7 @@ fn all_variants_are_listed() {
             | TokenKind::SubSigil
             | TokenKind::GlobSigil
             | TokenKind::Eof
-            | TokenKind::Unknown
-            | TokenKind::Field => {}
+            | TokenKind::Unknown => {}
         }
     }
 }

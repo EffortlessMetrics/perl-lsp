@@ -21,7 +21,7 @@ pub struct CodeFormatter {
 impl CodeFormatter {
     /// Create a new code formatter with the default OS subprocess runtime
     pub fn new() -> Self {
-        Self { inner: FormattingProvider::new(OsSubprocessRuntime::new()) }
+        Self { inner: FormattingProvider::new(OsSubprocessRuntime::with_timeout(10)) }
     }
 
     /// Format an entire document, returning just the edits for backwards compatibility

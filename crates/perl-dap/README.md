@@ -25,6 +25,15 @@ perl-dap --socket --port 13603  # Native adapter on TCP
 perl-dap --bridge           # Bridge mode (requires Perl::LanguageServer)
 ```
 
+## Bridge Adapter
+
+`BridgeAdapter` proxies DAP messages to an existing `Perl::LanguageServer` installation:
+
+```bash
+cpanm Perl::LanguageServer
+perl-dap --bridge
+```
+
 ## License
 
 MIT OR Apache-2.0

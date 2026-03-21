@@ -323,6 +323,10 @@ fn with_config_zero_lookahead_disables_decimal_number_peek() -> R {
 
 #[test]
 fn with_config_small_lookahead_limits_namespace_parsing() -> R {
+    // max_lookahead: 0 prevents peek_char(1) in identifier parsing (try_identifier_or_keyword),
+    // so "Foo::Bar" emits "Foo" as the identifier rather than "Foo::Bar". However, try_operator
+    // uses current_char (not peek_char), so "::" is still correctly emitted as a single DoubleColon
+    // operator token regardless of max_lookahead.
     let cfg = LexerConfig { max_lookahead: 0, ..LexerConfig::default() };
     let mut lexer = PerlLexer::with_config("Foo::Bar", cfg);
 
@@ -331,7 +335,7 @@ fn with_config_small_lookahead_limits_namespace_parsing() -> R {
     assert_eq!(first.text.as_ref(), "Foo");
 
     let colon = lexer.next_token().ok_or("expected colon token")?;
-    assert_eq!(colon.text.as_ref(), ":");
+    assert_eq!(colon.text.as_ref(), "::");
     Ok(())
 }
 

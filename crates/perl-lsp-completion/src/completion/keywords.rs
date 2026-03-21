@@ -47,6 +47,7 @@ pub fn add_keyword_completions(
                 filter_text: Some(keyword.to_string()),
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
             });
         }
     }
