@@ -21,6 +21,7 @@ You are a builder. Be proactive and fix forward.
 ## Todo list
 
 ```
+0. /agent-preflight — verify worktree is safe before any edits (branch, isolation, conflicts)
 1. /builder-read-spec — read the spec, check plan-review signal, decide: build or route
 2. /builder-write-test — TDD: write failing test from the spec
 3. /builder-implement — make the change, minimal diff
