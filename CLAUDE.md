@@ -21,12 +21,10 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 | **Wisdom** | Learning | Retrospective, update memory, log patterns | N/A |
 
 **Key principles:**
-- The orchestrator routes, it doesn't execute. Never poll CI, read diffs, or check PR state in loops. Launch an agent with the full job and move to the next routing decision.
-- One status check to inform routing, then delegate. When the orchestrator has context (exact edits, file contents), pass it to the agent — don't make agents re-research what you already know.
 - Scouts are honest about uncertainty — plan-reviewers correct. Being roughly right > confidently wrong.
 - Plan-reviewers improve plans, never punt "needs more scout work." They're enhanced scouts with sonnet.
-- Builders execute the spec as given. Fix forward on small gaps, bump back if structural.
-- Reviewers push improvements directly to PR branches. Every PR gets improved, no LGTM-only.
+- Builders fix forward on plan-reviewed work. Bump back on unreviewed non-trivial specs.
+- Reviewers push improvements directly to PR branches. Every PR gets improved.
 - Every agent recommends next steps for the orchestrator.
 - Learning is continuous — every agent-wrapup captures what was learned.
 
