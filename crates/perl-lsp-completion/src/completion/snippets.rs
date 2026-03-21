@@ -302,7 +302,7 @@ const SNIPPETS: &[Snippet] = &[
     Snippet {
         trigger: "qrbasic",
         label: "qrbasic",
-        body: "qr/${1:pattern}/${0:flags}",
+        body: "qr/${1:pattern}/${0}",
         detail: "compiled regex",
         doc: "Compile regex for reuse. Returns a regex object.",
     },
