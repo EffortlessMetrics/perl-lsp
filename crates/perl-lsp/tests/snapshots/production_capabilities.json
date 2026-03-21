@@ -49,6 +49,7 @@
       "perl.runTestFile",
       "perl.runSubtest",
       "perl.debugFile",
+      "perl.debugTest",
       "perl.goToTest",
       "perl.goToImplementation"
     ]
