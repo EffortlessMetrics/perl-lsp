@@ -901,7 +901,9 @@ impl<'a> Parser<'a> {
             match kind {
                 TokenKind::Star | TokenKind::Slash | TokenKind::Percent => {
                     let op_token = self.tokens.next()?;
-                    let right = self.parse_unary()?;
+                    // Use parse_power() so that `a * b**c` parses as `a * (b**c)`.
+                    // Exponentiation binds more tightly than multiplication in Perl.
+                    let right = self.parse_power()?;
                     let start = expr.location.start;
                     let end = right.location.end;
 

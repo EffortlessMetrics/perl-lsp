@@ -397,6 +397,28 @@ impl ClassModelBuilder {
             }
         }
 
+        // Form C: FunctionCall { name: "has", args: [name_expr, HashLiteral { ... }] }
+        // Produced when the parser recognises `has 'name' => (is => 'ro', ...)` as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && name == "has"
+            && !args.is_empty()
+        {
+            // The last arg that is a HashLiteral holds the options.
+            let options_hash_idx =
+                args.iter().rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
+            if let Some(opts_idx) = options_hash_idx {
+                if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
+                    let names: Vec<String> =
+                        args[..opts_idx].iter().flat_map(collect_symbol_names).collect();
+                    if !names.is_empty() {
+                        self.extract_has_with_names(&names, pairs, first.location);
+                        return Some(1);
+                    }
+                }
+            }
+        }
+
         None
     }
 
@@ -495,11 +517,41 @@ impl ClassModelBuilder {
 
     /// Extract method modifiers (before/after/around).
     fn try_extract_modifier(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        let first = &statements[idx];
+
+        // FunctionCall form: `before 'save' => sub { }` parsed as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+        {
+            let modifier_kind = match name.as_str() {
+                "before" => Some(ModifierKind::Before),
+                "after" => Some(ModifierKind::After),
+                "around" => Some(ModifierKind::Around),
+                _ => None,
+            };
+            if let Some(modifier_kind) = modifier_kind {
+                // args[0] is the method name (String or ArrayLiteral), rest is the impl.
+                let method_names: Vec<String> =
+                    args.first().map(collect_symbol_names).unwrap_or_default();
+                if !method_names.is_empty() {
+                    for method_name in method_names {
+                        self.current_modifiers.push(MethodModifier {
+                            kind: modifier_kind,
+                            method_name,
+                            location: first.location,
+                        });
+                    }
+                    return Some(1);
+                }
+            }
+        }
+
+        // Two-statement legacy form:
+        // 1) ExpressionStatement(Identifier("before"/"after"/"around"))
+        // 2) ExpressionStatement(HashLiteral((method_name, Subroutine)))
         if idx + 1 >= statements.len() {
             return None;
         }
-
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         let modifier_kind = match &first.kind {
@@ -542,11 +594,31 @@ impl ClassModelBuilder {
 
     /// Extract `extends 'Parent'` and `with 'Role'` declarations.
     fn try_extract_extends_with(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        let first = &statements[idx];
+
+        // Form: FunctionCall { name: "extends"/"with", args: [...] }
+        // Produced when `extends 'Parent'` / `with 'Role'` are parsed as bare calls.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && matches!(name.as_str(), "extends" | "with")
+        {
+            let names: Vec<String> = args.iter().flat_map(collect_symbol_names).collect();
+            if !names.is_empty() {
+                if name == "extends" {
+                    self.current_parent = names.into_iter().next();
+                } else {
+                    self.current_roles.extend(names);
+                }
+                return Some(1);
+            }
+        }
+
+        // Two-statement form (legacy parser output):
+        // 1) ExpressionStatement(Identifier("extends"/"with"))
+        // 2) ExpressionStatement(String/ArrayLiteral)
         if idx + 1 >= statements.len() {
             return None;
         }
-
-        let first = &statements[idx];
         let second = &statements[idx + 1];
 
         let keyword = match &first.kind {

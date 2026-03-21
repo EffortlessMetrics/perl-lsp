@@ -446,9 +446,6 @@ impl LspServer {
                         lenses.insert(0, shebang_lens);
                     }
 
-                    // Add subtest lenses via text scanning
-                    lenses.extend(CodeLensProvider::extract_subtest_lenses(&doc.text));
-
                     // Apply cap to code lenses
                     if lenses.len() > cap {
                         eprintln!("CodeLens: capping from {} to {}", lenses.len(), cap);
@@ -459,6 +456,8 @@ impl LspServer {
                 } else {
                     // Text-based fallback when AST is not available
                     let mut text_lenses = self.extract_text_based_code_lenses(&doc.text, uri);
+                    // Add subtest lenses via text scanning (AST not available)
+                    text_lenses.extend(CodeLensProvider::extract_subtest_lenses(&doc.text));
                     // Apply cap to text-based lenses
                     if text_lenses.len() > cap {
                         eprintln!("CodeLens (text): capping from {} to {}", text_lenses.len(), cap);
