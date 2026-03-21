@@ -3682,7 +3682,7 @@ Utils::process_data();
         let index = WorkspaceIndex::new();
         let files: Vec<(Url, String)> = (0..5)
             .map(|i| {
-                let uri = Url::parse(&format!("file:///batch/module{}.pm", i)).ok().unwrap();
+                let uri = must(Url::parse(&format!("file:///batch/module{}.pm", i)));
                 let code =
                     format!("package Batch::Mod{};\nsub func_{} {{ return {}; }}\n1;", i, i, i);
                 (uri, code)
@@ -3699,7 +3699,7 @@ Utils::process_data();
     #[test]
     fn test_batch_indexing_skips_unchanged() {
         let index = WorkspaceIndex::new();
-        let uri = Url::parse("file:///batch/skip.pm").ok().unwrap();
+        let uri = must(Url::parse("file:///batch/skip.pm"));
         let code = "package Skip;\nsub skip_fn { 1 }\n1;".to_string();
 
         index.index_file(uri.clone(), code.clone()).ok();
@@ -3714,8 +3714,8 @@ Utils::process_data();
     fn test_incremental_update_preserves_other_symbols() {
         let index = WorkspaceIndex::new();
 
-        let uri_a = Url::parse("file:///incr/a.pm").ok().unwrap();
-        let uri_b = Url::parse("file:///incr/b.pm").ok().unwrap();
+        let uri_a = must(Url::parse("file:///incr/a.pm"));
+        let uri_b = must(Url::parse("file:///incr/b.pm"));
         index.index_file(uri_a.clone(), "package A;\nsub a_func { 1 }\n1;".into()).ok();
         index.index_file(uri_b.clone(), "package B;\nsub b_func { 2 }\n1;".into()).ok();
 
@@ -3732,8 +3732,8 @@ Utils::process_data();
     fn test_remove_file_preserves_shadowed_symbols() {
         let index = WorkspaceIndex::new();
 
-        let uri_a = Url::parse("file:///shadow/a.pm").ok().unwrap();
-        let uri_b = Url::parse("file:///shadow/b.pm").ok().unwrap();
+        let uri_a = must(Url::parse("file:///shadow/a.pm"));
+        let uri_b = must(Url::parse("file:///shadow/b.pm"));
         index.index_file(uri_a.clone(), "package ShadowA;\nsub helper { 1 }\n1;".into()).ok();
         index.index_file(uri_b.clone(), "package ShadowB;\nsub helper { 2 }\n1;".into()).ok();
 
