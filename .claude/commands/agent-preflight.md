@@ -19,7 +19,7 @@ The script checks:
 1. **Branch safety** — Not on `master` or `main`. Not in detached HEAD state. Exit 1 if failed.
 2. **Worktree isolation** — Running inside a git worktree, not the main checkout. Exit 2 if failed.
 3. **No merge conflicts** — No unresolved conflict markers in the working tree. Exit 3 if failed.
-4. **CARGO_TARGET_DIR isolation** — Sets `CARGO_TARGET_DIR` to a per-branch path under `/tmp/` if not already set. Prevents shared build artifact collisions between concurrent agents.
+4. **CARGO_TARGET_DIR isolation** — Computes the recommended `CARGO_TARGET_DIR` (a per-branch path under `/tmp/`) and reports it. Prevents shared build artifact collisions between concurrent agents. **Note:** Because the script runs in a subshell, you must set the variable yourself before running cargo commands — see the builder environment setup section.
 
 ## Interpreting results
 
