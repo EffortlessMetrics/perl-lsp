@@ -138,14 +138,6 @@ parser_blockers:
     issue: null
     note: "Tier 2: 16 files. No issue filed."
 
-  - id: "unclosed_brace"
-    category: "block"
-    affected_files: 16
-    root_cause: "map/grep block fat-arrow ambiguity"
-    status: "filed"
-    issue: "#2392"
-    note: "Tier 2: 9 files in issue; baseline shows 16. builder-ready."
-
   - id: "expected_identifier"
     category: "identifier"
     affected_files: 10
@@ -252,4 +244,13 @@ ci_blockers:
 # Do NOT delete fixed entries — move them here with closed_date and closed_pr.
 # Format: same schema plus closed_date: "YYYY-MM-DD" and closed_pr: "#NNNN"
 
-archived: []
+archived:
+  - id: "unclosed_brace"
+    category: "block"
+    affected_files: 16
+    root_cause: "map/grep block fat-arrow ambiguity"
+    status: "fixed"
+    issue: "#2392"
+    closed_date: "2026-03-21"
+    closed_pr: null
+    note: "Tier 2: 9 files in issue; baseline shows 16. builder-ready. FIXED: moved to archived on 2026-03-21 when issue #2392 closed."
