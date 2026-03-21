@@ -466,10 +466,6 @@ mod tests {
         // Must not panic; if the Use node was recovered, we get PL701.
         // If recovery omitted it entirely we get 0. Either is acceptable — but not a panic.
         let pl701_count = diags.iter().filter(|d| d.code.as_deref() == Some("PL701")).count();
-        assert!(
-            pl701_count <= 1,
-            "at most one PL701 for one use statement (got {})",
-            pl701_count
-        );
+        assert!(pl701_count <= 1, "at most one PL701 for one use statement (got {})", pl701_count);
     }
 }
