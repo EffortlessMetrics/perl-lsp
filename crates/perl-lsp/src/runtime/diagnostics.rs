@@ -71,132 +71,156 @@ impl LspServer {
     /// Only publishes if client doesn't support pull diagnostics to avoid
     /// double-flow for modern LSP 3.17+ clients.
     pub(crate) fn publish_diagnostics(&self, uri: &str) {
-        let documents = self.documents.lock();
         let normalized_uri = self.normalize_uri_key(uri);
-        if let Some(doc) = documents.get(&normalized_uri).or_else(|| documents.get(uri)) {
-            let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
-                // Get diagnostics (already includes unused variable detection)
-                let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
-                let mut diagnostics =
-                    provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, Some(&resolver));
 
-                // Add Perl::Critic built-in analysis
-                let built_in_analyzer = BuiltInAnalyzer::new();
-                let violations = built_in_analyzer.analyze(ast, &doc.text);
-                for violation in violations {
-                    diagnostics.push(builtin_violation_to_diagnostic(&violation));
+        // Snapshot all fields needed from DocumentState while holding the lock briefly,
+        // then drop the lock before calling resolve_module_to_path which also acquires
+        // documents.lock().  Holding the lock across that call causes a reentrant deadlock
+        // because parking_lot::Mutex is not reentrant.
+        let snapshot = {
+            let documents = self.documents.lock();
+            documents.get(&normalized_uri).or_else(|| documents.get(uri)).map(|doc| {
+                (
+                    doc.ast.clone(),
+                    doc.text.clone(),
+                    doc.parse_errors.clone(),
+                    doc.version,
+                    doc.degradation_tier,
+                    doc.line_starts.clone(),
+                    doc.rope.clone(),
+                )
+            })
+            // lock is released here
+        };
+
+        let Some((ast_opt, text, parse_errors, version, degradation_tier, line_starts, rope)) =
+            snapshot
+        else {
+            return;
+        };
+
+        // Position helper that works on the snapshotted line_starts + rope.
+        let pos16 = |offset: usize| line_starts.offset_to_position_rope(&rope, offset);
+
+        let lsp_diagnostics: Vec<Value> = if let Some(ast) = &ast_opt {
+            // Get diagnostics (already includes unused variable detection).
+            // resolver is called with the documents lock *released* — no reentrant deadlock.
+            let provider = DiagnosticsProvider::new(ast, text.clone());
+            let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
+            let mut diagnostics =
+                provider.get_diagnostics(ast, &parse_errors, &text, Some(&resolver));
+
+            // Add Perl::Critic built-in analysis
+            let built_in_analyzer = BuiltInAnalyzer::new();
+            let violations = built_in_analyzer.analyze(ast, &text);
+            for violation in violations {
+                diagnostics.push(builtin_violation_to_diagnostic(&violation));
+            }
+
+            // Add external perlcritic diagnostics (opt-in)
+            self.collect_external_perlcritic_diagnostics(uri, &text, &mut diagnostics);
+
+            // Add dead code diagnostics from workspace-wide symbol analysis
+            #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+            {
+                if let Some(workspace_index) = self.workspace_index() {
+                    let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
+                        &workspace_index,
+                        uri,
+                        &text,
+                        &line_starts,
+                    );
+                    diagnostics.extend(dead_code_diags);
                 }
+            }
 
-                // Add external perlcritic diagnostics (opt-in)
-                self.collect_external_perlcritic_diagnostics(uri, &doc.text, &mut diagnostics);
+            // Convert to LSP diagnostics
+            diagnostics
+                .into_iter()
+                .map(|d| {
+                    let (start_line, start_char) = pos16(d.range.0);
+                    let (end_line, end_char) = pos16(d.range.1);
 
-                // Add dead code diagnostics from workspace-wide symbol analysis
-                #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-                {
-                    if let Some(workspace_index) = self.workspace_index() {
-                        let dead_code_diags = perl_lsp_diagnostics::detect_dead_code(
-                            &workspace_index,
-                            uri,
-                            &doc.text,
-                            &doc.line_starts,
-                        );
-                        diagnostics.extend(dead_code_diags);
+                    let mut diag = json!({
+                        "range": {
+                            "start": {"line": start_line, "character": start_char},
+                            "end": {"line": end_line, "character": end_char},
+                        },
+                        "severity": match d.severity {
+                            InternalDiagnosticSeverity::Error => 1,
+                            InternalDiagnosticSeverity::Warning => 2,
+                            InternalDiagnosticSeverity::Information => 3,
+                            InternalDiagnosticSeverity::Hint => 4,
+                        },
+                        "code": d.code,
+                        "source": "perl-parser",
+                        "message": d.message,
+                    });
+                    if !d.tags.is_empty() {
+                        diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
                     }
-                }
-
-                // Convert to LSP diagnostics
-                diagnostics
-                    .into_iter()
-                    .map(|d| {
-                        let (start_line, start_char) = self.offset_to_pos16(doc, d.range.0);
-                        let (end_line, end_char) = self.offset_to_pos16(doc, d.range.1);
-
-                        let mut diag = json!({
-                            "range": {
-                                "start": {"line": start_line, "character": start_char},
-                                "end": {"line": end_line, "character": end_char},
-                            },
-                            "severity": match d.severity {
-                                InternalDiagnosticSeverity::Error => 1,
-                                InternalDiagnosticSeverity::Warning => 2,
-                                InternalDiagnosticSeverity::Information => 3,
-                                InternalDiagnosticSeverity::Hint => 4,
-                            },
-                            "code": d.code,
-                            "source": "perl-parser",
-                            "message": d.message,
-                        });
-                        if !d.tags.is_empty() {
-                            diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
+                    diag
+                })
+                .collect()
+        } else {
+            // No AST available (parse failed completely), just report parse errors
+            parse_errors
+                .iter()
+                .map(|e| {
+                    // Extract location and message from error enum
+                    let (location, message) = match e {
+                        crate::error::ParseError::UnexpectedToken { location, expected, found } => {
+                            (*location, format!("Expected {}, found {}", expected, found))
                         }
-                        diag
-                    })
-                    .collect()
-            } else {
-                // No AST available (parse failed completely), just report parse errors
-                doc.parse_errors
-                    .iter()
-                    .map(|e| {
-                        // Extract location and message from error enum
-                        let (location, message) = match e {
-                            crate::error::ParseError::UnexpectedToken {
-                                location,
-                                expected,
-                                found,
-                            } => (*location, format!("Expected {}, found {}", expected, found)),
-                            crate::error::ParseError::SyntaxError { location, message } => {
-                                (*location, message.clone())
-                            }
-                            crate::error::ParseError::UnexpectedEof => {
-                                (doc.text.len(), "Unexpected end of input".to_string())
-                            }
-                            crate::error::ParseError::LexerError { message } => {
-                                (0, message.clone())
-                            }
-                            _ => (0, e.to_string()),
-                        };
+                        crate::error::ParseError::SyntaxError { location, message } => {
+                            (*location, message.clone())
+                        }
+                        crate::error::ParseError::UnexpectedEof => {
+                            (text.len(), "Unexpected end of input".to_string())
+                        }
+                        crate::error::ParseError::LexerError { message } => (0, message.clone()),
+                        _ => (0, e.to_string()),
+                    };
 
-                        // Convert byte offset to line/column
-                        let (line, character) = self.offset_to_pos16(doc, location);
+                    // Convert byte offset to line/column
+                    let (line, character) = pos16(location);
 
-                        json!({
-                            "range": {
-                                "start": {"line": line, "character": character},
-                                "end": {"line": line, "character": character + 1},
-                            },
-                            "severity": 1, // Error
-                            "code": DiagnosticCode::ParseError.as_str(),
-                            "source": "perl-parser",
-                            "message": message,
-                        })
-                    })
-                    .collect()
-            };
-
-            eprintln!(
-                "Publishing {} diagnostics for {} (version {}, tier: {})",
-                lsp_diagnostics.len(),
-                normalized_uri,
-                doc.version,
-                doc.degradation_tier
-            );
-
-            // Only publish if client doesn't support pull diagnostics
-            // This avoids double-flow for modern clients
-            if !self.client_supports_pull_diags.load(Ordering::Relaxed) {
-                // Send diagnostics notification with version
-                // This ensures diagnostics are cleared when all errors are fixed
-                if let Err(e) = self.notify(
-                    "textDocument/publishDiagnostics",
                     json!({
-                        "uri": uri,
-                        "version": doc.version,
-                        "diagnostics": lsp_diagnostics
-                    }),
-                ) {
-                    eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
-                }
+                        "range": {
+                            "start": {"line": line, "character": character},
+                            "end": {"line": line, "character": character + 1},
+                        },
+                        "severity": 1, // Error
+                        "code": DiagnosticCode::ParseError.as_str(),
+                        "source": "perl-parser",
+                        "message": message,
+                    })
+                })
+                .collect()
+        };
+
+        eprintln!(
+            "Publishing {} diagnostics for {} (version {}, tier: {})",
+            lsp_diagnostics.len(),
+            normalized_uri,
+            version,
+            degradation_tier
+        );
+
+        // Only publish if client doesn't support pull diagnostics
+        // This avoids double-flow for modern clients
+        if !self.client_supports_pull_diags.load(Ordering::Relaxed) {
+            // Send diagnostics notification with version
+            // This ensures diagnostics are cleared when all errors are fixed
+            if let Err(e) = self.notify(
+                "textDocument/publishDiagnostics",
+                json!({
+                    "uri": uri,
+                    "version": version,
+                    "diagnostics": lsp_diagnostics
+                }),
+            ) {
+                eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
             }
         }
     }
@@ -233,8 +257,14 @@ impl LspServer {
             let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
             let previous_result_id = params["previousResultId"].as_str().map(|s| s.to_string());
 
-            let documents = self.documents.lock();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            // Snapshot the document while holding the lock briefly, then release before
+            // calling resolve_module_to_path which also acquires documents.lock().
+            let doc_snapshot = {
+                let documents = self.documents.lock();
+                self.get_document(&documents, uri).cloned()
+                // lock released here
+            };
+            if let Some(doc) = doc_snapshot {
                 // Get diagnostics from the existing provider
                 if let Some(ast) = &doc.ast {
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());

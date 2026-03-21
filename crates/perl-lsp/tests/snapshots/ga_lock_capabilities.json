@@ -127,7 +127,11 @@
   },
   "signatureHelpProvider": {
     "retriggerCharacters": [
-      ","
+      ",",
+      "@",
+      "%",
+      "{",
+      "["
     ],
     "triggerCharacters": [
       "(",
