@@ -1307,9 +1307,11 @@ impl LspServer {
                     return self.run_subtest(subtest_name);
                 }
                 "perl.debugTest" => {
-                    if let Some(test_id) = arguments.first().and_then(|v| v.as_str()) {
-                        return self.debug_test(test_id);
-                    }
+                    let test_id = arguments
+                        .first()
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| invalid_params("Missing test ID argument"))?;
+                    return self.debug_test(test_id);
                 }
                 // New commands handled by ExecuteCommandProvider
                 "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.runCritic" => {
