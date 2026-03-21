@@ -394,7 +394,7 @@ impl ClassModelBuilder {
             if let Some(opts_idx) = options_hash_idx {
                 if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
                     let names: Vec<String> =
-                        args[..opts_idx].iter().flat_map(|a| collect_symbol_names(a)).collect();
+                        args[..opts_idx].iter().flat_map(collect_symbol_names).collect();
                     if !names.is_empty() {
                         self.extract_has_with_names(&names, pairs, first.location);
                         return Some(1);
@@ -586,7 +586,7 @@ impl ClassModelBuilder {
             && let NodeKind::FunctionCall { name, args } = &expression.kind
             && matches!(name.as_str(), "extends" | "with")
         {
-            let names: Vec<String> = args.iter().flat_map(|a| collect_symbol_names(a)).collect();
+            let names: Vec<String> = args.iter().flat_map(collect_symbol_names).collect();
             if !names.is_empty() {
                 if name == "extends" {
                     self.current_parent = names.into_iter().next();
