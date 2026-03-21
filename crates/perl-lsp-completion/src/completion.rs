@@ -111,14 +111,25 @@ pub use self::items::{CompletionItem, CompletionItemKind};
 pub use self::test_more::get_test_more_documentation;
 
 use perl_parser_core::ast::Node;
+use perl_parser_core::ast::NodeKind;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_workspace_index::workspace_index::WorkspaceIndex;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+/// Maps module_name -> Set of explicitly imported symbol names.
+///
+/// Semantics:
+/// - Entry MISSING: `use Module` with no args (import all of `@EXPORT`) — no filtering.
+/// - Entry with EMPTY set: `use Module qw()` (explicit empty qw import) — nothing in namespace.
+/// - Entry with non-empty set: `use Module qw(a b)` — only those symbols are imported.
+type ImportMap = HashMap<String, HashSet<String>>;
 
 /// Completion provider
 pub struct CompletionProvider {
     symbol_table: SymbolTable,
     workspace_index: Option<Arc<WorkspaceIndex>>,
+    import_map: ImportMap,
 }
 
 impl CompletionProvider {
@@ -199,8 +210,89 @@ impl CompletionProvider {
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, workspace_index }
+        CompletionProvider { symbol_table, workspace_index, import_map }
+    }
+
+    /// Walk the top-level AST and build an `ImportMap` from `use` statements.
+    ///
+    /// Only uppercase-starting module names are included (skips pragmas like
+    /// `strict`, `warnings`, `feature`, `constant`, `utf8`, `lib`, `parent`, `base`).
+    fn extract_import_map(ast: &Node) -> ImportMap {
+        let mut map: ImportMap = HashMap::new();
+
+        fn collect(node: &Node, map: &mut ImportMap) {
+            match &node.kind {
+                NodeKind::Use { module, args, .. } => {
+                    // Skip pragmas: only process uppercase-starting module names
+                    let first_char: Option<char> = module.chars().next();
+                    if !first_char.is_some_and(|c: char| c.is_ascii_uppercase()) {
+                        return;
+                    }
+
+                    // `use Module` with no args at all — import all of @EXPORT, no filtering
+                    if args.is_empty() {
+                        return;
+                    }
+
+                    let mut symbols: HashSet<String> = HashSet::new();
+                    let mut has_symbol_args = false;
+
+                    for arg in args {
+                        // Skip version numbers (e.g. "1.50" in `use List::Util 1.50 qw(sum)`)
+                        let first_byte = arg.as_bytes().first().copied().unwrap_or(0);
+                        if first_byte.is_ascii_digit() {
+                            continue;
+                        }
+                        // Skip flag args (e.g. "-norequire")
+                        if arg.starts_with('-') {
+                            continue;
+                        }
+                        // Skip hash-ref style args
+                        if arg.starts_with('{') {
+                            continue;
+                        }
+
+                        if arg.starts_with("qw") {
+                            let content = arg
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            for word in content.split_whitespace() {
+                                if !word.is_empty() {
+                                    symbols.insert(word.to_string());
+                                    has_symbol_args = true;
+                                }
+                            }
+                        } else {
+                            // Bare string arg (possibly quoted): 'func' or "func"
+                            let cleaned = arg.trim_matches(|c: char| c == '\'' || c == '"');
+                            if !cleaned.is_empty() {
+                                symbols.insert(cleaned.to_string());
+                                has_symbol_args = true;
+                            }
+                        }
+                    }
+
+                    if has_symbol_args {
+                        map.entry(module.clone()).or_default().extend(symbols);
+                    } else {
+                        // Explicit empty import: `use Module qw()`
+                        map.entry(module.clone()).or_default();
+                    }
+                }
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    for stmt in statements {
+                        collect(stmt, map);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        collect(ast, &mut map);
+        map
     }
 
     /// Create a new completion provider from parsed AST without workspace context
@@ -586,6 +678,7 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.import_map,
             );
             if is_cancelled() {
                 return vec![];
