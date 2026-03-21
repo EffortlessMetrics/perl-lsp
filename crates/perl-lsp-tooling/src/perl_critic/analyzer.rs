@@ -33,7 +33,8 @@ impl CriticAnalyzer {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn with_os_runtime(config: CriticConfig) -> Self {
         use perl_subprocess_runtime::OsSubprocessRuntime;
-        Self::new(config, Arc::new(OsSubprocessRuntime::new()))
+        let timeout = config.timeout_secs;
+        Self::new(config, Arc::new(OsSubprocessRuntime::with_timeout(timeout)))
     }
 
     /// Run Perl::Critic on a file

@@ -74,13 +74,25 @@ pub trait SubprocessRuntime: Send + Sync {
 
 /// Default implementation using `std::process::Command`.
 #[cfg(not(target_arch = "wasm32"))]
-pub struct OsSubprocessRuntime;
+pub struct OsSubprocessRuntime {
+    timeout_secs: Option<u64>,
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 impl OsSubprocessRuntime {
-    /// Create a new OS subprocess runtime.
+    /// Create a new OS subprocess runtime with no timeout.
     pub fn new() -> Self {
-        Self
+        Self { timeout_secs: None }
+    }
+
+    /// Create a new OS subprocess runtime with the given wall-clock timeout.
+    ///
+    /// If the subprocess does not complete within `timeout_secs` seconds the
+    /// call returns a `SubprocessError` with a "timed out" message.  The
+    /// spawned process is left for the OS to reap — it is not explicitly
+    /// killed.
+    pub fn with_timeout(timeout_secs: u64) -> Self {
+        Self { timeout_secs: Some(timeout_secs) }
     }
 }
 
@@ -124,15 +136,56 @@ impl SubprocessRuntime for OsSubprocessRuntime {
             })?;
         }
 
-        let output = child
-            .wait_with_output()
-            .map_err(|e| SubprocessError::new(format!("Failed to wait for {}: {}", program, e)))?;
+        match self.timeout_secs {
+            None => {
+                let output = child.wait_with_output().map_err(|e| {
+                    SubprocessError::new(format!("Failed to wait for {}: {}", program, e))
+                })?;
+                Ok(SubprocessOutput {
+                    stdout: output.stdout,
+                    stderr: output.stderr,
+                    status_code: output.status.code().unwrap_or(-1),
+                })
+            }
+            Some(secs) => {
+                use std::thread;
+                use std::time::{Duration, Instant};
 
-        Ok(SubprocessOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
-            status_code: output.status.code().unwrap_or(-1),
-        })
+                let deadline = Instant::now() + Duration::from_secs(secs);
+                let program_name = program.to_string();
+                let handle = thread::spawn(move || child.wait_with_output());
+
+                loop {
+                    if Instant::now() >= deadline {
+                        // Background thread may still be running; deliberately do not
+                        // join — the spawned process will be reaped by the OS.
+                        return Err(SubprocessError::new(format!(
+                            "subprocess timed out after {} seconds",
+                            secs
+                        )));
+                    }
+
+                    if handle.is_finished() {
+                        let output = handle
+                            .join()
+                            .map_err(|_| SubprocessError::new("subprocess thread panicked"))?
+                            .map_err(|e| {
+                                SubprocessError::new(format!(
+                                    "Failed to wait for {}: {}",
+                                    program_name, e
+                                ))
+                            })?;
+                        return Ok(SubprocessOutput {
+                            stdout: output.stdout,
+                            stderr: output.stderr,
+                            status_code: output.status.code().unwrap_or(-1),
+                        });
+                    }
+
+                    thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
     }
 }
 
