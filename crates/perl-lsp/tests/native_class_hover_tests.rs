@@ -35,7 +35,7 @@ mod native_class_hover_tests {
     fn test_hover_on_native_method_shows_method_keyword() -> Result<(), Box<dyn std::error::Error>>
     {
         let code = "class Foo {\n    method bar { return 1; }\n}\nmy $f = Foo->new;\n$f->bar;\n";
-        // Hover on "bar" in the method call on line 4
+        // Hover on "bar" in the method declaration on line 1 (0-indexed)
         let resp = hover_at(code, "file:///native_class.pl", "bar", 1)?;
 
         let content = semantic::hover_content(&resp)

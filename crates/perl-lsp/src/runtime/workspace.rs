@@ -348,6 +348,9 @@ impl LspServer {
                                     crate::symbol::SymbolKind::Subroutine => {
                                         format!("sub {}", name)
                                     }
+                                    crate::symbol::SymbolKind::Method => {
+                                        format!("method {}", name)
+                                    }
                                     crate::symbol::SymbolKind::Variable(VarKind::Scalar) => {
                                         format!("${}", name)
                                     }
