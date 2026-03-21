@@ -306,8 +306,14 @@ impl<'a> Parser<'a> {
             // expressions because : acts as a terminator.  parse_assignment
             // calls parse_ternary internally, so nested ternaries still work.
             let then_expr = self.parse_assignment()?;
+            // Fat-comma pair as then-branch: `$cond ? key => val : ...`
+            // parse_assignment returns only the first element; collect any
+            // trailing fat-arrow / comma continuation stopping before `:`.
+            let then_expr = self.collect_fat_arrow_ternary_branch(then_expr)?;
             self.expect(TokenKind::Colon)?;
             let else_expr = self.parse_ternary()?;
+            // Likewise for the else-branch.
+            let else_expr = self.collect_fat_arrow_ternary_branch(else_expr)?;
 
             let start = expr.location.start;
             let end = else_expr.location.end;
@@ -332,8 +338,10 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Question) {
             self.tokens.next()?; // consume ?
             let then_expr = self.parse_assignment()?;
+            let then_expr = self.collect_fat_arrow_ternary_branch(then_expr)?;
             self.expect(TokenKind::Colon)?;
             let else_expr = self.parse_ternary()?;
+            let else_expr = self.collect_fat_arrow_ternary_branch(else_expr)?;
 
             let start = expr.location.start;
             let end = else_expr.location.end;
@@ -349,6 +357,127 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expr)
+    }
+
+    /// After parsing the first element of a ternary branch with
+    /// `parse_assignment`, check whether a fat-arrow or comma follows.
+    ///
+    /// If so, collect the remaining elements into a list/hash, stopping at
+    /// `Colon` (the ternary separator), `Semicolon`, closing delimiters, and
+    /// statement-modifier keywords.  This handles patterns such as:
+    ///   `$cond ? key => val : other => val2`
+    ///
+    /// If no fat-arrow or comma follows, the first element is returned as-is
+    /// (fast path for ordinary ternary branches).
+    ///
+    /// IMPORTANT: do NOT call `parse_comma` here — it does not stop at `:`
+    /// and would consume the ternary separator.
+    fn collect_fat_arrow_ternary_branch(&mut self, first: Node) -> ParseResult<Node> {
+        // Fast path: no fat-arrow or comma following — nothing to collect.
+        if self.peek_kind() != Some(TokenKind::FatArrow)
+            && self.peek_kind() != Some(TokenKind::Comma)
+        {
+            return Ok(first);
+        }
+
+        let mut elements: Vec<Node> = vec![first];
+        let mut saw_fat_arrow = false;
+
+        // Handle an immediate fat-arrow after the first element.
+        if self.peek_kind() == Some(TokenKind::FatArrow) {
+            saw_fat_arrow = true;
+            // Auto-quote a bare identifier before =>
+            if let NodeKind::Identifier { ref name } = elements[0].kind {
+                let loc = elements[0].location;
+                elements[0] = Node::new(
+                    NodeKind::String { value: name.clone(), interpolated: false },
+                    loc,
+                );
+            }
+            self.tokens.next()?; // consume =>
+            elements.push(self.parse_assignment()?);
+        }
+
+        // Continue collecting comma/fat-arrow separated elements until we see
+        // a ternary colon or other terminator.
+        loop {
+            match self.peek_kind() {
+                Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {}
+                // Stop at ternary colon and all other terminators.
+                Some(TokenKind::Colon)
+                | Some(TokenKind::Semicolon)
+                | Some(TokenKind::RightParen)
+                | Some(TokenKind::RightBrace)
+                | Some(TokenKind::RightBracket)
+                | None => break,
+                Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                _ => break,
+            }
+
+            let was_fat_arrow = self.peek_kind() == Some(TokenKind::FatArrow);
+            self.consume_token()?; // consume , or =>
+
+            if was_fat_arrow {
+                saw_fat_arrow = true;
+                // Auto-quote the last element (the key before =>)
+                if let Some(last) = elements.last_mut() {
+                    if let NodeKind::Identifier { ref name } = last.kind {
+                        *last = Node::new(
+                            NodeKind::String { value: name.clone(), interpolated: false },
+                            last.location,
+                        );
+                    }
+                }
+            }
+
+            // Stop before parsing the value if we hit a terminator.
+            match self.peek_kind() {
+                Some(TokenKind::Colon)
+                | Some(TokenKind::Semicolon)
+                | Some(TokenKind::RightParen)
+                | Some(TokenKind::RightBrace)
+                | Some(TokenKind::RightBracket)
+                | None => break,
+                Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                _ => {}
+            }
+
+            let mut elem = self.parse_assignment()?;
+
+            // If fat-arrow follows this element, auto-quote it and consume =>
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                saw_fat_arrow = true;
+                if let NodeKind::Identifier { ref name } = elem.kind {
+                    elem = Node::new(
+                        NodeKind::String { value: name.clone(), interpolated: false },
+                        elem.location,
+                    );
+                }
+                self.tokens.next()?; // consume =>
+                elements.push(elem);
+
+                match self.peek_kind() {
+                    Some(TokenKind::Colon)
+                    | Some(TokenKind::Semicolon)
+                    | Some(TokenKind::RightParen)
+                    | Some(TokenKind::RightBrace)
+                    | Some(TokenKind::RightBracket)
+                    | None => break,
+                    Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                    _ => elements.push(self.parse_assignment()?),
+                }
+            } else {
+                elements.push(elem);
+            }
+        }
+
+        let start = elements[0].location.start;
+        let end = elements
+            .last()
+            .ok_or_else(|| ParseError::syntax("Empty ternary branch list", start))?
+            .location
+            .end;
+        Ok(Self::build_list_or_hash(elements, saw_fat_arrow, start, end))
     }
 
     /// Parse logical OR expression
