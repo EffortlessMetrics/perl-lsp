@@ -11,6 +11,10 @@
 #
 # Usage:
 #   bash scripts/agent-preflight.sh
+#
+# Check 5 computes the recommended CARGO_TARGET_DIR and prints it.
+# Agents should set CARGO_TARGET_DIR before running cargo commands:
+#   export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-target"
 
 set -uo pipefail
 
@@ -94,6 +98,25 @@ if [[ -n "$MAIN_REPO" && "$CWD" = "$MAIN_REPO" ]]; then
 else
     ok "cwd is not the main repo root"
     CWD_OK=true
+fi
+
+# ── Check 5: CARGO_TARGET_DIR isolation ─────────────────────────────────────
+# Shared target/ across worktrees causes phantom test failures from stale
+# artifacts. Each agent needs its own CARGO_TARGET_DIR.
+
+if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+    ok "CARGO_TARGET_DIR already set: $CARGO_TARGET_DIR"
+else
+    BRANCH_SLUG="$(git branch --show-current 2>/dev/null | tr '/' '-')"
+    if [[ -n "$BRANCH_SLUG" ]]; then
+        export CARGO_TARGET_DIR="/tmp/agent-${BRANCH_SLUG}-target"
+        ok "Set CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
+    else
+        # Detached HEAD — use a hash-based fallback
+        HEAD_SHORT="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+        export CARGO_TARGET_DIR="/tmp/agent-detached-${HEAD_SHORT}-target"
+        ok "Set CARGO_TARGET_DIR=$CARGO_TARGET_DIR (detached HEAD fallback)"
+    fi
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────

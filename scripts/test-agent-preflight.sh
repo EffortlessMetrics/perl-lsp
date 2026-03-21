@@ -348,6 +348,75 @@ test_check4_fires_with_git_dir_override() {
     fi
 }
 
+# ── Test 12: Sets CARGO_TARGET_DIR when unset ────────────────────────────────
+
+test_sets_cargo_target_dir_when_unset() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-target-dir-test")"
+
+    # Run preflight with CARGO_TARGET_DIR unset and capture output
+    local output
+    output="$(cd "$wt" && unset CARGO_TARGET_DIR && bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -q "CARGO_TARGET_DIR="; then
+        pass "sets CARGO_TARGET_DIR when unset"
+    else
+        fail "sets CARGO_TARGET_DIR when unset — output: $output"
+    fi
+}
+
+# ── Test 13: Respects existing CARGO_TARGET_DIR ──────────────────────────────
+
+test_respects_existing_cargo_target_dir() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-target-existing-test")"
+
+    # Run preflight with CARGO_TARGET_DIR already set
+    local output
+    output="$(cd "$wt" && CARGO_TARGET_DIR="/tmp/my-custom-target" bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -q "CARGO_TARGET_DIR.*already set"; then
+        pass "respects existing CARGO_TARGET_DIR"
+    else
+        fail "respects existing CARGO_TARGET_DIR — output: $output"
+    fi
+}
+
+# ── Test 14: CARGO_TARGET_DIR contains branch-derived path ───────────────────
+
+test_cargo_target_dir_contains_branch_name() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-branch-in-path")"
+
+    # Run preflight with CARGO_TARGET_DIR unset, capture output
+    local output
+    output="$(cd "$wt" && unset CARGO_TARGET_DIR && bash "$PREFLIGHT" 2>&1)" || true
+
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if echo "$output" | grep -q "agent-branch-in-path"; then
+        pass "CARGO_TARGET_DIR contains branch name"
+    else
+        fail "CARGO_TARGET_DIR contains branch name — output: $output"
+    fi
+}
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 echo "=== agent-preflight test suite ==="
@@ -364,6 +433,9 @@ test_current_worktree_passes
 test_fails_when_cwd_is_main_repo_root
 test_worktree_path_prefix_no_false_positive
 test_check4_fires_with_git_dir_override
+test_sets_cargo_target_dir_when_unset
+test_respects_existing_cargo_target_dir
+test_cargo_target_dir_contains_branch_name
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="
