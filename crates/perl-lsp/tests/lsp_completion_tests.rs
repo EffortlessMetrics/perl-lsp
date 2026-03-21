@@ -1350,7 +1350,10 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
     // don't accidentally match Constant items (which also serialize as kind 14).
     let kw_items: Vec<_> = items
         .iter()
-        .filter(|item| item["kind"] == 14 && item["label"].as_str().map(|l| l.starts_with("retur")).unwrap_or(false))
+        .filter(|item| {
+            item["kind"] == 14
+                && item["label"].as_str().map(|l| l.starts_with("retur")).unwrap_or(false)
+        })
         .collect();
 
     assert!(
