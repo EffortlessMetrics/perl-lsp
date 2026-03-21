@@ -280,13 +280,12 @@ test_fails_when_cwd_is_main_repo_root() {
     git -C "$repo" worktree prune 2>/dev/null || true
     rm -rf "$repo"
 
-    # The main repo root is not a worktree, so check 2 should catch it (exit 2).
-    # But if check 2 somehow passes (e.g. future git version), check 4 should
-    # catch it with exit 4. Either exit 2 or 4 is acceptable.
-    if [[ "$code_main" -eq 2 || "$code_main" -eq 4 ]]; then
-        pass "fails when cwd is main repo root (exit $code_main)"
+    # The main repo root is not a worktree, so check 2 catches it (exit 2).
+    # Test 11 below exercises check 4 in isolation.
+    if [[ "$code_main" -eq 2 ]]; then
+        pass "fails when cwd is main repo root (exit $code_main — caught by check 2)"
     else
-        fail "fails when cwd is main repo root — expected exit 2 or 4, got $code_main"
+        fail "fails when cwd is main repo root — expected exit 2, got $code_main"
     fi
 }
 
@@ -315,6 +314,40 @@ test_worktree_path_prefix_no_false_positive() {
     fi
 }
 
+# ── Test 11: Check 4 fires independently (GIT_DIR override) ──────────────────
+# Test 9 is caught by Check 2 (exit 2) before Check 4 runs.  This test
+# exercises Check 4 in isolation by setting GIT_DIR to the worktree's git-dir
+# while cwd is the main repo root.  Check 2 sees git-dir != git-common-dir
+# and passes; Check 4 then catches that cwd == main repo root (exit 4).
+
+test_check4_fires_with_git_dir_override() {
+    local repo
+    repo="$(make_git_repo)"
+    local wt
+    wt="$(make_worktree "$repo" "agent-check4-iso")"
+
+    # Discover the worktree's actual git-dir
+    local wt_git_dir
+    wt_git_dir="$(git -C "$wt" rev-parse --git-dir 2>/dev/null)"
+
+    # Run preflight from the main repo root with GIT_DIR pointing to the
+    # worktree.  Checks 1-3 should pass; Check 4 should catch the cwd.
+    local code
+    code=0
+    (cd "$repo" && GIT_DIR="$wt_git_dir" bash "$PREFLIGHT" >/dev/null 2>&1) || code=$?
+
+    # Cleanup
+    git -C "$repo" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$repo" worktree prune 2>/dev/null || true
+    rm -rf "$repo"
+
+    if [[ "$code" -eq 4 ]]; then
+        pass "check 4 fires independently via GIT_DIR override (exit 4)"
+    else
+        fail "check 4 via GIT_DIR override — expected exit 4, got $code"
+    fi
+}
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 echo "=== agent-preflight test suite ==="
@@ -330,6 +363,7 @@ test_error_messages_on_master
 test_current_worktree_passes
 test_fails_when_cwd_is_main_repo_root
 test_worktree_path_prefix_no_false_positive
+test_check4_fires_with_git_dir_override
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="
