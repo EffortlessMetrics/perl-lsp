@@ -499,10 +499,38 @@ mod tests {
     }
 
     #[test]
-    fn snippets_count_updated() {
-        let ctx = make_context("");
-        let mut items = Vec::new();
-        add_snippet_completions(&mut items, &ctx);
-        assert!(items.len() >= 50, "expected >=50 snippets, got {}", items.len());
+    fn regex_snippet_bodies_are_correct() {
+        // Verify the actual regex syntax inside snippet bodies is spelled correctly.
+        // Existence tests confirm triggers fire; this test confirms the body text
+        // delivered to the LSP client contains valid Perl regex constructs.
+        let body = |trigger: &str| -> String {
+            SNIPPETS
+                .iter()
+                .find(|s| s.trigger == trigger)
+                .map(|s| s.body.to_string())
+                .unwrap_or_else(|| panic!("snippet '{trigger}' not found"))
+        };
+        assert!(body("namedcap").contains("(?<"), "namedcap must contain named-capture opener (?<");
+        assert!(body("lookahead").contains("(?="), "lookahead must contain positive lookahead (?=");
+        assert!(
+            body("neglookahead").contains("(?!"),
+            "neglookahead must contain negative lookahead (?!"
+        );
+        assert!(
+            body("lookbehind").contains("(?<="),
+            "lookbehind must contain positive lookbehind (?<="
+        );
+        assert!(
+            body("neglookbehind").contains("(?<!"),
+            "neglookbehind must contain negative lookbehind (?<!"
+        );
+        assert!(body("rxglobal").contains("/g"), "rxglobal must embed /g flag");
+        assert!(body("rxcase").contains("/i"), "rxcase must embed /i flag");
+        assert!(body("rxmulti").contains("/m"), "rxmulti must embed /m flag");
+        assert!(body("rxdots").contains("/s"), "rxdots must embed /s flag");
+        assert!(body("rxverbose").contains("/x"), "rxverbose must embed /x flag");
+        assert!(body("mbasic").starts_with("m/"), "mbasic body must start with m/");
+        assert!(body("sbasic").starts_with("s/"), "sbasic body must start with s/");
+        assert!(body("qrbasic").starts_with("qr/"), "qrbasic body must start with qr/");
     }
 }
