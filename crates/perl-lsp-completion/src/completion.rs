@@ -2030,7 +2030,10 @@ sub helper { }
         let ast = must(parser.parse());
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
-        assert!(completions.iter().any(|c| c.label == "MyApp"), "use MyA should suggest MyApp");
+        assert!(
+            completions.iter().any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
+            "use MyA should suggest MyApp with Module kind"
+        );
         assert!(
             !completions.iter().any(|c| c.label == "OtherLib"),
             "use MyA should not suggest OtherLib"
