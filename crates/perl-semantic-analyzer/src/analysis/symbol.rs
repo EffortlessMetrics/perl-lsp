@@ -1034,10 +1034,8 @@ impl SymbolExtractor {
                 args.iter().rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
             if let Some(opts_idx) = options_hash_idx {
                 if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
-                    let names: Vec<String> = args[..opts_idx]
-                        .iter()
-                        .flat_map(Self::collect_symbol_names)
-                        .collect();
+                    let names: Vec<String> =
+                        args[..opts_idx].iter().flat_map(Self::collect_symbol_names).collect();
                     if !names.is_empty() {
                         self.synthesize_moo_has_attrs_with_options(&names, pairs, first.location);
                         self.visit_node(first);
