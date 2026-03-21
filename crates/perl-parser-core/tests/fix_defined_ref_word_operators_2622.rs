@@ -135,3 +135,38 @@ fn test_defined_paren_arg_then_and() {
     // defined($x) and — parens path, unaffected by this change
     assert_clean_parse(r#"defined($x) and length($x);"#);
 }
+
+// === Operator variety: symbolic || and // at STATEMENT level (not RHS of assignment) ===
+//
+// Note: `defined` without args inside an assignment RHS (e.g. `my $x = defined || ...`)
+// is a pre-existing parser limitation — `defined` in expression context goes through a
+// different code path than `parse_simple_statement`. The fix here is ONLY for the
+// statement-level dispatch. Tests below use statement-level forms only.
+
+#[test]
+fn test_defined_symbolic_or_statement_level() {
+    // defined || fallback at statement level (not inside an assignment RHS)
+    // || (TokenKind::Or) is in is_binary_operator, so omit_optional_arg fires
+    assert_clean_parse(r#"defined || length;"#);
+}
+
+#[test]
+fn test_defined_symbolic_and_statement_level() {
+    // defined && x at statement level
+    // && (TokenKind::And) is in is_binary_operator
+    assert_clean_parse(r#"defined && length;"#);
+}
+
+#[test]
+fn test_defined_xor_operator() {
+    // defined xor something — WordXor is in is_binary_operator
+    assert_clean_parse(r#"grep { defined xor something } @list;"#);
+}
+
+// === Nested: defined and ref combined ===
+
+#[test]
+fn test_nested_defined_in_grep() {
+    // defined and ref $_ eq 'HASH' — combination of no-arg and with-arg
+    assert_clean_parse(r#"grep { defined and ref $_ eq 'HASH' } @list;"#);
+}
