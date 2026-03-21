@@ -1023,6 +1023,30 @@ impl SymbolExtractor {
             }
         }
 
+        // Form C: FunctionCall { name: "has", args: [name_expr, HashLiteral { ... }] }
+        // Produced when the parser recognises `has 'name' => (is => 'ro', ...)` as a bare call.
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::FunctionCall { name, args } = &expression.kind
+            && name == "has"
+            && !args.is_empty()
+        {
+            let options_hash_idx =
+                args.iter().rposition(|a| matches!(a.kind, NodeKind::HashLiteral { .. }));
+            if let Some(opts_idx) = options_hash_idx {
+                if let NodeKind::HashLiteral { pairs } = &args[opts_idx].kind {
+                    let names: Vec<String> = args[..opts_idx]
+                        .iter()
+                        .flat_map(|a| Self::collect_symbol_names(a))
+                        .collect();
+                    if !names.is_empty() {
+                        self.synthesize_moo_has_attrs_with_options(&names, pairs, first.location);
+                        self.visit_node(first);
+                        return Some(1);
+                    }
+                }
+            }
+        }
+
         None
     }
 
