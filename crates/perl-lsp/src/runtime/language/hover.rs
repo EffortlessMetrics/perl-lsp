@@ -173,6 +173,18 @@ impl LspServer {
                 format!("\n**Attributes**: {}", symbol_info.attributes.join(", "))
             };
 
+            // Run type inference to get inferred type for the symbol.
+            // Filter out uninformative types (Any, Void) that add no value.
+            let type_info = {
+                let mut engine = perl_parser::type_inference::TypeInferenceEngine::new();
+                let _ = engine.infer(ast);
+                engine
+                    .hover_label_for(&symbol_info.name)
+                    .filter(|label| label != "Any" && label != "Void")
+                    .map(|label| format!("\n**Type**: `{}`", label))
+                    .unwrap_or_default()
+            };
+
             let complexity_section = if complexity_info.is_empty() {
                 String::new()
             } else {
@@ -188,10 +200,11 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
+                        type_info,
                         tied_info,
                         attrs_info,
                         complexity_section,
