@@ -6,8 +6,7 @@
 //! - Service Level Objectives (SLOs)
 //! - Performance optimization for large workspaces
 //! - Production coordinator integration
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
+use perl_tdd_support::{must, must_some};
 use perl_workspace_index::workspace::cache::{
     AstCacheConfig, BoundedLruCache, CacheConfig, CombinedWorkspaceCacheConfig, SymbolCacheConfig,
     WorkspaceCacheConfig,
@@ -147,7 +146,7 @@ fn test_state_machine_concurrent_access() {
 
     // Wait for all threads
     for handle in handles {
-        handle.join().expect("Thread panicked");
+        must(handle.join());
     }
 
     // State machine should still be functional
@@ -299,7 +298,7 @@ fn test_cache_concurrent_access() {
     }
 
     for handle in handles {
-        handle.join().expect("Thread panicked");
+        must(handle.join());
     }
 
     // Cache should still be functional
@@ -678,9 +677,9 @@ fn test_production_coordinator_initialization() {
 #[test]
 fn test_production_coordinator_file_indexing() {
     let coordinator = ProductionIndexCoordinator::new();
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
-    let uri = Url::parse("file:///example.pl").unwrap();
+    let uri = must(Url::parse("file:///example.pl"));
     let code = "sub hello { return 42; }";
     assert!(coordinator.index_file(uri, code.to_string()).is_ok());
 }
@@ -688,11 +687,11 @@ fn test_production_coordinator_file_indexing() {
 #[test]
 fn test_production_coordinator_definition_lookup() {
     let coordinator = ProductionIndexCoordinator::new();
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
-    let uri = Url::parse("file:///example.pl").unwrap();
+    let uri = must(Url::parse("file:///example.pl"));
     let code = "sub hello { return 42; }";
-    coordinator.index_file(uri, code.to_string()).unwrap();
+    must(coordinator.index_file(uri, code.to_string()));
 
     let def = coordinator.find_definition("hello");
     assert!(def.is_some());
@@ -701,11 +700,11 @@ fn test_production_coordinator_definition_lookup() {
 #[test]
 fn test_production_coordinator_references() {
     let coordinator = ProductionIndexCoordinator::new();
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
-    let uri = Url::parse("file:///example.pl").unwrap();
+    let uri = must(Url::parse("file:///example.pl"));
     let code = "sub hello { return 42; } hello();";
-    coordinator.index_file(uri, code.to_string()).unwrap();
+    must(coordinator.index_file(uri, code.to_string()));
 
     let refs = coordinator.find_references("hello");
     assert!(!refs.is_empty());
@@ -714,9 +713,9 @@ fn test_production_coordinator_references() {
 #[test]
 fn test_production_coordinator_caching() {
     let coordinator = ProductionIndexCoordinator::new();
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
-    let uri = Url::parse("file:///example.pl").unwrap();
+    let uri = must(Url::parse("file:///example.pl"));
     let code = "sub hello { return 42; }";
 
     // First indexing - should cache
@@ -727,18 +726,18 @@ fn test_production_coordinator_caching() {
 
     // Check cache stats
     let stats = coordinator.statistics();
-    let ast_stats = stats.cache_stats.get("ast").unwrap();
+    let ast_stats = must_some(stats.cache_stats.get("ast"));
     assert!(ast_stats.hits > 0);
 }
 
 #[test]
 fn test_production_coordinator_slo_tracking() {
     let coordinator = ProductionIndexCoordinator::new();
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
-    let uri = Url::parse("file:///example.pl").unwrap();
+    let uri = must(Url::parse("file:///example.pl"));
     let code = "sub hello { return 42; }";
-    coordinator.index_file(uri, code.to_string()).unwrap();
+    must(coordinator.index_file(uri, code.to_string()));
 
     let def = coordinator.find_definition("hello");
     assert!(def.is_some());
@@ -747,11 +746,11 @@ fn test_production_coordinator_slo_tracking() {
     let stats = coordinator.statistics();
     assert!(stats.all_slos_met);
 
-    let file_stats = stats.slo_stats.get(&OperationType::FileIndexing).unwrap();
+    let file_stats = must_some(stats.slo_stats.get(&OperationType::FileIndexing));
     assert_eq!(file_stats.total_count, 1);
     assert_eq!(file_stats.success_count, 1);
 
-    let def_stats = stats.slo_stats.get(&OperationType::DefinitionLookup).unwrap();
+    let def_stats = must_some(stats.slo_stats.get(&OperationType::DefinitionLookup));
     assert_eq!(def_stats.total_count, 1);
     assert_eq!(def_stats.success_count, 1);
 }
@@ -759,17 +758,17 @@ fn test_production_coordinator_slo_tracking() {
 #[test]
 fn test_production_coordinator_invalidation() {
     let coordinator = ProductionIndexCoordinator::new();
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
-    let uri = Url::parse("file:///example.pl").unwrap();
-    coordinator.index_file(uri, "sub hello {}".to_string()).unwrap();
+    let uri = must(Url::parse("file:///example.pl"));
+    must(coordinator.index_file(uri, "sub hello {}".to_string()));
 
     coordinator.invalidate(InvalidationReason::ManualRequest);
     assert!(matches!(coordinator.state(), IndexState::Idle { .. }));
 
     // Cache should be cleared
     let stats = coordinator.statistics();
-    let ast_stats = stats.cache_stats.get("ast").unwrap();
+    let ast_stats = must_some(stats.cache_stats.get("ast"));
     assert_eq!(ast_stats.current_items, 0);
 }
 
@@ -779,9 +778,9 @@ fn test_production_coordinator_memory_limits() {
     config.cache_config.ast.max_bytes = 100; // Very small limit
 
     let coordinator = ProductionIndexCoordinator::with_config(config);
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
-    let uri = Url::parse("file:///example.pl").unwrap();
+    let uri = must(Url::parse("file:///example.pl"));
     let large_code = "x".repeat(200); // Larger than cache limit
 
     // Should still work, but cache eviction will occur
@@ -794,16 +793,16 @@ fn test_production_coordinator_memory_limits() {
 #[test]
 fn test_production_coordinator_concurrent_operations() {
     let coordinator = std::sync::Arc::new(ProductionIndexCoordinator::new());
-    coordinator.initialize().unwrap();
+    must(coordinator.initialize());
 
     let mut handles = vec![];
 
     for i in 0..10 {
         let coord_clone = std::sync::Arc::clone(&coordinator);
         let handle = thread::spawn(move || {
-            let uri = Url::parse(&format!("file:///example{}.pl", i)).unwrap();
+            let uri = must(Url::parse(&format!("file:///example{}.pl", i)));
             let code = format!("sub hello{} {{ return {}; }}", i, i);
-            coord_clone.index_file(uri, code).unwrap();
+            must(coord_clone.index_file(uri, code));
 
             let def = coord_clone.find_definition(&format!("hello{}", i));
             assert!(def.is_some());
@@ -812,13 +811,13 @@ fn test_production_coordinator_concurrent_operations() {
     }
 
     for handle in handles {
-        handle.join().expect("Thread panicked");
+        must(handle.join());
     }
 
     // All operations should have completed successfully
     let stats = coordinator.statistics();
     assert!(stats.all_slos_met);
-    assert!(stats.cache_stats.get("ast").unwrap().current_items > 0);
+    assert!(must_some(stats.cache_stats.get("ast")).current_items > 0);
 }
 
 #[test]
@@ -837,7 +836,7 @@ fn test_production_coordinator_full_workflow() {
     ];
 
     for (uri_str, code) in &files {
-        let uri = Url::parse(uri_str).unwrap();
+        let uri = must(Url::parse(uri_str));
         assert!(coordinator.index_file(uri, code.to_string()).is_ok());
     }
 
@@ -854,8 +853,8 @@ fn test_production_coordinator_full_workflow() {
     // 4. Check statistics
     let stats = coordinator.statistics();
     assert!(stats.all_slos_met);
-    assert_eq!(stats.cache_stats.get("ast").unwrap().current_items, 3);
-    assert_eq!(stats.cache_stats.get("symbol").unwrap().current_items, 3);
+    assert_eq!(must_some(stats.cache_stats.get("ast")).current_items, 3);
+    assert_eq!(must_some(stats.cache_stats.get("symbol")).current_items, 3);
 
     // 5. Invalidate and reinitialize
     coordinator.invalidate(InvalidationReason::ConfigurationChanged);
