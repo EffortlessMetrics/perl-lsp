@@ -396,17 +396,20 @@ impl LspServer {
                 let is_incomplete = completions.len() > cap;
                 completions.truncate(cap);
 
+                // Snapshot capability flag once before the loop to avoid
+                // acquiring client_capabilities lock per completion item
+                let snippet_support = self.client_capabilities.lock().snippet_support;
+
                 let items: Vec<Value> = completions
                     .into_iter()
                     .map(|c| {
                         // Determine insertTextFormat based on client capability and completion kind
                         let is_snippet = c.kind == CompletionItemKind::Snippet;
-                        let insert_text_format =
-                            if is_snippet && self.client_capabilities.lock().snippet_support {
-                                2 // Snippet format
-                            } else {
-                                1 // PlainText format
-                            };
+                        let insert_text_format = if is_snippet && snippet_support {
+                            2 // Snippet format
+                        } else {
+                            1 // PlainText format
+                        };
 
                         let mut item = json!({
                             "label": c.label,
@@ -431,7 +434,7 @@ impl LspServer {
                         // Only include insertText if it has a value
                         if let Some(mut insert_text) = c.insert_text {
                             // Degrade snippets to plaintext if client doesn't support snippets
-                            if is_snippet && !self.client_capabilities.lock().snippet_support {
+                            if is_snippet && !snippet_support {
                                 // Remove snippet syntax: $1, $0, ${1:placeholder}, etc.
                                 insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
                             }

@@ -750,7 +750,7 @@ impl LspServer {
 
         for (uri, doc) in documents.iter() {
             if let Some(ref ast) = doc.ast {
-                self.find_subclasses_in_ast(ast, base_class, uri, &mut results);
+                self.find_subclasses_in_ast(ast, base_class, uri, &mut results, &doc.text);
             }
         }
 
@@ -758,6 +758,9 @@ impl LspServer {
     }
 
     /// Find subclasses in an AST
+    ///
+    /// Takes `source_text` from the caller instead of acquiring `documents_guard()`
+    /// internally, which would deadlock if the caller already holds the documents lock.
     #[allow(dead_code)]
     fn find_subclasses_in_ast(
         &self,
@@ -765,26 +768,22 @@ impl LspServer {
         base_class: &str,
         uri: &str,
         results: &mut Vec<Location>,
+        source_text: &str,
     ) {
         if let NodeKind::Package { name: _name, .. } = &node.kind {
             // Check if this package extends the base class
             // Look for @ISA assignment or 'use base' or 'use parent'
             // This would need proper traversal - simplified for now
             if self.check_inheritance_in_package(node, base_class) {
-                // Get source text for position conversion
-                let documents = self.documents_guard();
-                if let Some(doc) = documents.get(uri) {
-                    let source_text = &doc.text;
-                    // Convert byte offsets to wire range using conversion waist
-                    let wire_range = crate::convert::WireRange::from_byte_offsets(
-                        source_text,
-                        node.location.start,
-                        node.location.end,
-                    );
+                // Convert byte offsets to wire range using caller-provided source text
+                let wire_range = crate::convert::WireRange::from_byte_offsets(
+                    source_text,
+                    node.location.start,
+                    node.location.end,
+                );
 
-                    // Create typed Location
-                    results.push(Location { uri: parse_uri(uri), range: wire_range.into() });
-                }
+                // Create typed Location
+                results.push(Location { uri: parse_uri(uri), range: wire_range.into() });
             }
         }
 
@@ -792,12 +791,12 @@ impl LspServer {
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.find_subclasses_in_ast(stmt, base_class, uri, results);
+                    self.find_subclasses_in_ast(stmt, base_class, uri, results, source_text);
                 }
             }
             NodeKind::Package { block, .. } => {
                 if let Some(b) = block {
-                    self.find_subclasses_in_ast(b, base_class, uri, results);
+                    self.find_subclasses_in_ast(b, base_class, uri, results, source_text);
                 }
             }
             _ => {}
