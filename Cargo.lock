@@ -1901,6 +1901,7 @@ dependencies = [
 name = "perl-lsp-code-actions"
 version = "0.12.0"
 dependencies = [
+ "perl-builtins",
  "perl-diagnostics-codes",
  "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
