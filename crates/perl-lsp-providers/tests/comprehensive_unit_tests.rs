@@ -1472,7 +1472,7 @@ mod diagnostics_integration_tests {
         let code = "use strict;\nuse warnings;\nmy $x = 42;\nprint $x;\n";
         let ast = parse(code)?;
         let provider = DiagnosticsProvider::new(&ast, code.to_string());
-        let diagnostics = provider.get_diagnostics(&ast, &[], code);
+        let diagnostics = provider.get_diagnostics(&ast, &[], code, None);
         // Valid code should produce few or no diagnostics
         let _ = diagnostics;
         Ok(())
@@ -1482,7 +1482,7 @@ mod diagnostics_integration_tests {
     fn diagnostics_for_empty_code() -> Result<(), ParseError> {
         let ast = parse("")?;
         let provider = DiagnosticsProvider::new(&ast, String::new());
-        let diagnostics = provider.get_diagnostics(&ast, &[], "");
+        let diagnostics = provider.get_diagnostics(&ast, &[], "", None);
         let _ = diagnostics;
         Ok(())
     }

@@ -53,6 +53,7 @@ pub use perl_lsp_diagnostic_types::{
 // Re-export lint checks from the lints module
 pub use lints::common_mistakes;
 pub use lints::deprecated;
+pub use lints::missing_module;
 pub use lints::security;
 pub use lints::strict_warnings;
 pub use lints::unused_imports;

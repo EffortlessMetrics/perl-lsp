@@ -14,7 +14,7 @@ sub test($x, $y, $x) {
     let ast = parser.parse()?;
     let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should have one error for duplicate parameter
     let duplicate_errors: Vec<_> =
@@ -40,7 +40,7 @@ sub increment($count) {
     let ast = parser.parse()?;
     let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should have one warning for parameter shadowing
     let shadow_warnings: Vec<_> = diagnostics
@@ -66,7 +66,7 @@ sub helper($x, $y, $z) {
     let ast = parser.parse()?;
     let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should have one warning for unused parameter
     let unused_warnings: Vec<_> =
@@ -92,7 +92,7 @@ my $hash = { key => value };  # These barewords should also be flagged
     let ast = parser.parse()?;
     let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should have errors for barewords
     let bareword_errors: Vec<_> =
@@ -122,7 +122,7 @@ sub legacy_style {
     let ast = parser.parse()?;
     let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should not flag @_ usage
     let false_positives: Vec<_> = diagnostics.iter().filter(|d| d.message.contains("@_")).collect();
@@ -144,7 +144,7 @@ sub callback($event, $_unused_data) {
     let ast = parser.parse()?;
     let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should not flag parameters starting with underscore as unused
     let unused_warnings: Vec<_> = diagnostics
@@ -169,7 +169,7 @@ sub complex($a, $b, $a, $c, $b) {
     let ast = parser.parse()?;
     let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
-    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source);
+    let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should have errors for both duplicate parameters
     let duplicate_errors: Vec<_> =

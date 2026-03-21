@@ -32,7 +32,8 @@ impl LspServer {
 
             // Get diagnostics from the document
             let diag_provider = DiagnosticsProvider::new(ast, doc.text.clone());
-            let diagnostics = diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.text);
+            let diagnostics =
+                diag_provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, None);
 
             // Get code actions from both providers
             let mut code_actions: Vec<Value> = Vec::new();

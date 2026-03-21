@@ -115,7 +115,7 @@ impl PullDiagnosticsProvider {
                 let ast = std::sync::Arc::new(ast);
                 let provider = DiagnosticsProvider::new(&ast, content.to_string());
                 provider
-                    .get_diagnostics(&ast, &parse_errors, content)
+                    .get_diagnostics(&ast, &parse_errors, content, None)
                     .into_iter()
                     .map(|d| self.to_lsp_diagnostic(uri, content, d))
                     .collect()
@@ -132,7 +132,7 @@ impl PullDiagnosticsProvider {
         if let Some(ast) = &doc_state.ast {
             let provider = DiagnosticsProvider::new(ast, doc_state.text.clone());
             provider
-                .get_diagnostics(ast, &doc_state.parse_errors, &doc_state.text)
+                .get_diagnostics(ast, &doc_state.parse_errors, &doc_state.text, None)
                 .into_iter()
                 .map(|d| self.to_lsp_diagnostic(uri, &doc_state.text, d))
                 .collect()
