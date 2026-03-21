@@ -105,7 +105,8 @@ fn test_for_loop_empty_all_clean() {
 }
 
 /// Both internal semicolons missing — parser must not infinite-loop or cascade
-/// catastrophically. Records errors and the statement following the loop still parses.
+/// catastrophically. Records errors, produces a For node, and the statement
+/// following the loop still parses.
 #[test]
 fn test_for_loop_both_semicolons_missing_no_infinite_loop() {
     let src = "for (my $i = 0 $i < 10 $i++) { print $i; }\nprint 'done';";
@@ -114,8 +115,70 @@ fn test_for_loop_both_semicolons_missing_no_infinite_loop() {
     // Parser must not cascade catastrophically — statement count must be sane
     let count = statement_count(&ast);
     assert!(
-        count >= 1,
-        "Parser must produce at least one statement even with both semicolons missing. Got {}",
+        count >= 2,
+        "Statement after bad for loop must still parse even with both semicolons missing. Got {} stmts",
         count
+    );
+    // The for-loop itself must still produce a For node (recovery keeps it intact)
+    let first_kind = first_statement_kind(&ast);
+    assert_eq!(
+        first_kind, "For",
+        "First statement must be a For node after recovery, not '{}'. \
+         Both-semicolons-missing should still yield a partial For node.",
+        first_kind
+    );
+    // Error count must be bounded — at most 2 (one per missing semicolon), not a cascade
+    assert!(
+        errs <= 4,
+        "Error count should be bounded with both semicolons missing (expected 2-3, got {}). \
+         The fix should not cascade.",
+        errs
+    );
+}
+
+/// Nested for loop where the inner loop has a missing semicolon — outer loop must
+/// still parse as a For node, inner loop must recover and not destroy the outer structure.
+#[test]
+fn test_for_loop_nested_inner_missing_semicolon() {
+    let src = "for (my $i = 0; $i < 5; $i++) {\n    for (my $j = 0 $j < 5; $j++) { print \"$i $j\"; }\n}\nprint 'done';";
+    let (ast, errs) = parse_with_error_count(src);
+    assert!(errs > 0, "Expected at least one error for missing semicolon in inner for loop");
+    let count = statement_count(&ast);
+    assert!(count >= 2, "Statement after the outer for loop must still parse. Got {} stmts", count);
+    // Outer for loop must be a For node — inner recovery must not bubble up
+    let first_kind = first_statement_kind(&ast);
+    assert_eq!(
+        first_kind, "For",
+        "Outer loop must remain a For node after inner recovery, not '{}'.",
+        first_kind
+    );
+    // Errors should be bounded — only the inner missing semicolon
+    assert!(
+        errs <= 3,
+        "Error count should be bounded (expected 1, got {}). Inner recovery must not cascade.",
+        errs
+    );
+}
+
+/// Expression-init path (not `my`): `for ($i = 0 $i < 10; $i++)` — the init is
+/// a plain expression, not a variable declaration. The recovery must work for this
+/// path too, not just the `my` declaration path.
+#[test]
+fn test_for_loop_expression_init_missing_first_semicolon() {
+    let src = "for ($i = 0 $i < 10; $i++) { print $i; }\nprint 'done';";
+    let (ast, errs) = parse_with_error_count(src);
+    assert!(errs > 0, "Expected at least one error for missing semicolon after expression init");
+    let count = statement_count(&ast);
+    assert!(count >= 2, "Statement after bad for loop must still parse. Got {} stmts", count);
+    let first_kind = first_statement_kind(&ast);
+    assert_eq!(
+        first_kind, "For",
+        "First statement must be a For node after recovery, not '{}'.",
+        first_kind
+    );
+    assert!(
+        errs <= 3,
+        "Error count should be bounded after recovery (expected 1-2, got {}).",
+        errs
     );
 }
