@@ -208,6 +208,15 @@ tests = ["tests/pull_diagnostics_tests.rs"]
 description = "Pull model diagnostics"
 
 [[feature]]
+id = "lsp.diagnostic.unused_variable"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/pull_diagnostics_tests.rs"]
+description = "Unused variable diagnostics (PL102) via scope analyzer — warns on declared-but-never-used variables, suppressed by underscore prefix"
+
+[[feature]]
 id = "lsp.inline_completion"
 spec = "LSP 3.18"
 area = "text_document"
