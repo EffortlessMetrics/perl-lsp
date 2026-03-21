@@ -129,6 +129,8 @@ pub struct SweepReport {
     pub files_with_errors: usize,
     pub total_error_nodes: usize,
     pub first_error_buckets: BTreeMap<String, usize>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub files_by_bucket: BTreeMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub file_results: Vec<FileResult>,
     pub elapsed_secs: f64,
@@ -423,6 +425,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut files_with_errors = 0usize;
     let mut total_error_nodes = 0usize;
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
+    let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut file_results: Vec<FileResult> = Vec::new();
 
     for path in &pm_files {
@@ -458,6 +461,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 total_error_nodes += 1;
                 let bucket = "catastrophic_parse_failure".to_string();
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+                files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
                 if config.verbose {
                     file_results.push(FileResult {
                         path: path.display().to_string(),
@@ -490,6 +494,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             let first = summary.first_message.as_deref().unwrap_or("unknown");
             let bucket = normalize_error_bucket(first);
             *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+            files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
             if config.verbose {
                 file_results.push(FileResult {
                     path: path.display().to_string(),
@@ -509,7 +514,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let commit = get_git_commit();
 
     let report = SweepReport {
-        schema_version: "1.1.0".to_string(),
+        schema_version: "1.2.0".to_string(),
         commit,
         timestamp: chrono::Utc::now().to_rfc3339(),
         corpus_profile: corpus_profile.clone(),
@@ -526,6 +531,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         files_with_errors,
         total_error_nodes,
         first_error_buckets,
+        files_by_bucket,
         file_results: if config.verbose { file_results } else { Vec::new() },
         elapsed_secs: elapsed.as_secs_f64(),
     };
@@ -786,7 +792,7 @@ mod tests {
         first_error_buckets: BTreeMap<String, usize>,
     ) -> SweepReport {
         SweepReport {
-            schema_version: "1.1.0".to_string(),
+            schema_version: "1.2.0".to_string(),
             commit: "abc".to_string(),
             timestamp: "now".to_string(),
             corpus_profile: "system".to_string(),
@@ -799,6 +805,7 @@ mod tests {
             files_with_errors,
             total_error_nodes,
             first_error_buckets,
+            files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,
         }
@@ -1370,5 +1377,72 @@ mod tests {
         let report = baseline.clone();
         let violations = enforce_ratchet(&report, &baseline);
         assert!(violations.is_empty(), "Empty baselines should have no violations");
+    }
+
+    // ── files_by_bucket tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_files_by_bucket_populated_for_error_files() {
+        // A report where files_by_bucket has known content
+        let mut fbb = BTreeMap::new();
+        fbb.insert("unclosed_brace".to_string(), vec!["Foo.pm".to_string(), "Bar.pm".to_string()]);
+        let report = SweepReport {
+            files_by_bucket: fbb,
+            ..test_report(8, 2, 3, 0, BTreeMap::from([("unclosed_brace".to_string(), 2)]))
+        };
+        let files = report.files_by_bucket.get("unclosed_brace").expect("bucket should exist");
+        assert_eq!(files.len(), 2);
+        assert!(files.contains(&"Foo.pm".to_string()));
+    }
+
+    #[test]
+    fn test_files_by_bucket_serde_roundtrip() {
+        let mut fbb = BTreeMap::new();
+        fbb.insert("expected_semicolon".to_string(), vec!["Some/Module.pm".to_string()]);
+        let report = SweepReport {
+            files_by_bucket: fbb,
+            ..test_report(9, 1, 1, 0, BTreeMap::from([("expected_semicolon".to_string(), 1)]))
+        };
+        let json = serde_json::to_string(&report).expect("serialize");
+        let back: SweepReport = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.files_by_bucket, report.files_by_bucket);
+    }
+
+    #[test]
+    fn test_files_by_bucket_absent_in_old_schema_deserializes_empty() {
+        // The existing backward-compat JSON (schema 1.0.0) has no files_by_bucket
+        // field — must deserialize as empty BTreeMap.
+        let old_json = r#"{
+            "schema_version": "1.0.0",
+            "commit": "abc",
+            "timestamp": "now",
+            "corpus_roots": ["/usr/share/perl"],
+            "total_files": 100,
+            "files_unreadable": 0,
+            "clean_files": 80,
+            "files_with_errors": 20,
+            "total_error_nodes": 30,
+            "first_error_buckets": {},
+            "elapsed_secs": 1.0
+        }"#;
+        let report: SweepReport = serde_json::from_str(old_json).expect("deserialize old schema");
+        assert!(report.files_by_bucket.is_empty(), "files_by_bucket should default to empty");
+    }
+
+    #[test]
+    fn test_files_by_bucket_not_examined_by_ratchet() {
+        // Different file lists in files_by_bucket with identical counts should not trigger
+        // violations — files_by_bucket is informational only, not part of the ratchet.
+        let mut fbb_a = BTreeMap::new();
+        fbb_a.insert("unclosed_brace".to_string(), vec!["A.pm".to_string()]);
+        let mut fbb_b = BTreeMap::new();
+        fbb_b.insert("unclosed_brace".to_string(), vec!["B.pm".to_string()]);
+        let baseline = SweepReport {
+            files_by_bucket: fbb_a,
+            ..test_report(9, 1, 1, 0, BTreeMap::from([("unclosed_brace".to_string(), 1)]))
+        };
+        let report = SweepReport { files_by_bucket: fbb_b, ..baseline.clone() };
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "files_by_bucket changes should not affect ratchet");
     }
 }
