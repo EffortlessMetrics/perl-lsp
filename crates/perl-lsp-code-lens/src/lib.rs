@@ -143,6 +143,12 @@ impl CodeLensProvider {
                 self.visit_node(expression, lenses);
             }
 
+            NodeKind::FunctionCall { name, args } => {
+                if name == "subtest" {
+                    self.add_subtest_lens(node, args, lenses);
+                }
+            }
+
             _ => {
                 self.visit_children(node, lenses);
             }
