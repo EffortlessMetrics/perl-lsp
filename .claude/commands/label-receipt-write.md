@@ -42,14 +42,15 @@ CURRENT_SHA="n/a"
 
 ### 3. Check for existing receipt comment
 
-Search for the receipt comment marker:
+Search for the receipt comment marker. Use the `issues` endpoint for both PRs and
+issues -- on GitHub's API, `gh pr comment` creates an issue-type comment, and the
+`pulls/.../comments` endpoint only returns line-level review comments, not general comments.
+
 ```bash
-EXISTING_COMMENT=$(gh api "repos/{owner}/{repo}/$ENDPOINT/$NUMBER/comments" \
+EXISTING_COMMENT=$(gh api "repos/{owner}/{repo}/issues/$NUMBER/comments" \
   --jq '.[] | select(.body | contains("<!-- LABEL_RECEIPT_v1 -->")) | {id: .id, body: .body}' \
   | head -1)
 ```
-
-Where `$ENDPOINT` is `pulls` for PRs or `issues` for issues.
 
 ### 4. Build the label binding
 

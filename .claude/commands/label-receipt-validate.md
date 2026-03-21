@@ -41,12 +41,14 @@ CURRENT_SHA="n/a"
 
 ### 3. Find the receipt comment
 
+Use the `issues` endpoint for both PRs and issues -- on GitHub's API, receipt comments
+created via `gh pr comment` are issue-type comments, and `pulls/.../comments` only returns
+line-level review comments.
+
 ```bash
-RECEIPT_BODY=$(gh api "repos/{owner}/{repo}/$ENDPOINT/$NUMBER/comments" \
+RECEIPT_BODY=$(gh api "repos/{owner}/{repo}/issues/$NUMBER/comments" \
   --jq '[.[] | select(.body | contains("<!-- LABEL_RECEIPT_v1 -->"))] | last | .body')
 ```
-
-Where `$ENDPOINT` is `pulls` for PRs or `issues` for issues.
 
 ### 4. Check for receipt existence
 
