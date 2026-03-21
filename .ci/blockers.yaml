@@ -1,0 +1,256 @@
+# =============================================================================
+# Blocker Ledger
+# =============================================================================
+#
+# Machine-readable list of known active parser/LSP/CI blockers.
+# Agents MUST check this file before starting discovery work to avoid
+# re-investigating known issues.
+#
+# Schema Version: 1
+# Last Verified: 2026-03-21  (counts from .ci/parser-corpus-baseline.json)
+#
+# Usage:
+#   - Scouts: read this before /scout-dedup — if status: filed or partial, stop.
+#   - Builders: pick entries with status: needs_investigation — they need issues.
+#   - Archiving: when an issue closes, move entry to the archived section below.
+#
+# Counts source: .ci/parser-corpus-baseline.json first_error_buckets
+# (system corpus only — CPAN corpus counts will differ).
+#
+# =============================================================================
+
+schema_version: 1
+last_verified: "2026-03-21"
+
+budgets:
+  max_active_blockers: 50  # advisory only — no gate enforcement today
+  note: "Archive entries with status: fixed — do not delete, move to archived section"
+
+# =============================================================================
+# Parser Error Buckets
+# =============================================================================
+# Entries keyed by first_error_buckets key in parser-corpus-baseline.json.
+# affected_files: count from live baseline at last_verified date.
+# Verify freshness: python3 -c "import json; d=json.load(open('.ci/parser-corpus-baseline.json')); print(d['first_error_buckets'])"
+
+parser_blockers:
+  - id: "unexpected_token_in_expr"
+    category: "expression"
+    affected_files: 206
+    root_cause: "Broad catch-all expression token error — multiple sub-causes undiagnosed"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 1: largest bucket (206 files). No issue filed. Highest-priority scout target."
+
+  - id: "unexpected_rbrace_expr"
+    category: "expression"
+    affected_files: 105
+    root_cause: "Unexpected right brace inside expression context"
+    status: "filed"
+    issue: "#2189"
+    note: "Tier 1: investigation issue only, fix spec not yet written."
+
+  - id: "unclosed_paren"
+    category: "expression"
+    affected_files: 99
+    root_cause: "Unmatched open parenthesis — multiple sub-causes"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 1: 99 files. No issue filed."
+
+  - id: "unexpected_comma_expr"
+    category: "expression"
+    affected_files: 98
+    root_cause: "Unexpected comma in grep/map/sort block arguments"
+    status: "filed"
+    issue: "#2140"
+    note: "Tier 1: issue count was 70 at filing time; baseline now shows 98."
+
+  - id: "unexpected_rparen_expr"
+    category: "expression"
+    affected_files: 84
+    root_cause: "Unexpected right paren in expression context"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 1: 84 files. No issue filed."
+
+  - id: "unclosed_paren_identifier"
+    category: "identifier"
+    affected_files: 70
+    root_cause: "Bareword in sub call treated as unclosed paren"
+    status: "filed"
+    issue: "#2391"
+    note: "Tier 1: 15 files in issue at filing time; baseline now shows 70."
+
+  - id: "expected_module_name"
+    category: "module"
+    affected_files: 69
+    root_cause: "Module name parser fails on unusual package name forms"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 1: 69 files. No issue filed."
+
+  - id: "unexpected_word_op_or"
+    category: "operator"
+    affected_files: 43
+    root_cause: "Low-precedence 'or' operator in unexpected position"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 43 files. No issue filed."
+
+  - id: "unexpected_word_op_and"
+    category: "operator"
+    affected_files: 32
+    root_cause: "Low-precedence 'and' operator in unexpected position"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 32 files. No issue filed."
+
+  - id: "unclosed_brace_semicolon"
+    category: "block"
+    affected_files: 21
+    root_cause: "Brace not closed before semicolon — block/hash ambiguity"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 21 files. No issue filed."
+
+  - id: "unexpected_word_op_not"
+    category: "operator"
+    affected_files: 20
+    root_cause: "Low-precedence 'not' operator in unexpected position"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 20 files. No issue filed."
+
+  - id: "expected_left_brace"
+    category: "block"
+    affected_files: 19
+    root_cause: "Keyword-named subroutines parsed as block openers"
+    status: "filed"
+    issue: "#2149"
+    note: "Tier 2: 19 files in system corpus."
+
+  - id: "expected_colon"
+    category: "expression"
+    affected_files: 16
+    root_cause: "Ternary operator or label colon in unexpected position"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 16 files. No issue filed."
+
+  - id: "expected_identifier"
+    category: "identifier"
+    affected_files: 10
+    root_cause: "Identifier expected in complex contexts"
+    status: "filed"
+    issue: "#2150"
+    note: "Tier 2: 10 files."
+
+  - id: "substitution_misparse"
+    category: "regex"
+    affected_files: 8
+    root_cause: "s/// with /e modifier mishandled"
+    status: "filed"
+    issue: "#2395"
+    note: "Tier 2: 8 files."
+
+  - id: "unexpected_slash_expr"
+    category: "regex"
+    affected_files: 8
+    root_cause: "Division slash vs regex delimiter ambiguity"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 8 files. No issue filed."
+
+  - id: "expected_left_paren"
+    category: "expression"
+    affected_files: 6
+    root_cause: "Expected left paren in various call/declaration contexts"
+    status: "filed"
+    issue: "#2187"
+    note: "Tier 2: 6 files. builder-ready."
+
+  - id: "expected_variable"
+    category: "variable"
+    affected_files: 6
+    root_cause: "format/write statement parser expects variable"
+    status: "filed"
+    issue: "#2408"
+    note: "Tier 3: 6 files."
+
+  - id: "expected_semicolon"
+    category: "control_flow"
+    affected_files: 4
+    root_cause: "C-style for loop parser expects semicolon without recovery"
+    status: "filed"
+    issue: "#2573"
+    note: "Tier 3: 4 files in system corpus."
+
+  - id: "unexpected_fat_arrow_expr"
+    category: "expression"
+    affected_files: 2
+    root_cause: "Hash in list context fat-arrow ambiguity"
+    status: "filed"
+    issue: "#2402"
+    note: "Tier 3: 2 files in system corpus."
+
+  - id: "unclosed_bracket"
+    category: "expression"
+    affected_files: 2
+    root_cause: "False positives on unclosed bracket in complex expressions"
+    status: "filed"
+    issue: "#2148"
+    note: "Tier 3: 2 files in system corpus. CPAN count was larger at filing time."
+
+# =============================================================================
+# LSP Limitations
+# =============================================================================
+# Known LSP feature gaps that scouts should be aware of.
+# affected_files: not applicable for LSP limitations.
+
+lsp_limitations:
+  - id: "scoped_rename_workspace"
+    category: "refactoring"
+    status: "partial"
+    issue: "#1663"
+    note: "Single-file rename works; workspace-scoped rename incomplete. OPEN."
+
+  - id: "moose_moo_method_modifiers"
+    category: "semantic"
+    status: "filed"
+    issue: "#2328"
+    note: "Moose/Moo before/after/around modifiers need IDE support."
+
+  - id: "moose_moo_role_composition"
+    category: "semantic"
+    status: "filed"
+    issue: "#2325"
+    note: "Moose/Moo role composition detection and navigation missing."
+
+# =============================================================================
+# CI / Infrastructure Blockers
+# =============================================================================
+
+ci_blockers:
+  - id: "corpus_sweep_no_per_file_breakdown"
+    category: "tooling"
+    status: "filed"
+    issue: "#2554"
+    note: "corpus sweep baseline lacks per-file detail. builder-ready."
+
+# =============================================================================
+# Archived
+# =============================================================================
+# Do NOT delete fixed entries — move them here with closed_date and closed_pr.
+# Format: same schema plus closed_date: "YYYY-MM-DD" and closed_pr: "#NNNN"
+
+archived:
+  - id: "unclosed_brace"
+    category: "block"
+    affected_files: 16
+    root_cause: "map/grep block fat-arrow ambiguity"
+    status: "fixed"
+    issue: "#2392"
+    closed_date: "2026-03-21"
+    closed_pr: null
+    note: "Tier 2: 9 files in issue; baseline shows 16. builder-ready. FIXED: moved to archived on 2026-03-21 when issue #2392 closed."
