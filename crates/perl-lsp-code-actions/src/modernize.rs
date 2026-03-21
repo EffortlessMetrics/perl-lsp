@@ -271,6 +271,9 @@ fn find_missing_strict_warnings(source: &str) -> Vec<CodeAction> {
 /// Only fires when the source contains a `package` declaration (i.e. a module, not
 /// a script). The `or die` and `|| die` idioms used for system-call error handling
 /// are explicitly excluded — those are idiomatic and correct as-is.
+///
+/// Multi-line forms are handled: a `die` on a line by itself is also skipped when
+/// the previous non-empty line ends in `or` or `||` (e.g. `open(...) or\n    die`).
 fn find_die_in_module(source: &str) -> Vec<CodeAction> {
     // Only relevant in module files
     if !source.contains("package ") {
@@ -279,8 +282,9 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
 
     let already_uses_carp = source.contains("use Carp");
     let mut actions = Vec::new();
+    let lines: Vec<&str> = source.lines().collect();
 
-    for (line_idx, line) in source.lines().enumerate() {
+    for (line_idx, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
 
         // Skip `or die` and `|| die` idioms — correct for system calls
@@ -288,9 +292,20 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
             continue;
         }
 
-        // Match bare die call at start of trimmed line
-        if !trimmed.starts_with("die ") && !trimmed.starts_with("die;") {
+        // Match bare die call at start of trimmed line (space, paren, or semicolon after "die")
+        if !trimmed.starts_with("die ")
+            && !trimmed.starts_with("die;")
+            && !trimmed.starts_with("die(")
+        {
             continue;
+        }
+
+        // Skip multi-line `or die` / `|| die` where `or` or `||` is at end of previous line
+        if line_idx > 0 {
+            let prev_trimmed = lines[line_idx - 1].trim();
+            if prev_trimmed.ends_with(" or") || prev_trimmed.ends_with("||") {
+                continue;
+            }
         }
 
         let line_start = line_start_offset(source, line_idx);
@@ -632,6 +647,40 @@ mod tests {
         assert!(
             actions.is_empty(),
             "known limitation: die with ' or die' in message is not flagged"
+        );
+    }
+
+    #[test]
+    fn test_die_with_parens_flagged() {
+        // die("msg") — parenthesised form — must be flagged like die "msg"
+        let source = "package Foo;\ndie(\"Something failed\");\n";
+        let actions = find_die_in_module(source);
+        assert!(
+            !actions.is_empty(),
+            "die(\"msg\") in module context should be flagged for croak upgrade"
+        );
+    }
+
+    #[test]
+    fn test_multiline_or_die_not_flagged() {
+        // Multi-line `or die`: `or` at end of previous line, `die` on its own line.
+        // The die should NOT be flagged — it is part of an `or die` idiom.
+        let source = "package Foo;\nopen(my $fh, '<', 'f') or\n    die \"open failed: $!\";\n";
+        let actions = find_die_in_module(source);
+        assert!(
+            actions.is_empty(),
+            "die on its own line after trailing `or` should not be flagged as bare die"
+        );
+    }
+
+    #[test]
+    fn test_multiline_pipe_die_not_flagged() {
+        // Multi-line `|| die`: `||` at end of previous line, `die` on its own line.
+        let source = "package Foo;\nopen(my $fh, '<', 'f') ||\n    die \"open failed: $!\";\n";
+        let actions = find_die_in_module(source);
+        assert!(
+            actions.is_empty(),
+            "die on its own line after trailing `||` should not be flagged as bare die"
         );
     }
 }
