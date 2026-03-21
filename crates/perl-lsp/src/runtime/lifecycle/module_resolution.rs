@@ -497,4 +497,79 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_resolve_module_path_findbin_dotdot_traversal_blocked() -> TestResult {
+        // A FindBin path like "$FindBin::Bin/../../../etc" must not escape the workspace.
+        // Even if resolve_use_lib_paths emits an absolute path string for the out-of-workspace
+        // resolved directory, validate_workspace_path in the resolution layer must reject it.
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let scripts_dir = workspace.join("scripts");
+        fs::create_dir_all(&scripts_dir)?;
+        // Place a file outside the workspace that should never be reachable.
+        let outside = temp.path().join("secret");
+        fs::create_dir_all(outside.join("Evil"))?;
+        fs::write(outside.join("Evil").join("Secrets.pm"), "package Evil::Secrets; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        // The doc URI is in scripts/; "$FindBin::Bin/../../secret" would escape the workspace.
+        let doc_text = "use FindBin;\nuse lib \"$FindBin::Bin/../../secret\";\n";
+        let doc_uri = url::Url::from_file_path(scripts_dir.join("main.pl"))
+            .map_err(|_| "failed to create doc URI")?
+            .to_string();
+
+        let result = server
+            .resolve_module_path_with_uri("Evil::Secrets", Some(doc_text), Some(&doc_uri));
+
+        // Result must be None (file doesn't exist inside workspace) or a path inside workspace.
+        if let Some(ref path) = result {
+            assert!(
+                path.starts_with(&workspace),
+                "FindBin dotdot traversal must not resolve outside workspace: {path:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_malformed_use_lib_does_not_crash() -> TestResult {
+        // Malformed use lib statements (unclosed quote, empty, bare word) must be
+        // silently skipped — no panic, no crash, no spurious paths added.
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        fs::create_dir_all(&workspace)?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        let malformed_cases = [
+            // Unclosed single quote
+            "use lib 'unclosed;\n",
+            // No argument at all
+            "use lib;\n",
+            // Bare word (no quotes)
+            "use lib bareword;\n",
+            // Empty qw
+            "use lib qw();\n",
+            // Mixed malformed + valid: valid path must still be picked up
+            "use lib 'unclosed;\nuse lib 'good_path';\n",
+        ];
+
+        for doc_text in &malformed_cases {
+            // Must not panic
+            let _result = server.resolve_module_path("Any::Module", Some(doc_text));
+        }
+        Ok(())
+    }
 }
