@@ -7,6 +7,7 @@
 //! - Memory usage limits and garbage collection
 
 use perl_parser::Parser;
+use perl_tdd_support::must;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -245,7 +246,7 @@ fn test_concurrent_parsing_performance() {
                 let result = parser.parse();
                 let thread_time = thread_start.elapsed();
 
-                results_clone.lock().unwrap().push((i, result, thread_time));
+                must(results_clone.lock()).push((i, result, thread_time));
             });
 
             handles.push(handle);

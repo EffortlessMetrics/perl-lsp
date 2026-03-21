@@ -156,8 +156,8 @@ fn parser_430_ac6_partial_block_missing_closing_brace() {
     let result = parser.parse();
 
     // Should recover and return a partial AST
-    assert!(result.is_ok(), "Parser should recover from missing closing brace");
-    let ast = result.unwrap();
+    use perl_tdd_support::must;
+    let ast = must(result);
 
     println!("AC6 AST: {}", ast.to_sexp());
 
@@ -288,9 +288,8 @@ fn parser_430_ac10_common_error_scenarios() {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
-        assert!(result.is_ok(), "Should recover from: {}", description);
-
-        let ast = result.unwrap();
+        use perl_tdd_support::must;
+        let ast = must(result);
         let errors = parser.errors();
 
         println!(
@@ -312,8 +311,8 @@ fn parser_430_integration_lsp_hover_on_broken_code() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover");
-    let ast = result.unwrap();
+    use perl_tdd_support::must;
+    let ast = must(result);
 
     // Verify we can still find the valid variable declaration
     if let NodeKind::Program { statements } = &ast.kind {
@@ -332,8 +331,8 @@ fn parser_430_integration_lsp_completion_on_broken_code() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser should recover");
-    let ast = result.unwrap();
+    use perl_tdd_support::must;
+    let ast = must(result);
 
     // Verify we can still find the subroutine definition
     if let NodeKind::Program { statements } = &ast.kind {

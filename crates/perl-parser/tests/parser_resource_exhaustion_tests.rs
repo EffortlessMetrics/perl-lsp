@@ -7,6 +7,7 @@
 //! - Massive data structures
 
 use perl_parser::Parser;
+use perl_tdd_support::must;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -298,7 +299,7 @@ fn test_concurrent_resource_exhaustion() {
                         let result = parser.parse();
                         let parse_time = start_time.elapsed();
 
-                        results_clone.lock().unwrap().push((
+                        must(results_clone.lock()).push((
                             thread_id,
                             iteration,
                             scenario_id,
