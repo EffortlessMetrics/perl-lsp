@@ -470,14 +470,23 @@ mod tests {
         let mut items = Vec::new();
         add_snippet_completions(&mut items, &ctx);
         let triggers: Vec<&str> = items.iter().filter_map(|i| i.filter_text.as_deref()).collect();
+        // Basic operators
         assert!(triggers.contains(&"mbasic"), "mbasic snippet missing");
         assert!(triggers.contains(&"sbasic"), "sbasic snippet missing");
         assert!(triggers.contains(&"qrbasic"), "qrbasic snippet missing");
+        // Named captures
         assert!(triggers.contains(&"namedcap"), "namedcap snippet missing");
+        // Lookahead / lookbehind
         assert!(triggers.contains(&"lookahead"), "lookahead snippet missing");
         assert!(triggers.contains(&"neglookahead"), "neglookahead snippet missing");
         assert!(triggers.contains(&"lookbehind"), "lookbehind snippet missing");
         assert!(triggers.contains(&"neglookbehind"), "neglookbehind snippet missing");
+        // Flag variants
+        assert!(triggers.contains(&"rxglobal"), "rxglobal snippet missing");
+        assert!(triggers.contains(&"rxcase"), "rxcase snippet missing");
+        assert!(triggers.contains(&"rxmulti"), "rxmulti snippet missing");
+        assert!(triggers.contains(&"rxdots"), "rxdots snippet missing");
+        assert!(triggers.contains(&"rxverbose"), "rxverbose snippet missing");
     }
 
     #[test]
