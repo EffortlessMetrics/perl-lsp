@@ -166,6 +166,7 @@ fn add_known_core_module_completions(
             filter_text: Some((*member_name).to_string()),
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),
+            commit_characters: None,
         });
     }
 }
@@ -215,6 +216,7 @@ pub fn add_package_completions(
                     filter_text: Some(symbol.name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
                 });
             }
         }
