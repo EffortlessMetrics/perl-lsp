@@ -803,6 +803,15 @@ pub struct ExceptionContext {
 /// This is a classification helper for future diagnostic and code-action use.
 /// It is not currently called from any LSP code path — callers may use it to
 /// decide whether to invoke [`get_exception_context`].
+///
+/// # Examples
+/// ```
+/// use perl_semantic_analyzer::analysis::semantic::is_exception_function;
+///
+/// assert!(is_exception_function("die"));
+/// assert!(is_exception_function("croak"));
+/// assert!(!is_exception_function("print"));
+/// ```
 pub fn is_exception_function(name: &str) -> bool {
     matches!(name, "die" | "warn" | "croak" | "carp" | "confess" | "cluck")
 }
@@ -814,6 +823,18 @@ pub fn is_exception_function(name: &str) -> bool {
 /// - `preferred_alternative`: recommended upgrade path (`die` → `Carp::croak`)
 ///
 /// Returns `None` for non-exception functions (e.g. `eval`, `print`).
+///
+/// # Examples
+/// ```
+/// use perl_semantic_analyzer::analysis::semantic::get_exception_context;
+///
+/// let die_ctx = get_exception_context("die").unwrap();
+/// assert_eq!(die_ctx.error_variable, Some("$@".to_string()));
+/// assert_eq!(die_ctx.preferred_alternative, Some("Carp::croak".to_string()));
+///
+/// let croak_ctx = get_exception_context("croak").unwrap();
+/// assert_eq!(croak_ctx.preferred_alternative, None);  // already preferred
+/// ```
 pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
     match name {
         "die" => Some(ExceptionContext {
