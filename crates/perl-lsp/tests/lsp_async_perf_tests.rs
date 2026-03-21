@@ -163,6 +163,36 @@ fn test_file_watcher_debouncer_coalesces_50_rapid_events() {
     assert_eq!(uris, 50, "All 50 URIs should be delivered, got {uris}");
 }
 
+/// Verify that `FileWatcherDebouncer` is properly wired through `LspServer`.
+///
+/// Creates a bare `LspServer`, manually installs a debouncer with a short
+/// window, calls `schedule_file_watcher_uri()` for 10 distinct URIs rapidly,
+/// and asserts the batch callback fires after the debounce window expires.
+#[test]
+fn test_file_watcher_debouncer_wired_through_server() {
+    use perl_lsp::runtime::file_watcher_debounce::FileWatcherDebouncer;
+
+    let server = LspServer::new();
+    let call_count = Arc::new(AtomicUsize::new(0));
+    let c = Arc::clone(&call_count);
+    let debouncer = FileWatcherDebouncer::with_interval(Duration::from_millis(80), move |_uris| {
+        c.fetch_add(1, Ordering::SeqCst);
+    });
+    server.install_file_watcher_debouncer(debouncer);
+
+    // 10 rapid CHANGED events — should queue, not fire immediately
+    for i in 0..10usize {
+        let queued = server.schedule_file_watcher_uri(&format!("file:///workspace/file{i}.pl"));
+        assert!(queued, "debouncer should be installed and return true");
+    }
+
+    thread::sleep(Duration::from_millis(250));
+    assert!(
+        call_count.load(Ordering::SeqCst) >= 1,
+        "batch callback should have fired after debounce window"
+    );
+}
+
 /// Verify that duplicate URIs within the debounce window are deduplicated.
 #[test]
 fn test_file_watcher_debouncer_deduplicates_same_uri() {

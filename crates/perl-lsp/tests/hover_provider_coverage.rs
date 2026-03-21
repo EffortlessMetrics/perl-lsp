@@ -895,4 +895,80 @@ $name;
         }
         Ok(())
     }
+
+    // ── Phase block hover tests (issue #2360) ────────────────────────────
+
+    #[test]
+    fn test_hover_begin_block_shows_compile_time_description()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "BEGIN { 1; }\n";
+        let resp = hover_at(code, "file:///begin_hover.pl", "BEGIN", 0)?;
+        let content = hover_content(&resp).ok_or("BEGIN hover must return content, not null")?;
+        assert!(content.contains("BEGIN"), "hover content should mention BEGIN, got: {content}");
+        assert!(
+            content.contains("compile") || content.contains("compile-time"),
+            "hover content should describe compile-time execution, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_end_block_shows_exit_description() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "END { 1; }\n";
+        let resp = hover_at(code, "file:///end_hover.pl", "END", 0)?;
+        let content = hover_content(&resp).ok_or("END hover must return content, not null")?;
+        assert!(content.contains("END"), "hover content should mention END, got: {content}");
+        assert!(
+            content.contains("exit") || content.contains("cleanup") || content.contains("program"),
+            "hover content should describe program-exit execution, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_init_block_shows_post_compile_description()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "INIT { print 'init'; }\n";
+        let resp = hover_at(code, "file:///init_hover.pl", "INIT", 0)?;
+        let content = hover_content(&resp).ok_or("INIT hover must return content, not null")?;
+        assert!(content.contains("INIT"), "hover content should mention INIT, got: {content}");
+        assert!(
+            content.contains("compilation")
+                || content.contains("compile")
+                || content.contains("before"),
+            "hover content should describe post-compile execution, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_check_block_shows_end_of_compile_description()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "CHECK { print 'check'; }\n";
+        let resp = hover_at(code, "file:///check_hover.pl", "CHECK", 0)?;
+        let content = hover_content(&resp).ok_or("CHECK hover must return content, not null")?;
+        assert!(content.contains("CHECK"), "hover content should mention CHECK, got: {content}");
+        assert!(
+            content.contains("compilation") || content.contains("compile"),
+            "hover content should describe end-of-compilation execution, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_unitcheck_block_shows_description() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "UNITCHECK { print 'unitcheck'; }\n";
+        let resp = hover_at(code, "file:///unitcheck_hover.pl", "UNITCHECK", 0)?;
+        let content =
+            hover_content(&resp).ok_or("UNITCHECK hover must return content, not null")?;
+        assert!(
+            content.contains("UNITCHECK"),
+            "hover content should mention UNITCHECK, got: {content}"
+        );
+        assert!(
+            content.contains("compilation unit") || content.contains("unit"),
+            "hover content should describe compilation-unit scope, got: {content}"
+        );
+        Ok(())
+    }
 }

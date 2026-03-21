@@ -70,6 +70,20 @@ use std::time::Instant;
 // mod enhanced_recovery;
 // pub use enhanced_recovery::{RecoveryConfig, EnhancedRecovery, EnhancedErrorRecovery, ErrorContext};
 
+/// Strip Perl-style line comments from `qw()` content.
+///
+/// In Perl, `#` inside `qw()` begins a comment that extends to the end of the
+/// line (see perlop: "A # character within the list is treated as a comment
+/// character"). This function removes those comment segments so that
+/// `split_whitespace()` sees only the actual list elements.
+fn strip_qw_comments(content: &str) -> String {
+    content
+        .lines()
+        .map(|line| if let Some(pos) = line.find('#') { &line[..pos] } else { line })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Parser state for a single Perl source input.
 ///
 /// Construct with [`Parser::new`] and call [`Parser::parse`] to obtain an AST.
@@ -492,3 +506,14 @@ mod tie_tests;
 mod use_overload_tests;
 #[cfg(test)]
 mod x_repetition_tests;
+
+#[cfg(test)]
+mod strip_qw_comments_unit_tests {
+    use super::strip_qw_comments;
+
+    #[test]
+    fn test_strip_basic() {
+        let result = strip_qw_comments("foo # comment\n bar");
+        assert_eq!(result.split_whitespace().collect::<Vec<_>>(), vec!["foo", "bar"]);
+    }
+}

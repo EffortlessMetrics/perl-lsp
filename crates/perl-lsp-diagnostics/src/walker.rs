@@ -71,6 +71,9 @@ where
         NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
             walk_node(init, func);
         }
+        NodeKind::PhaseBlock { block, .. } => {
+            walk_node(block, func);
+        }
         _ => {} // Other nodes don't have children or are handled differently
     }
 }

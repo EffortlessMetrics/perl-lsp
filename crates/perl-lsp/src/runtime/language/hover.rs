@@ -280,6 +280,11 @@ impl LspServer {
                     }
                 }
             }
+            NodeKind::PhaseBlock { block, .. } => {
+                if let Some(m) = Self::find_use_module_at_offset(block, offset) {
+                    return Some(m);
+                }
+            }
             _ => {}
         }
 
