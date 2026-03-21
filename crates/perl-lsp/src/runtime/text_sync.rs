@@ -811,4 +811,135 @@ mod tests {
 
         Ok(())
     }
+
+    /// `new_parse_token` must cancel the previous flag when called a second time
+    /// for the same URI and return a fresh `false` flag.
+    #[test]
+    fn test_new_parse_token_cancels_previous_flag() {
+        let server = LspServer::new();
+        let uri = "file:///test_cancel_token.pl";
+
+        let first = server.new_parse_token(uri);
+        assert!(!first.load(Ordering::Relaxed), "first token must start false");
+
+        // Second call for same URI must set the first flag to true.
+        let second = server.new_parse_token(uri);
+        assert!(first.load(Ordering::Relaxed), "first token must be cancelled after second call");
+        assert!(!second.load(Ordering::Relaxed), "second token must start false");
+
+        // Third call cancels second, returns fresh third.
+        let third = server.new_parse_token(uri);
+        assert!(second.load(Ordering::Relaxed), "second token must be cancelled after third call");
+        assert!(!third.load(Ordering::Relaxed), "third token must start false");
+    }
+
+    /// Different URIs must not interfere with each other's cancellation tokens.
+    #[test]
+    fn test_new_parse_token_is_per_uri() {
+        let server = LspServer::new();
+        let uri_a = "file:///a.pl";
+        let uri_b = "file:///b.pl";
+
+        let token_a = server.new_parse_token(uri_a);
+        let token_b = server.new_parse_token(uri_b);
+
+        // Issuing a second token for uri_b must not affect uri_a's token.
+        let _token_b2 = server.new_parse_token(uri_b);
+        assert!(
+            !token_a.load(Ordering::Relaxed),
+            "uri_a token must not be cancelled by uri_b activity"
+        );
+        assert!(
+            token_b.load(Ordering::Relaxed),
+            "uri_b first token must be cancelled by uri_b second token"
+        );
+    }
+
+    /// `handle_did_close` must cancel the in-flight parse flag and remove it from
+    /// the map so that the entry does not leak after the document is closed.
+    #[test]
+    fn test_did_close_cancels_and_removes_flag() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_close_cancel.pl";
+
+        // Simulate a parse token being registered for this URI.
+        let token = server.new_parse_token(uri);
+        assert!(!token.load(Ordering::Relaxed), "token must start false");
+
+        // Open document so did_close has something to clean up.
+        server.handle_did_open_with_cancellation(
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;"
+                }
+            })),
+            None,
+        )?;
+
+        // Now issue a new token (as dispatch would do) — replaces the previous one.
+        let in_flight_token = server.new_parse_token(uri);
+
+        // Close the document.
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+
+        // The in-flight token must have been cancelled by did_close.
+        assert!(
+            in_flight_token.load(Ordering::Relaxed),
+            "did_close must set the in-flight parse flag to true"
+        );
+
+        // The flags map must be empty for this URI — no leak.
+        assert!(
+            !server.parse_cancel_flags.lock().contains_key(uri),
+            "did_close must remove the URI entry from parse_cancel_flags"
+        );
+
+        Ok(())
+    }
+
+    /// A parse cancelled via a pre-set flag must return Ok(()) and not store
+    /// a document, so the caller behaves as if the parse simply didn't happen.
+    #[test]
+    fn test_cancelled_open_returns_ok_without_storing_document()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicBool;
+
+        let server = LspServer::new();
+        let uri = "file:///test_cancelled_open.pl";
+
+        // Pre-set the cancellation flag — the parse must be skipped immediately.
+        let flag = Arc::new(AtomicBool::new(true));
+
+        // Build a source large enough that parse() wouldn't return instantly
+        // on its own — we rely on the pre-parse check in parse().
+        let text: String = (0..200).map(|i| format!("my $x{} = {};\n", i, i)).collect();
+
+        let result = server.handle_did_open_with_cancellation(
+            Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text
+                }
+            })),
+            Some(flag),
+        );
+
+        // The handler must return Ok (not propagate Cancelled as a JsonRpcError).
+        assert!(result.is_ok(), "cancelled open must return Ok(()): {:?}", result);
+
+        // The document must NOT have been stored (cancelled parse = no result).
+        let normalized = server.normalize_uri_key(uri);
+        assert!(
+            !server.documents.lock().contains_key(&normalized),
+            "cancelled parse must not store document state"
+        );
+
+        Ok(())
+    }
 }
