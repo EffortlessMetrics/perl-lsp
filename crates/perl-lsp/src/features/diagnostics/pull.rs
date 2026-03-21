@@ -445,16 +445,44 @@ mod tests {
         let uri: Uri = "file:///test.pl".parse()?;
         let code = "print 'hello';\n";
         let items = get_full_items(provider.get_document_diagnostics(&uri, code, None));
+        let diag = items
+            .iter()
+            .find(|d| {
+                d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL100"))
+                    == Some(true)
+            })
+            .ok_or("expected PL100 (missing strict) diagnostic for bare print statement")?;
+        let data = diag.data.as_ref().ok_or("data should be Some for PL100")?;
+        assert_eq!(data["code"], "PL100");
+        assert_eq!(data["category"], "StrictWarnings");
+        assert_eq!(data["fixable"], true);
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostic_data_fixable_false_for_non_fixable() -> Result<(), Box<dyn std::error::Error>> {
+        // PL105 (VariableRedeclaration) has no quick-fix action; fixable must be false
+        // so clients do not show a lightning-bolt icon for it.
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        // Redeclare $x in the same scope to trigger PL105
+        let code = "use strict; use warnings; my $x = 1; my $x = 2;\n";
+        let items = get_full_items(provider.get_document_diagnostics(&uri, code, None));
         if let Some(diag) = items.iter().find(|d| {
-            d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL100"))
+            d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL105"))
                 == Some(true)
         }) {
-            let data = diag.data.as_ref().ok_or("data should be Some for PL100")?;
-            assert_eq!(data["code"], "PL100");
-            assert_eq!(data["category"], "StrictWarnings");
-            assert_eq!(data["fixable"], true);
+            let data = diag.data.as_ref().ok_or("data should be Some for PL105")?;
+            assert_eq!(data["code"], "PL105");
+            assert_eq!(data["fixable"], false, "PL105 has no quick-fix; fixable must be false");
         }
-        // If PL100 is not emitted for this snippet the test still compiles and passes
+        // Also verify that every diagnostic with a code has a valid data object
+        for d in &items {
+            if d.code.is_some() {
+                let data = d.data.as_ref().ok_or("data must be Some when code is Some")?;
+                assert!(data["fixable"].is_boolean(), "fixable must always be a boolean");
+            }
+        }
         Ok(())
     }
 
