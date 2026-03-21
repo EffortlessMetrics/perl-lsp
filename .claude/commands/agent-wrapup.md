@@ -36,6 +36,16 @@ clean handoff to whoever picks up next.
 5. **Update task status.** Mark your tasks as completed with the summary
    from step 1.
 
+## Release the control-plane lock (if you acquired it)
+
+If you acquired the lock during this session, release it now:
+
+```bash
+scripts/control-plane-lock.sh release <your-agent-id> || true
+```
+
+The `|| true` makes this safe to run regardless of whether you acquired the lock. Always include it as your final bash action before stopping. If your agent crashed mid-edit, the orchestrator can run `scripts/control-plane-lock.sh force-release`; the lock also auto-expires after 30 minutes.
+
 ## Where to write this
 
 - **Scouts:** Add retrospective to the issue as a closing comment

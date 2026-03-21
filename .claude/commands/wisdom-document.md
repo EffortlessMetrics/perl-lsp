@@ -7,6 +7,19 @@ user-invocable: false
 
 Put your findings where they'll have the most impact.
 
+## Before editing control-plane files
+
+If your findings require editing `.claude/agents/`, `.claude/commands/`, or `CLAUDE.md`, acquire the lock first:
+
+```bash
+AGENT_ID="wisdom-<issue-number>"   # e.g., wisdom-2566
+scripts/control-plane-lock.sh acquire "$AGENT_ID"
+```
+
+If acquire fails (another agent holds the lock), do NOT retry in a loop. File your `gh issue comment` and `crates/*/CLAUDE.md` updates without the lock — those are safe. Report the contention to the orchestrator for resolution.
+
+Note: Edits to `crates/*/CLAUDE.md` do NOT need the lock — each crate is isolated. Only `.claude/agents/`, `.claude/commands/`, and the root `CLAUDE.md` require coordination.
+
 ## Where findings go
 
 **Process improvements** → comment on the issue or PR:
