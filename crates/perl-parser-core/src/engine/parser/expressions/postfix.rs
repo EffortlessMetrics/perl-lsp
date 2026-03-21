@@ -594,7 +594,10 @@ impl<'a> Parser<'a> {
                                 NodeKind::FunctionCall { name: name.clone(), args: vec![arg] },
                                 SourceLocation { start, end },
                             );
-                        } else if Self::is_builtin_function(name) || self.looks_like_bare_call(name) {
+                        } else if Self::is_builtin_function(name)
+                            || Self::core_qualified_builtin_name(name).is_some()
+                            || self.looks_like_bare_call(name)
+                        {
                             // In call argument lists, `builtin => value` should keep the lhs as a
                             // bareword key so parse_args can auto-quote it for fat-comma pairs.
                             // Example: `$obj->on(accept => sub { ... })`.
@@ -602,13 +605,19 @@ impl<'a> Parser<'a> {
                                 break;
                             }
 
+                            // For CORE::qualified names, use the bare name for downstream
+                            // builtin classification so that e.g. `CORE::shift` is recognised
+                            // as nullary and `CORE::grep { ... } @list` gets block handling.
+                            let bare_name = Self::core_qualified_builtin_name(name)
+                                .unwrap_or(name.as_str());
+
                             // Builtins always become function calls, even with no arguments
                             // This ensures they work correctly in expressions like "return $x or die"
                             //
                             // For nullary builtins like shift, pop, caller, wantarray, etc.,
                             // when followed by a binary operator, they should be treated as
                             // having no arguments (e.g., "shift || 2" means shift() || 2)
-                            let is_nullary_without_args = Self::is_nullary_builtin(name)
+                            let is_nullary_without_args = Self::is_nullary_builtin(bare_name)
                                 && self.peek_kind().is_some_and(Self::is_binary_operator);
 
                             // When a builtin is followed by a comma, it should be treated
@@ -647,7 +656,7 @@ impl<'a> Parser<'a> {
 
                                 // Special handling for sort/map/grep/first/any/all/etc.
                                 // with block first argument
-                                if Self::is_block_list_func(name.as_str())
+                                if Self::is_block_list_func(bare_name)
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
                                     // Parse block (may contain multiple statements) as first argument
@@ -678,7 +687,7 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_ternary()?);
                                     }
-                                } else if name == "sort"
+                                } else if bare_name == "sort"
                                     && matches!(self.peek_kind(), Some(TokenKind::Identifier))
                                     && self.tokens.peek().ok().is_some_and(|t| {
                                         // Named comparator: lowercase identifier that's not a
@@ -727,7 +736,7 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_ternary()?);
                                     }
-                                } else if name == "bless"
+                                } else if bare_name == "bless"
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
                                     // Special handling for bless {} - parse it as a hash
@@ -741,7 +750,7 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_assignment()?);
                                     }
-                                } else if matches!(name.as_str(), "print" | "say" | "printf" | "exec" | "system" | "send")
+                                } else if matches!(bare_name, "print" | "say" | "printf" | "exec" | "system" | "send")
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
                                     // print { $fh } ARGS — block-form filehandle in expr context
@@ -769,7 +778,7 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_ternary()?);
                                     }
-                                } else if matches!(name.as_str(), "split" | "grep" | "map" | "sort")
+                                } else if matches!(bare_name, "split" | "grep" | "map" | "sort")
                                     && self.peek_kind() == Some(TokenKind::Slash)
                                 {
                                     // For `split /regex/, ...` and `grep /regex/, @list`,
@@ -795,7 +804,7 @@ impl<'a> Parser<'a> {
                                     // After the first arg, if next is not a comma/terminator,
                                     // treat first arg as indirect object and continue parsing the list.
                                     if matches!(
-                                        name.as_str(),
+                                        bare_name,
                                         "print" | "say" | "printf" | "exec" | "system" | "send"
                                     ) && !self.is_at_statement_end()
                                         && !matches!(

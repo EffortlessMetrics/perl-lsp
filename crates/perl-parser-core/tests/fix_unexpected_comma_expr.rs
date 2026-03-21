@@ -166,6 +166,38 @@ fn test_core_select() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_core_grep_with_block() {
+    // CORE::grep with block argument should get block-list-func handling
+    let source = r#"my @result = CORE::grep { defined $_ } @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_core_grep_with_regex() {
+    // CORE::grep /regex/, @list should re-lex / as regex delimiter
+    let source = r#"my @matches = CORE::grep /foo/, @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_core_sort_with_block() {
+    let source = r#"my @sorted = CORE::sort { $a <=> $b } @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_core_map_with_block() {
+    let source = r#"my @doubled = CORE::map { $_ * 2 } @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_core_print_with_filehandle() {
+    let source = r#"CORE::print $fh "hello\n";"#;
+    assert_clean_parse(source);
+}
+
 // === Complex real-world patterns ===
 
 #[test]
