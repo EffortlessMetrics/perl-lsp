@@ -204,9 +204,5 @@ fn test_for_loop_no_semicolons_rparen_immediately() {
         first_kind
     );
     // Only 1 error expected: the missing first semicolon
-    assert!(
-        errs <= 2,
-        "Error count should be 1 (only the missing first `;`), got {}.",
-        errs
-    );
+    assert!(errs <= 2, "Error count should be 1 (only the missing first `;`), got {}.", errs);
 }
