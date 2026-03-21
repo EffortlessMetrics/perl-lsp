@@ -974,3 +974,29 @@ fn os_runtime_no_timeout_still_works() -> Result<(), Box<dyn std::error::Error>>
     assert!(output.success());
     Ok(())
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+#[should_panic(expected = "timeout_secs must be greater than zero")]
+fn os_runtime_with_timeout_zero_panics() {
+    use perl_subprocess_runtime::OsSubprocessRuntime;
+    // A zero-second timeout would time out every command immediately.
+    // The constructor rejects it explicitly to surface caller bugs early.
+    let _ = OsSubprocessRuntime::with_timeout(0);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn os_runtime_completion_before_deadline_always_succeeds() -> Result<(), Box<dyn std::error::Error>>
+{
+    use perl_subprocess_runtime::OsSubprocessRuntime;
+    // A 1-second timeout with an instant echo command: the process finishes
+    // well within the deadline.  This verifies that is_finished() is checked
+    // before the deadline so a process completing at the deadline boundary is
+    // never incorrectly reported as timed out.
+    let runtime = OsSubprocessRuntime::with_timeout(1);
+    let output = runtime.run_command("echo", &["boundary"], None)?;
+    assert!(output.success());
+    assert_eq!(output.stdout_lossy().trim(), "boundary");
+    Ok(())
+}

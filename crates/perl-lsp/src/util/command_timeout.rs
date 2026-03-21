@@ -27,17 +27,19 @@ pub fn run_command_with_timeout(cmd: Command, timeout_secs: u64) -> Result<Outpu
     });
 
     loop {
-        if start.elapsed() >= timeout {
-            // The background thread may still be running; we deliberately
-            // do not join it — the process will be reaped by the OS.
-            return Err(format!("command timed out after {} seconds", timeout_secs));
-        }
-
+        // Check completion before the deadline so a process that finishes
+        // exactly at the deadline boundary is never reported as timed out.
         if join_handle.is_finished() {
             return join_handle
                 .join()
                 .map_err(|_| "command thread panicked".to_string())?
                 .map_err(|e| format!("command failed to start: {}", e));
+        }
+
+        if start.elapsed() >= timeout {
+            // The background thread may still be running; we deliberately
+            // do not join it — the process will be reaped by the OS.
+            return Err(format!("command timed out after {} seconds", timeout_secs));
         }
 
         thread::sleep(Duration::from_millis(50));

@@ -91,7 +91,21 @@ impl OsSubprocessRuntime {
     /// call returns a `SubprocessError` with a "timed out" message.  The
     /// spawned process is left for the OS to reap — it is not explicitly
     /// killed.
+    ///
+    /// # Stdin size caveat
+    ///
+    /// Stdin data is written synchronously before the timeout poll loop begins.
+    /// If the subprocess hangs before consuming stdin and the data exceeds the
+    /// OS pipe buffer (~64 KiB on Linux), `run_command` will block in the write
+    /// phase and the timeout will not fire.  For typical Perl source files this
+    /// is not a concern.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `timeout_secs` is zero (a zero-second timeout would time out
+    /// every command immediately and is almost certainly a caller bug).
     pub fn with_timeout(timeout_secs: u64) -> Self {
+        assert!(timeout_secs > 0, "timeout_secs must be greater than zero");
         Self { timeout_secs: Some(timeout_secs) }
     }
 }
@@ -156,15 +170,9 @@ impl SubprocessRuntime for OsSubprocessRuntime {
                 let handle = thread::spawn(move || child.wait_with_output());
 
                 loop {
-                    if Instant::now() >= deadline {
-                        // Background thread may still be running; deliberately do not
-                        // join — the spawned process will be reaped by the OS.
-                        return Err(SubprocessError::new(format!(
-                            "subprocess timed out after {} seconds",
-                            secs
-                        )));
-                    }
-
+                    // Check completion before the deadline so a process that
+                    // finishes exactly at the deadline boundary is never
+                    // reported as timed out.
                     if handle.is_finished() {
                         let output = handle
                             .join()
@@ -180,6 +188,15 @@ impl SubprocessRuntime for OsSubprocessRuntime {
                             stderr: output.stderr,
                             status_code: output.status.code().unwrap_or(-1),
                         });
+                    }
+
+                    if Instant::now() >= deadline {
+                        // Background thread may still be running; deliberately do not
+                        // join — the spawned process will be reaped by the OS.
+                        return Err(SubprocessError::new(format!(
+                            "subprocess timed out after {} seconds",
+                            secs
+                        )));
                     }
 
                     thread::sleep(Duration::from_millis(50));
