@@ -113,7 +113,26 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'sub'
 
-        let (name, name_span) = if self.peek_kind().is_some_and(Self::can_be_sub_name) {
+        let (name, name_span) = if self.peek_kind() == Some(TokenKind::DoubleColon) {
+            // Leading :: qualifier — subroutine in the main package (e.g., sub ::PCDATA { })
+            let dc_token = self.tokens.next()?; // consume '::'
+            let name_start = dc_token.start;
+            if self.peek_kind().is_some_and(Self::can_be_sub_name) {
+                // sub ::PCDATA or sub ::DB_File::splice
+                let ident_token = self.tokens.next()?;
+                let full_name = format!("::{}", ident_token.text);
+                (
+                    Some(full_name),
+                    Some(SourceLocation { start: name_start, end: ident_token.end }),
+                )
+            } else {
+                // sub :: with no following name — treat as name "::"
+                (
+                    Some("::".to_string()),
+                    Some(SourceLocation { start: name_start, end: dc_token.end }),
+                )
+            }
+        } else if self.peek_kind().is_some_and(Self::can_be_sub_name) {
             let token = self.tokens.next()?;
             (
                 Some(token.text.to_string()),
