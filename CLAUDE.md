@@ -166,6 +166,7 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 | Documentation | `docs/` |
 | Features catalog | `features.toml` |
 | CI config | `.ci/` |
+| Known blockers | `.ci/blockers.yaml` |
 | Build tooling | `xtask/` |
 | Slash commands | `.claude/commands/` |
 | Swarm ops | `.ops-perl-lsp/` |
@@ -183,6 +184,7 @@ Metrics are **computed, not hand-edited**:
 - `features.toml` is the canonical LSP capability definition
 - Test output and CI receipts are evidence for all claims
 - `README.md` must not contain volatile metrics -- link to CURRENT_STATUS.md
+- `.ci/blockers.yaml` is manually maintained — verify counts against `parser-corpus-baseline.json` before trusting `affected_files` values
 
 ## Coding Standards
 
