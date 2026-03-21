@@ -28,6 +28,7 @@ re-researching the codebase.
 4. /scout-root-cause — trace WHY it fails
 5. /scout-design — 2-3 fix approaches
 6. /scout-test-spec — write actual test code
-7. /scout-report — file the issue
-8. /agent-wrapup — retrospective and handoff
+7. /scout-verify — verify all file paths and function names exist
+8. /scout-report — file the issue
+9. /agent-wrapup — retrospective and handoff
 ```
