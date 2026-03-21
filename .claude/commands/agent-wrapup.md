@@ -27,7 +27,7 @@ clean handoff to whoever picks up next.
 
    **Builders:**
    - PR created: [URL]
-   - Tests: [N added/modified] (list: test_name1, test_name2, ...)
+   - Tests: [N added/modified] (e.g., crate::module::test_name1, crate::module::test_name2)
    - Files changed: [exact list: crate/src/file.rs, ...]
    - Tests passing: [cargo test result summary]
    - Next step: [ready for review | blocked on X]
