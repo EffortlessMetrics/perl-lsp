@@ -2042,32 +2042,53 @@ sub helper { }
     }
 
     #[test]
-    fn test_use_statement_skips_pragmas() {
-        // Lowercase-first token after `use` means pragma — no module completion
+    fn test_use_statement_skips_pragmas() -> Result<(), Box<dyn std::error::Error>> {
+        // Lowercase-first token after `use` means pragma — no module completion.
+        // The index is populated with a Module-kind package so that if the lowercase
+        // guard in is_use_statement_context were absent the test would fail (not
+        // vacuously pass due to an empty index).
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Strict.pm")?,
+            "package Strict;\n1;\n".to_string(),
+        )?;
         let code = "use strict";
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
-        let provider = CompletionProvider::new(&ast);
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
             !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
-            "use strict should not trigger module completions"
+            "use strict should not trigger module completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
+        Ok(())
     }
 
     #[test]
-    fn test_use_statement_skips_past_module_name_at_qw() {
-        // Cursor inside qw list should NOT trigger module name completion
+    fn test_use_statement_skips_past_module_name_at_qw() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor inside qw list should NOT trigger module-name completion.
+        // The index is populated so the test is non-vacuous: if the qw-dispatch
+        // branch were removed, add_use_module_completions would fire and the
+        // Module-kind assertion would fail.
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Module.pm")?,
+            "package Module;\nsub foo {}\n1;\n".to_string(),
+        )?;
         let code = "use Module qw(foo";
         let mut parser = Parser::new(code);
         let ast = must(parser.parse());
-        let provider = CompletionProvider::new(&ast);
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
-        // This context should route to qw-import completions, not module-name completions
+        // This context routes to qw-import completions (Function kind), not module-name
+        // completions (Module kind).
         assert!(
             !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
-            "cursor inside qw() should not get module-name completions"
+            "cursor inside qw() should not get module-name completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
+        Ok(())
     }
 
     #[test]
@@ -2082,9 +2103,9 @@ sub helper { }
         let provider = CompletionProvider::new_with_index(&ast, Some(index));
         let completions = provider.get_completions(code, code.len());
         assert!(
-            completions.iter().any(|c| c.label == "Utils"),
-            "require Ut should suggest Utils; got: {:?}",
-            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+            completions.iter().any(|c| c.label == "Utils" && c.kind == CompletionItemKind::Module),
+            "require Ut should suggest Utils with Module kind; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
         Ok(())
     }
@@ -2132,6 +2153,30 @@ sub helper { }
         assert!(
             !completions.iter().any(|c| c.sort_text.as_deref() == Some("1_MyApp")),
             "Module-priority sort_text should only appear in use context"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_statement_past_semicolon_excluded() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor at the end of `use Module;` — the semicolon guard in
+        // is_use_statement_context must suppress module-name completions.
+        // Without the `;` check the cursor would be considered still inside
+        // the use statement and would show stale module suggestions.
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Module.pm")?,
+            "package Module;\n1;\n".to_string(),
+        )?;
+        let code = "use Module;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            "cursor after `use Module;` should not trigger module-name completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
         Ok(())
     }
