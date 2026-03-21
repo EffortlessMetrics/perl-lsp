@@ -77,48 +77,68 @@ clean handoff to whoever picks up next.
 5. **Update task status.** Mark your tasks as completed with the summary
    from step 1.
 
-6. **File your wrapup on GitHub.** Post your retrospective using the right gh command:
+6. **File your wrapup on GitHub.** Post your retrospective using the right gh command.
+   Use single-quoted heredoc (`<<'WRAPUP_EOF'`) so backticks and `$variables` in your
+   summary are not interpreted by the shell:
 
    - **Scouts:**
      ```bash
-     gh issue comment <NUMBER> --body "## Scout Wrapup
+     gh issue comment <NUMBER> --body "$(cat <<'WRAPUP_EOF'
+     ## Scout Wrapup
 
-     <summary from steps 1-4>"
+     <summary from steps 1-4>
+     WRAPUP_EOF
+     )"
      ```
 
    - **Builders:**
      ```bash
-     gh pr comment <NUMBER> --body "## Builder Wrapup
+     gh pr comment <NUMBER> --body "$(cat <<'WRAPUP_EOF'
+     ## Builder Wrapup
 
-     <summary from steps 1-4>"
+     <summary from steps 1-4>
+     WRAPUP_EOF
+     )"
      ```
 
    - **Plan-reviewers:**
      ```bash
-     gh issue comment <NUMBER> --body "## Plan-Review Wrapup
+     gh issue comment <NUMBER> --body "$(cat <<'WRAPUP_EOF'
+     ## Plan-Review Wrapup
 
-     <summary from steps 1-4>"
+     <summary from steps 1-4>
+     WRAPUP_EOF
+     )"
      ```
 
    - **Reviewers:**
      ```bash
-     gh pr comment <NUMBER> --body "## Review Wrapup
+     gh pr comment <NUMBER> --body "$(cat <<'WRAPUP_EOF'
+     ## Review Wrapup
 
-     <summary from steps 1-4>"
+     <summary from steps 1-4>
+     WRAPUP_EOF
+     )"
      ```
 
    - **Ops:**
      ```bash
-     gh pr comment <NUMBER> --body "## Ops Wrapup
+     gh pr comment <NUMBER> --body "$(cat <<'WRAPUP_EOF'
+     ## Ops Wrapup
 
-     <summary from steps 1-4>"
+     <summary from steps 1-4>
+     WRAPUP_EOF
+     )"
      ```
 
    - **Wisdom:**
      ```bash
-     gh issue comment <NUMBER> --body "## Wisdom Wrapup
+     gh issue comment <NUMBER> --body "$(cat <<'WRAPUP_EOF'
+     ## Wisdom Wrapup
 
-     <summary from steps 1-4>"
+     <summary from steps 1-4>
+     WRAPUP_EOF
+     )"
      ```
 
    > If you don't file the update on GitHub, the work is invisible.
@@ -136,7 +156,7 @@ The `|| true` makes this safe to run regardless of whether you acquired the lock
 ## Where to write this
 
 - **Scouts:** Add retrospective to the issue as a closing comment
-- **Builders:** Add retrospective to the PR description under "What's next"
+- **Builders:** Add retrospective as a comment on the PR
 - **Reviewers:** Add retrospective to the review comment
 - **Ops:** Add retrospective to a brief merge summary comment
 - **Wisdom:** Add retrospective to follow-up issues
