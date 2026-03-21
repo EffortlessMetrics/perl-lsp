@@ -161,6 +161,8 @@ pub enum DiagnosticCode {
     // Import (PL700-PL799)
     /// Module appears to be unused
     UnusedImport,
+    /// Module not found in workspace or configured include paths
+    ModuleNotFound,
 
     // Heredoc anti-patterns (PL800-PL899)
     /// Heredoc used inside a format block
@@ -224,6 +226,7 @@ impl DiagnosticCode {
             DiagnosticCode::SecurityStringEval => "PL600",
             DiagnosticCode::SecurityBacktickExec => "PL601",
             DiagnosticCode::UnusedImport => "PL700",
+            DiagnosticCode::ModuleNotFound => "PL701",
             DiagnosticCode::HeredocInFormat => "PL800",
             DiagnosticCode::HeredocInBegin => "PL801",
             DiagnosticCode::HeredocDynamicDelimiter => "PL802",
@@ -277,6 +280,7 @@ impl DiagnosticCode {
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
             "PL601" => "https://docs.perl-lsp.org/errors/PL601",
             "PL700" => "https://docs.perl-lsp.org/errors/PL700",
+            "PL701" => "https://docs.perl-lsp.org/errors/PL701",
             "PL800" => "https://docs.perl-lsp.org/errors/PL800",
             "PL801" => "https://docs.perl-lsp.org/errors/PL801",
             "PL802" => "https://docs.perl-lsp.org/errors/PL802",
@@ -322,6 +326,7 @@ impl DiagnosticCode {
             | DiagnosticCode::DeprecatedArrayBase
             | DiagnosticCode::SecurityStringEval
             | DiagnosticCode::SecurityBacktickExec
+            | DiagnosticCode::ModuleNotFound
             | DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
 
@@ -479,6 +484,10 @@ impl DiagnosticCode {
                 "This module is imported but none of its exports appear to be used. \
                 Remove the `use` statement to reduce unnecessary dependencies.",
             ),
+            DiagnosticCode::ModuleNotFound => Some(
+                "This module was not found in the workspace or configured include paths. \
+                Install it with cpanm or add it to cpanfile.",
+            ),
             DiagnosticCode::HeredocInFormat => Some(
                 "Heredocs inside `format` blocks can cause subtle parsing issues. \
                 Extract the heredoc content into a variable before the format.",
@@ -570,6 +579,7 @@ impl DiagnosticCode {
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
             "PL601" => Some(DiagnosticCode::SecurityBacktickExec),
             "PL700" => Some(DiagnosticCode::UnusedImport),
+            "PL701" => Some(DiagnosticCode::ModuleNotFound),
             "PL800" => Some(DiagnosticCode::HeredocInFormat),
             "PL801" => Some(DiagnosticCode::HeredocInBegin),
             "PL802" => Some(DiagnosticCode::HeredocDynamicDelimiter),
@@ -662,7 +672,9 @@ impl DiagnosticCode {
                 DiagnosticCategory::Security
             }
 
-            DiagnosticCode::UnusedImport => DiagnosticCategory::Import,
+            DiagnosticCode::UnusedImport | DiagnosticCode::ModuleNotFound => {
+                DiagnosticCategory::Import
+            }
 
             DiagnosticCode::HeredocInFormat
             | DiagnosticCode::HeredocInBegin

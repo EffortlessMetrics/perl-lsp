@@ -67,3 +67,11 @@ fn get_suggestions_returns_error_when_binary_missing() {
     let err = perl_tdd_support::must_err(result);
     assert!(err.contains("Failed to start perltidy"));
 }
+
+// ──────────────────────────── PerlTidyConfig: timeout field ──────────────────
+
+#[test]
+fn perltidy_config_default_has_timeout() {
+    let config = PerlTidyConfig::default();
+    assert_eq!(config.timeout_secs, 10);
+}

@@ -1992,4 +1992,193 @@ sub helper { }
         );
         Ok(())
     }
+
+    // -------------------------------------------------------------------------
+    // Tests for is_use_statement_context and add_use_module_completions
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_use_statement_context_after_use_keyword() -> Result<(), Box<dyn std::error::Error>> {
+        // "use " with cursor right after space — empty prefix, should trigger module completion
+        let index = Arc::new(WorkspaceIndex::new());
+        let uri = Url::parse("file:///lib/MyApp.pm")?;
+        index.index_file(uri, "package MyApp;\n1;\n".to_string())?;
+        let code = "use ";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
+            "use <cursor> should suggest workspace module names; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_statement_context_with_prefix() -> Result<(), Box<dyn std::error::Error>> {
+        // "use MyA" — prefix filtering should narrow to MyApp, not OtherLib
+        let index = Arc::new(WorkspaceIndex::new());
+        index
+            .index_file(Url::parse("file:///lib/MyApp.pm")?, "package MyApp;\n1;\n".to_string())?;
+        index.index_file(
+            Url::parse("file:///lib/OtherLib.pm")?,
+            "package OtherLib;\n1;\n".to_string(),
+        )?;
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
+            "use MyA should suggest MyApp with Module kind"
+        );
+        assert!(
+            !completions.iter().any(|c| c.label == "OtherLib"),
+            "use MyA should not suggest OtherLib"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_statement_skips_pragmas() -> Result<(), Box<dyn std::error::Error>> {
+        // Lowercase-first token after `use` means pragma — no module completion.
+        // The index is populated with a Module-kind package so that if the lowercase
+        // guard in is_use_statement_context were absent the test would fail (not
+        // vacuously pass due to an empty index).
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Strict.pm")?,
+            "package Strict;\n1;\n".to_string(),
+        )?;
+        let code = "use strict";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            "use strict should not trigger module completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_statement_skips_past_module_name_at_qw() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor inside qw list should NOT trigger module-name completion.
+        // The index is populated so the test is non-vacuous: if the qw-dispatch
+        // branch were removed, add_use_module_completions would fire and the
+        // Module-kind assertion would fail.
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Module.pm")?,
+            "package Module;\nsub foo {}\n1;\n".to_string(),
+        )?;
+        let code = "use Module qw(foo";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        // This context routes to qw-import completions (Function kind), not module-name
+        // completions (Module kind).
+        assert!(
+            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            "cursor inside qw() should not get module-name completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_statement_triggers_module_completion() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = Arc::new(WorkspaceIndex::new());
+        index
+            .index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+        let code = "require Ut";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "Utils" && c.kind == CompletionItemKind::Module),
+            "require Ut should suggest Utils with Module kind; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_deduplication() -> Result<(), Box<dyn std::error::Error>> {
+        // Two files declaring the same package should produce one completion, not two
+        let index = Arc::new(WorkspaceIndex::new());
+        index
+            .index_file(Url::parse("file:///lib/MyApp.pm")?, "package MyApp;\n1;\n".to_string())?;
+        index.index_file(
+            Url::parse("file:///lib/MyApp2.pm")?,
+            "package MyApp;\n1;\n".to_string(), // duplicate package name
+        )?;
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        let myapp_count = completions.iter().filter(|c| c.label == "MyApp").count();
+        assert_eq!(
+            myapp_count, 1,
+            "Duplicate package declarations should produce exactly one completion"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_non_use_context_excluded() -> Result<(), Box<dyn std::error::Error>> {
+        // Outside a use/require statement, module-priority sort_text should NOT appear.
+        // add_use_module_completions gates on in_use_statement; its "1_" sort_text
+        // prefix is the marker we check here.
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/MyApp.pm")?,
+            "package MyApp;\nsub hello {}\n1;\n".to_string(),
+        )?;
+        let code = "my $x = MyA";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        // The "1_MyApp" sort_text is only emitted by add_use_module_completions,
+        // which is guarded by in_use_statement. It must not appear outside that context.
+        assert!(
+            !completions.iter().any(|c| c.sort_text.as_deref() == Some("1_MyApp")),
+            "Module-priority sort_text should only appear in use context"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_statement_past_semicolon_excluded() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor at the end of `use Module;` — the semicolon guard in
+        // is_use_statement_context must suppress module-name completions.
+        // Without the `;` check the cursor would be considered still inside
+        // the use statement and would show stale module suggestions.
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Module.pm")?,
+            "package Module;\n1;\n".to_string(),
+        )?;
+        let code = "use Module;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+            "cursor after `use Module;` should not trigger module-name completions; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
 }

@@ -41,6 +41,8 @@ pub struct PerlTidyConfig {
     pub profile: Option<String>,
     /// Additional command line arguments.
     pub extra_args: Vec<String>,
+    /// Timeout in seconds for the perltidy subprocess. Default: 10.
+    pub timeout_secs: u64,
 }
 
 impl Default for PerlTidyConfig {
@@ -57,6 +59,7 @@ impl Default for PerlTidyConfig {
             block_comment_indentation: Some(0),
             profile: None,
             extra_args: Vec::new(),
+            timeout_secs: 10,
         }
     }
 }
@@ -77,6 +80,7 @@ impl PerlTidyConfig {
             block_comment_indentation: Some(0),
             profile: None,
             extra_args: vec!["--perl-best-practices".to_string()],
+            timeout_secs: 10,
         }
     }
 
@@ -95,6 +99,7 @@ impl PerlTidyConfig {
             block_comment_indentation: Some(2),
             profile: None,
             extra_args: vec!["--gnu-style".to_string()],
+            timeout_secs: 10,
         }
     }
 
@@ -192,7 +197,8 @@ impl PerlTidyFormatter {
     #[must_use]
     pub fn with_os_runtime(config: PerlTidyConfig) -> Self {
         use perl_subprocess_runtime::OsSubprocessRuntime;
-        Self::new(config, Arc::new(OsSubprocessRuntime::new()))
+        let timeout = config.timeout_secs;
+        Self::new(config, Arc::new(OsSubprocessRuntime::with_timeout(timeout)))
     }
 
     /// Format Perl code.

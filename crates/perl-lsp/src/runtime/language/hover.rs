@@ -14,7 +14,8 @@ enum HoverExtracted {
     /// Hover content fully built (symbol, builtin, or token hover).
     Complete(Value),
     /// A `use Module` was found; module name needs resolution without lock.
-    UseModule(String),
+    /// Carries (module_name, doc_text, doc_uri) for use lib / FindBin wiring.
+    UseModule(String, String, String),
     /// Nothing hoverable at this position.
     None,
 }
@@ -60,7 +61,11 @@ impl LspServer {
 
                         // Check for `use Module` at this offset first
                         if let Some(module_name) = Self::find_use_module_at_offset(ast, offset) {
-                            HoverExtracted::UseModule(module_name)
+                            HoverExtracted::UseModule(
+                                module_name,
+                                doc.text.clone(),
+                                uri.to_string(),
+                            )
                         } else {
                             self.extract_symbol_hover(ast, &doc.text, offset)
                         }
@@ -76,8 +81,8 @@ impl LspServer {
             // Phase 2: Resolve module or return pre-built hover
             match extracted {
                 HoverExtracted::Complete(value) => return Ok(Some(value)),
-                HoverExtracted::UseModule(module_name) => {
-                    return Ok(Some(self.build_module_hover(&module_name)));
+                HoverExtracted::UseModule(module_name, doc_text, doc_uri) => {
+                    return Ok(Some(self.build_module_hover(&module_name, &doc_text, &doc_uri)));
                 }
                 HoverExtracted::None => {}
             }
@@ -140,6 +145,16 @@ impl LspServer {
                 .map(|d| format!("\n**Declaration**: `{}`", d))
                 .unwrap_or_default();
 
+            // Check if this variable is tied — scan AST for a matching Tie node.
+            let tied_info = if symbol_info.kind.is_variable() {
+                let sigil = symbol_info.kind.sigil().unwrap_or("");
+                Self::find_tied_class(ast, sigil, &symbol_info.name)
+                    .map(|cls| format!("\n**Tied to**: `{}`", cls))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+
             let attrs_info = if symbol_info.attributes.is_empty() {
                 String::new()
             } else {
@@ -161,10 +176,11 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
+                        tied_info,
                         attrs_info,
                         complexity_section,
                         doc_info
@@ -280,9 +296,11 @@ impl LspServer {
     /// Tries URI-based resolution first, then filesystem-based resolution.
     /// When a module file is found, extracts POD documentation and includes
     /// it in the hover display. Results are cached per file path.
-    fn build_module_hover(&self, module_name: &str) -> Value {
+    fn build_module_hover(&self, module_name: &str, doc_text: &str, doc_uri: &str) -> Value {
         // Try URI resolution (handles open docs + workspace folders)
-        if let Some(uri) = self.resolve_module_to_path(module_name) {
+        if let Some(uri) =
+            self.resolve_module_to_path_with_doc(module_name, Some(doc_text), Some(doc_uri))
+        {
             let display_path = uri.strip_prefix("file://").unwrap_or(&uri);
             let fs_path = url::Url::parse(&uri).ok().and_then(|u| u.to_file_path().ok());
             let pod_section =
@@ -298,7 +316,9 @@ impl LspServer {
         }
 
         // Try filesystem resolution as fallback
-        if let Some(path) = self.resolve_module_path(module_name) {
+        if let Some(path) =
+            self.resolve_module_path_with_uri(module_name, Some(doc_text), Some(doc_uri))
+        {
             let pod_section = self.format_pod_for_hover(&path);
             let display = path.display().to_string();
             if let Ok(file_uri) = url::Url::from_file_path(&path) {
@@ -743,6 +763,36 @@ impl LspServer {
             _ => {}
         }
         None
+    }
+
+    /// Walk the AST to find a `tie` statement whose variable matches `sigil` and `var_name`.
+    /// Returns the class string if the package argument is a string literal, `None` otherwise.
+    /// Handles the first tie encountered for the given name; retie sequences are a known limitation.
+    fn find_tied_class(node: &Node, sigil: &str, var_name: &str) -> Option<String> {
+        match &node.kind {
+            NodeKind::Tie { variable, package, .. } => {
+                let matched = match &variable.kind {
+                    NodeKind::Variable { sigil: s, name: n } => s == sigil && n == var_name,
+                    NodeKind::VariableDeclaration { variable: inner, .. } => {
+                        matches!(&inner.kind, NodeKind::Variable { sigil: s, name: n } if s == sigil && n == var_name)
+                    }
+                    _ => false,
+                };
+                if matched {
+                    if let NodeKind::String { value, .. } = &package.kind {
+                        return Some(value.trim_matches(|c| c == '\'' || c == '"').to_string());
+                    }
+                }
+                None
+            }
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                statements.iter().find_map(|s| Self::find_tied_class(s, sigil, var_name))
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                Self::find_tied_class(expression, sigil, var_name)
+            }
+            _ => None,
+        }
     }
 
     /// Extract parameter names from a params node (for signature help)

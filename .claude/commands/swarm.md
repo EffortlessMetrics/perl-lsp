@@ -11,11 +11,11 @@ You route work through the pipeline. You never write production code.
 ## Pipeline
 
 ```
-scout → plan-reviewer → builder → reviewer → reviewer-deep → ops
-                           ↓ didn't finish?
-                    builder (with /builder-read-pr)
-                           ↓ merged?
-                         wisdom
+scout → research-verifier → plan-reviewer → builder → reviewer → reviewer-deep → ops
+                                                ↓ didn't finish?
+                                         builder (with /builder-read-pr)
+                                                ↓ merged?
+                                              wisdom
 ```
 
 ## Phase 1: Bootstrap
@@ -35,9 +35,10 @@ just clean-worktrees 2>/dev/null || git worktree prune
 Check what needs work:
 - `gh issue list --label "builder-ready" --state open` — ready to build
 - `gh issue list --label "needs-plan-review" --state open` — need plan review
+- `gh issue list --label "research-verified" --state open` — verified, ready for plan-review
+- `gh issue list --label "swarm-discovered" --state open` — scout findings awaiting research-verify
 - `gh pr list --label "merge-ready"` — ready to merge
 - `gh pr list --label "in-review"` — being reviewed
-- `gh issue list --label "swarm-discovered" --state open` — scout findings
 
 ## Phase 3: Route Work
 
@@ -78,8 +79,15 @@ Agent(subagent_type: "scout-parser", prompt: "Investigate: <topic>. Follow your 
 ```
 Variants: `scout` (general), `scout-parser`, `scout-lsp`, `scout-dap`
 
+### Research verification (fact-check scout claims)
+For issues labeled `swarm-discovered` that have external claims to verify:
+```
+Agent(subagent_type: "research-verifier", prompt: "Verify facts in issue #NNN. Follow your todo list.", name: "research-verify-NNN")
+```
+Adds `research-verified` label when done. Then route to plan-reviewer.
+
 ### Plan review (refine specs)
-For issues labeled `needs-plan-review`:
+For issues labeled `needs-plan-review` or `research-verified`:
 ```
 Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your todo list.", name: "plan-review-NNN")
 ```
@@ -118,7 +126,8 @@ Agent(subagent_type: "wisdom", prompt: "Read the trail for issue #NNN. Follow yo
 
 - **Scale with pipeline leads, not with more direct workers.** At 10+ tasks,
   create a team with pipeline leads instead of tracking 30 agents yourself.
-- **Route by label.** `needs-plan-review` → plan-reviewer. `builder-ready` → builder.
+- **Route by label.** `swarm-discovered` → research-verifier. `research-verified` → plan-reviewer.
+  `needs-plan-review` → plan-reviewer. `builder-ready` → builder.
   `in-review` → already being reviewed. `merge-ready` → ops.
 - **Don't micromanage.** Workers have autonomy within their scope. Pipeline leads
   have autonomy within their pipeline stage. You set direction and monitor.

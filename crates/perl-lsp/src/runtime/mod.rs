@@ -214,6 +214,12 @@ pub struct LspServer {
     /// when it completes.  Used by tests to observe that indexing was detached
     /// from the synchronous handler (issue #2352).
     pub(crate) pending_index_task_count: Arc<std::sync::atomic::AtomicUsize>,
+    /// Per-document cancellation flags for stale-parse cancellation.
+    ///
+    /// When `didChange` #2 arrives while `didChange` #1 is still parsing,
+    /// setting the old flag to `true` interrupts the in-progress parse
+    /// cooperatively (via `Parser::check_cancelled`).
+    pub(crate) parse_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
@@ -246,6 +252,21 @@ impl LspServer {
     /// This is used by formatting and linting providers.
     pub fn subprocess_runtime(&self) -> perl_lsp_tooling::OsSubprocessRuntime {
         perl_lsp_tooling::OsSubprocessRuntime::new()
+    }
+
+    /// Cancel any in-progress parse for `uri` and return a fresh token.
+    ///
+    /// Sets the previous flag to `true` (interrupting the in-flight parse),
+    /// inserts a new `false` flag, and returns an `Arc` clone of the new flag
+    /// for the caller to pass to `Parser::new_with_cancellation`.
+    pub(crate) fn new_parse_token(&self, uri: &str) -> Arc<AtomicBool> {
+        let mut flags = self.parse_cancel_flags.lock();
+        if let Some(old) = flags.get(uri) {
+            old.store(true, Ordering::Release);
+        }
+        let new_flag = Arc::new(AtomicBool::new(false));
+        flags.insert(uri.to_string(), Arc::clone(&new_flag));
+        new_flag
     }
 
     /// Send a notification to the client via the outbound channel
@@ -491,6 +512,8 @@ mod tests {
                 line_starts,
                 generation: Arc::new(AtomicU32::new(0)),
                 degradation_tier: crate::state::DegradationTier::Minimal,
+                #[cfg(feature = "incremental")]
+                incremental_doc: None,
             },
         );
 

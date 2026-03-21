@@ -23,6 +23,7 @@ include = [
 
 [dependencies]
 perl-dap = { workspace = true, optional = true }
+perl-incremental-parsing = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-formatting = { workspace = true }
@@ -88,7 +89,7 @@ workspace = true
 [features]
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 workspace = []  # Workspace-wide indexing for cross-file features
-incremental = ["perl-parser/incremental"]  # Incremental parsing support
+incremental = ["perl-parser/incremental", "perl-incremental-parsing"]  # Incremental parsing support
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = [

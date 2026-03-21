@@ -41,6 +41,19 @@ After a merge batch, lock in gains and update metrics.
    - fix: <description> (#NNN)
    ```
 
+5. Post a merge summary comment on the most recently merged PR in this batch:
+   ```bash
+   gh pr comment <NUMBER> --body "$(cat <<'MERGE_EOF'
+   ## Merge Summary
+
+   **Merged:** <list of PRs merged in this batch>
+   **Master status:** <CI passing | blocked>
+   **Corpus ratcheted:** <yes (new count) | no | N/A>
+   **User-visible changes:** <list or none>
+   MERGE_EOF
+   )"
+   ```
+
 ## Output
 
 Record in your task:

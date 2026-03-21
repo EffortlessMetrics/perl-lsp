@@ -616,7 +616,7 @@ fn test_supported_commands_structure() -> TestResult {
 
     // MUTATION KILLER: Verify not empty/default list
     assert!(!commands.is_empty(), "Supported commands should not be empty");
-    assert_eq!(commands.len(), 9, "Should have exactly 9 supported commands");
+    assert_eq!(commands.len(), 10, "Should have exactly 10 supported commands");
 
     // Verify specific commands are present
     let expected_commands = vec![
@@ -626,6 +626,7 @@ fn test_supported_commands_structure() -> TestResult {
         "perl.runCritic",
         "perl.runTest",
         "perl.runTestFile",
+        "perl.runSubtest",
         "perl.debugFile",
         "perl.goToTest",
         "perl.goToImplementation",
@@ -757,5 +758,85 @@ print "Result: $result\n";
 
     // Clean up
     fs::remove_file(temp_file).ok();
+    Ok(())
+}
+
+// ============= COMMAND LIST SYNC GUARD =============
+// Ensures provider.rs and perl-lsp-protocol stay in sync after the inlining in PR #2617.
+
+#[test]
+fn test_provider_and_protocol_command_lists_are_in_sync() -> TestResult {
+    let provider_cmds = get_supported_commands();
+    let protocol_cmds = perl_lsp_protocol::capabilities::get_supported_commands();
+
+    let mut sorted_provider = provider_cmds.clone();
+    sorted_provider.sort();
+    let mut sorted_protocol = protocol_cmds.clone();
+    sorted_protocol.sort();
+
+    assert_eq!(
+        sorted_provider, sorted_protocol,
+        "provider.rs get_supported_commands() must match perl_lsp_protocol::capabilities::get_supported_commands(). \
+         These lists were inlined in PR #2617 — keep them in sync."
+    );
+    Ok(())
+}
+
+// ============= RUN SUBTEST HANDLER SHAPE =============
+// Verifies the perl.runSubtest dispatch arm returns the correct JSON shape
+// (not just that the command is in the supported list).
+
+#[test]
+fn test_run_subtest_handler_returns_correct_shape() -> TestResult {
+    use perl_lsp::{JsonRpcRequest, LspServer};
+
+    let server = LspServer::new();
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.runSubtest",
+            "arguments": ["my fancy subtest"]
+        })),
+        id: Some(json!(1)),
+    };
+
+    let response = server.handle_request(request).ok_or("No response from perl.runSubtest")?;
+    let result = response.result.ok_or("perl.runSubtest returned error, expected Ok result")?;
+
+    assert_eq!(result["status"], "success", "perl.runSubtest should return status=success");
+    assert_eq!(
+        result["subtest"], "my fancy subtest",
+        "perl.runSubtest should echo back the subtest name"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_run_subtest_missing_argument_returns_error() -> TestResult {
+    use perl_lsp::{JsonRpcRequest, LspServer};
+
+    let server = LspServer::new();
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.runSubtest",
+            "arguments": []
+        })),
+        id: Some(json!(2)),
+    };
+
+    let response =
+        server.handle_request(request).ok_or("No response from perl.runSubtest (empty args)")?;
+    // Should return an error, not a success result
+    assert!(
+        response.error.is_some(),
+        "perl.runSubtest with empty arguments should return a JSON-RPC error"
+    );
+    let error = response.error.ok_or("error field missing")?;
+    assert_eq!(error.code, -32602, "Missing argument should return InvalidParams (-32602)");
     Ok(())
 }

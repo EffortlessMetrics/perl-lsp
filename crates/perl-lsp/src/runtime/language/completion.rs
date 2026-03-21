@@ -36,6 +36,23 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
     SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
 }
 
+/// Returns commit characters for a completion item based on its kind.
+/// Each string is exactly one character, per the LSP 3.x spec.
+///
+/// Returns a static slice to avoid per-item heap allocation in the completion
+/// serialization hot path (called once per item, up to `completion_cap()` times
+/// per request, on every keypress in editors).
+fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static str]> {
+    match kind {
+        CompletionItemKind::Function => Some(&["(", ",", ";"]),
+        CompletionItemKind::Variable => Some(&["[", "{", ".", ";"]),
+        CompletionItemKind::Module => Some(&[";"]),
+        CompletionItemKind::Constant => Some(&["[", "{", ".", ";"]),
+        CompletionItemKind::Property => Some(&[",", "}"]),
+        _ => None,
+    }
+}
+
 impl LspServer {
     fn split_sigil(name: &str) -> (Option<char>, &str) {
         let mut chars = name.chars();
@@ -428,16 +445,8 @@ impl LspServer {
                             });
                         }
 
-                        // Only add commit characters for functions and variables, not keywords
-                        let needs_commit_chars = matches!(
-                            c.kind,
-                            CompletionItemKind::Function
-                                | CompletionItemKind::Variable
-                                | CompletionItemKind::Module
-                                | CompletionItemKind::Constant
-                        );
-                        if needs_commit_chars {
-                            item["commitCharacters"] = json!([";", " ", ")", "]", "}"]);
+                        if let Some(chars) = commit_chars_for_kind(c.kind) {
+                            item["commitCharacters"] = json!(chars);
                         }
 
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
@@ -631,6 +640,10 @@ impl LspServer {
                                 "kind": "markdown",
                                 "value": documentation
                             });
+                        }
+
+                        if let Some(chars) = commit_chars_for_kind(c.kind) {
+                            item["commitCharacters"] = json!(chars);
                         }
 
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)

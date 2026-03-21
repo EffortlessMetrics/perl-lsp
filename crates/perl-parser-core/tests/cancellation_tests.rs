@@ -14,29 +14,27 @@ fn test_parse_without_cancellation_succeeds() {
 }
 
 #[test]
-fn test_parse_with_cancellation_flag_set_completes() {
-    // check_cancelled() is no longer called in the parse loop; the cancellation
-    // flag is stored but not polled, so parsing completes normally regardless.
+fn test_parse_with_cancellation_flag_set_returns_cancelled() {
+    // Parser now polls the cancellation flag — pre-set flag returns Cancelled.
     let flag = Arc::new(AtomicBool::new(true));
     let statements: Vec<String> = (0..200).map(|i| format!("my $x{} = {};", i, i)).collect();
     let source = statements.join("\n");
     let mut parser = Parser::new_with_cancellation(&source, flag);
     let result = parser.parse();
-    assert!(result.is_ok());
+    assert!(matches!(result, Err(ParseError::Cancelled)));
 }
 
 #[test]
-fn test_parse_with_delayed_cancellation_flag_completes() {
-    // check_cancelled() is no longer called in the parse loop; the cancellation
-    // flag is stored but not polled, so parsing completes normally regardless.
+fn test_parse_with_delayed_cancellation_flag_returns_cancelled() {
+    // Parser polls the flag — flag set before parse() returns Cancelled.
     let flag = Arc::new(AtomicBool::new(false));
     let flag_clone = Arc::clone(&flag);
     let statements: Vec<String> = (0..200).map(|i| format!("my $x{} = {};", i, i)).collect();
     let source = statements.join("\n");
-    flag_clone.store(true, Ordering::Relaxed);
+    flag_clone.store(true, Ordering::Release);
     let mut parser = Parser::new_with_cancellation(&source, flag);
     let result = parser.parse();
-    assert!(result.is_ok());
+    assert!(matches!(result, Err(ParseError::Cancelled)));
 }
 
 #[test]
@@ -53,8 +51,8 @@ fn test_cancelled_error_display() {
 }
 
 #[test]
-fn test_cancellation_flag_in_nested_blocks_completes() {
-    // check_cancelled() is no longer called in the parse loop; parsing completes normally.
+fn test_cancellation_flag_in_nested_blocks_returns_cancelled() {
+    // Parser polls the flag inside block loops — pre-set flag returns Cancelled.
     let flag = Arc::new(AtomicBool::new(true));
     let mut source = String::from("{\n");
     for i in 0..200 {
@@ -63,5 +61,5 @@ fn test_cancellation_flag_in_nested_blocks_completes() {
     source.push('}');
     let mut parser = Parser::new_with_cancellation(&source, flag);
     let result = parser.parse();
-    assert!(result.is_ok());
+    assert!(matches!(result, Err(ParseError::Cancelled)));
 }

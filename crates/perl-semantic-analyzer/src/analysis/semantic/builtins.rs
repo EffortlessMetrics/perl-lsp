@@ -338,18 +338,73 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Returns a reference to the object underlying VARIABLE if it is tied, or undef if not.",
         }),
 
+        // Tie magic methods
+        "TIESCALAR" => Some(BuiltinDoc {
+            signature: "TIESCALAR CLASSNAME, LIST",
+            description: "Constructor called when `tie $scalar, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEARRAY" => Some(BuiltinDoc {
+            signature: "TIEARRAY CLASSNAME, LIST",
+            description: "Constructor called when `tie @array, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEHASH" => Some(BuiltinDoc {
+            signature: "TIEHASH CLASSNAME, LIST",
+            description: "Constructor called when `tie %hash, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "TIEHANDLE" => Some(BuiltinDoc {
+            signature: "TIEHANDLE CLASSNAME, LIST",
+            description: "Constructor called when `tie *FH, CLASSNAME, LIST` is used. Must return a blessed reference.",
+        }),
+        "FETCH" => Some(BuiltinDoc {
+            signature: "FETCH this",
+            description: "Called on every access of a tied scalar or array/hash element. Returns the value.",
+        }),
+        "STORE" => Some(BuiltinDoc {
+            signature: "STORE this, value",
+            description: "Called on every assignment to a tied scalar or array/hash element.",
+        }),
+        "FIRSTKEY" => Some(BuiltinDoc {
+            signature: "FIRSTKEY this",
+            description: "Called when `keys` or `each` is first invoked on a tied hash.",
+        }),
+        "NEXTKEY" => Some(BuiltinDoc {
+            signature: "NEXTKEY this, lastkey",
+            description: "Called during iteration of a tied hash with `each` or `keys`.",
+        }),
+        "DESTROY" => Some(BuiltinDoc {
+            signature: "DESTROY this",
+            description: "Called when the tied object goes out of scope or is explicitly untied.",
+        }),
+
         // Control flow
         "die" => Some(BuiltinDoc {
             signature: "die LIST",
-            description: "Raises an exception. If the last element of LIST does not end in a newline, the current script line number and input line number are appended.",
+            description: "Raises an exception. If LIST does not end in '\\n', Perl appends the script name and line number. In modules, prefer Carp::croak() to preserve the caller's stack frame. The exception is available in $@ after an eval block.",
         }),
         "warn" => Some(BuiltinDoc {
             signature: "warn LIST",
-            description: "Produces a message on STDERR, like die but does not exit or throw an exception.",
+            description: "Prints a warning to STDERR. Does not exit. If the message does not end in '\\n', Perl appends the script name and line number. In modules, prefer Carp::carp() to report from the caller's perspective.",
         }),
         "eval" => Some(BuiltinDoc {
             signature: "eval BLOCK\neval EXPR",
-            description: "Evaluates EXPR or BLOCK and traps any errors, making them available in $@.",
+            description: "Evaluates BLOCK or EXPR and traps exceptions. After the eval, check $@ for errors: if ($@) { ... }. BLOCK form is preferred — EXPR form (string eval) is a security risk and triggers the PL600 diagnostic.",
+        }),
+        // Carp module functions
+        "croak" => Some(BuiltinDoc {
+            signature: "croak LIST",
+            description: "Like die but reports the error from the caller's perspective. Part of the Carp module. Use instead of die in library code so the stack trace points to the caller, not the module internals.",
+        }),
+        "carp" => Some(BuiltinDoc {
+            signature: "carp LIST",
+            description: "Like warn but reports the warning from the caller's perspective. Part of the Carp module. Prefer over warn in library code.",
+        }),
+        "confess" => Some(BuiltinDoc {
+            signature: "confess LIST",
+            description: "Like croak but includes a full stack trace. Part of the Carp module. Use when the full call chain is needed for debugging.",
+        }),
+        "cluck" => Some(BuiltinDoc {
+            signature: "cluck LIST",
+            description: "Like carp but includes a full stack trace. Part of the Carp module. Use for warnings that benefit from call chain context.",
         }),
         "return" => Some(BuiltinDoc {
             signature: "return EXPR\nreturn",
@@ -793,6 +848,80 @@ pub fn get_attribute_documentation(attr: &str) -> Option<BuiltinDoc> {
             signature: ":overload(OP)",
             description: "Declares that a subroutine implements an operator overload for OP.",
         }),
+        _ => None,
+    }
+}
+
+/// Structured exception context for exception-family functions.
+///
+/// Used by code actions and semantic analysis to understand exception
+/// handling semantics — upgrade paths (die → croak) and associated
+/// error variables.
+#[derive(Debug, Clone)]
+pub struct ExceptionContext {
+    /// Special variable that captures the exception after an eval block (e.g. `$@`).
+    pub error_variable: Option<String>,
+    /// Recommended replacement function, if the current function is not preferred
+    /// (e.g. `die` → `Carp::croak`, `warn` → `Carp::carp`).
+    pub preferred_alternative: Option<String>,
+}
+
+/// Check if a function name is in the Perl exception family.
+///
+/// Returns `true` for: `die`, `warn`, `croak`, `carp`, `confess`, `cluck`.
+///
+/// This is a classification helper for future diagnostic and code-action use.
+/// It is not currently called from any LSP code path — callers may use it to
+/// decide whether to invoke [`get_exception_context`].
+///
+/// # Examples
+/// ```
+/// use perl_semantic_analyzer::analysis::semantic::is_exception_function;
+///
+/// assert!(is_exception_function("die"));
+/// assert!(is_exception_function("croak"));
+/// assert!(!is_exception_function("print"));
+/// ```
+pub fn is_exception_function(name: &str) -> bool {
+    matches!(name, "die" | "warn" | "croak" | "carp" | "confess" | "cluck")
+}
+
+/// Get exception context for upgrade suggestions and error variables.
+///
+/// Returns metadata about exception handling semantics:
+/// - `error_variable`: special variable capturing the exception (`$@`)
+/// - `preferred_alternative`: recommended upgrade path (`die` → `Carp::croak`)
+///
+/// Returns `None` for non-exception functions (e.g. `eval`, `print`).
+///
+/// # Examples
+/// ```
+/// use perl_semantic_analyzer::analysis::semantic::get_exception_context;
+///
+/// let die_ctx = get_exception_context("die").unwrap();
+/// assert_eq!(die_ctx.error_variable, Some("$@".to_string()));
+/// assert_eq!(die_ctx.preferred_alternative, Some("Carp::croak".to_string()));
+///
+/// let croak_ctx = get_exception_context("croak").unwrap();
+/// assert_eq!(croak_ctx.preferred_alternative, None);  // already preferred
+/// ```
+pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
+    match name {
+        "die" => Some(ExceptionContext {
+            error_variable: Some("$@".to_string()),
+            preferred_alternative: Some("Carp::croak".to_string()),
+        }),
+        "warn" => Some(ExceptionContext {
+            error_variable: None,
+            preferred_alternative: Some("Carp::carp".to_string()),
+        }),
+        "croak" | "confess" => Some(ExceptionContext {
+            error_variable: Some("$@".to_string()),
+            preferred_alternative: None,
+        }),
+        "carp" | "cluck" => {
+            Some(ExceptionContext { error_variable: None, preferred_alternative: None })
+        }
         _ => None,
     }
 }

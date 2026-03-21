@@ -1242,7 +1242,7 @@ mod linked_editing_tests {
     }
 
     #[test]
-    fn cursor_on_close_brace() {
+    fn cursor_on_open_brace_forward_scan() {
         // Test cursor on the opening brace to find its matching close
         let text = "{x}";
         let result = handle_linked_editing(text, 0, 0);
@@ -1257,6 +1257,101 @@ mod linked_editing_tests {
         let text = "<data>";
         let result = handle_linked_editing(text, 0, 0);
         assert!(result.is_some(), "should find matching angle brackets");
+    }
+
+    // --- backward-scan tests (cursor on close bracket) ---
+
+    #[test]
+    fn cursor_on_close_paren_backward_scan() {
+        // Cursor ON ')' at col 2 — exercises the backward-scan branch
+        // "(x)" — ')' is at byte 2, line 0, col 2
+        let text = "(x)";
+        let result = handle_linked_editing(text, 0, 2);
+        assert!(result.is_some(), "cursor on close paren should find matching open");
+        if let Some(r) = result {
+            assert_eq!(r.ranges.len(), 2);
+            assert_eq!(r.ranges[0].start.character, 0); // open paren
+            assert_eq!(r.ranges[1].start.character, 2); // close paren
+        }
+    }
+
+    #[test]
+    fn cursor_on_close_bracket_backward_scan() {
+        // Cursor ON ']' at col 5; '[' is at col 0
+        let text = "[1, 2]";
+        let result = handle_linked_editing(text, 0, 5);
+        assert!(result.is_some(), "cursor on close bracket should find matching open");
+        if let Some(r) = result {
+            assert_eq!(r.ranges.len(), 2);
+            assert_eq!(r.ranges[0].start.character, 0); // open bracket
+            assert_eq!(r.ranges[1].start.character, 5); // close bracket
+        }
+    }
+
+    #[test]
+    fn cursor_on_close_brace_backward_scan() {
+        // Cursor ON '}' at col 7; '{' is at col 0
+        let text = "{ code }";
+        let result = handle_linked_editing(text, 0, 7);
+        assert!(result.is_some(), "cursor on close brace should find matching open");
+        if let Some(r) = result {
+            assert_eq!(r.ranges.len(), 2);
+            assert_eq!(r.ranges[0].start.character, 0); // open brace
+            assert_eq!(r.ranges[1].start.character, 7); // close brace
+        }
+    }
+
+    #[test]
+    fn cursor_on_close_paren_nested_backward_scan() {
+        // "(())" — cursor on outer ')' at col 3
+        let text = "(())";
+        let result = handle_linked_editing(text, 0, 3);
+        assert!(result.is_some(), "cursor on outer close paren should find outer open");
+        if let Some(r) = result {
+            assert_eq!(r.ranges.len(), 2);
+            assert_eq!(r.ranges[0].start.character, 0); // outer open
+            assert_eq!(r.ranges[1].start.character, 3); // outer close
+        }
+    }
+
+    #[test]
+    fn unmatched_close_paren_returns_none() {
+        // "x)" — no matching open bracket, must return None without panicking
+        let text = "x)";
+        let result = handle_linked_editing(text, 0, 1);
+        assert!(result.is_none(), "unmatched close paren should return None, not panic");
+    }
+
+    #[test]
+    fn cursor_on_close_angle_bracket_backward_scan() {
+        // Cursor ON '>' at col 5; '<' is at col 0
+        // '>' is in CLOSE but not in OPEN, so it takes the close-bracket branch (not quote branch)
+        let text = "<data>";
+        let result = handle_linked_editing(text, 0, 5);
+        assert!(result.is_some(), "cursor on close angle bracket should find matching open");
+        if let Some(r) = result {
+            assert_eq!(r.ranges.len(), 2);
+            assert_eq!(r.ranges[0].start.character, 0); // open angle
+            assert_eq!(r.ranges[1].start.character, 5); // close angle
+        }
+    }
+
+    #[test]
+    fn cursor_on_close_brace_multiline_backward_scan() {
+        // '}' is on line 2 col 0; '{' is on line 0 col 0
+        let text = "{\n  code;\n}";
+        let result = handle_linked_editing(text, 2, 0);
+        assert!(
+            result.is_some(),
+            "cursor on close brace in multiline block should find open brace on line 0"
+        );
+        if let Some(r) = result {
+            assert_eq!(r.ranges.len(), 2);
+            assert_eq!(r.ranges[0].start.line, 0); // open brace on line 0
+            assert_eq!(r.ranges[0].start.character, 0);
+            assert_eq!(r.ranges[1].start.line, 2); // close brace on line 2
+            assert_eq!(r.ranges[1].start.character, 0);
+        }
     }
 }
 
@@ -1472,7 +1567,7 @@ mod diagnostics_integration_tests {
         let code = "use strict;\nuse warnings;\nmy $x = 42;\nprint $x;\n";
         let ast = parse(code)?;
         let provider = DiagnosticsProvider::new(&ast, code.to_string());
-        let diagnostics = provider.get_diagnostics(&ast, &[], code);
+        let diagnostics = provider.get_diagnostics(&ast, &[], code, None);
         // Valid code should produce few or no diagnostics
         let _ = diagnostics;
         Ok(())
@@ -1482,7 +1577,7 @@ mod diagnostics_integration_tests {
     fn diagnostics_for_empty_code() -> Result<(), ParseError> {
         let ast = parse("")?;
         let provider = DiagnosticsProvider::new(&ast, String::new());
-        let diagnostics = provider.get_diagnostics(&ast, &[], "");
+        let diagnostics = provider.get_diagnostics(&ast, &[], "", None);
         let _ = diagnostics;
         Ok(())
     }

@@ -3275,7 +3275,7 @@ const BARE_TERM_BUILTINS: &[&str] = &[
 ];
 
 /// Fast lookup table for compound operator second characters
-const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*";
+const COMPOUND_SECOND_CHARS: &[u8] = b"=<>&|+->.~*:";
 
 #[inline]
 fn is_compound_operator(first: char, second: char) -> bool {
