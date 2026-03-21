@@ -1249,9 +1249,11 @@ impl LspServer {
                     }
                 }
                 "perl.runSubtest" => {
-                    if let Some(subtest_name) = arguments.first().and_then(|v| v.as_str()) {
-                        return self.run_subtest(subtest_name);
-                    }
+                    let subtest_name = arguments
+                        .first()
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| invalid_params("Missing subtest name argument"))?;
+                    return self.run_subtest(subtest_name);
                 }
                 // New commands handled by ExecuteCommandProvider
                 "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.runCritic" => {
