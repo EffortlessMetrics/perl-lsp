@@ -216,3 +216,36 @@ fn workspace_completion_non_imported_stays_normal_priority() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Test 7: alternate qw delimiters (qw[], qw{}, qw//, qw<>, qw||, qw!!)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn extract_import_map_parses_alternate_qw_delimiters() {
+    // Test all valid Perl qw delimiters
+    let test_cases = vec![
+        ("use List::Util qw[sum min];\nsu", "square brackets"),
+        ("use List::Util qw{sum min};\nsu", "curly braces"),
+        ("use List::Util qw/sum min/;\nsu", "slashes"),
+        ("use List::Util qw<sum min>;\nsu", "angle brackets"),
+        ("use List::Util qw|sum min|;\nsu", "pipes"),
+        ("use List::Util qw!sum min!;\nsu", "exclamation marks"),
+    ];
+
+    for (source, description) in test_cases {
+        let index = make_list_util_index();
+        let provider = parse_provider_with_index(source, Arc::clone(&index));
+        let items = provider.get_completions(source, source.len());
+
+        let sum_item = must_some(
+            items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum")),
+        );
+        assert!(
+            sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+            "sum with {} delimiters should be promoted; got: {:?}",
+            description,
+            sum_item.sort_text
+        );
+    }
+}
