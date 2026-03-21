@@ -80,7 +80,9 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     ("expected expression, found 'next'", "unexpected_token_next"),
     ("expected expression, found 'last'", "unexpected_token_last"),
     ("expected expression, found 'redo'", "unexpected_token_redo"),
-    // Expression errors — assignment operators ('==' must precede '=' to avoid substring match)
+    // Expression errors — assignment operators ('==' before '=' is defensive: without quotes
+    // "found ==" would contain "found =" as a substring, so the ordering is correct even
+    // though the quoted forms are distinct strings in practice)
     ("expected expression, found '=='", "unexpected_eq_expr"),
     ("expected expression, found '=~'", "unexpected_match_expr"),
     ("expected expression, found '='", "unexpected_assign_expr"),
@@ -1042,6 +1044,25 @@ mod tests {
         assert_eq!(
             normalize_error_bucket("expected expression, found '//'"),
             "unexpected_token_in_expr",
+        );
+    }
+
+    #[test]
+    fn test_eq_not_swallowed_by_assign_bucket() {
+        // '==' message must map to unexpected_eq_expr, not unexpected_assign_expr.
+        // The quoted form "found '=='" does NOT contain "found '='" as a substring
+        // (the trailing quote disambiguates), but keeping '==' before '=' is defensive
+        // in case the message format ever changes to unquoted tokens.
+        assert_eq!(normalize_error_bucket("expected expression, found '=='"), "unexpected_eq_expr",);
+        // '=~' must also route to its own bucket, not '='
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '=~'"),
+            "unexpected_match_expr",
+        );
+        // '=' itself still routes correctly
+        assert_eq!(
+            normalize_error_bucket("expected expression, found '='"),
+            "unexpected_assign_expr",
         );
     }
 
