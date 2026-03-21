@@ -10,17 +10,19 @@ use super::{
     items::{CompletionItem, CompletionItemKind},
 };
 use perl_workspace_index::workspace_index::{SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
 ///
 /// Queries the workspace index to provide completions for symbols from other files.
-/// This enables cross-file completion when the user types a symbol name.
+/// Uses the `import_map` to promote imported symbols and downrank explicitly
+/// not-imported symbols for import-aware sort ordering.
 pub fn add_workspace_symbol_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    import_map: &HashMap<String, HashSet<String>>,
 ) {
     // Only proceed if we have a workspace index
     let Some(index) = workspace_index else {
@@ -51,16 +53,45 @@ pub fn add_workspace_symbol_completions(
 
         match symbol.kind {
             WsSymbolKind::Subroutine | WsSymbolKind::Method => {
-                // Add function completion
+                // Determine sort priority and detail based on import map
                 let label = symbol.qualified_name.as_ref().unwrap_or(&symbol.name).clone();
+                let module = symbol.container_name.as_deref().unwrap_or("");
+
+                let (sort_prefix, detail) = match import_map.get(module) {
+                    None => {
+                        // Module not in import_map: not used or `use Module` (import all)
+                        let det = symbol
+                            .container_name
+                            .clone()
+                            .unwrap_or_else(|| "workspace".to_string());
+                        ("3_", det)
+                    }
+                    Some(imported_set) if imported_set.is_empty() => {
+                        // Explicit empty import `use Module qw()` — not in namespace
+                        ("4_", "not imported".to_string())
+                    }
+                    Some(imported_set) if imported_set.contains(&symbol.name) => {
+                        // Symbol is explicitly imported — boost priority
+                        let det = format!("imported from {module}");
+                        ("2_", det)
+                    }
+                    Some(_) => {
+                        // Module used with explicit list, but this symbol wasn't in it
+                        let det = symbol
+                            .container_name
+                            .clone()
+                            .unwrap_or_else(|| "workspace".to_string());
+                        ("3_", det)
+                    }
+                };
 
                 completions.push(CompletionItem {
                     insert_text: Some(symbol.name.clone()),
-                    sort_text: Some(format!("3_{}", label)), // Sort after local symbols
+                    sort_text: Some(format!("{sort_prefix}{label}")),
                     filter_text: Some(label.clone()),
                     label,
                     kind: CompletionItemKind::Function,
-                    detail: symbol.container_name.clone().or_else(|| Some("workspace".to_string())),
+                    detail: Some(detail),
                     documentation: symbol.documentation.clone(),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
