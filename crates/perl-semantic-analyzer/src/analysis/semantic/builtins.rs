@@ -255,11 +255,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "splice" => Some(BuiltinDoc {
             signature: "splice ARRAY, OFFSET, LENGTH, LIST\nsplice ARRAY, OFFSET, LENGTH\nsplice ARRAY, OFFSET\nsplice ARRAY",
-            description: "Removes LENGTH elements from ARRAY starting at OFFSET, replacing them with LIST. Returns the removed elements.",
+            description: "Removes LENGTH elements from ARRAY starting at OFFSET, replacing them with LIST. Returns the removed elements. In scalar context, returns the last removed element.",
         }),
         "sort" => Some(BuiltinDoc {
             signature: "sort SUBNAME LIST\nsort BLOCK LIST\nsort LIST",
-            description: "Sorts LIST and returns the sorted list. BLOCK or SUBNAME provides a custom comparison function using $a and $b.",
+            description: "Sorts LIST and returns the sorted list. BLOCK or SUBNAME provides a custom comparison function using $a and $b. Only valid in list context; using in scalar context returns undef or count (avoid).",
         }),
         "reverse" => Some(BuiltinDoc {
             signature: "reverse LIST",
@@ -267,11 +267,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "map" => Some(BuiltinDoc {
             signature: "map BLOCK LIST\nmap EXPR, LIST",
-            description: "Evaluates the BLOCK or EXPR for each element of LIST (locally setting $_ to each element) and composes a list of the results.",
+            description: "Evaluates the BLOCK or EXPR for each element of LIST (locally setting $_ to each element) and composes a list of the results. In scalar context, returns the number of elements the expression would produce.",
         }),
         "grep" => Some(BuiltinDoc {
             signature: "grep BLOCK LIST\ngrep EXPR, LIST",
-            description: "Evaluates BLOCK or EXPR for each element of LIST and returns the list of elements for which the expression is true.",
+            description: "Evaluates BLOCK or EXPR for each element of LIST and returns the list of elements for which the expression is true. In scalar context, returns the number of matching elements rather than the list.",
         }),
         "scalar" => Some(BuiltinDoc {
             signature: "scalar EXPR",
@@ -279,21 +279,21 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "wantarray" => Some(BuiltinDoc {
             signature: "wantarray",
-            description: "Returns true if the currently executing subroutine is expected to return a list value.",
+            description: "Returns true if the subroutine is called in list context, false (defined but false) in scalar context, and undef in void context. Use to write context-sensitive subs: `return wantarray ? @list : $count;`",
         }),
 
         // Hash
         "keys" => Some(BuiltinDoc {
             signature: "keys HASH\nkeys ARRAY",
-            description: "Returns a list of all the keys of the named hash, or the indices of an array.",
+            description: "In list context, returns all keys of the named hash or indices of an array. In scalar context, returns a string like '3/8' (used/total buckets) — use `scalar keys %h` to get a count, which evaluates as the number of keys.",
         }),
         "values" => Some(BuiltinDoc {
             signature: "values HASH\nvalues ARRAY",
-            description: "Returns a list of all the values of the named hash, or values of an array.",
+            description: "In list context, returns all values of the named hash or values of an array. In scalar context, returns the number of values (same as scalar keys).",
         }),
         "each" => Some(BuiltinDoc {
             signature: "each HASH\neach ARRAY",
-            description: "Returns a two-element list of the next (key, value) pair from the hash.",
+            description: "Returns the next key-value pair from the hash as a two-element list, or an empty list when exhausted. The iterator resets after reaching the end or when the hash is modified. Call in a while loop: `while (my ($k, $v) = each %h) { ... }`",
         }),
         "exists" => Some(BuiltinDoc {
             signature: "exists EXPR",
@@ -428,7 +428,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "caller" => Some(BuiltinDoc {
             signature: "caller EXPR\ncaller",
-            description: "Returns information about the calling subroutine's context. Returns (package, filename, line) in list context.",
+            description: "Without argument, returns (package, filename, line) in list context or the package name in scalar context. With EXPR returns additional call-frame info: (package, filename, line, subroutine, hasargs, wantarray, evaltext, is_require, hints, bitmask, hinthash).",
         }),
         "exit" => Some(BuiltinDoc {
             signature: "exit EXPR\nexit",
@@ -494,7 +494,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         // File tests and operations
         "stat" => Some(BuiltinDoc {
             signature: "stat FILEHANDLE\nstat EXPR",
-            description: "Returns a 13-element list giving the status info for a file. (dev, ino, mode, nlink, uid, gid, rdev, size, atime, mtime, ctime, blksize, blocks).",
+            description: "Returns a 13-element list (dev, ino, mode, nlink, uid, gid, rdev, size, atime, mtime, ctime, blksize, blocks) or an empty list on failure.",
         }),
         "lstat" => Some(BuiltinDoc {
             signature: "lstat FILEHANDLE\nlstat EXPR",
@@ -616,7 +616,7 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "gmtime" => Some(BuiltinDoc {
             signature: "gmtime EXPR\ngmtime",
-            description: "Like localtime but uses Greenwich Mean Time (UTC).",
+            description: "Like localtime but uses Greenwich Mean Time (UTC). In list context returns a 9-element time list (sec, min, hour, mday, mon, year, wday, yday, isdst). In scalar context returns a ctime(3)-style string.",
         }),
 
         // Misc
