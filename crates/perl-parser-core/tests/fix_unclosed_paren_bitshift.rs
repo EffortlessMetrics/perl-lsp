@@ -40,6 +40,41 @@ fn test_bitshift_in_return() {
     assert_clean_parse(r#"return (1<<foo());"#);
 }
 
+// -- Additional edge cases --
+
+#[test]
+fn test_left_shift_assign_in_paren() {
+    // <<= (left-shift-assign) after a term must not be treated as heredoc start
+    assert_clean_parse(r#"$x <<= 3;"#);
+}
+
+#[test]
+fn test_left_shift_assign_in_paren_expr() {
+    // <<= inside paren expression
+    assert_clean_parse(r#"($flags <<= $n);"#);
+}
+
+#[test]
+fn test_bitshift_after_array_subscript() {
+    // ] also sets ExpectOperator — bitshift after array element
+    assert_clean_parse(r#"my $r = $arr[0] << func();"#);
+}
+
+#[test]
+fn test_print_variable_fh_heredoc_regression() {
+    // print $fh <<END — $fh sets ExpectOperator, but the parser must handle
+    // the filehandle-then-heredoc pattern correctly.
+    // Note: the parser sees $fh as the indirect object and <<END starts
+    // a heredoc. Verify clean parse.
+    assert_clean_parse("print $fh <<END;\nhello\nEND\n");
+}
+
+#[test]
+fn test_heredoc_after_ternary_regression() {
+    // <<END after ? — ? sets ExpectTerm, so heredoc must be recognized
+    assert_clean_parse("my $x = $cond ? <<END : \"default\";\nhello\nEND\n");
+}
+
 // -- Regression: actual heredocs must still work --
 
 #[test]

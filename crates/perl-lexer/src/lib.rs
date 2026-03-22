@@ -256,6 +256,9 @@ pub struct PerlLexer<'a> {
     /// Depth tracking means all positions inside `$h{...}` — including after commas
     /// in hash slices like `@h{m, s}` — correctly suppress quote-op misidentification.
     hash_brace_depth: usize,
+    /// Depth of open parentheses — used to distinguish `(1<<func())` (bitshift)
+    /// from `print $fh <<END` (heredoc at statement level, paren_depth == 0).
+    paren_depth: usize,
     /// Current position with line/column tracking
     #[allow(dead_code)]
     current_pos: Position,
@@ -295,6 +298,7 @@ impl<'a> PerlLexer<'a> {
             after_sub: false,
             after_arrow: false,
             hash_brace_depth: 0,
+            paren_depth: 0,
             current_pos: Position::start(),
             after_newline: true, // Start of file counts as after newline
             pending_heredocs: Vec::new(),
@@ -702,6 +706,7 @@ impl<'a> PerlLexer<'a> {
         let saved_after_sub = self.after_sub;
         let saved_after_arrow = self.after_arrow;
         let saved_hash_brace_depth = self.hash_brace_depth;
+        let saved_paren_depth = self.paren_depth;
         let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
         let saved_pending_heredocs = self.pending_heredocs.clone();
@@ -720,6 +725,7 @@ impl<'a> PerlLexer<'a> {
         self.after_sub = saved_after_sub;
         self.after_arrow = saved_after_arrow;
         self.hash_brace_depth = saved_hash_brace_depth;
+        self.paren_depth = saved_paren_depth;
         self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
         self.pending_heredocs = saved_pending_heredocs;
@@ -759,6 +765,7 @@ impl<'a> PerlLexer<'a> {
         self.after_sub = false;
         self.after_arrow = false;
         self.hash_brace_depth = 0;
+        self.paren_depth = 0;
         self.current_pos = Position::start();
         self.after_newline = true;
         self.pending_heredocs.clear();
@@ -1009,10 +1016,15 @@ impl<'a> PerlLexer<'a> {
     }
 
     fn try_heredoc(&mut self) -> Option<Token> {
-        // `<<` is the left-shift operator, not a heredoc, when we just finished
-        // a term (e.g. `(1<<index(...))`). The `1` sets ExpectOperator mode, so
-        // any `<<` in that mode is bitshift and must not be treated as a heredoc.
-        if self.mode == LexerMode::ExpectOperator {
+        // `<<` is the left-shift operator, not a heredoc, when we are inside
+        // a parenthesized expression and have just finished a term.
+        // E.g. `(1<<index(...))` — the `1` sets ExpectOperator and paren_depth > 0,
+        // so `<<index` must be the bitshift operator, not a heredoc start.
+        //
+        // We must NOT fire the guard at statement level (paren_depth == 0) because
+        // `print $fh <<END` is valid Perl: `$fh` sets ExpectOperator but `<<END`
+        // is a heredoc.  The depth check distinguishes the two cases.
+        if self.mode == LexerMode::ExpectOperator && self.paren_depth > 0 {
             return None;
         }
 
@@ -2498,6 +2510,7 @@ impl<'a> PerlLexer<'a> {
                 } else if self.in_prototype {
                     self.prototype_depth += 1;
                 }
+                self.paren_depth += 1;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftParen,
@@ -2515,6 +2528,7 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
                 self.after_arrow = false;
+                self.paren_depth = self.paren_depth.saturating_sub(1);
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightParen,
@@ -3446,6 +3460,7 @@ impl Checkpointable for PerlLexer<'_> {
             after_sub: self.after_sub,
             after_arrow: self.after_arrow,
             hash_brace_depth: self.hash_brace_depth,
+            paren_depth: self.paren_depth,
             current_pos: self.current_pos,
             context,
         }
@@ -3460,6 +3475,7 @@ impl Checkpointable for PerlLexer<'_> {
         self.after_sub = checkpoint.after_sub;
         self.after_arrow = checkpoint.after_arrow;
         self.hash_brace_depth = checkpoint.hash_brace_depth;
+        self.paren_depth = checkpoint.paren_depth;
         self.current_pos = checkpoint.current_pos;
 
         // Handle special contexts
