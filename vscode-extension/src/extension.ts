@@ -16,6 +16,8 @@ import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
 import { generateBoilerplate } from './fileCreation';
+import { handleFormattingError } from './formattingErrors';
+export { handleFormattingError, resetFormatErrorCooldown } from './formattingErrors';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -523,7 +525,38 @@ function createLanguageClient(serverPath: string): LanguageClient {
             fileEvents: vscode.workspace.createFileSystemWatcher('**/.perltidyrc')
         },
         outputChannel,
-        traceOutputChannel: outputChannel
+        traceOutputChannel: outputChannel,
+        middleware: {
+            provideDocumentFormattingEdits: async (document, options, token, next) => {
+                try {
+                    return await next(document, options, token);
+                } catch (err: unknown) {
+                    const code = err && typeof err === 'object' && 'code' in err
+                        ? (err as { code: unknown }).code
+                        : undefined;
+                    // Do not notify for request cancellations (code -32800)
+                    if (code !== -32800) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        handleFormattingError(msg, outputChannel);
+                    }
+                    return null;
+                }
+            },
+            provideDocumentRangeFormattingEdits: async (document, range, options, token, next) => {
+                try {
+                    return await next(document, range, options, token);
+                } catch (err: unknown) {
+                    const code = err && typeof err === 'object' && 'code' in err
+                        ? (err as { code: unknown }).code
+                        : undefined;
+                    if (code !== -32800) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        handleFormattingError(msg, outputChannel);
+                    }
+                    return null;
+                }
+            },
+        },
     };
 
     const lc = new LanguageClient(
@@ -658,12 +691,17 @@ function shouldFormatOnSave(document: vscode.TextDocument): boolean {
 }
 
 async function formatDocumentOnSave(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
-    const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>(
-        'vscode.executeFormatDocumentProvider',
-        document.uri
-    );
-
-    return edits ?? [];
+    try {
+        const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>(
+            'vscode.executeFormatDocumentProvider',
+            document.uri
+        );
+        return edits ?? [];
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        handleFormattingError(msg, outputChannel);
+        return [];
+    }
 }
 
 async function refreshTestAdapter(context: vscode.ExtensionContext) {
