@@ -1,4 +1,4 @@
-# ADR-0035: Raw-Pointer Parent Map for AST Upward Traversal
+# ADR-0039: Raw-Pointer Parent Map for AST Upward Traversal
 
 **Status**: Accepted
 **Date**: 2026-03-18
