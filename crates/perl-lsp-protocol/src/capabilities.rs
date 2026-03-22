@@ -173,6 +173,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                         SemanticTokenType::NUMBER,
                         SemanticTokenType::REGEXP,
                         SemanticTokenType::OPERATOR,
+                        SemanticTokenType::new("sql_string"), // DBI/SQL string context (Issue #2337)
                     ],
                     token_modifiers: vec![
                         SemanticTokenModifier::DECLARATION,
