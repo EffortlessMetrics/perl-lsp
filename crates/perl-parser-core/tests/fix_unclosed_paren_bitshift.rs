@@ -112,3 +112,18 @@ fn test_indented_heredoc_in_paren_regression() {
     // (<<~END) — indented heredoc in paren context must still be recognized
     assert_clean_parse("my $x = (<<~END);\n  hello\n  END\n");
 }
+
+#[test]
+fn test_bitshift_after_array_subscript_in_paren() {
+    // paren_depth > 0 AND ] sets ExpectOperator — both conditions must fire the guard
+    // `($arr[0] << func())` — `[` doesn't increment paren_depth, but outer `(` does.
+    // After `]`, mode=ExpectOperator, paren_depth=1, so `<<` must be treated as bitshift.
+    assert_clean_parse(r#"my $x = ($arr[0] << func());"#);
+}
+
+#[test]
+fn test_bitshift_after_hash_subscript_in_paren() {
+    // paren_depth > 0 AND `}` sets ExpectOperator — guard must fire
+    // `($hash{key} << $n)` — `{`/`}` don't touch paren_depth; outer `(` means depth=1.
+    assert_clean_parse(r#"my $x = ($hash{key} << $n);"#);
+}
