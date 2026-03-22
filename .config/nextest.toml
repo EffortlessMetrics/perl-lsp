@@ -19,7 +19,7 @@ leak-timeout = "10s"
 # Generate JUnit reports for CI integration
 path = "target/nextest/ci/junit.xml"
 
-[profile.ci.overrides]
+[[profile.ci.overrides]]
 # LSP integration tests may need more time in CI
 filter = 'package(perl-lsp)'
 slow-timeout = { period = "120s", terminate-after = 3 }
