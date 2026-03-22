@@ -317,6 +317,55 @@ FAKEGH
     fi
 }
 
+# ── Test 11: Metrics are logged even when enforcement BLOCKS (exit 2) ─────────
+# The jq metrics write runs before the enforcement block, so a blocked plan-reviewer
+# should still have its stop event recorded for audit purposes.
+
+test_metrics_logged_when_enforcement_blocks() {
+    local tmpwt
+    tmpwt="$(mktemp -d)"
+    rm -rf "$tmpwt"
+    git -C "$REPO_ROOT" worktree add -q -b "plan-review-33333" "$tmpwt" HEAD 2>/dev/null || {
+        git -C "$REPO_ROOT" worktree add -q "$tmpwt" -b "plan-review-33333-$RANDOM" HEAD
+    }
+
+    local fake_bin
+    fake_bin="$(mktemp -d)"
+    cat > "$fake_bin/gh" <<'FAKEGH'
+#!/usr/bin/env bash
+# Returns labels that will trigger enforcement (neither builder-ready nor already-fixed)
+echo "in-build"
+echo "needs-plan-review"
+FAKEGH
+    chmod +x "$fake_bin/gh"
+
+    local ops_dir
+    ops_dir="$(mktemp -d)"
+
+    local payload="{\"agent_type\":\"plan-reviewer\",\"worktree_path\":\"${tmpwt}\"}"
+    local code=0
+    echo "$payload" | PATH="$fake_bin:$PATH" OPS_DIR="$ops_dir" bash "$HOOK" 2>/dev/null || code=$?
+
+    cleanup_worktree "$tmpwt"
+    rm -rf "$fake_bin"
+
+    local logged=0
+    [[ -f "$ops_dir/swarm-metrics.jsonl" ]] && logged=1
+    rm -rf "$ops_dir"
+
+    # Enforcement must have blocked (exit 2)
+    if [[ "$code" -ne 2 ]]; then
+        fail "metrics-blocked test precondition: expected exit 2 from enforcement, got $code"
+        return
+    fi
+
+    if [[ "$logged" -eq 1 ]]; then
+        pass "metrics are logged even when enforcement blocks (exit 2)"
+    else
+        fail "metrics were not logged when enforcement blocked — subagent_stop event lost"
+    fi
+}
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 echo "=== subagent-stop enforcement test suite ==="
@@ -332,6 +381,7 @@ test_plan_reviewer_passes_with_already_fixed
 test_plan_reviewer_gh_failure_fails_open
 test_error_message_is_informative
 test_metrics_logged_for_plan_reviewer
+test_metrics_logged_when_enforcement_blocks
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="

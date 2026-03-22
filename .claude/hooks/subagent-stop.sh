@@ -29,7 +29,7 @@ jq -nc \
 
 if [[ "${AGENT_TYPE}" == *"plan-reviewer"* && -n "${WORKTREE_PATH}" && -d "${WORKTREE_PATH}" ]]; then
     BRANCH="$(git -C "${WORKTREE_PATH}" branch --show-current 2>/dev/null || true)"
-    ISSUE_NUM="$(echo "${BRANCH}" | grep -oE '[0-9]+' | head -1)"
+    ISSUE_NUM="$(echo "${BRANCH}" | grep -oE '[0-9]+' | head -1 || true)"
     if [[ -n "${ISSUE_NUM}" ]]; then
         LABELS="$(gh issue view "${ISSUE_NUM}" --json labels --jq '.labels[].name' 2>/dev/null || true)"
         if [[ -n "${LABELS}" ]] && ! echo "${LABELS}" | grep -qE '^(builder-ready|already-fixed)$'; then

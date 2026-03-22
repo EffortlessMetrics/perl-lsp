@@ -358,14 +358,27 @@ fn lint_pipeline_format_heredoc_emits_pl800_via_get_diagnostics() {
 
 #[test]
 fn lint_pipeline_source_filter_range_valid_via_get_diagnostics() {
-    // `use Filter::Util::Call` may trigger PL803 (HeredocInSourceFilter).
-    // If the diagnostic fires, its range must be within source bounds.
+    // `use Filter::Util::Call` triggers PL803 (HeredocInSourceFilter) — the
+    // SourceFilterDetector regex matches `use\s+Filter::Util::Call` unconditionally.
+    // This test verifies two things:
+    //   (a) wiring: get_diagnostics() emits PL803 at all (non-vacuous assertion)
+    //   (b) range validity: the emitted range falls within the source bounds
     let source = "use Filter::Util::Call;\nuse strict;\nuse warnings;\n";
     let diags = diagnostics_for(source);
 
     let source_filter_diags: Vec<_> =
         diags.iter().filter(|d| d.code.as_deref() == Some("PL803")).collect();
 
+    // (a) wiring assertion — would fail if detect_heredoc_antipatterns is not called
+    assert!(
+        !source_filter_diags.is_empty(),
+        "Expected PL803 diagnostic from get_diagnostics() for 'use Filter::Util::Call', \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+
+    // (b) range validity for each PL803 emitted
     for d in &source_filter_diags {
         assert!(
             d.range.0 <= source.len(),
