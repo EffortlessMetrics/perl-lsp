@@ -1080,4 +1080,49 @@ with 'MyApp::Printable';
         }
         Ok(())
     }
+
+    /// Double-quoted role name: `with "MyApp::Printable"` should be handled the same
+    /// as single-quoted.  The quote-stripping in `role_name_at_offset` uses
+    /// `trim_matches('"')` for this case.
+    #[test]
+    fn test_hover_on_with_role_double_quoted() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "package MyApp::User;\nuse Moo;\nwith \"MyApp::Printable\";\n1;\n";
+        let resp = hover_at(code, "file:///role_hover_dq.pl", "MyApp::Printable", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for double-quoted role")?;
+        assert!(
+            content.contains("MyApp::Printable"),
+            "hover on double-quoted role should contain module name, got: {content}"
+        );
+        assert!(
+            !content.starts_with("**Perl**:"),
+            "hover on double-quoted role must NOT be the generic fallback, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Cursor on the SECOND role in a multi-role `with 'A', 'B'` should also produce
+    /// a module hover (not just the first role).
+    #[test]
+    fn test_hover_on_with_multi_role_second_role() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"package MyApp::User;
+use Moo;
+with 'MyApp::Printable', 'MyApp::Serializable';
+1;
+"#;
+        // Hover on the SECOND role name on line 2.
+        let resp = hover_at(code, "file:///multi_role_second.pl", "MyApp::Serializable", 2)?;
+
+        let content =
+            hover_content(&resp).ok_or("expected hover content for second role name")?;
+        assert!(
+            content.contains("MyApp::Serializable"),
+            "hover on second role in multi-role with should contain module name, got: {content}"
+        );
+        assert!(
+            !content.starts_with("**Perl**:"),
+            "hover on second role name must NOT be the generic Perl token fallback, got: {content}"
+        );
+        Ok(())
+    }
 }
