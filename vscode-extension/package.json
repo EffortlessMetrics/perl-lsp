@@ -56,7 +56,8 @@
     "onLanguage:perl",
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",
-    "onCommand:perl-lsp.reinstall"
+    "onCommand:perl-lsp.reinstall",
+    "onCommand:perl-lsp.createDebugConfig"
   ],
   "contributes": {
     "languages": [
@@ -369,6 +370,12 @@
         "title": "Show Special Variables Reference",
         "category": "Perl",
         "icon": "$(symbol-variable)"
+      },
+      {
+        "command": "perl-lsp.createDebugConfig",
+        "title": "Create Debug Configuration",
+        "category": "Perl",
+        "icon": "$(debug-alt)"
       }
     ],
     "menus": {
@@ -411,6 +418,10 @@
         },
         {
           "command": "perl-lsp.showSpecialVarsReference"
+        },
+        {
+          "command": "perl-lsp.createDebugConfig",
+          "when": "workspaceFolderCount >= 1"
         }
       ],
       "editor/title": [
