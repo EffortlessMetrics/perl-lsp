@@ -30,31 +30,7 @@ run_hook() {
     echo "$code"
 }
 
-# Like run_hook but capture stderr too
-run_hook_stderr() {
-    local payload="$1"
-    local code=0
-    local output
-    output="$(echo "$payload" | bash "$HOOK" 2>&1)" || code=$?
-    echo "CODE=$code"
-    echo "OUTPUT=$output"
-}
-
-# Create a real git worktree for tests that need one.
-# Returns worktree path on stdout.
-make_worktree_for_issue() {
-    local issue_num="$1"
-    local branch="plan-review-${issue_num}"
-    local wtdir
-    wtdir="$(mktemp -d)"
-    rm -rf "$wtdir"
-    git -C "$REPO_ROOT" worktree add -q -b "$branch" "$wtdir" HEAD 2>/dev/null || {
-        # Branch may already exist from a previous run; use checkout
-        git -C "$REPO_ROOT" worktree add -q "$wtdir" -b "${branch}-$RANDOM" HEAD
-    }
-    echo "$wtdir"
-}
-
+# Cleanup git worktree created during tests
 cleanup_worktree() {
     local wtdir="$1"
     git -C "$REPO_ROOT" worktree remove --force "$wtdir" 2>/dev/null || true
@@ -100,10 +76,6 @@ test_plan_reviewer_nonexistent_path_fails_open() {
 # ── Test 4: Plan-reviewer branch with no parseable issue number exits 0 ──────
 
 test_plan_reviewer_no_issue_number_fails_open() {
-    # Use the current worktree which has branch worktree-agent-af0e16bf (no issue num)
-    local wt_path
-    wt_path="$REPO_ROOT"  # doesn't matter — branch extraction must fail gracefully
-
     # Create a real worktree on a branch without a number
     local tmpwt
     tmpwt="$(mktemp -d)"
