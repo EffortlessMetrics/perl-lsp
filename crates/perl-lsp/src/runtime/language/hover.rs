@@ -174,8 +174,10 @@ impl LspServer {
             };
 
             // Run type inference to get inferred type for the symbol.
+            // Only applies to variables; subroutines, packages, and constants
+            // are never stored in the type environment so inference adds nothing.
             // Filter out uninformative types (Any, Void) that add no value.
-            let type_info = {
+            let type_info = if symbol_info.kind.is_variable() {
                 let mut engine = perl_parser::type_inference::TypeInferenceEngine::new();
                 let _ = engine.infer(ast);
                 engine
@@ -183,6 +185,8 @@ impl LspServer {
                     .filter(|label| label != "Any" && label != "Void")
                     .map(|label| format!("\n**Type**: `{}`", label))
                     .unwrap_or_default()
+            } else {
+                String::new()
             };
 
             let complexity_section = if complexity_info.is_empty() {

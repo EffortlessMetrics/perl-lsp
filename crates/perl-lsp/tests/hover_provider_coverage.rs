@@ -784,6 +784,47 @@ $name;
         Ok(())
     }
 
+    #[test]
+    fn test_hover_subroutine_does_not_show_type_annotation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Subroutines are not variables — the type inference engine only tracks
+        // variable types.  Hovering on a sub must never emit a spurious **Type** line.
+        let code = "sub compute { return 42; }\ncompute();\n";
+        let resp = hover_at(code, "file:///sub_no_type.pl", "compute", 0)?;
+        let content = hover_content(&resp).ok_or("expected hover for compute()")?;
+
+        assert!(content.contains("Subroutine"), "hover should indicate Subroutine, got: {content}");
+        assert!(
+            !content.contains("**Type**"),
+            "hover on a subroutine must not display a **Type** line, got: {content}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_array_variable_shows_inferred_type() -> Result<(), Box<dyn std::error::Error>> {
+        // Array variables should show their inferred element type when concrete.
+        let code = "my @nums = (1, 2, 3);\n@nums;\n";
+        let resp = hover_at(code, "file:///array_type.pl", "@nums", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for @nums")?;
+
+        assert!(
+            content.contains("Array Variable"),
+            "hover should indicate Array Variable, got: {content}"
+        );
+        assert!(
+            content.contains("**Type**"),
+            "hover on array with integer elements should include **Type** annotation, got: {content}"
+        );
+        assert!(
+            content.contains("Array"),
+            "hover should show Array type for @nums, got: {content}"
+        );
+
+        Ok(())
+    }
+
     // ── Test::More hover documentation ───────────────────────────────────
 
     #[test]
