@@ -135,3 +135,30 @@ fn test_absent_initialization_options_is_noop() -> TestResult {
     );
     Ok(())
 }
+
+/// Disabling multiple valid features simultaneously must suppress all of them.
+/// This exercises the loop path: each ID in the array must independently zero
+/// its BuildFlags field, and all zeroed fields must be absent from the response.
+#[test]
+fn test_disabled_features_multiple_features_all_suppressed() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    let result = harness.initialize_with_init_options(
+        Some(json!({})),
+        json!({ "disabledFeatures": ["lsp.semantic_tokens", "lsp.hover", "lsp.completion"] }),
+    )?;
+    let caps = &result["capabilities"];
+
+    assert!(
+        caps.get("semanticTokensProvider").is_none() || caps["semanticTokensProvider"].is_null(),
+        "semanticTokensProvider must be absent when lsp.semantic_tokens is disabled"
+    );
+    assert!(
+        caps.get("hoverProvider").is_none() || caps["hoverProvider"].is_null(),
+        "hoverProvider must be absent when lsp.hover is disabled"
+    );
+    assert!(
+        caps.get("completionProvider").is_none() || caps["completionProvider"].is_null(),
+        "completionProvider must be absent when lsp.completion is disabled"
+    );
+    Ok(())
+}
