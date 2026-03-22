@@ -718,14 +718,23 @@ impl LspServer {
         degradation_tier: crate::state::DegradationTier,
         file_size: usize,
     ) {
-        // Early return if no parse errors
+        // Fast path: skip if no errors at all (most document edits are clean)
         if parse_errors.is_empty() {
             return;
         }
 
         // Check config: telemetry must be explicitly enabled (opt-in, default false)
+        // This is the cheapest meaningful check — do it before any allocation.
         let enabled = self.config.lock().telemetry_enabled;
         if !enabled {
+            return;
+        }
+
+        // Filter out Cancelled — a cancelled parse is not a user-visible error
+        // and should not be recorded in telemetry as a parser failure.
+        let has_real_errors =
+            parse_errors.iter().any(|e| !matches!(e, crate::error::ParseError::Cancelled));
+        if !has_real_errors {
             return;
         }
 
@@ -748,20 +757,23 @@ impl LspServer {
             }
         }
 
-        // Extract file extension ONLY — no path components (privacy-safe)
+        // Extract file extension ONLY — no path components (privacy-safe).
+        // Guard: empty, path-containing, or overly-long extensions fall back to "unknown".
         let extension = uri
             .rsplit('.')
             .next()
-            .filter(|ext| ext.len() <= 10 && !ext.contains('/'))
+            .filter(|ext| !ext.is_empty() && ext.len() <= 10 && !ext.contains('/'))
             .unwrap_or("unknown");
 
-        // Classify errors by variant name — no message content or locations.
+        // Classify real errors by variant name — no message content or locations.
+        // Cancelled is excluded: it is a transport-level event, not a parse failure.
         // Deduplicated: a file with 50 UnexpectedToken errors sends "UnexpectedToken"
-        // once. errorCount covers the total; the set covers the type distribution.
-        let error_types: Vec<&str> = {
-            let mut seen = std::collections::HashSet::new();
-            let mut deduped = Vec::new();
-            for variant in parse_errors.iter().map(|e| match e {
+        // once. errorCount covers the real (non-Cancelled) total.
+        let mut seen = std::collections::HashSet::new();
+        let mut error_types: Vec<&str> = Vec::new();
+        let mut real_error_count: usize = 0;
+        for e in parse_errors {
+            let variant = match e {
                 crate::error::ParseError::UnexpectedEof => "UnexpectedEof",
                 crate::error::ParseError::UnexpectedToken { .. } => "UnexpectedToken",
                 crate::error::ParseError::SyntaxError { .. } => "SyntaxError",
@@ -772,14 +784,13 @@ impl LspServer {
                 crate::error::ParseError::UnclosedDelimiter { .. } => "UnclosedDelimiter",
                 crate::error::ParseError::InvalidRegex { .. } => "InvalidRegex",
                 crate::error::ParseError::NestingTooDeep { .. } => "NestingTooDeep",
-                crate::error::ParseError::Cancelled => "Cancelled",
-            }) {
-                if seen.insert(variant) {
-                    deduped.push(variant);
-                }
+                crate::error::ParseError::Cancelled => continue, // excluded from telemetry
+            };
+            real_error_count += 1;
+            if seen.insert(variant) {
+                error_types.push(variant);
             }
-            deduped
-        };
+        }
 
         // Bucket file size to avoid fingerprinting small/unique files
         let size_bucket = match file_size {
@@ -793,7 +804,7 @@ impl LspServer {
         let event = serde_json::json!({
             "type": "parseError",
             "errorTypes": error_types,
-            "errorCount": parse_errors.len(),
+            "errorCount": real_error_count,
             "degradationTier": degradation_tier.as_str(),
             "fileExtension": extension,
             "fileSizeBucket": size_bucket,
