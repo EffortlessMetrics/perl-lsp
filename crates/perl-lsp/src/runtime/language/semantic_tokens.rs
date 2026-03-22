@@ -53,9 +53,10 @@ impl LspServer {
             }
 
             let result_id = self.next_semantic_tokens_result_id();
+            let cache_key = self.normalize_uri_key(uri);
             self.semantic_tokens_cache
                 .lock()
-                .insert(uri.to_string(), (result_id.clone(), flat_data.clone()));
+                .insert(cache_key, (result_id.clone(), flat_data.clone()));
 
             return Ok(Some(json!({ "resultId": result_id, "data": flat_data })));
         }
@@ -71,6 +72,9 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        let start = Instant::now();
+        let deadline = semantic_tokens_deadline();
+
         let p = match params {
             Some(p) => p,
             None => return Ok(Some(json!({ "data": [] }))),
@@ -103,12 +107,21 @@ impl LspServer {
             }
         };
 
+        if start.elapsed() >= deadline {
+            eprintln!(
+                "SemanticTokensDelta: deadline exceeded ({:?}), returning {} tokens",
+                start.elapsed(),
+                current_flat_data.len() / 5
+            );
+        }
+
         let new_result_id = self.next_semantic_tokens_result_id();
+        let cache_key = self.normalize_uri_key(uri);
 
         // Check cache and decide: delta or full fallback
         let cached = {
             let cache = self.semantic_tokens_cache.lock();
-            cache.get(uri).cloned()
+            cache.get(&cache_key).cloned()
         };
 
         if let Some((cached_id, cached_data)) = cached {
@@ -117,7 +130,7 @@ impl LspServer {
                 let edits = compute_semantic_token_edits(&cached_data, &current_flat_data);
                 self.semantic_tokens_cache
                     .lock()
-                    .insert(uri.to_string(), (new_result_id.clone(), current_flat_data));
+                    .insert(cache_key, (new_result_id.clone(), current_flat_data));
                 return Ok(Some(json!({
                     "resultId": new_result_id,
                     "edits": edits
@@ -128,7 +141,7 @@ impl LspServer {
         // Stale or missing cache: return full response
         self.semantic_tokens_cache
             .lock()
-            .insert(uri.to_string(), (new_result_id.clone(), current_flat_data.clone()));
+            .insert(cache_key, (new_result_id.clone(), current_flat_data.clone()));
         Ok(Some(json!({
             "resultId": new_result_id,
             "data": current_flat_data
@@ -300,5 +313,86 @@ mod tests {
         assert_eq!(edits[0]["start"], json!(2u32));
         assert_eq!(edits[0]["deleteCount"], json!(1u32));
         assert_eq!(edits[0]["data"], json!(vec![99u32]));
+    }
+
+    /// Pure append: tokens added at the end (common in single-line additions).
+    #[test]
+    fn compute_edits_append_to_end() {
+        let old = vec![0u32, 1, 2, 3, 4];
+        let new = vec![0u32, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let edits = compute_semantic_token_edits(&old, &new);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0]["start"], json!(5u32));
+        assert_eq!(edits[0]["deleteCount"], json!(0u32));
+        assert_eq!(edits[0]["data"], json!(vec![5u32, 6, 7, 8, 9]));
+    }
+
+    /// Pure tail deletion: tokens removed from the end.
+    #[test]
+    fn compute_edits_delete_from_end() {
+        let old = vec![0u32, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let new = vec![0u32, 1, 2, 3, 4];
+        let edits = compute_semantic_token_edits(&old, &new);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0]["start"], json!(5u32));
+        assert_eq!(edits[0]["deleteCount"], json!(5u32));
+        // No data field when pure deletion
+        assert!(edits[0].get("data").is_none());
+    }
+
+    /// Round-trip: applying the edit to `old` must reconstruct `new`.
+    fn apply_edits(old: &[u32], edits: &[Value]) -> Vec<u32> {
+        let mut result = old.to_vec();
+        for edit in edits {
+            let start = edit["start"].as_u64().unwrap() as usize;
+            let delete_count = edit["deleteCount"].as_u64().unwrap() as usize;
+            let insert: Vec<u32> = edit
+                .get("data")
+                .and_then(|d| d.as_array())
+                .map(|arr| arr.iter().map(|v| v.as_u64().unwrap() as u32).collect())
+                .unwrap_or_default();
+            result.splice(start..start + delete_count, insert);
+        }
+        result
+    }
+
+    #[test]
+    fn compute_edits_round_trip_middle_change() {
+        let old = vec![0u32, 1, 2, 3, 4];
+        let new = vec![0u32, 1, 99, 100, 3, 4];
+        let edits = compute_semantic_token_edits(&old, &new);
+        assert_eq!(apply_edits(&old, &edits), new);
+    }
+
+    #[test]
+    fn compute_edits_round_trip_append() {
+        let old = vec![0u32, 1, 2];
+        let new = vec![0u32, 1, 2, 3, 4, 5];
+        let edits = compute_semantic_token_edits(&old, &new);
+        assert_eq!(apply_edits(&old, &edits), new);
+    }
+
+    #[test]
+    fn compute_edits_round_trip_delete_from_end() {
+        let old = vec![0u32, 1, 2, 3, 4, 5];
+        let new = vec![0u32, 1, 2];
+        let edits = compute_semantic_token_edits(&old, &new);
+        assert_eq!(apply_edits(&old, &edits), new);
+    }
+
+    #[test]
+    fn compute_edits_round_trip_delete_all() {
+        let old = vec![0u32, 1, 2, 3, 4];
+        let new: Vec<u32> = vec![];
+        let edits = compute_semantic_token_edits(&old, &new);
+        assert_eq!(apply_edits(&old, &edits), new);
+    }
+
+    #[test]
+    fn compute_edits_round_trip_insert_into_empty() {
+        let old: Vec<u32> = vec![];
+        let new = vec![0u32, 1, 2, 3, 4];
+        let edits = compute_semantic_token_edits(&old, &new);
+        assert_eq!(apply_edits(&old, &edits), new);
     }
 }

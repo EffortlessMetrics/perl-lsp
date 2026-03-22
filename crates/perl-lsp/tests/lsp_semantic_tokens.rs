@@ -114,9 +114,17 @@ fn semantic_tokens_delta_returns_edits_after_change() -> Result<(), Box<dyn std:
         .map_err(|e| e)?;
 
     // Delta response must have `edits` array (not `data`)
+    let edits = delta_result["edits"]
+        .as_array()
+        .ok_or_else(|| format!("delta response must contain edits array, got: {}", delta_result))?;
     assert!(
-        delta_result.get("edits").is_some(),
-        "delta response must contain edits array, got: {}",
+        !edits.is_empty(),
+        "edits must be non-empty after a real token change (added $y variable), got: {}",
+        delta_result
+    );
+    assert!(
+        delta_result.get("data").is_none(),
+        "delta response must NOT contain data field (must be delta not full), got: {}",
         delta_result
     );
     assert!(delta_result.get("resultId").is_some(), "delta response must contain updated resultId");
