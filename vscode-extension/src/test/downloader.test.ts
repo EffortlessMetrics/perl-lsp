@@ -374,6 +374,12 @@ describe('parseLocalVersion', () => {
   test('handles single-line output with no newline', () => {
     expect(parseLocalVersion('perl-lsp 0.13.0')).toBe('0.13.0');
   });
+
+  test('handles Windows CRLF line endings', () => {
+    // On Windows, execFile stdout may use \r\n; trim() strips the \r from the first line.
+    const out = 'perl-lsp 0.12.0\r\nGit tag: v0.12.0\r\n';
+    expect(parseLocalVersion(out)).toBe('0.12.0');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -411,5 +417,22 @@ describe('compareVersions', () => {
 
   test('patch downgrade returns 1', () => {
     expect(compareVersions('0.12.1', '0.12.0')).toBe(1);
+  });
+
+  test('malformed local version (NaN components) returns 0 — no spurious notification', () => {
+    // If parseInt produces NaN, NaN < x and NaN > x are both false,
+    // so the loop exits unchanged and the function returns 0 (treat as equal).
+    // This prevents a malformed binary stdout from triggering a spurious update prompt.
+    expect(compareVersions('not-a-version', '0.12.0')).toBe(0);
+  });
+
+  test('malformed remote version (NaN components) returns 0 — no spurious notification', () => {
+    expect(compareVersions('0.12.0', 'not-a-version')).toBe(0);
+  });
+
+  test('pre-release suffix is ignored by parseInt — treats 0.12.0-rc1 same as 0.12.0', () => {
+    // parseInt('0-rc1', 10) === 0, so patch component is 0 for both sides.
+    // Document this known limitation: rc builds are treated as equal to their release.
+    expect(compareVersions('0.12.0-rc1', '0.12.0')).toBe(0);
   });
 });
