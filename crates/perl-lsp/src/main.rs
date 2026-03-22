@@ -144,8 +144,22 @@ fn check_one_file(path: &str) -> FileCheckStatus {
 /// Run the `--check` batch mode: parse the given files and report errors.
 fn run_check(files: &[String], format: CheckFormat) -> i32 {
     if files.is_empty() {
-        eprintln!("Usage: perl-lsp --check <file.pl> [file2.pm ...]");
-        eprintln!("No files specified.");
+        match format {
+            CheckFormat::Json => {
+                // In JSON mode emit a valid (empty) result so piped consumers
+                // (e.g. `| jq`) receive parseable output rather than empty stdin.
+                let output = serde_json::json!({
+                    "version": 1,
+                    "files": [],
+                    "summary": { "total": 0, "ok": 0, "fail": 0, "error": 0 }
+                });
+                println!("{output}");
+            }
+            CheckFormat::Text => {
+                eprintln!("Usage: perl-lsp --check <file.pl> [file2.pm ...]");
+                eprintln!("No files specified.");
+            }
+        }
         return 1;
     }
 

@@ -306,3 +306,54 @@ fn test_check_json_mixed_results_summary() -> Result<(), Box<dyn std::error::Err
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+/// `--check --check-format json` with no file arguments must still emit valid
+/// JSON (not empty stdout) so that `| jq` consumers don't crash on empty stdin.
+#[test]
+fn test_check_json_no_files_emits_valid_json() -> Result<(), Box<dyn std::error::Error>> {
+    // Pass --check with no trailing files.  clap's trailing_var_arg allows this.
+    let output =
+        cargo_bin_cmd!("perl-lsp").args(["--check", "--check-format", "json"]).output()?;
+
+    // Exit must be non-zero (no files = usage error) …
+    assert!(!output.status.success(), "expected non-zero exit when no files given");
+
+    // … but stdout must still be parseable JSON with an empty files array.
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|e| format!("stdout is not valid JSON: {e}\nraw: {stdout}"))?;
+
+    let files = parsed["files"].as_array().ok_or("'files' must be an array")?;
+    assert!(files.is_empty(), "files array must be empty when no files were given");
+
+    let summary = &parsed["summary"];
+    assert_eq!(summary["total"], 0);
+    assert_eq!(summary["ok"], 0);
+    assert_eq!(summary["fail"], 0);
+    assert_eq!(summary["error"], 0);
+
+    Ok(())
+}
+
+/// `--check --check-format json` on a zero-byte (empty) file must produce
+/// status "ok" — an empty Perl file is valid syntax.
+#[test]
+fn test_check_json_empty_file_is_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let (_dir, path) = write_temp_perl("")?;
+    let output =
+        cargo_bin_cmd!("perl-lsp").args(["--check", "--check-format", "json", &path]).output()?;
+
+    assert!(output.status.success(), "expected exit 0 for empty (valid) file");
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    let files = parsed["files"].as_array().ok_or("'files' must be an array")?;
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["status"], "ok", "empty file must report 'ok'");
+    assert_eq!(parsed["summary"]["ok"], 1);
+
+    Ok(())
+}
