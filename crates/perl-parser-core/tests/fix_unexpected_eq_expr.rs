@@ -77,6 +77,18 @@ fn test_defined_eq_one() {
     assert_clean_parse(r#"die if defined == 1;"#);
 }
 
+#[test]
+fn test_ord_eq_value() {
+    // ord without args uses $_ — `ord == 65` means ord($_) == 65
+    assert_clean_parse(r#"next if ord == 65;"#);
+}
+
+#[test]
+fn test_ord_with_explicit_arg_unchanged() {
+    // ord with explicit arg must still parse the arg
+    assert_clean_parse(r#"my $n = ord $c;"#);
+}
+
 // ── Must NOT regress ──────────────────────────────────────────────────
 
 #[test]
