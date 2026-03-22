@@ -212,3 +212,171 @@ fn test_end_marker_with_semicolon() {
     // __END__ after a properly semicolon-terminated statement — pre-existing path
     assert_clean_parse("1;\n__END__\n");
 }
+
+// === Edge cases: Pattern A — nested / chained constructs ===
+
+#[test]
+fn test_filetest_chained_three_way() {
+    // Three-way filetest chain: -f && -d && -w all using implicit $_
+    assert_clean_parse("-f && -d && -w;");
+}
+
+#[test]
+fn test_filetest_inside_if_condition() {
+    // Filetest no-arg inside an if condition
+    assert_clean_parse("if (-f && -d) { do_something(); }");
+}
+
+#[test]
+fn test_defined_in_ternary() {
+    // defined without args in ternary condition: defined ? $x : $y
+    assert_clean_parse("my $r = defined ? $x : $y;");
+}
+
+#[test]
+fn test_length_in_string_comparison() {
+    // length without args in a string comparison chain
+    assert_clean_parse("length == 0 || length > 100;");
+}
+
+#[test]
+fn test_optional_arg_builtin_in_grep_block() {
+    // Multiple optional-arg builtins inside a grep block
+    assert_clean_parse("grep { defined && length } @list;");
+}
+
+#[test]
+fn test_optional_arg_builtin_map_chain() {
+    // map with optional-arg builtins
+    assert_clean_parse("my @r = map { length > 0 ? uc : lc } @list;");
+}
+
+#[test]
+fn test_ord_in_range_expr() {
+    // ord without args used in a range expression
+    assert_clean_parse("my @r = (ord .. 127);");
+}
+
+// === Edge cases: Pattern A — explicit arg followed by binary op ===
+
+#[test]
+fn test_length_explicit_arg_then_op() {
+    // length WITH explicit arg followed by comparison — arg must be consumed first
+    assert_clean_parse("length($str) > 0;");
+}
+
+#[test]
+fn test_defined_explicit_arg_then_and() {
+    // defined WITH explicit arg followed by && — parens delimit, && is binary
+    assert_clean_parse("defined($x) && do_it();");
+}
+
+// === Edge cases: Pattern B — $: in complex contexts ===
+
+#[test]
+fn test_special_var_colon_in_hash() {
+    // $: as a hash value
+    assert_clean_parse(r#"my %fmt = (sep => $:);"#);
+}
+
+#[test]
+fn test_special_var_colon_interpolated() {
+    // $: inside a double-quoted string
+    assert_clean_parse(r#"my $s = "sep: $:";"#);
+}
+
+#[test]
+fn test_special_var_colon_as_arg() {
+    // $: passed as a function argument
+    assert_clean_parse(r#"print $:;"#);
+}
+
+// === Edge cases: Pattern C — *^N variants and nesting ===
+
+#[test]
+fn test_typeglob_caret_multiline() {
+    // Multiple *^X assignments — pattern from English.pm
+    assert_clean_parse("*PREMATCH = *^PREMATCH;\n*MATCH = *^N;\n*POSTMATCH = *^POSTMATCH;\n");
+}
+
+#[test]
+fn test_typeglob_caret_in_array() {
+    // *^N in a list context
+    assert_clean_parse("my @globs = (*^N, *^W, *^F);");
+}
+
+// === Edge cases: Pattern D — __END__ / __DATA__ in various positions ===
+
+#[test]
+fn test_end_marker_after_sub_definition() {
+    // __END__ immediately after a sub definition without trailing semicolon
+    assert_clean_parse("sub foo { 1 }\n__END__\n");
+}
+
+#[test]
+fn test_data_marker_with_content_lines() {
+    // __DATA__ with multi-line content
+    assert_clean_parse("1;\n__DATA__\nline1\nline2\nline3\n");
+}
+
+#[test]
+fn test_end_marker_empty_body() {
+    // __END__ at the very end of file with nothing after
+    assert_clean_parse("1;\n__END__");
+}
+
+// === Edge cases: $: must not shadow $:: (package stash variable) ===
+
+#[test]
+fn test_dollar_doublecolon_not_shadowed() {
+    // $:: is the main package stash — DoubleColon arm must still fire before Colon arm
+    assert_clean_parse("my $x = $::foo;");
+}
+
+#[test]
+fn test_dollar_colon_and_doublecolon_coexist() {
+    // $: and $::foo in the same statement must both parse correctly
+    assert_clean_parse(r#"my $a = $:; my $b = $::foo;"#);
+}
+
+// === Edge cases: Pattern A — builtin followed by dot (string concat) ===
+
+#[test]
+fn test_length_before_dot_concat() {
+    // length without args before . — dot is in is_binary_operator, so length() . "x"
+    assert_clean_parse(r#"length . "suffix";"#);
+}
+
+#[test]
+fn test_defined_before_range() {
+    // defined without args before .. range operator
+    assert_clean_parse("my @r = (defined .. 10);");
+}
+
+// === Edge cases: Interaction between Pattern A and explicit-arg in expression ===
+
+#[test]
+fn test_length_no_arg_inside_paren_expr() {
+    // length without args inside a parenthesized condition
+    assert_clean_parse("my $ok = (length > 0 && defined);");
+}
+
+#[test]
+fn test_chr_no_arg_in_ternary() {
+    // chr without args (uses $_ as character code) in ternary
+    assert_clean_parse("my $c = defined ? chr : undef;");
+}
+
+// === Edge cases: Pattern D — __END__ / __DATA__ interaction with expressions ===
+
+#[test]
+fn test_end_after_complex_expression() {
+    // Complex expression without semicolon before __END__
+    assert_clean_parse("my $x = 1 + 2\n__END__\n");
+}
+
+#[test]
+fn test_end_after_hash_return() {
+    // Common module pattern: return hash ref without semicolon before __END__
+    assert_clean_parse("{ foo => 1, bar => 2 }\n__END__\n");
+}
