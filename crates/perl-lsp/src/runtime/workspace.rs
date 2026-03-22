@@ -821,10 +821,23 @@ impl LspServer {
                                 .as_object()
                                 .map(|m| m.keys().map(|k| k.as_str()).collect())
                                 .unwrap_or_default();
+                        // Build a word-boundary pattern so "Base" does not match "Database".
+                        // Perl module names consist of \w and ::, so we check that any match
+                        // of old_module in the document text is not immediately preceded or
+                        // followed by a word character.
                         let documents = self.documents.lock();
                         let unhandled = documents.iter().any(|(uri, doc)| {
-                            !updated_uris.contains(uri.as_str())
-                                && doc.text.contains(old_module.as_str())
+                            // Skip the file being renamed itself — it is expected to contain
+                            // the old module name (e.g., `package OldModule;`).
+                            if uri.as_str() == old_uri {
+                                return false;
+                            }
+                            if updated_uris.contains(uri.as_str()) {
+                                return false;
+                            }
+                            // Word-boundary check: reject matches where old_module is part of
+                            // a longer identifier (e.g., "Base" inside "Database").
+                            module_name_appears_in_text(&doc.text, old_module.as_str())
                         });
                         drop(documents);
                         if unhandled {
@@ -1366,6 +1379,46 @@ impl LspServer {
     }
 }
 
+/// Return `true` if `module_name` appears in `text` as a whole-identifier token.
+///
+/// This prevents false-positive rename warnings when a short module name (e.g. `"Base"`)
+/// appears as a suffix of an unrelated longer identifier (e.g. `"Database"`).  The check
+/// rejects any match that is immediately preceded or followed by a word character (`\w`)
+/// or a colon (`:`), both of which extend a Perl identifier.
+pub(super) fn module_name_appears_in_text(text: &str, module_name: &str) -> bool {
+    if module_name.is_empty() {
+        return false;
+    }
+    let bytes = text.as_bytes();
+    let name_bytes = module_name.as_bytes();
+    let name_len = name_bytes.len();
+    let text_len = bytes.len();
+
+    let mut start = 0usize;
+    while start + name_len <= text_len {
+        if let Some(pos) = text[start..].find(module_name) {
+            let abs = start + pos;
+            // Check character before the match
+            let before_ok = abs == 0 || {
+                let c = bytes[abs - 1] as char;
+                !c.is_alphanumeric() && c != '_' && c != ':'
+            };
+            // Check character after the match
+            let after_ok = abs + name_len >= text_len || {
+                let c = bytes[abs + name_len] as char;
+                !c.is_alphanumeric() && c != '_' && c != ':'
+            };
+            if before_ok && after_ok {
+                return true;
+            }
+            start = abs + 1;
+        } else {
+            break;
+        }
+    }
+    false
+}
+
 /// Convert a file path to a Perl module name
 pub(super) fn path_to_module_name(uri: &str) -> String {
     #[cfg(feature = "workspace")]
@@ -1378,4 +1431,49 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
     let path = uri.trim_start_matches("file://").to_string();
 
     file_path_to_module_name(&path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::module_name_appears_in_text;
+
+    #[test]
+    fn test_module_name_appears_exact_match() {
+        assert!(module_name_appears_in_text("use MyBase;", "MyBase"));
+    }
+
+    #[test]
+    fn test_module_name_appears_as_suffix_rejected() {
+        // "Base" must NOT match inside "Database" (false-positive guard)
+        assert!(!module_name_appears_in_text("use Database;", "Base"));
+    }
+
+    #[test]
+    fn test_module_name_appears_as_prefix_rejected() {
+        // "Foo" must NOT match inside "FooBar"
+        assert!(!module_name_appears_in_text("FooBar->method()", "Foo"));
+    }
+
+    #[test]
+    fn test_module_name_appears_with_colon_boundary() {
+        // "Bar" must NOT match when followed by "::" (it is a namespace prefix, not a standalone name)
+        assert!(!module_name_appears_in_text("Foo::Bar::Baz", "Bar"));
+    }
+
+    #[test]
+    fn test_module_name_appears_qualified_name() {
+        // "Foo::Bar" should match as a whole module path
+        assert!(module_name_appears_in_text("use Foo::Bar;", "Foo::Bar"));
+    }
+
+    #[test]
+    fn test_module_name_appears_in_string_literal() {
+        // Module name inside a single-quoted string counts as a reference
+        assert!(module_name_appears_in_text("use parent 'MyBase';", "MyBase"));
+    }
+
+    #[test]
+    fn test_module_name_empty_returns_false() {
+        assert!(!module_name_appears_in_text("anything", ""));
+    }
 }

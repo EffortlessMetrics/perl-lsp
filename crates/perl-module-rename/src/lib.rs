@@ -187,4 +187,17 @@ mod tests {
         assert_eq!(rewritten, "use X::Y;");
         assert!(changed);
     }
+
+    #[test]
+    fn plans_use_parent_simple_name_no_colons() {
+        // Regression for #2747: use parent with simple name (no ::)
+        let source = "package Child;\nuse parent 'MyBase';\n1;\n";
+        let edits = plan_module_rename_edits(source, "MyBase", "RenamedBase");
+        let rewritten = apply_module_rename_edits(source, &edits);
+        assert!(
+            rewritten.contains("use parent 'RenamedBase'"),
+            "Expected rewrite of use parent 'MyBase' to 'RenamedBase', got: {:?}",
+            rewritten
+        );
+    }
 }

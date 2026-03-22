@@ -678,3 +678,51 @@ fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::E
     );
     Ok(())
 }
+
+/// Regression test: renaming a module whose own file is open must NOT appear in
+/// `changes` (the package file itself does not need a `use` line rewrite).
+/// Previously the warning-detection code could false-positive on `package OldModule;`
+/// inside the old file because it was not excluded from the unhandled-documents scan.
+#[test]
+fn test_will_rename_files_old_uri_not_in_changes() -> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    // Open ONLY the module file being renamed — no dependent files.
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Solo.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Solo;\nsub new { bless {}, shift }\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    let params = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/Solo.pm",
+            "newUri": "file:///test/workspace/lib/Renamed.pm"
+        }]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+
+    // Solo.pm itself should NOT be in the changes map — it contains `package Solo;`
+    // but that line is not a `use Solo;` import that needs rewriting.
+    assert!(
+        !changes.contains_key("file:///test/workspace/lib/Solo.pm"),
+        "the renamed file itself should not appear as a change target: {changes:?}"
+    );
+    Ok(())
+}

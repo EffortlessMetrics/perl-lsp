@@ -3802,6 +3802,85 @@ Utils::process_data();
     }
 
     // -------------------------------------------------------------------------
+    // find_dependents — use parent / use base integration (#2747)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_index_dependency_via_use_parent_end_to_end() {
+        // Regression for #2747: index a file with `use parent 'MyBase'` and verify
+        // that find_dependents("MyBase") returns that file.
+        // 1. Index MyBase.pm
+        // 2. Index child.pl with `use parent 'MyBase'`
+        // 3. find_dependents("MyBase") should return child.pl
+        let index = WorkspaceIndex::new();
+
+        let base_url = url::Url::parse("file:///test/workspace/lib/MyBase.pm").unwrap();
+        index
+            .index_file(base_url, "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string())
+            .expect("indexing MyBase.pm");
+
+        let child_url = url::Url::parse("file:///test/workspace/child.pl").unwrap();
+        index
+            .index_file(child_url, "package Child;\nuse parent 'MyBase';\n1;\n".to_string())
+            .expect("indexing child.pl");
+
+        let dependents = index.find_dependents("MyBase");
+        assert!(
+            !dependents.is_empty(),
+            "find_dependents('MyBase') returned empty — \
+             use parent 'MyBase' should register MyBase as a dependency. \
+             Dependencies in index: {:?}",
+            {
+                let files = index.files.read();
+                files
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.dependencies.iter().cloned().collect::<Vec<_>>()))
+                    .collect::<Vec<_>>()
+            }
+        );
+        assert!(
+            dependents.contains(&"file:///test/workspace/child.pl".to_string()),
+            "child.pl should be in dependents, got: {:?}",
+            dependents
+        );
+    }
+
+    #[test]
+    fn test_parser_produces_correct_args_for_use_parent() {
+        // Regression for #2747: verify that the parser produces args=["'MyBase'"]
+        // for `use parent 'MyBase'`, so extract_module_names_from_use_args strips
+        // the quotes and registers the dependency under the bare name "MyBase".
+        use crate::Parser;
+        let mut p = Parser::new("package Child;\nuse parent 'MyBase';\n1;\n");
+        let ast = p.parse().expect("parse succeeded");
+        if let NodeKind::Program { statements } = &ast.kind {
+            for stmt in statements {
+                if let NodeKind::Use { module, args, .. } = &stmt.kind {
+                    if module == "parent" {
+                        assert_eq!(
+                            args,
+                            &["'MyBase'".to_string()],
+                            "Expected args=[\"'MyBase'\"] for `use parent 'MyBase'`, got: {:?}",
+                            args
+                        );
+                        let extracted = extract_module_names_from_use_args(args);
+                        assert_eq!(
+                            extracted,
+                            vec!["MyBase".to_string()],
+                            "extract_module_names_from_use_args should return [\"MyBase\"], got {:?}",
+                            extracted
+                        );
+                        return; // Test passed
+                    }
+                }
+            }
+            panic!("No Use node with module='parent' found in AST");
+        } else {
+            panic!("Expected Program root");
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // extract_module_names_from_use_args — unit tests (#2747)
     // -------------------------------------------------------------------------
 
