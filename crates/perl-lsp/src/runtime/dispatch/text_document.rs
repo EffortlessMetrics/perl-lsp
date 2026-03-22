@@ -274,13 +274,6 @@ impl LspServer {
         self.handle_semantic_tokens(params)
     }
 
-    pub(super) fn handle_semantic_tokens_delta_dispatch(
-        &self,
-        params: Option<Value>,
-    ) -> Result<Option<Value>, JsonRpcError> {
-        self.handle_semantic_tokens_delta(params)
-    }
-
     pub(super) fn handle_semantic_tokens_range_dispatch(
         &self,
         params: Option<Value>,

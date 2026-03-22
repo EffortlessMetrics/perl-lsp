@@ -3,9 +3,9 @@
 This document defines the stable API contracts for the Perl LSP server implementation.
 These contracts are enforced by tests in `tests/lsp_api_contracts.rs`.
 
-**Version:** 0.12.0
+**Version:** 0.8.3
 **LSP Specification:** 3.17
-**Last Updated:** 2026-03-21
+**Last Updated:** 2025-02-19
 
 ## 1. Initialization Contract
 
@@ -230,7 +230,7 @@ These contracts are enforced by the following test categories:
 1. **Initialization Tests**
    - ✅ Basic initialization
    - ✅ Minimal client capabilities
-   - ✅ Double initialization rejection
+   - ⚠️ Double initialization rejection (TODO: Fix server)
 
 2. **Response Shape Tests**
    - ✅ Completion response shapes
@@ -239,7 +239,7 @@ These contracts are enforced by the following test categories:
 
 3. **Performance Tests**
    - ✅ Large file responsiveness
-   - ✅ Bounded module resolution
+   - ⚠️ Bounded module resolution (TODO: Fix timeout)
 
 4. **Compatibility Tests**
    - ✅ URI validation
@@ -260,6 +260,13 @@ These contracts are enforced by the following test categories:
 | Performance | ✅ Complete | 100% | Module timeout implemented |
 | Error Handling | ✅ Complete | 100% | Standard codes used |
 | Compatibility | ✅ Complete | 100% | Backwards compatible |
+
+## Known Issues
+
+### Test Infrastructure
+- `test_bounded_definition_timeout`: Test harness may block on server communication,
+  preventing proper timeout validation. The server implementation has correct timeouts
+  but the test infrastructure needs improvement.
 
 ## Breaking Changes Policy
 

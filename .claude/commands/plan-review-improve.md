@@ -37,12 +37,6 @@ Write your findings as an issue comment and label the issue as builder-ready.
    )"
    ```
 
-   The `**Verdict:**` line is **mandatory**. Do not submit the comment without declaring
-   either `READY FOR BUILDER` or `ALREADY FIXED (with evidence)`. These are the only
-   valid terminal states. The SubagentStop hook enforces this by checking that
-   `builder-ready` or `already-fixed` label is present when you finish — if neither
-   label exists, your completion will be rejected.
-
 2. If ready for builder, set final labels in a single call:
    ```bash
    gh issue edit <number> --add-label "plan-reviewed" --add-label "builder-ready" --remove-label "needs-plan-review"
@@ -50,6 +44,12 @@ Write your findings as an issue comment and label the issue as builder-ready.
    All three label changes in one call: `plan-reviewed` and `builder-ready` are added atomically,
    and `needs-plan-review` is removed so the orchestrator does not re-route this issue to another
    plan-reviewer on the next swarm pass. (`--remove-label` is a no-op if the label is absent.)
+
+   After setting labels, write version-bound receipts for both:
+   ```
+   /label-receipt-write issue <number> plan-reviewed plan-reviewer
+   /label-receipt-write issue <number> builder-ready plan-reviewer
+   ```
 
 3. If the spec is incomplete or wrong (root cause was wrong, file references stale, approach flawed):
    - **Do the investigation yourself.** Find the real root cause, correct the file references, design the fix. You have sonnet — use it.

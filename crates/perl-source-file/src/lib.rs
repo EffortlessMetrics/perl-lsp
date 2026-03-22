@@ -6,7 +6,7 @@
 use std::path::Path;
 
 /// Canonical Perl source file extensions.
-pub const PERL_SOURCE_EXTENSIONS: [&str; 5] = ["pl", "pm", "t", "psgi", "tt"];
+pub const PERL_SOURCE_EXTENSIONS: [&str; 4] = ["pl", "pm", "t", "psgi"];
 
 /// Returns `true` if `extension` is a recognized Perl source extension.
 ///
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn exposes_expected_extension_set() {
-        assert_eq!(PERL_SOURCE_EXTENSIONS, ["pl", "pm", "t", "psgi", "tt"]);
+        assert_eq!(PERL_SOURCE_EXTENSIONS, ["pl", "pm", "t", "psgi"]);
     }
 
     #[test]
@@ -55,16 +55,7 @@ mod tests {
         assert!(is_perl_source_extension(".pm"));
         assert!(is_perl_source_extension("T"));
         assert!(is_perl_source_extension("PsGi"));
-        assert!(is_perl_source_extension("tt"));
-        assert!(is_perl_source_extension("TT"));
         assert!(!is_perl_source_extension("txt"));
-    }
-
-    #[test]
-    fn classifies_tt_template_files() {
-        assert!(is_perl_source_path(Path::new("/templates/page.tt")));
-        assert!(is_perl_source_uri("file:///templates/page.tt"));
-        assert!(!is_perl_source_path(Path::new("/templates/page.html")));
     }
 
     #[test]

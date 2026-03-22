@@ -5,7 +5,6 @@
 //! and concurrent parsing scenarios.
 
 use perl_parser::{Node, NodeKind, Parser};
-use perl_tdd_support::must;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -342,11 +341,11 @@ fn test_concurrent_parsing_stress() {
                     let result = parser.parse();
                     let parse_time = start_time.elapsed();
 
-                    let mut results = must(results_clone.lock());
+                    let mut results = results_clone.lock().unwrap();
                     results.push((thread_id, iteration, case_index, parse_time, result.is_ok()));
 
                     if result.is_err() {
-                        *must(error_count_clone.lock()) += 1;
+                        *error_count_clone.lock().unwrap() += 1;
                     }
                 }
             })
@@ -354,12 +353,11 @@ fn test_concurrent_parsing_stress() {
         .collect();
 
     for handle in handles {
-        let res = handle.join();
-        assert!(res.is_ok(), "Thread should complete successfully");
+        handle.join().unwrap();
     }
 
-    let results = must(results.lock());
-    let error_count = *must(error_count.lock());
+    let results = results.lock().unwrap();
+    let error_count = *error_count.lock().unwrap();
 
     println!("Completed {} concurrent parses with {} errors", results.len(), error_count);
 

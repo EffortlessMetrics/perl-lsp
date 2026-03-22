@@ -10,9 +10,9 @@
 #![deny(clippy::option_env_unwrap)]
 use perl_lsp::LspServer;
 use perl_lsp_launcher::{
-    CheckFormat, LaunchAction, LaunchConfig, TransportMode, format_health_output,
-    format_info_output, help_text, init_logging, log_server_startup, logging_filter, parse_args,
-    port_in_use_message, shell_completion, should_enable_logging,
+    LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
+    init_logging, log_server_startup, logging_filter, parse_args, port_in_use_message,
+    shell_completion, should_enable_logging,
 };
 use std::env;
 use std::process;
@@ -84,7 +84,7 @@ fn main() {
             process::exit(0);
         }
         LaunchAction::Check => {
-            let exit_code = run_check(&launch_plan.files, launch_plan.check_format);
+            let exit_code = run_check(&launch_plan.files);
             process::exit(exit_code);
         }
         LaunchAction::CheckProject { ref dir } => {
@@ -115,80 +115,35 @@ fn main() {
     }
 }
 
-/// Status of a single file parsed in `--check` mode.
-enum FileCheckStatus {
-    Ok,
-    Fail { messages: Vec<String> },
-    Error { message: String },
-}
-
-/// Parse a single file and return its status plus collected error messages.
-fn check_one_file(path: &str) -> FileCheckStatus {
-    let source = match std::fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(e) => return FileCheckStatus::Error { message: format!("error reading file: {e}") },
-    };
-
-    let mut parser = perl_parser::Parser::new(&source);
-    let parse_result = parser.parse();
-    let recovered = parser.errors();
-
-    let mut messages: Vec<String> = recovered.iter().map(|e| format!("{e}")).collect();
-    if let Err(ref e) = parse_result {
-        messages.push(format!("{e}"));
-    }
-
-    if messages.is_empty() { FileCheckStatus::Ok } else { FileCheckStatus::Fail { messages } }
-}
-
 /// Run the `--check` batch mode: parse the given files and report errors.
-fn run_check(files: &[String], format: CheckFormat) -> i32 {
+fn run_check(files: &[String]) -> i32 {
     if files.is_empty() {
-        match format {
-            CheckFormat::Json => {
-                // In JSON mode emit a valid (empty) result so piped consumers
-                // (e.g. `| jq`) receive parseable output rather than empty stdin.
-                let output = serde_json::json!({
-                    "version": 1,
-                    "files": [],
-                    "summary": { "total": 0, "ok": 0, "fail": 0, "error": 0 }
-                });
-                println!("{output}");
-            }
-            CheckFormat::Text => {
-                eprintln!("Usage: perl-lsp --check <file.pl> [file2.pm ...]");
-                eprintln!("No files specified.");
-            }
-        }
+        eprintln!("Usage: perl-lsp --check <file.pl> [file2.pm ...]");
+        eprintln!("No files specified.");
         return 1;
     }
 
-    match format {
-        CheckFormat::Text => run_check_text(files),
-        CheckFormat::Json => run_check_json(files),
-    }
-}
-
-/// Text-format `--check` output (original behaviour).
-fn run_check_text(files: &[String]) -> i32 {
     let mut total = 0usize;
     let mut errors = 0usize;
 
     for path in files {
         total += 1;
-        match check_one_file(path) {
-            FileCheckStatus::Ok => {
+        let source = match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("{path}: error reading file: {e}");
+                errors += 1;
+                continue;
+            }
+        };
+
+        let mut parser = perl_parser::Parser::new(&source);
+        match parser.parse() {
+            Ok(_) => {
                 println!("{path}: ok");
             }
-            FileCheckStatus::Fail { messages } => {
-                println!(
-                    "{path}: FAIL - {}",
-                    messages.first().map(String::as_str).unwrap_or("parse error")
-                );
-                errors += 1;
-            }
-            FileCheckStatus::Error { message } => {
-                eprintln!("{path}: {message}");
+            Err(e) => {
+                println!("{path}: FAIL - {e}");
                 errors += 1;
             }
         }
@@ -200,63 +155,6 @@ fn run_check_text(files: &[String]) -> i32 {
     }
 
     if errors > 0 { 1 } else { 0 }
-}
-
-/// JSON-format `--check` output.
-fn run_check_json(files: &[String]) -> i32 {
-    let mut count_ok = 0usize;
-    let mut count_fail = 0usize;
-    let mut count_error = 0usize;
-
-    let mut file_entries: Vec<serde_json::Value> = Vec::new();
-
-    for path in files {
-        let entry = match check_one_file(path) {
-            FileCheckStatus::Ok => {
-                count_ok += 1;
-                serde_json::json!({
-                    "path": path,
-                    "status": "ok",
-                    "errors": []
-                })
-            }
-            FileCheckStatus::Fail { messages } => {
-                count_fail += 1;
-                let errors: Vec<serde_json::Value> =
-                    messages.iter().map(|m| serde_json::json!({ "message": m })).collect();
-                serde_json::json!({
-                    "path": path,
-                    "status": "fail",
-                    "errors": errors
-                })
-            }
-            FileCheckStatus::Error { message } => {
-                count_error += 1;
-                serde_json::json!({
-                    "path": path,
-                    "status": "error",
-                    "errors": [{ "message": message }]
-                })
-            }
-        };
-        file_entries.push(entry);
-    }
-
-    let total = count_ok + count_fail + count_error;
-    let output = serde_json::json!({
-        "version": 1,
-        "files": file_entries,
-        "summary": {
-            "total": total,
-            "ok": count_ok,
-            "fail": count_fail,
-            "error": count_error
-        }
-    });
-
-    println!("{output}");
-
-    if count_fail > 0 || count_error > 0 { 1 } else { 0 }
 }
 
 /// Detect whether stdout is a terminal (for colored output).

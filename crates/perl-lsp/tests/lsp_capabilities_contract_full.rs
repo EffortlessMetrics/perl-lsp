@@ -48,12 +48,7 @@ fn full_capabilities_match_contract() -> Result<(), Box<dyn std::error::Error>> 
 
     let st = &caps["semanticTokensProvider"];
     assert!(st.is_object());
-    // Since LSP 3.16 delta support, full is {"delta": true} rather than just true.
-    assert_eq!(
-        st["full"],
-        json!({"delta": true}),
-        "semanticTokensProvider.full must advertise delta=true"
-    );
+    assert_eq!(st["full"], json!(true));
 
     let ih = &caps["inlayHintProvider"];
     assert!(ih.is_object());

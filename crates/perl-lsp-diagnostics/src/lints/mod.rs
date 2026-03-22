@@ -104,3 +104,5 @@ pub mod security;
 pub mod strict_warnings;
 /// Unused import detection
 pub mod unused_imports;
+/// Perl version compatibility warnings (PL900)
+pub mod version_compat;
