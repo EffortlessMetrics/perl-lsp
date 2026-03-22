@@ -418,7 +418,12 @@ mod tests {
         let uri: Uri = "file:///test.pl".parse()?;
         let items = get_full_items(provider.get_document_diagnostics(&uri, "my $x = ;", None));
         assert!(!items.is_empty());
-        let diag = &items[0];
+        // Find the PL001 (ParseError) diagnostic — ordering may vary depending on
+        // which lints run first (e.g., PL100 MissingStrict may precede PL001).
+        let diag = items
+            .iter()
+            .find(|d| d.data.as_ref().and_then(|v| v["code"].as_str()) == Some("PL001"))
+            .ok_or("expected a PL001 ParseError diagnostic in the results")?;
         let data = diag.data.as_ref().ok_or("data should be populated")?;
         assert_eq!(data["code"], "PL001");
         assert_eq!(data["category"], "Parser");

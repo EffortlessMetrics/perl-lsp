@@ -32,6 +32,7 @@ pub use model::SemanticModel;
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;
+use crate::analysis::class_model::{ClassModel, ClassModelBuilder};
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolExtractor, SymbolTable};
 use std::collections::HashMap;
@@ -86,6 +87,8 @@ pub struct SemanticAnalyzer {
     pub(super) hover_info: HashMap<SourceLocation, HoverInfo>,
     /// Source code for text extraction and analysis
     pub(super) source: String,
+    /// Class models extracted from the same file (for same-file inheritance resolution)
+    pub class_models: Vec<ClassModel>,
 }
 
 impl SemanticAnalyzer {
@@ -129,12 +132,14 @@ impl SemanticAnalyzer {
     /// ```
     pub fn analyze_with_source(ast: &Node, source: &str) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let class_models = ClassModelBuilder::new().build(ast);
 
         let mut analyzer = SemanticAnalyzer {
             symbol_table,
             semantic_tokens: Vec::new(),
             hover_info: HashMap::new(),
             source: source.to_string(),
+            class_models,
         };
 
         analyzer.analyze_node(ast, 0);
@@ -211,6 +216,82 @@ impl SemanticAnalyzer {
     /// Delegates to `builtins::is_file_test_operator`.
     pub fn is_file_test_operator(op: &str) -> bool {
         builtins::is_file_test_operator(op)
+    }
+
+    /// Resolve hover info for a method by walking the same-file parent chain.
+    ///
+    /// Given a receiver package name and a method name, walks the `parents` of
+    /// each `ClassModel` in `self.class_models` (BFS) and returns `HoverInfo` for
+    /// the first class in the chain that defines the method.
+    ///
+    /// For packages not in `class_models` (plain packages with no OO indicators),
+    /// falls back to the symbol table looking for `PackageName::method_name`.
+    ///
+    /// Returns `None` when no ancestor in the same file defines the method.
+    /// Cross-file inheritance is out of scope — tracked as a follow-up issue.
+    pub fn resolve_inherited_method_hover(
+        &self,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<HoverInfo> {
+        let mut visited: Vec<String> = Vec::new();
+        let mut queue: Vec<String> = vec![receiver_class.to_string()];
+
+        while !queue.is_empty() {
+            let current = queue.remove(0);
+            if visited.contains(&current) {
+                continue;
+            }
+            visited.push(current.clone());
+
+            // Check class model first (has method list + parent chain)
+            if let Some(model) = self.class_models.iter().find(|m| m.name == current) {
+                if model.methods.iter().any(|m| m.name == method_name) {
+                    let is_direct = current == receiver_class;
+                    let details = if is_direct {
+                        vec![format!("Defined in {}", current)]
+                    } else {
+                        vec![format!("Inherited from {}", current)]
+                    };
+                    return Some(HoverInfo {
+                        signature: format!("sub {}::{}", current, method_name),
+                        documentation: None,
+                        details,
+                    });
+                }
+                for parent in &model.parents {
+                    if !visited.contains(parent) {
+                        queue.push(parent.clone());
+                    }
+                }
+            } else {
+                // Plain package not in class_models — check the symbol table
+                // for a sub with qualified_name == "PackageName::method_name"
+                let qualified = format!("{}::{}", current, method_name);
+                let found_in_table =
+                    self.symbol_table.symbols.get(method_name).is_some_and(|syms| {
+                        syms.iter().any(|s| {
+                            matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
+                                && s.qualified_name == qualified
+                        })
+                    }) || self.symbol_table.symbols.contains_key(&qualified);
+
+                if found_in_table {
+                    let is_direct = current == receiver_class;
+                    let details = if is_direct {
+                        vec![format!("Defined in {}", current)]
+                    } else {
+                        vec![format!("Inherited from {}", current)]
+                    };
+                    return Some(HoverInfo {
+                        signature: format!("sub {}::{}", current, method_name),
+                        documentation: None,
+                        details,
+                    });
+                }
+            }
+        }
+        None
     }
 }
 

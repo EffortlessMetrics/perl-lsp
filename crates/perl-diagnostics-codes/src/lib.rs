@@ -182,6 +182,10 @@ pub enum DiagnosticCode {
     /// Heredoc used with a tied filehandle
     HeredocTiedHandle,
 
+    // Version compatibility (PL900-PL999)
+    /// Use of a Perl feature not available in the declared version
+    VersionIncompatFeature,
+
     // Perl::Critic violations (PC001-PC005)
     /// Perl::Critic brutal (severity 1) violation
     CriticSeverity1,
@@ -237,6 +241,7 @@ impl DiagnosticCode {
             DiagnosticCode::HeredocInRegexCode => "PL804",
             DiagnosticCode::HeredocInEval => "PL805",
             DiagnosticCode::HeredocTiedHandle => "PL806",
+            DiagnosticCode::VersionIncompatFeature => "PL900",
             DiagnosticCode::CriticSeverity1 => "PC001",
             DiagnosticCode::CriticSeverity2 => "PC002",
             DiagnosticCode::CriticSeverity3 => "PC003",
@@ -292,6 +297,7 @@ impl DiagnosticCode {
             "PL804" => "https://docs.perl-lsp.org/errors/PL804",
             "PL805" => "https://docs.perl-lsp.org/errors/PL805",
             "PL806" => "https://docs.perl-lsp.org/errors/PL806",
+            "PL900" => "https://docs.perl-lsp.org/errors/PL900",
             _ => return None,
         })
     }
@@ -332,6 +338,7 @@ impl DiagnosticCode {
             | DiagnosticCode::SecurityStringEval
             | DiagnosticCode::SecurityBacktickExec
             | DiagnosticCode::ModuleNotFound
+            | DiagnosticCode::VersionIncompatFeature
             | DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
 
@@ -525,6 +532,10 @@ impl DiagnosticCode {
                 "Heredocs written to tied filehandles may not behave as expected. \
                 The tie interface may not handle multi-line heredoc output correctly.",
             ),
+            DiagnosticCode::VersionIncompatFeature => Some(
+                "This Perl feature requires a newer Perl version than declared. \
+                Update 'use vN.NN' or 'use feature' to enable it.",
+            ),
             // Perl::Critic codes carry per-policy descriptions; no generic hint needed.
             DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2
@@ -597,6 +608,7 @@ impl DiagnosticCode {
             "PL804" => Some(DiagnosticCode::HeredocInRegexCode),
             "PL805" => Some(DiagnosticCode::HeredocInEval),
             "PL806" => Some(DiagnosticCode::HeredocTiedHandle),
+            "PL900" => Some(DiagnosticCode::VersionIncompatFeature),
             "PC001" => Some(DiagnosticCode::CriticSeverity1),
             "PC002" => Some(DiagnosticCode::CriticSeverity2),
             "PC003" => Some(DiagnosticCode::CriticSeverity3),
@@ -694,6 +706,8 @@ impl DiagnosticCode {
             | DiagnosticCode::HeredocInRegexCode
             | DiagnosticCode::HeredocInEval
             | DiagnosticCode::HeredocTiedHandle => DiagnosticCategory::Heredoc,
+
+            DiagnosticCode::VersionIncompatFeature => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2

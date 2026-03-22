@@ -1110,10 +1110,20 @@ fn test_non_sql_method_call_still_produces_method_token() {
 // Special variable semantic tokens – issue #2347
 // ===========================================================================
 
-/// The `defaultLibrary` modifier is bit 3 (value 8) in the modifiers list.
-/// Modifiers: declaration=0(1), definition=1(2), readonly=2(4), defaultLibrary=3(8)
+/// Returns true if the token has the `defaultLibrary` modifier set.
+///
+/// The bitmask is derived from the legend at runtime (1 << bit_position) so this
+/// helper stays correct if the modifier order ever changes again.  Hard-coding
+/// `512` here was the same class of bug that PR #2772 fixed in production code.
 fn has_default_library_modifier(token: &EncodedToken) -> bool {
-    token[4] & 8 != 0
+    let leg = legend();
+    let bit_pos = leg
+        .modifiers
+        .iter()
+        .position(|m| m == "defaultLibrary")
+        .expect("defaultLibrary must be in the modifier legend");
+    let bitmask = 1u32 << bit_pos;
+    token[4] & bitmask != 0
 }
 
 #[test]
@@ -1127,7 +1137,7 @@ fn test_special_variable_dollar_underscore_has_default_library_modifier() {
         tokens.iter().filter(|t| t[3] == var_idx && has_default_library_modifier(t)).collect();
     assert!(
         !special_tokens.is_empty(),
-        "$_ should produce a variable token with defaultLibrary modifier (bit 3 = 8), \
+        "$_ should produce a variable token with defaultLibrary modifier (bit 9 = 512), \
          got variable tokens: {:?}",
         tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
     );

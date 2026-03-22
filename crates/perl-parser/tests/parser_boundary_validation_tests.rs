@@ -488,7 +488,6 @@ print "Result: $y\n";
 fn test_concurrent_boundary_conditions() {
     println!("Testing concurrent boundary conditions...");
 
-    use perl_tdd_support::must;
     use std::sync::{Arc, Mutex};
     use std::thread;
 
@@ -527,7 +526,7 @@ fn test_concurrent_boundary_conditions() {
                         Err(error) => is_expected_boundary_error(scenario_name, error),
                     };
 
-                    must(results_clone.lock()).push((
+                    results_clone.lock().unwrap().push((
                         thread_id,
                         operation,
                         scenario_name,

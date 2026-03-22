@@ -25,6 +25,8 @@ pub enum Framework {
     Native,
     /// Native Perl 5.38+ class (use feature 'class')
     NativeClass,
+    /// Plain OO via `use parent`, `use base`, or `@ISA` (no framework)
+    PlainOO,
     /// No OO framework detected
     None,
 }
@@ -113,8 +115,8 @@ pub struct ClassModel {
     pub attributes: Vec<Attribute>,
     /// Methods declared via `sub`
     pub methods: Vec<MethodInfo>,
-    /// Parent class from `extends 'Parent'`
-    pub parent: Option<String>,
+    /// Parent classes from `extends 'Parent'`, `use parent`, `use base`, or `@ISA`
+    pub parents: Vec<String>,
     /// Roles consumed via `with 'Role'`
     pub roles: Vec<String>,
     /// Method modifiers (before/after/around)
@@ -135,7 +137,7 @@ pub struct ClassModelBuilder {
     current_framework: Framework,
     current_attributes: Vec<Attribute>,
     current_methods: Vec<MethodInfo>,
-    current_parent: Option<String>,
+    current_parents: Vec<String>,
     current_roles: Vec<String>,
     current_modifiers: Vec<MethodModifier>,
     /// Track which packages have framework detection applied
@@ -157,7 +159,7 @@ impl ClassModelBuilder {
             current_framework: Framework::None,
             current_attributes: Vec::new(),
             current_methods: Vec::new(),
-            current_parent: None,
+            current_parents: Vec::new(),
             current_roles: Vec::new(),
             current_modifiers: Vec::new(),
             framework_map: HashMap::new(),
@@ -174,14 +176,17 @@ impl ClassModelBuilder {
     /// Flush the current package's accumulated data into a ClassModel.
     fn flush_current_package(&mut self) {
         let framework = self.current_framework;
-        // Only produce a ClassModel if the package uses a framework or has attributes
-        if framework != Framework::None || !self.current_attributes.is_empty() {
+        // Produce a ClassModel if the package uses a framework, has attributes, or has parents
+        let has_oo_indicator = framework != Framework::None
+            || !self.current_attributes.is_empty()
+            || !self.current_parents.is_empty();
+        if has_oo_indicator {
             let model = ClassModel {
                 name: self.current_package.clone(),
                 framework,
                 attributes: std::mem::take(&mut self.current_attributes),
                 methods: std::mem::take(&mut self.current_methods),
-                parent: self.current_parent.take(),
+                parents: std::mem::take(&mut self.current_parents),
                 roles: std::mem::take(&mut self.current_roles),
                 modifiers: std::mem::take(&mut self.current_modifiers),
             };
@@ -190,7 +195,7 @@ impl ClassModelBuilder {
             // Reset accumulators even if we don't produce a model
             self.current_attributes.clear();
             self.current_methods.clear();
-            self.current_parent = None;
+            self.current_parents.clear();
             self.current_roles.clear();
             self.current_modifiers.clear();
         }
@@ -229,6 +234,27 @@ impl ClassModelBuilder {
 
             NodeKind::Use { module, args, .. } => {
                 self.detect_framework(module, args);
+            }
+
+            // `our @ISA = qw(Parent1 Parent2);`
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                if let NodeKind::Variable { sigil, name } = &variable.kind
+                    && sigil == "@"
+                    && name == "ISA"
+                    && let Some(init) = initializer
+                {
+                    self.extract_isa_from_node(init);
+                }
+            }
+
+            // `@ISA = qw(Parent1 Parent2);` (bare assignment without `our`)
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                if let NodeKind::Variable { sigil, name } = &lhs.kind
+                    && sigil == "@"
+                    && name == "ISA"
+                {
+                    self.extract_isa_from_node(rhs);
+                }
             }
 
             NodeKind::Class { name, body } => {
@@ -316,12 +342,40 @@ impl ClassModelBuilder {
             "Class::Accessor" => Framework::ClassAccessor,
             "Object::Pad" => Framework::ObjectPad,
             "base" | "parent" => {
-                let has_class_accessor = args
-                    .iter()
-                    .any(|a| normalize_symbol_name(a).as_deref() == Some("Class::Accessor"));
+                // Capture parent class names, skipping -norequire flag and Class::Accessor sentinel.
+                // args may be:
+                //   - A quoted string: "'Parent'"
+                //   - A qw-string:     "qw(Base1 Base2)"  (single arg, space-separated inside)
+                //   - A bare flag:     "-norequire"
+                let mut has_class_accessor = false;
+                let mut captured_parents: Vec<String> = Vec::new();
+
+                for arg in args {
+                    let trimmed = arg.trim();
+                    if trimmed.starts_with('-') || trimmed.is_empty() {
+                        // Skip flags like -norequire
+                        continue;
+                    }
+                    // Expand qw(...) into individual names
+                    let names = expand_arg_to_names(trimmed);
+                    for name in names {
+                        if name == "Class::Accessor" {
+                            has_class_accessor = true;
+                        } else {
+                            captured_parents.push(name);
+                        }
+                    }
+                }
+
+                self.current_parents.extend(captured_parents);
+
                 if has_class_accessor {
                     Framework::ClassAccessor
+                } else if self.current_framework == Framework::None {
+                    // Only promote to PlainOO if no stronger framework already detected
+                    Framework::PlainOO
                 } else {
+                    // Already a Moose/Moo/etc. package — keep existing framework
                     return;
                 }
             }
@@ -605,7 +659,7 @@ impl ClassModelBuilder {
             let names: Vec<String> = args.iter().flat_map(collect_symbol_names).collect();
             if !names.is_empty() {
                 if name == "extends" {
-                    self.current_parent = names.into_iter().next();
+                    self.current_parents.extend(names);
                 } else {
                     self.current_roles.extend(names);
                 }
@@ -641,13 +695,25 @@ impl ClassModelBuilder {
         }
 
         if keyword == "extends" {
-            // Moose/Moo only supports single inheritance via `extends`
-            self.current_parent = names.into_iter().next();
+            self.current_parents.extend(names);
         } else {
             self.current_roles.extend(names);
         }
 
         Some(2)
+    }
+
+    /// Extract parent class names from an `@ISA` RHS node (ArrayLiteral or qw-word-list).
+    fn extract_isa_from_node(&mut self, node: &Node) {
+        let parents = collect_symbol_names(node);
+        if !parents.is_empty() {
+            // Promote to PlainOO if no stronger framework is already set
+            if self.current_framework == Framework::None {
+                self.current_framework = Framework::PlainOO;
+                self.framework_map.insert(self.current_package.clone(), Framework::PlainOO);
+            }
+            self.current_parents.extend(parents);
+        }
     }
 }
 
@@ -667,6 +733,47 @@ fn collect_symbol_names(node: &Node) -> Vec<String> {
 fn normalize_symbol_name(raw: &str) -> Option<String> {
     let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
     if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+}
+
+/// Expand a single `use parent`/`use base` arg string into individual class names.
+///
+/// The parser stores qw-lists as a single string like `"qw(Base1 Base2)"`.
+/// This function splits those into `["Base1", "Base2"]`.
+/// Plain quoted strings like `"'Parent'"` return `["Parent"]`.
+fn expand_arg_to_names(arg: &str) -> Vec<String> {
+    let arg = arg.trim();
+    // qw(...) — any delimiter variant that the parser normalised to qw(...)
+    if arg.starts_with("qw(") && arg.ends_with(')') {
+        let content = &arg[3..arg.len() - 1];
+        return content
+            .split_whitespace()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+    }
+    // Other qw variants: qw{...}, qw[...], qw/.../ etc.
+    if arg.starts_with("qw") && arg.len() > 2 {
+        let open = arg.chars().nth(2).unwrap_or(' ');
+        let close = match open {
+            '(' => ')',
+            '{' => '}',
+            '[' => ']',
+            '<' => '>',
+            c => c,
+        };
+        if let (Some(start), Some(end)) = (arg.find(open), arg.rfind(close)) {
+            if start < end {
+                let content = &arg[start + 1..end];
+                return content
+                    .split_whitespace()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect();
+            }
+        }
+    }
+    // Quoted string or bare identifier
+    normalize_symbol_name(arg).into_iter().collect()
 }
 
 fn extract_hash_options(pairs: &[(Node, Node)]) -> HashMap<String, String> {
@@ -765,7 +872,7 @@ has 'level' => (is => 'ro');
         let model = model.unwrap();
 
         assert_eq!(model.framework, Framework::Moose);
-        assert_eq!(model.parent.as_deref(), Some("MyApp::User"));
+        assert!(model.parents.contains(&"MyApp::User".to_string()));
         assert_eq!(model.roles, vec!["MyApp::Printable", "MyApp::Serializable"]);
         assert_eq!(model.attributes.len(), 1);
     }
@@ -1155,5 +1262,80 @@ has 'status' => (
         assert_eq!(attr.predicate.as_deref(), Some("has_status"));
         assert_eq!(attr.clearer.as_deref(), Some("clear_status"));
         assert!(attr.trigger);
+    }
+
+    // ── Phase 1 tests: plain OO inheritance detection ─────────────────────
+
+    #[test]
+    fn use_parent_plain_oo() {
+        let code = "package Child; use parent 'Parent'; sub greet { } 1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert_eq!(model.framework, Framework::PlainOO);
+        assert!(model.parents.contains(&"Parent".to_string()), "parents should contain 'Parent'");
+    }
+
+    #[test]
+    fn use_parent_multiple() {
+        let code = "package Child; use parent qw(Base1 Base2); 1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert_eq!(model.framework, Framework::PlainOO);
+        assert!(model.parents.contains(&"Base1".to_string()), "parents should contain Base1");
+        assert!(model.parents.contains(&"Base2".to_string()), "parents should contain Base2");
+    }
+
+    #[test]
+    fn isa_array_assignment() {
+        let code = "package Child; our @ISA = qw(Parent); sub greet { } 1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert!(
+            model.parents.contains(&"Parent".to_string()),
+            "parents should contain 'Parent' from @ISA"
+        );
+    }
+
+    #[test]
+    fn use_parent_norequire() {
+        // use parent -norequire, 'Base' — the -norequire flag must not prevent parent capture
+        let code = "package Child; use parent -norequire, 'Base'; 1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert!(
+            model.parents.contains(&"Base".to_string()),
+            "parents should contain 'Base' even with -norequire"
+        );
+    }
+
+    #[test]
+    fn use_base_plain_oo() {
+        let code = "package Child; use base 'Parent'; sub greet { } 1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert_eq!(model.framework, Framework::PlainOO);
+        assert!(
+            model.parents.contains(&"Parent".to_string()),
+            "parents should contain 'Parent' from use base"
+        );
+    }
+
+    #[test]
+    fn plain_oo_does_not_regress_moose_extends() {
+        // Moose classes should still work and use parent field from extends
+        let models = build_models(
+            r#"
+package MyApp::Admin;
+use Moose;
+extends 'MyApp::User';
+has 'level' => (is => 'ro');
+"#,
+        );
+        let model = find_model(&models, "MyApp::Admin").expect("Admin model");
+        assert_eq!(model.framework, Framework::Moose);
+        assert!(
+            model.parents.contains(&"MyApp::User".to_string()),
+            "Moose extends should still populate parents"
+        );
     }
 }

@@ -55,12 +55,12 @@ impl LspHarness {
         let server_requests = Arc::new(Mutex::new(VecDeque::new()));
 
         // Create server with captured output
-        let writer = Arc::new(Mutex::new(Box::new(TestWriter::new(
-            output_buffer.clone(),
-            output_signal.clone(),
-            notification_buffer.clone(),
-            server_requests.clone(),
-        )) as Box<dyn Write + Send>));
+        let writer = Arc::new(Mutex::new(Box::new(TestWriter {
+            buffer: output_buffer.clone(),
+            signal: output_signal.clone(),
+            notifications: notification_buffer.clone(),
+            server_requests: server_requests.clone(),
+        }) as Box<dyn Write + Send>));
         let server = SendableServer(perl_lsp::LspServer::with_output(writer));
 
         let (tx, rx) = mpsc::channel::<Vec<u8>>();

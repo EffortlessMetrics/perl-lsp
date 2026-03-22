@@ -538,6 +538,164 @@ mod tied_variable_hover_tests {
 }
 
 #[cfg(test)]
+mod method_modifier_hover_tests {
+    use crate::common::test_utils::TestServerBuilder;
+    use serde_json::Value;
+
+    fn hover_content(resp: &Value) -> Option<String> {
+        let result = resp.get("result")?;
+        if result.is_null() {
+            return None;
+        }
+        let contents = result.get("contents")?;
+        let value = contents.get("value")?.as_str()?;
+        Some(value.to_string())
+    }
+
+    fn find_pos(
+        code: &str,
+        needle: &str,
+        target_line: usize,
+    ) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+        let line = code
+            .lines()
+            .nth(target_line)
+            .ok_or_else(|| format!("no line {} in test code", target_line))?;
+        let col = line
+            .find(needle)
+            .ok_or_else(|| format!("could not find `{needle}` on line {target_line}"))?;
+        Ok((target_line as u32, col as u32))
+    }
+
+    /// Hovering over the method name inside `before 'save' => sub { ... }`
+    /// should show "Method Modifier" rather than the generic "Subroutine" label.
+    #[test]
+    fn hover_on_before_modifier_shows_method_modifier_kind()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = include_str!("fixtures/frameworks/moo_method_modifiers.pl");
+        let uri = "file:///moo_modifiers.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        // Line 8 (0-indexed) is: before 'save' => sub {
+        let (line, col) = find_pos(code, "save", 8)?;
+        let response = server.get_hover(uri, line, col);
+        println!("BEFORE MODIFIER HOVER RESPONSE: {response:#}");
+
+        let content =
+            hover_content(&response).ok_or("expected hover content on before modifier")?;
+
+        assert!(
+            content.to_lowercase().contains("modifier") || content.contains("before"),
+            "hover should mention modifier kind, got: {content}"
+        );
+        assert!(
+            !content.contains("**Subroutine**"),
+            "hover should not show generic Subroutine label for a modifier, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over the method name inside `around 'save' => sub { ... }`
+    /// should mention "around" and show `$orig` usage semantics.
+    /// The improved hover card (after fix) will show "Method Modifier (`around`)"
+    /// and explain that around receives `$orig` as the first arg.
+    #[test]
+    fn hover_on_around_modifier_mentions_orig() -> Result<(), Box<dyn std::error::Error>> {
+        let code = include_str!("fixtures/frameworks/moo_method_modifiers.pl");
+        let uri = "file:///moo_modifiers_around.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        // Line 18 (0-indexed) is: around 'save' => sub {
+        let (line, col) = find_pos(code, "save", 18)?;
+        let response = server.get_hover(uri, line, col);
+        println!("AROUND MODIFIER HOVER RESPONSE: {response:#}");
+
+        let content =
+            hover_content(&response).ok_or("expected hover content on around modifier")?;
+
+        // After fix: hover should mention $orig (the key semantic of around modifiers).
+        // Before fix: shows generic "**Subroutine**" with no $orig guidance.
+        assert!(
+            content.contains("orig"),
+            "around modifier hover should explain $orig usage, got: {content}"
+        );
+        assert!(
+            !content.contains("**Subroutine**"),
+            "hover should not show generic Subroutine label for around modifier, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over the method name inside `after 'save' => sub { ... }`
+    /// should name the "after" modifier and not show the generic Subroutine label.
+    #[test]
+    fn hover_on_after_modifier_is_distinct_from_subroutine()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = include_str!("fixtures/frameworks/moo_method_modifiers.pl");
+        let uri = "file:///moo_modifiers_after.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        // Line 13 (0-indexed) is: after 'save' => sub {
+        let (line, col) = find_pos(code, "save", 13)?;
+        let response = server.get_hover(uri, line, col);
+        println!("AFTER MODIFIER HOVER RESPONSE: {response:#}");
+
+        let content = hover_content(&response).ok_or("expected hover content on after modifier")?;
+
+        assert!(
+            content.contains("after") || content.contains("modifier"),
+            "after modifier hover should name the modifier, got: {content}"
+        );
+        assert!(
+            !content.contains("**Subroutine**"),
+            "hover should not show generic Subroutine label for a modifier, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// `use Mouse;` packages should get modifier symbols just like `use Moo;`.
+    /// This verifies that Mouse is recognized in symbol.rs framework detection.
+    /// Without the fix, Mouse is not in `update_framework_context`, so `is_moo`
+    /// is never set and the modifier symbol is never added — hover falls through
+    /// to the generic token fallback showing "**Perl**: `save`" with no modifier info.
+    #[test]
+    fn mouse_modifier_emits_symbol_with_modifier_attribute()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "package MyApp::User;\nuse Mouse;\nbefore 'save' => sub { };\n";
+        let uri = "file:///mouse_modifier.pl";
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        // Line 2 (0-indexed) is: before 'save' => sub { };
+        let (line, col) = find_pos(code, "save", 2)?;
+        let response = server.get_hover(uri, line, col);
+        println!("MOUSE MODIFIER HOVER RESPONSE: {response:#}");
+
+        let content =
+            hover_content(&response).ok_or("expected hover content on Mouse before modifier")?;
+
+        // Must be a semantic hover (not just token fallback "**Perl**: `save`").
+        // The semantic hover will have Declaration/Attributes fields from the modifier symbol.
+        assert!(
+            content.contains("before") || content.contains("modifier"),
+            "Mouse before modifier should produce semantic hover mentioning the modifier, got: {content}"
+        );
+        assert!(
+            !content.contains("**Perl**"),
+            "hover should be semantic, not the generic token fallback, got: {content}"
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
 mod module_hover_tests {
     use crate::common::test_utils::TestServerBuilder;
     use serde_json::Value;

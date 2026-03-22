@@ -72,8 +72,7 @@
           ".pm",
           ".pod",
           ".t",
-          ".psgi",
-          ".tt"
+          ".psgi"
         ],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"

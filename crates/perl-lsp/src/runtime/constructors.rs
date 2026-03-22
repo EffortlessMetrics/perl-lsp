@@ -51,7 +51,6 @@ impl LspServer {
             trace_level: Arc::new(Mutex::new("off".to_string())),
             feature_profile,
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
-            telemetry_cooldowns: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
@@ -146,7 +145,6 @@ impl LspServer {
             trace_level: Arc::new(Mutex::new("off".to_string())),
             feature_profile,
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
-            telemetry_cooldowns: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
@@ -204,7 +202,6 @@ impl LspServer {
             trace_level: Arc::new(Mutex::new("off".to_string())),
             feature_profile,
             pod_cache: Arc::new(Mutex::new(HashMap::new())),
-            telemetry_cooldowns: Arc::new(Mutex::new(HashMap::new())),
             pending_index_task_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]

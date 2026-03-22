@@ -572,7 +572,7 @@ fn test_mixed_concurrent_operations() {
                         _ => unreachable!(),
                     };
 
-                    must(results_clone.lock()).push((
+                    results_clone.lock().unwrap().push((
                         thread_id,
                         operation,
                         operation_name,

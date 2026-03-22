@@ -38,37 +38,26 @@ fn semantic_tokens_expected_ranges() -> Result<(), Box<dyn std::error::Error>> {
         tokens.push((line, col, len, token_type));
     }
 
-    // Legend used by the server (see semantic_tokens.rs) - kept for reference
-    let _legend = [
-        "namespace",
-        "class",
-        "function",
-        "method",
-        "variable",
-        "parameter",
-        "property",
-        "keyword",
-        "comment",
-        "string",
-        "number",
-        "regexp",
-        "operator",
-        "type",
-        "macro",
-    ];
+    // Legend indices (must match capabilities_for() advertisement order in perl-lsp-protocol).
+    // If indices diverge, clients decode emitted tokenType values to wrong colours (issue #2103).
+    // See lsp_semantic_legend_contract_tests.rs for structural validation.
+    //   0=namespace  1=type       2=class      3=interface  4=enum     5=enumMember
+    //   6=typeParameter  7=function  8=method  9=property  10=macro  11=variable
+    //  12=parameter  13=keyword  14=modifier  15=comment  16=string  17=number
+    //  18=regexp  19=operator  20=sql_string
 
     // Expected tokens after overlap removal (LSP specification compliant).
     // We now emit separate non-overlapping tokens for the `sub` keyword, function name,
     // and referenced variable inside the sub body rather than one synthetic combined span.
     let expected_non_overlapping = [
-        (0, 0, 2, 7),  // my - keyword (index 7)
-        (0, 3, 2, 4),  // $x - variable (index 4)
-        (0, 6, 1, 12), // = - operator (index 12)
-        (0, 8, 1, 10), // 1 - number (index 10)
-        (1, 0, 3, 7),  // sub - keyword (index 7)
-        (1, 4, 3, 2),  // foo - function (index 2)
-        (1, 10, 2, 4), // $x - variable reference (index 4)
-        (2, 0, 5, 2),  // foo(); - function (index 2)
+        (0, 0, 2, 13),  // my - keyword (index 13)
+        (0, 3, 2, 11),  // $x - variable (index 11)
+        (0, 6, 1, 19),  // = - operator (index 19)
+        (0, 8, 1, 17),  // 1 - number (index 17)
+        (1, 0, 3, 13),  // sub - keyword (index 13)
+        (1, 4, 3, 7),   // foo - function (index 7)
+        (1, 10, 2, 11), // $x - variable reference (index 11)
+        (2, 0, 5, 7),   // foo(); - function (index 7)
     ];
 
     assert_eq!(tokens.len(), expected_non_overlapping.len(), "semantic token count mismatch");

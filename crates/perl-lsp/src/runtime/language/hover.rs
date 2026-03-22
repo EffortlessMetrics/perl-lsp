@@ -66,6 +66,15 @@ impl LspServer {
                                 doc.text.clone(),
                                 uri.to_string(),
                             )
+                        } else if let Some(module_name) =
+                            Self::find_with_module_at_offset(ast, offset)
+                        {
+                            // Check for `with 'Role'` / `extends 'Parent'` at this offset
+                            HoverExtracted::UseModule(
+                                module_name,
+                                doc.text.clone(),
+                                uri.to_string(),
+                            )
                         } else {
                             self.extract_symbol_hover(ast, &doc.text, offset)
                         }
@@ -96,6 +105,31 @@ impl LspServer {
         let analyzer = crate::semantic::SemanticAnalyzer::analyze_with_source(ast, text);
 
         if let Some(symbol_info) = analyzer.find_definition(offset) {
+            // Detect method modifier symbols (before/after/around) early and render
+            // a dedicated card instead of the generic "Subroutine" label.
+            if let Some(modifier_kind) =
+                symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
+            {
+                let method_name = &symbol_info.name;
+                let kind_label = match modifier_kind {
+                    "before" => "runs **before** the method — use for preconditions and logging",
+                    "after" => "runs **after** the method — use for postconditions and cleanup",
+                    "around" => {
+                        "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
+                    }
+                    _ => "modifies the method",
+                };
+                let doc = symbol_info.documentation.as_deref().unwrap_or("");
+                return HoverExtracted::Complete(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
+                        ),
+                    },
+                }));
+            }
+
             use crate::symbol::VarKind;
             let kind_str = match symbol_info.kind {
                 crate::symbol::SymbolKind::Variable(VarKind::Scalar) => "Scalar Variable",
@@ -173,22 +207,6 @@ impl LspServer {
                 format!("\n**Attributes**: {}", symbol_info.attributes.join(", "))
             };
 
-            // Run type inference to get inferred type for the symbol.
-            // Only applies to variables; subroutines, packages, and constants
-            // are never stored in the type environment so inference adds nothing.
-            // Filter out uninformative types (Any, Void) that add no value.
-            let type_info = if symbol_info.kind.is_variable() {
-                let mut engine = perl_parser::type_inference::TypeInferenceEngine::new();
-                let _ = engine.infer(ast);
-                engine
-                    .hover_label_for(&symbol_info.name)
-                    .filter(|label| label != "Any" && label != "Void")
-                    .map(|label| format!("\n**Type**: `{}`", label))
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
-
             let complexity_section = if complexity_info.is_empty() {
                 String::new()
             } else {
@@ -204,11 +222,10 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
-                        type_info,
                         tied_info,
                         attrs_info,
                         complexity_section,
@@ -318,6 +335,113 @@ impl LspServer {
         }
 
         None
+    }
+
+    /// Walk the AST to find a `with 'Role'` or `extends 'Parent'` name at `offset`.
+    ///
+    /// Handles two AST forms produced by the parser:
+    ///
+    /// 1. **FunctionCall form**: `ExpressionStatement { FunctionCall { name: "with"/"extends", args } }`
+    ///    where args contains `String { value }` or `ArrayLiteral { elements: [String, ...] }`.
+    ///
+    /// 2. **Two-statement form**: consecutive `ExpressionStatement { Identifier { name: "with"/"extends" } }`
+    ///    followed by `ExpressionStatement { String/ArrayLiteral }` within the same `Block`.
+    ///
+    /// Returns the role/parent module name only when `offset` falls within the **name string node**,
+    /// not when the cursor is on the `with`/`extends` keyword itself.
+    fn find_with_module_at_offset(node: &Node, offset: usize) -> Option<String> {
+        // Recurse into container nodes, and handle with/extends patterns at Block level.
+        // NOTE: We do NOT use the ExpressionStatement's outer location to gate entry because
+        // the parser captures only the keyword span (e.g. "with" at 30-34) for the
+        // ExpressionStatement, not the full statement including its arguments. We instead
+        // walk into each ExpressionStatement unconditionally when looking for with/extends calls.
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for (idx, stmt) in statements.iter().enumerate() {
+                    // FunctionCall form: `with 'Role'` or `with 'A', 'B'` parsed as a call.
+                    // Check the inner FunctionCall's args directly — do NOT gate on the outer
+                    // ExpressionStatement's location which only spans the keyword.
+                    if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+                        if let NodeKind::FunctionCall { name, args } = &expression.kind {
+                            if matches!(name.as_str(), "with" | "extends") {
+                                for arg in args {
+                                    if let Some(role) = Self::role_name_at_offset(arg, offset) {
+                                        return Some(role);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Two-statement form: Identifier("with"/"extends") then String/ArrayLiteral
+                    if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+                        if let NodeKind::Identifier { name } = &expression.kind {
+                            if matches!(name.as_str(), "with" | "extends") {
+                                if let Some(next) = statements.get(idx + 1) {
+                                    if let NodeKind::ExpressionStatement { expression: next_expr } =
+                                        &next.kind
+                                    {
+                                        if let Some(role) =
+                                            Self::role_name_at_offset(next_expr, offset)
+                                        {
+                                            return Some(role);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Recurse deeper for nested blocks/packages
+                    if let Some(m) = Self::find_with_module_at_offset(stmt, offset) {
+                        return Some(m);
+                    }
+                }
+            }
+            NodeKind::Package { block, .. } => {
+                if let Some(b) = block {
+                    if let Some(m) = Self::find_with_module_at_offset(b, offset) {
+                        return Some(m);
+                    }
+                }
+            }
+            NodeKind::PhaseBlock { block, .. } => {
+                if let Some(m) = Self::find_with_module_at_offset(block, offset) {
+                    return Some(m);
+                }
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    /// Extract a role/module name from a node if `offset` falls within it.
+    ///
+    /// Handles `String { value }` (single role) and `ArrayLiteral { elements }`
+    /// (multi-role `with 'A', 'B'`). Returns `None` if the offset is not within
+    /// any string node in the argument.
+    fn role_name_at_offset(node: &Node, offset: usize) -> Option<String> {
+        match &node.kind {
+            NodeKind::String { value, .. } => {
+                if offset >= node.location.start && offset <= node.location.end {
+                    let trimmed = value.trim().trim_matches('\'').trim_matches('"').trim();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed.to_string());
+                    }
+                }
+                None
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for elem in elements {
+                    if let Some(role) = Self::role_name_at_offset(elem, offset) {
+                        return Some(role);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
     }
 
     /// Build a hover response for a `use Module` statement.

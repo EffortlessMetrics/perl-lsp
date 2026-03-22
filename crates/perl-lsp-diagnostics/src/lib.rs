@@ -57,6 +57,7 @@ pub use lints::missing_module;
 pub use lints::security;
 pub use lints::strict_warnings;
 pub use lints::unused_imports;
+pub use lints::version_compat;
 
 // Re-export dead code detection (when not targeting WASM)
 #[cfg(not(target_arch = "wasm32"))]
