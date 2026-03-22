@@ -1963,6 +1963,7 @@ name = "perl-lsp-config"
 version = "0.12.0"
 dependencies = [
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
