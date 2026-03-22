@@ -328,14 +328,17 @@ pub(crate) fn apply_disabled_feature_id(
         "lsp.signature_help" => flags.signature_help = false,
         "lsp.document_highlight" => flags.document_highlight = false,
         "lsp.formatting" => flags.formatting = false,
-        "lsp.range_formatting" => flags.range_formatting = false,
+        "lsp.range_formatting" | "lsp.ranges_formatting" => flags.range_formatting = false,
         "lsp.on_type_formatting" => flags.on_type_formatting = false,
         "lsp.document_link" => flags.document_links = false,
         "lsp.inline_completion" => flags.inline_completion = false,
         "lsp.inline_value" => flags.inline_values = false,
         "lsp.notebook_document_sync" => flags.notebook_document_sync = false,
+        "lsp.notebook_cell_execution" => flags.notebook_cell_execution = false,
         "lsp.implementation" => flags.implementation = false,
         "lsp.type_definition" => flags.type_definition = false,
+        "lsp.execute_command" => flags.execute_command = false,
+        "lsp.moniker" => flags.moniker = false,
         unknown => eprintln!("[perl-lsp] Unknown disabledFeatures ID ignored: {unknown}"),
     }
 }
@@ -359,5 +362,51 @@ mod tests {
         let before = flags.clone();
         apply_disabled_feature_id(&mut flags, "lsp.does_not_exist");
         assert_eq!(flags, before, "unknown ID must not mutate flags");
+    }
+
+    #[test]
+    fn apply_disabled_feature_id_execute_command_zeros_field() {
+        let mut flags = BuildFlags::all();
+        apply_disabled_feature_id(&mut flags, "lsp.execute_command");
+        assert!(!flags.execute_command, "lsp.execute_command must zero execute_command field");
+        assert!(flags.completion, "other flags must be unchanged");
+    }
+
+    #[test]
+    fn apply_disabled_feature_id_moniker_zeros_field() {
+        let mut flags = BuildFlags::all();
+        apply_disabled_feature_id(&mut flags, "lsp.moniker");
+        assert!(!flags.moniker, "lsp.moniker must zero moniker field");
+    }
+
+    #[test]
+    fn apply_disabled_feature_id_notebook_cell_execution_zeros_field() {
+        let mut flags = BuildFlags::all();
+        apply_disabled_feature_id(&mut flags, "lsp.notebook_cell_execution");
+        assert!(
+            !flags.notebook_cell_execution,
+            "lsp.notebook_cell_execution must zero notebook_cell_execution field"
+        );
+    }
+
+    /// All feature IDs emitted by BuildFlags::to_feature_ids() must have a match arm.
+    /// This test will fail if a new field is added to BuildFlags with a feature ID
+    /// but no corresponding arm in apply_disabled_feature_id.
+    #[test]
+    fn all_feature_ids_have_match_arm() {
+        let all_ids = BuildFlags::all().to_feature_ids();
+        for id in &all_ids {
+            // Apply each ID to a fresh all-true set; if it's unknown it won't zero anything
+            let mut before = BuildFlags::all();
+            apply_disabled_feature_id(&mut before, id);
+            // After applying, the flags should differ from BuildFlags::all()
+            // (i.e. some field was zeroed — not treated as unknown)
+            let still_all = before == BuildFlags::all();
+            assert!(
+                !still_all,
+                "feature ID '{id}' emitted by to_feature_ids() has no match arm in \
+                 apply_disabled_feature_id — add one to keep the two in sync"
+            );
+        }
     }
 }
