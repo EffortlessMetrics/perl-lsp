@@ -202,7 +202,8 @@ fn run_check_json(files: &[String]) -> i32 {
                 count_ok += 1;
                 serde_json::json!({
                     "path": path,
-                    "status": "ok"
+                    "status": "ok",
+                    "errors": []
                 })
             }
             FileCheckStatus::Fail { messages } => {

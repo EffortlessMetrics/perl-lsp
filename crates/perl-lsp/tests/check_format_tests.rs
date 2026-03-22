@@ -100,9 +100,15 @@ fn test_check_json_error_file() -> Result<(), Box<dyn std::error::Error>> {
 /// IO error (nonexistent file) should produce status "error" in JSON output.
 #[test]
 fn test_check_json_io_error() -> Result<(), Box<dyn std::error::Error>> {
-    let nonexistent = "/tmp/nonexistent_perl_lsp_test_file_12345.pl";
+    // Use a path inside a fresh tempdir that is dropped immediately, guaranteeing
+    // it does not exist on disk (more robust than a hardcoded /tmp sentinel).
+    let dir = tempfile::tempdir()?;
+    let nonexistent = dir.path().join("does_not_exist.pl");
+    drop(dir); // directory is now deleted; the path is guaranteed absent
+    let nonexistent = nonexistent.to_str().ok_or("non-UTF-8 temp path")?.to_string();
+
     let output = cargo_bin_cmd!("perl-lsp")
-        .args(["--check", "--check-format", "json", nonexistent])
+        .args(["--check", "--check-format", "json", &nonexistent])
         .output()?;
 
     // Non-zero exit code
@@ -186,6 +192,32 @@ fn test_check_json_file_path_matches() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+/// JSON output for an ok file must include "errors": [] for schema consistency.
+///
+/// CI tools iterating `.files[].errors` expect a uniform shape regardless of
+/// status.  Absence of the key (null in jq) breaks `[.files[].errors | length]
+/// | add` style queries.
+#[test]
+fn test_check_json_ok_entry_has_empty_errors_array() -> Result<(), Box<dyn std::error::Error>> {
+    let (_dir, path) = write_temp_perl("use strict;\nprint 1;\n")?;
+    let output =
+        cargo_bin_cmd!("perl-lsp").args(["--check", "--check-format", "json", &path]).output()?;
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    let files = parsed["files"].as_array().ok_or("'files' is not an array")?;
+    let entry = &files[0];
+    assert_eq!(entry["status"], "ok");
+
+    // "errors" must be present as an empty array — not absent (null) — so that
+    // consumers can uniformly iterate `.errors` without a null guard.
+    let errors = entry["errors"].as_array().ok_or("'errors' must be an array on ok entries")?;
+    assert!(errors.is_empty(), "ok entry must have empty errors array, got {errors:?}");
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Text format regression — must be unchanged
 // ---------------------------------------------------------------------------
@@ -251,10 +283,14 @@ fn test_check_format_without_check_fails() {
 fn test_check_json_mixed_results_summary() -> Result<(), Box<dyn std::error::Error>> {
     let (_dir_ok, path_ok) = write_temp_perl("use strict;\nprint 1;\n")?;
     let (_dir_fail, path_fail) = write_temp_perl("sub foo { \n    my $x = ;\n}\n")?;
-    let nonexistent = "/tmp/nonexistent_perl_lsp_mixed_test_99999.pl";
+    // Guarantee a nonexistent path without relying on /tmp sentinel names.
+    let gone_dir = tempfile::tempdir()?;
+    let nonexistent = gone_dir.path().join("gone.pl");
+    drop(gone_dir);
+    let nonexistent = nonexistent.to_str().ok_or("non-UTF-8 temp path")?.to_string();
 
     let output = cargo_bin_cmd!("perl-lsp")
-        .args(["--check", "--check-format", "json", &path_ok, &path_fail, nonexistent])
+        .args(["--check", "--check-format", "json", &path_ok, &path_fail, &nonexistent])
         .output()?;
 
     assert!(!output.status.success());
