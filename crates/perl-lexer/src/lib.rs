@@ -1009,6 +1009,13 @@ impl<'a> PerlLexer<'a> {
     }
 
     fn try_heredoc(&mut self) -> Option<Token> {
+        // `<<` is the left-shift operator, not a heredoc, when we just finished
+        // a term (e.g. `(1<<index(...))`). The `1` sets ExpectOperator mode, so
+        // any `<<` in that mode is bitshift and must not be treated as a heredoc.
+        if self.mode == LexerMode::ExpectOperator {
+            return None;
+        }
+
         // Check for heredoc start
         if self.peek_byte(0) != Some(b'<') || self.peek_byte(1) != Some(b'<') {
             return None;
