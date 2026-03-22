@@ -626,9 +626,9 @@ export class BinaryDownloader {
         if (!binaryPath.startsWith(storagePath)) { return; }
         if (!fs.existsSync(binaryPath)) { return; }
 
-        // Guard: check interval
+        // Guard: check interval (treat negative values same as 0 — disabled)
         const intervalHours = config.get<number>('updateCheckInterval', 24);
-        if (intervalHours === 0) { return; }
+        if (intervalHours <= 0) { return; }
         const lastCheck = this.context.globalState.get<number>('perl-lsp.lastUpdateCheck', 0);
         const elapsedHours = (Date.now() - lastCheck) / (1000 * 60 * 60);
         if (elapsedHours < intervalHours) { return; }
