@@ -435,18 +435,13 @@ sub build {
         .request("workspace/symbol", json!({ "query": "build" }))
         .map_err(|e| format!("workspace/symbol request failed: {e}"))?;
 
-    assert!(
-        response.is_array(),
-        "workspace/symbol should return an array, got: {:?}",
-        response
-    );
+    assert!(response.is_array(), "workspace/symbol should return an array, got: {:?}", response);
 
     let symbols = response.as_array().ok_or("response is not an array")?;
     let build_sym = symbols.iter().find(|s| s["name"].as_str() == Some("build"));
 
-    let sym = build_sym.ok_or(
-        "workspace/symbol did not return 'build' — WorkspaceSymbolsProvider not wired",
-    )?;
+    let sym = build_sym
+        .ok_or("workspace/symbol did not return 'build' — WorkspaceSymbolsProvider not wired")?;
 
     // containerName is populated by WorkspaceSymbolsProvider when the sub is inside a package.
     // extract_simple_symbols never sets containerName — its absence would prove the old path is active.
