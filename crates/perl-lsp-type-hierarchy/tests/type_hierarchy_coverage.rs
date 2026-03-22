@@ -399,7 +399,203 @@ fn supertypes_for_unknown_package_is_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// 14. Mixed use-parent and @ISA in same file
+// 14. Cross-file (multi-document) supertypes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_find_supertypes_multi_cross_file() {
+    // File A defines the parent; File B defines the child that inherits from it.
+    let code_a = "package Parent;\nsub new { bless {}, shift }\n";
+    let code_b = "package Child;\nuse parent 'Parent';\n";
+    let ast_a = parse(code_a);
+    let ast_b = parse(code_b);
+    let provider = TypeHierarchyProvider::new();
+
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> =
+        vec![("file:///a.pm", &ast_a, code_a), ("file:///b.pm", &ast_b, code_b)];
+    let item = make_item("Child");
+    let supertypes = provider.find_supertypes_multi(docs.into_iter(), &item);
+
+    assert_eq!(supertypes.len(), 1, "Expected one supertype, got: {:?}", supertypes);
+    assert_eq!(supertypes[0].name, "Parent");
+    // The Parent is defined in file A — result URI must point to file A.
+    assert_eq!(
+        supertypes[0].uri, "file:///a.pm",
+        "Supertype URI should point to the file where Parent is declared"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 15. Cross-file (multi-document) subtypes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_find_subtypes_multi_cross_file() {
+    // File A defines the parent; File B defines the child.
+    let code_a = "package Parent;\nsub new { bless {}, shift }\n";
+    let code_b = "package Child;\nuse parent 'Parent';\n";
+    let ast_a = parse(code_a);
+    let ast_b = parse(code_b);
+    let provider = TypeHierarchyProvider::new();
+
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> =
+        vec![("file:///a.pm", &ast_a, code_a), ("file:///b.pm", &ast_b, code_b)];
+    let item = make_item("Parent");
+    let subtypes = provider.find_subtypes_multi(docs.into_iter(), &item);
+
+    assert_eq!(subtypes.len(), 1, "Expected one subtype, got: {:?}", subtypes);
+    assert_eq!(subtypes[0].name, "Child");
+    // The Child is declared in file B — result URI must point to file B.
+    assert_eq!(
+        subtypes[0].uri, "file:///b.pm",
+        "Subtype URI should point to the file where Child is declared"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 16. Diamond inheritance across multiple files
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_diamond_inheritance_multi() {
+    // GrandParent in file A; Parent1 and Parent2 in files B, C; Child in file D.
+    let code_a = "package GrandParent;\n";
+    let code_b = "package Parent1;\nuse parent 'GrandParent';\n";
+    let code_c = "package Parent2;\nuse parent 'GrandParent';\n";
+    let code_d = "package Child;\nuse parent 'Parent1';\nuse parent 'Parent2';\n";
+    let ast_a = parse(code_a);
+    let ast_b = parse(code_b);
+    let ast_c = parse(code_c);
+    let ast_d = parse(code_d);
+    let provider = TypeHierarchyProvider::new();
+
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> = vec![
+        ("file:///a.pm", &ast_a, code_a),
+        ("file:///b.pm", &ast_b, code_b),
+        ("file:///c.pm", &ast_c, code_c),
+        ("file:///d.pm", &ast_d, code_d),
+    ];
+
+    // supertypes of Child should be Parent1 and Parent2 (no duplicates)
+    let item_child = make_item("Child");
+    let supertypes =
+        provider.find_supertypes_multi(docs.iter().map(|(u, a, c)| (*u, *a, *c)), &item_child);
+    let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Parent1"), "Expected Parent1 in {names:?}");
+    assert!(names.contains(&"Parent2"), "Expected Parent2 in {names:?}");
+    assert_eq!(names.len(), 2, "No duplicate supertypes expected, got: {names:?}");
+
+    // subtypes of GrandParent should be Parent1 and Parent2 (no duplicates)
+    let item_gp = make_item("GrandParent");
+    let subtypes =
+        provider.find_subtypes_multi(docs.iter().map(|(u, a, c)| (*u, *a, *c)), &item_gp);
+    let subnames: Vec<&str> = subtypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(subnames.contains(&"Parent1"), "Expected Parent1 in {subnames:?}");
+    assert!(subnames.contains(&"Parent2"), "Expected Parent2 in {subnames:?}");
+    assert_eq!(subnames.len(), 2, "No duplicate subtypes expected, got: {subnames:?}");
+}
+
+// ---------------------------------------------------------------------------
+// 17. C3 MRO across multiple files
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_c3_mro_multi() {
+    // Diamond: GrandParent <- Parent1, Parent2 <- Child
+    let code_a = "package GrandParent;\n";
+    let code_b = "package Parent1;\nuse parent 'GrandParent';\n";
+    let code_c = "package Parent2;\nuse parent 'GrandParent';\n";
+    let code_d = "package Child;\nuse parent 'Parent1';\nuse parent 'Parent2';\n";
+    let ast_a = parse(code_a);
+    let ast_b = parse(code_b);
+    let ast_c = parse(code_c);
+    let ast_d = parse(code_d);
+    let provider = TypeHierarchyProvider::new();
+
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> = vec![
+        ("file:///a.pm", &ast_a, code_a),
+        ("file:///b.pm", &ast_b, code_b),
+        ("file:///c.pm", &ast_c, code_c),
+        ("file:///d.pm", &ast_d, code_d),
+    ];
+
+    let mro = provider.c3_mro_multi(docs.into_iter(), "Child");
+    // C3 MRO for diamond should be: Child, Parent1, Parent2, GrandParent
+    assert_eq!(mro[0], "Child", "MRO must start with the class itself");
+    assert!(mro.contains(&"Parent1".to_string()), "MRO missing Parent1: {mro:?}");
+    assert!(mro.contains(&"Parent2".to_string()), "MRO missing Parent2: {mro:?}");
+    assert!(mro.contains(&"GrandParent".to_string()), "MRO missing GrandParent: {mro:?}");
+    // Each class appears exactly once
+    let mut seen = std::collections::BTreeSet::<String>::new();
+    for cls in &mro {
+        assert!(seen.insert(cls.clone()), "Duplicate in MRO: {cls}");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 18. Fallback URI — parent declared outside all open documents
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_find_supertypes_multi_fallback_uri() {
+    // Child declares `use parent 'ExternalLib'` but ExternalLib has no open
+    // document. The result URI should fall back to the item's own URI.
+    let code_b = "package Child;\nuse parent 'ExternalLib';\n";
+    let ast_b = parse(code_b);
+    let provider = TypeHierarchyProvider::new();
+
+    // Only one document scanned — ExternalLib has no package declaration anywhere.
+    let item = TypeHierarchyItem {
+        name: "Child".to_string(),
+        kind: TypeHierarchySymbolKind::Class,
+        uri: "file:///b.pm".to_string(),
+        range: WireRange::default(),
+        selection_range: WireRange::default(),
+        detail: None,
+        data: None,
+    };
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> =
+        vec![("file:///b.pm", &ast_b, code_b)];
+    let supertypes = provider.find_supertypes_multi(docs.into_iter(), &item);
+
+    assert_eq!(supertypes.len(), 1, "Expected one supertype, got: {:?}", supertypes);
+    assert_eq!(supertypes[0].name, "ExternalLib");
+    // ExternalLib was never declared in any scanned document — must fall back to item.uri
+    assert_eq!(
+        supertypes[0].uri, "file:///b.pm",
+        "Unknown parent URI should fall back to the request item URI, got: {}",
+        supertypes[0].uri
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Single-document degrade: find_supertypes_multi with one doc == find_supertypes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_find_supertypes_multi_single_doc_degrades_correctly() {
+    // With exactly one document, multi should return the same parent names as single.
+    let code = "package Child;\nuse parent 'Parent';\npackage Parent;\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let item = make_item("Child");
+
+    let single = provider.find_supertypes(&ast, &item);
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> =
+        vec![("file:///single.pm", &ast, code)];
+    let multi = provider.find_supertypes_multi(docs.into_iter(), &item);
+
+    let single_names: Vec<&str> = single.iter().map(|i| i.name.as_str()).collect();
+    let multi_names: Vec<&str> = multi.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(
+        single_names, multi_names,
+        "single-file and multi-file (1 doc) should return the same parent names"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 19. Mixed use-parent and @ISA in same file
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -422,7 +618,7 @@ our @ISA = ('ParentB');\n";
 }
 
 // ---------------------------------------------------------------------------
-// 15. Empty source
+// 20. Empty source
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -450,7 +646,7 @@ fn empty_source_returns_empty_subtypes() {
 }
 
 // ---------------------------------------------------------------------------
-// 16. C3 linearization (Method Resolution Order)
+// 21. C3 linearization (Method Resolution Order)
 // ---------------------------------------------------------------------------
 
 /// Simple linear chain: Child -> Parent -> GrandParent
