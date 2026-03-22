@@ -590,6 +590,17 @@ Enable Test::More and Test2 integration.
 
 ---
 
+### `perl-lsp.autoPopulateNewFiles`
+
+| Property | Value |
+|----------|-------|
+| Type | `boolean` |
+| Default | `true` |
+
+Auto-populate new `.pm` files with a `package` declaration matching the inferred package name plus `use strict; use warnings; 1;`. New `.t` files receive `use strict; use warnings; use Test::More; done_testing;`. Files that already have content are not modified. Set to `false` to disable.
+
+---
+
 ## DAP Settings
 
 Debug Adapter Protocol settings (from `perl-dap`).
