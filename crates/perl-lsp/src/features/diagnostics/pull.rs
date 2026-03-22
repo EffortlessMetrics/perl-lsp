@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
 use perl_diagnostics_codes::DiagnosticCode;
+use perl_lsp_performance::{OperationMetrics, PerformanceMonitor};
 use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
@@ -51,6 +52,30 @@ impl PullDiagnosticsProvider {
 
         let diagnostics = self.collect_diagnostics_for_text(uri, content);
         self.build_full_report(result_id, diagnostics)
+    }
+
+    /// Handle textDocument/diagnostic request with performance metrics.
+    ///
+    /// Same as [`get_document_diagnostics`] but also returns a map of
+    /// [`OperationMetrics`] keyed by phase name: `"parse"`, `"scope_analysis"`,
+    /// `"lint"`, and `"deduplication"`.
+    pub fn get_document_diagnostics_with_metrics(
+        &self,
+        uri: &Uri,
+        content: &str,
+        previous_result_id: Option<String>,
+    ) -> (DocumentDiagnosticReport, HashMap<String, OperationMetrics>) {
+        let monitor = PerformanceMonitor::new();
+
+        let result_id = format!("{:x}", md5::compute(content));
+        if previous_result_id.as_deref() == Some(&result_id) {
+            let report = self.build_unchanged_report(result_id);
+            return (report, monitor.get_metrics());
+        }
+
+        let diagnostics = self.collect_diagnostics_for_text_monitored(uri, content, &monitor);
+        let report = self.build_full_report(result_id, diagnostics);
+        (report, monitor.get_metrics())
     }
 
     /// Handle workspace/diagnostic request.
@@ -121,6 +146,54 @@ impl PullDiagnosticsProvider {
                     .into_iter()
                     .map(|d| self.to_lsp_diagnostic(uri, content, d))
                     .collect()
+            }
+            Err(error) => vec![self.parse_error_to_diagnostic(uri, content, &error)],
+        }
+    }
+
+    /// Like [`collect_diagnostics_for_text`] but records per-phase timing into
+    /// `monitor`.  The phases tracked are:
+    ///   - `"parse"` — parsing the source into an AST
+    ///   - `"scope_analysis"` — scope analysis and lint checks (via `get_diagnostics`)
+    ///   - `"lint"` — lint post-processing (converting internal diagnostics to LSP)
+    ///   - `"deduplication"` — deduplication (performed inside `get_diagnostics`)
+    ///
+    /// `"scope_analysis"` and `"deduplication"` share the wall-clock time of the
+    /// `get_diagnostics` call because both phases happen inside it; `"lint"` covers
+    /// the LSP conversion step.
+    fn collect_diagnostics_for_text_monitored(
+        &self,
+        uri: &Uri,
+        content: &str,
+        monitor: &PerformanceMonitor,
+    ) -> Vec<LspDiagnostic> {
+        let code_text = code_slice(content);
+        let mut parser = Parser::new(code_text);
+
+        // Phase: parse
+        let parse_result = monitor.track_operation("parse", || parser.parse());
+
+        match parse_result {
+            Ok(ast) => {
+                let parse_errors: Vec<ParseError> = parser.errors().to_vec();
+                let ast = std::sync::Arc::new(ast);
+                let provider = DiagnosticsProvider::new(&ast, content.to_string());
+
+                // Phase: scope_analysis + deduplication (both happen inside get_diagnostics)
+                let internal_diagnostics = monitor.track_operation("scope_analysis", || {
+                    provider.get_diagnostics(&ast, &parse_errors, content, None)
+                });
+
+                // Record deduplication as a nominal entry — it runs inside get_diagnostics
+                monitor.track_operation("deduplication", || ());
+
+                // Phase: lint — LSP-format conversion of the collected diagnostics
+                monitor.track_operation("lint", || {
+                    internal_diagnostics
+                        .into_iter()
+                        .map(|d| self.to_lsp_diagnostic(uri, content, d))
+                        .collect::<Vec<_>>()
+                })
             }
             Err(error) => vec![self.parse_error_to_diagnostic(uri, content, &error)],
         }

@@ -1834,6 +1834,7 @@ dependencies = [
  "perl-lsp-launcher",
  "perl-lsp-limits",
  "perl-lsp-navigation",
+ "perl-lsp-performance",
  "perl-lsp-protocol",
  "perl-lsp-providers",
  "perl-lsp-rename",

@@ -8,8 +8,70 @@
 
 use moka::sync::Cache;
 use perl_parser_core::Node;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// A single operation's accumulated timing metrics.
+#[derive(Debug, Clone, Default)]
+pub struct OperationMetrics {
+    /// Total nanoseconds spent across all calls to this operation.
+    pub total_duration_ns: u128,
+    /// Number of times this operation was invoked.
+    pub call_count: u64,
+}
+
+/// Diagnostic latency monitor.
+///
+/// Wraps named operations with timing and accumulates metrics that can be
+/// retrieved after the fact via [`get_metrics`](PerformanceMonitor::get_metrics).
+///
+/// # Example
+///
+/// ```rust
+/// use perl_lsp_performance::PerformanceMonitor;
+/// let monitor = PerformanceMonitor::new();
+/// let result = monitor.track_operation("parse", || 42_u32);
+/// assert_eq!(result, 42);
+/// let metrics = monitor.get_metrics();
+/// assert!(metrics.contains_key("parse"));
+/// ```
+pub struct PerformanceMonitor {
+    metrics: Mutex<HashMap<String, OperationMetrics>>,
+}
+
+impl PerformanceMonitor {
+    /// Create a new monitor with no recorded metrics.
+    pub fn new() -> Self {
+        Self { metrics: Mutex::new(HashMap::new()) }
+    }
+
+    /// Run `f`, record its wall-clock duration under `name`, and return its value.
+    pub fn track_operation<T, F: FnOnce() -> T>(&self, name: &str, f: F) -> T {
+        let start = Instant::now();
+        let result = f();
+        let elapsed_ns = start.elapsed().as_nanos();
+
+        if let Ok(mut map) = self.metrics.lock() {
+            let entry = map.entry(name.to_string()).or_default();
+            entry.total_duration_ns += elapsed_ns;
+            entry.call_count += 1;
+        }
+
+        result
+    }
+
+    /// Return a snapshot of all recorded metrics, keyed by operation name.
+    pub fn get_metrics(&self) -> HashMap<String, OperationMetrics> {
+        self.metrics.lock().map(|m| m.clone()).unwrap_or_default()
+    }
+}
+
+impl Default for PerformanceMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub use perl_symbol_index::SymbolIndex;
 
