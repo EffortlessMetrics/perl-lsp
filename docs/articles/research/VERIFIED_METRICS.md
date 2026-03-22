@@ -1,5 +1,7 @@
 # Verified Metrics: Fact-Checked Numbers for perl-lsp
 
+> **Note**: This document is a historical research artifact capturing metrics as of 2026-03-19. For current authoritative values, see [`docs/project/PUBLICATION_FACTS_LEDGER.md`](../project/PUBLICATION_FACTS_LEDGER.md). The ledger is updated each session and supersedes this file for any metric that conflicts.
+
 *Every number in this document has been verified against the source. Where common claims differ from verified data, both are shown with the discrepancy explained.*
 
 ---
@@ -8,19 +10,19 @@
 
 | Metric | Verified Value | Common Claim | Source | Verification Command |
 |--------|---------------|-------------|--------|---------------------|
-| Lines of Rust code | 563,883 | 546,000 | `wc -l` on all `.rs` files | `wc -l $(find crates -name "*.rs")` |
-| Workspace crates | 133 | 128-132 | `Cargo.toml` count | `find crates -name "Cargo.toml" -maxdepth 2 \| wc -l` |
-| Total commits | 2,768 | varies | `git log` | `git log --oneline \| wc -l` |
-| LSP features tracked | 97 | 98 | `features.toml` | `grep -c '\[\[feature\]\]' features.toml` |
+| Lines of Rust code | 591,034 | 546,000–563,883 (historical) | `wc -l` on all `.rs` files | `find crates/ -name "*.rs" \| xargs wc -l \| tail -1` |
+| Workspace crates | 133 | 128-132 (historical) | `cargo metadata` | `cargo metadata --no-deps \| jq '.packages \| length'` |
+| Total commits | 3,210 | 2,768 (historical) | `git log` | `git log --oneline \| wc -l` |
+| LSP features tracked | 98 | 97 (off-by-one) | `features.toml` | `grep -c '^\[\[feature\]\]' features.toml` |
 | LSP features implemented | 53/53 advertised | 98 | `features.toml` + `CURRENT_STATUS.md` | `scripts/update-current-status.py` |
 
 ### Discrepancy Notes
 
-**Lines of code (563K vs 546K)**: The 546K figure appeared in the FIVE_ERAS.md article, written from an earlier snapshot. The codebase grows continuously as parser fixes, tests, and new microcrates are added. Both numbers were correct at their respective measurement times.
+**Lines of code (591K vs 546K–563K historical)**: The 546K figure appeared in FIVE_ERAS.md; the 563K figure appeared in earlier COST_ROI.md drafts. Both were correct at their respective measurement times. The codebase grows continuously as parser fixes, tests, and new microcrates are added. Current verified value: 591,034 (2026-03-21). See `docs/project/PUBLICATION_FACTS_LEDGER.md` for the authoritative current value.
 
-**Crate count (133 vs 128-132)**: The count changes as microcrates are extracted and new crates are created. The workspace `Cargo.toml` excludes some directories (`tree-sitter-perl/`, `fuzz/`, `archive/`), so the "member count" depends on whether you count excluded crates. 133 is the count of `Cargo.toml` files under `crates/`.
+**Crate count (133 vs 128-132 historical)**: The count changes as microcrates are extracted and new crates are created. The workspace `Cargo.toml` excludes some directories (`tree-sitter-perl/`, `fuzz/`, `archive/`), so the "member count" depends on whether you count excluded crates. 133 is verified via `cargo metadata --no-deps` (2026-03-21).
 
-**LSP features (97 total vs 98)**: The `features.toml` file tracks 97 `[[feature]]` entries. The "98" claim likely included a feature that was subsequently consolidated. The user-visible coverage metric is 53/53 advertised features at 100%.
+**LSP features (98 vs 97 historical)**: The `features.toml` file tracks 98 `[[feature]]` entries as of 2026-03-21. Earlier claims of 97 were off-by-one. The user-visible coverage metric is 53/53 advertised features at 100%.
 
 ---
 

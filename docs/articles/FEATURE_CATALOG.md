@@ -1,6 +1,6 @@
 # perl-lsp Feature Catalog
 
-perl-lsp implements 97 LSP and DAP features, all at GA maturity, tracked in [`features.toml`](../../features.toml). This catalog describes what each capability area does and why it matters for Perl development.
+perl-lsp implements 98 LSP and DAP features, all at GA maturity, tracked in [`features.toml`](../../features.toml). This catalog describes what each capability area does and why it matters for Perl development.
 
 This is not a marketing summary — it is a structured tour of the actual implementation, grouped by what you use it for.
 

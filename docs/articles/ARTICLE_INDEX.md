@@ -149,7 +149,7 @@ Supporting research and source material. All files are in [research/](research/)
 | [research/COUNTER_INTUITIVE_INSIGHTS.md](research/COUNTER_INTUITIVE_INSIGHTS.md) | Surprising findings that invert common assumptions about AI-assisted development |
 | [research/HINDSIGHT_FINDINGS.md](research/HINDSIGHT_FINDINGS.md) | Things that are obvious in hindsight but were invisible at build time |
 | [research/CPAN_CORPUS_AUDIT.md](research/CPAN_CORPUS_AUDIT.md) | Detailed CPAN corpus analysis: 4,355 files, top error buckets, coverage by module category |
-| [research/MICROCRATE_EVOLUTION.md](research/MICROCRATE_EVOLUTION.md) | How the codebase grew from 2 to 132 crates: emergent architecture from swarm development |
+| [research/MICROCRATE_EVOLUTION.md](research/MICROCRATE_EVOLUTION.md) | How the codebase grew from 2 to 133 crates: emergent architecture from swarm development |
 | [research/TREE_SITTER_BREAKAGE.md](research/TREE_SITTER_BREAKAGE.md) | 7 tree-sitter breakage patterns and the mode-based lexer insight that drove v3 |
 | [research/INTERVIEW_QUESTIONS.md](research/INTERVIEW_QUESTIONS.md) | 57 interview questions (35 original + 22 generated from session discoveries) |
 | [research/BUILDER_SPECS_PHASE_A.md](research/BUILDER_SPECS_PHASE_A.md) | Builder-ready specifications from session 3 scout findings |
@@ -236,12 +236,12 @@ These angles have supporting research material but no finalized outline yet:
 
 All of the following were verified by scout agents on 2026-03-19 and documented in [research/VERIFIED_METRICS.md](research/VERIFIED_METRICS.md):
 
-| Claim | Verified Value | Common Claim | Note |
-|-------|---------------|--------------|------|
-| Lines of Rust | 563,883 | 546,000 | Codebase grows; both were correct at measurement time |
+| Claim | Verified Value | Historical Claims | Note |
+|-------|---------------|------------------|------|
+| Lines of Rust | 591,034 | 563,883 / 546K (historical) | Codebase grows; see PUBLICATION_FACTS_LEDGER.md |
 | Workspace crates | 133 | 128-132 | Count changes as microcrates are extracted |
-| Total commits | 2,768 | varies | Per `git log --oneline \| wc -l` |
-| LSP features tracked | 97 | 98 | Per `features.toml` |
+| Total commits | 3,210 | 2,768 | Per `git log --oneline \| wc -l` (2026-03-21) |
+| LSP features tracked | 98 | 97 | Per `features.toml` (off-by-one corrected) |
 | LSP features implemented | 53/53 advertised | 98 | 100% of advertised features |
 | CPAN corpus files | 4,355 | same | Per `.ci/cpan-corpus-baseline.json` |
 | CPAN ratcheted clean rate | 80.0% | same | 3,484/4,355 as of PR #2039 |
@@ -255,12 +255,12 @@ All of the following were verified by scout agents on 2026-03-19 and documented 
 
 These figures appear in polished articles but differ from verified values. Writers should use verified values.
 
-| Article | Stated Value | Verified Value |
-|---------|-------------|----------------|
-| FIVE_ERAS.md | 546,000 lines of Rust | 563,883 (article snapshot was earlier) |
-| FIVE_ERAS.md | 130 crates | 133 (count grows) |
+| Article | Stated Value | Current Verified Value |
+|---------|-------------|------------------------|
+| FIVE_ERAS.md | ~546K LOC (article snapshot) | 591,034 (ledger 2026-03-21) |
+| FIVE_ERAS.md | 130 crates (article snapshot) | 133 (ledger 2026-03-21) |
 | BLOG_MATERIAL_INDEX.md | 425 commits in 24 hours | 321 all-ref artifacts on 2026-03-18 (peak session day) |
-| BLOG_MATERIAL_INDEX.md | 546,283 lines | 563,883 (earlier snapshot) |
+| BLOG_MATERIAL_INDEX.md | ~546K LOC (article snapshot) | 591,034 (ledger 2026-03-21) |
 
 ### Claims pending verification
 

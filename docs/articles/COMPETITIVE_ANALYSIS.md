@@ -85,7 +85,7 @@ The 78% adoption gap is largely explained by this friction. Developers who do no
 
 perl-lsp occupies a different position in this landscape: zero-dependency static analysis.
 
-**The parser does not call Perl.** It is a hand-written recursive descent parser in Rust (`crates/perl-parser-core/`) with a stateful lexer (`crates/perl-lexer/`) that handles Perl's context-sensitive grammar without executing any code. A single native binary handles parsing, analysis, and all 97 LSP and DAP features.
+**The parser does not call Perl.** It is a hand-written recursive descent parser in Rust (`crates/perl-parser-core/`) with a stateful lexer (`crates/perl-lexer/`) that handles Perl's context-sensitive grammar without executing any code. A single native binary handles parsing, analysis, and all 98 LSP and DAP features.
 
 This has real implications:
 
@@ -99,7 +99,7 @@ This has real implications:
 
 ### Feature Coverage
 
-perl-lsp implements 97 LSP and DAP features, tracked in `features.toml`. The feature table from the research comparison:
+perl-lsp implements 98 LSP and DAP features, tracked in `features.toml`. The feature table from the research comparison:
 
 | Feature | perl-lsp | PerlNavigator | Perl::LanguageServer | PLS |
 |---------|----------|---------------|---------------------|-----|

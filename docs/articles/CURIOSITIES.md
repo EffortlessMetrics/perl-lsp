@@ -108,9 +108,9 @@ compare them.
 
 ## Architecture Curiosities
 
-### 131 crates, zero circular dependencies
+### 133 crates, zero circular dependencies
 
-The workspace contains 131 crates organized into families
+The workspace contains 133 crates organized into families
 (`perl-module-*`, `perl-lsp-*`, `perl-dap-*`, `perl-ts-*`). Despite
 this scale, there are zero circular dependencies. The microcrate
 architecture makes this possible: each crate has a single
@@ -135,7 +135,7 @@ discovering the previous one had edge cases.
 ### Feature governance pipeline
 
 Every LSP capability goes through a governance pipeline:
-`features.toml` (97 features defined) -> microcrate implementation ->
+`features.toml` (98 features defined) -> microcrate implementation ->
 runtime feature gates. A feature cannot be advertised to clients
 until it passes through all three stages.
 
