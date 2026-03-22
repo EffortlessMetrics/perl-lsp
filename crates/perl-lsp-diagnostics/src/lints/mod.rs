@@ -68,6 +68,14 @@
 //! | `security-string-eval` | Warning | `eval "$string"` is a security risk |
 //! | `security-backtick-exec` | Information | Backtick/qx command execution detected |
 //!
+//! ## Package / subroutine (`package_subroutine.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL200` | Warning | File has no package declaration |
+//! | `PL201` | Warning | Package name declared more than once |
+//! | `PL300` | Warning | Subroutine name defined more than once |
+//!
 //! ## Dead code (`dead_code.rs`)
 //!
 //! | Code | Severity | Description |
@@ -98,6 +106,8 @@ pub mod common_mistakes;
 pub mod deprecated;
 /// Missing module detection (PL701)
 pub mod missing_module;
+/// Package and subroutine diagnostics (PL200, PL201, PL300)
+pub mod package_subroutine;
 /// printf/sprintf format specifier arity validation (PL405)
 pub mod printf_format;
 pub mod security;
