@@ -914,13 +914,6 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Parse hash subscript key expression, treating lone keywords as bare
-    /// identifiers when they appear as `$h->{keyword}` or `$h{keyword}`.
-    ///
-    /// Keywords like `not`, `and`, `or`, `xor`, `do`, `eval` would normally be
-    /// consumed as operators or statement keywords. When one of these appears
-    /// inside a hash subscript followed immediately by `}`, it should be treated
-    /// as a bare hash key instead.
     /// Check whether the current peek token is a quote-op name that should be
     /// treated as a bareword hash key inside a subscript.
     ///
@@ -962,6 +955,19 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    /// Parse hash subscript key expression, treating lone keywords as bare
+    /// identifiers when they appear as `$h->{keyword}` or `$h{keyword}`.
+    ///
+    /// Keywords like `not`, `and`, `or`, `xor`, `do`, `eval` would normally be
+    /// consumed as operators or statement keywords. When one of these appears
+    /// inside a hash subscript followed immediately by `}`, it should be treated
+    /// as a bare hash key instead.
+    ///
+    /// Additionally handles quote-operator names (`m`, `s`, `q`, etc.) when used
+    /// as hash subscript keys. The lexer suppresses quote-op detection inside
+    /// hash subscripts (hash_brace_depth > 0), emitting them as Identifier tokens.
+    /// This function builds a proper parse tree node for them, including support
+    /// for hash slices like `@h{m, s}` which require a list node.
     fn parse_hash_subscript_key(&mut self) -> ParseResult<Node> {
         // Classic keyword-as-bareword (not, and, or, xor, do, eval) when directly
         // before `}`.  These were handled here before this PR and are preserved.
