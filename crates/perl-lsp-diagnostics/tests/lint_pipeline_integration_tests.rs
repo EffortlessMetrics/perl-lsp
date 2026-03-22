@@ -326,3 +326,169 @@ fn lint_pipeline_dedup_removes_exact_duplicates() {
         }
     }
 }
+
+// =========================================================================
+// 15. Heredoc antipatterns flow through DiagnosticsProvider::get_diagnostics()
+//     Wiring test for issue #2708: ensures detect_heredoc_antipatterns is called
+//     from get_diagnostics(), not only from direct callers in the LSP layer.
+// =========================================================================
+
+#[test]
+fn lint_pipeline_format_heredoc_emits_pl800_via_get_diagnostics() {
+    // `format STDOUT =` is the most reliable trigger for PL800 (HeredocInFormat).
+    // This test verifies the wiring: get_diagnostics() must call
+    // detect_heredoc_antipatterns() so any consumer gets these diagnostics.
+    let source = "format STDOUT =\n@<<<< @>>>>\n$name, $value\n.\n";
+    let diags = diagnostics_for(source);
+
+    // PL800..PL806 are heredoc antipattern codes
+    let heredoc_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref().map(|c| c.starts_with("PL8")).unwrap_or(false))
+        .collect();
+
+    assert!(
+        !heredoc_diags.is_empty(),
+        "Expected at least one heredoc antipattern diagnostic (PL800-PL806) from \
+         get_diagnostics(), got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn lint_pipeline_source_filter_range_valid_via_get_diagnostics() {
+    // `use Filter::Util::Call` triggers PL803 (HeredocInSourceFilter) — the
+    // SourceFilterDetector regex matches `use\s+Filter::Util::Call` unconditionally.
+    // This test verifies two things:
+    //   (a) wiring: get_diagnostics() emits PL803 at all (non-vacuous assertion)
+    //   (b) range validity: the emitted range falls within the source bounds
+    let source = "use Filter::Util::Call;\nuse strict;\nuse warnings;\n";
+    let diags = diagnostics_for(source);
+
+    let source_filter_diags: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL803")).collect();
+
+    // (a) wiring assertion — would fail if detect_heredoc_antipatterns is not called
+    assert!(
+        !source_filter_diags.is_empty(),
+        "Expected PL803 diagnostic from get_diagnostics() for 'use Filter::Util::Call', \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+
+    // (b) range validity for each PL803 emitted
+    for d in &source_filter_diags {
+        assert!(
+            d.range.0 <= source.len(),
+            "PL803 range.0 {} should be within source length {}",
+            d.range.0,
+            source.len()
+        );
+        assert!(
+            d.range.1 <= source.len() + 1,
+            "PL803 range.1 {} should not exceed source.len()+1={}",
+            d.range.1,
+            source.len() + 1
+        );
+    }
+}
+
+#[test]
+fn lint_pipeline_clean_heredoc_emits_no_pl8xx_via_get_diagnostics() {
+    // A plain heredoc with no antipatterns should not trigger any PL800-PL806 diagnostics.
+    let source =
+        "use strict;\nuse warnings;\nmy $text = <<'END';\nHello, world!\nEND\nprint $text;\n";
+    let diags = diagnostics_for(source);
+
+    let heredoc_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref().map(|c| c.starts_with("PL8")).unwrap_or(false))
+        .collect();
+
+    assert!(
+        heredoc_diags.is_empty(),
+        "Clean heredoc should produce no PL8xx diagnostics via get_diagnostics(), \
+         got: {:?}",
+        heredoc_diags.iter().map(|d| d.code.as_deref()).collect::<Vec<_>>()
+    );
+}
+
+// =========================================================================
+// 16. Heredoc antipattern detection survives alongside parse errors
+//     Edge case: if the source is malformed and produces parse errors,
+//     detect_heredoc_antipatterns() must still fire — the two paths are
+//     independent in get_diagnostics().
+// =========================================================================
+
+#[test]
+fn lint_pipeline_heredoc_antipattern_survives_parse_errors() {
+    // Source has a syntax error (missing semicolon) AND a source filter that
+    // triggers PL803. Both kinds of diagnostic should appear together.
+    // This guards that the heredoc detection block (lines 111-113 of diagnostics.rs)
+    // is not short-circuited by an earlier error path.
+    let source = "use Filter::Util::Call\nuse strict;\n";
+    let diags = diagnostics_for(source);
+
+    let heredoc_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref().map(|c| c.starts_with("PL8")).unwrap_or(false))
+        .collect();
+
+    assert!(
+        !heredoc_diags.is_empty(),
+        "Expected PL8xx diagnostic even when source has parse errors, \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
+// =========================================================================
+// 17. Heredoc antipattern range is always within source bounds
+//     Edge case: the offset returned by extract_offset() must never exceed
+//     source.len(). This validates the (offset, (offset+1).min(source.len()))
+//     calculation in heredoc_antipatterns.rs for any PL8xx diagnostic.
+// =========================================================================
+
+#[test]
+fn lint_pipeline_heredoc_antipattern_range_in_bounds() {
+    // Multiple antipatterns in one source — verify all emitted ranges are valid.
+    let source = "use Filter::Util::Call;\nformat REPORT =\n@<<<< @>>>>\n$name\n.\n";
+    let diags = diagnostics_for(source);
+
+    let heredoc_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref().map(|c| c.starts_with("PL8")).unwrap_or(false))
+        .collect();
+
+    assert!(
+        !heredoc_diags.is_empty(),
+        "Expected at least one PL8xx diagnostic in multi-antipattern source"
+    );
+
+    for d in &heredoc_diags {
+        assert!(
+            d.range.0 <= source.len(),
+            "PL8xx range.0 {} exceeds source.len() {} for code {:?}",
+            d.range.0,
+            source.len(),
+            d.code
+        );
+        assert!(
+            d.range.1 <= source.len() + 1,
+            "PL8xx range.1 {} exceeds source.len()+1 {} for code {:?}",
+            d.range.1,
+            source.len() + 1,
+            d.code
+        );
+        assert!(
+            d.range.0 <= d.range.1,
+            "PL8xx range is inverted: ({}, {}) for code {:?}",
+            d.range.0,
+            d.range.1,
+            d.code
+        );
+    }
+}
