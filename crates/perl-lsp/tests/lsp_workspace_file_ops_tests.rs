@@ -612,3 +612,117 @@ fn test_path_to_module_name() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
+
+/// Regression test for #2747: a file that only has `use parent 'Mod'` (no direct `use Mod`)
+/// must be discovered by find_dependents and appear in the willRenameFiles edit response.
+#[test]
+fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    // Open the module that will be renamed.
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/MyBase.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package MyBase;\nsub new { bless {}, shift }\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    // Open a dependent file that ONLY has use parent — no direct `use MyBase`.
+    let dependent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/child.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Child;\nuse parent 'MyBase';\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+
+    let params = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/MyBase.pm",
+            "newUri": "file:///test/workspace/lib/RenamedBase.pm"
+        }]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+
+    // The pure-parent-only file must be in the edit response (regression for #2747).
+    let child_changes = changes
+        .get("file:///test/workspace/child.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for child.pl — pure use parent case was not discovered")?;
+
+    let new_texts: Vec<String> = child_changes
+        .iter()
+        .filter_map(|e| e.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+
+    assert!(
+        new_texts.contains(&"use parent 'RenamedBase';".to_string()),
+        "expected rewritten use parent in edits: {new_texts:?}"
+    );
+    Ok(())
+}
+
+/// Regression test: renaming a module whose own file is open must NOT appear in
+/// `changes` (the package file itself does not need a `use` line rewrite).
+/// Previously the warning-detection code could false-positive on `package OldModule;`
+/// inside the old file because it was not excluded from the unhandled-documents scan.
+#[test]
+fn test_will_rename_files_old_uri_not_in_changes() -> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    // Open ONLY the module file being renamed — no dependent files.
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Solo.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Solo;\nsub new { bless {}, shift }\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    let params = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/Solo.pm",
+            "newUri": "file:///test/workspace/lib/Renamed.pm"
+        }]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+
+    // Solo.pm itself should NOT be in the changes map — it contains `package Solo;`
+    // but that line is not a `use Solo;` import that needs rewriting.
+    assert!(
+        !changes.contains_key("file:///test/workspace/lib/Solo.pm"),
+        "the renamed file itself should not appear as a change target: {changes:?}"
+    );
+    Ok(())
+}
