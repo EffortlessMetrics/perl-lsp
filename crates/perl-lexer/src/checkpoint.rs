@@ -23,6 +23,8 @@ pub struct LexerCheckpoint {
     pub after_sub: bool,
     /// Whether we just saw '->' (suppresses s/tr/y as substitution)
     pub after_arrow: bool,
+    /// Whether we just emitted `{` in ExpectOperator mode (hash subscript opener)
+    pub after_hash_brace: bool,
     /// Current position with line/column tracking
     pub current_pos: Position,
     /// Additional context for complex states
@@ -55,6 +57,7 @@ impl LexerCheckpoint {
             prototype_depth: 0,
             after_sub: false,
             after_arrow: false,
+            after_hash_brace: false,
             current_pos: Position::start(),
             context: CheckpointContext::Normal,
         }
@@ -79,7 +82,8 @@ impl LexerCheckpoint {
             prototype_state_changed: self.in_prototype != other.in_prototype
                 || self.prototype_depth != other.prototype_depth
                 || self.after_sub != other.after_sub
-                || self.after_arrow != other.after_arrow,
+                || self.after_arrow != other.after_arrow
+                || self.after_hash_brace != other.after_hash_brace,
             context_changed: self.context != other.context,
         }
     }
@@ -99,6 +103,7 @@ impl LexerCheckpoint {
                 self.prototype_depth = 0;
                 self.after_sub = false;
                 self.after_arrow = false;
+                self.after_hash_brace = false;
                 self.context = CheckpointContext::Normal;
             }
         }

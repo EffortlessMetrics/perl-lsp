@@ -250,6 +250,10 @@ pub struct PerlLexer<'a> {
     after_sub: bool,
     /// Track if we just saw a '->' operator (to suppress s/tr/y as substitution)
     after_arrow: bool,
+    /// Track if we just emitted `{` in ExpectOperator mode (hash subscript opener).
+    /// When true, suppresses quote-op detection so `m`, `s`, `q*`, `tr`, `y`
+    /// are treated as bareword identifiers (hash keys) rather than regex operators.
+    after_hash_brace: bool,
     /// Current position with line/column tracking
     #[allow(dead_code)]
     current_pos: Position,
@@ -288,6 +292,7 @@ impl<'a> PerlLexer<'a> {
             prototype_depth: 0,
             after_sub: false,
             after_arrow: false,
+            after_hash_brace: false,
             current_pos: Position::start(),
             after_newline: true, // Start of file counts as after newline
             pending_heredocs: Vec::new(),
@@ -694,6 +699,7 @@ impl<'a> PerlLexer<'a> {
         let saved_depth = self.prototype_depth;
         let saved_after_sub = self.after_sub;
         let saved_after_arrow = self.after_arrow;
+        let saved_after_hash_brace = self.after_hash_brace;
         let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
         let saved_pending_heredocs = self.pending_heredocs.clone();
@@ -711,6 +717,7 @@ impl<'a> PerlLexer<'a> {
         self.prototype_depth = saved_depth;
         self.after_sub = saved_after_sub;
         self.after_arrow = saved_after_arrow;
+        self.after_hash_brace = saved_after_hash_brace;
         self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
         self.pending_heredocs = saved_pending_heredocs;
@@ -749,6 +756,7 @@ impl<'a> PerlLexer<'a> {
         self.prototype_depth = 0;
         self.after_sub = false;
         self.after_arrow = false;
+        self.after_hash_brace = false;
         self.current_pos = Position::start();
         self.after_newline = true;
         self.pending_heredocs.clear();
@@ -2003,7 +2011,11 @@ impl<'a> PerlLexer<'a> {
                     }
                     // Quote operators expect a delimiter next.
                     // Skip if after '->' -- these are method names, not operators.
-                    op if !self.after_arrow && quote_handler::is_quote_operator(op) => {
+                    // Skip if after '{' in operator mode -- these are hash subscript keys.
+                    op if !self.after_arrow
+                        && !self.after_hash_brace
+                        && quote_handler::is_quote_operator(op) =>
+                    {
                         // Perl allows whitespace between a quote-like operator and its delimiter,
                         // but ONLY for paired delimiters (s { ... } { ... }g).
                         // For non-paired delimiters (s/foo/bar/, s,foo,bar,), the delimiter
@@ -2127,6 +2139,7 @@ impl<'a> PerlLexer<'a> {
             };
 
             self.after_arrow = false;
+            self.after_hash_brace = false;
             Some(Token { token_type, text: Arc::from(text), start, end: self.position })
         } else {
             None
@@ -2547,6 +2560,11 @@ impl<'a> PerlLexer<'a> {
                 self.advance();
                 // Opening brace ends prototype window — no prototype follows
                 self.after_sub = false;
+                // If `{` appears in ExpectOperator mode it is a hash subscript opener
+                // (e.g. `$h{...}`). Flag this so quote-op detection is suppressed for
+                // the first identifier token, preventing `m`, `s`, `q*`, `tr`, `y`
+                // from being misread as regex/quote operators.
+                self.after_hash_brace = self.mode == LexerMode::ExpectOperator;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftBrace,
@@ -3412,6 +3430,7 @@ impl Checkpointable for PerlLexer<'_> {
             prototype_depth: self.prototype_depth,
             after_sub: self.after_sub,
             after_arrow: self.after_arrow,
+            after_hash_brace: self.after_hash_brace,
             current_pos: self.current_pos,
             context,
         }
@@ -3425,6 +3444,7 @@ impl Checkpointable for PerlLexer<'_> {
         self.prototype_depth = checkpoint.prototype_depth;
         self.after_sub = checkpoint.after_sub;
         self.after_arrow = checkpoint.after_arrow;
+        self.after_hash_brace = checkpoint.after_hash_brace;
         self.current_pos = checkpoint.current_pos;
 
         // Handle special contexts
