@@ -287,8 +287,8 @@ sub hello {
 }
 
 #[test]
-fn test_workspace_symbol_resolve_no_documentation_without_comment(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn test_workspace_symbol_resolve_no_documentation_without_comment()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = setup_server();
     let uri = "file:///test_nodocs.pl";
     let content = "sub bare_function { return 1; }\n";
@@ -316,8 +316,8 @@ fn test_workspace_symbol_resolve_no_documentation_without_comment(
 }
 
 #[test]
-fn test_workspace_symbol_resolve_container_name_from_qualified(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn test_workspace_symbol_resolve_container_name_from_qualified()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = setup_server();
     let uri = "file:///test_container.pl";
     let content = "package Animal::Dog;\nsub bark { print \"woof\"; }\n";
@@ -342,8 +342,8 @@ fn test_workspace_symbol_resolve_container_name_from_qualified(
 }
 
 #[test]
-fn test_workspace_symbol_resolve_documentation_for_variables(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn test_workspace_symbol_resolve_documentation_for_variables()
+-> Result<(), Box<dyn std::error::Error>> {
     let server = setup_server();
     let uri = "file:///test_var_docs.pl";
     let content = r#"package MyModule;
