@@ -293,6 +293,17 @@
           ],
           "default": "auto",
           "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
+        },
+        "perl-lsp.autoUpdate": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Automatically download and install new `perl-lsp` binary releases without prompting. When `false`, a notification is shown instead."
+        },
+        "perl-lsp.updateCheckInterval": {
+          "type": "number",
+          "default": 24,
+          "minimum": 0,
+          "markdownDescription": "Hours between background checks for `perl-lsp` binary updates. Set to `0` to disable update checks entirely."
         }
       }
     },
