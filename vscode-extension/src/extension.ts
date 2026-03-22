@@ -210,6 +210,17 @@ export async function activate(context: vscode.ExtensionContext) {
         await whatsNewManager.showWhatsNew();
     });
 
+    const openConfigurationGuideCommand = vscode.commands.registerCommand(
+        'perl-lsp.openConfigurationGuide',
+        () => {
+            void vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                '@ext:EffortlessMetrics.perl-lsp-rs'
+            );
+        }
+    );
+
+
     const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument((event) => {
         if (!shouldFormatOnSave(event.document)) {
             return;
@@ -268,6 +279,7 @@ export async function activate(context: vscode.ExtensionContext) {
         reinstallCommand,
         runHealthCheckCommand,
         showWhatsNewCommand,
+        openConfigurationGuideCommand,
         formatOnSaveDisposable,
         configurationWatcher,
         fileCreationWatcher,

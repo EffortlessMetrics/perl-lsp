@@ -56,7 +56,11 @@
     "onLanguage:perl",
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",
-    "onCommand:perl-lsp.reinstall"
+    "onCommand:perl-lsp.reinstall",
+    "onCommand:perl-lsp.createDebugConfig",
+    "onCommand:perl-lsp.runHealthCheck",
+    "onCommand:perl-lsp.openConfigurationGuide",
+    "onWalkthrough:perl-lsp.gettingStarted"
   ],
   "contributes": {
     "languages": [
@@ -72,8 +76,7 @@
           ".pm",
           ".pod",
           ".t",
-          ".psgi",
-          ".tt"
+          ".psgi"
         ],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"
@@ -189,158 +192,153 @@
         ]
       }
     ],
-    "configuration": {
-      "title": "Perl LSP",
-      "properties": {
-        "perl-lsp.channel": {
-          "type": "string",
-          "enum": [
-            "latest",
-            "stable",
-            "tag"
-          ],
-          "default": "latest",
-          "markdownDescription": "Release channel: `latest` for newest release, `stable` for latest stable, `tag` for specific version"
-        },
-        "perl-lsp.versionTag": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Specific release tag (e.g., `v0.12.0`) when channel is set to `tag`"
-        },
-        "perl-lsp.serverPath": {
-          "type": "string",
-          "default": "",
-          "scope": "machine",
-          "markdownDescription": "Absolute path to `perl-lsp` binary. Leave empty to auto-download latest release."
-        },
-        "perl-lsp.autoDownload": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Automatically download `perl-lsp` binary if not found locally. Set to false for internal deployments using `serverPath`."
-        },
-        "perl-lsp.downloadBaseUrl": {
-          "type": "string",
-          "default": "",
-          "scope": "machine",
-          "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp/`"
-        },
-        "perl-lsp.trace.server": {
-          "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
-          "default": "off",
-          "markdownDescription": "Controls the logging verbosity of the language server communication. Allowed values: `off`, `messages`, `verbose`. Useful for debugging LSP issues."
-        },
-        "perl-lsp.enableDiagnostics": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Enable real-time **syntax diagnostics**."
-        },
-        "perl-lsp.enableSemanticTokens": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Enable **semantic syntax highlighting**."
-        },
-        "perl-lsp.enableFormatting": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Enable document formatting using `perltidy`. Requires `perltidy` to be installed on your system."
-        },
-        "perl-lsp.formatOnSave": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Format document on save. **Note:** This requires a formatter (like `perltidy`) to be configured."
-        },
-        "perl-lsp.enableRefactoring": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Enable refactoring-related code actions when supported by the connected `perl-lsp` server."
-        },
-        "perl-lsp.perltidyConfig": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
-        },
-        "perl-lsp.includePaths": {
-          "type": "array",
-          "default": [
-            "lib",
-            "local/lib/perl5"
-          ],
-          "markdownDescription": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root."
-        },
-        "perl-lsp.enableTestIntegration": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Enable `Test::More` and `Test2` integration"
-        },
-        "perl-lsp.autoPopulateNewFiles": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "Auto-populate new `.pm` files with a `package` declaration and new `.t` files with `Test::More` boilerplate."
-        },
-        "perl-lsp.featureProfile": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "ga-lock",
-            "ga",
-            "prod",
-            "production",
-            "all"
-          ],
-          "default": "auto",
-          "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
-        },
-        "perl-lsp.disabledFeatures": {
-          "type": "array",
-          "items": {
+    "configuration": [
+      {
+        "title": "Perl LSP — Core",
+        "properties": {
+          "perl-lsp.serverPath": {
+            "type": "string",
+            "default": "",
+            "order": 1,
+            "scope": "machine",
+            "markdownDescription": "Absolute path to `perl-lsp` binary. Leave empty to auto-download latest release."
+          },
+          "perl-lsp.autoDownload": {
+            "type": "boolean",
+            "default": true,
+            "order": 2,
+            "markdownDescription": "Automatically download `perl-lsp` binary if not found locally. Set to false for internal deployments using `serverPath`."
+          },
+          "perl-lsp.includePaths": {
+            "type": "array",
+            "default": [
+              "lib",
+              "local/lib/perl5"
+            ],
+            "order": 3,
+            "items": {
+              "type": "string"
+            },
+            "markdownDescription": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root. Add paths here if you see `Can't locate Foo/Bar.pm` errors."
+          },
+          "perl-lsp.enableDiagnostics": {
+            "type": "boolean",
+            "default": true,
+            "order": 4,
+            "markdownDescription": "Enable real-time **syntax diagnostics**."
+          },
+          "perl-lsp.enableSemanticTokens": {
+            "type": "boolean",
+            "default": true,
+            "order": 5,
+            "markdownDescription": "Enable **semantic syntax highlighting**."
+          },
+          "perl-lsp.perltidyConfig": {
+            "type": "string",
+            "default": "",
+            "order": 6,
+            "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
+          }
+        }
+      },
+      {
+        "title": "Perl LSP — Editor",
+        "properties": {
+          "perl-lsp.enableFormatting": {
+            "type": "boolean",
+            "default": true,
+            "order": 1,
+            "markdownDescription": "Enable document formatting using `perltidy`. Requires `perltidy` to be installed on your system."
+          },
+          "perl-lsp.formatOnSave": {
+            "type": "boolean",
+            "default": false,
+            "order": 2,
+            "markdownDescription": "Format document on save. **Note:** This requires a formatter (like `perltidy`) to be configured."
+          },
+          "perl-lsp.enableRefactoring": {
+            "type": "boolean",
+            "default": true,
+            "order": 3,
+            "markdownDescription": "Enable refactoring-related code actions when supported by the connected `perl-lsp` server."
+          },
+          "perl-lsp.enableTestIntegration": {
+            "type": "boolean",
+            "default": true,
+            "order": 4,
+            "markdownDescription": "Enable `Test::More` and `Test2` integration"
+          },
+          "perl-lsp.autoPopulateNewFiles": {
+            "type": "boolean",
+            "default": true,
+            "order": 5,
+            "markdownDescription": "Auto-populate new `.pm` files with a `package` declaration and new `.t` files with `Test::More` boilerplate."
+          }
+        }
+      },
+      {
+        "title": "Perl LSP — Advanced",
+        "properties": {
+          "perl-lsp.featureProfile": {
             "type": "string",
             "enum": [
-              "lsp.call_hierarchy",
-              "lsp.code_action",
-              "lsp.code_lens",
-              "lsp.completion",
-              "lsp.declaration",
-              "lsp.definition",
-              "lsp.document_color",
-              "lsp.document_highlight",
-              "lsp.document_link",
-              "lsp.document_symbol",
-              "lsp.execute_command",
-              "lsp.folding_range",
-              "lsp.formatting",
-              "lsp.hover",
-              "lsp.implementation",
-              "lsp.inlay_hint",
-              "lsp.inline_completion",
-              "lsp.inline_value",
-              "lsp.linked_editing_range",
-              "lsp.moniker",
-              "lsp.notebook_cell_execution",
-              "lsp.notebook_document_sync",
-              "lsp.on_type_formatting",
-              "lsp.pull_diagnostics",
-              "lsp.range_formatting",
-              "lsp.ranges_formatting",
-              "lsp.references",
-              "lsp.rename",
-              "lsp.selection_range",
-              "lsp.semantic_tokens",
-              "lsp.signature_help",
-              "lsp.type_definition",
-              "lsp.type_hierarchy",
-              "lsp.workspace_symbol"
-            ]
+              "auto",
+              "ga-lock",
+              "ga",
+              "prod",
+              "production",
+              "all"
+            ],
+            "enumDescriptions": [
+              "Automatically follows the server binary build mode",
+              "GA features only — locked, no experimental features",
+              "General availability features",
+              "Production-safe features (alias for ga)",
+              "Production-safe features (alias for prod)",
+              "All features including experimental"
+            ],
+            "default": "auto",
+            "order": 1,
+            "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
           },
-          "default": [],
-          "markdownDescription": "Feature IDs to disable at server startup. Use canonical `lsp.*` IDs (e.g., `lsp.semantic_tokens`). Changes take effect after server restart."
+          "perl-lsp.trace.server": {
+            "type": "string",
+            "enum": [
+              "off",
+              "messages",
+              "verbose"
+            ],
+            "default": "off",
+            "order": 2,
+            "markdownDescription": "Controls the logging verbosity of the language server communication. Allowed values: `off`, `messages`, `verbose`. Useful for debugging LSP issues."
+          },
+          "perl-lsp.channel": {
+            "type": "string",
+            "enum": [
+              "latest",
+              "stable",
+              "tag"
+            ],
+            "default": "latest",
+            "order": 3,
+            "markdownDescription": "Release channel: `latest` for newest release, `stable` for latest stable, `tag` for specific version"
+          },
+          "perl-lsp.versionTag": {
+            "type": "string",
+            "default": "",
+            "order": 4,
+            "markdownDescription": "Specific release tag (e.g., `v0.12.0`) when channel is set to `tag`"
+          },
+          "perl-lsp.downloadBaseUrl": {
+            "type": "string",
+            "default": "",
+            "order": 5,
+            "scope": "machine",
+            "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp/`"
+          }
         }
       }
-    },
+    ],
     "commands": [
       {
         "command": "perl-lsp.restart",
@@ -409,16 +407,22 @@
         "icon": "$(star-empty)"
       },
       {
-        "command": "perl-lsp.showSpecialVarsReference",
-        "title": "Show Special Variables Reference",
+        "command": "perl-lsp.createDebugConfig",
+        "title": "Create Debug Configuration",
         "category": "Perl",
-        "icon": "$(symbol-variable)"
+        "icon": "$(debug-alt)"
       },
       {
-        "command": "perl-lsp.reportIssue",
-        "title": "Report Issue",
+        "command": "perl-lsp.runHealthCheck",
+        "title": "Run Health Check",
         "category": "Perl",
-        "icon": "$(github)"
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "perl-lsp.openConfigurationGuide",
+        "title": "Open Configuration Guide",
+        "category": "Perl",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -460,10 +464,14 @@
           "when": "editorLangId == perl"
         },
         {
-          "command": "perl-lsp.showSpecialVarsReference"
+          "command": "perl-lsp.createDebugConfig",
+          "when": "workspaceFolderCount >= 1"
         },
         {
-          "command": "perl-lsp.reportIssue"
+          "command": "perl-lsp.runHealthCheck"
+        },
+        {
+          "command": "perl-lsp.openConfigurationGuide"
         }
       ],
       "editor/title": [
@@ -538,6 +546,78 @@
             "description": "Arguments to pass to the script"
           }
         }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "perl-lsp.gettingStarted",
+        "title": "Get Started with Perl LSP",
+        "description": "Set up and explore Perl language support in VS Code.",
+        "steps": [
+          {
+            "id": "welcome",
+            "title": "Welcome to Perl LSP",
+            "description": "Perl LSP brings IDE-quality features to Perl development in VS Code.",
+            "media": {
+              "image": "media/walkthrough/welcome.svg",
+              "altText": "Welcome"
+            }
+          },
+          {
+            "id": "verify-perl",
+            "title": "Verify Your Perl Installation",
+            "description": "Run the health check to confirm Perl and perltidy are available.",
+            "media": {
+              "image": "media/walkthrough/verify-perl.svg",
+              "altText": "Verify Perl"
+            }
+          },
+          {
+            "id": "open-project",
+            "title": "Open a Perl Project",
+            "description": "Open a folder containing Perl files to activate workspace indexing.",
+            "media": {
+              "image": "media/walkthrough/open-project.svg",
+              "altText": "Open Project"
+            }
+          },
+          {
+            "id": "try-completion",
+            "title": "Try Code Completion",
+            "description": "Type in a .pl or .pm file and press Ctrl+Space for completions.",
+            "media": {
+              "image": "media/walkthrough/try-completion.svg",
+              "altText": "Code Completion"
+            }
+          },
+          {
+            "id": "try-goto-definition",
+            "title": "Go to Definition",
+            "description": "Hold Ctrl and click a symbol to jump to its definition.",
+            "media": {
+              "image": "media/walkthrough/try-goto-definition.svg",
+              "altText": "Go to Definition"
+            }
+          },
+          {
+            "id": "configure-settings",
+            "title": "Configure Settings",
+            "description": "Open Perl LSP settings to set includePaths, formatting, and feature profiles.",
+            "media": {
+              "image": "media/walkthrough/configure-settings.svg",
+              "altText": "Configure Settings"
+            }
+          },
+          {
+            "id": "debug-first-script",
+            "title": "Debug Your First Script",
+            "description": "Create a debug configuration with the Create Debug Configuration command.",
+            "media": {
+              "image": "media/walkthrough/debug-first-script.svg",
+              "altText": "Debug Script"
+            }
+          }
+        ]
       }
     ]
   },
