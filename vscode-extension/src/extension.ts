@@ -231,9 +231,11 @@ export async function activate(context: vscode.ExtensionContext) {
         const extensionVersion: string = ext?.packageJSON?.version ?? 'unknown';
 
         // Build GitHub new-issue URL using the bug_report template
+        // Extract just the version from the first line (handles multiline output from --version)
+        const versionLine = serverVersion.split('\n')[0];
         const params = new URLSearchParams({
             template: 'bug_report.yml',
-            version: serverVersion.replace(/^perl-lsp\s+/, ''),
+            version: versionLine.replace(/^perl-lsp\s+/, ''),
             editor: `VS Code ${vscode.version} (ext ${extensionVersion})`,
             os: `${process.platform} ${process.arch}`,
         });
