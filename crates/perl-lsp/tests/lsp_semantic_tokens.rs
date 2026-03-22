@@ -232,7 +232,8 @@ fn semantic_tokens_delta_no_previous_returns_full() -> Result<(), Box<dyn std::e
 /// Verifies that the cache eviction on didClose is effective: using a resultId
 /// from before the close must not produce a delta (the cache entry was wiped).
 #[test]
-fn semantic_tokens_delta_after_close_and_reopen_returns_full() -> Result<(), Box<dyn std::error::Error>> {
+fn semantic_tokens_delta_after_close_and_reopen_returns_full()
+-> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
     let uri = "file:///delta_close_reopen_test.pl";
