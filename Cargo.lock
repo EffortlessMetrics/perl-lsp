@@ -1843,6 +1843,7 @@ dependencies = [
  "perl-lsp-transport",
  "perl-lsp-type-hierarchy",
  "perl-lsp-uri",
+ "perl-lsp-workspace-symbols",
  "perl-module-path",
  "perl-module-reference",
  "perl-module-rename",
