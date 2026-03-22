@@ -204,3 +204,105 @@ fn test_non_arrow_hash_key_q_known_broken() {
     let source = r#"my $x = $h{q};"#;
     assert_has_error(source, "");
 }
+
+// ── Regression: comma-delimited substitution (XSLoader.pm) ──────────────────
+
+/// XSLoader.pm line 43: s,[\\/][^\\/]+$,, — comma as substitution delimiter.
+/// This is a non-standard but valid Perl delimiter. Must parse cleanly.
+#[test]
+fn test_comma_delimited_subst_xsloader() {
+    let source = r#"$modlibname =~ s,[\\/][^\\/]+$,, while $c--;"#;
+    assert_clean_parse(source);
+}
+
+/// XSLoader.pm full content — must parse cleanly (corpus gate regression test).
+#[test]
+fn test_xsloader_pm_full() {
+    let source = r#"use strict;
+no strict 'refs';
+
+package XSLoader;
+
+our $VERSION = "0.32";
+
+package DynaLoader;
+
+boot_DynaLoader('DynaLoader') if defined(&boot_DynaLoader) &&
+                                !defined(&dl_error);
+package XSLoader;
+
+sub load {
+    package DynaLoader;
+
+    my ($caller, $modlibname) = caller();
+    my $module = $caller;
+
+    if (@_) {
+        $module = $_[0];
+    } else {
+        $_[0] = $module;
+    }
+
+    my $boots = "$module\::bootstrap";
+    goto &$boots if defined &$boots;
+
+    goto \&XSLoader::bootstrap_inherit unless $module and defined &dl_load_file;
+
+    my @modparts = split(/::/,$module);
+    my $modfname = $modparts[-1];
+    my $modfname_orig = $modfname;
+
+    my $modpname = join('/',@modparts);
+    my $c = () = split(/::/,$caller,-1);
+    $modlibname =~ s,[\\/][^\\/]+$,, while $c--;
+    if ($modlibname !~ m{^/}) {
+        FOUND: {
+            for (@INC) {
+                if ($_ eq $modlibname) {
+                    last FOUND;
+                }
+            }
+            goto \&XSLoader::bootstrap_inherit;
+        }
+    }
+    my $file = "$modlibname/auto/$modpname/$modfname.so";
+
+    my $bs = "$modlibname/auto/$modpname/$modfname_orig.bs";
+
+    goto \&XSLoader::bootstrap_inherit if not -f $file or -s $bs;
+
+    my $bootname = "boot_$module";
+    $bootname =~ s/\W/_/g;
+    @DynaLoader::dl_require_symbols = ($bootname);
+
+    my $boot_symbol_ref;
+
+    my $libref = dl_load_file($file, 0) or do {
+        require Carp;
+        Carp::croak("Can't load '$file' for module $module: " . dl_error());
+    };
+    push(@DynaLoader::dl_librefs,$libref);
+
+    $boot_symbol_ref = dl_find_symbol($libref, $bootname) or do {
+        require Carp;
+        Carp::croak("Can't find '$bootname' symbol in $file\n");
+    };
+
+    push(@DynaLoader::dl_modules, $module);
+
+  boot:
+    my $xs = dl_install_xsub($boots, $boot_symbol_ref, $file);
+
+    push(@DynaLoader::dl_shared_objects, $file);
+    return &$xs(@_);
+}
+
+sub bootstrap_inherit {
+    require DynaLoader;
+    goto \&DynaLoader::bootstrap_inherit;
+}
+
+1;
+"#;
+    assert_clean_parse(source);
+}
