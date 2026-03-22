@@ -316,8 +316,7 @@ fn test_check_json_mixed_results_summary() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_check_json_no_files_emits_valid_json() -> Result<(), Box<dyn std::error::Error>> {
     // Pass --check with no trailing files.  clap's trailing_var_arg allows this.
-    let output =
-        cargo_bin_cmd!("perl-lsp").args(["--check", "--check-format", "json"]).output()?;
+    let output = cargo_bin_cmd!("perl-lsp").args(["--check", "--check-format", "json"]).output()?;
 
     // Exit must be non-zero (no files = usage error) …
     assert!(!output.status.success(), "expected non-zero exit when no files given");
