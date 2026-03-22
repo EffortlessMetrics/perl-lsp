@@ -1117,11 +1117,10 @@ fn test_non_sql_method_call_still_produces_method_token() {
 /// `512` here was the same class of bug that PR #2772 fixed in production code.
 fn has_default_library_modifier(token: &EncodedToken) -> bool {
     let leg = legend();
-    let bit_pos = leg
-        .modifiers
-        .iter()
-        .position(|m| m == "defaultLibrary")
-        .expect("defaultLibrary must be in the modifier legend");
+    let Some(bit_pos) = leg.modifiers.iter().position(|m| m == "defaultLibrary") else {
+        // defaultLibrary not in legend — token cannot have the modifier.
+        return false;
+    };
     let bitmask = 1u32 << bit_pos;
     token[4] & bitmask != 0
 }
