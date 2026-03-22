@@ -211,9 +211,23 @@ pub struct LspArgs {
     #[arg(long)]
     pub feature_profile: Option<String>,
 
+    /// Output format for --check mode (text, json)
+    #[arg(long, requires = "check")]
+    pub check_format: Option<String>,
+
     /// Files to check (used with --check)
     #[arg(trailing_var_arg = true, requires = "check")]
     pub files: Vec<String>,
+}
+
+/// Output format for `--check` mode.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+pub enum CheckFormat {
+    /// Human-readable text output (default).
+    #[default]
+    Text,
+    /// Machine-readable JSON output.
+    Json,
 }
 
 /// How the server should connect to the editor or test client.
@@ -317,6 +331,8 @@ pub struct LaunchPlan {
     pub config: LaunchConfig,
     /// Trailing file paths (used for `--check` mode).
     pub files: Vec<String>,
+    /// Output format for `--check` mode.
+    pub check_format: CheckFormat,
 }
 
 /// Parse-time errors emitted by the CLI parser.
@@ -349,6 +365,11 @@ pub enum LaunchParseError {
         /// Raw shell token from CLI.
         raw_shell: String,
     },
+    /// Invalid --check-format value.
+    InvalidCheckFormat {
+        /// Raw value passed on CLI.
+        raw_format: String,
+    },
 }
 
 impl fmt::Display for LaunchParseError {
@@ -369,6 +390,9 @@ impl fmt::Display for LaunchParseError {
             }
             Self::InvalidShell { raw_shell } => {
                 write!(f, "Unknown shell: {raw_shell}. Supported: bash, zsh, fish, powershell")
+            }
+            Self::InvalidCheckFormat { raw_format } => {
+                write!(f, "Invalid --check-format value: {raw_format}. Supported: text, json")
             }
         }
     }
@@ -413,7 +437,17 @@ where
                 LaunchAction::Run
             };
 
-            Ok(LaunchPlan { action, config, files: parsed_args.files })
+            let check_format = match parsed_args.check_format.as_deref() {
+                None | Some("text") => CheckFormat::Text,
+                Some("json") => CheckFormat::Json,
+                Some(other) => {
+                    return Err(LaunchParseError::InvalidCheckFormat {
+                        raw_format: other.to_string(),
+                    });
+                }
+            };
+
+            Ok(LaunchPlan { action, config, files: parsed_args.files, check_format })
         }
         Err(err) => {
             let is_help = err.kind() == clap::error::ErrorKind::DisplayHelp
@@ -425,12 +459,14 @@ where
                     action: LaunchAction::Help,
                     config: LaunchConfig::new(FeatureProfile::current()),
                     files: Vec::new(),
+                    check_format: CheckFormat::Text,
                 });
             } else if is_version {
                 return Ok(LaunchPlan {
                     action: LaunchAction::Version,
                     config: LaunchConfig::new(FeatureProfile::current()),
                     files: Vec::new(),
+                    check_format: CheckFormat::Text,
                 });
             }
 
@@ -553,6 +589,7 @@ pub fn help_text() -> String {
     out.push('\n');
     out.push_str("Tool options:\n");
     out.push_str("  --check <files...>   Validate Perl files and report parse errors\n");
+    out.push_str("  --check-format <fmt> Output format for --check (text, json) [default: text]\n");
     out.push_str("  --check-project [dir] Scan project directory for parsability report\n");
     out.push_str("  --completion <shell> Generate shell completions (bash, zsh, fish)\n");
     out.push_str("  --help               Show this help message\n");
@@ -1037,5 +1074,67 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("tcsh"));
         assert!(msg.contains("bash"));
+    }
+
+    // ── --check-format flag ───────────────────────────────────────
+
+    #[test]
+    fn parse_check_format_text_explicit() {
+        use super::CheckFormat;
+        let plan = must(parse_args(["perl-lsp", "--check", "--check-format", "text", "file.pl"]));
+        assert_eq!(plan.action, LaunchAction::Check);
+        assert_eq!(plan.check_format, CheckFormat::Text);
+    }
+
+    #[test]
+    fn parse_check_format_json() {
+        use super::CheckFormat;
+        let plan = must(parse_args(["perl-lsp", "--check", "--check-format", "json", "file.pl"]));
+        assert_eq!(plan.action, LaunchAction::Check);
+        assert_eq!(plan.check_format, CheckFormat::Json);
+    }
+
+    #[test]
+    fn parse_check_format_defaults_to_text() {
+        use super::CheckFormat;
+        let plan = must(parse_args(["perl-lsp", "--check", "file.pl"]));
+        assert_eq!(plan.check_format, CheckFormat::Text);
+    }
+
+    #[test]
+    fn parse_check_format_invalid_value_returns_error() {
+        let result = parse_args(["perl-lsp", "--check", "--check-format", "xml", "file.pl"]);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("xml"), "error should mention the invalid value");
+        assert!(msg.contains("text") || msg.contains("json"), "error should mention valid values");
+    }
+
+    #[test]
+    fn parse_check_format_case_sensitive_rejects_json_caps() {
+        // --check-format must be lowercase; "JSON" is not accepted.
+        let result = parse_args(["perl-lsp", "--check", "--check-format", "JSON", "file.pl"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_check_format_without_check_fails() {
+        // --check-format requires --check to be present.
+        let result = parse_args(["perl-lsp", "--check-format", "json"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn error_display_invalid_check_format() {
+        let err = super::LaunchParseError::InvalidCheckFormat { raw_format: "csv".to_string() };
+        let msg = format!("{err}");
+        assert!(msg.contains("csv"), "error must mention the bad value");
+        assert!(msg.contains("text") && msg.contains("json"), "error must list valid options");
+    }
+
+    #[test]
+    fn help_mentions_check_format_flag() {
+        let text = super::help_text();
+        assert!(text.contains("--check-format"), "help must document --check-format");
     }
 }
