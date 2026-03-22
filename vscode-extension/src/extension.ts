@@ -253,7 +253,12 @@ export async function activate(context: vscode.ExtensionContext) {
             'Open Without Copying'
         );
         if (choice === 'Copy Diagnostic Info') {
-            await vscode.env.clipboard.writeText(diagnosticInfo);
+            try {
+                await vscode.env.clipboard.writeText(diagnosticInfo);
+            } catch {
+                // Clipboard unavailable — continue to open the browser so the user
+                // can still file the issue; the diagnostic info is lost silently.
+            }
         }
         if (choice !== undefined) {
             await vscode.env.openExternal(vscode.Uri.parse(issueUrl));
