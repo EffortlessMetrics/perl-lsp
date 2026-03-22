@@ -220,6 +220,102 @@ impl WorkspaceConfig {
     }
 }
 
+// ── ProjectConfig ─────────────────────────────────────────────────────────────
+
+/// Project configuration loaded from `.perl-lsp.toml` in the workspace root.
+///
+/// Committed to the repo; provides editor-agnostic, team-wide defaults.
+/// LSP `initializationOptions` / `didChangeConfiguration` always win over this file.
+///
+/// Unknown TOML keys are silently ignored for forward compatibility.
+///
+/// `[formatting]` is reserved for future perltidy configuration (not yet wired).
+#[non_exhaustive]
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectConfig {
+    /// `[perl]` section: module resolution settings.
+    pub perl: ProjectPerlConfig,
+    /// `[diagnostics]` section: linting settings.
+    pub diagnostics: ProjectDiagnosticsConfig,
+    /// `[features]` section: LSP feature toggles.
+    pub features: ProjectFeaturesConfig,
+}
+
+/// `[perl]` section of `.perl-lsp.toml`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectPerlConfig {
+    /// Additional include paths for module resolution (relative to workspace root).
+    pub include_paths: Vec<String>,
+    /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
+    /// Reserved for future use; ignored in this implementation.
+    pub version: Option<String>,
+}
+
+/// `[diagnostics]` section of `.perl-lsp.toml`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectDiagnosticsConfig {
+    /// Whether perlcritic is enabled. Maps to `ServerConfig.perlcritic_enabled`.
+    pub perlcritic: Option<bool>,
+    /// Minimum perlcritic severity (1-5). Maps to `ServerConfig.perlcritic_severity`.
+    pub perlcritic_severity: Option<u8>,
+}
+
+/// `[features]` section of `.perl-lsp.toml`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectFeaturesConfig {
+    /// Whether inlay hints are enabled globally. Maps to `ServerConfig.inlay_hints_enabled`.
+    pub inlay_hints: Option<bool>,
+}
+
+/// Load project config from `<workspace_root>/.perl-lsp.toml`.
+///
+/// Returns `None` if the file does not exist (normal case — most projects won't have one).
+/// Returns `Err` only on TOML parse failure; caller should emit a `window/showMessage` warning.
+pub fn load_project_config(
+    workspace_root: &std::path::Path,
+) -> Result<Option<ProjectConfig>, String> {
+    let path = workspace_root.join(".perl-lsp.toml");
+    match std::fs::read_to_string(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Failed to read .perl-lsp.toml: {}", e)),
+        Ok(content) => toml::from_str::<ProjectConfig>(&content)
+            .map(Some)
+            .map_err(|e| format!(".perl-lsp.toml parse error: {}", e)),
+    }
+}
+
+impl ProjectConfig {
+    /// Apply project config to `ServerConfig` as the base layer.
+    ///
+    /// Only fields explicitly set in the TOML override defaults; unset fields are untouched.
+    /// LSP `didChangeConfiguration` is expected to run after this, overriding any values here.
+    pub fn apply_to_server_config(&self, config: &mut ServerConfig) {
+        if let Some(enabled) = self.diagnostics.perlcritic {
+            config.perlcritic_enabled = enabled;
+        }
+        if let Some(severity) = self.diagnostics.perlcritic_severity {
+            config.perlcritic_severity = severity.clamp(1, 5);
+        }
+        if let Some(hints) = self.features.inlay_hints {
+            config.inlay_hints_enabled = hints;
+        }
+    }
+
+    /// Apply project config to `WorkspaceConfig` as the base layer.
+    ///
+    /// Only applies `include_paths` when the TOML list is non-empty, so that
+    /// an absent key leaves the defaults unchanged (distinct from an explicit `[]`).
+    pub fn apply_to_workspace_config(&self, config: &mut WorkspaceConfig) {
+        if !self.perl.include_paths.is_empty() {
+            config.include_paths = self.perl.include_paths.clone();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ServerConfig, WorkspaceConfig};
