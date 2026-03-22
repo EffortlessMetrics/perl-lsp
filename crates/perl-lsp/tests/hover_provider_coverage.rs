@@ -971,4 +971,113 @@ $name;
         );
         Ok(())
     }
+
+    // ── Moose/Moo role composition hover (Issue #2325) ───────────────────
+
+    /// Hover on the role name in `with 'RoleName';` should produce a module hover
+    /// (showing **RoleName** as a header), NOT the generic `**Perl**: \`RoleName\`` fallback.
+    #[test]
+    fn test_hover_on_with_role_shows_module_hover() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"package MyApp::User;
+use Moo;
+with 'MyApp::Printable';
+1;
+"#;
+        // Line 2 (0-indexed): `with 'MyApp::Printable';`
+        // Position the cursor on the role name token (inside the string).
+        let resp = hover_at(code, "file:///role_hover.pl", "MyApp::Printable", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for role name")?;
+
+        // Should show the module name as a heading (module hover format)
+        // NOT the generic "**Perl**: `MyApp::Printable`" fallback
+        assert!(
+            content.contains("MyApp::Printable"),
+            "hover on role name should contain the module name, got: {content}"
+        );
+        assert!(
+            !content.starts_with("**Perl**:"),
+            "hover on role name must NOT be the generic Perl token fallback, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on the role name in a multi-role `with 'RoleA', 'RoleB';` statement
+    /// should also show a module hover for the role under the cursor.
+    #[test]
+    fn test_hover_on_with_multi_role_shows_module_hover() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = r#"package MyApp::User;
+use Moo;
+with 'MyApp::Printable', 'MyApp::Serializable';
+1;
+"#;
+        // Line 2: `with 'MyApp::Printable', 'MyApp::Serializable';`
+        // Hover on the first role name.
+        let resp = hover_at(code, "file:///multi_role_hover.pl", "MyApp::Printable", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for first role name")?;
+        assert!(
+            content.contains("MyApp::Printable"),
+            "hover on first role in multi-role with should contain module name, got: {content}"
+        );
+        assert!(
+            !content.starts_with("**Perl**:"),
+            "hover on role name must NOT be the generic Perl token fallback, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on `extends 'ParentClass'` should also produce a module hover,
+    /// not the generic fallback. The fix covers both `with` and `extends`.
+    #[test]
+    fn test_hover_on_extends_parent_shows_module_hover() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"package MyApp::AdminUser;
+use Moo;
+extends 'MyApp::User';
+1;
+"#;
+        // Line 2: `extends 'MyApp::User';`
+        let resp = hover_at(code, "file:///extends_hover.pl", "MyApp::User", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for parent class name")?;
+        assert!(
+            content.contains("MyApp::User"),
+            "hover on extends parent should contain the module name, got: {content}"
+        );
+        assert!(
+            !content.starts_with("**Perl**:"),
+            "hover on extends parent must NOT be the generic Perl token fallback, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Cursor on the `with` keyword itself should NOT trigger module hover.
+    /// The `with` keyword is an identifier node, not a string node — the fix
+    /// must only activate when the cursor falls within the role name string.
+    #[test]
+    fn test_hover_on_with_keyword_does_not_trigger_module_hover()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"package MyApp::User;
+use Moo;
+with 'MyApp::Printable';
+1;
+"#;
+        // Line 2: `with 'MyApp::Printable';`
+        // Hover on the `with` keyword (column 0), not the role name.
+        let server = TestServerBuilder::new().build();
+        server.open_document("file:///with_keyword_hover.pl", code);
+        let resp = server.get_hover("file:///with_keyword_hover.pl", 2, 0);
+
+        let content = hover_content(&resp);
+        // The hover should NOT produce a module hover for `with` keyword itself.
+        // It may produce a generic Perl token hover or null — either is acceptable.
+        if let Some(c) = content {
+            assert!(
+                !c.starts_with("**MyApp"),
+                "hover on 'with' keyword must not show module hover, got: {c}"
+            );
+        }
+        Ok(())
+    }
 }

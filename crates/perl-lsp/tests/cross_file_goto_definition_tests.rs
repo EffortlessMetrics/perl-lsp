@@ -403,6 +403,181 @@ fn symbol_at_cursor_resolves_use_statement() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
+// Tests 7+: Moose/Moo role composition goto-definition (Issue #2325)
+// ---------------------------------------------------------------------------
+
+/// Go-to-definition on the role name in `with 'RoleName'` should navigate to the role file.
+#[test]
+fn go_to_definition_on_with_role_navigates_to_role_file() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    // Write the role file to disk
+    workspace.write(
+        "lib/MyApp/Role/Printable.pm",
+        r#"package MyApp::Role::Printable;
+use Moo::Role;
+
+sub print_self {
+    my ($self) = @_;
+    print ref($self), "\n";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    // Open the role file so it is indexed
+    let role_uri = workspace.uri("lib/MyApp/Role/Printable.pm");
+    let role_content =
+        std::fs::read_to_string(workspace.dir.path().join("lib/MyApp/Role/Printable.pm"))
+            .map_err(|e| format!("failed to read role file: {e}"))?;
+    harness.open(&role_uri, &role_content)?;
+
+    // Open the consumer class that composes the role
+    harness.open(
+        &workspace.uri("lib/MyApp/User.pm"),
+        r#"package MyApp::User;
+use Moo;
+with 'MyApp::Role::Printable';
+1;
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Request goto-definition on "MyApp::Role::Printable" in `with 'MyApp::Role::Printable';`
+    // Line 2 (0-indexed): `with 'MyApp::Role::Printable';`
+    // "MyApp::Role::Printable" starts at character 6 (after `with '`)
+    let consumer_uri = workspace.uri("lib/MyApp/User.pm");
+    let consumer_code = "package MyApp::User;\nuse Moo;\nwith 'MyApp::Role::Printable';\n1;\n";
+    let with_line = consumer_code
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains("MyApp::Role::Printable"))
+        .map(|(i, _)| i as u64)
+        .ok_or("could not find with line")?;
+    let with_char = consumer_code
+        .lines()
+        .nth(with_line as usize)
+        .and_then(|line| line.find("MyApp::Role::Printable"))
+        .ok_or("could not find role name in with line")?;
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": consumer_uri},
+            "position": {"line": with_line, "character": with_char + 5}
+        }),
+    )?;
+
+    // MUST navigate to the role file — empty result means the feature is not implemented.
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("goto-def on 'with' role name returned non-array: {:?}", result))?;
+    assert!(
+        !locations.is_empty(),
+        "goto-def on 'with' role name MUST return at least one location (got empty array)"
+    );
+    let first = &locations[0];
+    assert_valid_location(first);
+
+    let uri = first["uri"].as_str().ok_or("Expected URI in goto-def result")?;
+    assert!(
+        uri.contains("Printable"),
+        "goto-def on 'with' role name should navigate to Printable.pm, got: {}",
+        uri
+    );
+
+    Ok(())
+}
+
+/// Go-to-definition on the parent class in `extends 'ParentClass'` should navigate to parent file.
+#[test]
+fn go_to_definition_on_extends_parent_navigates_to_parent_file() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    // Write the parent class file to disk
+    workspace.write(
+        "lib/MyApp/User.pm",
+        r#"package MyApp::User;
+use Moo;
+
+has name => (is => 'ro');
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    // Open the parent file so it is indexed
+    let parent_uri = workspace.uri("lib/MyApp/User.pm");
+    let parent_content = std::fs::read_to_string(workspace.dir.path().join("lib/MyApp/User.pm"))
+        .map_err(|e| format!("failed to read parent file: {e}"))?;
+    harness.open(&parent_uri, &parent_content)?;
+
+    // Open the child class that extends the parent
+    harness.open(
+        &workspace.uri("lib/MyApp/AdminUser.pm"),
+        r#"package MyApp::AdminUser;
+use Moo;
+extends 'MyApp::User';
+1;
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Request goto-definition on "MyApp::User" in `extends 'MyApp::User';`
+    // Line 2 (0-indexed): `extends 'MyApp::User';`
+    let child_uri = workspace.uri("lib/MyApp/AdminUser.pm");
+    let child_code = "package MyApp::AdminUser;\nuse Moo;\nextends 'MyApp::User';\n1;\n";
+    let extends_line = child_code
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains("MyApp::User"))
+        .map(|(i, _)| i as u64)
+        .ok_or("could not find extends line")?;
+    let extends_char = child_code
+        .lines()
+        .nth(extends_line as usize)
+        .and_then(|line| line.find("MyApp::User"))
+        .ok_or("could not find parent name in extends line")?;
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": child_uri},
+            "position": {"line": extends_line, "character": extends_char + 3}
+        }),
+    )?;
+
+    // MUST navigate to the parent file — empty result means the feature is not implemented.
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("goto-def on 'extends' parent returned non-array: {:?}", result))?;
+    assert!(
+        !locations.is_empty(),
+        "goto-def on 'extends' parent name MUST return at least one location (got empty array)"
+    );
+    let first = &locations[0];
+    assert_valid_location(first);
+
+    let uri = first["uri"].as_str().ok_or("Expected URI in goto-def result")?;
+    assert!(
+        uri.contains("User"),
+        "goto-def on 'extends' parent should navigate to User.pm, got: {}",
+        uri
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 7: symbol_at_cursor handles Package->method (Identifier-based)
 // ---------------------------------------------------------------------------
 
