@@ -200,8 +200,9 @@ impl LspServer {
         }
 
         // Use SymbolIndex trie as a fast pre-filter for the open-document
-        // fallback path.  The trie is populated on every didOpen/didChange and
-        // provides O(prefix-len) lookups instead of scanning every symbol name.
+        // fallback path.  The trie is populated on didOpen (and after background
+        // workspace re-indexing) and provides O(prefix-len) lookups instead of
+        // scanning every symbol name.
         let trie_hint: Option<std::collections::HashSet<String>> = if !query.is_empty() {
             let idx = self.symbol_index.lock();
             let mut names = idx.search_prefix(query);
@@ -230,8 +231,9 @@ impl LspServer {
     ///
     /// When `trie_hint` is `Some`, symbols whose names appear in the hint set are
     /// sorted to the front of the result list.  This lets the fast SymbolIndex trie
-    /// (populated on every didOpen/didChange) improve relevance of the open-document
-    /// fallback path without changing the overall scan logic.
+    /// (populated on didOpen and after background workspace re-indexing) improve
+    /// relevance of the open-document fallback path without changing the overall
+    /// scan logic.
     #[cfg(feature = "workspace")]
     fn search_open_documents_for_symbols_with_hints(
         &self,
@@ -284,13 +286,10 @@ impl LspServer {
 
         // When trie hints are available, sort symbols so that trie-matched names
         // appear first.  This improves relevance for prefix queries without
-        // discarding any results.
+        // discarding any results.  sort_by_key with a boolean key is stable
+        // within each group (hit vs non-hit), preserving original discovery order.
         if let Some(hints) = trie_hint {
-            all_symbols.sort_by(|a, b| {
-                let a_hit = hints.contains(&a.name);
-                let b_hit = hints.contains(&b.name);
-                b_hit.cmp(&a_hit)
-            });
+            all_symbols.sort_by_key(|sym| !hints.contains(&sym.name));
         }
 
         // Truncate to cap in case we went slightly over
@@ -299,12 +298,16 @@ impl LspServer {
         Ok(Some(json!(all_symbols)))
     }
 
-    /// Search open documents for symbols (non-workspace stub)
+    /// Search open documents for symbols with trie hints — non-workspace stub.
+    ///
+    /// When the workspace feature is disabled there is no document scan, so
+    /// `trie_hint` is unused and we return an empty result set.
     #[cfg(not(feature = "workspace"))]
-    fn search_open_documents_for_symbols(
+    fn search_open_documents_for_symbols_with_hints(
         &self,
         query: &str,
         _cap: usize,
+        _trie_hint: Option<&std::collections::HashSet<String>>,
     ) -> Result<Option<Value>, JsonRpcError> {
         eprintln!("Workspace symbol: no workspace feature, returning empty for query '{}'", query);
         Ok(Some(json!([])))

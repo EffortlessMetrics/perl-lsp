@@ -1,5 +1,5 @@
 //! Tests that the SymbolIndex (trie-based fast lookup) is populated on
-//! didOpen/didChange and its queries are wired into completion and workspace
+//! didOpen and that its queries are wired into completion and workspace
 //! symbol handlers.
 //!
 //! Issue #2701: SymbolIndex was populated but never queried.
@@ -109,39 +109,62 @@ proc
 
     assert!(!response.is_null(), "textDocument/completion should return a non-null result");
 
-    if response.is_array() {
-        let items = response.as_array().cloned().unwrap_or_default();
-        // Completion should return items for the "proc" prefix
-        // (either directly or indirectly via workspace completion)
-        assert!(!items.is_empty(), "textDocument/completion should return items for 'proc' prefix");
+    // The response may be an array (simple) or an object with an "items" key.
+    let items: Vec<serde_json::Value> = if response.is_array() {
+        response.as_array().cloned().unwrap_or_default()
+    } else if let Some(arr) = response.get("items").and_then(|i| i.as_array()) {
+        arr.clone()
+    } else {
+        Vec::new()
+    };
 
-        // Verify that completion items have the expected structure
-        for item in &items {
-            assert!(item["label"].is_string(), "Completion item should have a string label");
-        }
+    assert!(!items.is_empty(), "textDocument/completion should return items for 'proc' prefix");
 
-        // When workspace symbols are returned, they should have sort_text
-        // set by the SymbolIndex promotion logic (for filtered symbols):
-        // - Trie-matched: "0{label}"
-        // - Not matched: "1{label}"
-        // - Trie not active: None
-        // This is informational; the test passes if completion works at all.
-    } else if let Some(items_obj) = response.get("items").and_then(|i| i.as_array()) {
-        assert!(!items_obj.is_empty(), "textDocument/completion items array should be non-empty");
+    // Every item must have a string label.
+    for item in &items {
+        assert!(item["label"].is_string(), "Completion item should have a string label");
+    }
+
+    // Verify sortText is now serialized into the JSON response when present.
+    // Items with a sort_text set by any path (trie-promotion "0/1{label}", existing
+    // completion system "2a_{label}", etc.) must produce a non-empty string value.
+    let items_with_sort_text: Vec<&serde_json::Value> =
+        items.iter().filter(|i| !i["sortText"].is_null() && i["sortText"].is_string()).collect();
+
+    // At least some items should carry sortText — the existing completion path
+    // assigns sort_text to workspace symbols ("2a_{label}" etc.) and our new
+    // serialization code must forward that to the client.
+    assert!(
+        !items_with_sort_text.is_empty(),
+        "At least some completion items should have a non-null sortText value; \
+         this confirms sortText is being serialized into the LSP response. \
+         Items: {:?}",
+        items.iter().take(5).collect::<Vec<_>>()
+    );
+
+    // Every non-null sortText must be a non-empty string.
+    for item in &items_with_sort_text {
+        let st = item["sortText"].as_str().unwrap_or("");
+        assert!(
+            !st.is_empty(),
+            "sortText must be a non-empty string, got empty for item: {:?}",
+            item
+        );
     }
 
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// SymbolIndex trie is populated incrementally on didChange
+// Workspace symbol search continues to work after didChange
 // ---------------------------------------------------------------------------
 
-/// When a document is changed via didChange, the SymbolIndex should be
-/// updated with new symbols from the changed content.
+/// When a document is changed via didChange, newly added symbols should
+/// be findable via workspace/symbol after the change is processed.
 ///
-/// This test verifies that workspace/symbol can find newly added symbols
-/// after a didChange event, confirming the index is updated.
+/// This test verifies that the workspace index (and the overall symbol
+/// lookup pipeline) is updated after a didChange event so that callers
+/// always see current symbols.
 #[test]
 fn symbol_index_updated_on_did_change() -> TestResult {
     let mut harness = LspHarness::new();

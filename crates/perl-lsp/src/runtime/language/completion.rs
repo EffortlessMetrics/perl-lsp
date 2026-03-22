@@ -452,6 +452,12 @@ impl LspServer {
                             item["detail"] = json!(detail);
                         }
 
+                        // Serialize sortText so LSP clients can order items correctly.
+                        // Trie-matched symbols get "0{label}" (sorts before "1{label}").
+                        if let Some(sort_text) = c.sort_text {
+                            item["sortText"] = json!(sort_text);
+                        }
+
                         // Only include insertText if it has a value
                         if let Some(mut insert_text) = c.insert_text {
                             // Degrade snippets to plaintext if client doesn't support snippets
@@ -655,6 +661,11 @@ impl LspServer {
 
                         if let Some(detail) = c.detail {
                             item["detail"] = json!(detail);
+                        }
+                        // Serialize sortText so LSP clients can order items correctly.
+                        // Trie-matched symbols get "0{label}" (sorts before "1{label}").
+                        if let Some(sort_text) = c.sort_text {
+                            item["sortText"] = json!(sort_text);
                         }
                         if let Some(insert_text) = c.insert_text {
                             item["insertText"] = json!(insert_text);
