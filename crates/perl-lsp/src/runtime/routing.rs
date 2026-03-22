@@ -41,9 +41,6 @@
 //!     }
 //! }
 //! ```
-// This module is part of ongoing refactoring - allow unused code during development
-#![allow(dead_code)]
-#![allow(unreachable_pub)]
 
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, IndexCoordinator, IndexPhase, IndexState};
@@ -197,19 +194,6 @@ fn degradation_reason_str(reason: &DegradationReason) -> &'static str {
         DegradationReason::ScanTimeout { .. } => "index degraded (scan timeout)",
         DegradationReason::ResourceLimit { .. } => "index degraded (resource limit)",
     }
-}
-
-/// Helper trait for handlers to implement degraded behavior
-///
-/// Handlers can implement this trait to provide consistent degraded
-/// behavior across the codebase.
-#[allow(dead_code)]
-pub(crate) trait DegradedBehavior<T> {
-    /// The default empty result for this handler
-    fn empty_result() -> T;
-
-    /// Description of what's unavailable in degraded mode
-    fn unavailable_feature() -> &'static str;
 }
 
 #[cfg(test)]
