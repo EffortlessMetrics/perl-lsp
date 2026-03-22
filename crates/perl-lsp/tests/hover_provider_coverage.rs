@@ -1089,7 +1089,8 @@ with 'MyApp::Printable';
         let code = "package MyApp::User;\nuse Moo;\nwith \"MyApp::Printable\";\n1;\n";
         let resp = hover_at(code, "file:///role_hover_dq.pl", "MyApp::Printable", 2)?;
 
-        let content = hover_content(&resp).ok_or("expected hover content for double-quoted role")?;
+        let content =
+            hover_content(&resp).ok_or("expected hover content for double-quoted role")?;
         assert!(
             content.contains("MyApp::Printable"),
             "hover on double-quoted role should contain module name, got: {content}"
@@ -1113,8 +1114,7 @@ with 'MyApp::Printable', 'MyApp::Serializable';
         // Hover on the SECOND role name on line 2.
         let resp = hover_at(code, "file:///multi_role_second.pl", "MyApp::Serializable", 2)?;
 
-        let content =
-            hover_content(&resp).ok_or("expected hover content for second role name")?;
+        let content = hover_content(&resp).ok_or("expected hover content for second role name")?;
         assert!(
             content.contains("MyApp::Serializable"),
             "hover on second role in multi-role with should contain module name, got: {content}"
