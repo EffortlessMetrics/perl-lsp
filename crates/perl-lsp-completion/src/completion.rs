@@ -1354,6 +1354,14 @@ impl CompletionProvider {
 
     /// Returns `true` if the cursor follows a `|` pipe inside a TT directive,
     /// indicating a filter-completion context.
+    ///
+    /// Returns `true` in two situations:
+    /// - Cursor is immediately after `|` (optionally with leading whitespace) with
+    ///   nothing typed yet: `[% x | ` — prefix will be empty.
+    /// - Cursor is mid-word after `|`: `[% x | html` — prefix will be "html".
+    ///
+    /// Returns `false` once a space appears after the filter word, since the cursor
+    /// has moved past the filter position: `[% x | html ` (cursor after the space).
     fn is_inside_tt_filter_context(source: &str, position: usize) -> bool {
         if !Self::is_inside_tt_directive(source, position) {
             return false;
@@ -1363,10 +1371,14 @@ impl CompletionProvider {
             return false;
         };
         let directive_text = &before[open_pos..];
-        // The last non-space segment before the cursor in the directive starts with `|`.
-        directive_text
-            .rfind('|')
-            .is_some_and(|pipe_pos| directive_text[pipe_pos + 1..].trim().is_empty())
+        let Some(pipe_pos) = directive_text.rfind('|') else {
+            return false;
+        };
+        // Text between the `|` and the cursor.  Strip leading whitespace; the
+        // remainder must be a single identifier fragment with no internal spaces
+        // (a space gap means the cursor has moved past the filter name word).
+        let after_pipe = directive_text[pipe_pos + 1..].trim_start();
+        !after_pipe.contains(' ') && !after_pipe.contains('\t')
     }
 }
 
@@ -2783,6 +2795,48 @@ sub helper { }
         assert!(
             completions.is_empty(),
             "Expected no completions inside TT comment; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_tt_filter_completions_mid_word() {
+        // After `|` with a partial word typed, filter completions must still fire
+        // and be narrowed to the typed prefix.
+        let source = "[% name | ht";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        assert!(
+            completions.iter().any(|c| c.label == "html"),
+            "html filter missing when typing 'ht' after pipe; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        // Filters not matching "ht" prefix must not appear
+        assert!(
+            !completions.iter().any(|c| c.label == "uri"),
+            "uri filter must not appear when prefix is 'ht'"
+        );
+        // Directives must not appear in filter context
+        assert!(
+            !completions.iter().any(|c| c.label == "FOREACH"),
+            "FOREACH directive must not appear in mid-word filter context"
+        );
+    }
+
+    #[test]
+    fn test_tt_filter_completions_no_completions_after_space_past_filter() {
+        // After a complete filter word followed by a space, filter context ends.
+        // The cursor has moved past the filter name.
+        let source = "[% name | html ";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        // Should be in directive context with empty prefix -> all directives
+        // (or empty prefix loop vars), but NOT in filter context.
+        // The key assertion: no filter-specific items from filter-only path,
+        // but directive completions fire (cursor is still inside [%...]).
+        assert!(
+            completions.iter().any(|c| c.label == "IF"),
+            "directive IF expected after filter word + space; got: {:?}",
             completions.iter().map(|c| &c.label).collect::<Vec<_>>()
         );
     }
