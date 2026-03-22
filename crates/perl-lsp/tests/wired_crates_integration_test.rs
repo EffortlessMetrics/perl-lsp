@@ -58,6 +58,26 @@ fn test_wired_inline_completion_utf16_position() {
     assert_eq!(completions.items[0].insert_text, "new()", "expected 'new()' suggestion after '->'");
 }
 
+/// Real LSP requests provide a line number within a multi-line document.
+/// The provider must find the correct line and apply the UTF-16 column offset
+/// within that line — not across the entire document.
+#[test]
+fn test_wired_inline_completion_multiline_document() {
+    use perl_lsp_inline_completion::InlineCompletionProvider;
+    // Line 0: preamble; Line 1: the trigger line
+    let source = "use strict;\nuse warnings;\n$obj->";
+    let provider = InlineCompletionProvider::new();
+    // line=2 is "$obj->", character=6 (UTF-16 units of "$obj->")
+    let line2 = "$obj->";
+    let col: u32 = line2.encode_utf16().count() as u32;
+    let completions = provider.get_inline_completions(source, 2, col);
+    assert!(
+        !completions.items.is_empty(),
+        "multi-line document: expected completion on line 2 at col {col}"
+    );
+    assert_eq!(completions.items[0].insert_text, "new()", "expected 'new()' after '->' on line 2");
+}
+
 // ---------------------------------------------------------------------------
 // perl-lsp-workspace-symbols
 // ---------------------------------------------------------------------------
