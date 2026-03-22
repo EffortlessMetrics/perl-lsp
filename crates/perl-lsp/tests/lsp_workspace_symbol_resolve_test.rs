@@ -1,6 +1,19 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
+// Helper to open a document on a server
+fn open_doc(server: &LspServer, uri: &str, content: &str) {
+    let did_open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": content }
+        })),
+    };
+    let _ = server.handle_request(did_open);
+}
+
 /// Helper to properly initialize a server with the required initialized notification
 fn setup_server() -> LspServer {
     let server = LspServer::new();
@@ -234,5 +247,96 @@ fn test_workspace_symbol_resolve_unknown_symbol() -> Result<(), Box<dyn std::err
     assert_eq!(resolved["name"], "unknown_function");
     assert_eq!(resolved["kind"], 12);
 
+    Ok(())
+}
+
+#[test]
+fn test_workspace_symbol_resolve_includes_documentation() -> Result<(), Box<dyn std::error::Error>>
+{
+    let server = setup_server();
+    let uri = "file:///test_docs.pl";
+    let content = r#"package MyModule;
+
+# Greets the user with a friendly message
+sub hello {
+    print "Hello!\n";
+}
+"#;
+    open_doc(&server, uri, content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "workspace/symbol/resolve".into(),
+        params: Some(json!({
+            "name": "hello",
+            "kind": 12,
+            "location": { "uri": uri, "range": { "start": { "line": 3, "character": 0 }, "end": { "line": 5, "character": 1 } } }
+        })),
+    };
+    let response = server.handle_request(request).ok_or("no response")?;
+    let resolved = response.result.ok_or("no result")?;
+
+    assert!(resolved["documentation"].is_string(), "Should have documentation field");
+    let doc = resolved["documentation"].as_str().unwrap_or("");
+    assert!(
+        doc.contains("Greets"),
+        "documentation should contain leading comment text, got: {doc}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_workspace_symbol_resolve_no_documentation_without_comment()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server();
+    let uri = "file:///test_nodocs.pl";
+    let content = "sub bare_function { return 1; }\n";
+    open_doc(&server, uri, content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(3)),
+        method: "workspace/symbol/resolve".into(),
+        params: Some(json!({
+            "name": "bare_function",
+            "kind": 12,
+            "location": { "uri": uri, "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 31 } } }
+        })),
+    };
+    let response = server.handle_request(request).ok_or("no response")?;
+    let resolved = response.result.ok_or("no result")?;
+
+    // documentation should be absent (null/missing), not an empty string
+    assert!(
+        resolved["documentation"].is_null() || resolved.get("documentation").is_none(),
+        "Should not have documentation when no leading comment"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_workspace_symbol_resolve_container_name_from_qualified()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server();
+    let uri = "file:///test_container.pl";
+    let content = "package Animal::Dog;\nsub bark { print \"woof\"; }\n";
+    open_doc(&server, uri, content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(4)),
+        method: "workspace/symbol/resolve".into(),
+        params: Some(json!({
+            "name": "bark",
+            "kind": 12,
+            "location": { "uri": uri, "range": { "start": { "line": 1, "character": 0 }, "end": { "line": 1, "character": 30 } } }
+        })),
+    };
+    let response = server.handle_request(request).ok_or("no response")?;
+    let resolved = response.result.ok_or("no result")?;
+
+    let container = resolved["containerName"].as_str().unwrap_or("");
+    assert_eq!(container, "Animal::Dog", "containerName should be derived from qualified name");
     Ok(())
 }

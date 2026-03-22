@@ -1852,6 +1852,7 @@ dependencies = [
  "perl-parser",
  "perl-pod",
  "perl-position-tracking",
+ "perl-qualified-name",
  "perl-source-file",
  "perl-symbol-cursor",
  "perl-tdd-support",
