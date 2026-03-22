@@ -777,7 +777,7 @@ impl<'a> Parser<'a> {
                             //
                             // When called WITH parens we fall through — parens already delimit.
                             if self.peek_kind() != Some(TokenKind::LeftParen)
-                                && matches!(func_name.as_ref(), "defined" | "ref")
+                                && Self::is_optional_arg_builtin(func_name.as_ref())
                             {
                                 return self.parse_named_unary_statement_call(
                                     start,

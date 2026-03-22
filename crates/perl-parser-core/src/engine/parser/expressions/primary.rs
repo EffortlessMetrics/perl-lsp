@@ -810,6 +810,14 @@ impl<'a> Parser<'a> {
                 self.parse_qualified_identifier()
             }
 
+            TokenKind::DataMarker => {
+                // __END__ / __DATA__ reached in expression context (e.g. after a
+                // no-semicolon statement like `__PACKAGE__\n__END__`).  Delegate to
+                // the statement-level handler so the data section is parsed correctly
+                // rather than emitting an "expected expression" error.
+                self.parse_data_section()
+            }
+
             _ => {
                 // Get position before consuming
                 let pos = self.current_position();

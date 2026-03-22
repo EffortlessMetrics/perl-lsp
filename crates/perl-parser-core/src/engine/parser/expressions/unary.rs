@@ -22,6 +22,20 @@ impl<'a> Parser<'a> {
                             // grep/map, not an argument to the file-test operator.
                             let operand = if self.is_at_statement_end()
                                 || self.peek_kind() == Some(TokenKind::Comma)
+                                || matches!(
+                                    self.peek_kind(),
+                                    Some(
+                                        TokenKind::And
+                                            | TokenKind::Or
+                                            | TokenKind::DefinedOr
+                                            | TokenKind::Greater
+                                            | TokenKind::Less
+                                            | TokenKind::GreaterEqual
+                                            | TokenKind::LessEqual
+                                            | TokenKind::Equal
+                                            | TokenKind::NotEqual
+                                    )
+                                )
                             {
                                 // No operand, test $_
                                 Node::new(
@@ -153,6 +167,20 @@ impl<'a> Parser<'a> {
                                         NodeKind::Unary { op: "*".to_string(), operand: Box::new(brace_expr) },
                                         SourceLocation { start, end },
                                     ));
+                                }
+                                TokenKind::BitwiseXor => {
+                                    // *^X typeglob for control variable $^X (e.g. *^N, *^W, *^F)
+                                    self.consume_token()?; // consume ^
+                                    if let Some(TokenKind::Identifier) = self.peek_kind() {
+                                        let id_token = self.tokens.next()?;
+                                        let name = format!("^{}", id_token.text);
+                                        let end = id_token.end;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name },
+                                            SourceLocation { start, end },
+                                        ));
+                                    }
+                                    // Standalone *^ — fall through to parse operand
                                 }
                                 _ => {}
                             }
