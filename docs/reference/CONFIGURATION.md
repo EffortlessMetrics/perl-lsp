@@ -470,6 +470,7 @@ behaviour such as binary management and feature toggles.
 | `perl-lsp.formatOnSave` | `boolean` | `false` | Auto-format on save. |
 | `perl-lsp.enableRefactoring` | `boolean` | `true` | Advanced refactoring features (rename, extract). |
 | `perl-lsp.enableTestIntegration` | `boolean` | `true` | Test::More and Test2 integration. |
+| `perl-lsp.autoPopulateNewFiles` | `boolean` | `true` | Insert boilerplate into newly created `.pm` and `.t` files. `.pm` gets `package <name>; use strict; use warnings; 1;`. `.t` gets `use strict; use warnings; use Test::More; done_testing;`. |
 
 ### Perl-specific
 
