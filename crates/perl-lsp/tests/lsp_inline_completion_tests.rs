@@ -194,3 +194,28 @@ fn test_inline_completion_utf16_position_correct() -> Result<(), Box<dyn std::er
     );
     Ok(())
 }
+
+/// Edge case: completion requested on line 1 of a multiline document.
+/// Verifies that line_context_at_position correctly skips line 0 and
+/// returns the right prefix for line 1.
+#[test]
+fn test_inline_completion_multiline_doc_line1() -> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///test.pl";
+    // Two-line document. Completion is requested on line 1 at end of "->".
+    let text = "use strict;\nmy $obj = Package->";
+    open_doc(&server, uri, text);
+
+    let second_line = "my $obj = Package->";
+    let character = second_line.encode_utf16().count() as u32;
+    let result = inline_completion(&server, uri, 1, character)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(!items.is_empty(), "expected completion on line 1 of multiline doc");
+    assert_eq!(
+        items[0]["insertText"].as_str().ok_or("insertText not a string")?,
+        "new()",
+        "expected 'new()' suggestion after -> on line 1"
+    );
+    Ok(())
+}
