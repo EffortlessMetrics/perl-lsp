@@ -289,6 +289,7 @@ impl LspServer {
         };
 
         // Build source map and index documents with WorkspaceSymbolsProvider.
+        let cap = workspace_symbol_cap();
         let mut provider = perl_lsp_workspace_symbols::WorkspaceSymbolsProvider::new();
         let mut source_map = std::collections::HashMap::new();
         for (uri, text, ast) in docs_snapshot.iter() {
@@ -298,9 +299,10 @@ impl LspServer {
             source_map.insert(uri.clone(), text.clone());
         }
 
-        let symbols = provider.search(query, &source_map);
+        let mut symbols = provider.search(query, &source_map);
+        symbols.truncate(cap);
 
-        eprintln!("Found {} symbols total", symbols.len());
+        eprintln!("Found {} symbols total (cap: {})", symbols.len(), cap);
 
         let result = serde_json::to_value(&symbols).unwrap_or_else(|_| json!([]));
 

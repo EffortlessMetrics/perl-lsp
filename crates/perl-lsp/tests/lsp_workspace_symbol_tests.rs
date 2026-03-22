@@ -431,23 +431,25 @@ sub build {
 "#,
     )?;
 
-    let response =
-        harness.request("workspace/symbol", json!({ "query": "build" })).unwrap_or(json!(null));
+    let response = harness
+        .request("workspace/symbol", json!({ "query": "build" }))
+        .map_err(|e| format!("workspace/symbol request failed: {e}"))?;
 
-    if response.is_null() || !response.is_array() {
-        // Server not ready or no results — skip rather than fail
-        return Ok(());
-    }
+    assert!(
+        response.is_array(),
+        "workspace/symbol should return an array, got: {:?}",
+        response
+    );
 
     let symbols = response.as_array().ok_or("response is not an array")?;
     let build_sym = symbols.iter().find(|s| s["name"].as_str() == Some("build"));
 
-    // If no symbol found, the crate may not be wired — still a failing case
-    // but we assert on structure rather than crash.
-    let sym = build_sym.ok_or("workspace/symbol did not return 'build' — provider not wired")?;
+    let sym = build_sym.ok_or(
+        "workspace/symbol did not return 'build' — WorkspaceSymbolsProvider not wired",
+    )?;
 
     // containerName is populated by WorkspaceSymbolsProvider when the sub is inside a package.
-    // extract_simple_symbols never sets containerName.
+    // extract_simple_symbols never sets containerName — its absence would prove the old path is active.
     assert!(
         sym.get("containerName").is_some(),
         "Symbol 'build' should have containerName set by WorkspaceSymbolsProvider, got: {:?}",
