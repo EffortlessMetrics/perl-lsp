@@ -769,12 +769,16 @@ $name;
             "hover should indicate Scalar Variable, got: {content}"
         );
 
-        // Type inference should produce a **Type** annotation.
-        // The engine may infer Str (through return tracking) or filter Any.
-        // At minimum, verify that the type section is present when informative.
+        // Type inference traces through function return types: get_name returns a
+        // string literal, so $name infers as Str.  The hover must include a **Type**
+        // annotation showing that concrete type.
         assert!(
-            content.contains("**Type**") || !content.contains("Any"),
-            "hover should show an informative inferred type (not raw Any), got: {content}"
+            content.contains("**Type**"),
+            "hover should include **Type** annotation for inferred function return type, got: {content}"
+        );
+        assert!(
+            content.contains("Str"),
+            "hover should show Str for variable assigned from string-returning function, got: {content}"
         );
 
         Ok(())
