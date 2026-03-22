@@ -93,10 +93,7 @@ sub get_user_name { return "test"; }
     let response =
         harness.request("workspace/symbol", json!({ "query": "calculate" })).unwrap_or(json!(null));
 
-    assert!(
-        !response.is_null(),
-        "workspace/symbol should return a result, got null"
-    );
+    assert!(!response.is_null(), "workspace/symbol should return a result, got null");
 
     if response.is_array() {
         let symbols = response.as_array().ok_or("response is not an array")?;
@@ -164,10 +161,7 @@ sub handle_error { return 0; }
         .unwrap_or(json!(null));
 
     // The completion should return results
-    assert!(
-        !response.is_null(),
-        "textDocument/completion should return results"
-    );
+    assert!(!response.is_null(), "textDocument/completion should return results");
 
     if response.is_array() {
         let items = response.as_array().cloned().unwrap_or_default();
@@ -175,10 +169,7 @@ sub handle_error { return 0; }
 
         // Verify that completion items have labels
         for item in &items {
-            assert!(
-                item["label"].is_string(),
-                "Completion item should have a string label"
-            );
+            assert!(item["label"].is_string(), "Completion item should have a string label");
         }
     }
 
