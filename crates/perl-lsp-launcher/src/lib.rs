@@ -1126,8 +1126,7 @@ mod tests {
 
     #[test]
     fn error_display_invalid_check_format() {
-        let err =
-            super::LaunchParseError::InvalidCheckFormat { raw_format: "csv".to_string() };
+        let err = super::LaunchParseError::InvalidCheckFormat { raw_format: "csv".to_string() };
         let msg = format!("{err}");
         assert!(msg.contains("csv"), "error must mention the bad value");
         assert!(msg.contains("text") && msg.contains("json"), "error must list valid options");
