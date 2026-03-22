@@ -236,7 +236,15 @@ impl Sandbox {
 
     /// Escape a path string for safe interpolation into a macOS sandbox profile DSL string literal.
     /// The profile language is TinyScheme-based; only `\` and `"` are special inside quoted strings.
-    /// Backslash must be escaped first to avoid double-escaping.
+    /// Parentheses are NOT special inside a quoted string (only at the DSL level), so they are
+    /// left unescaped. Backslash must be escaped first to avoid double-escaping the newly
+    /// introduced backslashes in the second pass.
+    ///
+    /// Limitation: paths containing literal newlines or null bytes are not escaped here.
+    /// Such paths are pathological on macOS (HFS+ permits them but they are essentially never
+    /// used) and are out of scope for this fix. If configuration sources ever accept arbitrary
+    /// user-supplied paths, add a sanitisation step that rejects control characters before
+    /// calling this function.
     #[cfg(any(target_os = "macos", test))]
     fn sandbox_escape_path(path: &std::path::Path) -> String {
         path.display().to_string().replace('\\', "\\\\").replace('"', "\\\"")
@@ -440,6 +448,17 @@ mod tests {
         // Backslash must be doubled (Windows-style path or escape chars)
         let path = std::path::Path::new("/home/user/my\\path");
         assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/my\\\\path");
+    }
+
+    #[test]
+    fn test_sandbox_escape_path_backslash_then_quote() {
+        // A path containing both \ and " verifies the escape ordering:
+        // backslash is doubled first (\\ -> \\\\), then the quote is escaped (" -> \").
+        // If the order were reversed, the backslash introduced by quote-escaping would
+        // itself get doubled, producing \\\" instead of the correct \".
+        let path = std::path::Path::new("/home/user/my\\\"path");
+        // Expected: /home/user/my\\"path (\ -> \\, then " -> \")
+        assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/my\\\\\\\"path");
     }
 
     #[test]
