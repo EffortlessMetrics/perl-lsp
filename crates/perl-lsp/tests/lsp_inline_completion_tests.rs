@@ -143,7 +143,9 @@ fn test_inline_completion_after_arrow_with_multibyte_prefix()
     let text = "my $emoji = \"😀\"; my $obj = Package->";
     open_doc(&server, uri, text);
 
-    let character = text.len() as u32;
+    // A real LSP client sends UTF-16 code unit count, not byte count.
+    // This emoji string is 39 UTF-8 bytes but 37 UTF-16 code units.
+    let character = text.encode_utf16().count() as u32;
     let result = inline_completion(&server, uri, 0, character)?;
     let items = result["items"].as_array().ok_or("items array")?;
 
