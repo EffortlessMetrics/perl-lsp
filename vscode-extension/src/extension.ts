@@ -15,6 +15,7 @@ import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
+import { showSpecialVarsReference } from './specialVarsReference';
 import { generateBoilerplate } from './fileCreation';
 
 let client: LanguageClient | undefined;
@@ -210,6 +211,10 @@ export async function activate(context: vscode.ExtensionContext) {
         await whatsNewManager.showWhatsNew();
     });
 
+    const showSpecialVarsRefCommand = vscode.commands.registerCommand('perl-lsp.showSpecialVarsReference', async () => {
+        await showSpecialVarsReference(context, outputChannel);
+    });
+
     const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument((event) => {
         if (!shouldFormatOnSave(event.document)) {
             return;
@@ -268,6 +273,7 @@ export async function activate(context: vscode.ExtensionContext) {
         reinstallCommand,
         runHealthCheckCommand,
         showWhatsNewCommand,
+        showSpecialVarsRefCommand,
         formatOnSaveDisposable,
         configurationWatcher,
         fileCreationWatcher,

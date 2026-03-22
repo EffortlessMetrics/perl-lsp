@@ -166,6 +166,7 @@ describe('package.json contributes', () => {
       expect(commandIds).toContain('perl-lsp.runTests');
       expect(commandIds).toContain('perl-lsp.showStatusMenu');
       expect(commandIds).toContain('perl-lsp.createDebugConfig');
+      expect(commandIds).toContain('perl-lsp.showSpecialVarsReference');
     });
 
     test('registers refactoring commands', () => {
