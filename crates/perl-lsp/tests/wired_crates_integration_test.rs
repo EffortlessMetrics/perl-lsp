@@ -191,7 +191,10 @@ fn test_wired_import_management_collect_imports() {
         "sub foo { 1 }".to_string(),
     ];
     let imports = collect_imports(&lines);
-    assert!(!imports.is_empty(), "should detect use statements as imports");
+    // 3 `use` lines + 1 blank + 1 sub — only the 3 use lines should be collected.
+    assert_eq!(imports.len(), 3, "should collect exactly the 3 use statements");
+    assert!(imports[0].contains("strict"), "first import should be 'use strict'");
+    assert!(imports[2].contains("Scalar::Util"), "third import should be Scalar::Util");
 }
 
 // ---------------------------------------------------------------------------
@@ -219,12 +222,15 @@ fn test_wired_capability_map_roundtrip() {
 // perl-lsp-performance
 // ---------------------------------------------------------------------------
 
-/// Performance types must be reachable.
+/// Performance types must be reachable and AstCache must behave correctly.
 #[test]
 fn test_wired_performance_ast_cache_accessible() {
     use perl_lsp_performance::AstCache;
     let cache = AstCache::new(100, 60);
-    let _ = cache;
+    // A freshly constructed cache must return None for any lookup —
+    // this verifies the get() API is callable and the initial state is empty.
+    let result = cache.get("file:///test.pl", "my $x = 1;");
+    assert!(result.is_none(), "fresh AstCache should return None before any put()");
 }
 
 // ---------------------------------------------------------------------------
@@ -316,12 +322,15 @@ fn test_wired_feature_profile_cli_accessible() {
 // perl-lsp-perltidy
 // ---------------------------------------------------------------------------
 
-/// Perltidy integration types must be reachable.
+/// Perltidy integration types must be reachable and defaults must be correct.
 #[test]
 fn test_wired_perltidy_config_accessible() {
     use perl_lsp_perltidy::PerlTidyConfig;
     let config = PerlTidyConfig::default();
-    let _ = config;
+    // Verify load-bearing defaults that downstream callers depend on.
+    assert_eq!(config.indent_columns, Some(4), "default indent_columns must be 4");
+    assert_eq!(config.maximum_line_length, Some(80), "default maximum_line_length must be 80");
+    assert_eq!(config.tabs, Some(false), "default tabs must be false (spaces)");
 }
 
 // ---------------------------------------------------------------------------
