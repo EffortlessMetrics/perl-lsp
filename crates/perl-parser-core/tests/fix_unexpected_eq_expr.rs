@@ -89,6 +89,32 @@ fn test_ord_with_explicit_arg_unchanged() {
     assert_clean_parse(r#"my $n = ord $c;"#);
 }
 
+// ── Edge cases: operator variety and qualification ────────────────────
+
+#[test]
+fn test_core_qualified_length_eq_zero() {
+    // CORE::length strips to "length" via core_qualified_builtin_name
+    assert_clean_parse(r#"next if CORE::length == 0;"#);
+}
+
+#[test]
+fn test_length_ternary() {
+    // Question token is in is_binary_operator; length() used as ternary condition
+    assert_clean_parse(r#"my $x = length ? "has" : "empty";"#);
+}
+
+#[test]
+fn test_abs_dot_concat() {
+    // Dot (concatenation) is in is_binary_operator; abs($_) . "px"
+    assert_clean_parse(r#"my $s = abs . "px";"#);
+}
+
+#[test]
+fn test_chained_optional_arg_builtins() {
+    // Two optional-arg builtins both implicitly 0-arg in same expression
+    assert_clean_parse(r#"die if length == 0 || defined == 1;"#);
+}
+
 // ── Must NOT regress ──────────────────────────────────────────────────
 
 #[test]
