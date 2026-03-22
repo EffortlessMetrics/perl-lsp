@@ -199,6 +199,14 @@ impl LspServer {
                 .collect()
         };
 
+        // Send telemetry for parse errors (opt-in, rate-limited)
+        self.maybe_send_parse_telemetry(
+            &normalized_uri,
+            &parse_errors,
+            degradation_tier,
+            text.len(),
+        );
+
         eprintln!(
             "Publishing {} diagnostics for {} (version {}, tier: {})",
             lsp_diagnostics.len(),
@@ -692,6 +700,93 @@ impl LspServer {
         _doc_text: &str,
         _diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
+    }
+
+    /// Send a `telemetry/event` notification for parse errors if telemetry is enabled.
+    ///
+    /// Collects ONLY privacy-safe metadata: error variant names, degradation tier,
+    /// file extension (NOT path), and approximate file size bucket.
+    ///
+    /// NO file paths, NO source code content, NO user identity are ever collected.
+    ///
+    /// Rate-limited to at most once per URI per 60 seconds to prevent flooding
+    /// on rapid-reparse storms (e.g., every keystroke).
+    fn maybe_send_parse_telemetry(
+        &self,
+        uri: &str,
+        parse_errors: &[crate::error::ParseError],
+        degradation_tier: crate::state::DegradationTier,
+        file_size: usize,
+    ) {
+        // Early return if no parse errors
+        if parse_errors.is_empty() {
+            return;
+        }
+
+        // Check config: telemetry must be explicitly enabled (opt-in, default false)
+        let enabled = self.config.lock().telemetry_enabled;
+        if !enabled {
+            return;
+        }
+
+        // Rate limit: 60-second cooldown per URI
+        {
+            let mut cooldowns = self.telemetry_cooldowns.lock();
+            let now = std::time::Instant::now();
+            if let Some(last) = cooldowns.get(uri) {
+                if now.duration_since(*last).as_secs() < 60 {
+                    return;
+                }
+            }
+            cooldowns.insert(uri.to_string(), now);
+        }
+
+        // Extract file extension ONLY — no path components (privacy-safe)
+        let extension = uri
+            .rsplit('.')
+            .next()
+            .filter(|ext| ext.len() <= 10 && !ext.contains('/'))
+            .unwrap_or("unknown");
+
+        // Classify errors by variant name — no message content or locations
+        let error_types: Vec<&str> = parse_errors
+            .iter()
+            .map(|e| match e {
+                crate::error::ParseError::UnexpectedEof => "UnexpectedEof",
+                crate::error::ParseError::UnexpectedToken { .. } => "UnexpectedToken",
+                crate::error::ParseError::SyntaxError { .. } => "SyntaxError",
+                crate::error::ParseError::LexerError { .. } => "LexerError",
+                crate::error::ParseError::RecursionLimit => "RecursionLimit",
+                crate::error::ParseError::InvalidNumber { .. } => "InvalidNumber",
+                crate::error::ParseError::InvalidString => "InvalidString",
+                crate::error::ParseError::UnclosedDelimiter { .. } => "UnclosedDelimiter",
+                crate::error::ParseError::InvalidRegex { .. } => "InvalidRegex",
+                crate::error::ParseError::NestingTooDeep { .. } => "NestingTooDeep",
+                crate::error::ParseError::Cancelled => "Cancelled",
+            })
+            .collect();
+
+        // Bucket file size to avoid fingerprinting small/unique files
+        let size_bucket = match file_size {
+            0..=1_000 => "tiny",
+            1_001..=10_000 => "small",
+            10_001..=50_000 => "medium",
+            50_001..=200_000 => "large",
+            _ => "very_large",
+        };
+
+        let event = serde_json::json!({
+            "type": "parseError",
+            "errorTypes": error_types,
+            "errorCount": parse_errors.len(),
+            "degradationTier": degradation_tier.as_str(),
+            "fileExtension": extension,
+            "fileSizeBucket": size_bucket,
+        });
+
+        // Fire-and-forget: errors are silently ignored (telemetry must not
+        // disrupt the user's editing session if the transport fails)
+        let _ = self.send_telemetry(event);
     }
 }
 
