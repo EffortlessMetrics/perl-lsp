@@ -151,3 +151,34 @@ fn test_inline_completion_after_arrow_with_multibyte_prefix()
     assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "new()");
     Ok(())
 }
+
+/// UTF-16 correctness test: LSP uses UTF-16 code-unit positions. The emoji 😀 is
+/// 4 bytes / 2 UTF-16 code units. Passing the correct UTF-16 length (37) as
+/// `character` must still resolve the cursor to the end of the `->` arrow.
+/// The old byte-offset implementation slices 37 bytes, landing inside `Package`
+/// (before `->`) and returning no suggestions. The microcrate re-export uses
+/// `utf16_line_col_to_offset` and returns `new()` correctly.
+#[test]
+fn test_inline_completion_arrow_utf16_position() -> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///test.pl";
+    // 😀 is 4 UTF-8 bytes but 2 UTF-16 code units, so utf16 len < byte len
+    let text = "my $emoji = \"😀\"; my $obj = Package->";
+    open_doc(&server, uri, text);
+
+    // LSP sends UTF-16 code-unit count, not byte count
+    let character = text.encode_utf16().count() as u32;
+    let result = inline_completion(&server, uri, 0, character)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(
+        !items.is_empty(),
+        "expected new() suggestion at UTF-16 position {character} but got no items"
+    );
+    assert_eq!(
+        items[0]["insertText"].as_str().ok_or("insertText not a string")?,
+        "new()",
+        "first suggestion must be new()"
+    );
+    Ok(())
+}
