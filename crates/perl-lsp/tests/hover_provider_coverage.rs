@@ -825,6 +825,53 @@ $name;
         Ok(())
     }
 
+    // ── Additional type inference coverage for Issue #348 ────────────────
+
+    #[test]
+    fn test_hover_hash_variable_shows_inferred_type() -> Result<(), Box<dyn std::error::Error>> {
+        // Hash variables should show their inferred type when concretely assigned.
+        let code = "my %config = (host => 'localhost', port => 8080);\n%config;\n";
+        let resp = hover_at(code, "file:///hash_type.pl", "%config", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for %config")?;
+
+        assert!(
+            content.contains("Hash Variable"),
+            "hover should indicate Hash Variable, got: {content}"
+        );
+        assert!(
+            content.contains("**Type**"),
+            "hover on hash variable should include **Type** annotation, got: {content}"
+        );
+        assert!(
+            content.contains("Hash"),
+            "hover should show Hash type for %config, got: {content}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_hover_string_literal_assignment_shows_str_type()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Scalar holding a string literal should infer to Str type.
+        let code = "my $greeting = \"hello\";\n$greeting;\n";
+        let resp = hover_at(code, "file:///str_type.pl", "$greeting", 1)?;
+        let content = hover_content(&resp).ok_or("expected hover for $greeting")?;
+
+        assert!(
+            content.contains("Scalar Variable"),
+            "hover should indicate Scalar Variable, got: {content}"
+        );
+        assert!(
+            content.contains("**Type**"),
+            "hover should include **Type** annotation for string literal, got: {content}"
+        );
+        assert!(
+            content.contains("Str"),
+            "hover should show Str for string literal assignment, got: {content}"
+        );
+        Ok(())
+    }
+
     // ── Test::More hover documentation ───────────────────────────────────
 
     #[test]
