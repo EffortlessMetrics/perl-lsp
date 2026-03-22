@@ -319,9 +319,10 @@ fn test_multiple_diagnostics_mixed_categories() -> Result<(), Box<dyn std::error
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
         .collect();
-    // Lint diagnostics may or may not fire depending on the AST content.
-    // At minimum, we have the parse-error.
-    let _ = lint_diags;
+    assert!(
+        lint_diags.is_empty(),
+        "empty Program AST should suppress strict/warnings lint, got: {lint_diags:?}"
+    );
 
     // Verify we have at least Error-level diagnostics from the parse error
     let has_error = diags.iter().any(|d| d.severity == DiagnosticSeverity::Error);
@@ -555,6 +556,12 @@ fn test_full_pipeline_empty_source() -> Result<(), Box<dyn std::error::Error>> {
     // Empty source should not panic and should return a valid Vec with no diagnostics
     let pe = parse_error_diags(&diags);
     assert!(pe.is_empty(), "Empty source should not have parse errors");
+    // Empty source should also not trigger strict/warnings lint (regression guard)
+    let lint: Vec<_> = diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
+        .collect();
+    assert!(lint.is_empty(), "Empty source should not produce strict/warnings lint, got: {lint:?}");
     Ok(())
 }
 
