@@ -3613,4 +3613,29 @@ mod tests {
         assert_eq!(token.token_type, TokenType::Division);
         Ok(())
     }
+
+    #[test]
+    fn test_peek_token_does_not_mutate_paren_depth() -> TestResult {
+        // Regression guard for issue #2750: peek_token() must save and restore
+        // paren_depth so that a peek at `(` does not permanently increment
+        // paren_depth and corrupt the heredoc/bitshift guard on a subsequent token.
+        let mut lexer = PerlLexer::new("(1<<2)");
+        assert_eq!(lexer.paren_depth, 0, "paren_depth must start at 0");
+
+        // Peek at `(` — must not permanently increment paren_depth
+        let peeked = lexer.peek_token().ok_or("peek at ( failed")?;
+        assert_eq!(peeked.token_type, TokenType::LeftParen);
+        assert_eq!(lexer.paren_depth, 0, "peek_token must not mutate paren_depth");
+
+        // Consume `(` — paren_depth becomes 1
+        lexer.next_token();
+        assert_eq!(lexer.paren_depth, 1);
+
+        // Peek at `1` (a number) — paren_depth must remain 1
+        let peeked2 = lexer.peek_token().ok_or("peek at 1 failed")?;
+        assert!(matches!(peeked2.token_type, TokenType::Number(_)));
+        assert_eq!(lexer.paren_depth, 1, "peek at number must not change paren_depth");
+
+        Ok(())
+    }
 }
