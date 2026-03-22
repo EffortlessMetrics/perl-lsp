@@ -151,3 +151,44 @@ fn test_inline_completion_after_arrow_with_multibyte_prefix()
     assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "new()");
     Ok(())
 }
+
+/// Regression test: verify UTF-16 position handling uses microcrate's
+/// utf16_line_col_to_offset, not naive byte indexing.
+///
+/// The string "my $emoji = \"😀\"; my $obj = Package->" has:
+///   UTF-8 byte length: 39
+///   UTF-16 code units: 37 (emoji 😀 is 2 UTF-16 units, 4 UTF-8 bytes)
+///
+/// LSP sends UTF-16 position 37 (end of "->"). The naive byte implementation
+/// would slice [..37] which lands BEFORE "->", producing no completion.
+/// The microcrate uses utf16_line_col_to_offset which correctly maps
+/// UTF-16 position 37 to byte offset 39 (end of string), triggering new().
+#[test]
+fn test_inline_completion_utf16_position_correct() -> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///test.pl";
+    // "😀" is 4 UTF-8 bytes but 2 UTF-16 code units.
+    // UTF-16 end-of-string position = 37 (not 39, the byte length).
+    let text = "my $emoji = \"😀\"; my $obj = Package->";
+    open_doc(&server, uri, text);
+
+    // Use UTF-16 encoded length as the LSP character position (this is what
+    // a real editor sends — UTF-16 code unit count, not byte count).
+    let utf16_character = text.encode_utf16().count() as u32;
+    // Confirm our understanding: UTF-16 len < UTF-8 len due to 4-byte emoji
+    assert_eq!(utf16_character, 37, "expected 37 UTF-16 code units");
+
+    let result = inline_completion(&server, uri, 0, utf16_character)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(
+        !items.is_empty(),
+        "expected inline completion after -> when using correct UTF-16 position"
+    );
+    assert_eq!(
+        items[0]["insertText"].as_str().ok_or("insertText not a string")?,
+        "new()",
+        "expected 'new()' suggestion after ->"
+    );
+    Ok(())
+}
