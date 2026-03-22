@@ -393,3 +393,65 @@ fn test_say_nested_in_method_call_object_detected() -> Result<(), Box<dyn std::e
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Test 14: say in a ternary branch is detected
+// ---------------------------------------------------------------------------
+//
+// Walker regression guard for Ternary: before the fix, Ternary had no arm
+// in the walker and fell into `_ => {}`, silently dropping all three
+// sub-expressions.
+
+#[test]
+fn test_say_in_ternary_branch_detected() -> Result<(), Box<dyn std::error::Error>> {
+    // Models: $x ? say("a") : "b"  — say in ternary then-expr
+    let ternary = Node::new(
+        NodeKind::Ternary {
+            condition: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                loc(20, 22),
+            )),
+            then_expr: Box::new(say_call()),
+            else_expr: Box::new(Node::new(
+                NodeKind::String { value: "b".to_string(), interpolated: false },
+                loc(40, 43),
+            )),
+        },
+        loc(20, 44),
+    );
+
+    let ast = program(vec![use_node("v5.8"), ternary]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'say' inside ternary on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 15: say in a return expression is detected
+// ---------------------------------------------------------------------------
+//
+// Walker regression guard for Return: before the fix, Return{value:Some(...)}
+// fell into `_ => {}` so any version-gated construct in a return value
+// was never visited.
+
+#[test]
+fn test_say_in_return_value_detected() -> Result<(), Box<dyn std::error::Error>> {
+    // Models: `return say("hi");` — say in return value
+    let ret = Node::new(NodeKind::Return { value: Some(Box::new(say_call())) }, loc(20, 40));
+    let ast = program(vec![use_node("v5.8"), ret]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'say' inside return value on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}

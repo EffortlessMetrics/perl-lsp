@@ -206,12 +206,6 @@ pub struct LspServer {
     feature_profile: FeatureProfile,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, perl_pod::PodDoc>>>,
-    /// Per-URI last telemetry send time for parse-error rate limiting.
-    ///
-    /// Prevents a rapid-reparse storm from flooding the client with
-    /// `telemetry/event` notifications.  A URI is suppressed for 60 seconds
-    /// after its last send.
-    pub(crate) telemetry_cooldowns: Arc<Mutex<HashMap<String, std::time::Instant>>>,
     /// Count of background workspace indexing tasks currently in flight.
     ///
     /// Incremented before spawning a background `index_file` task, decremented
@@ -231,14 +225,6 @@ pub struct LspServer {
     /// exit paths including panics).
     #[cfg(feature = "workspace")]
     indexing_in_progress: Arc<AtomicBool>,
-    /// Cache for semantic tokens delta encoding: URI -> (resultId, flat_data).
-    ///
-    /// Populated by `handle_semantic_tokens` after each full response.
-    /// Used by `handle_semantic_tokens_delta` to compute an edit list against
-    /// the stored flat u32 array.  Evicted on `textDocument/didClose`.
-    /// Kept separate from DocumentState to avoid holding the documents lock
-    /// while computing tokens.
-    pub(crate) semantic_tokens_cache: Arc<Mutex<HashMap<String, (String, Vec<u32>)>>>,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains

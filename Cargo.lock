@@ -1830,7 +1830,6 @@ dependencies = [
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
- "perl-lsp-inline-completion",
  "perl-lsp-input-validation",
  "perl-lsp-launcher",
  "perl-lsp-limits",
@@ -1965,7 +1964,6 @@ name = "perl-lsp-config"
 version = "0.12.0"
 dependencies = [
  "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -2142,16 +2140,6 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-inline-completion"
-version = "0.12.0"
-dependencies = [
- "lsp-types",
- "perl-position-tracking",
- "perl-tdd-support",
- "serde",
 ]
 
 [[package]]

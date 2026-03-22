@@ -14,7 +14,7 @@ A fast, native Perl 5 language server with 26+ IDE features. Written in Rust for
 ### Navigation and Intelligence
 - **Go to Definition** -- Jump to any symbol declaration across files
 - **Find References** -- Find all usages of a symbol across your project
-- **Hover Documentation** -- Instant docs for functions, variables, and modules, including educational tooltips for Perl special variables (`$_`, `@_`, `%ENV`, and 20+ more)
+- **Hover Documentation** -- Instant docs for functions, variables, and modules
 - **Auto-completion** -- Smart suggestions for variables, functions, and module names
 - **Signature Help** -- Real-time parameter hints as you type function calls
 - **Symbol Navigation** -- Outline view, breadcrumbs, and workspace symbol search
@@ -33,7 +33,6 @@ A fast, native Perl 5 language server with 26+ IDE features. Written in Rust for
 - **Document Formatting** -- Format with `perltidy` (`Shift+Alt+F`)
 
 ### Advanced Features
-- **Special Variables Reference** -- Hover over `$_`, `@_`, `%ENV`, `$!`, and 20+ built-in Perl special variables for instant documentation. Open the full reference via `Perl: Show Special Variables Reference` in the command palette.
 - **Semantic Highlighting** -- Context-aware syntax coloring beyond TextMate grammars
 - **Type Hierarchy** -- Navigate inheritance with `@ISA` and `use parent`
 - **Call Hierarchy** -- Trace function calls inbound and outbound

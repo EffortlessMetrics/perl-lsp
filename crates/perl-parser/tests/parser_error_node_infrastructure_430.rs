@@ -4,13 +4,13 @@
 //! capabilities required for IDE features on incomplete or broken code.
 
 use perl_parser::{Node, NodeKind, Parser, SourceLocation};
-use perl_tdd_support::must;
 
 /// AC1: NodeKind enum includes Error variant with message, expected tokens, found token, and optional partial node
 #[test]
 fn parser_430_ac1_error_variant_structure() {
     let code = "my $x = ;"; // Missing expression after =
     let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
     let ast = must(parser.parse());
 
     // Debug: Print the AST structure
@@ -65,6 +65,7 @@ fn parser_430_ac2_missing_node_variants_exist() {
 fn parser_430_ac3_error_nodes_preserve_location() {
     let code = "my $x = ;\nprint 1;"; // Error on line 1
     let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
     let ast = must(parser.parse());
 
     let mut found_error = false;
@@ -93,6 +94,7 @@ fn parser_430_ac3_error_nodes_preserve_location() {
 fn parser_430_ac4_error_nodes_have_context() {
     let code = "if ($x) { my $y = ; }"; // Missing expression in if block
     let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
     let ast = must(parser.parse());
 
     // Navigate to the error node inside the if block
@@ -126,6 +128,7 @@ fn parser_430_ac5_error_nodes_with_partial_ast() {
     // This test validates that Error nodes can wrap partial valid trees
     let code = "my $x = ;"; // Assignment with missing RHS
     let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
     let ast = must(parser.parse());
 
     let mut found_error = false;
@@ -153,7 +156,8 @@ fn parser_430_ac6_partial_block_missing_closing_brace() {
     let result = parser.parse();
 
     // Should recover and return a partial AST
-    let ast = must(result);
+    assert!(result.is_ok(), "Parser should recover from missing closing brace");
+    let ast = result.unwrap();
 
     println!("AC6 AST: {}", ast.to_sexp());
 
@@ -208,6 +212,7 @@ fn parser_430_ac6_partial_block_missing_closing_brace() {
 fn parser_430_ac7_partial_if_statement() {
     let code = "if ($x > 0) { print 'positive'; } # Missing else handled gracefully";
     let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
     let ast = must(parser.parse());
 
     let mut found_if = false;
@@ -243,6 +248,7 @@ fn parser_430_ac8_missing_expression_node() {
     // This test validates the capability exists in the AST
     let code = "my $x = ;"; // Missing expression
     let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
     let ast = must(parser.parse());
 
     // Check AST for Error or MissingExpression
@@ -282,7 +288,9 @@ fn parser_430_ac10_common_error_scenarios() {
         let mut parser = Parser::new(code);
         let result = parser.parse();
 
-        let ast = must(result);
+        assert!(result.is_ok(), "Should recover from: {}", description);
+
+        let ast = result.unwrap();
         let errors = parser.errors();
 
         println!(
@@ -304,7 +312,8 @@ fn parser_430_integration_lsp_hover_on_broken_code() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    let ast = must(result);
+    assert!(result.is_ok(), "Parser should recover");
+    let ast = result.unwrap();
 
     // Verify we can still find the valid variable declaration
     if let NodeKind::Program { statements } = &ast.kind {
@@ -323,7 +332,8 @@ fn parser_430_integration_lsp_completion_on_broken_code() {
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    let ast = must(result);
+    assert!(result.is_ok(), "Parser should recover");
+    let ast = result.unwrap();
 
     // Verify we can still find the subroutine definition
     if let NodeKind::Program { statements } = &ast.kind {
@@ -369,6 +379,7 @@ fn parser_430_performance_error_recovery_overhead() {
 fn parser_430_sexp_error_nodes() {
     let code = "my $x = ;";
     let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
     let ast = must(parser.parse());
     let sexp = ast.to_sexp();
 

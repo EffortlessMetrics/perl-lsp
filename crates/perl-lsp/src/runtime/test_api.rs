@@ -156,21 +156,6 @@ impl LspServer {
         self.handle_workspace_symbols_v2(params)
     }
 
-    /// Test-only accessor for the fast SymbolIndex (trie).
-    ///
-    /// Returns the symbol names matching a prefix query against the
-    /// trie-based index that is populated on every didOpen/didChange.
-    pub fn test_symbol_index_search_prefix(&self, prefix: &str) -> Vec<String> {
-        self.symbol_index.lock().search_prefix(prefix)
-    }
-
-    /// Test-only accessor for fuzzy SymbolIndex search.
-    ///
-    /// Returns the symbol names from the inverted-index fuzzy search.
-    pub fn test_symbol_index_search_fuzzy(&self, query: &str) -> Vec<String> {
-        self.symbol_index.lock().search_fuzzy(query)
-    }
-
     /// Test-only entrypoint for LSP `textDocument/documentColor`.
     ///
     /// Exercises document color detection functionality in tests.

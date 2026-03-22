@@ -7,7 +7,6 @@
 //! - Cleanup and resource release validation
 
 use perl_parser::Parser;
-use perl_tdd_support::{must, must_some};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -261,8 +260,8 @@ fn test_cleanup_and_resource_release() {
 
         // Analyze memory usage pattern
         let avg_memory = memory_measurements.iter().sum::<usize>() / memory_measurements.len();
-        let max_memory = must_some(memory_measurements.iter().max());
-        let min_memory = must_some(memory_measurements.iter().min());
+        let max_memory = memory_measurements.iter().max().unwrap();
+        let min_memory = memory_measurements.iter().min().unwrap();
 
         let final_memory = estimate_memory_usage();
         let memory_leak = final_memory.saturating_sub(baseline_memory);
@@ -326,7 +325,7 @@ fn test_concurrent_memory_pressure() {
                     let memory_after = estimate_memory_usage();
                     let memory_used = memory_after.saturating_sub(memory_before);
 
-                    must(results_clone.lock()).push((
+                    results_clone.lock().unwrap().push((
                         thread_id,
                         pressure,
                         pressure_level,

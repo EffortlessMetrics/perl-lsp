@@ -199,14 +199,6 @@ impl LspServer {
                 .collect()
         };
 
-        // Send telemetry for parse errors (opt-in, rate-limited)
-        self.maybe_send_parse_telemetry(
-            &normalized_uri,
-            &parse_errors,
-            degradation_tier,
-            text.len(),
-        );
-
         eprintln!(
             "Publishing {} diagnostics for {} (version {}, tier: {})",
             lsp_diagnostics.len(),
@@ -700,119 +692,6 @@ impl LspServer {
         _doc_text: &str,
         _diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
-    }
-
-    /// Send a `telemetry/event` notification for parse errors if telemetry is enabled.
-    ///
-    /// Collects ONLY privacy-safe metadata: error variant names, degradation tier,
-    /// file extension (NOT path), and approximate file size bucket.
-    ///
-    /// NO file paths, NO source code content, NO user identity are ever collected.
-    ///
-    /// Rate-limited to at most once per URI per 60 seconds to prevent flooding
-    /// on rapid-reparse storms (e.g., every keystroke).
-    fn maybe_send_parse_telemetry(
-        &self,
-        uri: &str,
-        parse_errors: &[crate::error::ParseError],
-        degradation_tier: crate::state::DegradationTier,
-        file_size: usize,
-    ) {
-        // Fast path: skip if no errors at all (most document edits are clean)
-        if parse_errors.is_empty() {
-            return;
-        }
-
-        // Check config: telemetry must be explicitly enabled (opt-in, default false)
-        // This is the cheapest meaningful check — do it before any allocation.
-        let enabled = self.config.lock().telemetry_enabled;
-        if !enabled {
-            return;
-        }
-
-        // Filter out Cancelled — a cancelled parse is not a user-visible error
-        // and should not be recorded in telemetry as a parser failure.
-        let has_real_errors =
-            parse_errors.iter().any(|e| !matches!(e, crate::error::ParseError::Cancelled));
-        if !has_real_errors {
-            return;
-        }
-
-        // Rate limit: 60-second cooldown per URI
-        {
-            let mut cooldowns = self.telemetry_cooldowns.lock();
-            let now = std::time::Instant::now();
-            if let Some(last) = cooldowns.get(uri) {
-                if now.duration_since(*last).as_secs() < 60 {
-                    return;
-                }
-            }
-            cooldowns.insert(uri.to_string(), now);
-
-            // Periodic cleanup: remove entries older than 120 seconds to prevent
-            // unbounded HashMap growth in long-running sessions. Only run cleanup
-            // if the map has grown beyond 1000 entries (cheap check).
-            if cooldowns.len() > 1000 {
-                cooldowns.retain(|_, last_time| now.duration_since(*last_time).as_secs() < 120);
-            }
-        }
-
-        // Extract file extension ONLY — no path components (privacy-safe).
-        // Guard: empty, path-containing, or overly-long extensions fall back to "unknown".
-        let extension = uri
-            .rsplit('.')
-            .next()
-            .filter(|ext| !ext.is_empty() && ext.len() <= 10 && !ext.contains('/'))
-            .unwrap_or("unknown");
-
-        // Classify real errors by variant name — no message content or locations.
-        // Cancelled is excluded: it is a transport-level event, not a parse failure.
-        // Deduplicated: a file with 50 UnexpectedToken errors sends "UnexpectedToken"
-        // once. errorCount covers the real (non-Cancelled) total.
-        let mut seen = std::collections::HashSet::new();
-        let mut error_types: Vec<&str> = Vec::new();
-        let mut real_error_count: usize = 0;
-        for e in parse_errors {
-            let variant = match e {
-                crate::error::ParseError::UnexpectedEof => "UnexpectedEof",
-                crate::error::ParseError::UnexpectedToken { .. } => "UnexpectedToken",
-                crate::error::ParseError::SyntaxError { .. } => "SyntaxError",
-                crate::error::ParseError::LexerError { .. } => "LexerError",
-                crate::error::ParseError::RecursionLimit => "RecursionLimit",
-                crate::error::ParseError::InvalidNumber { .. } => "InvalidNumber",
-                crate::error::ParseError::InvalidString => "InvalidString",
-                crate::error::ParseError::UnclosedDelimiter { .. } => "UnclosedDelimiter",
-                crate::error::ParseError::InvalidRegex { .. } => "InvalidRegex",
-                crate::error::ParseError::NestingTooDeep { .. } => "NestingTooDeep",
-                crate::error::ParseError::Cancelled => continue, // excluded from telemetry
-            };
-            real_error_count += 1;
-            if seen.insert(variant) {
-                error_types.push(variant);
-            }
-        }
-
-        // Bucket file size to avoid fingerprinting small/unique files
-        let size_bucket = match file_size {
-            0..=1_000 => "tiny",
-            1_001..=10_000 => "small",
-            10_001..=50_000 => "medium",
-            50_001..=200_000 => "large",
-            _ => "very_large",
-        };
-
-        let event = serde_json::json!({
-            "type": "parseError",
-            "errorTypes": error_types,
-            "errorCount": real_error_count,
-            "degradationTier": degradation_tier.as_str(),
-            "fileExtension": extension,
-            "fileSizeBucket": size_bucket,
-        });
-
-        // Fire-and-forget: errors are silently ignored (telemetry must not
-        // disrupt the user's editing session if the transport fails)
-        let _ = self.send_telemetry(event);
     }
 }
 

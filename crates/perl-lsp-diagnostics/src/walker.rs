@@ -104,6 +104,17 @@ where
                 walk_node(arg, func);
             }
         }
+        NodeKind::Ternary { condition, then_expr, else_expr } => {
+            walk_node(condition, func);
+            walk_node(then_expr, func);
+            walk_node(else_expr, func);
+        }
+        NodeKind::Return { value: Some(v) } => {
+            walk_node(v, func);
+        }
+        NodeKind::LabeledStatement { statement, .. } => {
+            walk_node(statement, func);
+        }
         _ => {} // Other nodes don't have children or are handled differently
     }
 }
