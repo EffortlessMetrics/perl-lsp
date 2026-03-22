@@ -363,6 +363,12 @@
         "title": "Show What's New",
         "category": "Perl",
         "icon": "$(star-empty)"
+      },
+      {
+        "command": "perl-lsp.showSpecialVarsReference",
+        "title": "Show Special Variables Reference",
+        "category": "Perl",
+        "icon": "$(symbol-variable)"
       }
     ],
     "menus": {
@@ -402,6 +408,9 @@
         {
           "command": "perl-lsp.showRefactoringOptions",
           "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.showSpecialVarsReference"
         }
       ],
       "editor/title": [
