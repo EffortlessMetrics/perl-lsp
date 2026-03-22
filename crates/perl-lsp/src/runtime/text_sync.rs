@@ -93,6 +93,59 @@ impl LspServer {
                 return Ok(());
             }
 
+            // Binary content guard: skip parsing for files containing null bytes
+            // (binary files that arrive via didOpen as valid UTF-8 strings)
+            if text.contains('\0') {
+                tracing::warn!(
+                    "Skipping parse for {} (binary content detected: null bytes present)",
+                    uri
+                );
+
+                let rope = ropey::Rope::from_str(text);
+                let line_starts = LineStartsCache::new_rope(&rope);
+                let normalized_uri = self.normalize_uri_key(uri);
+                self.documents.lock().insert(
+                    normalized_uri.clone(),
+                    DocumentState {
+                        rope,
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: Arc::new(AtomicU32::new(0)),
+                        degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
+                    },
+                );
+
+                if let Err(e) = self.notify(
+                    "textDocument/publishDiagnostics",
+                    json!({
+                        "uri": uri,
+                        "diagnostics": [{
+                            "range": {
+                                "start": {"line": 0, "character": 0},
+                                "end": {"line": 0, "character": 0}
+                            },
+                            "severity": 3,
+                            "source": "perl-lsp",
+                            "message": "File appears to contain binary content (null bytes detected). Perl diagnostics are disabled."
+                        }]
+                    }),
+                ) {
+                    tracing::warn!(
+                        "Failed to publish binary-content diagnostic for {}: {}",
+                        uri,
+                        e
+                    );
+                }
+
+                return Ok(());
+            }
+
             // Notify coordinator of pending change (tracks parse storm)
             #[cfg(feature = "workspace")]
             if let Some(coordinator) = self.coordinator() {
@@ -446,6 +499,56 @@ impl LspServer {
                         }),
                     ) {
                         tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
+                    }
+
+                    return Ok(());
+                }
+
+                // Binary content guard: skip parsing for files containing null bytes
+                if text.contains('\0') {
+                    tracing::warn!(
+                        "Skipping parse for {} (binary content detected via didChange)",
+                        uri
+                    );
+
+                    let line_starts = LineStartsCache::new_rope(&doc.rope);
+                    let normalized_uri = self.normalize_uri_key(uri);
+                    doc_state = DocumentState {
+                        rope: doc.rope.clone(),
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: doc_state.generation.clone(),
+                        degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
+                    };
+                    documents.insert(normalized_uri.clone(), doc_state);
+                    drop(documents);
+
+                    if let Err(e) = self.notify(
+                        "textDocument/publishDiagnostics",
+                        json!({
+                            "uri": uri,
+                            "diagnostics": [{
+                                "range": {
+                                    "start": {"line": 0, "character": 0},
+                                    "end": {"line": 0, "character": 0}
+                                },
+                                "severity": 3,
+                                "source": "perl-lsp",
+                                "message": "File appears to contain binary content (null bytes detected). Perl diagnostics are disabled."
+                            }]
+                        }),
+                    ) {
+                        tracing::warn!(
+                            "Failed to publish binary-content diagnostic for {}: {}",
+                            uri,
+                            e
+                        );
                     }
 
                     return Ok(());
@@ -1258,6 +1361,121 @@ mod tests {
             "cancelled parse must not store document state"
         );
 
+        Ok(())
+    }
+
+    /// Binary content guard — didOpen with null bytes must skip the parser and
+    /// store the document with DegradationTier::Minimal and no AST.
+    #[test]
+    fn test_binary_file_guard_did_open_skips_parse() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_binary.pl";
+        // Simulate a binary file that arrived as a valid UTF-8 string containing null bytes
+        let binary_content = "PK\x00\x03some binary content\x00\x00\x00";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": binary_content
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after binary didOpen")?;
+        assert_eq!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "binary content should result in Minimal degradation tier"
+        );
+        assert!(doc.ast.is_none(), "parser must not be called on binary content");
+        Ok(())
+    }
+
+    /// Binary content guard — a single null byte is sufficient to trigger the guard.
+    #[test]
+    fn test_binary_file_guard_single_null_byte_triggers_guard()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_null.pl";
+        let content_with_null = "#!/usr/bin/perl\nmy $x = 1;\x00\n";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": content_with_null
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after single-null didOpen")?;
+        assert_eq!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "a single null byte must trigger the binary guard"
+        );
+        assert!(doc.ast.is_none(), "parser must not be called when null byte is present");
+        Ok(())
+    }
+
+    /// Binary content guard — normal Perl source (no null bytes) must still parse normally.
+    #[test]
+    fn test_binary_file_guard_normal_perl_still_parses() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///normal.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "#!/usr/bin/perl\nuse strict;\nmy $x = 42;\n"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after normal didOpen")?;
+        assert_ne!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "normal Perl should not be treated as binary content"
+        );
+        Ok(())
+    }
+
+    /// Binary content guard — didChange with null bytes must skip parse and keep DegradationTier::Minimal.
+    #[test]
+    fn test_binary_file_guard_did_change_skips_parse() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_binary_change.pl";
+
+        // Open with valid Perl first
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n"
+            }
+        }))?;
+
+        // Full-document replace with binary content (null bytes)
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "PK\x00\x03binary\x00data" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("document not stored after binary didChange")?;
+        assert_eq!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "binary content via didChange should result in Minimal degradation tier"
+        );
+        assert!(doc.ast.is_none(), "parser must not be called on binary content via didChange");
         Ok(())
     }
 }
