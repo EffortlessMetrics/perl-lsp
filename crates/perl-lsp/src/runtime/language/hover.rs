@@ -105,6 +105,31 @@ impl LspServer {
         let analyzer = crate::semantic::SemanticAnalyzer::analyze_with_source(ast, text);
 
         if let Some(symbol_info) = analyzer.find_definition(offset) {
+            // Detect method modifier symbols (before/after/around) early and render
+            // a dedicated card instead of the generic "Subroutine" label.
+            if let Some(modifier_kind) =
+                symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
+            {
+                let method_name = &symbol_info.name;
+                let kind_label = match modifier_kind {
+                    "before" => "runs **before** the method — use for preconditions and logging",
+                    "after" => "runs **after** the method — use for postconditions and cleanup",
+                    "around" => {
+                        "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
+                    }
+                    _ => "modifies the method",
+                };
+                let doc = symbol_info.documentation.as_deref().unwrap_or("");
+                return HoverExtracted::Complete(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
+                        ),
+                    },
+                }));
+            }
+
             use crate::symbol::VarKind;
             let kind_str = match symbol_info.kind {
                 crate::symbol::SymbolKind::Variable(VarKind::Scalar) => "Scalar Variable",

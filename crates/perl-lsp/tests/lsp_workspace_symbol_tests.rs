@@ -386,7 +386,7 @@ fn test_workspace_symbol_finds_native_class_and_method() -> TestResult {
         let symbols2 = response2.as_array().ok_or("response2 is not an array")?;
         let names2: Vec<&str> = symbols2.iter().filter_map(|s| s["name"].as_str()).collect();
         assert!(
-            names2.iter().any(|n| *n == "MyPoint"),
+            names2.contains(&"MyPoint"),
             "workspace/symbol should find native class 'MyPoint', got: {:?}",
             names2
         );
