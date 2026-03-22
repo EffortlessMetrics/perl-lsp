@@ -364,6 +364,13 @@ impl LspServer {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock();
                 let normalized_uri = self.normalize_uri_key(uri);
+
+                // Invalidate the SemanticAnalyzer cache for this URI — content is changing.
+                {
+                    let mut cache = self.semantic_analyzer_cache.lock();
+                    cache.retain(|(cached_uri, _), _| cached_uri != &normalized_uri);
+                }
+
                 let mut doc_state = documents
                     .get(&normalized_uri)
                     .or_else(|| documents.get(uri))
@@ -741,6 +748,12 @@ impl LspServer {
             let normalized_uri = self.normalize_uri_key(uri);
 
             tracing::debug!("Document closed: {}", uri);
+
+            // Invalidate the SemanticAnalyzer cache for this URI on close.
+            {
+                let mut cache = self.semantic_analyzer_cache.lock();
+                cache.retain(|(cached_uri, _), _| cached_uri != &normalized_uri);
+            }
 
             // Notify coordinator of pending change to track cleanup work
             #[cfg(feature = "workspace")]
@@ -1476,6 +1489,165 @@ mod tests {
             "binary content via didChange should result in Minimal degradation tier"
         );
         assert!(doc.ast.is_none(), "parser must not be called on binary content via didChange");
+        Ok(())
+    }
+
+    /// Semantic analyzer cache must accumulate at most one entry per document
+    /// version across multiple hover calls at different offsets.
+    ///
+    /// This verifies the (uri, content_hash) key strategy: two hovers on the
+    /// same document text must reuse the cached SemanticAnalyzer rather than
+    /// constructing a fresh one.
+    #[test]
+    fn test_semantic_analyzer_cache_reuses_entry_on_same_version()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_cache_hover.pl";
+        let text = "my $x = 1;\nmy $y = 2;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Two hover calls at different positions on the same document version.
+        let _ = server.handle_hover(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        })));
+
+        let _ = server.handle_hover(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 3 }
+        })));
+
+        // Cache must have exactly 1 entry: one per (uri, content_hash).
+        let cache = server.semantic_analyzer_cache.lock();
+        assert_eq!(
+            cache.len(),
+            1,
+            "should cache exactly one analyzer entry per document version (got {})",
+            cache.len()
+        );
+
+        Ok(())
+    }
+
+    /// The semantic analyzer cache must be cleared for a URI when the document
+    /// changes (textDocument/didChange), so stale analysis is never served.
+    #[test]
+    fn test_semantic_analyzer_cache_invalidated_on_did_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_cache_invalidate_change.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Prime the cache with a hover call.
+        let _ = server.handle_hover(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        })));
+
+        // Verify the cache has an entry before the change.
+        {
+            let cache = server.semantic_analyzer_cache.lock();
+            assert!(!cache.is_empty(), "cache must be populated before didChange");
+        }
+
+        // Apply a document change.
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "my $x = 99;\n" }]
+        })))?;
+
+        // Cache must be cleared for this URI after didChange.
+        let cache = server.semantic_analyzer_cache.lock();
+        let uri_key = server.normalize_uri_key(uri);
+        let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
+        assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for changed URI");
+
+        Ok(())
+    }
+
+    /// The semantic analyzer cache must be cleared for a URI when the document
+    /// is closed (textDocument/didClose), preventing stale memory retention.
+    #[test]
+    fn test_semantic_analyzer_cache_invalidated_on_did_close()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_cache_invalidate_close.pl";
+        let text = "my $x = 1;\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // Prime the cache with a hover call.
+        let _ = server.handle_hover(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        })));
+
+        // Verify the cache has an entry before the close.
+        {
+            let cache = server.semantic_analyzer_cache.lock();
+            assert!(!cache.is_empty(), "cache must be populated before didClose");
+        }
+
+        // Close the document.
+        server.handle_did_close(Some(json!({ "textDocument": { "uri": uri } })))?;
+
+        // Cache must be cleared for this URI after didClose.
+        let cache = server.semantic_analyzer_cache.lock();
+        let uri_key = server.normalize_uri_key(uri);
+        let still_has_stale = cache.keys().any(|(k, _)| k == &uri_key);
+        assert!(!still_has_stale, "semantic_analyzer_cache must evict entries for closed URI");
+
+        Ok(())
+    }
+
+    /// A new document version must produce a distinct cache entry (different
+    /// content hash) while the old version's entry is evicted on didChange.
+    #[test]
+    fn test_semantic_analyzer_cache_separates_document_versions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_cache_versions.pl";
+        let text_v1 = "my $x = 1;\n";
+        let text_v2 = "my $x = 999;\n";
+
+        // Open v1 and prime the cache.
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text_v1 }
+        }))?;
+
+        let _ = server.handle_hover(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        })));
+
+        // Change to v2 (invalidates v1 entry) then hover again.
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": text_v2 }]
+        })))?;
+
+        let _ = server.handle_hover(Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        })));
+
+        // Cache must have at most 1 entry (v2 only; v1 was evicted on didChange).
+        let cache = server.semantic_analyzer_cache.lock();
+        assert!(
+            cache.len() <= 1,
+            "cache must hold at most one entry after version change (got {})",
+            cache.len()
+        );
+
         Ok(())
     }
 }
