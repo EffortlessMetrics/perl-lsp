@@ -132,3 +132,92 @@ fn class_model_isa_assignment() {
         "should detect Parent from @ISA assignment"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+/// `use parent 'A', 'B'` — comma-separated quoted strings (not qw).
+/// The parser produces args = ["'A'", "'B'"], each must be normalized and captured.
+#[test]
+fn use_parent_comma_separated_quoted() {
+    let code = "package Child; use parent 'BaseA', 'BaseB'; 1;";
+    let models = build_models(code);
+    let model = must_some(find_model(&models, "Child"));
+    assert_eq!(model.framework, Framework::PlainOO);
+    assert!(
+        model.parents.contains(&"BaseA".to_string()),
+        "should capture BaseA from comma-separated use parent"
+    );
+    assert!(
+        model.parents.contains(&"BaseB".to_string()),
+        "should capture BaseB from comma-separated use parent"
+    );
+    assert_eq!(model.parents.len(), 2, "exactly 2 parents");
+}
+
+/// Diamond inheritance: A <- B, A <- C, B+C <- D.
+/// resolve_inherited_method_hover on D for a method on A must not infinite-loop
+/// and must return the hover exactly once.
+#[test]
+fn resolve_diamond_inheritance_no_cycle() {
+    let code = r#"
+package A;
+sub shared_method { 1 }
+
+package B;
+use parent 'A';
+
+package C;
+use parent 'A';
+
+package D;
+use parent 'B';
+use parent 'C';
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+    // D should resolve shared_method via BFS without infinite loop
+    let hover = analyzer.resolve_inherited_method_hover("D", "shared_method");
+    assert!(hover.is_some(), "should resolve shared_method through diamond chain");
+    let hover = must_some(hover);
+    assert!(
+        hover.signature.contains("shared_method"),
+        "signature should mention shared_method, got: {}",
+        hover.signature
+    );
+    // Must resolve to A (the defining class)
+    assert!(
+        hover.details.iter().any(|d| d.contains("A")),
+        "details should mention A as the defining class, got: {:?}",
+        hover.details
+    );
+}
+
+/// Two-level class model chain: grandparent method accessible from grandchild.
+#[test]
+fn resolve_grandparent_method_via_class_models() {
+    let code = r#"
+package Animal;
+use parent 'LivingThing';
+sub breathe { 1 }
+
+package Dog;
+use parent 'Animal';
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+    // Dog inherits Animal's breathe method through class model chain
+    let hover = analyzer.resolve_inherited_method_hover("Dog", "breathe");
+    assert!(hover.is_some(), "Dog should resolve Animal's breathe via class_models chain");
+    let hover = must_some(hover);
+    assert!(
+        hover.details.iter().any(|d| d.contains("Animal")),
+        "details should attribute breathe to Animal, got: {:?}",
+        hover.details
+    );
+}
