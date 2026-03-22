@@ -56,6 +56,7 @@ impl LspServer {
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -151,6 +152,7 @@ impl LspServer {
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -209,6 +211,7 @@ impl LspServer {
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
+            semantic_tokens_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

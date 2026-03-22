@@ -188,7 +188,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                     ],
                 },
                 range: Some(true),
-                full: Some(SemanticTokensFullOptions::Bool(true)),
+                full: Some(SemanticTokensFullOptions::Delta { delta: Some(true) }),
             }));
     }
 

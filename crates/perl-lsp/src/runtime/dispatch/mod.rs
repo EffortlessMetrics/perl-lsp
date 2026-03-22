@@ -226,6 +226,9 @@ impl LspServer {
             "textDocument/semanticTokens/full" => {
                 self.handle_semantic_tokens_dispatch(request.params)
             }
+            "textDocument/semanticTokens/full/delta" => {
+                self.handle_semantic_tokens_delta_dispatch(request.params)
+            }
             "textDocument/inlayHint" => early_cancel_or!(
                 self,
                 id,

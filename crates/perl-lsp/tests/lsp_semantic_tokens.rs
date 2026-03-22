@@ -2,7 +2,6 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-
 fn semantic_tokens_emit_data() -> Result<(), Box<dyn std::error::Error>> {
     let srv = LspServer::new();
     let init = JsonRpcRequest {
@@ -52,6 +51,301 @@ fn semantic_tokens_emit_data() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify encoding is valid (5-tuples)
     assert_eq!(arr.len() % 5, 0, "semantic tokens must be 5-tuples");
+
+    Ok(())
+}
+
+// =========================================================================
+// Semantic tokens delta encoding tests (issue #2320)
+// =========================================================================
+
+mod support;
+use support::lsp_harness::LspHarness;
+
+/// Full request must include a `resultId` field for delta tracking.
+#[test]
+fn semantic_tokens_full_returns_result_id() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_test.pl";
+    harness.open(uri, "package Foo;\nsub bar { my $x = 1; }")?;
+
+    let result = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))
+        .map_err(|e| e)?;
+
+    assert!(
+        result.get("resultId").is_some(),
+        "full response must contain resultId for delta tracking, got: {}",
+        result
+    );
+    assert!(result["data"].is_array(), "full response must contain data array");
+    Ok(())
+}
+
+/// After an edit, the delta request must return an `edits` array (delta response).
+#[test]
+fn semantic_tokens_delta_returns_edits_after_change() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_edit_test.pl";
+    harness.open(uri, "package Foo;\nsub bar { my $x = 1; }")?;
+
+    // Get initial full tokens
+    let full_result = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))
+        .map_err(|e| e)?;
+
+    let result_id =
+        full_result["resultId"].as_str().ok_or("full response missing resultId")?.to_string();
+
+    // Edit the document (add a new variable)
+    harness.change_full(uri, 2, "package Foo;\nsub bar { my $x = 1; my $y = 2; }")?;
+
+    // Request delta
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": result_id
+            }),
+        )
+        .map_err(|e| e)?;
+
+    // Delta response must have `edits` array (not `data`)
+    let edits = delta_result["edits"]
+        .as_array()
+        .ok_or_else(|| format!("delta response must contain edits array, got: {}", delta_result))?;
+    assert!(
+        !edits.is_empty(),
+        "edits must be non-empty after a real token change (added $y variable), got: {}",
+        delta_result
+    );
+    assert!(
+        delta_result.get("data").is_none(),
+        "delta response must NOT contain data field (must be delta not full), got: {}",
+        delta_result
+    );
+    assert!(delta_result.get("resultId").is_some(), "delta response must contain updated resultId");
+    Ok(())
+}
+
+/// No-op edit: tokens unchanged, delta returns empty edits array.
+#[test]
+fn semantic_tokens_delta_noop_returns_empty_edits() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_noop_test.pl";
+    let content = "package Foo;\nsub bar { my $x = 1; }";
+    harness.open(uri, content)?;
+
+    // Get initial full tokens
+    let full_result = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))
+        .map_err(|e| e)?;
+
+    let result_id =
+        full_result["resultId"].as_str().ok_or("full response missing resultId")?.to_string();
+
+    // Request delta without any document change
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": result_id
+            }),
+        )
+        .map_err(|e| e)?;
+
+    let edits = delta_result["edits"]
+        .as_array()
+        .ok_or_else(|| format!("expected edits array, got: {}", delta_result))?;
+    assert!(
+        edits.is_empty(),
+        "no-op delta must return empty edits array, got {} edits",
+        edits.len()
+    );
+    Ok(())
+}
+
+/// Stale resultId: server returns full tokens (not delta).
+#[test]
+fn semantic_tokens_delta_stale_id_returns_full() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_stale_test.pl";
+    harness.open(uri, "package Foo;\nsub bar { my $x = 1; }")?;
+
+    // Request delta with bogus previousResultId (simulates stale client state)
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": "nonexistent-result-id-12345"
+            }),
+        )
+        .map_err(|e| e)?;
+
+    // Must return full data, not a delta
+    assert!(
+        delta_result.get("data").is_some(),
+        "stale resultId must fall back to full response with data field, got: {}",
+        delta_result
+    );
+    assert!(delta_result.get("resultId").is_some(), "fallback full response must include resultId");
+    Ok(())
+}
+
+/// No prior full request: delta with no cache falls back to full response.
+#[test]
+fn semantic_tokens_delta_no_previous_returns_full() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_no_prior_test.pl";
+    harness.open(uri, "package Foo;\nsub bar { my $x = 1; }")?;
+
+    // Send delta request without any prior full request
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": "no-prior-full-request"
+            }),
+        )
+        .map_err(|e| e)?;
+
+    // Must return full data array since no cache exists
+    assert!(
+        delta_result.get("data").is_some(),
+        "delta with no prior cache must fall back to full response with data, got: {}",
+        delta_result
+    );
+    Ok(())
+}
+
+/// After didClose + didOpen, stale cached resultId must fall back to full response.
+///
+/// Verifies that the cache eviction on didClose is effective: using a resultId
+/// from before the close must not produce a delta (the cache entry was wiped).
+#[test]
+fn semantic_tokens_delta_after_close_and_reopen_returns_full()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_close_reopen_test.pl";
+    let content = "package Foo;\nsub bar { my $x = 1; }";
+    harness.open(uri, content)?;
+
+    // Get initial full tokens and capture the resultId
+    let full_result = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))
+        .map_err(|e| e)?;
+    let result_id =
+        full_result["resultId"].as_str().ok_or("full response missing resultId")?.to_string();
+
+    // Close the document — this must evict the cache
+    harness.close(uri)?;
+
+    // Re-open the document
+    harness.open(uri, content)?;
+
+    // Request delta with the pre-close resultId — cache was evicted, must return full
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": result_id
+            }),
+        )
+        .map_err(|e| e)?;
+
+    assert!(
+        delta_result.get("data").is_some(),
+        "delta after close+reopen must fall back to full response, got: {}",
+        delta_result
+    );
+    assert!(
+        delta_result.get("edits").is_none(),
+        "delta after close+reopen must NOT return edits (cache was evicted), got: {}",
+        delta_result
+    );
+    Ok(())
+}
+
+/// After multiple sequential didChange events, a single delta covers all changes.
+///
+/// The cache stores the state from the previous token response, not each individual
+/// document change. Multiple edits between token requests all appear in one delta.
+#[test]
+fn semantic_tokens_delta_covers_multiple_changes() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_multi_change_test.pl";
+    harness.open(uri, "package Foo;")?;
+
+    // Get initial tokens
+    let full_result = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))
+        .map_err(|e| e)?;
+    let result_id =
+        full_result["resultId"].as_str().ok_or("full response missing resultId")?.to_string();
+
+    // Apply two sequential changes without requesting tokens in between
+    harness.change_full(uri, 2, "package Foo;\nsub bar { }")?;
+    harness.change_full(uri, 3, "package Foo;\nsub bar { my $x = 1; }")?;
+
+    // Delta should cover the combined change (not just the last one)
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": result_id
+            }),
+        )
+        .map_err(|e| e)?;
+
+    // Must return delta (not a fallback full) since resultId is still valid
+    assert!(
+        delta_result.get("edits").is_some(),
+        "delta must return edits after multiple changes, got: {}",
+        delta_result
+    );
+    // The final document has more tokens than the initial, so edits must be non-empty
+    assert!(
+        !delta_result["edits"].as_array().map(|e| e.is_empty()).unwrap_or(true),
+        "edits must be non-empty after content was added, got: {}",
+        delta_result
+    );
+    Ok(())
+}
+
+/// Initialize response must advertise delta capability.
+#[test]
+fn semantic_tokens_capability_advertises_delta() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    let init_response = harness.initialize(None)?;
+
+    let caps = &init_response["capabilities"];
+    let tokens_provider = &caps["semanticTokensProvider"];
+
+    assert!(!tokens_provider.is_null(), "server must advertise semanticTokensProvider capability");
+
+    // The `full` field must be an object with `delta: true` (not simply Bool(true))
+    let full = &tokens_provider["full"];
+    assert!(!full.is_null(), "semanticTokensProvider.full must be present");
+
+    let delta = full.get("delta");
+    assert!(
+        delta.map(|v| v.as_bool()) == Some(Some(true)),
+        "semanticTokensProvider.full.delta must be true, got: {}",
+        full
+    );
 
     Ok(())
 }

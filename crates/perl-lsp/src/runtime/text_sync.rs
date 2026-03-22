@@ -661,6 +661,13 @@ impl LspServer {
                 }
             }
 
+            // Evict semantic tokens delta cache for this document.
+            {
+                let mut st_cache = self.semantic_tokens_cache.lock();
+                st_cache.remove(&normalized_uri);
+                st_cache.remove(uri);
+            }
+
             // Clear from workspace index
             // Note: Mutation operation - use coordinator.index() directly
             #[cfg(feature = "workspace")]
