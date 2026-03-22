@@ -230,18 +230,34 @@ export async function activate(context: vscode.ExtensionContext) {
         const ext = vscode.extensions.getExtension('EffortlessMetrics.perl-lsp-rs');
         const extensionVersion: string = ext?.packageJSON?.version ?? 'unknown';
 
-        // Build GitHub new-issue URL using the bug_report template
         // Extract just the version from the first line (handles multiline output from --version)
         const versionLine = serverVersion.split('\n')[0];
-        const params = new URLSearchParams({
-            template: 'bug_report.yml',
-            version: versionLine.replace(/^perl-lsp\s+/, ''),
-            editor: `VS Code ${vscode.version} (ext ${extensionVersion})`,
-            os: `${process.platform} ${process.arch}`,
-        });
+        const serverVersionShort = versionLine.replace(/^perl-lsp\s+/, '');
 
-        const issueUrl = `https://github.com/EffortlessMetrics/perl-lsp/issues/new?${params.toString()}`;
-        await vscode.env.openExternal(vscode.Uri.parse(issueUrl));
+        // Build diagnostic info string for the user to paste into the form.
+        // GitHub's YAML issue form templates do not support pre-filling individual
+        // field IDs via URL query parameters (only markdown templates support ?body=).
+        // We show this info in a notification so the user can copy and paste it.
+        const diagnosticInfo = [
+            `perl-lsp version: ${serverVersionShort}`,
+            `Editor: VS Code ${vscode.version} (ext ${extensionVersion})`,
+            `OS: ${process.platform} ${process.arch}`,
+        ].join('\n');
+
+        // Open the bug report template — ?template= selects it; field pre-fill is not
+        // supported for YAML form templates, so we surface the info via notification.
+        const issueUrl = `https://github.com/EffortlessMetrics/perl-lsp/issues/new?template=bug_report.yml`;
+        const choice = await vscode.window.showInformationMessage(
+            'Opening GitHub issue form. Copy your diagnostic info to paste into the form.',
+            'Copy Diagnostic Info',
+            'Open Without Copying'
+        );
+        if (choice === 'Copy Diagnostic Info') {
+            await vscode.env.clipboard.writeText(diagnosticInfo);
+        }
+        if (choice !== undefined) {
+            await vscode.env.openExternal(vscode.Uri.parse(issueUrl));
+        }
     });
 
     const whatsNewManager = new WhatsNewManager(context, outputChannel);

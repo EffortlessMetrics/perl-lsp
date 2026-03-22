@@ -461,20 +461,21 @@ describe('package.json contributes', () => {
       expect(cmd.category).toBe('Perl');
     });
 
-    test('reportIssue has a title', () => {
+    test('reportIssue has the title "Report Issue"', () => {
       const cmd = pkg.contributes.commands.find(
         (c: any) => c.command === 'perl-lsp.reportIssue'
       );
       expect(cmd).toBeDefined();
-      expect(cmd.title).toBeTruthy();
+      expect(cmd.title).toBe('Report Issue');
     });
 
-    test('reportIssue is listed in commandPalette without language restriction', () => {
+    test('reportIssue is listed in commandPalette unconditionally (no when clause)', () => {
       const palette = pkg.contributes.menus.commandPalette;
       const entry = palette.find((e: any) => e.command === 'perl-lsp.reportIssue');
       expect(entry).toBeDefined();
-      // Must be available globally — users need to report startup failures
-      expect(entry.when ?? '').not.toMatch(/editorLangId/);
+      // Must be unconditionally available — users need to report startup failures
+      // even with no Perl file open. A missing/undefined 'when' means always-shown.
+      expect(entry.when).toBeUndefined();
     });
   });
 
