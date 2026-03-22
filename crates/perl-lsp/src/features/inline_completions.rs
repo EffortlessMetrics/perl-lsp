@@ -1,9 +1,7 @@
-//! Inline completions provider — delegated to perl-lsp-inline-completion (#2756).
+//! Inline completions provider — re-exported from `perl-lsp-inline-completion`.
 //!
-//! The upstream crate uses `utf16_line_col_to_offset` for correct UTF-16
-//! character-position handling as required by the LSP protocol (§3.17).
-//! The previous local implementation used raw byte offsets which gave
-//! silently wrong results for documents containing non-BMP characters.
+//! The authoritative implementation lives in the microcrate, which provides
+//! context-aware ghost-text completions with correct UTF-16 position handling.
 
 pub use perl_lsp_inline_completion::{
     InlineCompletionItem, InlineCompletionList, InlineCompletionProvider,

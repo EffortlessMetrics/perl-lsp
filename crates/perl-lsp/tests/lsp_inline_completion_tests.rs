@@ -194,7 +194,6 @@ fn test_inline_completion_utf16_position_correct() -> Result<(), Box<dyn std::er
     );
     Ok(())
 }
-
 /// Edge case: completion requested on line 1 of a multiline document.
 /// Verifies that line_context_at_position correctly skips line 0 and
 /// returns the right prefix for line 1.
