@@ -304,12 +304,7 @@ fn semantic_tokens_legend_has_token_modifiers() -> Result<(), Box<dyn std::error
         .ok_or("missing legend.tokenModifiers")?;
     // 10 standard LSP modifiers. This count assertion catches modifier legend
     // desynchronization — if a modifier is added internally but not advertised, this fails.
-    assert_eq!(
-        modifiers.len(),
-        10,
-        "expected 10 token modifiers; got {:?}",
-        modifiers
-    );
+    assert_eq!(modifiers.len(), 10, "expected 10 token modifiers; got {:?}", modifiers);
     let mod_strs: Vec<&str> = modifiers.iter().filter_map(|t| t.as_str()).collect();
     assert!(mod_strs.contains(&"declaration"), "should include 'declaration' modifier");
     assert!(mod_strs.contains(&"definition"), "should include 'definition' modifier");
@@ -323,7 +318,9 @@ fn semantic_tokens_legend_has_token_modifiers() -> Result<(), Box<dyn std::error
     );
     // Verify defaultLibrary is at bit position 9 (index 9 in the modifiers array),
     // which is the bitmask value 512 used by collect_semantic_tokens.
-    let default_library_idx = mod_strs.iter().position(|&s| s == "defaultLibrary")
+    let default_library_idx = mod_strs
+        .iter()
+        .position(|&s| s == "defaultLibrary")
         .expect("defaultLibrary must be in advertised modifiers");
     assert_eq!(
         default_library_idx, 9,
