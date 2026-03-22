@@ -293,9 +293,8 @@ pub fn add_builtin_completions(
                     "Append LIST elements to the end of ARRAY. Returns new count.",
                 ),
                 "pop" => ("pop ", "pop ARRAY", "Remove and return the last element of ARRAY."),
-                "shift" => {
-                    ("shift ", "shift ARRAY", "Remove and return the first element of ARRAY.")
-                }
+                "shift" => (
+                    ("shift ", "shift ARRAY", "Remove and return the first element of ARRAY."),
                 "unshift" => (
                     "unshift ",
                     "unshift ARRAY, LIST",
@@ -341,9 +340,8 @@ pub fn add_builtin_completions(
                     "chomp VARIABLE",
                     "Remove trailing newline from string. Returns number of characters removed.",
                 ),
-                "chop" => {
-                    ("chop ", "chop VARIABLE", "Remove and return the last character of a string.")
-                }
+                "chop" => (
+                    ("chop ", "chop VARIABLE", "Remove and return the last character of a string."),
                 "substr" => (
                     "substr(, , )",
                     "substr EXPR, OFFSET, LENGTH",
@@ -367,12 +365,10 @@ pub fn add_builtin_completions(
                 ),
                 "lc" => ("lc ", "lc EXPR", "Return a lowercased copy of EXPR."),
                 "uc" => ("uc ", "uc EXPR", "Return an uppercased copy of EXPR."),
-                "lcfirst" => {
-                    ("lcfirst ", "lcfirst EXPR", "Return EXPR with the first character lowercased.")
-                }
-                "ucfirst" => {
-                    ("ucfirst ", "ucfirst EXPR", "Return EXPR with the first character uppercased.")
-                }
+                "lcfirst" => (
+                    ("lcfirst ", "lcfirst EXPR", "Return EXPR with the first character lowercased."),
+                "ucfirst" => (
+                    ("ucfirst ", "ucfirst EXPR", "Return EXPR with the first character uppercased."),
                 "defined" => (
                     "defined ",
                     "defined EXPR",
@@ -410,9 +406,8 @@ pub fn add_builtin_completions(
                 ),
                 "die" => ("die ", "die LIST", "Raise an exception with LIST as the error message."),
                 "warn" => ("warn ", "warn LIST", "Print LIST to STDERR as a warning."),
-                "eval" => {
-                    ("eval { }", "eval BLOCK", "Trap exceptions from BLOCK; check $@ afterwards.")
-                }
+                "eval" => (
+                    ("eval { }", "eval BLOCK", "Trap exceptions from BLOCK; check $@ afterwards."),
                 "exit" => ("exit ", "exit EXPR", "Exit the program with status EXPR (default 0)."),
                 "require" => (
                     "require ",
@@ -446,9 +441,8 @@ pub fn add_builtin_completions(
                 ),
                 "rmdir" => ("rmdir ", "rmdir FILENAME", "Remove an empty directory."),
                 "chdir" => ("chdir ", "chdir EXPR", "Change the working directory to EXPR."),
-                "chmod" => {
-                    ("chmod(, )", "chmod MODE, LIST", "Change permissions on files in LIST.")
-                }
+                "chmod" => (
+                    ("chmod(, )", "chmod MODE, LIST", "Change permissions on files in LIST."),
                 "chown" => (
                     "chown(, , )",
                     "chown UID, GID, LIST",
@@ -464,9 +458,8 @@ pub fn add_builtin_completions(
                     "symlink OLDFILE, NEWFILE",
                     "Create a symbolic link NEWFILE pointing to OLDFILE.",
                 ),
-                "readlink" => {
-                    ("readlink ", "readlink EXPR", "Return the path a symbolic link points to.")
-                }
+                "readlink" => (
+                    ("readlink ", "readlink EXPR", "Return the path a symbolic link points to."),
                 "opendir" => (
                     "opendir(my $dh, )",
                     "opendir DIRHANDLE, EXPR",
@@ -482,9 +475,8 @@ pub fn add_builtin_completions(
                     "closedir DIRHANDLE",
                     "Close a directory handle opened by opendir.",
                 ),
-                "glob" => {
-                    ("glob ", "glob EXPR", "Expand shell glob patterns in EXPR; like <*.pl>.")
-                }
+                "glob" => (
+                    ("glob ", "glob EXPR", "Expand shell glob patterns in EXPR; like <*.pl>."),
                 "truncate" => (
                     "truncate(, )",
                     "truncate FILEHANDLE|EXPR, LENGTH",
@@ -510,9 +502,8 @@ pub fn add_builtin_completions(
                     "accept NEWSOCKET, GENERICSOCKET",
                     "Accept an incoming socket connection.",
                 ),
-                "connect" => {
-                    ("connect(, )", "connect SOCKET, NAME", "Connect a socket to a remote address.")
-                }
+                "connect" => (
+                    ("connect(, )", "connect SOCKET, NAME", "Connect a socket to a remote address."),
                 "bind" => ("bind(, )", "bind SOCKET, NAME", "Bind a socket to a local address."),
                 "recv" => (
                     "recv(, , , )",
@@ -530,9 +521,8 @@ pub fn add_builtin_completions(
                     "getpeername SOCKET",
                     "Return the remote address of a connected socket.",
                 ),
-                "getsockname" => {
-                    ("getsockname ", "getsockname SOCKET", "Return the local address of a socket.")
-                }
+                "getsockname" => (
+                    ("getsockname ", "getsockname SOCKET", "Return the local address of a socket."),
                 "getsockopt" => (
                     "getsockopt(, , )",
                     "getsockopt SOCKET, LEVEL, OPTNAME",
@@ -548,21 +538,16 @@ pub fn add_builtin_completions(
                     "times",
                     "Return (user, system, cuser, csystem) CPU times in seconds.",
                 ),
-                "getlogin" => {
-                    ("getlogin", "getlogin", "Return the login name of the current user.")
-                }
-                "getpwnam" => {
-                    ("getpwnam ", "getpwnam NAME", "Return the passwd entry for user NAME.")
-                }
-                "getpwuid" => {
-                    ("getpwuid ", "getpwuid UID", "Return the passwd entry for user UID.")
-                }
-                "getgrnam" => {
-                    ("getgrnam ", "getgrnam NAME", "Return the group entry for group NAME.")
-                }
-                "getgrgid" => {
-                    ("getgrgid ", "getgrgid GID", "Return the group entry for group GID.")
-                }
+                "getlogin" => (
+                    ("getlogin", "getlogin", "Return the login name of the current user."),
+                "getpwnam" => (
+                    ("getpwnam ", "getpwnam NAME", "Return the passwd entry for user NAME."),
+                "getpwuid" => (
+                    ("getpwuid ", "getpwuid UID", "Return the passwd entry for user UID."),
+                "getgrnam" => (
+                    ("getgrnam ", "getgrnam NAME", "Return the group entry for group NAME."),
+                "getgrgid" => (
+                    ("getgrgid ", "getgrgid GID", "Return the group entry for group GID."),
                 "gethostbyname" => (
                     "gethostbyname ",
                     "gethostbyname NAME",
