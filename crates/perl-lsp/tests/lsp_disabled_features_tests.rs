@@ -28,12 +28,8 @@ fn test_disabled_features_removes_semantic_tokens_from_caps() -> TestResult {
     Ok(())
 }
 
-<<<<<<< HEAD
-/// Unknown feature IDs must be silently ignored — the server must still initialize
+/// Unknown feature IDs must be silently ignored - the server must still initialize
 /// and must not accidentally disable valid features.
-=======
-/// Unknown feature IDs must be silently ignored — the server must still initialize.
->>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
 #[test]
 fn test_disabled_features_unknown_id_is_tolerated() -> TestResult {
     let mut harness = LspHarness::new_raw();
@@ -41,12 +37,15 @@ fn test_disabled_features_unknown_id_is_tolerated() -> TestResult {
         Some(json!({})),
         json!({ "disabledFeatures": ["lsp.does_not_exist", "semanticTokens"] }),
     )?;
-<<<<<<< HEAD
     let caps = &result["capabilities"];
-    // "semanticTokens" (without lsp. prefix) is not a valid ID — semantic tokens must remain.
+    // "semanticTokens" (without lsp. prefix) is not a valid ID - semantic tokens must remain.
     assert!(
         caps.get("semanticTokensProvider").is_some(),
         "semanticTokensProvider must still be present when only unknown IDs are given"
+    );
+    assert!(
+        result["capabilities"].is_object(),
+        "Server must initialize successfully when unknown feature IDs are given"
     );
     Ok(())
 }
@@ -81,12 +80,6 @@ fn test_disabled_features_non_array_value_ignored() -> TestResult {
     assert!(
         caps.get("semanticTokensProvider").is_some(),
         "semanticTokensProvider must be present when disabledFeatures is a string, not an array"
-=======
-    // Server must initialize successfully and return a capabilities object
-    assert!(
-        result["capabilities"].is_object(),
-        "Server must initialize successfully when unknown feature IDs are given"
->>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
     );
     Ok(())
 }
@@ -96,8 +89,7 @@ fn test_disabled_features_non_array_value_ignored() -> TestResult {
 #[test]
 fn test_disabled_features_empty_array_is_noop() -> TestResult {
     let mut harness = LspHarness::new_raw();
-    let result =
-        harness.initialize_with_init_options(Some(json!({})), json!({ "disabledFeatures": [] }))?;
+    let result = harness.initialize_with_init_options(Some(json!({})), json!({ "disabledFeatures": [] }))?;
     let caps = &result["capabilities"];
     assert!(
         caps.get("semanticTokensProvider").is_some(),
@@ -146,7 +138,6 @@ fn test_absent_initialization_options_is_noop() -> TestResult {
     );
     Ok(())
 }
-<<<<<<< HEAD
 
 /// Disabling multiple valid features simultaneously must suppress all of them.
 /// This exercises the loop path: each ID in the array must independently zero
@@ -174,5 +165,3 @@ fn test_disabled_features_multiple_features_all_suppressed() -> TestResult {
     );
     Ok(())
 }
-=======
->>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
