@@ -347,17 +347,26 @@ pub(crate) fn apply_disabled_feature_id(
         "lsp.signature_help" => flags.signature_help = false,
         "lsp.document_highlight" => flags.document_highlight = false,
         "lsp.formatting" => flags.formatting = false,
+<<<<<<< HEAD
         "lsp.range_formatting" | "lsp.ranges_formatting" => flags.range_formatting = false,
+=======
+        "lsp.range_formatting" => flags.range_formatting = false,
+>>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
         "lsp.on_type_formatting" => flags.on_type_formatting = false,
         "lsp.document_link" => flags.document_links = false,
         "lsp.inline_completion" => flags.inline_completion = false,
         "lsp.inline_value" => flags.inline_values = false,
         "lsp.notebook_document_sync" => flags.notebook_document_sync = false,
+<<<<<<< HEAD
         "lsp.notebook_cell_execution" => flags.notebook_cell_execution = false,
         "lsp.implementation" => flags.implementation = false,
         "lsp.type_definition" => flags.type_definition = false,
         "lsp.execute_command" => flags.execute_command = false,
         "lsp.moniker" => flags.moniker = false,
+=======
+        "lsp.implementation" => flags.implementation = false,
+        "lsp.type_definition" => flags.type_definition = false,
+>>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
         unknown => eprintln!("[perl-lsp] Unknown disabledFeatures ID ignored: {unknown}"),
     }
 }
@@ -382,6 +391,7 @@ mod tests {
         apply_disabled_feature_id(&mut flags, "lsp.does_not_exist");
         assert_eq!(flags, before, "unknown ID must not mutate flags");
     }
+<<<<<<< HEAD
 
     #[test]
     fn apply_disabled_feature_id_execute_command_zeros_field() {
@@ -428,4 +438,6 @@ mod tests {
             );
         }
     }
+=======
+>>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
 }

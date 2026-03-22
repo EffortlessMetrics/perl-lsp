@@ -200,6 +200,7 @@
         ]
       }
     ],
+<<<<<<< HEAD
     "configuration": [
       {
         "title": "Perl LSP — Core",
@@ -367,6 +368,146 @@
             "order": 7,
             "markdownDescription": "Automatically download and install new `perl-lsp` binary releases without prompting. When `false`, a notification is shown instead."
           }
+=======
+    "configuration": {
+      "title": "Perl LSP",
+      "properties": {
+        "perl-lsp.channel": {
+          "type": "string",
+          "enum": [
+            "latest",
+            "stable",
+            "tag"
+          ],
+          "default": "latest",
+          "markdownDescription": "Release channel: `latest` for newest release, `stable` for latest stable, `tag` for specific version"
+        },
+        "perl-lsp.versionTag": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Specific release tag (e.g., `v0.12.0`) when channel is set to `tag`"
+        },
+        "perl-lsp.serverPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path to `perl-lsp` binary. Leave empty to auto-download latest release."
+        },
+        "perl-lsp.autoDownload": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically download `perl-lsp` binary if not found locally. Set to false for internal deployments using `serverPath`."
+        },
+        "perl-lsp.downloadBaseUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp/`"
+        },
+        "perl-lsp.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "markdownDescription": "Controls the logging verbosity of the language server communication. Allowed values: `off`, `messages`, `verbose`. Useful for debugging LSP issues."
+        },
+        "perl-lsp.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable real-time **syntax diagnostics**."
+        },
+        "perl-lsp.enableSemanticTokens": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable **semantic syntax highlighting**."
+        },
+        "perl-lsp.enableFormatting": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable document formatting using `perltidy`. Requires `perltidy` to be installed on your system."
+        },
+        "perl-lsp.formatOnSave": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Format document on save. **Note:** This requires a formatter (like `perltidy`) to be configured."
+        },
+        "perl-lsp.enableRefactoring": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable refactoring-related code actions when supported by the connected `perl-lsp` server."
+        },
+        "perl-lsp.perltidyConfig": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
+        },
+        "perl-lsp.includePaths": {
+          "type": "array",
+          "default": [
+            "lib",
+            "local/lib/perl5"
+          ],
+          "markdownDescription": "Additional library paths (like `use lib`) to search for Perl modules. Relative paths resolve from workspace root."
+        },
+        "perl-lsp.enableTestIntegration": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable `Test::More` and `Test2` integration"
+        },
+        "perl-lsp.autoPopulateNewFiles": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Auto-populate new `.pm` files with a `package` declaration and new `.t` files with `Test::More` boilerplate."
+        },
+        "perl-lsp.featureProfile": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ga-lock",
+            "ga",
+            "prod",
+            "production",
+            "all"
+          ],
+          "default": "auto",
+          "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
+        },
+        "perl-lsp.disabledFeatures": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "lsp.completion",
+              "lsp.hover",
+              "lsp.definition",
+              "lsp.declaration",
+              "lsp.references",
+              "lsp.document_symbol",
+              "lsp.workspace_symbol",
+              "lsp.code_action",
+              "lsp.code_lens",
+              "lsp.rename",
+              "lsp.folding_range",
+              "lsp.selection_range",
+              "lsp.linked_editing_range",
+              "lsp.inlay_hint",
+              "lsp.semantic_tokens",
+              "lsp.call_hierarchy",
+              "lsp.type_hierarchy",
+              "lsp.pull_diagnostics",
+              "lsp.document_color",
+              "lsp.signature_help",
+              "lsp.document_highlight",
+              "lsp.formatting",
+              "lsp.range_formatting"
+            ]
+          },
+          "default": [],
+          "markdownDescription": "Feature IDs to disable at server startup. Use canonical `lsp.*` IDs (e.g., `lsp.semantic_tokens`). Changes take effect after server restart."
+>>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
         }
       }
     ],
