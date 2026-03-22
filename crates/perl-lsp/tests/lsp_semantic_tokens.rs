@@ -227,6 +227,103 @@ fn semantic_tokens_delta_no_previous_returns_full() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// After didClose + didOpen, stale cached resultId must fall back to full response.
+///
+/// Verifies that the cache eviction on didClose is effective: using a resultId
+/// from before the close must not produce a delta (the cache entry was wiped).
+#[test]
+fn semantic_tokens_delta_after_close_and_reopen_returns_full() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_close_reopen_test.pl";
+    let content = "package Foo;\nsub bar { my $x = 1; }";
+    harness.open(uri, content)?;
+
+    // Get initial full tokens and capture the resultId
+    let full_result = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))
+        .map_err(|e| e)?;
+    let result_id =
+        full_result["resultId"].as_str().ok_or("full response missing resultId")?.to_string();
+
+    // Close the document — this must evict the cache
+    harness.close(uri)?;
+
+    // Re-open the document
+    harness.open(uri, content)?;
+
+    // Request delta with the pre-close resultId — cache was evicted, must return full
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": result_id
+            }),
+        )
+        .map_err(|e| e)?;
+
+    assert!(
+        delta_result.get("data").is_some(),
+        "delta after close+reopen must fall back to full response, got: {}",
+        delta_result
+    );
+    assert!(
+        delta_result.get("edits").is_none(),
+        "delta after close+reopen must NOT return edits (cache was evicted), got: {}",
+        delta_result
+    );
+    Ok(())
+}
+
+/// After multiple sequential didChange events, a single delta covers all changes.
+///
+/// The cache stores the state from the previous token response, not each individual
+/// document change. Multiple edits between token requests all appear in one delta.
+#[test]
+fn semantic_tokens_delta_covers_multiple_changes() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    let uri = "file:///delta_multi_change_test.pl";
+    harness.open(uri, "package Foo;")?;
+
+    // Get initial tokens
+    let full_result = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))
+        .map_err(|e| e)?;
+    let result_id =
+        full_result["resultId"].as_str().ok_or("full response missing resultId")?.to_string();
+
+    // Apply two sequential changes without requesting tokens in between
+    harness.change_full(uri, 2, "package Foo;\nsub bar { }")?;
+    harness.change_full(uri, 3, "package Foo;\nsub bar { my $x = 1; }")?;
+
+    // Delta should cover the combined change (not just the last one)
+    let delta_result = harness
+        .request(
+            "textDocument/semanticTokens/full/delta",
+            json!({
+                "textDocument": { "uri": uri },
+                "previousResultId": result_id
+            }),
+        )
+        .map_err(|e| e)?;
+
+    // Must return delta (not a fallback full) since resultId is still valid
+    assert!(
+        delta_result.get("edits").is_some(),
+        "delta must return edits after multiple changes, got: {}",
+        delta_result
+    );
+    // The final document has more tokens than the initial, so edits must be non-empty
+    assert!(
+        !delta_result["edits"].as_array().map(|e| e.is_empty()).unwrap_or(true),
+        "edits must be non-empty after content was added, got: {}",
+        delta_result
+    );
+    Ok(())
+}
+
 /// Initialize response must advertise delta capability.
 #[test]
 fn semantic_tokens_capability_advertises_delta() -> Result<(), Box<dyn std::error::Error>> {
