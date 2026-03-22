@@ -201,8 +201,8 @@ impl WorkspaceConfig {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
-        let output = Command::new("perl").args(["-e", "print join(\"\\n\", @INC)"]).output();
+    fn fetch_perl_inc_with_cmd(perl_cmd: &str) -> Vec<PathBuf> {
+        let output = Command::new(perl_cmd).args(["-e", "print join(\"\\n\", @INC)"]).output();
 
         match output {
             Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
@@ -210,8 +210,27 @@ impl WorkspaceConfig {
                 .filter(|line| !line.is_empty() && *line != ".")
                 .map(PathBuf::from)
                 .collect(),
-            _ => Vec::new(),
+            Ok(out) => {
+                tracing::warn!(
+                    exit_code = ?out.status.code(),
+                    "perl @INC query failed with non-zero exit; system include paths will be empty"
+                );
+                Vec::new()
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "perl not found in PATH; system include paths will be empty. \
+                     Install perl or disable useSystemInc in settings."
+                );
+                Vec::new()
+            }
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn fetch_perl_inc() -> Vec<PathBuf> {
+        Self::fetch_perl_inc_with_cmd("perl")
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -429,5 +448,27 @@ mod tests {
         // use_system_inc = false (default)
         let inc = config.get_system_inc();
         assert!(inc.is_empty(), "system inc is empty when use_system_inc=false");
+    }
+
+    // ── WorkspaceConfig::fetch_perl_inc error recovery ───────
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn fetch_perl_inc_with_missing_binary_returns_empty_vec() {
+        // Use a binary name that cannot exist on any system
+        let result =
+            WorkspaceConfig::fetch_perl_inc_with_cmd("perl-binary-that-definitely-does-not-exist");
+        assert!(
+            result.is_empty(),
+            "fetch_perl_inc must return empty Vec when perl binary is missing"
+        );
+    }
+
+    #[test]
+    #[cfg(all(not(target_arch = "wasm32"), unix))]
+    fn fetch_perl_inc_with_failing_command_returns_empty_vec() {
+        // 'false' always exits 1 on Unix
+        let result = WorkspaceConfig::fetch_perl_inc_with_cmd("false");
+        assert!(result.is_empty(), "fetch_perl_inc must return empty Vec when perl exits non-zero");
     }
 }

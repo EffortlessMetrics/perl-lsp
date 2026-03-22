@@ -15,6 +15,7 @@ categories = ["development-tools", "text-editors"]
 
 [dependencies]
 serde_json = "1.0.149"
+tracing = "0.1.44"
 
 [lints]
 workspace = true
