@@ -144,7 +144,7 @@ parser_blockers:
     root_cause: "format/write statement parser expects variable"
     status: "needs_investigation"
     issue: null
-    note: "Tier 2: 6 files. Prior issue #2408 closed but count unchanged — fix may have targeted CPAN corpus only."
+    note: "Tier 2: 6 files. Prior issue #2408 closed but count unchanged — all 6 paths are Debconf Debian system modules (DbDriver.pm, Question.pm, Template.pm x2 each), not CPAN. Fix targeted CPAN corpus; Debconf format/write patterns remain unaddressed."
 
   - id: "unexpected_question_expr"
     category: "expression"
@@ -353,7 +353,7 @@ archived:
     issue: "#2408"
     closed_date: "2026-03-21"
     closed_pr: null
-    note: "Issue closed. Count unchanged at 6 — fix may have targeted CPAN corpus only. Tracked as active blocker."
+    note: "Issue closed. Count unchanged at 6 — all 6 paths are Debconf Debian system modules (DbDriver.pm, Question.pm, Template.pm), not CPAN. Fix targeted CPAN corpus; Debconf format/write patterns remain. Tracked as active blocker."
 
   - id: "expected_semicolon"
     category: "control_flow"
