@@ -225,6 +225,14 @@ pub struct LspServer {
     /// exit paths including panics).
     #[cfg(feature = "workspace")]
     indexing_in_progress: Arc<AtomicBool>,
+    /// Cache for semantic tokens delta encoding: URI -> (resultId, flat_data).
+    ///
+    /// Populated by `handle_semantic_tokens` after each full response.
+    /// Used by `handle_semantic_tokens_delta` to compute an edit list against
+    /// the stored flat u32 array.  Evicted on `textDocument/didClose`.
+    /// Kept separate from DocumentState to avoid holding the documents lock
+    /// while computing tokens.
+    pub(crate) semantic_tokens_cache: Arc<Mutex<HashMap<String, (String, Vec<u32>)>>>,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains

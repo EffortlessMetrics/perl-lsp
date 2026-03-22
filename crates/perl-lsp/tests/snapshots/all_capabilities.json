@@ -88,7 +88,9 @@
   },
   "selectionRangeProvider": true,
   "semanticTokensProvider": {
-    "full": true,
+    "full": {
+      "delta": true
+    },
     "legend": {
       "tokenModifiers": [
         "declaration",
