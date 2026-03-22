@@ -386,6 +386,9 @@ impl LspServer {
                                     _ => name.to_string(),
                                 };
                                 resolved["detail"] = json!(detail);
+                                if let Some(doc) = &sym.documentation {
+                                    resolved["documentation"] = json!(doc);
+                                }
 
                                 // Update location with accurate range
                                 resolved["location"]["range"] = json!({
@@ -399,23 +402,13 @@ impl LspServer {
                                     }
                                 });
 
-                                // Add scope information if available
-                                if let Some(scope) = symbol_table.scopes.get(&sym.scope_id) {
-                                    if scope.parent.is_some() {
-                                        // Find parent scope's package name
-                                        for parent_symbols in symbol_table.symbols.values() {
-                                            for parent_sym in parent_symbols {
-                                                if parent_sym.scope_id == scope.parent.unwrap_or(0)
-                                                    && parent_sym.kind
-                                                        == crate::symbol::SymbolKind::Package
-                                                {
-                                                    resolved["containerName"] =
-                                                        json!(parent_sym.name);
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
+                                // Add container name derived from qualified symbol name
+                                if let Some(container) =
+                                    perl_qualified_name::container_name(&sym.qualified_name)
+                                {
+                                    resolved["containerName"] = json!(
+                                        perl_module_path::normalize_package_separator(container)
+                                    );
                                 }
 
                                 return Ok(Some(json!(resolved)));
