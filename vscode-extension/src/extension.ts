@@ -11,7 +11,7 @@ import {
     Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger } from './debugAdapter';
+import { activateDebugger, offerDebugConfigOnFirstPerlOpen } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
@@ -151,6 +151,11 @@ export async function activate(context: vscode.ExtensionContext) {
                 command: 'editor.action.formatDocument',
                 disabled: !isPerl
             },
+            {
+                label: '$(debug-alt) Create Debug Configuration',
+                detail: 'Set up .vscode/launch.json for Perl debugging',
+                command: 'perl-lsp.createDebugConfig'
+            },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
@@ -281,6 +286,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize debug adapter
     activateDebugger(context);
+    context.subscriptions.push(
+        vscode.workspace.onDidOpenTextDocument(doc => {
+            offerDebugConfigOnFirstPerlOpen(doc).catch(() => { /* swallow */ });
+        })
+    );
     await initializeLanguageClient(context);
 
     // First-run onboarding: show welcome notification once per installation
