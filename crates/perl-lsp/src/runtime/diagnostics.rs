@@ -390,14 +390,24 @@ impl LspServer {
                                         InternalDiagnosticTag::Unnecessary => "Unnecessary".to_string(),
                                         InternalDiagnosticTag::Deprecated => "Deprecated".to_string(),
                                     }).collect();
-                                diag["data"] = json!({
+                                let mut data_obj = json!({
                                     "code": code_str,
                                     "category": category,
                                     "fixable": fixable,
                                     "tags": tag_strings,
                                 });
+                                // Also include messageMarkup if client supports it
+                                if markup_message_support {
+                                    let markdown = self
+                                        .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
+                                    data_obj["messageMarkup"] = json!({
+                                        "kind": "markdown",
+                                        "value": markdown
+                                    });
+                                }
+                                diag["data"] = data_obj;
                             } else if markup_message_support {
-                                // Only set messageMarkup when no structured data (codeless diags)
+                                // For codeless diagnostics, set messageMarkup only
                                 let markdown = self
                                     .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
                                 diag["data"] = json!({
