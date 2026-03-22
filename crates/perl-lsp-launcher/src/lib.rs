@@ -1101,15 +1101,21 @@ mod tests {
     #[test]
     #[allow(unsafe_code)]
     fn startup_banner_suppressed_by_quiet_env() {
-        // SAFETY: test-only, not run in parallel with other tests touching PERL_LSP_QUIET.
+        // Save previous value to avoid test pollution even if test panics.
+        let previous = std::env::var_os("PERL_LSP_QUIET");
+
+        // SAFETY: test-only env var manipulation; previous value is restored after test.
         unsafe {
             std::env::set_var("PERL_LSP_QUIET", "1");
         }
+
         // startup_banner must not panic when PERL_LSP_QUIET is set
         super::startup_banner("0.12.0", super::FeatureProfile::current());
-        // SAFETY: cleanup.
-        unsafe {
-            std::env::remove_var("PERL_LSP_QUIET");
+
+        // SAFETY: restore previous value.
+        match previous {
+            Some(value) => unsafe { std::env::set_var("PERL_LSP_QUIET", value) },
+            None => unsafe { std::env::remove_var("PERL_LSP_QUIET") },
         }
     }
 }
