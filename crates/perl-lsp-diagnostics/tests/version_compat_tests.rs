@@ -148,19 +148,29 @@ fn test_class_ok_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
-// Test 3: class with `use feature 'class'` (no version) -> no warn
+// Test 3: `use feature 'class'` overrides an old version declaration -> no warn
 // ---------------------------------------------------------------------------
+//
+// This is the real suppression test: a version IS declared (v5.10) and would
+// normally trigger a warning for `class`, but `use feature 'class'` explicitly
+// enables it and should suppress the warning.
+//
+// A previous version of this test used only `use_feature("class")` with no
+// version declaration, which made the checker return early before reaching the
+// suppression logic — the test was vacuous (it tested the early-exit path, not
+// the feature override).
 
 #[test]
 fn test_class_ok_with_use_feature_class() -> Result<(), Box<dyn std::error::Error>> {
-    // use feature 'class' explicitly enables it regardless of version
-    let ast = program(vec![use_feature("class"), class_node("Bar")]);
+    // version IS declared (v5.10 does NOT bundle class), but explicit `use feature 'class'`
+    // should suppress the PL900 warning.
+    let ast = program(vec![use_node("v5.10"), use_feature("class"), class_node("Bar")]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
     assert!(
         no_compat_warnings(&diagnostics),
-        "Expected no PL900 warning when 'use feature 'class'' is present, got: {:?}",
+        "Expected no PL900 warning when 'use feature 'class'' is present on v5.10, got: {:?}",
         diagnostics
     );
     Ok(())
@@ -293,6 +303,92 @@ fn test_explicit_use_feature_suppresses_warning() -> Result<(), Box<dyn std::err
     assert!(
         no_compat_warnings(&diagnostics),
         "Expected no PL900 warning when 'use feature 'signatures'' is present, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 11: signatures in v5.20 -> warns (not bundled until v5.36)
+// ---------------------------------------------------------------------------
+//
+// Regression guard for the FEATURE_VERSIONS / features_enabled_by_version
+// alignment fix.  signatures became experimental in v5.20 but are not in the
+// stable feature bundle until v5.36.  Without the fix (signatures min = 5.20
+// but bundle threshold = 5.36), `use v5.20` + a signature sub would emit a
+// false-positive "requires v5.20; declared v5.20" diagnostic.
+// With the fix (min = 5.36) it correctly warns "requires v5.36".
+
+#[test]
+fn test_signatures_warns_on_v5_20() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.20"), sub_with_signature()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for signatures on v5.20 (stable bundle requires v5.36), got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    // The minimum version in the warning must be 5.36, not 5.20 (which would be nonsensical)
+    assert!(
+        msg.message.contains("v5.36") || msg.message.contains("5.36"),
+        "Message should mention minimum version v5.36, not v5.20: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 12: signatures in v5.36 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_signatures_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), sub_with_signature()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for signatures in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: say nested inside a method call object is detected
+// ---------------------------------------------------------------------------
+//
+// Regression guard for the walker MethodCall fix: before the fix, `object`
+// was not traversed — a `say` call used as the object expression of a chain
+// (`say("hi")->something`) would be silently skipped.  This test verifies
+// the walker now enters the object sub-tree.
+
+fn say_inside_method_call_object() -> Node {
+    // Models: say("hi")->foo()  — contrived but exercises the object walk path
+    Node::new(
+        NodeKind::MethodCall {
+            object: Box::new(say_call()),
+            method: "foo".to_string(),
+            args: vec![],
+        },
+        loc(20, 70),
+    )
+}
+
+#[test]
+fn test_say_nested_in_method_call_object_detected() -> Result<(), Box<dyn std::error::Error>> {
+    // v5.8 file: say (inside method call object) must still be flagged
+    let ast = program(vec![use_node("v5.8"), say_inside_method_call_object()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'say' nested in method call object on v5.8, got: {:?}",
         diagnostics
     );
     Ok(())

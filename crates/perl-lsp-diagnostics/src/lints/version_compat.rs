@@ -28,7 +28,11 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("say", 5, 10),
     ("state", 5, 10),
     ("postfix_deref", 5, 20),
-    ("signatures", 5, 20),
+    // signatures: experimental since v5.20 but only stable-bundled at v5.36.
+    // We use 5.36 as the effective minimum to match features_enabled_by_version,
+    // preventing false-positive warnings on `use v5.20` files that rely on the
+    // experimental pragma (`use feature 'signatures'`).
+    ("signatures", 5, 36),
     ("try", 5, 34),
     ("class", 5, 38),
     ("field", 5, 38),

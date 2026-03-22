@@ -98,7 +98,8 @@ where
         NodeKind::For { body, .. } | NodeKind::Foreach { body, .. } => {
             walk_node(body, func);
         }
-        NodeKind::MethodCall { args, .. } => {
+        NodeKind::MethodCall { object, args, .. } => {
+            walk_node(object, func);
             for arg in args {
                 walk_node(arg, func);
             }
