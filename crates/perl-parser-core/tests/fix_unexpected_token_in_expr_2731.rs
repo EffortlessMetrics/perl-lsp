@@ -146,3 +146,69 @@ fn test_end_marker_with_pod() {
     // __END__ followed by POD documentation
     assert_clean_parse("__PACKAGE__\n__END__\n\n=pod\n\nSome docs.\n\n=cut\n");
 }
+
+// === Regression guards: explicit-arg forms must still parse correctly ===
+// The optional-arg builtin guard only fires when followed by a binary operator.
+// When an explicit argument is present, parsing should proceed as before.
+
+#[test]
+fn test_length_with_explicit_arg() {
+    // length $str — explicit bare arg at statement start must still be consumed
+    assert_clean_parse("length $str;");
+}
+
+#[test]
+fn test_length_with_parens() {
+    // length($str) — parens bypass the optional-arg path entirely
+    assert_clean_parse("length($str);");
+}
+
+#[test]
+fn test_defined_with_explicit_arg() {
+    // defined $x — explicit arg must still work at statement start
+    assert_clean_parse("defined $x;");
+}
+
+#[test]
+fn test_defined_with_parens() {
+    // defined($x) — parens bypass the optional-arg path
+    assert_clean_parse("defined($x);");
+}
+
+#[test]
+fn test_log_with_explicit_arg() {
+    // log $x — log newly routed through parse_named_unary_statement_call
+    assert_clean_parse("log $x;");
+}
+
+#[test]
+fn test_abs_int_explicit_arg() {
+    // abs and int with explicit args must still consume their argument
+    assert_clean_parse("abs $n;");
+    assert_clean_parse("int $n;");
+}
+
+#[test]
+fn test_hex_oct_explicit_arg() {
+    // hex and oct with explicit args
+    assert_clean_parse("hex $s;");
+    assert_clean_parse("oct $s;");
+}
+
+#[test]
+fn test_special_var_colon_comparison() {
+    // $: used in a comparison expression, not just assignment
+    assert_clean_parse(r#"$: eq " -";"#);
+}
+
+#[test]
+fn test_typeglob_caret_in_expression() {
+    // *^N used as an rvalue in a more complex expression
+    assert_clean_parse("my $g = *^N;");
+}
+
+#[test]
+fn test_end_marker_with_semicolon() {
+    // __END__ after a properly semicolon-terminated statement — pre-existing path
+    assert_clean_parse("1;\n__END__\n");
+}
