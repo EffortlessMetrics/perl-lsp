@@ -326,3 +326,78 @@ fn lint_pipeline_dedup_removes_exact_duplicates() {
         }
     }
 }
+
+// =========================================================================
+// 15. Heredoc antipatterns flow through DiagnosticsProvider::get_diagnostics()
+//     Wiring test for issue #2708: ensures detect_heredoc_antipatterns is called
+//     from get_diagnostics(), not only from direct callers in the LSP layer.
+// =========================================================================
+
+#[test]
+fn lint_pipeline_format_heredoc_emits_pl800_via_get_diagnostics() {
+    // `format STDOUT =` is the most reliable trigger for PL800 (HeredocInFormat).
+    // This test verifies the wiring: get_diagnostics() must call
+    // detect_heredoc_antipatterns() so any consumer gets these diagnostics.
+    let source = "format STDOUT =\n@<<<< @>>>>\n$name, $value\n.\n";
+    let diags = diagnostics_for(source);
+
+    // PL800..PL806 are heredoc antipattern codes
+    let heredoc_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref().map(|c| c.starts_with("PL8")).unwrap_or(false))
+        .collect();
+
+    assert!(
+        !heredoc_diags.is_empty(),
+        "Expected at least one heredoc antipattern diagnostic (PL800-PL806) from \
+         get_diagnostics(), got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn lint_pipeline_source_filter_range_valid_via_get_diagnostics() {
+    // `use Filter::Util::Call` may trigger PL803 (HeredocInSourceFilter).
+    // If the diagnostic fires, its range must be within source bounds.
+    let source = "use Filter::Util::Call;\nuse strict;\nuse warnings;\n";
+    let diags = diagnostics_for(source);
+
+    let source_filter_diags: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL803")).collect();
+
+    for d in &source_filter_diags {
+        assert!(
+            d.range.0 <= source.len(),
+            "PL803 range.0 {} should be within source length {}",
+            d.range.0,
+            source.len()
+        );
+        assert!(
+            d.range.1 <= source.len() + 1,
+            "PL803 range.1 {} should not exceed source.len()+1={}",
+            d.range.1,
+            source.len() + 1
+        );
+    }
+}
+
+#[test]
+fn lint_pipeline_clean_heredoc_emits_no_pl8xx_via_get_diagnostics() {
+    // A plain heredoc with no antipatterns should not trigger any PL800-PL806 diagnostics.
+    let source =
+        "use strict;\nuse warnings;\nmy $text = <<'END';\nHello, world!\nEND\nprint $text;\n";
+    let diags = diagnostics_for(source);
+
+    let heredoc_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref().map(|c| c.starts_with("PL8")).unwrap_or(false))
+        .collect();
+
+    assert!(
+        heredoc_diags.is_empty(),
+        "Clean heredoc should produce no PL8xx diagnostics via get_diagnostics(), \
+         got: {:?}",
+        heredoc_diags.iter().map(|d| d.code.as_deref()).collect::<Vec<_>>()
+    );
+}
