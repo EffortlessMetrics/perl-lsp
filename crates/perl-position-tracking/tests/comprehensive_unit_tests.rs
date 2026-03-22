@@ -1862,3 +1862,70 @@ fn wire_range_serde_empty_range() -> Result<(), serde_json::Error> {
     assert_eq!(back.start, back.end);
     Ok(())
 }
+
+// ─── Rope-backed CRLF tests (#2108) ─────────────────────────────────────────
+
+#[test]
+fn line_starts_cache_rope_crlf_basic() {
+    let text = "ab\r\ncd\r\nef";
+    let rope = ropey::Rope::from_str(text);
+    let cache = LineStartsCache::new_rope(&rope);
+
+    // 'c' is at byte 4 (after ab\r\n)
+    assert_eq!(cache.offset_to_position_rope(&rope, 4), (1, 0));
+    // 'e' is at byte 8 (after ab\r\ncd\r\n)
+    assert_eq!(cache.offset_to_position_rope(&rope, 8), (2, 0));
+}
+
+#[test]
+fn line_starts_cache_rope_crlf_roundtrip() {
+    let text = "hello\r\nworld\r\n!";
+    let rope = ropey::Rope::from_str(text);
+    let cache = LineStartsCache::new_rope(&rope);
+
+    let bytes: Vec<u8> = text.bytes().collect();
+    for byte in 0..text.len() {
+        if !text.is_char_boundary(byte) {
+            continue;
+        }
+        // Skip the \r and \n bytes of a CRLF pair — they are inside the
+        // terminator and do not have a unique inverse under the CRLF position model.
+        if bytes[byte] == b'\r' && byte + 1 < bytes.len() && bytes[byte + 1] == b'\n' {
+            continue;
+        }
+        if bytes[byte] == b'\n' && byte > 0 && bytes[byte - 1] == b'\r' {
+            continue;
+        }
+        let (line, col) = cache.offset_to_position_rope(&rope, byte);
+        let back = cache.position_to_offset_rope(&rope, line, col);
+        assert_eq!(back, byte, "CRLF rope roundtrip failed at byte {byte}");
+    }
+}
+
+#[test]
+fn line_starts_cache_rope_crlf_position_at_eol() {
+    // character pointing at or past end of line content must not land inside \r\n
+    let text = "ab\r\ncd";
+    let rope = ropey::Rope::from_str(text);
+    let cache = LineStartsCache::new_rope(&rope);
+
+    // Line 0 has "ab" (2 chars). character=2 is end-of-content, should be byte 2
+    let off = cache.position_to_offset_rope(&rope, 0, 2);
+    assert_eq!(off, 2, "EOL position should land at byte 2, not inside \\r\\n");
+
+    // character=100 (beyond end) should also clamp to byte 2
+    let off_clamped = cache.position_to_offset_rope(&rope, 0, 100);
+    assert_eq!(off_clamped, 2, "Over-large character should clamp to end of line content");
+}
+
+#[test]
+fn line_starts_cache_rope_mixed_line_endings() {
+    let text = "a\r\nb\nc";
+    let rope = ropey::Rope::from_str(text);
+    let cache = LineStartsCache::new_rope(&rope);
+
+    // 'b' at byte 3 (after a\r\n)
+    assert_eq!(cache.offset_to_position_rope(&rope, 3), (1, 0));
+    // 'c' at byte 5 (after a\r\nb\n)
+    assert_eq!(cache.offset_to_position_rope(&rope, 5), (2, 0));
+}

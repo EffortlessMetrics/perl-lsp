@@ -95,6 +95,9 @@ impl LineStartsCache {
             if uc >= character as usize {
                 break;
             }
+            if ch == '\r' || ch == '\n' {
+                break;
+            }
             uc += ch.len_utf16();
             bo += ch.len_utf8();
         }
