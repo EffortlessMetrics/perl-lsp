@@ -266,8 +266,16 @@ fn semantic_tokens_legend_has_token_types() -> Result<(), Box<dyn std::error::Er
         .pointer("/semanticTokensProvider/legend/tokenTypes")
         .and_then(|v| v.as_array())
         .ok_or("missing legend.tokenTypes")?;
-    assert!(!types.is_empty(), "legend.tokenTypes should not be empty");
-    // Check some expected Perl-relevant token types
+    // 20 standard LSP types + sql_string = 21 total.
+    // This count assertion catches legend desynchronization (issue #2103) at the
+    // advertisement layer — if a type is added to the internal legend but not
+    // advertised (or vice versa), this fails immediately.
+    assert_eq!(
+        types.len(),
+        21,
+        "expected 21 token types (20 standard + sql_string); got {:?}",
+        types
+    );
     let type_strs: Vec<&str> = types.iter().filter_map(|t| t.as_str()).collect();
     assert!(type_strs.contains(&"function"), "should include 'function' token type");
     assert!(type_strs.contains(&"variable"), "should include 'variable' token type");
@@ -277,6 +285,11 @@ fn semantic_tokens_legend_has_token_types() -> Result<(), Box<dyn std::error::Er
     assert!(type_strs.contains(&"regexp"), "should include 'regexp' token type");
     assert!(type_strs.contains(&"comment"), "should include 'comment' token type");
     assert!(type_strs.contains(&"namespace"), "should include 'namespace' token type");
+    // sql_string was missing from advertisement before PR #2772 — guard against regression.
+    assert!(
+        type_strs.contains(&"sql_string"),
+        "should include 'sql_string' token type (DBI/SQL context, issue #2337)"
+    );
     Ok(())
 }
 
@@ -289,12 +302,34 @@ fn semantic_tokens_legend_has_token_modifiers() -> Result<(), Box<dyn std::error
         .pointer("/semanticTokensProvider/legend/tokenModifiers")
         .and_then(|v| v.as_array())
         .ok_or("missing legend.tokenModifiers")?;
-    assert!(!modifiers.is_empty(), "legend.tokenModifiers should not be empty");
+    // 10 standard LSP modifiers. This count assertion catches modifier legend
+    // desynchronization — if a modifier is added internally but not advertised, this fails.
+    assert_eq!(
+        modifiers.len(),
+        10,
+        "expected 10 token modifiers; got {:?}",
+        modifiers
+    );
     let mod_strs: Vec<&str> = modifiers.iter().filter_map(|t| t.as_str()).collect();
     assert!(mod_strs.contains(&"declaration"), "should include 'declaration' modifier");
     assert!(mod_strs.contains(&"definition"), "should include 'definition' modifier");
     assert!(mod_strs.contains(&"readonly"), "should include 'readonly' modifier");
     assert!(mod_strs.contains(&"deprecated"), "should include 'deprecated' modifier");
+    // defaultLibrary is used for special variables ($_, %ENV, @_); must be advertised.
+    // Before PR #2772 the bitmask was wrong (8 vs 512) — guard against regression.
+    assert!(
+        mod_strs.contains(&"defaultLibrary"),
+        "should include 'defaultLibrary' modifier (used for Perl special variables)"
+    );
+    // Verify defaultLibrary is at bit position 9 (index 9 in the modifiers array),
+    // which is the bitmask value 512 used by collect_semantic_tokens.
+    let default_library_idx = mod_strs.iter().position(|&s| s == "defaultLibrary")
+        .expect("defaultLibrary must be in advertised modifiers");
+    assert_eq!(
+        default_library_idx, 9,
+        "defaultLibrary must be at index 9 (bitmask 512); \
+         collect_semantic_tokens hardcodes 512 for special variables"
+    );
     Ok(())
 }
 
