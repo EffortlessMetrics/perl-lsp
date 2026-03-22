@@ -38,6 +38,14 @@ const PRAGMA_TYPOS: &[(&str, &[&str])] = &[
 /// in the code and generates informational diagnostics if they are missing.
 /// It also detects misspelled pragma names and provides "Did you mean?" suggestions.
 pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    // Do not suggest strict/warnings for empty, whitespace-only, comment-only,
+    // or shebang-only files — the file has no executable content yet.
+    if let NodeKind::Program { statements } = &node.kind
+        && statements.is_empty()
+    {
+        return;
+    }
+
     let mut has_strict = false;
     let mut has_warnings = false;
 
@@ -139,5 +147,101 @@ fn check_misspelled_pragma(module: &str, node: &Node, diagnostics: &mut Vec<Diag
             });
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::must;
+
+    fn strict_warnings_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_strict_warnings(&ast, &mut diags);
+        diags
+    }
+
+    #[test]
+    fn empty_file_no_strict_warnings_diagnostic() {
+        assert!(
+            strict_warnings_diags("").is_empty(),
+            "empty file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn whitespace_only_no_strict_warnings_diagnostic() {
+        assert!(
+            strict_warnings_diags("   \n\t\n").is_empty(),
+            "whitespace-only file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn comment_only_no_strict_warnings_diagnostic() {
+        assert!(
+            strict_warnings_diags("# just a comment\n").is_empty(),
+            "comment-only file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn shebang_only_no_strict_warnings_diagnostic() {
+        assert!(
+            strict_warnings_diags("#!/usr/bin/perl\n").is_empty(),
+            "shebang-only file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn non_empty_file_without_strict_still_gets_diagnostic() {
+        let diags = strict_warnings_diags("my $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "non-empty file without strict should still get missing-strict diagnostic"
+        );
+    }
+
+    #[test]
+    fn file_with_strict_and_warnings_no_diagnostic() {
+        let diags = strict_warnings_diags("use strict;\nuse warnings;\nmy $x = 1;\n");
+        let has_strict_warn =
+            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(
+            !has_strict_warn,
+            "file with both pragmas should get no strict/warnings diagnostic"
+        );
+    }
+
+    #[test]
+    fn crlf_only_no_strict_warnings_diagnostic() {
+        // Windows CRLF line endings in an otherwise-empty file — both \r and \n
+        // are whitespace-skipped by the lexer, so statements remains empty.
+        assert!(
+            strict_warnings_diags("\r\n\r\n").is_empty(),
+            "CRLF-only file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn shebang_plus_comment_no_strict_warnings_diagnostic() {
+        // Combined: shebang line followed by a comment — both are skipped as trivia.
+        assert!(
+            strict_warnings_diags("#!/usr/bin/perl\n# a comment\n").is_empty(),
+            "shebang + comment file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn misspelled_pragma_in_non_empty_file_still_detected() {
+        // The guard must not suppress misspelled-pragma detection in real files.
+        // MisspelledPragma = PL111; the guard only fires for empty statements vec.
+        let diags = strict_warnings_diags("use structs;\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL111")),
+            "misspelled pragma should still be detected in non-empty files"
+        );
     }
 }

@@ -479,7 +479,9 @@ fn deprecated_related_info_has_suggestion() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn strict_warnings_both_missing() -> Result<(), Box<dyn std::error::Error>> {
-    let root = program(vec![]);
+    // Non-empty program (a bare variable expression) without strict/warnings pragmas
+    // should produce missing-strict and missing-warnings diagnostics.
+    let root = program(vec![var_node("$", "x", 0, 2)]);
     let mut diagnostics = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
 
