@@ -11,13 +11,11 @@ import {
     Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger, offerDebugConfigOnFirstPerlOpen } from './debugAdapter';
+import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
 import { generateBoilerplate } from './fileCreation';
-import { handleFormattingError } from './formattingErrors';
-export { handleFormattingError, resetFormatErrorCooldown } from './formattingErrors';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -152,18 +150,12 @@ export async function activate(context: vscode.ExtensionContext) {
                 command: 'editor.action.formatDocument',
                 disabled: !isPerl
             },
-            {
-                label: '$(debug-alt) Create Debug Configuration',
-                detail: 'Set up .vscode/launch.json for Perl debugging',
-                command: 'perl-lsp.createDebugConfig'
-            },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
             { label: '$(pulse) Run Health Check', detail: 'Check Perl, perltidy, and LSP binary', command: 'perl-lsp.runHealthCheck' },
             { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
-            { label: '$(github) Report Issue', detail: 'Report a bug or request a feature on GitHub', command: 'perl-lsp.reportIssue' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
@@ -210,60 +202,6 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('Perl LSP health check passed.', 'Show Output').then(sel => {
                 if (sel === 'Show Output') { outputChannel.show(); }
             });
-        }
-    });
-
-    const reportIssueCommand = vscode.commands.registerCommand('perl-lsp.reportIssue', async () => {
-        // Collect server version with graceful fallback
-        let serverVersion = 'unavailable';
-        if (currentServerPath) {
-            try {
-                serverVersion = await new Promise<string>((resolve, reject) => {
-                    execFile(currentServerPath!, ['--version'], { timeout: 5000 }, (err: Error | null, stdout: string) => {
-                        if (err) { reject(err); } else { resolve(stdout.trim()); }
-                    });
-                });
-            } catch {
-                serverVersion = 'error retrieving version';
-            }
-        }
-
-        // Collect extension version
-        const ext = vscode.extensions.getExtension('EffortlessMetrics.perl-lsp-rs');
-        const extensionVersion: string = ext?.packageJSON?.version ?? 'unknown';
-
-        // Extract just the version from the first line (handles multiline output from --version)
-        const versionLine = serverVersion.split('\n')[0];
-        const serverVersionShort = versionLine.replace(/^perl-lsp\s+/, '');
-
-        // Build diagnostic info string for the user to paste into the form.
-        // GitHub's YAML issue form templates do not support pre-filling individual
-        // field IDs via URL query parameters (only markdown templates support ?body=).
-        // We show this info in a notification so the user can copy and paste it.
-        const diagnosticInfo = [
-            `perl-lsp version: ${serverVersionShort}`,
-            `Editor: VS Code ${vscode.version} (ext ${extensionVersion})`,
-            `OS: ${process.platform} ${process.arch}`,
-        ].join('\n');
-
-        // Open the bug report template — ?template= selects it; field pre-fill is not
-        // supported for YAML form templates, so we surface the info via notification.
-        const issueUrl = `https://github.com/EffortlessMetrics/perl-lsp/issues/new?template=bug_report.yml`;
-        const choice = await vscode.window.showInformationMessage(
-            'Opening GitHub issue form. Copy your diagnostic info to paste into the form.',
-            'Copy Diagnostic Info',
-            'Open Without Copying'
-        );
-        if (choice === 'Copy Diagnostic Info') {
-            try {
-                await vscode.env.clipboard.writeText(diagnosticInfo);
-            } catch {
-                // Clipboard unavailable — continue to open the browser so the user
-                // can still file the issue; the diagnostic info is lost silently.
-            }
-        }
-        if (choice !== undefined) {
-            await vscode.env.openExternal(vscode.Uri.parse(issueUrl));
         }
     });
 
@@ -329,7 +267,6 @@ export async function activate(context: vscode.ExtensionContext) {
         statusMenuCommand,
         reinstallCommand,
         runHealthCheckCommand,
-        reportIssueCommand,
         showWhatsNewCommand,
         formatOnSaveDisposable,
         configurationWatcher,
@@ -338,19 +275,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize debug adapter
     activateDebugger(context);
-    context.subscriptions.push(
-        vscode.workspace.onDidOpenTextDocument(doc => {
-            offerDebugConfigOnFirstPerlOpen(doc).catch(() => { /* swallow */ });
-        })
-    );
     await initializeLanguageClient(context);
-
-    // Background update check — fire-and-forget, must not block startup
-    const updateDownloader = new BinaryDownloader(context, outputChannel);
-    updateDownloader.checkForUpdateSilent().catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        outputChannel.appendLine(`[update-check] Error: ${msg}`);
-    });
 
     // First-run onboarding: show welcome notification once per installation
     const onboarding = new OnboardingManager(context, outputChannel);
@@ -516,6 +441,9 @@ function createLanguageClient(serverPath: string): LanguageClient {
         }
     };
 
+    const disabledFeatures = vscode.workspace.getConfiguration('perl-lsp')
+        .get<string[]>('disabledFeatures', []);
+
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
             { scheme: 'file', language: 'perl' },
@@ -556,6 +484,9 @@ function createLanguageClient(serverPath: string): LanguageClient {
                     return null;
                 }
             },
+        },
+        initializationOptions: {
+            disabledFeatures,
         },
     };
 
@@ -691,17 +622,12 @@ function shouldFormatOnSave(document: vscode.TextDocument): boolean {
 }
 
 async function formatDocumentOnSave(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
-    try {
-        const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>(
-            'vscode.executeFormatDocumentProvider',
-            document.uri
-        );
-        return edits ?? [];
-    } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        handleFormattingError(msg, outputChannel);
-        return [];
-    }
+    const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>(
+        'vscode.executeFormatDocumentProvider',
+        document.uri
+    );
+
+    return edits ?? [];
 }
 
 async function refreshTestAdapter(context: vscode.ExtensionContext) {
