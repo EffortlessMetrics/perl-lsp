@@ -293,6 +293,13 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     await initializeLanguageClient(context);
 
+    // Background update check — fire-and-forget, must not block startup
+    const updateDownloader = new BinaryDownloader(context, outputChannel);
+    updateDownloader.checkForUpdateSilent().catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[update-check] Error: ${msg}`);
+    });
+
     // First-run onboarding: show welcome notification once per installation
     const onboarding = new OnboardingManager(context, outputChannel);
     if (onboarding.shouldShowWelcome()) {

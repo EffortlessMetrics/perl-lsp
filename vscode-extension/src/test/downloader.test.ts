@@ -9,7 +9,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BinaryDownloader } from '../downloader';
+import { BinaryDownloader, parseLocalVersion, compareVersions } from '../downloader';
 
 // ---------------------------------------------------------------------------
 // Helpers: build a minimal mock ExtensionContext
@@ -347,5 +347,69 @@ describe('BinaryDownloader.detectMusl', () => {
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel()) as any;
     const result = downloader.detectMusl();
     expect(typeof result).toBe('boolean');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseLocalVersion — pure function
+// ---------------------------------------------------------------------------
+describe('parseLocalVersion', () => {
+  test('extracts version from standard --version output', () => {
+    const out = 'perl-lsp 0.12.0\nGit tag: v0.12.0\nPerl Language Server using perl-parser v3\n';
+    expect(parseLocalVersion(out)).toBe('0.12.0');
+  });
+
+  test('returns null on unexpected format', () => {
+    expect(parseLocalVersion('something else entirely')).toBeNull();
+  });
+
+  test('handles trailing whitespace on first line', () => {
+    expect(parseLocalVersion('perl-lsp 0.12.1  \n')).toBe('0.12.1');
+  });
+
+  test('returns null on empty string', () => {
+    expect(parseLocalVersion('')).toBeNull();
+  });
+
+  test('handles single-line output with no newline', () => {
+    expect(parseLocalVersion('perl-lsp 0.13.0')).toBe('0.13.0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// compareVersions — pure function
+// ---------------------------------------------------------------------------
+describe('compareVersions', () => {
+  test('equal versions return 0', () => {
+    expect(compareVersions('0.12.0', '0.12.0')).toBe(0);
+  });
+
+  test('v-prefix on remote is stripped', () => {
+    expect(compareVersions('0.12.0', 'v0.12.0')).toBe(0);
+  });
+
+  test('v-prefix on local is stripped', () => {
+    expect(compareVersions('v0.12.0', '0.12.0')).toBe(0);
+  });
+
+  test('patch bump: local older returns -1', () => {
+    expect(compareVersions('0.12.0', '0.12.1')).toBe(-1);
+  });
+
+  test('minor bump with larger number not fooled by lexicographic compare', () => {
+    // lexicographic "9" > "10" — numeric must return -1
+    expect(compareVersions('0.9.0', '0.10.0')).toBe(-1);
+  });
+
+  test('local ahead of remote returns 1', () => {
+    expect(compareVersions('0.13.0', '0.12.0')).toBe(1);
+  });
+
+  test('major bump detected correctly', () => {
+    expect(compareVersions('0.12.0', '1.0.0')).toBe(-1);
+  });
+
+  test('patch downgrade returns 1', () => {
+    expect(compareVersions('0.12.1', '0.12.0')).toBe(1);
   });
 });
