@@ -113,7 +113,7 @@ expose_lsp_test_api = ["perl-parser/expose_lsp_test_api"]  # Expose test helpers
 lsp-extras = []  # Quarantined tests for unimplemented/aspirational LSP features
 strict-jsonrpc = []  # Strict JSON-RPC 2.0 protocol validation tests
 dap-phase1 = ["perl-dap"]  # DAP Phase 1: Bridge to Perl::LanguageServer (AC1-AC4)
-dap-phase3 = []  # DAP Phase 3: Non-regression tests (AC17)
+dap-phase3 = ["dap-phase1"]  # DAP Phase 3: Non-regression tests (AC17), requires DAP bridge
 utf16-complete = ["perl-parser/utf16-complete"]  # Complete UTF-16 round-trip support
 
 [dev-dependencies]
