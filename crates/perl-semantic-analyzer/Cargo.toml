@@ -28,6 +28,7 @@ perl-workspace-index = { workspace = true }
 perl-symbol-types = { workspace = true }
 regex = "1.12.2"
 rustc-hash = "2.1.1"
+tracing = "0.1"
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
