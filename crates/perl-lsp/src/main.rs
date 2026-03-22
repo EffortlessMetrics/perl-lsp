@@ -321,9 +321,13 @@ fn run_server(launch_config: LaunchConfig) {
         );
     }
 
-    // Unconditional process-start banner to stderr (suppressible via PERL_LSP_QUIET=1).
+    // Unconditional process-start banner to stderr (suppressible via PERL_LSP_QUIET).
     // Fires before any LSP message so users know the binary launched.
-    startup_banner(env!("CARGO_PKG_VERSION"), launch_config.feature_profile);
+    startup_banner(
+        env!("CARGO_PKG_VERSION"),
+        launch_config.feature_profile,
+        launch_config.transport,
+    );
 
     match launch_config.transport {
         TransportMode::Stdio => {

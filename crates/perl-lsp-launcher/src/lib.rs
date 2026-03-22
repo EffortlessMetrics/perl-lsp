@@ -760,13 +760,12 @@ pub fn format_startup_banner(version: &str, profile: FeatureProfile, is_socket: 
 ///
 /// Fires before the LSP handshake begins. Writes directly to stderr, not through
 /// tracing, so it is visible regardless of whether `--log` is active.
-/// Suppressed when `PERL_LSP_QUIET=1` is set (for automated test harnesses).
-pub fn startup_banner(version: &str, profile: FeatureProfile) {
+/// Suppressed when `PERL_LSP_QUIET` is set in the environment.
+pub fn startup_banner(version: &str, profile: FeatureProfile, transport: TransportMode) {
     if std::env::var("PERL_LSP_QUIET").is_ok() {
         return;
     }
-    let is_socket = std::env::var("PERL_LSP_SOCKET").is_ok();
-    eprintln!("{}", format_startup_banner(version, profile, is_socket));
+    eprintln!("{}", format_startup_banner(version, profile, transport.is_socket()));
 }
 
 /// Produce a user-friendly message when the TCP port is already in use.
@@ -1109,13 +1108,51 @@ mod tests {
             std::env::set_var("PERL_LSP_QUIET", "1");
         }
 
-        // startup_banner must not panic when PERL_LSP_QUIET is set
-        super::startup_banner("0.12.0", super::FeatureProfile::current());
+        // startup_banner must not panic when PERL_LSP_QUIET is set.
+        // The transport argument must propagate through without crashing.
+        super::startup_banner(
+            "0.12.0",
+            super::FeatureProfile::current(),
+            super::TransportMode::Stdio,
+        );
 
         // SAFETY: restore previous value.
         match previous {
             Some(value) => unsafe { std::env::set_var("PERL_LSP_QUIET", value) },
             None => unsafe { std::env::remove_var("PERL_LSP_QUIET") },
         }
+    }
+
+    #[test]
+    fn startup_banner_socket_transport_derived_from_transport_mode() {
+        // Verify that format_startup_banner reads the is_socket flag, not an env var.
+        // Socket transport must show "socket"; stdio must show "stdio".
+        let socket_banner = super::format_startup_banner(
+            "0.12.0",
+            super::FeatureProfile::current(),
+            super::TransportMode::Socket { port: 9257 }.is_socket(),
+        );
+        assert!(
+            socket_banner.contains("socket"),
+            "socket transport must appear in banner: {socket_banner}"
+        );
+        assert!(
+            !socket_banner.contains("stdio"),
+            "socket banner must not show stdio: {socket_banner}"
+        );
+
+        let stdio_banner = super::format_startup_banner(
+            "0.12.0",
+            super::FeatureProfile::current(),
+            super::TransportMode::Stdio.is_socket(),
+        );
+        assert!(
+            stdio_banner.contains("stdio"),
+            "stdio transport must appear in banner: {stdio_banner}"
+        );
+        assert!(
+            !stdio_banner.contains("socket"),
+            "stdio banner must not show socket: {stdio_banner}"
+        );
     }
 }

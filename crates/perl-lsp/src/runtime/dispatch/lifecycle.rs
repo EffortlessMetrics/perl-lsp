@@ -92,11 +92,13 @@ impl LspServer {
             eprintln!("Failed to send index-ready notification: {}", e);
         }
 
-        let folder_count = self.workspace_folders.lock().len();
-        if folder_count == 0 {
-            eprintln!("perl-lsp ready (single-file mode)");
-        } else {
-            eprintln!("perl-lsp ready ({folder_count} workspace folder(s))");
+        if std::env::var("PERL_LSP_QUIET").is_err() {
+            let folder_count = self.workspace_folders.lock().len();
+            if folder_count == 0 {
+                eprintln!("perl-lsp ready (single-file mode)");
+            } else {
+                eprintln!("perl-lsp ready ({folder_count} workspace folder(s))");
+            }
         }
 
         Ok(None)
