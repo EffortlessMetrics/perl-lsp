@@ -28,6 +28,7 @@ describe('handleFormattingError', () => {
         jest.useFakeTimers();
         resetFormatErrorCooldown();
         (vscode.window.showErrorMessage as jest.Mock).mockClear();
+        (vscode.commands.executeCommand as jest.Mock).mockClear();
     });
 
     afterEach(() => {
@@ -125,5 +126,14 @@ describe('handleFormattingError', () => {
         const call = (vscode.window.showErrorMessage as jest.Mock).mock.calls[0];
         expect(call[0]).toContain('actual error line');
         expect(call[0]).not.toContain('more info');
+    });
+
+    test('strips trailing carriage return from CRLF error messages', () => {
+        const ch = makeOutputChannel();
+        handleFormattingError('\r\nperltidy error: line 5\r\nmore info', ch as any);
+        const call = (vscode.window.showErrorMessage as jest.Mock).mock.calls[0];
+        // The toast message should not contain a bare \r character
+        expect(call[0]).not.toContain('\r');
+        expect(call[0]).toContain('perltidy error: line 5');
     });
 });

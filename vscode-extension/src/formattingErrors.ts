@@ -32,7 +32,7 @@ export function handleFormattingError(
     }
     lastFormatErrorTime = now;
 
-    const firstLine = message.split('\n').find(l => l.trim().length > 0) ?? message;
+    const firstLine = (message.split('\n').find(l => l.trim().length > 0) ?? message).trimEnd();
     const truncated = firstLine.length > 120 ? firstLine.slice(0, 117) + '...' : firstLine;
 
     const isNotFound = message.includes('perltidy not found');
