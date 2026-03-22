@@ -25,7 +25,9 @@ fn send_msg(stdin: &mut std::process::ChildStdin, body: &str) -> Result<(), BoxE
     Ok(())
 }
 
-fn recv_msg(reader: &mut BufReader<std::process::ChildStdout>) -> Result<serde_json::Value, BoxError> {
+fn recv_msg(
+    reader: &mut BufReader<std::process::ChildStdout>,
+) -> Result<serde_json::Value, BoxError> {
     let mut content_length: Option<usize> = None;
     loop {
         let mut line = String::new();
@@ -86,13 +88,13 @@ fn semantic_token_indices_match_advertised_legend() -> Result<(), BoxError> {
     let init_resp = recv_until_id(&mut reader, 1)?;
 
     // Extract the advertised token type legend from the initialize response.
-    let advertised_legend: Vec<String> = init_resp["result"]["capabilities"]
-        ["semanticTokensProvider"]["legend"]["tokenTypes"]
-        .as_array()
-        .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?
-        .iter()
-        .map(|v| v.as_str().unwrap_or("").to_string())
-        .collect();
+    let advertised_legend: Vec<String> =
+        init_resp["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"]
+            .as_array()
+            .ok_or("semanticTokensProvider.legend.tokenTypes missing from initialize response")?
+            .iter()
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .collect();
 
     // --- initialized notification ---
     let initialized = serde_json::json!({

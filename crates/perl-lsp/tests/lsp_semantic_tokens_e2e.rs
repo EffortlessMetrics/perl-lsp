@@ -48,14 +48,14 @@ fn semantic_tokens_expected_ranges() -> Result<(), Box<dyn std::error::Error>> {
     // We now emit separate non-overlapping tokens for the `sub` keyword, function name,
     // and referenced variable inside the sub body rather than one synthetic combined span.
     let expected_non_overlapping = [
-        (0, 0, 2, 13), // my - keyword (index 13)
-        (0, 3, 2, 11), // $x - variable (index 11)
-        (0, 6, 1, 19), // = - operator (index 19)
-        (0, 8, 1, 17), // 1 - number (index 17)
-        (1, 0, 3, 13), // sub - keyword (index 13)
-        (1, 4, 3, 7),  // foo - function (index 7)
-        (1, 10, 2, 11),// $x - variable reference (index 11)
-        (2, 0, 5, 7),  // foo(); - function (index 7)
+        (0, 0, 2, 13),  // my - keyword (index 13)
+        (0, 3, 2, 11),  // $x - variable (index 11)
+        (0, 6, 1, 19),  // = - operator (index 19)
+        (0, 8, 1, 17),  // 1 - number (index 17)
+        (1, 0, 3, 13),  // sub - keyword (index 13)
+        (1, 4, 3, 7),   // foo - function (index 7)
+        (1, 10, 2, 11), // $x - variable reference (index 11)
+        (2, 0, 5, 7),   // foo(); - function (index 7)
     ];
 
     assert_eq!(tokens.len(), expected_non_overlapping.len(), "semantic token count mismatch");
