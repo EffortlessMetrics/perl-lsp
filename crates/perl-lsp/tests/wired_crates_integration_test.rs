@@ -34,14 +34,13 @@ fn test_wired_inline_completion_provider_accessible() {
 /// correctly.
 ///
 /// String: `"my $prefix = \"😀\"; $obj->"`
-///   UTF-8 bytes  : 28
-///   UTF-16 units : 26   (emoji = 2 code units)
+///   UTF-8 bytes  : 27  (emoji 😀 = 4 bytes; other 23 chars = 1 byte each)
+///   UTF-16 units : 25  (emoji 😀 = 2 code units; other 23 chars = 1 unit each)
 ///
-/// Pass `character = 26` (the UTF-16 end-of-string position).
-/// The local impl would index byte 26 into the string, landing inside the
-/// ASCII suffix `->`, which happens to produce the right answer here.
-/// The real discriminator is when a UTF-16 position falls after a
-/// surrogate-pair character and the byte offset would mis-slice.
+/// Pass `character = 25` (the UTF-16 end-of-string position).
+/// The old local impl used `character.min(byte_len)` as a byte-slice index.
+/// For this string that gives `min(25, 27) = 25`, which slices off the last
+/// two bytes `->`, so `prefix` ends with `$obj` and no completion is returned.
 ///
 /// We verify the crate API is reachable and returns the correct result.
 #[test]
@@ -120,8 +119,8 @@ fn test_wired_ast_utils_find_function_insert_position() {
     use perl_lsp_ast_utils::find_function_insert_position;
     let source = "package Foo;\n\nsub bar { 1 }\n";
     let pos = find_function_insert_position(source);
-    // Must return a valid byte offset within the source
-    assert!(pos <= source.len(), "insert position must be within source bounds");
+    // Current policy: insert at end-of-file.
+    assert_eq!(pos, source.len(), "find_function_insert_position should return end-of-file offset");
 }
 
 // ---------------------------------------------------------------------------
@@ -131,19 +130,13 @@ fn test_wired_ast_utils_find_function_insert_position() {
 /// Formatting types must be reachable.
 #[test]
 fn test_wired_formatting_types_accessible() {
-    use perl_lsp_formatting_types::{FormatPosition, FormatRange, FormattingOptions};
-    let opts = FormattingOptions {
-        tab_size: 4,
-        insert_spaces: true,
-        trim_trailing_whitespace: None,
-        insert_final_newline: None,
-        trim_final_newlines: None,
-    };
-    let _range = FormatRange {
-        start: FormatPosition { line: 0, character: 0 },
-        end: FormatPosition { line: 10, character: 0 },
-    };
-    assert_eq!(opts.tab_size, 4);
+    use perl_lsp_formatting_types::{FormatRange};
+    // FormatRange::whole_document parses the content to find the last line.
+    // For a 3-line file the end line must be 2, not 0.
+    let content = "line1\nline2\nline3";
+    let range = FormatRange::whole_document(content);
+    assert_eq!(range.start.line, 0, "whole_document range must start at line 0");
+    assert_eq!(range.end.line, 2, "whole_document range must end at line 2 for a 3-line file");
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +229,9 @@ fn test_wired_feature_flags_accessible() {
 fn test_wired_feature_policy_accessible() {
     use perl_lsp_feature_policy::{FeatureProfile, flags_for_profile};
     let flags = flags_for_profile(FeatureProfile::Production);
-    let _ = flags;
+    // Production profile must have core capabilities enabled.
+    assert!(flags.completion, "production profile must enable completion");
+    assert!(flags.hover, "production profile must enable hover");
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +242,10 @@ fn test_wired_feature_policy_accessible() {
 #[test]
 fn test_wired_feature_contracts_accessible() {
     use perl_lsp_feature_contracts::FEATURE_PROFILE_SPECS;
-    assert!(!FEATURE_PROFILE_SPECS.is_empty(), "should have at least one profile spec");
+    // The canonical profile names are load-bearing — check specific known values.
+    let canonicals: Vec<&str> = FEATURE_PROFILE_SPECS.iter().map(|s| s.canonical).collect();
+    assert!(canonicals.contains(&"ga-lock"), "FEATURE_PROFILE_SPECS must contain ga-lock profile");
+    assert!(canonicals.contains(&"production"), "FEATURE_PROFILE_SPECS must contain production profile");
 }
 
 // ---------------------------------------------------------------------------
@@ -259,7 +257,9 @@ fn test_wired_feature_contracts_accessible() {
 fn test_wired_feature_grid_accessible() {
     use perl_lsp_feature_grid::feature_profile_specs;
     let specs = feature_profile_specs();
-    assert!(!specs.is_empty(), "feature profile specs should be non-empty");
+    // Verify the re-export returns the same data as the underlying contracts crate.
+    let canonicals: Vec<&str> = specs.iter().map(|s| s.canonical).collect();
+    assert!(canonicals.contains(&"production"), "feature_profile_specs must include production profile");
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +271,9 @@ fn test_wired_feature_grid_accessible() {
 fn test_wired_feature_profile_accessible() {
     use perl_lsp_feature_profile::supported_cli_profiles;
     let profiles = supported_cli_profiles();
-    assert!(!profiles.is_empty(), "should have at least one supported CLI profile");
+    // Check that canonical token values are present, not just that the list is non-empty.
+    assert!(profiles.contains(&"production"), "supported profiles must include 'production'");
+    assert!(profiles.contains(&"ga-lock"), "supported profiles must include 'ga-lock'");
 }
 
 // ---------------------------------------------------------------------------
@@ -281,9 +283,13 @@ fn test_wired_feature_profile_accessible() {
 /// Feature-profile-cli helpers must be reachable.
 #[test]
 fn test_wired_feature_profile_cli_accessible() {
-    use perl_lsp_feature_profile_cli::feature_profile_supported_tokens;
+    use perl_lsp_feature_profile_cli::{feature_profile_supported_tokens, parse_feature_profile_arg};
     let tokens = feature_profile_supported_tokens();
-    assert!(!tokens.is_empty(), "should have at least one supported token");
+    // Check specific tokens are present — this would fail if the list shrank unexpectedly.
+    assert!(tokens.contains(&"production"), "supported tokens must include 'production'");
+    // parse_feature_profile_arg must successfully parse known tokens.
+    assert!(parse_feature_profile_arg("production").is_ok(), "should parse 'production' as a valid profile");
+    assert!(parse_feature_profile_arg("__invalid__").is_err(), "should reject unknown profile tokens");
 }
 
 // ---------------------------------------------------------------------------
