@@ -60,6 +60,7 @@
     "onCommand:perl-lsp.createDebugConfig",
     "onCommand:perl-lsp.runHealthCheck",
     "onCommand:perl-lsp.openConfigurationGuide",
+    "onCommand:perl-lsp.runHealthCheck",
     "onWalkthrough:perl-lsp.gettingStarted"
   ],
   "contributes": {
@@ -308,6 +309,11 @@
               "messages",
               "verbose"
             ],
+            "enumDescriptions": [
+              "No LSP traffic logged",
+              "Log request and response messages only",
+              "Log full message payloads (may be verbose)"
+            ],
             "default": "off",
             "order": 2,
             "markdownDescription": "Controls the logging verbosity of the language server communication. Allowed values: `off`, `messages`, `verbose`. Useful for debugging LSP issues."
@@ -318,6 +324,11 @@
               "latest",
               "stable",
               "tag"
+            ],
+            "enumDescriptions": [
+              "Always download the newest release",
+              "Download the latest stable release",
+              "Download a specific release tag set in versionTag"
             ],
             "default": "latest",
             "order": 3,
