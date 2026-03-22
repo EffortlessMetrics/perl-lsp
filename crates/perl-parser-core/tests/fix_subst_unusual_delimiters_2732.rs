@@ -134,3 +134,43 @@ fn test_arrow_method_named_s_regression() {
     let source = r#"$obj->s("arg");"#;
     assert_clean_parse(source);
 }
+
+// ── Root Cause 3 extended: q-family hash keys ────────────────────────────────
+
+/// $_->{q} — 'q' as bare hash subscript key via arrow
+#[test]
+fn test_hash_key_q() {
+    let source = r#"my $x = $_->{q};"#;
+    assert_clean_parse(source);
+}
+
+/// $_->{qq} — 'qq' as bare hash subscript key via arrow
+#[test]
+fn test_hash_key_qq() {
+    let source = r#"my $x = $_->{qq};"#;
+    assert_clean_parse(source);
+}
+
+/// $_->{qw} — 'qw' as bare hash subscript key via arrow
+#[test]
+fn test_hash_key_qw() {
+    let source = r#"my $x = $_->{qw};"#;
+    assert_clean_parse(source);
+}
+
+// ── Regression guard: chained hash access with arrow ────────────────────────
+
+/// $h->{outer}->{inner} — chained hash access must not break after_arrow clearing on }
+/// If clearing after_arrow on } breaks chained access, this will parse with errors.
+#[test]
+fn test_chained_hash_access_regression() {
+    let source = r#"my $x = $h->{outer}->{inner};"#;
+    assert_clean_parse(source);
+}
+
+/// $h->{s}->{m} — chained access with quote-op keys at each level
+#[test]
+fn test_chained_hash_access_quote_op_keys() {
+    let source = r#"my $x = $h->{s}->{m};"#;
+    assert_clean_parse(source);
+}
