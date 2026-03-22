@@ -31,17 +31,18 @@ fn find_statement_start_before_any_delimiter_returns_zero() {
     let source = "my $x = 1;";
     let lines = make_lines(source);
     let h = helpers(source, &lines);
-    // Position 3 is inside "my $x", before any ';' or '\n'
+    // Position 3 is inside "my $x", before any ';'
     assert_eq!(h.find_statement_start(3), 0);
 }
 
 #[test]
-fn find_statement_start_after_newline_returns_position_after_newline() {
+fn find_statement_start_ignores_newline_as_boundary() {
+    // Newlines are NOT statement boundaries in Perl — a multi-line expression is a
+    // single statement. There is no ';' before position 9, so the result is 0.
     let source = "line one\nline two";
     let lines = make_lines(source);
     let h = helpers(source, &lines);
-    // Position of "line two" is 9; the '\n' at 8 means statement starts at 9
-    assert_eq!(h.find_statement_start(9), 9);
+    assert_eq!(h.find_statement_start(9), 0);
 }
 
 #[test]

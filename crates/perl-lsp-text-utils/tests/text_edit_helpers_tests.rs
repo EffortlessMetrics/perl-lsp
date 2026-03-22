@@ -1,13 +1,37 @@
 use perl_lsp_text_utils::TextEditHelpers;
 
 #[test]
+fn find_statement_start_does_not_break_on_newline() {
+    // A multi-line call: the newline after '(' is NOT a statement boundary.
+    // Extracting $arg1 should find the statement starts at byte 0, not after the '\n'.
+    let source = "my $result = some_func(\n    $arg1,\n    $arg2\n);\n";
+    let lines: Vec<String> = source.lines().map(ToString::to_string).collect();
+    let helpers = TextEditHelpers::new(source, &lines);
+
+    // $arg1 starts at byte 28 (after "my $result = some_func(\n    ")
+    let arg1_pos = source.find("$arg1").unwrap_or(0);
+    assert_eq!(arg1_pos, 28, "test precondition: $arg1 is at byte 28");
+
+    let start = helpers.find_statement_start(arg1_pos);
+    // There is no ';' before $arg1, so the statement starts at the beginning of the source.
+    assert_eq!(
+        start, 0,
+        "newline inside multi-line expression should not be treated as statement boundary"
+    );
+}
+
+#[test]
 fn finds_statement_start_after_semicolon() {
+    // source: "my $a = 1;\nmy $b = length($x);\n"
+    //                     ^10 = one past ';' at 9
+    // The statement containing "length" starts at byte 10 (right after the ';').
+    // The '\n' at byte 10 is NOT a boundary — the result is one past the ';'.
     let source = "my $a = 1;\nmy $b = length($x);\n";
     let lines: Vec<String> = source.lines().map(ToString::to_string).collect();
     let helpers = TextEditHelpers::new(source, &lines);
 
     let pos = source.find("length").unwrap_or(0);
-    assert_eq!(helpers.find_statement_start(pos), 11);
+    assert_eq!(helpers.find_statement_start(pos), 10);
 }
 
 #[test]

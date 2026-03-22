@@ -21,12 +21,17 @@ impl<'a> TextEditHelpers<'a> {
     }
 
     /// Find the start of the statement containing `pos`.
+    ///
+    /// Only `;` is treated as a statement boundary. Newlines are not statement
+    /// boundaries in Perl — a multi-line expression like `some_func(\n    $arg)`
+    /// is a single statement, so treating `\n` as a boundary would insert the
+    /// extracted declaration inside the argument list.
     #[must_use]
     pub fn find_statement_start(&self, pos: usize) -> usize {
         self.source
             .char_indices()
             .take_while(|(idx, _)| *idx < pos)
-            .filter(|(_, ch)| *ch == ';' || *ch == '\n')
+            .filter(|(_, ch)| *ch == ';')
             .map(|(idx, _)| idx + 1)
             .last()
             .unwrap_or(0)
