@@ -38,7 +38,9 @@ fn semantic_tokens_expected_ranges() -> Result<(), Box<dyn std::error::Error>> {
         tokens.push((line, col, len, token_type));
     }
 
-    // Legend indices (must match capabilities_for() advertisement order in perl-lsp-protocol):
+    // Legend indices (must match capabilities_for() advertisement order in perl-lsp-protocol).
+    // If indices diverge, clients decode emitted tokenType values to wrong colours (issue #2103).
+    // See lsp_semantic_legend_contract_tests.rs for structural validation.
     //   0=namespace  1=type       2=class      3=interface  4=enum     5=enumMember
     //   6=typeParameter  7=function  8=method  9=property  10=macro  11=variable
     //  12=parameter  13=keyword  14=modifier  15=comment  16=string  17=number

@@ -182,7 +182,8 @@ pub fn legend() -> TokensLegend {
 
     // IMPORTANT: this ordering must exactly match the token_modifiers vec in
     // `perl-lsp-protocol/src/capabilities.rs` `capabilities_for()`.
-    // Modifier bitmasks (1 << position) are decoded using the advertised legend.
+    // Modifier bitmasks (1 << bit_position) are decoded using the advertised legend.
+    // Each modifier's numeric value is 2^bit_position (e.g., defaultLibrary at bit 9 = 512).
     let modifiers = vec![
         "declaration",    // bit 0  → 1
         "definition",     // bit 1  → 2
