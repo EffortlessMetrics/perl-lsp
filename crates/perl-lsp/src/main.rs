@@ -12,7 +12,7 @@ use perl_lsp::LspServer;
 use perl_lsp_launcher::{
     LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
     init_logging, log_server_startup, logging_filter, parse_args, port_in_use_message,
-    shell_completion, should_enable_logging,
+    shell_completion, should_enable_logging, startup_banner,
 };
 use std::env;
 use std::process;
@@ -320,6 +320,10 @@ fn run_server(launch_config: LaunchConfig) {
             Some(launch_config.feature_profile),
         );
     }
+
+    // Unconditional process-start banner to stderr (suppressible via PERL_LSP_QUIET=1).
+    // Fires before any LSP message so users know the binary launched.
+    startup_banner(env!("CARGO_PKG_VERSION"), launch_config.feature_profile);
 
     match launch_config.transport {
         TransportMode::Stdio => {
