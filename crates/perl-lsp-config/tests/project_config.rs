@@ -271,10 +271,6 @@ fn project_config_severity_out_of_u8_range_returns_err() -> TestResult {
 fn project_config_severity_negative_returns_err() -> TestResult {
     let dir = write_toml("[diagnostics]\nperlcritic_severity = -1\n")?;
     let result = load_project_config(dir.path());
-    assert!(
-        result.is_err(),
-        "negative severity must be a parse error, got: {:?}",
-        result
-    );
+    assert!(result.is_err(), "negative severity must be a parse error, got: {:?}", result);
     Ok(())
 }
