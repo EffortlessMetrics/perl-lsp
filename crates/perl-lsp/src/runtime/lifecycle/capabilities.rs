@@ -238,37 +238,43 @@ impl LspServer {
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.tt" } }
                 ]},
                 "didCreate": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.tt" } }
                 ]},
                 "willRename": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.tt" } }
                 ]},
                 "didRename": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.tt" } }
                 ]},
                 "willDelete": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.tt" } }
                 ]},
                 "didDelete": { "filters": [
                     { "pattern": { "glob": "**/*.pl" } },
                     { "pattern": { "glob": "**/*.pm" } },
                     { "pattern": { "glob": "**/*.t" } },
-                    { "pattern": { "glob": "**/*.psgi" } }
+                    { "pattern": { "glob": "**/*.psgi" } },
+                    { "pattern": { "glob": "**/*.tt" } }
                 ]}
             },
             "textDocumentContent": {
