@@ -932,7 +932,18 @@ impl<'a> Parser<'a> {
                     | TokenKind::Do
                     | TokenKind::Eval
             );
-            if is_keyword_key {
+            // Quote-operator identifiers (s, m, tr, y, q, qq, qw, qr, qx) arrive as
+            // TokenKind::Identifier (because after_arrow is true inside {}) and would
+            // normally be re-parsed as substitution/quote operators. Treat them as
+            // bareword keys when the immediately following token is '}'.
+            let is_quote_op_key = kind == TokenKind::Identifier
+                && self.tokens.peek().is_ok_and(|t| {
+                    matches!(
+                        t.text.as_ref(),
+                        "s" | "m" | "tr" | "y" | "q" | "qq" | "qw" | "qr" | "qx"
+                    )
+                });
+            if is_keyword_key || is_quote_op_key {
                 if let Ok(second) = self.tokens.peek_second() {
                     if second.kind == TokenKind::RightBrace {
                         let token = self.tokens.next()?;
