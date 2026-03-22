@@ -45,10 +45,7 @@ sub get_user_name { return "test"; }
     let response =
         harness.request("workspace/symbol", json!({ "query": "calculate" })).unwrap_or(json!(null));
 
-    assert!(
-        !response.is_null(),
-        "workspace/symbol should return a non-null result"
-    );
+    assert!(!response.is_null(), "workspace/symbol should return a non-null result");
 
     if response.is_array() {
         let symbols = response.as_array().ok_or("response is not an array")?;
@@ -110,26 +107,17 @@ proc
         )
         .unwrap_or(json!(null));
 
-    assert!(
-        !response.is_null(),
-        "textDocument/completion should return a non-null result"
-    );
+    assert!(!response.is_null(), "textDocument/completion should return a non-null result");
 
     if response.is_array() {
         let items = response.as_array().cloned().unwrap_or_default();
         // Completion should return items for the "proc" prefix
         // (either directly or indirectly via workspace completion)
-        assert!(
-            !items.is_empty(),
-            "textDocument/completion should return items for 'proc' prefix"
-        );
+        assert!(!items.is_empty(), "textDocument/completion should return items for 'proc' prefix");
 
         // Verify that completion items have the expected structure
         for item in &items {
-            assert!(
-                item["label"].is_string(),
-                "Completion item should have a string label"
-            );
+            assert!(item["label"].is_string(), "Completion item should have a string label");
         }
 
         // When workspace symbols are returned, they should have sort_text
@@ -139,10 +127,7 @@ proc
         // - Trie not active: None
         // This is informational; the test passes if completion works at all.
     } else if let Some(items_obj) = response.get("items").and_then(|i| i.as_array()) {
-        assert!(
-            !items_obj.is_empty(),
-            "textDocument/completion items array should be non-empty"
-        );
+        assert!(!items_obj.is_empty(), "textDocument/completion items array should be non-empty");
     }
 
     Ok(())
