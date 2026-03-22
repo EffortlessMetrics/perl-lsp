@@ -77,6 +77,32 @@ where
         NodeKind::Eval { block } => {
             walk_node(block, func);
         }
+        NodeKind::Class { body, .. } => {
+            walk_node(body, func);
+        }
+        NodeKind::Try { body, catch_blocks, finally_block } => {
+            walk_node(body, func);
+            for (_, catch_body) in catch_blocks {
+                walk_node(catch_body, func);
+            }
+            if let Some(finally) = finally_block {
+                walk_node(finally, func);
+            }
+        }
+        NodeKind::Unary { operand, .. } => {
+            walk_node(operand, func);
+        }
+        NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
+            walk_node(body, func);
+        }
+        NodeKind::For { body, .. } | NodeKind::Foreach { body, .. } => {
+            walk_node(body, func);
+        }
+        NodeKind::MethodCall { args, .. } => {
+            for arg in args {
+                walk_node(arg, func);
+            }
+        }
         _ => {} // Other nodes don't have children or are handled differently
     }
 }
