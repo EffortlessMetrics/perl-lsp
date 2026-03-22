@@ -214,4 +214,34 @@ mod tests {
             "file with both pragmas should get no strict/warnings diagnostic"
         );
     }
+
+    #[test]
+    fn crlf_only_no_strict_warnings_diagnostic() {
+        // Windows CRLF line endings in an otherwise-empty file — both \r and \n
+        // are whitespace-skipped by the lexer, so statements remains empty.
+        assert!(
+            strict_warnings_diags("\r\n\r\n").is_empty(),
+            "CRLF-only file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn shebang_plus_comment_no_strict_warnings_diagnostic() {
+        // Combined: shebang line followed by a comment — both are skipped as trivia.
+        assert!(
+            strict_warnings_diags("#!/usr/bin/perl\n# a comment\n").is_empty(),
+            "shebang + comment file should not get strict/warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn misspelled_pragma_in_non_empty_file_still_detected() {
+        // The guard must not suppress misspelled-pragma detection in real files.
+        // MisspelledPragma = PL111; the guard only fires for empty statements vec.
+        let diags = strict_warnings_diags("use structs;\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL111")),
+            "misspelled pragma should still be detected in non-empty files"
+        );
+    }
 }
