@@ -82,9 +82,48 @@ describe('handleFormattingError', () => {
         const call = (vscode.window.showErrorMessage as jest.Mock).mock.calls[0];
         // The toast message contains "Perl formatting failed: " prefix plus truncated content
         expect(call[0]).toContain('...');
-        // The truncated content portion should not exceed 120 chars
+        // The truncated portion (firstLine capped at 120 chars) should not exceed 120 chars.
+        // The implementation truncates the raw error line to 120 chars before composing the message.
         const prefix = 'Perl formatting failed: ';
         const content = call[0].slice(prefix.length);
         expect(content.length).toBeLessThanOrEqual(120);
+    });
+
+    test('returns true when notification is shown', () => {
+        const ch = makeOutputChannel();
+        const shown = handleFormattingError('perltidy error: syntax error', ch as any);
+        expect(shown).toBe(true);
+    });
+
+    test('returns false when suppressed by cooldown', () => {
+        const ch = makeOutputChannel();
+        handleFormattingError('perltidy error: line 1', ch as any);
+        const shown = handleFormattingError('perltidy error: line 2', ch as any);
+        expect(shown).toBe(false);
+    });
+
+    test('Show Output button calls outputCh.show()', async () => {
+        const ch = makeOutputChannel();
+        (vscode.window.showErrorMessage as jest.Mock).mockResolvedValueOnce('Show Output');
+        handleFormattingError('perltidy error: syntax error', ch as any);
+        // Flush the .then() microtask on the showErrorMessage promise
+        await Promise.resolve();
+        expect(ch.show).toHaveBeenCalled();
+    });
+
+    test('Run Health Check button calls perl-lsp.runHealthCheck command', async () => {
+        const ch = makeOutputChannel();
+        (vscode.window.showErrorMessage as jest.Mock).mockResolvedValueOnce('Run Health Check');
+        handleFormattingError('perltidy not found: /usr/bin/perltidy', ch as any);
+        await Promise.resolve();
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith('perl-lsp.runHealthCheck');
+    });
+
+    test('skips leading empty lines when extracting first line', () => {
+        const ch = makeOutputChannel();
+        handleFormattingError('\n\n  \nactual error line\nmore info', ch as any);
+        const call = (vscode.window.showErrorMessage as jest.Mock).mock.calls[0];
+        expect(call[0]).toContain('actual error line');
+        expect(call[0]).not.toContain('more info');
     });
 });
