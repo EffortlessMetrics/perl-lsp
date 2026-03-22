@@ -6,23 +6,15 @@
 //! - Process isolation and sandboxing
 //! - Security monitoring and logging
 
-pub mod validation;
 pub mod sandbox;
+pub mod validation;
 
 pub use validation::{
-    validate_file_path,
-    validate_file_content,
-    validate_lsp_request,
-    sanitize_string,
+    sanitize_string, validate_file_content, validate_file_path, validate_lsp_request,
     validate_workspace_root,
 };
 
-pub use sandbox::{
-    SandboxConfig,
-    Sandbox,
-    SandboxResult,
-    SafeExecutor,
-};
+pub use sandbox::{SafeExecutor, Sandbox, SandboxConfig, SandboxResult};
 
 /// Security configuration for the LSP server
 #[derive(Debug, Clone)]
@@ -44,7 +36,12 @@ impl Default for SecurityConfig {
         Self {
             max_file_size: 10 * 1024 * 1024, // 10MB
             max_path_length: 4096,
-            allowed_extensions: vec!["pl".to_string(), "pm".to_string(), "t".to_string(), "pod".to_string()],
+            allowed_extensions: vec![
+                "pl".to_string(),
+                "pm".to_string(),
+                "t".to_string(),
+                "pod".to_string(),
+            ],
             strict_mode: true,
             max_parameter_size: 1_000_000,
         }
@@ -70,38 +67,34 @@ impl SecurityContext {
             last_violation: std::sync::Mutex::new(None),
         }
     }
-    
+
     /// Get the security configuration
     pub fn config(&self) -> &SecurityConfig {
         &self.config
     }
-    
+
     /// Record a security violation
     pub fn record_violation(&self, violation_type: &str) {
         let count = self.violation_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut last) = self.last_violation.lock() {
             *last = Some(std::time::Instant::now());
         }
-        
-        log::warn!(
-            "Security violation #{} recorded: {}",
-            count + 1,
-            violation_type
-        );
+
+        tracing::warn!("Security violation #{} recorded: {}", count + 1, violation_type);
     }
-    
+
     /// Get the number of violations
     pub fn violation_count(&self) -> usize {
         self.violation_count.load(std::sync::atomic::Ordering::Relaxed)
     }
-    
+
     /// Check if we're in a high-violation state (possible attack)
     pub fn is_high_violation_state(&self) -> bool {
         let count = self.violation_count();
         if count < 10 {
             return false;
         }
-        
+
         if let Ok(last_guard) = self.last_violation.lock()
             && let Some(last) = *last_guard
         {
@@ -116,7 +109,7 @@ impl SecurityContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_security_config_default() {
         let config = SecurityConfig::default();
@@ -125,15 +118,15 @@ mod tests {
         assert!(config.strict_mode);
         assert_eq!(config.allowed_extensions.len(), 4);
     }
-    
+
     #[test]
     fn test_security_context_violation_tracking() {
         let config = SecurityConfig::default();
         let context = SecurityContext::new(config);
-        
+
         assert_eq!(context.violation_count(), 0);
         assert!(!context.is_high_violation_state());
-        
+
         context.record_violation("test");
         assert_eq!(context.violation_count(), 1);
         assert!(!context.is_high_violation_state());

@@ -1,13 +1,13 @@
 //! Process isolation and sandboxing utilities for production hardening
-//! 
+//!
 //! This module provides sandboxing capabilities to ensure safe execution
 //! of external processes and isolation from the host system.
 
+use crate::util::run_command_with_timeout;
+use anyhow::{Context, Result, anyhow};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use anyhow::{Context, Result, anyhow};
-use crate::util::run_command_with_timeout;
-use serde::{Deserialize, Serialize};
 
 /// Sandbox configuration for process execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,15 +33,11 @@ impl Default for SandboxConfig {
         Self {
             enabled: true,
             max_memory: Some(512 * 1024 * 1024), // 512MB
-            max_cpu_time: Some(30), // 30 seconds
+            max_cpu_time: Some(30),              // 30 seconds
             allowed_paths: vec![],
             allow_network: false,
             working_directory: None,
-            allowed_env_vars: vec![
-                "PATH".to_string(),
-                "HOME".to_string(),
-                "TMPDIR".to_string(),
-            ],
+            allowed_env_vars: vec!["PATH".to_string(), "HOME".to_string(), "TMPDIR".to_string()],
         }
     }
 }
@@ -58,9 +54,11 @@ impl Sandbox {
     pub fn new(config: SandboxConfig) -> Result<Self> {
         let temp_dir = if config.enabled {
             // Create temporary directory for sandbox
-            let temp_dir = std::env::temp_dir().join(format!("perl-lsp-sandbox-{}", uuid::Uuid::new_v4()));
-            std::fs::create_dir_all(&temp_dir)
-                .with_context(|| format!("failed to create sandbox temp dir at {}", temp_dir.display()))?;
+            let temp_dir =
+                std::env::temp_dir().join(format!("perl-lsp-sandbox-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&temp_dir).with_context(|| {
+                format!("failed to create sandbox temp dir at {}", temp_dir.display())
+            })?;
             Some(temp_dir)
         } else {
             None
@@ -77,7 +75,7 @@ impl Sandbox {
 
         let mut cmd = Command::new(program);
         cmd.args(args);
-        
+
         // Apply sandbox restrictions
         self.apply_sandbox_restrictions(&mut cmd)?;
 
@@ -86,7 +84,7 @@ impl Sandbox {
         // Use the configured CPU time limit (or 30s as a fallback) as the wall-clock timeout.
         let timeout_secs = self.config.max_cpu_time.unwrap_or(30);
         let output = run_command_with_timeout(cmd, timeout_secs)
-            .with_context(|| format!("failed to execute sandboxed command: {}", program))?;
+            .map_err(|e| anyhow!("failed to execute sandboxed command {}: {}", program, e))?;
         let execution_time = start.elapsed();
 
         Ok(SandboxResult {
@@ -104,8 +102,8 @@ impl Sandbox {
         cmd.args(args);
         let timeout_secs = self.config.max_cpu_time.unwrap_or(30);
         let output = run_command_with_timeout(cmd, timeout_secs)
-            .with_context(|| format!("failed to execute command: {}", program))?;
-        
+            .map_err(|e| anyhow!("failed to execute command {}: {}", program, e))?;
+
         Ok(SandboxResult {
             exit_code: output.status.code().unwrap_or(-1),
             stdout: output.stdout,
@@ -162,41 +160,41 @@ impl Sandbox {
         firejail_probe.arg("--version");
         if run_command_with_timeout(firejail_probe, 2).is_ok() {
             let mut firejail_cmd = Command::new("firejail");
-            
+
             // Apply memory limits
             if let Some(max_memory) = self.config.max_memory {
                 firejail_cmd.arg(format!("--rlimit-as={}", max_memory));
             }
-            
+
             // Apply CPU time limits
             if let Some(max_cpu) = self.config.max_cpu_time {
                 firejail_cmd.arg(format!("--rlimit-cpu={}", max_cpu));
             }
-            
+
             // Network restrictions
             if !self.config.allow_network {
                 firejail_cmd.arg("--net=none");
             }
-            
+
             // Private /tmp
             firejail_cmd.arg("--private-tmp");
-            
+
             // Whitelist allowed paths
             for path in &self.config.allowed_paths {
                 firejail_cmd.arg(format!("--whitelist={}", path.display()));
             }
-            
+
             // Execute the original command through firejail
             firejail_cmd.arg(cmd.get_program());
             firejail_cmd.args(cmd.get_args());
-            
+
             *cmd = firejail_cmd;
         } else {
             // Fallback: use ulimit for basic restrictions
             if let Some(max_memory) = self.config.max_memory {
                 cmd.env("RLIMIT_AS", max_memory.to_string());
             }
-            
+
             if let Some(max_cpu) = self.config.max_cpu_time {
                 cmd.env("RLIMIT_CPU", max_cpu.to_string());
             }
@@ -213,32 +211,63 @@ impl Sandbox {
         sandbox_probe.arg("--version");
         if run_command_with_timeout(sandbox_probe, 2).is_ok() {
             let sandbox_profile = self.generate_macos_sandbox_profile();
-            
+
+            // sandbox-exec -f takes a file path, not inline content.
+            // Write the profile to the sandbox temp dir (always Some here — enabled is checked in execute()).
+            let profile_path = self
+                .temp_dir
+                .as_deref()
+                .ok_or_else(|| anyhow!("sandbox temp dir missing when applying macOS sandbox"))?
+                .join("sandbox.sb");
+            std::fs::write(&profile_path, &sandbox_profile).with_context(|| {
+                format!("failed to write sandbox profile to {}", profile_path.display())
+            })?;
+
             let mut sandbox_cmd = Command::new("sandbox-exec");
-            sandbox_cmd.arg("-f").arg(&sandbox_profile);
+            sandbox_cmd.arg("-f").arg(&profile_path);
             sandbox_cmd.arg(cmd.get_program());
             sandbox_cmd.args(cmd.get_args());
-            
+
             *cmd = sandbox_cmd;
         }
 
         Ok(())
     }
 
+    /// Escape a path string for safe interpolation into a macOS sandbox profile DSL string literal.
+    /// The profile language is TinyScheme-based; only `\` and `"` are special inside quoted strings.
+    /// Parentheses are NOT special inside a quoted string (only at the DSL level), so they are
+    /// left unescaped. Backslash must be escaped first to avoid double-escaping the newly
+    /// introduced backslashes in the second pass.
+    ///
+    /// Limitation: paths containing literal newlines or null bytes are not escaped here.
+    /// Such paths are pathological on macOS (HFS+ permits them but they are essentially never
+    /// used) and are out of scope for this fix. If configuration sources ever accept arbitrary
+    /// user-supplied paths, add a sanitisation step that rejects control characters before
+    /// calling this function.
+    #[cfg(any(target_os = "macos", test))]
+    fn sandbox_escape_path(path: &std::path::Path) -> String {
+        path.display().to_string().replace('\\', "\\\\").replace('"', "\\\"")
+    }
+
     /// Generate macOS sandbox profile
+    #[cfg(any(target_os = "macos", test))]
     fn generate_macos_sandbox_profile(&self) -> String {
         let mut profile = String::from("(version 1)\n");
         profile.push_str("(allow default)\n");
-        
+
         if !self.config.allow_network {
             profile.push_str("(deny network*)\n");
         }
-        
+
         // Allow file system access to specific paths
         for path in &self.config.allowed_paths {
-            profile.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", path.display()));
+            profile.push_str(&format!(
+                "(allow file-read* (subpath \"{}\"))\n",
+                Self::sandbox_escape_path(path)
+            ));
         }
-        
+
         profile
     }
 
@@ -255,6 +284,12 @@ impl Sandbox {
     /// Get the temporary directory for the sandbox
     pub fn temp_dir(&self) -> Option<&Path> {
         self.temp_dir.as_deref()
+    }
+
+    /// Create a sandbox with no temp dir, for use in unit tests only.
+    #[cfg(test)]
+    fn new_for_test(config: SandboxConfig) -> Self {
+        Self { config, temp_dir: None }
     }
 
     /// Clean up sandbox resources
@@ -275,7 +310,7 @@ impl Sandbox {
 impl Drop for Sandbox {
     fn drop(&mut self) {
         if let Err(error) = self.cleanup() {
-            log::warn!("Sandbox cleanup failed during drop: {error:#}");
+            tracing::warn!("Sandbox cleanup failed during drop: {error:#}");
         }
     }
 }
@@ -323,9 +358,7 @@ pub struct SafeExecutor {
 impl SafeExecutor {
     /// Create a new safe executor with default configuration
     pub fn new() -> Self {
-        Self {
-            default_config: SandboxConfig::default(),
-        }
+        Self { default_config: SandboxConfig::default() }
     }
 
     /// Create a new safe executor with custom configuration
@@ -344,7 +377,12 @@ impl SafeExecutor {
     }
 
     /// Execute a command with custom configuration
-    pub fn execute_with_config(&self, program: &str, args: &[&str], config: &SandboxConfig) -> Result<SandboxResult> {
+    pub fn execute_with_config(
+        &self,
+        program: &str,
+        args: &[&str],
+        config: &SandboxConfig,
+    ) -> Result<SandboxResult> {
         let sandbox = Sandbox::new(config.clone())
             .context("failed to initialize sandbox with provided configuration")?;
         let result = sandbox
@@ -356,15 +394,15 @@ impl SafeExecutor {
     /// Execute a Perl script safely
     pub fn execute_perl_script(&self, script_path: &Path, args: &[&str]) -> Result<SandboxResult> {
         let mut config = self.default_config.clone();
-        
+
         // Add script directory to allowed paths
         if let Some(parent) = script_path.parent() {
             config.allowed_paths.push(parent.to_path_buf());
         }
-        
+
         // Set working directory to script directory
         config.working_directory = script_path.parent().map(|p| p.to_path_buf());
-        
+
         let path_str = script_path
             .to_str()
             .ok_or_else(|| anyhow!("Invalid script path: {}", script_path.display()))?;
@@ -389,6 +427,58 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    // --- Bug A: path escaping tests ---
+
+    #[test]
+    fn test_sandbox_escape_path_clean() {
+        // Clean paths must be passed through unchanged
+        let path = std::path::Path::new("/home/user/project");
+        assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/project");
+    }
+
+    #[test]
+    fn test_sandbox_escape_path_double_quote() {
+        // A path with a double-quote must be escaped to prevent DSL injection
+        let path = std::path::Path::new("/home/user/my\"project");
+        assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/my\\\"project");
+    }
+
+    #[test]
+    fn test_sandbox_escape_path_backslash() {
+        // Backslash must be doubled (Windows-style path or escape chars)
+        let path = std::path::Path::new("/home/user/my\\path");
+        assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/my\\\\path");
+    }
+
+    #[test]
+    fn test_sandbox_escape_path_backslash_then_quote() {
+        // A path containing both \ and " verifies the escape ordering:
+        // backslash is doubled first (\\ -> \\\\), then the quote is escaped (" -> \").
+        // If the order were reversed, the backslash introduced by quote-escaping would
+        // itself get doubled, producing \\\" instead of the correct \".
+        let path = std::path::Path::new("/home/user/my\\\"path");
+        // Expected: /home/user/my\\"path (\ -> \\, then " -> \")
+        assert_eq!(Sandbox::sandbox_escape_path(path), "/home/user/my\\\\\\\"path");
+    }
+
+    #[test]
+    fn test_generate_macos_sandbox_profile_escapes_paths() {
+        // Profile generation must produce a DSL-safe profile even for adversarial paths
+        let config = SandboxConfig {
+            allowed_paths: vec![
+                std::path::PathBuf::from("/safe/path"),
+                std::path::PathBuf::from("/path/with\"quote"),
+            ],
+            ..SandboxConfig::default()
+        };
+        let sandbox = Sandbox::new_for_test(config);
+        let profile = sandbox.generate_macos_sandbox_profile();
+        assert!(profile.contains("(allow file-read* (subpath \"/safe/path\"))"));
+        assert!(profile.contains("(allow file-read* (subpath \"/path/with\\\"quote\"))"));
+        // Must NOT contain an unescaped quote that would break the DSL
+        assert!(!profile.contains("(subpath \"/path/with\"quote\")"));
+    }
+
     #[test]
     fn test_sandbox_config_default() {
         let config = SandboxConfig::default();
@@ -410,7 +500,7 @@ mod tests {
         use perl_tdd_support::must;
         let config = SandboxConfig { enabled: false, ..Default::default() };
         let sandbox = must(Sandbox::new(config));
-        
+
         let result = must(sandbox.execute("echo", &["hello"]));
         assert!(result.success);
         assert_eq!(must(result.stdout_str()).trim(), "hello");
@@ -431,10 +521,10 @@ mod tests {
         let temp_dir = must(TempDir::new());
         let script_path = temp_dir.path().join("test.pl");
         must(fs::write(&script_path, "print \"Hello from Perl\\n\";"));
-        
+
         let executor = SafeExecutor::new();
         let result = executor.execute_perl_script(&script_path, &[]);
-        
+
         // Note: This test might fail if Perl is not installed
         if let Ok(result) = result {
             assert!(result.success);
@@ -452,7 +542,7 @@ mod tests {
             success: true,
             execution_time: std::time::Duration::from_millis(100),
         };
-        
+
         assert_eq!(must(result.stdout_str()), "test output");
         assert_eq!(must(result.stderr_str()), "");
         assert!(result.success);
