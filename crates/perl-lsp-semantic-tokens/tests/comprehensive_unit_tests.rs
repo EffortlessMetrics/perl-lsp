@@ -112,13 +112,15 @@ fn legend_modifiers_have_no_duplicates() {
 #[test]
 fn legend_token_type_count() {
     let leg = legend();
-    assert_eq!(leg.token_types.len(), 16, "expected 16 token types");
+    // 20 standard LSP types + sql_string = 21 total (must match capabilities_for() advertisement)
+    assert_eq!(leg.token_types.len(), 21, "expected 21 token types");
 }
 
 #[test]
 fn legend_modifier_count() {
     let leg = legend();
-    assert_eq!(leg.modifiers.len(), 7, "expected 7 modifiers");
+    // 10 standard LSP modifiers (must match capabilities_for() advertisement)
+    assert_eq!(leg.modifiers.len(), 10, "expected 10 modifiers");
 }
 
 #[test]

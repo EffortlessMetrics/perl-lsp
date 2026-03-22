@@ -119,7 +119,8 @@
         "string",
         "number",
         "regexp",
-        "operator"
+        "operator",
+        "sql_string"
       ]
     },
     "range": true

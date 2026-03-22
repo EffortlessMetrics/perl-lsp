@@ -1110,10 +1110,11 @@ fn test_non_sql_method_call_still_produces_method_token() {
 // Special variable semantic tokens – issue #2347
 // ===========================================================================
 
-/// The `defaultLibrary` modifier is bit 3 (value 8) in the modifiers list.
-/// Modifiers: declaration=0(1), definition=1(2), readonly=2(4), defaultLibrary=3(8)
+/// The `defaultLibrary` modifier is bit 9 (value 512) in the modifiers list.
+/// Modifiers: declaration=0(1), definition=1(2), readonly=2(4), static=3(8), ...
+///            defaultLibrary=9(512)
 fn has_default_library_modifier(token: &EncodedToken) -> bool {
-    token[4] & 8 != 0
+    token[4] & 512 != 0
 }
 
 #[test]

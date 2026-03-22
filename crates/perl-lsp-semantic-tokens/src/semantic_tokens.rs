@@ -149,36 +149,51 @@ pub struct TokensLegend {
 /// assert!(legend.token_types.contains(&"keyword".to_string()));
 /// ```
 pub fn legend() -> TokensLegend {
+    // IMPORTANT: this ordering must exactly match the token_types vec in
+    // `perl-lsp-protocol/src/capabilities.rs` `capabilities_for()`.
+    // Clients decode emitted tokenType indices using the advertised legend;
+    // any ordering mismatch renders every token with the wrong colour.
     let types = vec![
-        "namespace",
-        "class",
-        "function",
-        "method",
-        "variable",
-        "parameter",
-        "property",
-        "keyword",
-        "comment",
-        "string",
-        "number",
-        "regexp",
-        "operator",
-        "type",
-        "macro",
-        "sql_string", // DBI/SQL string context (Issue #2337)
+        "namespace",     // 0
+        "type",          // 1
+        "class",         // 2
+        "interface",     // 3
+        "enum",          // 4
+        "enumMember",    // 5
+        "typeParameter", // 6
+        "function",      // 7
+        "method",        // 8
+        "property",      // 9
+        "macro",         // 10
+        "variable",      // 11
+        "parameter",     // 12
+        "keyword",       // 13
+        "modifier",      // 14
+        "comment",       // 15
+        "string",        // 16
+        "number",        // 17
+        "regexp",        // 18
+        "operator",      // 19
+        "sql_string",    // 20 — DBI/SQL string context (Issue #2337)
     ]
     .into_iter()
     .map(|s| s.to_string())
     .collect::<Vec<_>>();
 
+    // IMPORTANT: this ordering must exactly match the token_modifiers vec in
+    // `perl-lsp-protocol/src/capabilities.rs` `capabilities_for()`.
+    // Modifier bitmasks (1 << position) are decoded using the advertised legend.
     let modifiers = vec![
-        "declaration",
-        "definition",
-        "readonly",
-        "defaultLibrary",
-        "deprecated",
-        "static",
-        "async",
+        "declaration",    // bit 0  → 1
+        "definition",     // bit 1  → 2
+        "readonly",       // bit 2  → 4
+        "static",         // bit 3  → 8
+        "deprecated",     // bit 4  → 16
+        "abstract",       // bit 5  → 32
+        "async",          // bit 6  → 64
+        "modification",   // bit 7  → 128
+        "documentation",  // bit 8  → 256
+        "defaultLibrary", // bit 9  → 512
     ]
     .into_iter()
     .map(|s| s.to_string())
@@ -491,7 +506,7 @@ pub fn collect_semantic_tokens(
                 let (vs, ve) = (node.location.start, node.location.end);
                 let decl_info = decl_spans.iter().find(|(ds, de, _)| *ds <= vs && ve <= *de);
                 let full_name = format!("{sigil}{name}");
-                let special_mod = if is_special_variable(&full_name) { 8 } else { 0 }; // defaultLibrary
+                let special_mod = if is_special_variable(&full_name) { 512 } else { 0 }; // defaultLibrary bit 9
                 let mods = match decl_info {
                     Some((_, _, true)) => 1 | 4 | special_mod, // declaration | readonly (our)
                     Some((_, _, false)) => 1 | special_mod,    // declaration (my/local/state)
