@@ -331,19 +331,23 @@ impl LspServer {
             documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
 
-        // Simple synchronous extraction (legacy non-workspace path)
-        let mut all_symbols = Vec::new();
+        // Build source map and index documents with WorkspaceSymbolsProvider.
+        let cap = workspace_symbol_cap();
+        let mut provider = perl_lsp_workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut source_map = std::collections::HashMap::new();
         for (uri, text, ast) in docs_snapshot.iter() {
             if let Some(ast) = ast {
-                // Extract symbols using document symbol provider
-                self.extract_simple_symbols(ast, text, uri, query, &mut all_symbols);
+                provider.index_document(uri, ast, text);
             }
+            source_map.insert(uri.clone(), text.clone());
         }
 
-        eprintln!("Found {} symbols total", all_symbols.len());
+        let mut symbols = provider.search(query, &source_map);
+        symbols.truncate(cap);
 
-        // Convert to JSON for LSP response
-        let result = serde_json::to_value(&all_symbols).unwrap_or_else(|_| json!([]));
+        eprintln!("Found {} symbols total (cap: {})", symbols.len(), cap);
+
+        let result = serde_json::to_value(&symbols).unwrap_or_else(|_| json!([]));
 
         Ok(Some(result))
     }
