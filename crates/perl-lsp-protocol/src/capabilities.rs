@@ -244,7 +244,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     if build.on_type_formatting {
         caps.document_on_type_formatting_provider = Some(DocumentOnTypeFormattingOptions {
             first_trigger_character: "}".to_string(),
-            more_trigger_character: Some(vec![";".to_string()]),
+            more_trigger_character: Some(vec![";".to_string(), "\n".to_string()]),
         });
     }
 
