@@ -390,6 +390,7 @@ fn generate_report() -> Result<()> {
 mod tests {
     use super::{compare_snapshot_caps, ensure_fence, replace_fence, snapshot_caps_from_content};
     use color_eyre::eyre::Result;
+    use perl_tdd_support::must_err;
     use std::collections::BTreeSet;
 
     #[test]
@@ -445,7 +446,7 @@ mod tests {
     #[test]
     fn ensure_fence_requires_both_markers() {
         let content = "<!-- BEGIN: COMPLIANCE_TABLE -->\nbody\n";
-        let error = ensure_fence(content, "COMPLIANCE_TABLE").expect_err("missing end marker");
+        let error = must_err(ensure_fence(content, "COMPLIANCE_TABLE"));
         assert!(error.to_string().contains("Missing documentation fence"));
     }
 
