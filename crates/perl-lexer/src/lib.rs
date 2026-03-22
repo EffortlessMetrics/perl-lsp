@@ -2004,15 +2004,47 @@ impl<'a> PerlLexer<'a> {
                     // Quote operators expect a delimiter next.
                     // Skip if after '->' -- these are method names, not operators.
                     op if !self.after_arrow && quote_handler::is_quote_operator(op) => {
-                        // Allow optional whitespace between operator and delimiter for all
-                        // quote-like operators, including s/tr/y/m (Perl allows `s { ... } { ... }`).
-                        let (next_char, char_after_next) = self.peek_nonspace_and_following();
+                        // Perl allows whitespace between a quote-like operator and its delimiter,
+                        // but ONLY for paired delimiters (s { ... } { ... }g).
+                        // For non-paired delimiters (s/foo/bar/, s,foo,bar,), the delimiter
+                        // must be immediately adjacent — otherwise `s $foo` would wrongly
+                        // treat `$` as a delimiter instead of being a bareword `s` followed
+                        // by a scalar variable.
+                        //
+                        // Strategy:
+                        //   1. Check the immediately-adjacent char first (no whitespace skip).
+                        //      If it is a valid delimiter → any non-alnum, non-whitespace char.
+                        //   2. If the adjacent char is whitespace, peek past it.
+                        //      Only accept PAIRED delimiters ({, [, (, <) in that case.
+                        let immediate = self.current_char();
+                        let (candidate, char_after_next, has_whitespace) =
+                            if immediate.is_some_and(|c| c.is_whitespace()) {
+                                // There is whitespace — peek past it
+                                let (nc, ca) = self.peek_nonspace_and_following();
+                                (nc, ca, true)
+                            } else {
+                                // No whitespace — use immediate char
+                                let following = immediate.and_then(|c| {
+                                    let j = self.position + c.len_utf8();
+                                    self.input.get(j..).and_then(|s| s.chars().next())
+                                });
+                                (immediate, following, false)
+                            };
 
-                        if let Some(next) = next_char {
+                        if let Some(next) = candidate {
                             // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
-                            if Self::is_quote_delim(next) && !is_fat_arrow {
+
+                            // When whitespace precedes the delimiter, only paired delimiters
+                            // are unambiguous. Non-paired chars like `$`, `@`, `,` etc. are
+                            // not valid delimiters after whitespace (e.g. `-s $file`).
+                            let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
+                            let is_valid_delim = Self::is_quote_delim(next)
+                                && !is_fat_arrow
+                                && (!has_whitespace || is_paired_delim);
+
+                            if is_valid_delim {
                                 self.mode = LexerMode::ExpectDelimiter;
                                 self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
                                     operator: op.to_string(),
