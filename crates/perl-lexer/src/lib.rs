@@ -250,10 +250,12 @@ pub struct PerlLexer<'a> {
     after_sub: bool,
     /// Track if we just saw a '->' operator (to suppress s/tr/y as substitution)
     after_arrow: bool,
-    /// Track if we just emitted `{` in ExpectOperator mode (hash subscript opener).
-    /// When true, suppresses quote-op detection so `m`, `s`, `q*`, `tr`, `y`
+    /// Depth of hash-subscript brace nesting (braces opened in ExpectOperator mode).
+    /// When > 0, suppresses quote-op detection so `m`, `s`, `q*`, `tr`, `y`
     /// are treated as bareword identifiers (hash keys) rather than regex operators.
-    after_hash_brace: bool,
+    /// Depth tracking means all positions inside `$h{...}` — including after commas
+    /// in hash slices like `@h{m, s}` — correctly suppress quote-op misidentification.
+    hash_brace_depth: usize,
     /// Current position with line/column tracking
     #[allow(dead_code)]
     current_pos: Position,
@@ -292,7 +294,7 @@ impl<'a> PerlLexer<'a> {
             prototype_depth: 0,
             after_sub: false,
             after_arrow: false,
-            after_hash_brace: false,
+            hash_brace_depth: 0,
             current_pos: Position::start(),
             after_newline: true, // Start of file counts as after newline
             pending_heredocs: Vec::new(),
@@ -699,7 +701,7 @@ impl<'a> PerlLexer<'a> {
         let saved_depth = self.prototype_depth;
         let saved_after_sub = self.after_sub;
         let saved_after_arrow = self.after_arrow;
-        let saved_after_hash_brace = self.after_hash_brace;
+        let saved_hash_brace_depth = self.hash_brace_depth;
         let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
         let saved_pending_heredocs = self.pending_heredocs.clone();
@@ -717,7 +719,7 @@ impl<'a> PerlLexer<'a> {
         self.prototype_depth = saved_depth;
         self.after_sub = saved_after_sub;
         self.after_arrow = saved_after_arrow;
-        self.after_hash_brace = saved_after_hash_brace;
+        self.hash_brace_depth = saved_hash_brace_depth;
         self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
         self.pending_heredocs = saved_pending_heredocs;
@@ -756,7 +758,7 @@ impl<'a> PerlLexer<'a> {
         self.prototype_depth = 0;
         self.after_sub = false;
         self.after_arrow = false;
-        self.after_hash_brace = false;
+        self.hash_brace_depth = 0;
         self.current_pos = Position::start();
         self.after_newline = true;
         self.pending_heredocs.clear();
@@ -2011,9 +2013,11 @@ impl<'a> PerlLexer<'a> {
                     }
                     // Quote operators expect a delimiter next.
                     // Skip if after '->' -- these are method names, not operators.
-                    // Skip if after '{' in operator mode -- these are hash subscript keys.
+                    // Skip inside hash subscript braces (hash_brace_depth > 0) — all
+                    // positions inside `$h{...}` or `@h{...}` treat quote-op names as
+                    // bareword keys, including after commas in slices like `@h{m, s}`.
                     op if !self.after_arrow
-                        && !self.after_hash_brace
+                        && self.hash_brace_depth == 0
                         && quote_handler::is_quote_operator(op) =>
                     {
                         // Perl allows whitespace between a quote-like operator and its delimiter,
@@ -2139,7 +2143,7 @@ impl<'a> PerlLexer<'a> {
             };
 
             self.after_arrow = false;
-            self.after_hash_brace = false;
+            // hash_brace_depth is managed by { and } handlers, not cleared per-token
             Some(Token { token_type, text: Arc::from(text), start, end: self.position })
         } else {
             None
@@ -2561,10 +2565,12 @@ impl<'a> PerlLexer<'a> {
                 // Opening brace ends prototype window — no prototype follows
                 self.after_sub = false;
                 // If `{` appears in ExpectOperator mode it is a hash subscript opener
-                // (e.g. `$h{...}`). Flag this so quote-op detection is suppressed for
-                // the first identifier token, preventing `m`, `s`, `q*`, `tr`, `y`
-                // from being misread as regex/quote operators.
-                self.after_hash_brace = self.mode == LexerMode::ExpectOperator;
+                // (e.g. `$h{...}` or `@h{...}`).  Track depth so all positions inside
+                // the subscript — including after commas in slices like `@h{m, s}` —
+                // suppress quote-op misidentification of bare keys like `m`, `s`, `tr`.
+                if self.mode == LexerMode::ExpectOperator {
+                    self.hash_brace_depth = self.hash_brace_depth.saturating_add(1);
+                }
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftBrace,
@@ -2576,6 +2582,8 @@ impl<'a> PerlLexer<'a> {
             '}' => {
                 self.advance();
                 self.after_arrow = false;
+                // Decrement hash subscript brace depth if we were inside one
+                self.hash_brace_depth = self.hash_brace_depth.saturating_sub(1);
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightBrace,
@@ -3430,7 +3438,7 @@ impl Checkpointable for PerlLexer<'_> {
             prototype_depth: self.prototype_depth,
             after_sub: self.after_sub,
             after_arrow: self.after_arrow,
-            after_hash_brace: self.after_hash_brace,
+            hash_brace_depth: self.hash_brace_depth,
             current_pos: self.current_pos,
             context,
         }
@@ -3444,7 +3452,7 @@ impl Checkpointable for PerlLexer<'_> {
         self.prototype_depth = checkpoint.prototype_depth;
         self.after_sub = checkpoint.after_sub;
         self.after_arrow = checkpoint.after_arrow;
-        self.after_hash_brace = checkpoint.after_hash_brace;
+        self.hash_brace_depth = checkpoint.hash_brace_depth;
         self.current_pos = checkpoint.current_pos;
 
         // Handle special contexts

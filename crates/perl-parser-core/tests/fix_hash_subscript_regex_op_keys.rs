@@ -112,3 +112,56 @@ fn test_regular_hash_key_still_works() {
 fn test_fat_arrow_with_regex_op_name() {
     assert_clean_parse(r#"my %h = (m => 1, s => 2);"#);
 }
+
+// Bug C (discovered in review): hash SLICE with multiple regex-op keys
+// After Bug A is fixed for the first key, subsequent keys in a slice lost
+// the after_hash_brace protection because the flag was cleared per-token.
+// The depth-tracking fix (hash_brace_depth) and slice-aware
+// parse_hash_subscript_key keep all keys in a slice treated as barewords.
+#[test]
+fn test_hash_slice_two_regex_op_keys() {
+    assert_clean_parse(r#"my @v = @h{m, s};"#);
+}
+
+#[test]
+fn test_hash_slice_three_regex_op_keys() {
+    assert_clean_parse(r#"my @v = @h{q, m, s};"#);
+}
+
+#[test]
+fn test_hash_slice_tr_and_y() {
+    assert_clean_parse(r#"my @v = @h{tr, y};"#);
+}
+
+// Regression: qw(list) inside a hash subscript must NOT be treated as a bareword
+// (it has `(` after it, not `}` or `,`, so the normal qw parse path applies)
+#[test]
+fn test_hash_subscript_qw_list_unaffected() {
+    assert_clean_parse(r#"my @v = %Pkg::Hash{qw(a b)};"#);
+}
+
+// Arrow subscript: missing Bug B coverage for y and remaining q* variants
+#[test]
+fn test_arrow_hash_subscript_key_y() {
+    assert_clean_parse("$ref->{y};");
+}
+
+#[test]
+fn test_arrow_hash_subscript_key_qq() {
+    assert_clean_parse("$ref->{qq};");
+}
+
+#[test]
+fn test_arrow_hash_subscript_key_qr() {
+    assert_clean_parse("$ref->{qr};");
+}
+
+#[test]
+fn test_arrow_hash_subscript_key_qx() {
+    assert_clean_parse("$ref->{qx};");
+}
+
+#[test]
+fn test_arrow_hash_subscript_key_qw() {
+    assert_clean_parse("$ref->{qw};");
+}
