@@ -102,6 +102,7 @@ pub(crate) mod scope_distance;
 mod snippets;
 mod sort;
 pub(crate) mod test_more;
+pub(crate) mod tt_directives;
 mod variables;
 mod workspace;
 
@@ -468,6 +469,21 @@ impl CompletionProvider {
         }
 
         let mut completions = Vec::new();
+
+        // Template Toolkit file context: offer directive/filter completions inside
+        // [% … %] blocks, and nothing outside them (raw HTML/text content).
+        if Self::is_tt_file_context(filepath) {
+            if Self::is_inside_tt_filter_context(source, position) {
+                tt_directives::add_tt_filter_completions(&mut completions, &context);
+                return sort::deduplicate_and_sort(completions);
+            }
+            if Self::is_inside_tt_directive(source, position) {
+                tt_directives::add_tt_directive_completions(&mut completions, &context);
+                return sort::deduplicate_and_sort(completions);
+            }
+            // Outside [% %]: raw HTML/text — no completions.
+            return completions;
+        }
 
         // After regex close delimiter: offer flag completions.
         // This check MUST precede the in_regex check because the cursor after
@@ -1301,6 +1317,56 @@ impl CompletionProvider {
 
         // Check if source contains Test::More or Test2::V0
         source.contains("use Test::More") || source.contains("use Test2::V0")
+    }
+
+    /// Returns `true` if the file is a Template Toolkit template (`.tt` or `.tt2`).
+    fn is_tt_file_context(filepath: Option<&str>) -> bool {
+        filepath.is_some_and(|p| p.ends_with(".tt") || p.ends_with(".tt2"))
+    }
+
+    /// Returns `true` if the cursor is inside an open `[% … %]` TT directive block.
+    ///
+    /// Handles the whitespace-stripping variants `[%-` and `[%+` as well as the
+    /// standard `[%`. Returns `false` when the cursor is inside a TT comment
+    /// (`[%# … %]`).
+    fn is_inside_tt_directive(source: &str, position: usize) -> bool {
+        let before = &source[..position.min(source.len())];
+
+        // Find the last `[%` (or `[%-` / `[%+`) before the cursor.
+        let Some(open_pos) = before.rfind("[%") else {
+            return false;
+        };
+
+        // Check if the block has already been closed before the cursor.
+        let inner = &before[open_pos + 2..];
+
+        // Skip optional `-` / `+` whitespace control character.
+        let inner = inner.strip_prefix(['-', '+']).unwrap_or(inner);
+
+        // A `#` immediately after `[%` (optionally after `-`/`+`) opens a TT
+        // comment; no completions should fire inside comments.
+        if inner.starts_with('#') {
+            return false;
+        }
+
+        !inner.contains("%]")
+    }
+
+    /// Returns `true` if the cursor follows a `|` pipe inside a TT directive,
+    /// indicating a filter-completion context.
+    fn is_inside_tt_filter_context(source: &str, position: usize) -> bool {
+        if !Self::is_inside_tt_directive(source, position) {
+            return false;
+        }
+        let before = &source[..position.min(source.len())];
+        let Some(open_pos) = before.rfind("[%") else {
+            return false;
+        };
+        let directive_text = &before[open_pos..];
+        // The last non-space segment before the cursor in the directive starts with `|`.
+        directive_text
+            .rfind('|')
+            .is_some_and(|pipe_pos| directive_text[pipe_pos + 1..].trim().is_empty())
     }
 }
 
@@ -2588,5 +2654,136 @@ sub helper { }
         let qrpat = must_some(completions3.iter().find(|c| c.label == "qrpat"));
         let insert3 = qrpat.insert_text.as_deref().unwrap_or_default();
         assert!(insert3.starts_with("qr/"), "qrpat body must start with qr/; got: {insert3:?}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Template Toolkit directive/filter completion tests (#2350)
+    // -------------------------------------------------------------------------
+
+    /// Helper: build a CompletionProvider from source that may not be valid Perl
+    /// (TT files contain HTML + [% %] directives, not Perl).
+    fn tt_provider(source: &str) -> CompletionProvider {
+        let output = Parser::new(source).parse_with_recovery();
+        CompletionProvider::new(&output.ast)
+    }
+
+    #[test]
+    fn test_tt_directive_completions_in_tt_file() {
+        // Inside an open [% ... %] block, directive completions should appear.
+        let source = "[% FOR";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        assert!(
+            completions.iter().any(|c| c.label == "FOREACH"),
+            "FOREACH directive missing from TT completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "FOR"),
+            "FOR directive missing from TT completions"
+        );
+    }
+
+    #[test]
+    fn test_tt_no_completions_outside_directive() {
+        // Outside [% %] is raw HTML/text — no completions should fire.
+        let source = "<html><body>Hello ";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        assert!(
+            completions.is_empty(),
+            "Expected no completions outside TT directive in .tt file; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_tt_filter_completions_after_pipe() {
+        // After `|` inside a TT directive, filter names should be offered.
+        let source = "[% name | ";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        assert!(
+            completions.iter().any(|c| c.label == "html"),
+            "html filter missing from TT filter completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "uri"),
+            "uri filter missing from TT filter completions"
+        );
+        // Directives should NOT appear in filter context
+        assert!(
+            !completions.iter().any(|c| c.label == "FOREACH"),
+            "FOREACH directive must not appear in filter completion context"
+        );
+    }
+
+    #[test]
+    fn test_tt_loop_variable_completions() {
+        // loop.* variables should appear inside an open TT directive.
+        let source = "[% FOREACH item IN list %][% loop.";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        assert!(
+            completions.iter().any(|c| c.label == "loop.count"),
+            "loop.count missing from TT loop variable completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_tt_extension_tt2_also_recognized() {
+        // .tt2 files should also get TT completions.
+        let source = "[% IF ";
+        let provider = tt_provider(source);
+        let completions =
+            provider.get_completions_with_path(source, source.len(), Some("email.tt2"));
+        assert!(
+            completions.iter().any(|c| c.label == "IF"),
+            "IF directive missing for .tt2 extension; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_non_tt_file_unaffected_by_tt_completions() {
+        // Regular Perl files must not receive TT directive completions.
+        let source = "my $fo";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions =
+            provider.get_completions_with_path(source, source.len(), Some("script.pl"));
+        assert!(
+            !completions.iter().any(|c| c.label == "FOREACH"),
+            "TT completions leaked into Perl file context"
+        );
+    }
+
+    #[test]
+    fn test_tt_whitespace_stripping_variant_recognized() {
+        // [%- ... %] (whitespace-stripping) variant must also trigger completions.
+        let source = "[%- IF";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        assert!(
+            completions.iter().any(|c| c.label == "IF"),
+            "IF directive missing for [%- variant; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_tt_comment_block_no_completions() {
+        // [%# comment %] should NOT produce completions (it's a TT comment).
+        let source = "[%# some comment ";
+        let provider = tt_provider(source);
+        let completions = provider.get_completions_with_path(source, source.len(), Some("page.tt"));
+        assert!(
+            completions.is_empty(),
+            "Expected no completions inside TT comment; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
     }
 }
