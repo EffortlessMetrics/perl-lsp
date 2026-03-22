@@ -1075,4 +1075,67 @@ mod tests {
         assert!(msg.contains("tcsh"));
         assert!(msg.contains("bash"));
     }
+
+    // ── --check-format flag ───────────────────────────────────────
+
+    #[test]
+    fn parse_check_format_text_explicit() {
+        use super::CheckFormat;
+        let plan = must(parse_args(["perl-lsp", "--check", "--check-format", "text", "file.pl"]));
+        assert_eq!(plan.action, LaunchAction::Check);
+        assert_eq!(plan.check_format, CheckFormat::Text);
+    }
+
+    #[test]
+    fn parse_check_format_json() {
+        use super::CheckFormat;
+        let plan = must(parse_args(["perl-lsp", "--check", "--check-format", "json", "file.pl"]));
+        assert_eq!(plan.action, LaunchAction::Check);
+        assert_eq!(plan.check_format, CheckFormat::Json);
+    }
+
+    #[test]
+    fn parse_check_format_defaults_to_text() {
+        use super::CheckFormat;
+        let plan = must(parse_args(["perl-lsp", "--check", "file.pl"]));
+        assert_eq!(plan.check_format, CheckFormat::Text);
+    }
+
+    #[test]
+    fn parse_check_format_invalid_value_returns_error() {
+        let result = parse_args(["perl-lsp", "--check", "--check-format", "xml", "file.pl"]);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("xml"), "error should mention the invalid value");
+        assert!(msg.contains("text") || msg.contains("json"), "error should mention valid values");
+    }
+
+    #[test]
+    fn parse_check_format_case_sensitive_rejects_json_caps() {
+        // --check-format must be lowercase; "JSON" is not accepted.
+        let result = parse_args(["perl-lsp", "--check", "--check-format", "JSON", "file.pl"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_check_format_without_check_fails() {
+        // --check-format requires --check to be present.
+        let result = parse_args(["perl-lsp", "--check-format", "json"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn error_display_invalid_check_format() {
+        let err =
+            super::LaunchParseError::InvalidCheckFormat { raw_format: "csv".to_string() };
+        let msg = format!("{err}");
+        assert!(msg.contains("csv"), "error must mention the bad value");
+        assert!(msg.contains("text") && msg.contains("json"), "error must list valid options");
+    }
+
+    #[test]
+    fn help_mentions_check_format_flag() {
+        let text = super::help_text();
+        assert!(text.contains("--check-format"), "help must document --check-format");
+    }
 }
