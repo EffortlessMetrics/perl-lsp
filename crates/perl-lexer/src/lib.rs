@@ -1709,24 +1709,33 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
-    /// Return next non-space char without consuming.
-    fn peek_nonspace(&self) -> Option<char> {
+    /// Return the next non-space char and the char immediately following it (without consuming).
+    /// Used to detect quote-operator delimiters while distinguishing `=>` (fat-arrow autoquote)
+    /// from `=` used as a plain delimiter.
+    fn peek_nonspace_and_following(&self) -> (Option<char>, Option<char>) {
         let mut i = self.position;
         while i < self.input.len() {
-            let c = self.input.get(i..).and_then(|s| s.chars().next())?;
+            let c = match self.input.get(i..).and_then(|s| s.chars().next()) {
+                Some(c) => c,
+                None => return (None, None),
+            };
             if c.is_whitespace() {
                 i += c.len_utf8();
                 continue;
             }
-            return Some(c);
+            // Found non-space at position i; peek the next char after it
+            let j = i + c.len_utf8();
+            let following = self.input.get(j..).and_then(|s| s.chars().next());
+            return (Some(c), following);
         }
-        None
+        (None, None)
     }
 
     /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)
     fn is_quote_delim(c: char) -> bool {
-        // Quote delimiters are punctuation, but not whitespace or control characters
-        !c.is_ascii_alphanumeric() && !c.is_whitespace() && !c.is_control()
+        // Perl allows any non-alphanumeric, non-whitespace character as delimiter,
+        // including control characters (e.g. s\x07pattern\x07replacement\x07).
+        !c.is_ascii_alphanumeric() && !c.is_whitespace()
     }
 
     /// Try to parse a v-string (version string) like `v5.26.0` or `v5.10`.
@@ -1992,19 +2001,18 @@ impl<'a> PerlLexer<'a> {
                     "sub" => {
                         self.after_sub = true;
                     }
-                    // Quote operators expect a delimiter next (must be immediately adjacent)
+                    // Quote operators expect a delimiter next.
                     // Skip if after '->' -- these are method names, not operators.
                     op if !self.after_arrow && quote_handler::is_quote_operator(op) => {
-                        // For regex operators like 'm', 's', 'tr', 'y', delimiter must be immediately adjacent
-                        // For quote operators like 'q', 'qq', 'qw', 'qr', 'qx', we allow whitespace
-                        let next_char = if matches!(op, "m" | "s" | "tr" | "y") {
-                            self.current_char() // Must be immediately adjacent
-                        } else {
-                            self.peek_nonspace() // Can skip whitespace
-                        };
+                        // Allow optional whitespace between operator and delimiter for all
+                        // quote-like operators, including s/tr/y/m (Perl allows `s { ... } { ... }`).
+                        let (next_char, char_after_next) = self.peek_nonspace_and_following();
 
                         if let Some(next) = next_char {
-                            if Self::is_quote_delim(next) {
+                            // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
+                            // not a valid substitution delimiter. Treat as identifier.
+                            let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                            if Self::is_quote_delim(next) && !is_fat_arrow {
                                 self.mode = LexerMode::ExpectDelimiter;
                                 self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
                                     operator: op.to_string(),
@@ -2450,6 +2458,7 @@ impl<'a> PerlLexer<'a> {
                         self.in_prototype = false;
                     }
                 }
+                self.after_arrow = false;
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightParen,
@@ -2462,6 +2471,8 @@ impl<'a> PerlLexer<'a> {
                 self.advance();
                 // Semicolon ends prototype window (forward declaration)
                 self.after_sub = false;
+                // Semicolon is a statement boundary — any pending method-call chain is over.
+                self.after_arrow = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::Semicolon,
@@ -2514,6 +2525,7 @@ impl<'a> PerlLexer<'a> {
             }
             '}' => {
                 self.advance();
+                self.after_arrow = false;
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightBrace,

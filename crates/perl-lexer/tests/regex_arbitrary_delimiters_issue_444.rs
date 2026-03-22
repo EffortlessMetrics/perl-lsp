@@ -244,15 +244,15 @@ fn test_m_vs_bareword_disambiguation() {
         "m followed by ! should be regex match"
     );
 
-    // When followed by whitespace and then delimiter, should still work for m
-    let code2 = "m (pattern)"; // Note: for m, delimiter must be adjacent, so this might not work
+    // When followed by whitespace and then delimiter, Perl allows m SPACE DELIM
+    // e.g. `m (pattern)` is valid Perl — the space is optional between operator and delimiter.
+    let code2 = "m (pattern)";
     let mut lexer2 = PerlLexer::new(code2);
     let tokens2 = lexer2.collect_tokens();
-    // For m operator, delimiter must be immediately adjacent, so this should be identifier + paren
-    // This test verifies the correct behavior
+    // Perl allows optional whitespace before the delimiter for all quote-like operators.
     assert!(
-        matches!(tokens2[0].token_type, TokenType::Identifier(_)),
-        "m followed by space should be identifier, got: {:?}",
+        matches!(tokens2[0].token_type, TokenType::RegexMatch),
+        "m followed by space then delimiter should be regex match, got: {:?}",
         tokens2[0].token_type
     );
 }
