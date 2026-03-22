@@ -190,7 +190,9 @@ fn test_lsp_response_time_maintained() -> Result<()> {
     }
 
     latencies.sort();
-    let p50 = latencies[5]; // median approximation from 10 samples
+    // p50 = lower median of 10 sorted samples (index 4 = 5th value in 1-indexed,
+    // i.e. the 50th percentile boundary). Index 5 would be p60.
+    let p50 = latencies[4];
     assert!(
         p50 < Duration::from_millis(100),
         "p50 LSP response too slow with DAP enabled: {:?}",
@@ -513,9 +515,12 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
         }),
     );
 
+    // settle_time measures: notification send + 100ms sleep + server diagnostic flush.
+    // The server-side parse is <1ms; this is a CI-safe "server didn't hang" check.
+    // Threshold: 100ms (mandatory sleep) + 500ms (drain ceiling) + 200ms (CI margin) = 800ms.
     std::thread::sleep(Duration::from_millis(100));
     drain_until_quiet(&server, Duration::from_millis(50), Duration::from_millis(500));
-    let parse_time = start_time.elapsed();
+    let settle_time = start_time.elapsed();
 
     // Verify LSP still responsive after incremental edit
     let hover_id = 800;
@@ -534,11 +539,10 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
 
     let response = read_response_matching_i64(&server, hover_id, Duration::from_secs(5));
     assert!(response.is_some(), "LSP should remain responsive after incremental edit");
-    // CI-safe threshold: spec says <1ms server-side, 500ms covers round-trip overhead
     assert!(
-        parse_time < Duration::from_millis(500),
-        "Incremental parsing round-trip too slow: {:?}",
-        parse_time
+        settle_time < Duration::from_millis(800),
+        "Server failed to settle after incremental edit within 800ms: {:?}",
+        settle_time
     );
 
     Ok(())
@@ -596,7 +600,9 @@ fn test_performance_baseline_no_regression() -> Result<()> {
     }
 
     latencies.sort();
-    let p50 = latencies[5]; // median approximation from 10 samples
+    // p50 = lower median of 10 sorted samples (index 4 = 5th value in 1-indexed,
+    // i.e. the 50th percentile boundary). Index 5 would be p60.
+    let p50 = latencies[4];
     assert!(
         p50 < Duration::from_millis(100),
         "Performance baseline regression: p50 hover latency {:?} exceeds 100ms with dap-phase3",
