@@ -531,6 +531,11 @@ impl<'a> Parser<'a> {
                     let dc_token = self.tokens.next()?; // consume ::
                     ("::".to_string(), dc_token.end)
                 }
+                Some(TokenKind::Colon) => {
+                    // $: — format line-break character variable
+                    let colon_token = self.tokens.next()?;
+                    (":".to_string(), colon_token.end)
+                }
                 _ => {
                     // Empty variable name (just the sigil)
                     (String::new(), self.previous_position())
