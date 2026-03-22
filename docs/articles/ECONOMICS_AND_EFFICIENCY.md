@@ -9,7 +9,7 @@
 | PRs merged (this session) | 30 |
 | Issues closed | 17+ |
 | Critical bugs found & fixed | 7+ |
-| System corpus improvement | 85.7% → 93.7% |
+| System corpus improvement | 85.7% → 90.9% (ratcheted) + active fixes in queue |
 | Weekly quota delta | +15 points (50% → 65%) |
 | Session window consumed | 88% of 5h |
 
