@@ -739,6 +739,13 @@ impl LspServer {
                 }
             }
             cooldowns.insert(uri.to_string(), now);
+
+            // Periodic cleanup: remove entries older than 120 seconds to prevent
+            // unbounded HashMap growth in long-running sessions. Only run cleanup
+            // if the map has grown beyond 1000 entries (cheap check).
+            if cooldowns.len() > 1000 {
+                cooldowns.retain(|_, last_time| now.duration_since(*last_time).as_secs() < 120);
+            }
         }
 
         // Extract file extension ONLY — no path components (privacy-safe)
@@ -748,10 +755,13 @@ impl LspServer {
             .filter(|ext| ext.len() <= 10 && !ext.contains('/'))
             .unwrap_or("unknown");
 
-        // Classify errors by variant name — no message content or locations
-        let error_types: Vec<&str> = parse_errors
-            .iter()
-            .map(|e| match e {
+        // Classify errors by variant name — no message content or locations.
+        // Deduplicated: a file with 50 UnexpectedToken errors sends "UnexpectedToken"
+        // once. errorCount covers the total; the set covers the type distribution.
+        let error_types: Vec<&str> = {
+            let mut seen = std::collections::HashSet::new();
+            let mut deduped = Vec::new();
+            for variant in parse_errors.iter().map(|e| match e {
                 crate::error::ParseError::UnexpectedEof => "UnexpectedEof",
                 crate::error::ParseError::UnexpectedToken { .. } => "UnexpectedToken",
                 crate::error::ParseError::SyntaxError { .. } => "SyntaxError",
@@ -763,8 +773,13 @@ impl LspServer {
                 crate::error::ParseError::InvalidRegex { .. } => "InvalidRegex",
                 crate::error::ParseError::NestingTooDeep { .. } => "NestingTooDeep",
                 crate::error::ParseError::Cancelled => "Cancelled",
-            })
-            .collect();
+            }) {
+                if seen.insert(variant) {
+                    deduped.push(variant);
+                }
+            }
+            deduped
+        };
 
         // Bucket file size to avoid fingerprinting small/unique files
         let size_bucket = match file_size {

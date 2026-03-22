@@ -211,3 +211,51 @@ fn test_parse_telemetry_no_pii_in_payload() -> TestResult {
 
     Ok(())
 }
+
+// ============================================================
+// Test 6: errorTypes is deduplicated — repeated same-variant errors
+// produce only one entry in the set, not N duplicates
+// ============================================================
+
+#[test]
+fn test_parse_telemetry_error_types_deduplicated() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    enable_telemetry(&mut harness);
+
+    // Open a document that intentionally produces multiple syntax errors of the
+    // same type (each `= ;` is a syntax error at the expression level).
+    // The server may produce 1 or more errors, but errorTypes must be a set —
+    // no duplicate variant names regardless of how many errors exist.
+    harness.open("file:///dedup_telem.pl", "my $a = ;\nmy $b = ;\nmy $c = ;\n")?;
+
+    let notif = harness.wait_for_notification("telemetry/event", Duration::from_millis(800));
+    assert!(notif.is_ok(), "Expected telemetry/event: {:?}", notif.err());
+
+    let payload = notif?;
+    let error_types = payload["errorTypes"].as_array().expect("errorTypes must be an array");
+
+    // Verify no duplicate variant names appear in the errorTypes array
+    let mut seen = std::collections::HashSet::new();
+    for entry in error_types {
+        let variant = entry.as_str().expect("errorTypes entries must be strings");
+        assert!(
+            seen.insert(variant),
+            "Duplicate error variant '{}' found in errorTypes — deduplication failed: {:?}",
+            variant,
+            error_types
+        );
+    }
+
+    // errorCount may be > errorTypes.len() — that's the expected invariant
+    let error_count = payload["errorCount"].as_u64().unwrap_or(0);
+    assert!(
+        error_count >= error_types.len() as u64,
+        "errorCount ({}) must be >= errorTypes.len() ({})",
+        error_count,
+        error_types.len()
+    );
+
+    Ok(())
+}
