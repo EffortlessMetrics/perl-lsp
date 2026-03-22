@@ -72,7 +72,8 @@
           ".pm",
           ".pod",
           ".t",
-          ".psgi"
+          ".psgi",
+          ".tt"
         ],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"
@@ -293,17 +294,6 @@
           ],
           "default": "auto",
           "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
-        },
-        "perl-lsp.autoUpdate": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Automatically download and install new `perl-lsp` binary releases without prompting. When `false`, a notification is shown instead."
-        },
-        "perl-lsp.updateCheckInterval": {
-          "type": "number",
-          "default": 24,
-          "minimum": 0,
-          "markdownDescription": "Hours between background checks for `perl-lsp` binary updates. Set to `0` to disable update checks entirely."
         }
       }
     },
@@ -373,6 +363,18 @@
         "title": "Show What's New",
         "category": "Perl",
         "icon": "$(star-empty)"
+      },
+      {
+        "command": "perl-lsp.showSpecialVarsReference",
+        "title": "Show Special Variables Reference",
+        "category": "Perl",
+        "icon": "$(symbol-variable)"
+      },
+      {
+        "command": "perl-lsp.reportIssue",
+        "title": "Report Issue",
+        "category": "Perl",
+        "icon": "$(github)"
       }
     ],
     "menus": {
@@ -412,6 +414,12 @@
         {
           "command": "perl-lsp.showRefactoringOptions",
           "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.showSpecialVarsReference"
+        },
+        {
+          "command": "perl-lsp.reportIssue"
         }
       ],
       "editor/title": [

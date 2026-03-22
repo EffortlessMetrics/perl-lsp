@@ -161,6 +161,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
             { label: '$(pulse) Run Health Check', detail: 'Check Perl, perltidy, and LSP binary', command: 'perl-lsp.runHealthCheck' },
             { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
+            { label: '$(github) Report Issue', detail: 'Report a bug or request a feature on GitHub', command: 'perl-lsp.reportIssue' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
@@ -208,6 +209,37 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (sel === 'Show Output') { outputChannel.show(); }
             });
         }
+    });
+
+    const reportIssueCommand = vscode.commands.registerCommand('perl-lsp.reportIssue', async () => {
+        // Collect server version with graceful fallback
+        let serverVersion = 'unavailable';
+        if (currentServerPath) {
+            try {
+                serverVersion = await new Promise<string>((resolve, reject) => {
+                    execFile(currentServerPath!, ['--version'], { timeout: 5000 }, (err: Error | null, stdout: string) => {
+                        if (err) { reject(err); } else { resolve(stdout.trim()); }
+                    });
+                });
+            } catch {
+                serverVersion = 'error retrieving version';
+            }
+        }
+
+        // Collect extension version
+        const ext = vscode.extensions.getExtension('EffortlessMetrics.perl-lsp-rs');
+        const extensionVersion: string = ext?.packageJSON?.version ?? 'unknown';
+
+        // Build GitHub new-issue URL using the bug_report template
+        const params = new URLSearchParams({
+            template: 'bug_report.yml',
+            version: serverVersion.replace(/^perl-lsp\s+/, ''),
+            editor: `VS Code ${vscode.version} (ext ${extensionVersion})`,
+            os: `${process.platform} ${process.arch}`,
+        });
+
+        const issueUrl = `https://github.com/EffortlessMetrics/perl-lsp/issues/new?${params.toString()}`;
+        await vscode.env.openExternal(vscode.Uri.parse(issueUrl));
     });
 
     const whatsNewManager = new WhatsNewManager(context, outputChannel);
@@ -272,6 +304,7 @@ export async function activate(context: vscode.ExtensionContext) {
         statusMenuCommand,
         reinstallCommand,
         runHealthCheckCommand,
+        reportIssueCommand,
         showWhatsNewCommand,
         formatOnSaveDisposable,
         configurationWatcher,

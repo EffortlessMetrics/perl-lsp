@@ -447,6 +447,37 @@ describe('package.json contributes', () => {
     });
   });
 
+  describe('reportIssue command', () => {
+    test('registers perl-lsp.reportIssue command', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.reportIssue');
+    });
+
+    test('reportIssue has Perl category', () => {
+      const cmd = pkg.contributes.commands.find(
+        (c: any) => c.command === 'perl-lsp.reportIssue'
+      );
+      expect(cmd).toBeDefined();
+      expect(cmd.category).toBe('Perl');
+    });
+
+    test('reportIssue has a title', () => {
+      const cmd = pkg.contributes.commands.find(
+        (c: any) => c.command === 'perl-lsp.reportIssue'
+      );
+      expect(cmd).toBeDefined();
+      expect(cmd.title).toBeTruthy();
+    });
+
+    test('reportIssue is listed in commandPalette without language restriction', () => {
+      const palette = pkg.contributes.menus.commandPalette;
+      const entry = palette.find((e: any) => e.command === 'perl-lsp.reportIssue');
+      expect(entry).toBeDefined();
+      // Must be available globally — users need to report startup failures
+      expect(entry.when ?? '').not.toMatch(/editorLangId/);
+    });
+  });
+
   describe('createDebugConfig command', () => {
     test('registers perl-lsp.createDebugConfig command', () => {
       const commandIds = pkg.contributes.commands.map((c: any) => c.command);
