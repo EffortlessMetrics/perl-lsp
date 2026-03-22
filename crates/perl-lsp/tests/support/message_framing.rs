@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use parking_lot::{Condvar, Mutex};
+use perl_content_length_framing::ContentLengthFramer;
 use perl_lsp::LspServer;
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -28,11 +29,28 @@ unsafe impl Send for SendableServer {}
 /// routes server-initiated notifications and requests into dedicated
 /// queues so that `drain_notifications` / `wait_for_notification` can
 /// consume them without re-parsing.
+///
+/// The writer uses `ContentLengthFramer` to correctly extract ALL messages
+/// from a batch write, handling the case where the outbound writer coalesces
+/// multiple messages (e.g., `telemetry/event` + `publishDiagnostics`) into a
+/// single `write()` call.
 pub(super) struct TestWriter {
     pub(super) buffer: Arc<Mutex<Vec<u8>>>,
     pub(super) signal: Arc<Condvar>,
     pub(super) notifications: Arc<Mutex<VecDeque<Value>>>,
     pub(super) server_requests: Arc<Mutex<VecDeque<Value>>>,
+    framer: ContentLengthFramer,
+}
+
+impl TestWriter {
+    pub(super) fn new(
+        buffer: Arc<Mutex<Vec<u8>>>,
+        signal: Arc<Condvar>,
+        notifications: Arc<Mutex<VecDeque<Value>>>,
+        server_requests: Arc<Mutex<VecDeque<Value>>>,
+    ) -> Self {
+        Self { buffer, signal, notifications, server_requests, framer: ContentLengthFramer::new() }
+    }
 }
 
 impl Write for TestWriter {
@@ -41,23 +59,36 @@ impl Write for TestWriter {
             let mut buffer = self.buffer.lock();
             buffer.extend_from_slice(buf);
         }
-        // Parse and classify message outside buffer lock to avoid contention
-        let content = String::from_utf8_lossy(buf);
-        if let Some(json_start) = content.find('{') {
-            let json_str = &content[json_start..];
-            if let Ok(value) = serde_json::from_str::<Value>(json_str) {
-                let has_method = value.get("method").is_some();
-                let has_id = value.get("id").is_some();
-                if has_method && !has_id {
-                    // Server-initiated notification (no id)
-                    self.notifications.lock().push_back(value);
-                } else if has_method && has_id {
-                    // Server-initiated request (e.g., workspace/configuration)
-                    self.server_requests.lock().push_back(value);
+
+        // Feed the incoming bytes into the content-length framer so that ALL
+        // messages in a batched write are properly extracted and classified.
+        // Previously this only parsed a single JSON value from the raw bytes,
+        // which silently dropped the second message in any coalesced batch.
+        self.framer.push(buf);
+        loop {
+            match self.framer.try_next() {
+                Ok(Some(body)) => {
+                    if let Ok(value) = serde_json::from_slice::<Value>(&body) {
+                        let has_method = value.get("method").is_some();
+                        let has_id = value.get("id").is_some();
+                        if has_method && !has_id {
+                            // Server-initiated notification (no id)
+                            self.notifications.lock().push_back(value);
+                        } else if has_method && has_id {
+                            // Server-initiated request (e.g., workspace/configuration)
+                            self.server_requests.lock().push_back(value);
+                        }
+                        // Responses (has id, no method) stay in the raw buffer only
+                    }
                 }
-                // Responses (has id, no method) stay in the raw buffer only
+                Ok(None) => break,
+                Err(e) => {
+                    eprintln!("TestWriter framing error: {e}");
+                    break;
+                }
             }
         }
+
         self.signal.notify_all();
         Ok(buf.len())
     }
