@@ -314,7 +314,7 @@ fn test_multiple_diagnostics_mixed_categories() -> Result<(), Box<dyn std::error
     assert!(!pe.is_empty(), "Should have parse-error diagnostics from synthetic error");
 
     // The provider also runs scope analysis and lint checks.
-    // With an empty Program AST, missing-strict/warnings lint fires.
+    // With an empty Program AST, strict/warnings lint is suppressed (no executable content).
     let lint_diags: Vec<_> = diags
         .iter()
         .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
@@ -433,9 +433,21 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
     // diagnostics, since the full pipeline's lint integration depends on AST shape.
     use perl_parser_core::{Node, NodeKind, SourceLocation};
 
-    // Without strict/warnings: empty program should trigger missing-strict/warnings
-    let without =
-        Node::new(NodeKind::Program { statements: vec![] }, SourceLocation { start: 0, end: 10 });
+    // Without strict/warnings: a non-empty program (single bare statement) should trigger
+    // missing-strict/warnings. An empty program now correctly suppresses these diagnostics.
+    let stmt = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                SourceLocation { start: 0, end: 2 },
+            )),
+        },
+        SourceLocation { start: 0, end: 3 },
+    );
+    let without = Node::new(
+        NodeKind::Program { statements: vec![stmt] },
+        SourceLocation { start: 0, end: 10 },
+    );
     let mut diags1 = Vec::new();
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&without, &mut diags1);
     let lint1: Vec<_> = diags1
@@ -540,8 +552,7 @@ fn test_full_pipeline_complex_perl_file() -> Result<(), Box<dyn std::error::Erro
 #[test]
 fn test_full_pipeline_empty_source() -> Result<(), Box<dyn std::error::Error>> {
     let diags = diagnostics_for("");
-    // Empty source should not panic and should return a valid Vec
-    // May still have missing-strict/missing-warnings
+    // Empty source should not panic and should return a valid Vec with no diagnostics
     let pe = parse_error_diags(&diags);
     assert!(pe.is_empty(), "Empty source should not have parse errors");
     Ok(())
@@ -690,5 +701,48 @@ fn test_edge_case_unicode_source() -> Result<(), Box<dyn std::error::Error>> {
     // Verify offset-to-position works with multibyte chars
     let (line, _col) = offset_to_line_col(source, 0);
     assert_eq!(line, 0);
+    Ok(())
+}
+
+// =========================================================================
+// 11. Empty / trivially-empty files produce no strict/warnings diagnostics
+//     (regression: check_strict_warnings was unconditional)
+// =========================================================================
+
+#[test]
+fn empty_file_produces_no_strict_warnings_diagnostics() -> Result<(), Box<dyn std::error::Error>> {
+    let diags = diagnostics_for("");
+    let noisy: Vec<_> = diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
+        .collect();
+    assert!(
+        noisy.is_empty(),
+        "empty file should produce no strict/warnings diagnostics, got: {noisy:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn whitespace_only_file_produces_no_strict_warnings_diagnostics()
+-> Result<(), Box<dyn std::error::Error>> {
+    let diags = diagnostics_for("   \n\t\n");
+    let noisy: Vec<_> = diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
+        .collect();
+    assert!(noisy.is_empty(), "whitespace-only file should produce no strict/warnings diagnostics");
+    Ok(())
+}
+
+#[test]
+fn comment_only_file_produces_no_strict_warnings_diagnostics()
+-> Result<(), Box<dyn std::error::Error>> {
+    let diags = diagnostics_for("# just a comment\n");
+    let noisy: Vec<_> = diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
+        .collect();
+    assert!(noisy.is_empty(), "comment-only file should produce no strict/warnings diagnostics");
     Ok(())
 }
