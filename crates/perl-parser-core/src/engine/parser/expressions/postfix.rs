@@ -104,7 +104,7 @@ impl<'a> Parser<'a> {
                             } else if self.peek_kind() == Some(TokenKind::LeftBrace) {
                                 // ->%{...} hash slice
                                 self.tokens.next()?; // consume {
-                                let key = self.parse_expression()?;
+                                let key = self.parse_hash_subscript_key()?;
                                 self.expect(TokenKind::RightBrace)?;
 
                                 let start = expr.location.start;
@@ -268,7 +268,7 @@ impl<'a> Parser<'a> {
                         Some(TokenKind::LeftBrace) => {
                             // Arrow hash dereference: $ref->{key}
                             self.tokens.next()?; // consume {
-                            let key = self.parse_expression()?;
+                            let key = self.parse_hash_subscript_key()?;
                             self.expect(TokenKind::RightBrace)?;
 
                             let start = expr.location.start;
@@ -490,7 +490,7 @@ impl<'a> Parser<'a> {
 
                     // Hash element access
                     self.tokens.next()?; // consume {
-                    let key = self.parse_expression()?;
+                    let key = self.parse_hash_subscript_key()?;
                     self.expect(TokenKind::RightBrace)?;
 
                     let start = expr.location.start;
@@ -906,5 +906,38 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Eof)
                 | None
         )
+    }
+
+    /// Parse hash subscript key expression, treating lone keywords as bare
+    /// identifiers when they appear as `$h->{keyword}` or `$h{keyword}`.
+    ///
+    /// Keywords like `not`, `and`, `or`, `xor`, `do`, `eval` would normally be
+    /// consumed as operators or statement keywords. When one of these appears
+    /// inside a hash subscript followed immediately by `}`, it should be treated
+    /// as a bare hash key instead.
+    fn parse_hash_subscript_key(&mut self) -> ParseResult<Node> {
+        if let Some(kind) = self.peek_kind() {
+            let is_keyword_key = matches!(
+                kind,
+                TokenKind::WordNot
+                    | TokenKind::WordAnd
+                    | TokenKind::WordOr
+                    | TokenKind::WordXor
+                    | TokenKind::Do
+                    | TokenKind::Eval
+            );
+            if is_keyword_key {
+                if let Ok(second) = self.tokens.peek_second() {
+                    if second.kind == TokenKind::RightBrace {
+                        let token = self.tokens.next()?;
+                        return Ok(Node::new(
+                            NodeKind::Identifier { name: token.text.to_string() },
+                            SourceLocation { start: token.start, end: token.end },
+                        ));
+                    }
+                }
+            }
+        }
+        self.parse_expression()
     }
 }

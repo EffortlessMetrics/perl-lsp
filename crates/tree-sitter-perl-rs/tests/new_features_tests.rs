@@ -2,6 +2,7 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
 
     fn parse_to_sexp(code: &str) -> Result<String, String> {
@@ -75,7 +76,7 @@ mod tests {
 $x,   $y
 .
 "#;
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("format_declaration"));
 
@@ -85,7 +86,7 @@ Name: @<<<<<<<<<<<<
       $name
 .
 "#;
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("format_declaration"));
     }
@@ -96,13 +97,13 @@ Name: @<<<<<<<<<<<<
 
         // Test tie statement
         let code = "tie $scalar, 'Tie::Scalar', $arg1, $arg2;";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("tie_statement"));
 
         // Test untie statement
         let code = "untie @array;";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("untie_statement"));
 
@@ -159,7 +160,7 @@ Name: @<<<<<<<<<<<<
     when (2) { say "two"; }
     default { say "other"; }
 }"#;
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("given_statement"));
         assert!(sexp.contains("when_clause"));
@@ -172,13 +173,13 @@ Name: @<<<<<<<<<<<<
 
         // Test basic signature
         let code = "sub add ($x, $y) { return $x + $y; }";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("subroutine"));
 
         // Test signature with defaults
         let code = "sub greet ($name = 'World') { say \"Hello, $name!\"; }";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("subroutine"));
     }

@@ -6,6 +6,7 @@
 use perl_semantic_analyzer::analysis::semantic::{
     get_builtin_documentation, get_exception_context, is_exception_function,
 };
+use perl_tdd_support::must_some;
 
 // ---------------------------------------------------------------------------
 // Hover doc enrichment — die
@@ -15,7 +16,7 @@ use perl_semantic_analyzer::analysis::semantic::{
 fn test_die_hover_mentions_carp() {
     let doc = get_builtin_documentation("die");
     assert!(doc.is_some(), "die must have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.contains("Carp"),
         "die hover should mention Carp upgrade path, got: {}",
@@ -27,7 +28,7 @@ fn test_die_hover_mentions_carp() {
 fn test_die_hover_mentions_error_variable() {
     let doc = get_builtin_documentation("die");
     assert!(doc.is_some(), "die must have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.contains("$@"),
         "die hover should mention $@ error variable, got: {}",
@@ -43,7 +44,7 @@ fn test_die_hover_mentions_error_variable() {
 fn test_warn_hover_mentions_carp() {
     let doc = get_builtin_documentation("warn");
     assert!(doc.is_some(), "warn must have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.contains("Carp"),
         "warn hover should mention Carp upgrade path, got: {}",
@@ -59,7 +60,7 @@ fn test_warn_hover_mentions_carp() {
 fn test_eval_hover_mentions_error_variable() {
     let doc = get_builtin_documentation("eval");
     assert!(doc.is_some(), "eval must have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.contains("$@"),
         "eval hover should mention $@ error variable, got: {}",
@@ -99,7 +100,7 @@ fn test_cluck_has_docs() {
 fn test_confess_doc_mentions_stack_trace() {
     let doc = get_builtin_documentation("confess");
     assert!(doc.is_some(), "confess must have docs");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.contains("stack"),
         "confess description should mention stack trace, got: {}",
@@ -111,7 +112,7 @@ fn test_confess_doc_mentions_stack_trace() {
 fn test_cluck_doc_mentions_stack_trace() {
     let doc = get_builtin_documentation("cluck");
     assert!(doc.is_some(), "cluck must have docs");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.contains("stack"),
         "cluck description should mention stack trace, got: {}",
@@ -166,7 +167,7 @@ fn test_print_is_not_exception_function() {
 fn test_die_exception_context_has_alternative() {
     let ctx = get_exception_context("die");
     assert!(ctx.is_some(), "die must have exception context");
-    let ctx = ctx.unwrap();
+    let ctx = must_some(ctx);
     assert!(ctx.preferred_alternative.is_some(), "die should have a preferred alternative (croak)");
     let alt = ctx.preferred_alternative.as_deref().unwrap_or("");
     assert!(alt.contains("croak"), "die preferred alternative should be croak, got: {}", alt);
@@ -176,7 +177,7 @@ fn test_die_exception_context_has_alternative() {
 fn test_die_exception_context_has_error_variable() {
     let ctx = get_exception_context("die");
     assert!(ctx.is_some(), "die must have exception context");
-    let ctx = ctx.unwrap();
+    let ctx = must_some(ctx);
     assert_eq!(ctx.error_variable.as_deref(), Some("$@"), "die error variable should be $@");
 }
 
@@ -184,7 +185,7 @@ fn test_die_exception_context_has_error_variable() {
 fn test_warn_exception_context_has_alternative() {
     let ctx = get_exception_context("warn");
     assert!(ctx.is_some(), "warn must have exception context");
-    let ctx = ctx.unwrap();
+    let ctx = must_some(ctx);
     assert!(ctx.preferred_alternative.is_some(), "warn should have a preferred alternative (carp)");
     let alt = ctx.preferred_alternative.as_deref().unwrap_or("");
     assert!(alt.contains("carp"), "warn preferred alternative should be carp, got: {}", alt);
@@ -194,7 +195,7 @@ fn test_warn_exception_context_has_alternative() {
 fn test_croak_exception_context_no_alternative() {
     let ctx = get_exception_context("croak");
     assert!(ctx.is_some(), "croak must have exception context");
-    let ctx = ctx.unwrap();
+    let ctx = must_some(ctx);
     assert!(
         ctx.preferred_alternative.is_none(),
         "croak has no preferred alternative (already preferred), got: {:?}",

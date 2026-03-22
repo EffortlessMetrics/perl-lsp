@@ -30,7 +30,7 @@ use perl_semantic_analyzer::analysis::type_inference::{
 use perl_semantic_analyzer::symbol::{
     ScopeKind, SymbolExtractor, SymbolKind, SymbolTable, VarKind,
 };
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
@@ -167,7 +167,7 @@ fn symbol_at_cursor_on_method_call() -> Result<(), Box<dyn std::error::Error>> {
     // Debug: check what node is at the offset
     let node = find_node_at_offset(&ast, helper_offset);
     assert!(node.is_some(), "should find a node at the offset of 'helper'");
-    let node = node.unwrap();
+    let node = must_some(node);
     eprintln!(
         "Node at offset {}: kind={}, sexp={}",
         helper_offset,
@@ -181,7 +181,7 @@ fn symbol_at_cursor_on_method_call() -> Result<(), Box<dyn std::error::Error>> {
         "symbol_at_cursor should resolve method call, got node kind: {}",
         node.kind.kind_name()
     );
-    let key = sym.unwrap();
+    let key = must_some(sym);
     assert_eq!(key.name.as_ref(), "helper");
     // $self -> use current package
     assert_eq!(key.pkg.as_ref(), "MyPackage");
@@ -199,7 +199,7 @@ fn symbol_at_cursor_on_use_statement() -> Result<(), Box<dyn std::error::Error>>
 
     let node = find_node_at_offset(&ast, module_offset);
     assert!(node.is_some(), "should find node at offset of module name");
-    let node = node.unwrap();
+    let node = must_some(node);
     eprintln!(
         "Node at offset {}: kind={}, sexp={}",
         module_offset,

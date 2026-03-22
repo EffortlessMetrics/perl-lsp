@@ -4,7 +4,7 @@ use perl_semantic_analyzer::{
     Parser,
     symbol::{SymbolExtractor, SymbolKind, SymbolTable},
 };
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 
 fn extract_symbols(code: &str) -> SymbolTable {
     let mut parser = Parser::new(code);
@@ -427,7 +427,7 @@ requires 'some_method', 'another_method';
         some_method.is_some(),
         "expected Subroutine symbol with declaration='requires' for `some_method`"
     );
-    assert!(some_method.unwrap().attributes.contains(&"requires=true".to_string()));
+    assert!(must_some(some_method).attributes.contains(&"requires=true".to_string()));
 
     let another_method =
         find_symbol_with_declaration(&table, "another_method", SymbolKind::Subroutine, "requires");

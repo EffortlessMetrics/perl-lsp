@@ -2,6 +2,7 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
+    use perl_tdd_support::must_some;
     use tree_sitter_perl::context_aware_parser::{
         ContextAwareFullParser, ContextAwareHeredocParser,
     };
@@ -46,11 +47,9 @@ CODE
         assert!(declarations.iter().any(|d| d.terminator == "CODE"));
 
         // The inner heredoc should be detected when eval content is parsed
-        let eval_content = declarations
-            .iter()
-            .find(|d| d.terminator == "CODE")
-            .and_then(|d| d.content.as_ref())
-            .unwrap();
+        let eval_content = must_some(
+            declarations.iter().find(|d| d.terminator == "CODE").and_then(|d| d.content.as_ref()),
+        );
 
         assert!(eval_content.contains("<<'DATA'"));
     }

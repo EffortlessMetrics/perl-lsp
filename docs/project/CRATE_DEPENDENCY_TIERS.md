@@ -81,7 +81,6 @@ everything above. Note: some of these have workspace dev-dependencies (typically
 | `perl-position-tracking` | UTF-8/UTF-16 position tracking and conversion for LSP |
 | `perl-symbol-types` | Unified Perl symbol taxonomy for LSP tooling |
 | `perl-symbol-cursor` | Cursor-based Perl symbol extraction helpers |
-| `perl-symbol-table` | Symbol table and scope management (deps: `perl-symbol-types`, `perl-position-tracking`) |
 | `perl-symbol-index` | Trie + inverted-index symbol search for Perl tooling |
 | `perl-module-boundary` | Module-token boundary matching for single-line scanners (deps: `perl-module-token-core`) |
 | `perl-module-token-core` | Shared parser and boundary primitives for Perl module tokens |
@@ -98,7 +97,6 @@ everything above. Note: some of these have workspace dev-dependencies (typically
 | `perl-module-resolution-path` | Perl module path resolution within workspace roots (deps: `perl-module-path`, `perl-path-security`) |
 | `perl-module-resolution-uri` | Module URI resolution with workspace-safe search (deps: `perl-module-path`, `perl-path-security`, `perl-workspace-folder`) |
 | `perl-text-line` | Text-line cursor and boundary helpers (deps: `perl-module-token-parser`) |
-| `perl-source-editing` | Source text editing heuristics for insertion points and display truncation |
 | `perl-line-index` | Byte-oriented line/column index for incremental parsing |
 | `perl-source-file` | Shared Perl source file classification helpers |
 | `perl-content-length-framing` | Shared Content-Length frame parsing and encoding for LSP and DAP |
@@ -179,7 +177,7 @@ This tier contains the parser core engine and LSP transport layer.
 | `perl-lsp-workspace-symbols` | `perl-lsp-symbol-query`, `perl-module-path`, `perl-parser-core`, `perl-qualified-name`, `perl-semantic-analyzer` | Workspace symbol provider |
 | `perl-lsp-rename` | `perl-parser-core`, `perl-semantic-analyzer`, `perl-keywords`, `perl-symbol-cursor` | LSP rename provider |
 | `perl-lsp-completion` | `perl-lsp-completion-item`, `perl-parser-core`, `perl-semantic-analyzer`, `perl-workspace-index`, `perl-keywords`, `perl-path-security` | LSP completion engine |
-| `perl-lsp-code-actions` | `perl-parser-core`, `perl-lsp-ast-utils`, `perl-lsp-text-utils`, `perl-lsp-rename`, `perl-lsp-import-management`, `perl-lsp-diagnostics`, `perl-source-editing` | LSP code actions provider |
+| `perl-lsp-code-actions` | `perl-parser-core`, `perl-lsp-ast-utils`, `perl-lsp-text-utils`, `perl-lsp-rename`, `perl-lsp-import-management`, `perl-lsp-diagnostics` | LSP code actions provider |
 | `perl-lsp-navigation` | `perl-parser-core`, `perl-module-path`, `perl-module-import`, `perl-qualified-name`, `perl-lsp-document-links`, `perl-lsp-symbol-query`, `perl-lsp-workspace-symbols` | LSP navigation providers |
 
 **Count: 19 crates**
@@ -430,12 +428,10 @@ symbols.
 | `perl-regex` | 1 |
 | `perl-symbol-types` | 1 |
 | `perl-symbol-index` | 1 |
-| `perl-source-editing` | 1 |
 | `perl-ast` | 1 |
 | `perl-lexer` | 1 |
 | `perl-heredoc` | 1 |
 | `perl-edit` | 1 |
-| `perl-symbol-table` | 1 |
 | `perl-symbol-cursor` | 1 |
 | `perl-pragma` | 1 |
 | `perl-error` | 1 |

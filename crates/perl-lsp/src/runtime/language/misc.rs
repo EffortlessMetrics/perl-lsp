@@ -224,16 +224,23 @@ impl LspServer {
                 message: "Missing textDocument.uri".into(),
                 data: None,
             })?;
-            let documents = self.documents_guard();
-            let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
-                code: INVALID_REQUEST,
-                message: format!("Document not open: {}", uri),
-                data: None,
-            })?;
+            // Snapshot document text under lock, then release before acquiring
+            // workspace_folders via workspace_roots() to prevent ABBA deadlock.
+            // Path A (here): documents -> workspace_folders
+            // Path B (workspace.rs): workspace_folders -> documents
+            let doc_text = {
+                let documents = self.documents_guard();
+                let doc = self.get_document(&documents, uri).ok_or_else(|| JsonRpcError {
+                    code: INVALID_REQUEST,
+                    message: format!("Document not open: {}", uri),
+                    data: None,
+                })?;
+                doc.text.clone()
+            };
+            // documents lock released here
 
-            // Get workspace roots from initialization params
             let roots = self.workspace_roots();
-            let links = crate::document_links::compute_links(uri, &doc.text, &roots);
+            let links = crate::document_links::compute_links(uri, &doc_text, &roots);
             Ok(Some(json!(links)))
         } else {
             Ok(Some(json!([])))
@@ -1313,8 +1320,14 @@ impl LspServer {
                         .ok_or_else(|| invalid_params("Missing test ID argument"))?;
                     return self.debug_test(test_id);
                 }
-                // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.runCritic" => {
+                // Commands handled by ExecuteCommandProvider
+                "perl.runTests"
+                | "perl.runFile"
+                | "perl.runTestSub"
+                | "perl.runCritic"
+                | "perl.goToTest"
+                | "perl.goToImplementation"
+                | "perl.debugTests" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {

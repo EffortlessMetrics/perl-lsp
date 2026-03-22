@@ -44,9 +44,21 @@ impl ExecuteCommandProvider {
                     .ok_or_else(|| "Missing subroutine name argument".to_string())?;
                 self.run_test_sub(&file_path, sub_name)
             }
-            "perl.debugTests" => {
+            "perl.debugTests" | "perl.debugFile" | "perl.debugTest" => {
                 let file_path = self.resolve_path_from_args(&arguments)?;
                 self.debug_tests(&file_path)
+            }
+            "perl.runTest" | "perl.runTestFile" => {
+                let file_path = self.resolve_path_from_args(&arguments)?;
+                self.run_tests(&file_path)
+            }
+            "perl.runSubtest" => {
+                let file_path = self.resolve_path_from_args(&arguments)?;
+                let sub_name = arguments
+                    .get(1)
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| "Missing subroutine name argument".to_string())?;
+                self.run_test_sub(&file_path, sub_name)
             }
             "perl.runCritic" => self.run_critic_secure(&arguments),
             "perl.goToTest" => {

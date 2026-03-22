@@ -45,7 +45,8 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `in-review` | reviewer (/reviewer-read-handoff) | PR actively in review — set at review start |
 | `merge-ready` | reviewer (/pr-ready) | Ready for ops merge |
 | `structural-blocker` | any agent | Architecture issue; blocks parallel work |
-| `needs-deep-review` | reviewer | Requires additional deep-review pass |
+| `needs-deep-review` | reviewer (/reviewer-decide) | Standards review done, awaiting deep correctness review |
+| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | Deep correctness review complete — required before merge |
 | `follow-up-recommended` | wisdom or reviewer | Related follow-up issue needed |
 | `already-fixed` | plan-reviewer or scout | Close without build |
 

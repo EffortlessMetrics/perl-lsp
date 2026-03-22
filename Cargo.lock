@@ -1901,6 +1901,7 @@ dependencies = [
 name = "perl-lsp-code-actions"
 version = "0.12.0"
 dependencies = [
+ "perl-builtins",
  "perl-diagnostics-codes",
  "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
@@ -2646,10 +2647,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-source-editing"
-version = "0.12.0"
-
-[[package]]
 name = "perl-source-file"
 version = "0.12.0"
 
@@ -2670,15 +2667,6 @@ dependencies = [
 [[package]]
 name = "perl-symbol-index"
 version = "0.12.0"
-
-[[package]]
-name = "perl-symbol-table"
-version = "0.12.0"
-dependencies = [
- "perl-position-tracking",
- "perl-symbol-types",
- "serde",
-]
 
 [[package]]
 name = "perl-symbol-types"

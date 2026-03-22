@@ -60,7 +60,6 @@ Heuristic: <=700 LOC, <=3 Rust source files, <=8 direct deps.
 | `perl-qualified-name` | 136 | 1 | 1 | 0 |
 | `perl-regex` | 287 | 1 | 1 | 0 |
 | `perl-source-file` | 85 | 1 | 0 | 0 |
-| `perl-symbol-table` | 429 | 1 | 3 | 2 |
 | `perl-symbol-types` | 300 | 1 | 1 | 0 |
 | `perl-text-line` | 61 | 1 | 2 | 1 |
 | `perl-token` | 324 | 1 | 0 | 0 |

@@ -6,7 +6,7 @@
 use perl_semantic_analyzer::Parser;
 use perl_semantic_analyzer::analysis::semantic::{SemanticAnalyzer, get_attribute_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 
 fn parse_and_analyze(code: &str) -> SemanticAnalyzer {
     let mut parser = Parser::new(code);
@@ -22,7 +22,7 @@ fn parse_and_analyze(code: &str) -> SemanticAnalyzer {
 fn attribute_doc_lvalue_has_description() {
     let doc = get_attribute_documentation("lvalue");
     assert!(doc.is_some(), "lvalue should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("lvalue")
             || doc.description.to_lowercase().contains("assign"),
@@ -35,7 +35,7 @@ fn attribute_doc_lvalue_has_description() {
 fn attribute_doc_method_has_description() {
     let doc = get_attribute_documentation("method");
     assert!(doc.is_some(), "method should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("method"),
         "method description should mention method, got: {}",
@@ -47,7 +47,7 @@ fn attribute_doc_method_has_description() {
 fn attribute_doc_prototype_has_description() {
     let doc = get_attribute_documentation("prototype");
     assert!(doc.is_some(), "prototype should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("prototype")
             || doc.description.to_lowercase().contains("calling"),
@@ -60,7 +60,7 @@ fn attribute_doc_prototype_has_description() {
 fn attribute_doc_const_has_description() {
     let doc = get_attribute_documentation("const");
     assert!(doc.is_some(), "const should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("const")
             || doc.description.to_lowercase().contains("immutable")
@@ -74,7 +74,7 @@ fn attribute_doc_const_has_description() {
 fn attribute_doc_shared_has_description() {
     let doc = get_attribute_documentation("shared");
     assert!(doc.is_some(), "shared should have documentation");
-    let doc = doc.unwrap();
+    let doc = must_some(doc);
     assert!(
         doc.description.to_lowercase().contains("thread")
             || doc.description.to_lowercase().contains("shared"),
@@ -102,7 +102,7 @@ fn attribute_doc_covers_all_known_builtins() {
     for attr in &known_attrs {
         let doc = get_attribute_documentation(attr);
         assert!(doc.is_some(), "Expected documentation for attribute '{}' but got None", attr);
-        let doc = doc.unwrap();
+        let doc = must_some(doc);
         assert!(!doc.description.is_empty(), "Documentation for '{}' has empty description", attr);
     }
 }

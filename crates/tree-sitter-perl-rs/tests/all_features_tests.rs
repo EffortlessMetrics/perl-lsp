@@ -2,6 +2,7 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
     use tree_sitter_perl::stateful_parser::StatefulPerlParser;
 
@@ -114,7 +115,7 @@ mod tests {
         ];
 
         for code in q_tests {
-            let ast = parser.parse(code).unwrap();
+            let ast = must(parser.parse(code));
             let sexp = parser.to_sexp(&ast);
             assert!(sexp.contains("string"), "Failed to parse: {}", code);
         }
@@ -128,14 +129,14 @@ mod tests {
         ];
 
         for code in nested_tests {
-            let ast = parser.parse(code).unwrap();
+            let ast = must(parser.parse(code));
             let sexp = parser.to_sexp(&ast);
             assert!(sexp.contains("string"), "Failed to parse nested: {}", code);
         }
 
         // Test qw (word list)
         let code = "qw(one two three)";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("qw_list"));
 
@@ -143,7 +144,7 @@ mod tests {
         let qr_tests = vec!["qr/pattern/", "qr{pattern}", "qr(pattern)i", "qr[pattern]x"];
 
         for code in qr_tests {
-            let ast = parser.parse(code).unwrap();
+            let ast = must(parser.parse(code));
             let sexp = parser.to_sexp(&ast);
             assert!(
                 sexp.contains("qr_regex") || sexp.contains("regex"),
@@ -164,7 +165,7 @@ $name, $age, $city
 .
 print "done";"#;
 
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = PureRustPerlParser::node_to_sexp(&ast);
         assert!(sexp.contains("format_declaration"));
 
@@ -175,7 +176,7 @@ Name: @<<<<<<<<<<<
 .
 write;"#;
 
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = PureRustPerlParser::node_to_sexp(&ast);
         assert!(sexp.contains("format_declaration"));
     }
@@ -186,25 +187,25 @@ write;"#;
 
         // Test tie
         let code = "tie %hash, 'Tie::Hash::Indexed'";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("tie_statement"));
 
         // Test tie with args
         let code = "tie @array, 'Tie::File', $filename, O_RDWR";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("tie_statement"));
 
         // Test untie
         let code = "untie %hash";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("untie_statement"));
 
         // Test tied
         let code = "tied(%hash)";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("tied"));
     }
@@ -220,7 +221,7 @@ with multiple lines
 END
 print $text;"#;
 
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = PureRustPerlParser::node_to_sexp(&ast);
         assert!(sexp.contains("heredoc"));
 
@@ -231,7 +232,7 @@ No interpolation: $var @array
 EOF
 "#;
 
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = PureRustPerlParser::node_to_sexp(&ast);
         assert!(sexp.contains("heredoc"));
 
@@ -242,7 +243,7 @@ EOF
     END
 "#;
 
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = PureRustPerlParser::node_to_sexp(&ast);
         assert!(sexp.contains("heredoc"));
     }
@@ -278,7 +279,7 @@ EOF
         ];
 
         for (code, expected) in blocks {
-            let ast = parser.parse(code).unwrap();
+            let ast = must(parser.parse(code));
             let sexp = parser.to_sexp(&ast);
             assert!(
                 sexp.contains(expected),
@@ -318,7 +319,7 @@ EOF
 
         // Test smartmatch
         let code = "$a ~~ @array";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("~~"));
     }

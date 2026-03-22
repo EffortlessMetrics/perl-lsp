@@ -25,7 +25,6 @@ cargo doc -p perl-symbol-types --open    # View docs
 
 ### Downstream Consumers
 
-- `perl-symbol-table` -- symbol table storage
 - `perl-workspace-index` -- workspace-wide symbol indexing
 - `perl-semantic-analyzer` -- semantic analysis
 

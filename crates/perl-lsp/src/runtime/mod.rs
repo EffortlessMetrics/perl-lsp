@@ -90,7 +90,6 @@ use crate::{
         position_to_offset,
     },
 };
-use lsp_types::Location;
 use md5;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -104,7 +103,6 @@ use std::sync::{
 };
 use url::Url;
 
-use crate::util::uri::parse_uri;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{
     IndexCoordinator, LspWorkspaceSymbol, WorkspaceIndex, uri_to_fs_path,

@@ -151,7 +151,8 @@ Labels are the authoritative state of every issue and PR. Agents write labels; t
 | `in-review` | reviewer (/reviewer-read-handoff) | orchestrator | PR actively in review — set at review start |
 | `merge-ready` | reviewer (/pr-ready) | ops agent | Ready for merge pickup |
 | `structural-blocker` | any agent | orchestrator | Blocks parallel work |
-| `needs-deep-review` | reviewer | orchestrator | Needs additional deep-review pass |
+| `needs-deep-review` | reviewer (/reviewer-decide) | orchestrator | Standards review done, awaiting deep correctness review |
+| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | pr-ready, ops | Deep correctness review complete |
 | `follow-up-recommended` | wisdom or reviewer | orchestrator | Related follow-up issue needed |
 | `already-fixed` | plan-reviewer or scout | orchestrator | Close without build |
 

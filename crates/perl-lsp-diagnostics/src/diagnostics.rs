@@ -9,10 +9,13 @@ use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
 use perl_semantic_analyzer::symbol::SymbolExtractor;
 
+use crate::dedup::deduplicate_diagnostics;
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
 use crate::lints::printf_format::check_printf_format;
+use crate::lints::security::check_security;
 use crate::lints::strict_warnings::check_strict_warnings;
+use crate::lints::unused_imports::check_unused_imports;
 use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export diagnostic types from the shared SRP microcrate.
@@ -116,6 +119,12 @@ impl DiagnosticsProvider {
         check_common_mistakes(ast, &symbol_table, &mut diagnostics);
         check_printf_format(ast, &mut diagnostics);
 
+        // Security anti-pattern detection (string eval, two-arg open, backtick exec)
+        check_security(ast, &mut diagnostics);
+
+        // Unused import detection
+        check_unused_imports(ast, source, &mut diagnostics);
+
         // Missing module lint (PL701) — only when a resolver is provided
         if let Some(resolver) = module_resolver {
             crate::lints::missing_module::check_missing_modules(
@@ -125,6 +134,9 @@ impl DiagnosticsProvider {
                 &mut diagnostics,
             );
         }
+
+        // Remove duplicate diagnostics before returning
+        deduplicate_diagnostics(&mut diagnostics);
 
         diagnostics
     }
