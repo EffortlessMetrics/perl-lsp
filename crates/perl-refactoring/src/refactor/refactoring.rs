@@ -1674,53 +1674,108 @@ impl RefactoringEngine {
         {
             #[cfg(feature = "workspace_refactor")]
             {
-                let mut files_modified = 0;
-                let mut changes_made = 0;
-                let mut applied = false;
-
-                for file in files {
-                    // Try to find and inline variable in this file
-                    match self.workspace_refactor.inline_variable(symbol_name, file, (0, 0)) {
+                if all_occurrences {
+                    // Route to workspace-wide inlining — finds all references via WorkspaceIndex.
+                    // Requires that files[0] is the definition file; callers must call
+                    // index_file() for each workspace file before invoking this path so that
+                    // cross-file lookup works. The `files` slice beyond [0] is not used here;
+                    // the workspace index is the authoritative source of all occurrences.
+                    // Known limitation: SymbolKey uses pkg="main" hardcoded, so
+                    // package-qualified variables from other packages fall through to a
+                    // text-scan fallback inside inline_variable_all.
+                    let def_file = files.first().ok_or_else(|| ParseError::SyntaxError {
+                        message:
+                            "Inline all_occurrences requires at least one file (definition file)"
+                                .to_string(),
+                        location: 0,
+                    })?;
+                    match self.workspace_refactor.inline_variable_all(symbol_name, def_file, (0, 0))
+                    {
                         Ok(refactor_result) => {
                             let edits = refactor_result.file_edits;
-                            if !edits.is_empty() {
-                                let mod_count = self.apply_file_edits(&edits)?;
-                                if mod_count > 0 {
-                                    files_modified += mod_count;
-                                    changes_made +=
-                                        edits.iter().map(|e| e.edits.len()).sum::<usize>();
-                                    applied = true;
-                                    // AC1: If not all_occurrences, stop after first successful inlining
-                                    if !all_occurrences {
+                            if edits.is_empty() {
+                                warnings.push(format!(
+                                    "Symbol '{}' not found across workspace",
+                                    symbol_name
+                                ));
+                                return Ok(RefactoringResult {
+                                    success: false,
+                                    files_modified: 0,
+                                    changes_made: 0,
+                                    warnings,
+                                    errors: vec![],
+                                    operation_id: None,
+                                });
+                            }
+                            let changes_made = edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                            let files_modified = self.apply_file_edits(&edits)?;
+                            return Ok(RefactoringResult {
+                                success: true,
+                                files_modified,
+                                changes_made,
+                                warnings: refactor_result.warnings,
+                                errors: vec![],
+                                operation_id: None,
+                            });
+                        }
+                        Err(crate::workspace_refactor::RefactorError::SymbolNotFound {
+                            ..
+                        }) => {
+                            warnings.push(format!(
+                                "Symbol '{}' definition not found in provided files",
+                                symbol_name
+                            ));
+                        }
+                        Err(e) => {
+                            warnings.push(format!("Error during workspace inlining: {}", e));
+                        }
+                    }
+                } else {
+                    // Single-file path: iterate provided files, stop after first success.
+                    let mut files_modified = 0;
+                    let mut changes_made = 0;
+                    let mut applied = false;
+
+                    for file in files {
+                        match self.workspace_refactor.inline_variable(symbol_name, file, (0, 0)) {
+                            Ok(refactor_result) => {
+                                let edits = refactor_result.file_edits;
+                                if !edits.is_empty() {
+                                    let mod_count = self.apply_file_edits(&edits)?;
+                                    if mod_count > 0 {
+                                        files_modified += mod_count;
+                                        changes_made +=
+                                            edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                                        applied = true;
                                         break;
                                     }
                                 }
                             }
-                        }
-                        Err(crate::workspace_refactor::RefactorError::SymbolNotFound {
-                            ..
-                        }) => continue,
-                        Err(e) => {
-                            warnings.push(format!("Error checking {}: {}", file.display(), e));
+                            Err(crate::workspace_refactor::RefactorError::SymbolNotFound {
+                                ..
+                            }) => continue,
+                            Err(e) => {
+                                warnings.push(format!("Error checking {}: {}", file.display(), e));
+                            }
                         }
                     }
-                }
 
-                if !applied && warnings.is_empty() {
-                    warnings.push(format!(
-                        "Symbol '{}' definition not found in provided files",
-                        symbol_name
-                    ));
-                }
+                    if !applied && warnings.is_empty() {
+                        warnings.push(format!(
+                            "Symbol '{}' definition not found in provided files",
+                            symbol_name
+                        ));
+                    }
 
-                return Ok(RefactoringResult {
-                    success: applied,
-                    files_modified,
-                    changes_made,
-                    warnings,
-                    errors: vec![],
-                    operation_id: None,
-                });
+                    return Ok(RefactoringResult {
+                        success: applied,
+                        files_modified,
+                        changes_made,
+                        warnings,
+                        errors: vec![],
+                        operation_id: None,
+                    });
+                }
             }
 
             #[cfg(not(feature = "workspace_refactor"))]
@@ -3257,5 +3312,74 @@ sub complex {
             assert!(!old_backup.exists());
             // temp_dir cleanup is automatic
         }
+    }
+
+    // --- Inline all_occurrences routing tests ---
+
+    /// AC1: When all_occurrences=true, perform_inline routes to inline_variable_all, which
+    /// uses the workspace index to find references across ALL indexed files — not just those
+    /// explicitly passed in `files`. path_b is indexed but intentionally omitted from `files`;
+    /// the workspace lookup must still find and inline the usage there.
+    #[cfg(feature = "workspace_refactor")]
+    #[test]
+    fn test_inline_all_occurrences_routes_to_workspace_lookup() {
+        let temp_dir = must(tempfile::tempdir());
+        let path_a = temp_dir.path().join("a.pl");
+        let path_b = temp_dir.path().join("b.pl");
+
+        // path_a holds the definition; path_b only references $const
+        let content_a = "my $const = 42;\nprint $const;\n";
+        let content_b = "print $const;\n";
+
+        must(std::fs::write(&path_a, content_a));
+        must(std::fs::write(&path_b, content_b));
+
+        let mut engine = RefactoringEngine::new();
+        engine.config.safe_mode = false;
+
+        // Index both files — workspace index must know about path_b for cross-file lookup
+        must(engine.index_file(&path_a, content_a));
+        must(engine.index_file(&path_b, content_b));
+
+        // Pass only path_a (definition file); path_b is omitted from `files` intentionally
+        let result = must(engine.refactor(
+            RefactoringType::Inline { symbol_name: "$const".to_string(), all_occurrences: true },
+            vec![path_a.clone()],
+        ));
+
+        assert!(result.success, "expected success, warnings: {:?}", result.warnings);
+
+        // path_b must have its $const replaced — inline_variable_all found it via workspace index
+        let updated_b = must(std::fs::read_to_string(&path_b));
+        assert!(
+            !updated_b.contains("$const"),
+            "expected $const to be inlined in path_b, but found: {:?}",
+            updated_b
+        );
+    }
+
+    /// When all_occurrences=false, only the single-file path is taken.
+    /// The definition file (path_a) contains the symbol; inlining within it should succeed.
+    #[cfg(feature = "workspace_refactor")]
+    #[test]
+    fn test_inline_single_occurrence_stops_after_first_file() {
+        let temp_dir = must(tempfile::tempdir());
+        let path_a = temp_dir.path().join("a.pl");
+
+        let content_a = "my $x = 99;\nprint $x;\n";
+        must(std::fs::write(&path_a, content_a));
+
+        let mut engine = RefactoringEngine::new();
+        engine.config.safe_mode = false;
+
+        must(engine.index_file(&path_a, content_a));
+
+        let result = must(engine.refactor(
+            RefactoringType::Inline { symbol_name: "$x".to_string(), all_occurrences: false },
+            vec![path_a.clone()],
+        ));
+
+        assert!(result.success, "expected success, warnings: {:?}", result.warnings);
+        assert_eq!(result.files_modified, 1);
     }
 }
