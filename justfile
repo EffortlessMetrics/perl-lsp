@@ -328,9 +328,11 @@ _check-tools-basic:
     @MISSING=""; \
     if ! command -v cargo >/dev/null 2>&1; then MISSING="$$MISSING cargo"; fi; \
     if ! command -v rustfmt >/dev/null 2>&1; then MISSING="$$MISSING rustfmt"; fi; \
+    if ! cargo nextest --version >/dev/null 2>&1; then MISSING="$$MISSING cargo-nextest"; fi; \
     if [ -n "$$MISSING" ]; then \
         echo "ERROR: Missing required tools:$$MISSING"; \
         echo "  Install Rust: https://rustup.rs"; \
+        echo "  Install nextest: cargo install cargo-nextest --locked"; \
         exit 1; \
     fi
     @bash scripts/check-rust-toolchain.sh
