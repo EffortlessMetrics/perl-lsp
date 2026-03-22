@@ -533,7 +533,69 @@ fn test_c3_mro_multi() {
 }
 
 // ---------------------------------------------------------------------------
-// 18. Mixed use-parent and @ISA in same file
+// 18. Fallback URI — parent declared outside all open documents
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_find_supertypes_multi_fallback_uri() {
+    // Child declares `use parent 'ExternalLib'` but ExternalLib has no open
+    // document. The result URI should fall back to the item's own URI.
+    let code_b = "package Child;\nuse parent 'ExternalLib';\n";
+    let ast_b = parse(code_b);
+    let provider = TypeHierarchyProvider::new();
+
+    // Only one document scanned — ExternalLib has no package declaration anywhere.
+    let item = TypeHierarchyItem {
+        name: "Child".to_string(),
+        kind: TypeHierarchySymbolKind::Class,
+        uri: "file:///b.pm".to_string(),
+        range: WireRange::default(),
+        selection_range: WireRange::default(),
+        detail: None,
+        data: None,
+    };
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> =
+        vec![("file:///b.pm", &ast_b, code_b)];
+    let supertypes = provider.find_supertypes_multi(docs.into_iter(), &item);
+
+    assert_eq!(supertypes.len(), 1, "Expected one supertype, got: {:?}", supertypes);
+    assert_eq!(supertypes[0].name, "ExternalLib");
+    // ExternalLib was never declared in any scanned document — must fall back to item.uri
+    assert_eq!(
+        supertypes[0].uri, "file:///b.pm",
+        "Unknown parent URI should fall back to the request item URI, got: {}",
+        supertypes[0].uri
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Single-document degrade: find_supertypes_multi with one doc == find_supertypes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_find_supertypes_multi_single_doc_degrades_correctly() {
+    // With exactly one document, multi should return the same parent names as single.
+    let code = "package Child;\nuse parent 'Parent';\npackage Parent;\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let item = make_item("Child");
+
+    let single = provider.find_supertypes(&ast, &item);
+    let docs: Vec<(&str, &perl_parser_core::ast::Node, &str)> =
+        vec![("file:///single.pm", &ast, code)];
+    let multi = provider.find_supertypes_multi(docs.into_iter(), &item);
+
+    let single_names: Vec<&str> = single.iter().map(|i| i.name.as_str()).collect();
+    let multi_names: Vec<&str> = multi.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(
+        single_names, multi_names,
+        "single-file and multi-file (1 doc) should return the same parent names"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 19. Mixed use-parent and @ISA in same file
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -556,7 +618,7 @@ our @ISA = ('ParentB');\n";
 }
 
 // ---------------------------------------------------------------------------
-// 19. Empty source
+// 20. Empty source
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -584,7 +646,7 @@ fn empty_source_returns_empty_subtypes() {
 }
 
 // ---------------------------------------------------------------------------
-// 20. C3 linearization (Method Resolution Order)
+// 21. C3 linearization (Method Resolution Order)
 // ---------------------------------------------------------------------------
 
 /// Simple linear chain: Child -> Parent -> GrandParent
