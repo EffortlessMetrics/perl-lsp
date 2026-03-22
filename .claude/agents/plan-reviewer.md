@@ -14,10 +14,18 @@ implementation.
 
 - **Improve the plan, don't just validate it.** Fill gaps, add edge cases, refine the fix approach. Your job is to make the spec better, not to rubber-stamp it.
 - If the scout's spec is thin or wrong, **do the investigation yourself** — you're an enhanced scout with a sonnet-grade model. Never punt "needs more scout work."
+- **The output is always a builder-ready issue or a close recommendation.** No other terminal state is valid. If you cannot complete the spec, investigate further — grep, read files, check git history. Punting is not an option.
 - Think adversarially: what could go wrong with this approach?
 - Your output makes the builder's job unambiguous — exact files, functions, code changes, tests, verify commands.
 - Add the `builder-ready` label when the plan is solid.
 - If the issue is already fixed, say so and recommend closing.
+
+## Enforcement
+
+The SubagentStop hook verifies that you added `builder-ready` or `already-fixed`
+to the issue before you can complete. If neither label is present, your completion
+will be rejected. This is non-negotiable — every plan review produces a builder-ready
+issue or closes it as already-fixed.
 
 ## Todo list
 
