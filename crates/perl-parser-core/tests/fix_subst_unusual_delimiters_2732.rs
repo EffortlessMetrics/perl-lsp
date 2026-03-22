@@ -205,6 +205,35 @@ fn test_non_arrow_hash_key_q_known_broken() {
     assert_has_error(source, "");
 }
 
+// ── Regression: space before paren delimiter (all four paired chars covered) ─
+
+/// s (pattern) (replacement) — space before paren delimiter.
+/// Parens are one of the four paired delimiters ({, [, (, <) that are allowed
+/// after whitespace, but this case was not previously tested.
+#[test]
+fn test_subst_space_before_paren() {
+    let source = r#"$x =~ s (foo) (bar);"#;
+    assert_clean_parse(source);
+}
+
+// ── Regression: non-paired delimiters after whitespace must be rejected ───────
+
+/// -s $bs — file-size test, not substitution. The original XSLoader.pm regression.
+/// `s` here is a bareword file-test operator; `$bs` is its argument.
+/// With whitespace before `$`, the lexer must NOT treat `$` as a delimiter.
+#[test]
+fn test_file_size_test_not_subst() {
+    let source = r#"goto \&XSLoader::bootstrap_inherit if not -f $file or -s $bs;"#;
+    assert_clean_parse(source);
+}
+
+/// -s $bs in assignment context — variant of the core regression
+#[test]
+fn test_file_size_test_in_condition() {
+    let source = r#"if (-s $file) { print "has content"; }"#;
+    assert_clean_parse(source);
+}
+
 // ── Regression: comma-delimited substitution (XSLoader.pm) ──────────────────
 
 /// XSLoader.pm line 43: s,[\\/][^\\/]+$,, — comma as substitution delimiter.
