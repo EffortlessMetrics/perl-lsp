@@ -75,6 +75,10 @@ struct HierarchyIndex {
     children: BTreeMap<String, BTreeSet<String>>,
     /// Map from package to its composed roles (via `with`)
     roles: BTreeMap<String, BTreeSet<String>>,
+    /// Map from package name to the URI of the file where it is declared.
+    /// A package may be declared in multiple files (legal in Perl); we record
+    /// the first file seen. Used to populate `uri` on returned items.
+    package_uris: BTreeMap<String, String>,
 }
 
 impl HierarchyIndex {
@@ -87,6 +91,10 @@ impl HierarchyIndex {
         self.roles.entry(package.to_string()).or_default().insert(role.to_string());
     }
 
+    fn record_package_uri(&mut self, package: &str, uri: &str) {
+        self.package_uris.entry(package.to_string()).or_insert_with(|| uri.to_string());
+    }
+
     fn get_parents(&self, package: &str) -> Vec<String> {
         self.parents.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
     }
@@ -97,6 +105,11 @@ impl HierarchyIndex {
 
     fn get_children(&self, package: &str) -> Vec<String> {
         self.children.get(package).map(|set| set.iter().cloned().collect()).unwrap_or_default()
+    }
+
+    /// Return the URI where `package` is declared, or the fallback URI if unknown.
+    fn get_package_uri<'a>(&'a self, package: &str, fallback: &'a str) -> &'a str {
+        self.package_uris.get(package).map(String::as_str).unwrap_or(fallback)
     }
 }
 
@@ -115,14 +128,28 @@ impl TypeHierarchyProvider {
         Self
     }
 
-    /// Build a hierarchy index from the AST
+    /// Build a hierarchy index from a single AST (no URI tracking).
     fn build_hierarchy_index(&self, ast: &Node) -> HierarchyIndex {
         let mut index = HierarchyIndex::default();
         let mut current_package = "main".to_string();
+        self.index_hierarchy_recursive(ast, &mut index, &mut current_package, None);
+        index
+    }
 
-        // Walk the AST in order, tracking package scope
-        self.index_hierarchy_recursive(ast, &mut index, &mut current_package);
-
+    /// Build a unified hierarchy index from multiple `(uri, ast)` pairs.
+    ///
+    /// Each package declaration is recorded with its source URI so that
+    /// `find_supertypes_multi` / `find_subtypes_multi` can emit the correct
+    /// `uri` on every returned `TypeHierarchyItem`.
+    fn build_hierarchy_index_multi<'a>(
+        &self,
+        asts: impl Iterator<Item = (&'a str, &'a Node)>,
+    ) -> HierarchyIndex {
+        let mut index = HierarchyIndex::default();
+        for (uri, ast) in asts {
+            let mut current_package = "main".to_string();
+            self.index_hierarchy_recursive(ast, &mut index, &mut current_package, Some(uri));
+        }
         index
     }
 
@@ -131,16 +158,20 @@ impl TypeHierarchyProvider {
         node: &Node,
         index: &mut HierarchyIndex,
         current_package: &mut String,
+        source_uri: Option<&str>,
     ) {
         match &node.kind {
             NodeKind::Package { name, block, name_span: _ } => {
+                if let Some(uri) = source_uri {
+                    index.record_package_uri(name, uri);
+                }
                 if block.is_some() {
                     // Block form: package Foo { ... }
                     // Save current package, process block, restore
                     let saved_package = current_package.clone();
                     *current_package = name.clone();
                     if let Some(blk) = block {
-                        self.index_hierarchy_recursive(blk, index, current_package);
+                        self.index_hierarchy_recursive(blk, index, current_package, source_uri);
                     }
                     *current_package = saved_package;
                 } else {
@@ -206,14 +237,14 @@ impl TypeHierarchyProvider {
             }
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.index_hierarchy_recursive(stmt, index, current_package);
+                    self.index_hierarchy_recursive(stmt, index, current_package, source_uri);
                 }
             }
             _ => {
                 // Recurse into other nodes
                 if let Some(children) = self.get_children(node) {
                     for child in children {
-                        self.index_hierarchy_recursive(child, index, current_package);
+                        self.index_hierarchy_recursive(child, index, current_package, source_uri);
                     }
                 }
             }
@@ -500,6 +531,100 @@ impl TypeHierarchyProvider {
                 data: None,
             })
             .collect()
+    }
+
+    /// Find supertypes across multiple documents.
+    ///
+    /// Accepts an iterator of `(uri, ast, code)` tuples representing all open
+    /// documents. Builds a unified hierarchy index and returns parent classes
+    /// with each item's `uri` pointing to the file where that parent is declared.
+    pub fn find_supertypes_multi<'a>(
+        &self,
+        docs: impl Iterator<Item = (&'a str, &'a Node, &'a str)>,
+        item: &TypeHierarchyItem,
+    ) -> Vec<TypeHierarchyItem> {
+        let docs: Vec<_> = docs.collect();
+        let index = self.build_hierarchy_index_multi(docs.iter().map(|(u, a, _)| (*u, *a)));
+        let fallback_uri = item.uri.as_str();
+        let parents = index.get_parents(&item.name);
+        let roles = index.get_roles(&item.name);
+
+        let parent_items = parents.into_iter().map(|name| {
+            let uri = index.get_package_uri(&name, fallback_uri).to_string();
+            TypeHierarchyItem {
+                name,
+                kind: TypeHierarchySymbolKind::Class,
+                uri,
+                range: WireRange::default(),
+                selection_range: WireRange::default(),
+                detail: Some("Parent Class".to_string()),
+                data: None,
+            }
+        });
+
+        let role_items = roles.into_iter().map(|name| {
+            let uri = index.get_package_uri(&name, fallback_uri).to_string();
+            TypeHierarchyItem {
+                name,
+                kind: TypeHierarchySymbolKind::Class,
+                uri,
+                range: WireRange::default(),
+                selection_range: WireRange::default(),
+                detail: Some("Role".to_string()),
+                data: None,
+            }
+        });
+
+        parent_items.chain(role_items).collect()
+    }
+
+    /// Find subtypes across multiple documents.
+    ///
+    /// Accepts an iterator of `(uri, ast, code)` tuples representing all open
+    /// documents. Builds a unified hierarchy index and returns child classes
+    /// with each item's `uri` pointing to the file where that child is declared.
+    pub fn find_subtypes_multi<'a>(
+        &self,
+        docs: impl Iterator<Item = (&'a str, &'a Node, &'a str)>,
+        item: &TypeHierarchyItem,
+    ) -> Vec<TypeHierarchyItem> {
+        let docs: Vec<_> = docs.collect();
+        let index = self.build_hierarchy_index_multi(docs.iter().map(|(u, a, _)| (*u, *a)));
+        let fallback_uri = item.uri.as_str();
+        let children = index.get_children(&item.name);
+
+        children
+            .into_iter()
+            .map(|name| {
+                let uri = index.get_package_uri(&name, fallback_uri).to_string();
+                TypeHierarchyItem {
+                    name,
+                    kind: TypeHierarchySymbolKind::Class,
+                    uri,
+                    range: WireRange::default(),
+                    selection_range: WireRange::default(),
+                    detail: Some("Subclass".to_string()),
+                    data: None,
+                }
+            })
+            .collect()
+    }
+
+    /// Compute the C3 MRO for a package across multiple documents.
+    ///
+    /// Accepts an iterator of `(uri, ast, code)` tuples and builds a unified
+    /// hierarchy index before running the C3 linearization.
+    pub fn c3_mro_multi<'a>(
+        &self,
+        docs: impl Iterator<Item = (&'a str, &'a Node, &'a str)>,
+        package: &str,
+    ) -> Vec<String> {
+        let docs: Vec<_> = docs.collect();
+        let index = self.build_hierarchy_index_multi(docs.iter().map(|(u, a, _)| (*u, *a)));
+        let mut result = Vec::new();
+        let mut visited = BTreeSet::new();
+        self.c3_linearize(package, &index, &mut result, &mut visited);
+        result
     }
 
     // Helper methods
