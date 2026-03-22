@@ -241,6 +241,8 @@ impl<'a> Parser<'a> {
                 | "abs"
                 | "int"
                 | "sqrt"
+                | "cos"
+                | "sin"
                 | "log"
                 | "exp"
         )
