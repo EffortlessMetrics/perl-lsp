@@ -278,17 +278,17 @@ sub hello {
     let resolved = response.result.ok_or("no result")?;
 
     assert!(resolved["documentation"].is_string(), "Should have documentation field");
-    let doc = resolved["documentation"].as_str().unwrap_or("");
+    let doc_text = resolved["documentation"].as_str().ok_or("documentation is not a string")?;
     assert!(
-        doc.contains("Greets"),
-        "documentation should contain leading comment text, got: {doc}"
+        doc_text.contains("Greets"),
+        "documentation should contain leading comment text, got: {doc_text}"
     );
     Ok(())
 }
 
 #[test]
-fn test_workspace_symbol_resolve_no_documentation_without_comment()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_workspace_symbol_resolve_no_documentation_without_comment(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = setup_server();
     let uri = "file:///test_nodocs.pl";
     let content = "sub bare_function { return 1; }\n";
@@ -316,8 +316,8 @@ fn test_workspace_symbol_resolve_no_documentation_without_comment()
 }
 
 #[test]
-fn test_workspace_symbol_resolve_container_name_from_qualified()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_workspace_symbol_resolve_container_name_from_qualified(
+) -> Result<(), Box<dyn std::error::Error>> {
     let server = setup_server();
     let uri = "file:///test_container.pl";
     let content = "package Animal::Dog;\nsub bark { print \"woof\"; }\n";
@@ -336,7 +336,49 @@ fn test_workspace_symbol_resolve_container_name_from_qualified()
     let response = server.handle_request(request).ok_or("no response")?;
     let resolved = response.result.ok_or("no result")?;
 
-    let container = resolved["containerName"].as_str().unwrap_or("");
+    let container = resolved["containerName"].as_str().ok_or("containerName is not a string")?;
     assert_eq!(container, "Animal::Dog", "containerName should be derived from qualified name");
+    Ok(())
+}
+
+#[test]
+fn test_workspace_symbol_resolve_documentation_for_variables(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server();
+    let uri = "file:///test_var_docs.pl";
+    let content = r#"package MyModule;
+
+# Global counter variable
+our $counter = 0;
+"#;
+    open_doc(&server, uri, content);
+
+    let request = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(5)),
+        method: "workspace/symbol/resolve".into(),
+        params: Some(json!({
+            "name": "counter",
+            "kind": 13, // Variable
+            "location": { "uri": uri, "range": { "start": { "line": 3, "character": 0 }, "end": { "line": 3, "character": 20 } } }
+        })),
+    };
+    let response = server.handle_request(request).ok_or("no response")?;
+    let resolved = response.result.ok_or("no result")?;
+
+    // Should have documentation from the leading comment
+    assert!(resolved["documentation"].is_string(), "Variables should also carry documentation");
+    if let Some(doc_text) = resolved["documentation"].as_str() {
+        assert!(
+            doc_text.contains("Global counter"),
+            "Variable documentation should include leading comment"
+        );
+    }
+
+    // Detail should indicate it's a variable with proper sigil
+    assert!(resolved["detail"].is_string());
+    let detail = resolved["detail"].as_str().ok_or("detail is not a string")?;
+    assert!(detail.contains("$counter"), "Detail should show variable with sigil, got: {detail}");
+
     Ok(())
 }
