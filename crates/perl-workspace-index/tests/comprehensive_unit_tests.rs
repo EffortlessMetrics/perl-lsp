@@ -2033,3 +2033,55 @@ fn test_concurrent_index_and_search() -> Result<(), Box<dyn std::error::Error>> 
     assert!(index.file_count() >= 5);
     Ok(())
 }
+
+// =========================================================================
+// WorkspaceIndex – find_dependents via use parent / use base (#2747)
+// =========================================================================
+
+/// Regression test for #2747: a file that only has `use parent 'My::Base'`
+/// (no direct `use My::Base`) must register `My::Base` as a dependency so
+/// that `find_dependents("My::Base")` includes it.
+#[test]
+fn test_find_dependents_via_use_parent() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/child.pm")?;
+    // Only use parent, no direct use My::Base
+    index.index_file(uri, "package Child;\nuse parent 'My::Base';\n1;\n".to_string())?;
+
+    let dependents = index.find_dependents("My::Base");
+    assert!(
+        !dependents.is_empty(),
+        "use parent 'My::Base' should register My::Base as a dependency"
+    );
+    Ok(())
+}
+
+/// use base works the same way as use parent for dependency tracking.
+#[test]
+fn test_find_dependents_via_use_base() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/derived.pm")?;
+    index.index_file(uri, "package Derived;\nuse base 'My::Root';\n1;\n".to_string())?;
+
+    let dependents = index.find_dependents("My::Root");
+    assert!(!dependents.is_empty(), "use base 'My::Root' should register My::Root as a dependency");
+    Ok(())
+}
+
+/// use parent with qw() list registers all named modules as dependencies.
+#[test]
+fn test_find_dependents_via_use_parent_qw() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/multi_inherit.pm")?;
+    index.index_file(
+        uri,
+        "package Multi;\nuse parent qw(Foo::Bar Other::Base);\n1;\n".to_string(),
+    )?;
+
+    let foo_deps = index.find_dependents("Foo::Bar");
+    assert!(!foo_deps.is_empty(), "Foo::Bar should be a registered dependency");
+
+    let other_deps = index.find_dependents("Other::Base");
+    assert!(!other_deps.is_empty(), "Other::Base should be a registered dependency");
+    Ok(())
+}

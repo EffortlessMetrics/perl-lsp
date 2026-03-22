@@ -843,6 +843,27 @@ cargo bench
 
 ---
 
+## workspace/willRenameFiles Partial Coverage
+
+`workspace/willRenameFiles` (LSP 3.16) updates `use`, `require`, `use parent`, and `use base`
+import lines when a module file is renamed. The following patterns are **not** automatically
+rewritten and require manual find-and-replace:
+
+| Pattern | Example | Status |
+|---------|---------|--------|
+| Static method calls | `OldPkg->method()` | Not updated — tracked as follow-up |
+| Qualified function calls | `OldPkg::func()` | Not updated — tracked as follow-up |
+| `@ISA` array assignments | `@ISA = ('OldPkg')` | Not updated — dynamic, dangerous to auto-rewrite |
+| `push @ISA` | `push @ISA, 'OldPkg'` | Not updated — tracked as follow-up |
+| Moose/Moo DSL | `extends 'OldPkg'` | Not updated — tracked as follow-up |
+| Closed files | Files not open in the editor | Index-discovered but not rewritten (pre-existing limitation) |
+
+The LSP server emits a `window/showMessage` warning when it detects that open documents
+contain the old module name in patterns that were not updated, so the user is notified
+to perform a manual sweep.
+
+---
+
 ## Related Documentation
 
 - **[PARSER_LIMITATIONS.md](PARSER_LIMITATIONS.md)**: Intentional boundaries and resolved issues
@@ -856,6 +877,7 @@ cargo bench
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v0.12.0 | 2026-03 | workspace/willRenameFiles: use parent/use base discovery fixed (#2747) |
 | v0.10.0 | 2025-01 | Comprehensive documentation enhancement |
 | v0.7.1 | 2024-12 | Fixed empty block parsing (bless, sort, map, grep) |
 | v0.7.0 | 2024-11 | Added arbitrary regex delimiter support (v3) |

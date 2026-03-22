@@ -734,7 +734,7 @@ impl LspServer {
                         continue;
                     };
 
-                    eprintln!("File rename: {} -> {}", old_uri, new_uri);
+                    tracing::debug!("File rename: {} -> {}", old_uri, new_uri);
 
                     // Extract module names from file paths
                     let old_module = path_to_module_name(old_uri);
@@ -798,9 +798,10 @@ impl LspServer {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
-                                        eprintln!(
+                                        tracing::warn!(
                                             "Failed to index renamed file {}: {}",
-                                            new_uri, e
+                                            new_uri,
+                                            e
                                         );
                                     }
                                 }
@@ -808,6 +809,38 @@ impl LspServer {
                         }
                         coordinator.notify_parse_complete(old_uri);
                         coordinator.notify_parse_complete(new_uri);
+                    }
+
+                    // Warn the user if open documents reference the old module name via
+                    // patterns that were not updated (e.g., `->` static calls, `@ISA`,
+                    // qualified function calls). These are known gaps tracked in
+                    // docs/reference/KNOWN_LIMITATIONS.md.
+                    if !old_module.is_empty() {
+                        let updated_uris: std::collections::HashSet<&str> =
+                            workspace_edit["changes"]
+                                .as_object()
+                                .map(|m| m.keys().map(|k| k.as_str()).collect())
+                                .unwrap_or_default();
+                        let documents = self.documents.lock();
+                        let unhandled = documents.iter().any(|(uri, doc)| {
+                            !updated_uris.contains(uri.as_str())
+                                && doc.text.contains(old_module.as_str())
+                        });
+                        drop(documents);
+                        if unhandled {
+                            let msg = format!(
+                                "Some references to '{}' may not have been updated. \
+                                 Static method calls (->), qualified calls ({}::func), \
+                                 and @ISA assignments are not automatically rewritten. \
+                                 Use find-and-replace to update them manually.",
+                                old_module, old_module
+                            );
+                            if let Err(e) = self
+                                .show_message(crate::runtime::window::MessageType::Warning, &msg)
+                            {
+                                tracing::debug!("Failed to send rename warning: {}", e);
+                            }
+                        }
                     }
                 }
 

@@ -612,3 +612,69 @@ fn test_path_to_module_name() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
+
+/// Regression test for #2747: a file that only has `use parent 'Mod'` (no direct `use Mod`)
+/// must be discovered by find_dependents and appear in the willRenameFiles edit response.
+#[test]
+fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    // Open the module that will be renamed.
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/MyBase.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package MyBase;\nsub new { bless {}, shift }\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    // Open a dependent file that ONLY has use parent — no direct `use MyBase`.
+    let dependent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/child.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Child;\nuse parent 'MyBase';\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+
+    let params = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/MyBase.pm",
+            "newUri": "file:///test/workspace/lib/RenamedBase.pm"
+        }]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+
+    // The pure-parent-only file must be in the edit response (regression for #2747).
+    let child_changes = changes
+        .get("file:///test/workspace/child.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for child.pl — pure use parent case was not discovered")?;
+
+    let new_texts: Vec<String> = child_changes
+        .iter()
+        .filter_map(|e| e.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+
+    assert!(
+        new_texts.contains(&"use parent 'RenamedBase';".to_string()),
+        "expected rewritten use parent in edits: {new_texts:?}"
+    );
+    Ok(())
+}
