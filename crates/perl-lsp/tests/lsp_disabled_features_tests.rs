@@ -28,7 +28,8 @@ fn test_disabled_features_removes_semantic_tokens_from_caps() -> TestResult {
     Ok(())
 }
 
-/// Unknown feature IDs must be silently ignored — the server must still initialize.
+/// Unknown feature IDs must be silently ignored — the server must still initialize
+/// and must not accidentally disable valid features.
 #[test]
 fn test_disabled_features_unknown_id_is_tolerated() -> TestResult {
     let mut harness = LspHarness::new_raw();
@@ -36,10 +37,45 @@ fn test_disabled_features_unknown_id_is_tolerated() -> TestResult {
         Some(json!({})),
         json!({ "disabledFeatures": ["lsp.does_not_exist", "semanticTokens"] }),
     )?;
-    // Server must initialize successfully and return a capabilities object
+    let caps = &result["capabilities"];
+    // "semanticTokens" (without lsp. prefix) is not a valid ID — semantic tokens must remain.
     assert!(
-        result["capabilities"].is_object(),
-        "Server must initialize successfully when unknown feature IDs are given"
+        caps.get("semanticTokensProvider").is_some(),
+        "semanticTokensProvider must still be present when only unknown IDs are given"
+    );
+    Ok(())
+}
+
+/// Non-string elements in `disabledFeatures` must be silently skipped.
+#[test]
+fn test_disabled_features_non_string_elements_skipped() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    let result = harness.initialize_with_init_options(
+        Some(json!({})),
+        json!({ "disabledFeatures": [null, 42, true, {}, "lsp.does_not_exist"] }),
+    )?;
+    let caps = &result["capabilities"];
+    // None of the non-string elements should disable anything; semantic tokens must remain.
+    assert!(
+        caps.get("semanticTokensProvider").is_some(),
+        "semanticTokensProvider must be present when disabledFeatures contains only non-string/unknown items"
+    );
+    Ok(())
+}
+
+/// `disabledFeatures` set to a non-array value must be gracefully ignored.
+#[test]
+fn test_disabled_features_non_array_value_ignored() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    let result = harness.initialize_with_init_options(
+        Some(json!({})),
+        json!({ "disabledFeatures": "lsp.semantic_tokens" }),
+    )?;
+    let caps = &result["capabilities"];
+    // A bare string (not an array) must be ignored; semantic tokens must remain.
+    assert!(
+        caps.get("semanticTokensProvider").is_some(),
+        "semanticTokensProvider must be present when disabledFeatures is a string, not an array"
     );
     Ok(())
 }
