@@ -407,4 +407,38 @@ mod tests {
         assert!(!completions.items.is_empty());
         assert_eq!(completions.items[0].insert_text, "new()");
     }
+
+    /// 2-byte UTF-8 characters (U+0080..U+07FF, e.g. accented Latin) have 1 UTF-16 code unit
+    /// but 2 UTF-8 bytes. The old byte-slice implementation would slice at byte index
+    /// equal to the UTF-16 column, which could fall on a continuation byte (0x80-0xBF)
+    /// and cause a panic. The microcrate uses utf16_line_col_to_offset and is safe.
+    #[test]
+    fn test_after_arrow_with_latin1_prefix_uses_utf16_position() {
+        let provider = InlineCompletionProvider::new();
+        // 'é' is U+00E9 = 2 UTF-8 bytes (0xC3 0xA9) but 1 UTF-16 code unit.
+        // UTF-8 byte count of source = 5; UTF-16 unit count = 4.
+        // Old byte-slice at col=4 returns "xé-" (missing '>'), so no completion.
+        let source = "xé->";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(!completions.items.is_empty());
+        assert_eq!(completions.items[0].insert_text, "new()");
+    }
+
+    /// CJK characters (U+4E00..U+9FFF, 3 UTF-8 bytes, 1 UTF-16 code unit) present the same
+    /// class of offset mismatch as emoji and Latin-1 extended chars.
+    #[test]
+    fn test_after_arrow_with_cjk_prefix_uses_utf16_position() {
+        let provider = InlineCompletionProvider::new();
+        // '私' (U+79C1) = 3 UTF-8 bytes (0xE7 0xA7 0x81) but 1 UTF-16 code unit.
+        // UTF-8 byte count = 5; UTF-16 unit count = 3.
+        // Old byte-slice at col=3 returns "私" (missing "->"), so no completion.
+        let source = "私->";
+        let character = source.encode_utf16().count() as u32;
+        let completions = provider.get_inline_completions(source, 0, character);
+
+        assert!(!completions.items.is_empty());
+        assert_eq!(completions.items[0].insert_text, "new()");
+    }
 }
