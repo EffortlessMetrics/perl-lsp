@@ -247,7 +247,7 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
     assert!(response.is_some(), "Workspace symbol response should be present");
     let resp_val = response.ok_or_else(|| anyhow::anyhow!("Expected workspace symbol response"))?;
     assert!(
-        resp_val["result"].as_array().map_or(false, |a| !a.is_empty()),
+        resp_val["result"].as_array().is_some_and(|a| !a.is_empty()),
         "Should find target_func symbol in result: {:?}",
         resp_val
     );
