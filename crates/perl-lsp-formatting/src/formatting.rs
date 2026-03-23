@@ -8,18 +8,36 @@ pub use perl_lsp_formatting_types::{
 #[derive(Debug, thiserror::Error)]
 pub enum FormattingError {
     #[error(
-        "perltidy not found: {0}\n\nTo install perltidy:\n  - CPAN: cpan Perl::Tidy\n  - Debian/Ubuntu: apt-get install perltidy\n  - RedHat/Fedora: yum install perltidy\n  - macOS: brew install perltidy\n  - Windows: cpan Perl::Tidy"
+        "perltidy not found: {0}\n\nTo install perltidy:\n  - Recommended: cpanm Perl::Tidy\n  - CPAN: cpan Perl::Tidy\n  - Debian/Ubuntu: apt-get install perltidy\n  - RedHat/Fedora: yum install perltidy\n  - macOS: brew install perltidy\n  - Windows: cpanm Perl::Tidy"
     )]
     /// perltidy executable not found on system PATH.
     PerltidyNotFound(String),
 
     /// Error occurred during perltidy execution.
-    #[error("perltidy error: {0}")]
+    ///
+    /// This usually means perltidy ran but reported a problem — check that the
+    /// Perl code is syntactically valid, or inspect the perltidy output below.
+    #[error("perltidy error (check Perl syntax): {0}")]
     PerltidyError(String),
 
     /// I/O error during file operations.
     #[error("IO error: {0}")]
     IoError(String),
+}
+
+impl FormattingError {
+    /// Return a stable machine-readable error kind string for structured LSP error data.
+    ///
+    /// Used by LSP handlers to populate the JSON-RPC error `data` field so that
+    /// clients (e.g. the VSCode extension) can present targeted remediation actions.
+    #[must_use]
+    pub fn error_kind(&self) -> &'static str {
+        match self {
+            Self::PerltidyNotFound(_) => "perltidy_not_found",
+            Self::PerltidyError(_) => "perltidy_error",
+            Self::IoError(_) => "io_error",
+        }
+    }
 }
 
 /// Code formatter using perltidy.
