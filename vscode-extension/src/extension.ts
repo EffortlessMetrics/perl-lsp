@@ -7,7 +7,6 @@ import {
     LanguageClientOptions,
     ServerOptions,
     TransportKind,
-    State,
     Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
@@ -17,12 +16,14 @@ import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
 import { generateBoilerplate } from './fileCreation';
 import { handleFormattingError } from './formattingErrors';
+import { HealthWidget, ClientState } from './healthWidget';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
 let statusBarItem: vscode.StatusBarItem | undefined;
+let healthWidget: HealthWidget | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -30,7 +31,8 @@ export async function activate(context: vscode.ExtensionContext) {
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showStatusMenu';
     statusBarItem.show();
-    setStatusBarState(State.Starting);
+    healthWidget = new HealthWidget(statusBarItem);
+    healthWidget.onStateChange(ClientState.Starting);
     context.subscriptions.push(statusBarItem);
 
     // Register showOutput command early so it's available during binary download and initialization
@@ -583,11 +585,11 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
 }
 
 async function initializeLanguageClient(context: vscode.ExtensionContext): Promise<boolean> {
-    setStatusBarState(State.Starting);
+    healthWidget?.onStateChange(ClientState.Starting);
 
     currentServerPath = await getServerPath(context);
     if (!currentServerPath) {
-        setStatusBarState(State.Stopped);
+        healthWidget?.onStateChange(ClientState.Stopped);
         const choice = await vscode.window.showErrorMessage(
             'Perl Language Server (perl-lsp) not found.',
             'Install (cargo install perl-lsp)',
@@ -616,7 +618,7 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         stateChangeDisposable = undefined;
         try { client.dispose(); } catch { /* already dead */ }
         client = undefined;
-        setStatusBarState(State.Stopped);
+        healthWidget?.onStateChange(ClientState.Stopped);
         const choice = await vscode.window.showErrorMessage(
             `Perl Language Server failed to start. The binary at '${currentServerPath}' may be corrupted or incompatible.`,
             'Show Output',
@@ -632,6 +634,12 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         }
         return false;
     }
+    // Expose the server version in the widget tooltip once the handshake completes.
+    const serverVersion = client.initializeResult?.serverInfo?.version;
+    if (serverVersion) {
+        healthWidget?.setVersion(serverVersion);
+    }
+
     await refreshTestAdapter(context);
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
@@ -693,6 +701,10 @@ function createLanguageClient(serverPath: string): LanguageClient {
                     }
                     return null;
                 }
+            },
+            handleWorkDoneProgress: (token, params, next) => {
+                healthWidget?.onProgress(token, params);
+                next(token, params);
             },
         },
         initializationOptions: {
@@ -897,33 +909,13 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
 function bindClientState(languageClient: LanguageClient) {
     stateChangeDisposable?.dispose();
     stateChangeDisposable = languageClient.onDidChangeState(event => {
-        setStatusBarState(event.newState);
+        // vscode-languageclient State values match ClientState numeric values:
+        // Stopped = 1, Running = 2, Starting = 3
+        healthWidget?.onStateChange(event.newState as unknown as ClientState);
     });
 }
 
-function setStatusBarState(state: State) {
-    if (!statusBarItem) {
-        return;
-    }
 
-    switch (state) {
-        case State.Running:
-            statusBarItem.text = '$(check) Perl LSP';
-            statusBarItem.tooltip = 'Perl Language Server is running (click for options)';
-            statusBarItem.backgroundColor = undefined;
-            break;
-        case State.Starting:
-            statusBarItem.text = '$(sync~spin) Perl LSP';
-            statusBarItem.tooltip = 'Perl Language Server is starting... (click for options)';
-            statusBarItem.backgroundColor = undefined;
-            break;
-        case State.Stopped:
-            statusBarItem.text = '$(error) Perl LSP';
-            statusBarItem.tooltip = 'Perl Language Server is stopped (click for options)';
-            statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-            break;
-    }
-}
 
 function requiresClientRefresh(event: vscode.ConfigurationChangeEvent): boolean {
     return [
