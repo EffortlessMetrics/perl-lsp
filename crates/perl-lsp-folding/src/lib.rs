@@ -281,6 +281,27 @@ impl FoldingRangeExtractor {
                 }
             }
 
+            NodeKind::LabeledStatement { label: _, statement } => {
+                // Labeled loops (LABEL: while/for/foreach) fold the inner statement
+                self.add_range_from_node(node, None);
+                self.visit_node(statement);
+            }
+
+            NodeKind::Format { .. } => {
+                // Format declarations fold as regions (like heredocs)
+                self.add_range_from_node(node, Some(FoldingRangeKind::Region));
+            }
+
+            NodeKind::Tie { variable, package, args } => {
+                // Tie expressions with arguments are foldable when multi-line
+                self.add_range_from_node(node, None);
+                self.visit_node(variable);
+                self.visit_node(package);
+                for arg in args {
+                    self.visit_node(arg);
+                }
+            }
+
             // Other node types - visit children if any
             _ => {}
         }

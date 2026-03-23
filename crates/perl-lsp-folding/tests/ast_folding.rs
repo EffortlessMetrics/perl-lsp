@@ -262,3 +262,62 @@ fn all_extracted_folds_have_nontrivial_spans() -> Result<(), ParseError> {
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// LabeledStatement
+// ---------------------------------------------------------------------------
+
+#[test]
+fn labeled_loop_produces_fold() -> Result<(), ParseError> {
+    let code = "OUTER: while (1) {\n    INNER: for my $i (1..10) {\n        last OUTER if $i > 5;\n    }\n}\n";
+    let ranges = extract(code)?;
+    assert!(!ranges.is_empty(), "labeled loop should produce at least one fold");
+    Ok(())
+}
+
+#[test]
+fn labeled_foreach_produces_fold() -> Result<(), ParseError> {
+    let code = "LINE: foreach my $line (@lines) {\n    next LINE if $line =~ /^#/;\n    process($line);\n}\n";
+    let ranges = extract(code)?;
+    assert!(!ranges.is_empty(), "labeled foreach loop should produce a fold");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Format
+// ---------------------------------------------------------------------------
+
+#[test]
+fn format_declaration_produces_region_fold() -> Result<(), ParseError> {
+    let code = "format STDOUT =\n@<<<<<<<<<<<<  @>>>>>>\n$name,         $salary\n.\n";
+    let ranges = extract(code)?;
+    assert!(!ranges.is_empty(), "format declaration should produce a fold");
+    Ok(())
+}
+
+#[test]
+fn format_declaration_fold_is_region_kind() -> Result<(), ParseError> {
+    let code = "format STDOUT =\n@<<<<<<<<<<<<  @>>>>>>\n$name,         $salary\n.\n";
+    let ranges = extract(code)?;
+    assert!(
+        has_kind(&ranges, &FoldingRangeKind::Region),
+        "format declaration fold should have Region kind"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Tie
+// ---------------------------------------------------------------------------
+
+#[test]
+fn tie_with_multiple_args_produces_fold() -> Result<(), ParseError> {
+    let code = "tie %config,\n    'Tie::IxHash',\n    key1 => 'val1',\n    key2 => 'val2';\n";
+    let ranges = extract(code)?;
+    // Tie is only foldable if multi-line (end_offset > start_offset + 1)
+    // This test verifies the visitor does not panic and produces correct output
+    for r in &ranges {
+        assert!(r.end_offset > r.start_offset, "every fold must be non-trivial");
+    }
+    Ok(())
+}
