@@ -368,8 +368,38 @@ Controls optional Perl::Critic static analysis integration.
 merges violations into the diagnostic stream. Silently skipped if `perlcritic`
 is not installed on the system.
 
+#### `perl.perlcritic.severity`
+
+| Property | Value |
+|---|---|
+| Type | `integer` (1–5) |
+| Default | `3` |
+
+Minimum severity level to report. `1` = most severe (Brutal), `5` = everything
+(Gentle). Values are clamped to the valid range. Equivalent to
+`perlcritic --severity N`.
+
+#### `perl.perlcritic.profile`
+
+| Property | Value |
+|---|---|
+| Type | `string` |
+| Default | (none — auto-discovery) |
+
+Path to a `.perlcriticrc` profile file. When set, passes `--profile=<path>` to
+perlcritic. When absent, perlcritic's standard auto-discovery looks for
+`.perlcriticrc` in the workspace root.
+
 ```json
-{ "perl": { "perlcritic": { "enabled": true } } }
+{
+  "perl": {
+    "perlcritic": {
+      "enabled": true,
+      "severity": 3,
+      "profile": "${workspaceFolder}/.perlcriticrc"
+    }
+  }
+}
 ```
 
 ---
@@ -422,6 +452,7 @@ decrease them for resource-constrained environments.
 | `maxSymbolsPerFile` | `5000` | Maximum symbols indexed per file |
 | `maxTotalSymbols` | `500000` | Maximum total symbols across all indexed files |
 | `parseStormThreshold` | `10` | Pending parse count before degradation |
+| `maxFileSizeBytes` | `1048576` | Skip files larger than this in bytes (default: 1 MB). Files over the limit are stored with an empty AST and no diagnostics. |
 
 #### Deadline settings (milliseconds)
 
