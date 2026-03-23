@@ -417,13 +417,39 @@ impl<'a> Parser<'a> {
     /// Exception: when the declaration keyword is followed by `=>` (fat
     /// arrow), it is a bareword hash key, not a declaration.  For example:
     /// `(my => "value")` should autoquote `my` as a string.
+    ///
+    /// After a declaration **without** an `=` initializer, binary operators
+    /// such as `&&`, `||`, `=~` etc. that follow are consumed using
+    /// `parse_below_assignment_with()`.  This handles patterns like:
+    ///
+    ///   `if (our $CAN_HAZ_XS && $ok) { … }`   — Pattern D
+    ///   `(our $AUTOLOAD =~ /([^:]+)$/)`          — Pattern E
     fn parse_assignment_or_declaration(&mut self) -> ParseResult<Node> {
         if matches!(
             self.peek_kind(),
             Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)
         ) && !self.is_keyword_before_fat_arrow()
         {
-            self.parse_declaration_arg()
+            let decl = self.parse_declaration_arg()?;
+            // After a declaration that has no initializer (no `=` was consumed),
+            // binary operators like `&&`, `||`, `=~`, `?:`, etc. may follow.
+            // Apply the full binary-operator chain so that the declaration node
+            // is correctly used as the left operand.
+            //
+            // We detect the "no initializer" case by checking whether the
+            // declaration node itself contains an initializer.  If parse_declaration_arg
+            // already consumed an `=` and its rhs, parse_assignment() handled all
+            // operators inside the initializer — no further processing is needed.
+            let has_initializer = match &decl.kind {
+                NodeKind::VariableDeclaration { initializer, .. } => initializer.is_some(),
+                NodeKind::VariableListDeclaration { initializer, .. } => initializer.is_some(),
+                _ => true, // not a declaration node — treat as already-complete
+            };
+            if has_initializer {
+                Ok(decl)
+            } else {
+                self.parse_below_assignment_with(decl)
+            }
         } else {
             self.parse_assignment()
         }

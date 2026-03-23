@@ -612,6 +612,39 @@ impl<'a> Parser<'a> {
                                 NodeKind::FunctionCall { name: name.clone(), args: vec![arg] },
                                 SourceLocation { start, end },
                             );
+                        } else if name.contains("::")
+                            && !self.is_at_statement_end()
+                            && self.peek_kind() != Some(TokenKind::FatArrow)
+                            && matches!(
+                                self.peek_kind(),
+                                Some(
+                                    TokenKind::String
+                                        | TokenKind::QuoteSingle
+                                        | TokenKind::QuoteDouble
+                                        | TokenKind::Number
+                                )
+                            )
+                        {
+                            // Qualified call with string/number literal argument — issue #2750 Pattern B.
+                            // e.g. `(Carp::croak "error")`, `(utf8::downgrade $$buf or Carp::croak "Wide char")`
+                            // In paren-expression context, qualified names followed by a literal argument
+                            // are treated as function calls (same as unqualified `croak "err"` via looks_like_bare_call).
+                            // Guard: NOT followed by => (would be a hash-key) and NOT at statement end.
+                            let mut args = vec![self.parse_ternary()?];
+                            // Collect additional comma-separated arguments
+                            while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow))
+                                && !self.is_at_statement_end()
+                            {
+                                self.consume_token()?; // consume , or =>
+                                if self.is_at_statement_end() { break; }
+                                args.push(self.parse_ternary()?);
+                            }
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name: name.clone(), args },
+                                SourceLocation { start, end },
+                            );
                         } else if Self::is_builtin_function(name)
                             || Self::core_qualified_builtin_name(name).is_some()
                             || self.looks_like_bare_call(name)
@@ -740,6 +773,41 @@ impl<'a> Parser<'a> {
                                     // sort FUNCNAME LIST — `sort by_name @list`
                                     // Parse the comparator function name as the first arg,
                                     // then collect the list to sort.
+                                    args.push(self.parse_ternary()?);
+
+                                    while !self.is_at_statement_end()
+                                        && !matches!(
+                                            self.peek_kind(),
+                                            Some(
+                                                TokenKind::WordOr
+                                                    | TokenKind::WordAnd
+                                                    | TokenKind::WordXor
+                                                    | TokenKind::WordNot
+                                            )
+                                        )
+                                    {
+                                        if matches!(
+                                            self.peek_kind(),
+                                            Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                        ) {
+                                            self.consume_token()?;
+                                        }
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_ternary()?);
+                                    }
+                                } else if bare_name == "sort"
+                                    && self.tokens.peek().ok().is_some_and(|t| {
+                                        // Scalar-variable coderef: text starts with `$`
+                                        // e.g. `sort $cmp @list`, `sort $keysort (keys %h)`
+                                        t.kind == TokenKind::Identifier
+                                            && t.text.starts_with('$')
+                                    })
+                                {
+                                    // sort $coderef LIST — `sort $cmp @list`, `sort $cmp (keys %h)`
+                                    // The scalar is a coderef comparator. Consume it as the first
+                                    // arg, then collect the list to sort (issue #2750 Pattern C).
                                     args.push(self.parse_ternary()?);
 
                                     while !self.is_at_statement_end()
