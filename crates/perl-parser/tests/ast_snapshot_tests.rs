@@ -6,7 +6,7 @@
 //! - Error message formatting for each ParseError variant
 //! - Semantic token legend (token types and modifiers)
 //!
-//! Run with `cargo test -p perl-parser ast_snapshot` to execute.
+//! Run with `cargo test -p perl-parser --test ast_snapshot_tests` to execute.
 //! Update snapshots with `cargo insta review` after intentional changes.
 
 use insta::assert_snapshot;
