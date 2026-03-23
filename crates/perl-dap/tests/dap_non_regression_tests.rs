@@ -689,6 +689,65 @@ fn test_request_seq_negative_is_accepted() {
 }
 
 #[test]
+// AC:17 — request_seq=i64::MIN is accepted and echoed (lowest boundary value)
+fn test_request_seq_min_i64_is_valid() {
+    let mut adapter = new_adapter();
+    let msg = adapter.handle_request(i64::MIN, "threads", None);
+    let (_, request_seq, _, _, _) = unwrap_response(msg, "threads");
+    assert_eq!(request_seq, i64::MIN, "i64::MIN request_seq must be echoed");
+}
+
+#[test]
+// AC:17 — cancel flag does not corrupt subsequent command responses on the same adapter
+fn test_cancel_followed_by_command_returns_valid_response() {
+    // cancel sets an internal cancel_requested flag that gotoTargets and breakpointLocations
+    // read during their inner loops. Verify that a subsequent command on the same adapter
+    // still returns a well-formed Response and doesn't panic or hang.
+    //
+    // Note: gotoTargets with source.path=None returns early before reaching the
+    // cancel_requested check, so cancel_requested remains true after that call.
+    // Using a real source path here ensures the check fires and the flag resets.
+    // The non-existent path causes an early file-read error return, which is also
+    // fine — what matters is that a Response is returned and request_seq is echoed.
+    let mut adapter = new_adapter();
+
+    // First: cancel sets cancel_requested = true
+    let cancel_msg = adapter.handle_request(1, "cancel", None);
+    match cancel_msg {
+        DapMessage::Response { command, success, .. } => {
+            assert_eq!(command, "cancel");
+            assert!(success, "cancel must succeed");
+        }
+        other => panic!("cancel: expected Response, got {other:?}"),
+    }
+
+    // Second: breakpointLocations with a source path triggers the cancel_requested check
+    // in its inner loop, resets the flag, and returns a valid Response.
+    let bp_msg = adapter.handle_request(
+        2,
+        "breakpointLocations",
+        Some(json!({"source": {"path": "/nonexistent/file.pl"}, "line": 1})),
+    );
+    match bp_msg {
+        DapMessage::Response { command, request_seq, .. } => {
+            assert_eq!(command, "breakpointLocations", "command must echo");
+            assert_eq!(request_seq, 2, "request_seq must be echoed after cancel");
+        }
+        other => panic!("breakpointLocations after cancel: expected Response, got {other:?}"),
+    }
+
+    // Third: a subsequent command must also return a valid Response.
+    let threads_msg = adapter.handle_request(3, "threads", None);
+    match threads_msg {
+        DapMessage::Response { command, request_seq, .. } => {
+            assert_eq!(command, "threads");
+            assert_eq!(request_seq, 3);
+        }
+        other => panic!("threads after cancel: expected Response, got {other:?}"),
+    }
+}
+
+#[test]
 // AC:17 — null/empty JSON object body does not panic on any command
 fn test_empty_object_args_do_not_panic() {
     let commands_accepting_any = &[
