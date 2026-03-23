@@ -11,7 +11,7 @@ import {
     Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger, offerDebugConfigOnFirstPerlOpen } from './debugAdapter';
+import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
@@ -150,11 +150,6 @@ export async function activate(context: vscode.ExtensionContext) {
                 command: 'editor.action.formatDocument',
                 disabled: !isPerl
             },
-            {
-                label: '$(debug-alt) Create Debug Configuration',
-                detail: 'Set up .vscode/launch.json for Perl debugging',
-                command: 'perl-lsp.createDebugConfig'
-            },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
@@ -215,6 +210,17 @@ export async function activate(context: vscode.ExtensionContext) {
         await whatsNewManager.showWhatsNew();
     });
 
+    const openConfigurationGuideCommand = vscode.commands.registerCommand(
+        'perl-lsp.openConfigurationGuide',
+        () => {
+            void vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                '@ext:EffortlessMetrics.perl-lsp-rs'
+            );
+        }
+    );
+
+
     const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument((event) => {
         if (!shouldFormatOnSave(event.document)) {
             return;
@@ -273,6 +279,7 @@ export async function activate(context: vscode.ExtensionContext) {
         reinstallCommand,
         runHealthCheckCommand,
         showWhatsNewCommand,
+        openConfigurationGuideCommand,
         formatOnSaveDisposable,
         configurationWatcher,
         fileCreationWatcher,
@@ -280,11 +287,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize debug adapter
     activateDebugger(context);
-    context.subscriptions.push(
-        vscode.workspace.onDidOpenTextDocument(doc => {
-            offerDebugConfigOnFirstPerlOpen(doc).catch(() => { /* swallow */ });
-        })
-    );
     await initializeLanguageClient(context);
 
     // First-run onboarding: show welcome notification once per installation
@@ -451,6 +453,9 @@ function createLanguageClient(serverPath: string): LanguageClient {
         }
     };
 
+    const disabledFeatures = vscode.workspace.getConfiguration('perl-lsp')
+        .get<string[]>('disabledFeatures', []);
+
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
             { scheme: 'file', language: 'perl' },
@@ -460,7 +465,41 @@ function createLanguageClient(serverPath: string): LanguageClient {
             fileEvents: vscode.workspace.createFileSystemWatcher('**/.perltidyrc')
         },
         outputChannel,
-        traceOutputChannel: outputChannel
+        traceOutputChannel: outputChannel,
+        middleware: {
+            provideDocumentFormattingEdits: async (document, options, token, next) => {
+                try {
+                    return await next(document, options, token);
+                } catch (err: unknown) {
+                    const code = err && typeof err === 'object' && 'code' in err
+                        ? (err as { code: unknown }).code
+                        : undefined;
+                    // Do not notify for request cancellations (code -32800)
+                    if (code !== -32800) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        handleFormattingError(msg, outputChannel);
+                    }
+                    return null;
+                }
+            },
+            provideDocumentRangeFormattingEdits: async (document, range, options, token, next) => {
+                try {
+                    return await next(document, range, options, token);
+                } catch (err: unknown) {
+                    const code = err && typeof err === 'object' && 'code' in err
+                        ? (err as { code: unknown }).code
+                        : undefined;
+                    if (code !== -32800) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        handleFormattingError(msg, outputChannel);
+                    }
+                    return null;
+                }
+            },
+        },
+        initializationOptions: {
+            disabledFeatures,
+        },
     };
 
     const lc = new LanguageClient(

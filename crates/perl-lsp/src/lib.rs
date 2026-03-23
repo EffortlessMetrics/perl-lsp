@@ -332,6 +332,7 @@ pub mod features;
 pub mod handlers;
 pub mod protocol;
 pub mod runtime;
+pub mod security;
 pub mod server;
 pub mod state;
 pub mod textdoc;

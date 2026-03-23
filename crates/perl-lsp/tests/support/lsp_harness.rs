@@ -176,6 +176,61 @@ impl LspHarness {
         Ok(response)
     }
 
+    /// Initialize the LSP server with explicit `initializationOptions`.
+    ///
+    /// Unlike `initialize()` which only sets `params.capabilities`, this method
+    /// also injects `initializationOptions` into the initialize params, enabling
+    /// tests of per-feature disable via `disabledFeatures`.
+    pub fn initialize_with_init_options(
+        &mut self,
+        capabilities: Option<Value>,
+        initialization_options: Value,
+    ) -> Result<Value, String> {
+        let caps = capabilities.unwrap_or_else(|| {
+            json!({
+                "textDocument": {
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true
+                        }
+                    }
+                }
+            })
+        });
+
+        let init_request = json!({
+            "jsonrpc": "2.0",
+            "id": self.next_request_id,
+            "method": "initialize",
+            "params": {
+                "processId": std::process::id(),
+                "capabilities": caps,
+                "rootUri": "file:///workspace",
+                "initializationOptions": initialization_options
+            }
+        });
+        self.next_request_id += 1;
+
+        let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+        let init_timeout = if is_ci { Duration::from_secs(5) } else { Duration::from_secs(2) };
+        let init_timeout = if Self::is_coverage_instrumented() {
+            init_timeout.max(Duration::from_secs(6))
+        } else {
+            init_timeout
+        };
+
+        let response = self.send_request_with_timeout(init_request, init_timeout)?;
+
+        if response.get("capabilities").is_some() {
+            self.notify("initialized", json!({}));
+            let settle_time =
+                if is_ci { Duration::from_millis(100) } else { Duration::from_millis(50) };
+            thread::sleep(settle_time);
+        }
+
+        Ok(response)
+    }
+
     /// Create a harness with a temporary workspace
     pub fn with_workspace(files: &[(&str, &str)]) -> Result<(Self, TempWorkspace), String> {
         let workspace = TempWorkspace::new()?;

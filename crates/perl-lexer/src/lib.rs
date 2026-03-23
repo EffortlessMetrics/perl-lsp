@@ -250,6 +250,15 @@ pub struct PerlLexer<'a> {
     after_sub: bool,
     /// Track if we just saw a '->' operator (to suppress s/tr/y as substitution)
     after_arrow: bool,
+    /// Depth of hash-subscript brace nesting (braces opened in ExpectOperator mode).
+    /// When > 0, suppresses quote-op detection so `m`, `s`, `q*`, `tr`, `y`
+    /// are treated as bareword identifiers (hash keys) rather than regex operators.
+    /// Depth tracking means all positions inside `$h{...}` — including after commas
+    /// in hash slices like `@h{m, s}` — correctly suppress quote-op misidentification.
+    hash_brace_depth: usize,
+    /// Depth of open parentheses — used to distinguish `(1<<func())` (bitshift)
+    /// from `print $fh <<END` (heredoc at statement level, paren_depth == 0).
+    paren_depth: usize,
     /// Current position with line/column tracking
     #[allow(dead_code)]
     current_pos: Position,
@@ -288,6 +297,8 @@ impl<'a> PerlLexer<'a> {
             prototype_depth: 0,
             after_sub: false,
             after_arrow: false,
+            hash_brace_depth: 0,
+            paren_depth: 0,
             current_pos: Position::start(),
             after_newline: true, // Start of file counts as after newline
             pending_heredocs: Vec::new(),
@@ -694,6 +705,8 @@ impl<'a> PerlLexer<'a> {
         let saved_depth = self.prototype_depth;
         let saved_after_sub = self.after_sub;
         let saved_after_arrow = self.after_arrow;
+        let saved_hash_brace_depth = self.hash_brace_depth;
+        let saved_paren_depth = self.paren_depth;
         let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
         let saved_pending_heredocs = self.pending_heredocs.clone();
@@ -711,6 +724,8 @@ impl<'a> PerlLexer<'a> {
         self.prototype_depth = saved_depth;
         self.after_sub = saved_after_sub;
         self.after_arrow = saved_after_arrow;
+        self.hash_brace_depth = saved_hash_brace_depth;
+        self.paren_depth = saved_paren_depth;
         self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
         self.pending_heredocs = saved_pending_heredocs;
@@ -749,6 +764,8 @@ impl<'a> PerlLexer<'a> {
         self.prototype_depth = 0;
         self.after_sub = false;
         self.after_arrow = false;
+        self.hash_brace_depth = 0;
+        self.paren_depth = 0;
         self.current_pos = Position::start();
         self.after_newline = true;
         self.pending_heredocs.clear();
@@ -999,6 +1016,18 @@ impl<'a> PerlLexer<'a> {
     }
 
     fn try_heredoc(&mut self) -> Option<Token> {
+        // `<<` is the left-shift operator, not a heredoc, when we are inside
+        // a parenthesized expression and have just finished a term.
+        // E.g. `(1<<index(...))` — the `1` sets ExpectOperator and paren_depth > 0,
+        // so `<<index` must be the bitshift operator, not a heredoc start.
+        //
+        // We must NOT fire the guard at statement level (paren_depth == 0) because
+        // `print $fh <<END` is valid Perl: `$fh` sets ExpectOperator but `<<END`
+        // is a heredoc.  The depth check distinguishes the two cases.
+        if self.mode == LexerMode::ExpectOperator && self.paren_depth > 0 {
+            return None;
+        }
+
         // Check for heredoc start
         if self.peek_byte(0) != Some(b'<') || self.peek_byte(1) != Some(b'<') {
             return None;
@@ -1709,24 +1738,33 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
-    /// Return next non-space char without consuming.
-    fn peek_nonspace(&self) -> Option<char> {
+    /// Return the next non-space char and the char immediately following it (without consuming).
+    /// Used to detect quote-operator delimiters while distinguishing `=>` (fat-arrow autoquote)
+    /// from `=` used as a plain delimiter.
+    fn peek_nonspace_and_following(&self) -> (Option<char>, Option<char>) {
         let mut i = self.position;
         while i < self.input.len() {
-            let c = self.input.get(i..).and_then(|s| s.chars().next())?;
+            let c = match self.input.get(i..).and_then(|s| s.chars().next()) {
+                Some(c) => c,
+                None => return (None, None),
+            };
             if c.is_whitespace() {
                 i += c.len_utf8();
                 continue;
             }
-            return Some(c);
+            // Found non-space at position i; peek the next char after it
+            let j = i + c.len_utf8();
+            let following = self.input.get(j..).and_then(|s| s.chars().next());
+            return (Some(c), following);
         }
-        None
+        (None, None)
     }
 
     /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)
     fn is_quote_delim(c: char) -> bool {
-        // Quote delimiters are punctuation, but not whitespace or control characters
-        !c.is_ascii_alphanumeric() && !c.is_whitespace() && !c.is_control()
+        // Perl allows any non-alphanumeric, non-whitespace character as delimiter,
+        // including control characters (e.g. s\x07pattern\x07replacement\x07).
+        !c.is_ascii_alphanumeric() && !c.is_whitespace()
     }
 
     /// Try to parse a v-string (version string) like `v5.26.0` or `v5.10`.
@@ -1992,19 +2030,56 @@ impl<'a> PerlLexer<'a> {
                     "sub" => {
                         self.after_sub = true;
                     }
-                    // Quote operators expect a delimiter next (must be immediately adjacent)
+                    // Quote operators expect a delimiter next.
                     // Skip if after '->' -- these are method names, not operators.
-                    op if !self.after_arrow && quote_handler::is_quote_operator(op) => {
-                        // For regex operators like 'm', 's', 'tr', 'y', delimiter must be immediately adjacent
-                        // For quote operators like 'q', 'qq', 'qw', 'qr', 'qx', we allow whitespace
-                        let next_char = if matches!(op, "m" | "s" | "tr" | "y") {
-                            self.current_char() // Must be immediately adjacent
-                        } else {
-                            self.peek_nonspace() // Can skip whitespace
-                        };
+                    // Skip inside hash subscript braces (hash_brace_depth > 0) — all
+                    // positions inside `$h{...}` or `@h{...}` treat quote-op names as
+                    // bareword keys, including after commas in slices like `@h{m, s}`.
+                    op if !self.after_arrow
+                        && self.hash_brace_depth == 0
+                        && quote_handler::is_quote_operator(op) =>
+                    {
+                        // Perl allows whitespace between a quote-like operator and its delimiter,
+                        // but ONLY for paired delimiters (s { ... } { ... }g).
+                        // For non-paired delimiters (s/foo/bar/, s,foo,bar,), the delimiter
+                        // must be immediately adjacent — otherwise `s $foo` would wrongly
+                        // treat `$` as a delimiter instead of being a bareword `s` followed
+                        // by a scalar variable.
+                        //
+                        // Strategy:
+                        //   1. Check the immediately-adjacent char first (no whitespace skip).
+                        //      If it is a valid delimiter → any non-alnum, non-whitespace char.
+                        //   2. If the adjacent char is whitespace, peek past it.
+                        //      Only accept PAIRED delimiters ({, [, (, <) in that case.
+                        let immediate = self.current_char();
+                        let (candidate, char_after_next, has_whitespace) =
+                            if immediate.is_some_and(|c| c.is_whitespace()) {
+                                // There is whitespace — peek past it
+                                let (nc, ca) = self.peek_nonspace_and_following();
+                                (nc, ca, true)
+                            } else {
+                                // No whitespace — use immediate char
+                                let following = immediate.and_then(|c| {
+                                    let j = self.position + c.len_utf8();
+                                    self.input.get(j..).and_then(|s| s.chars().next())
+                                });
+                                (immediate, following, false)
+                            };
 
-                        if let Some(next) = next_char {
-                            if Self::is_quote_delim(next) {
+                        if let Some(next) = candidate {
+                            // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
+                            // not a valid substitution delimiter. Treat as identifier.
+                            let is_fat_arrow = next == '=' && char_after_next == Some('>');
+
+                            // When whitespace precedes the delimiter, only paired delimiters
+                            // are unambiguous. Non-paired chars like `$`, `@`, `,` etc. are
+                            // not valid delimiters after whitespace (e.g. `-s $file`).
+                            let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
+                            let is_valid_delim = Self::is_quote_delim(next)
+                                && !is_fat_arrow
+                                && (!has_whitespace || is_paired_delim);
+
+                            if is_valid_delim {
                                 self.mode = LexerMode::ExpectDelimiter;
                                 self.current_quote_op = Some(quote_handler::QuoteOperatorInfo {
                                     operator: op.to_string(),
@@ -2087,6 +2162,7 @@ impl<'a> PerlLexer<'a> {
             };
 
             self.after_arrow = false;
+            // hash_brace_depth is managed by { and } handlers, not cleared per-token
             Some(Token { token_type, text: Arc::from(text), start, end: self.position })
         } else {
             None
@@ -2434,6 +2510,7 @@ impl<'a> PerlLexer<'a> {
                 } else if self.in_prototype {
                     self.prototype_depth += 1;
                 }
+                self.paren_depth += 1;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftParen,
@@ -2450,6 +2527,8 @@ impl<'a> PerlLexer<'a> {
                         self.in_prototype = false;
                     }
                 }
+                self.after_arrow = false;
+                self.paren_depth = self.paren_depth.saturating_sub(1);
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightParen,
@@ -2462,6 +2541,8 @@ impl<'a> PerlLexer<'a> {
                 self.advance();
                 // Semicolon ends prototype window (forward declaration)
                 self.after_sub = false;
+                // Semicolon is a statement boundary — any pending method-call chain is over.
+                self.after_arrow = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::Semicolon,
@@ -2504,6 +2585,13 @@ impl<'a> PerlLexer<'a> {
                 self.advance();
                 // Opening brace ends prototype window — no prototype follows
                 self.after_sub = false;
+                // If `{` appears in ExpectOperator mode it is a hash subscript opener
+                // (e.g. `$h{...}` or `@h{...}`).  Track depth so all positions inside
+                // the subscript — including after commas in slices like `@h{m, s}` —
+                // suppress quote-op misidentification of bare keys like `m`, `s`, `tr`.
+                if self.mode == LexerMode::ExpectOperator {
+                    self.hash_brace_depth = self.hash_brace_depth.saturating_add(1);
+                }
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftBrace,
@@ -2514,6 +2602,9 @@ impl<'a> PerlLexer<'a> {
             }
             '}' => {
                 self.advance();
+                self.after_arrow = false;
+                // Decrement hash subscript brace depth if we were inside one
+                self.hash_brace_depth = self.hash_brace_depth.saturating_sub(1);
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightBrace,
@@ -3368,6 +3459,8 @@ impl Checkpointable for PerlLexer<'_> {
             prototype_depth: self.prototype_depth,
             after_sub: self.after_sub,
             after_arrow: self.after_arrow,
+            hash_brace_depth: self.hash_brace_depth,
+            paren_depth: self.paren_depth,
             current_pos: self.current_pos,
             context,
         }
@@ -3381,6 +3474,8 @@ impl Checkpointable for PerlLexer<'_> {
         self.prototype_depth = checkpoint.prototype_depth;
         self.after_sub = checkpoint.after_sub;
         self.after_arrow = checkpoint.after_arrow;
+        self.hash_brace_depth = checkpoint.hash_brace_depth;
+        self.paren_depth = checkpoint.paren_depth;
         self.current_pos = checkpoint.current_pos;
 
         // Handle special contexts
@@ -3516,6 +3611,31 @@ mod tests {
 
         let token = lexer.next_token().ok_or("Expected division token")?;
         assert_eq!(token.token_type, TokenType::Division);
+        Ok(())
+    }
+
+    #[test]
+    fn test_peek_token_does_not_mutate_paren_depth() -> TestResult {
+        // Regression guard for issue #2750: peek_token() must save and restore
+        // paren_depth so that a peek at `(` does not permanently increment
+        // paren_depth and corrupt the heredoc/bitshift guard on a subsequent token.
+        let mut lexer = PerlLexer::new("(1<<2)");
+        assert_eq!(lexer.paren_depth, 0, "paren_depth must start at 0");
+
+        // Peek at `(` — must not permanently increment paren_depth
+        let peeked = lexer.peek_token().ok_or("peek at ( failed")?;
+        assert_eq!(peeked.token_type, TokenType::LeftParen);
+        assert_eq!(lexer.paren_depth, 0, "peek_token must not mutate paren_depth");
+
+        // Consume `(` — paren_depth becomes 1
+        lexer.next_token();
+        assert_eq!(lexer.paren_depth, 1);
+
+        // Peek at `1` (a number) — paren_depth must remain 1
+        let peeked2 = lexer.peek_token().ok_or("peek at 1 failed")?;
+        assert!(matches!(peeked2.token_type, TokenType::Number(_)));
+        assert_eq!(lexer.paren_depth, 1, "peek at number must not change paren_depth");
+
         Ok(())
     }
 }

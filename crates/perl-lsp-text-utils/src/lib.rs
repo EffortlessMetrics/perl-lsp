@@ -21,15 +21,34 @@ impl<'a> TextEditHelpers<'a> {
     }
 
     /// Find the start of the statement containing `pos`.
+    ///
+    /// Only `;` is treated as a statement boundary. Newlines are not statement
+    /// boundaries in Perl — a multi-line expression like `some_func(\n    $arg)`
+    /// is a single statement, so treating `\n` as a boundary would insert the
+    /// extracted declaration inside the argument list.
+    ///
+    /// After finding the position immediately following a `;`, a single trailing
+    /// `\n` is skipped so that the returned position is the first character of
+    /// the next statement line, not the newline between statements.  This keeps
+    /// the inserted declaration on its own line rather than appended to the end
+    /// of the preceding statement.
     #[must_use]
     pub fn find_statement_start(&self, pos: usize) -> usize {
-        self.source
+        let after_semi = self
+            .source
             .char_indices()
             .take_while(|(idx, _)| *idx < pos)
-            .filter(|(_, ch)| *ch == ';' || *ch == '\n')
+            .filter(|(_, ch)| *ch == ';')
             .map(|(idx, _)| idx + 1)
             .last()
-            .unwrap_or(0)
+            .unwrap_or(0);
+        // Skip a single newline that immediately follows the semicolon so the
+        // insertion point is the first real character of the next line.
+        if self.source.as_bytes().get(after_semi) == Some(&b'\n') {
+            after_semi + 1
+        } else {
+            after_semi
+        }
     }
 
     /// Find where to insert an extracted subroutine near `current_pos`.

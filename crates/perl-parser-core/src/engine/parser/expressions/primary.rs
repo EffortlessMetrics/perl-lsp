@@ -404,14 +404,21 @@ impl<'a> Parser<'a> {
                     // Check if it's a quote operator or tie/untie
                     match token.text.as_ref() {
                         "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" => {
-                            // When 's' or 'm' appears immediately before '=>', it is a bareword
-                            // hash key (Perl fat-arrow autoquoting), NOT a quote operator.
-                            // e.g., my %h = (s => 'string', m => 'match');
+                            // When the quote-op name is immediately before `=>` or `}`,
+                            // treat it as a bareword string, not a quote/regex operator.
+                            // Cases:
+                            //   my %h = (m => 1)    — fat-arrow autoquoting
+                            //   $ref->{m}           — hash subscript key (} follows)
+                            let next_token = self.tokens.peek_second();
                             let next_is_fat_arrow = matches!(
-                                self.tokens.peek_second(),
+                                next_token,
                                 Ok(t) if t.kind == TokenKind::FatArrow
                             );
-                            if next_is_fat_arrow {
+                            let next_is_right_brace = matches!(
+                                next_token,
+                                Ok(t) if t.kind == TokenKind::RightBrace
+                            );
+                            if next_is_fat_arrow || next_is_right_brace {
                                 let tok = self.tokens.next()?;
                                 Ok(Node::new(
                                     NodeKind::String {
@@ -808,6 +815,14 @@ impl<'a> Parser<'a> {
             TokenKind::DoubleColon => {
                 // Absolute package path like ::Foo::Bar
                 self.parse_qualified_identifier()
+            }
+
+            TokenKind::DataMarker => {
+                // __END__ / __DATA__ reached in expression context (e.g. after a
+                // no-semicolon statement like `__PACKAGE__\n__END__`).  Delegate to
+                // the statement-level handler so the data section is parsed correctly
+                // rather than emitting an "expected expression" error.
+                self.parse_data_section()
             }
 
             _ => {

@@ -447,6 +447,38 @@ describe('package.json contributes', () => {
     });
   });
 
+  describe('reportIssue command', () => {
+    test('registers perl-lsp.reportIssue command', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.reportIssue');
+    });
+
+    test('reportIssue has Perl category', () => {
+      const cmd = pkg.contributes.commands.find(
+        (c: any) => c.command === 'perl-lsp.reportIssue'
+      );
+      expect(cmd).toBeDefined();
+      expect(cmd.category).toBe('Perl');
+    });
+
+    test('reportIssue has the title "Report Issue"', () => {
+      const cmd = pkg.contributes.commands.find(
+        (c: any) => c.command === 'perl-lsp.reportIssue'
+      );
+      expect(cmd).toBeDefined();
+      expect(cmd.title).toBe('Report Issue');
+    });
+
+    test('reportIssue is listed in commandPalette unconditionally (no when clause)', () => {
+      const palette = pkg.contributes.menus.commandPalette;
+      const entry = palette.find((e: any) => e.command === 'perl-lsp.reportIssue');
+      expect(entry).toBeDefined();
+      // Must be unconditionally available — users need to report startup failures
+      // even with no Perl file open. A missing/undefined 'when' means always-shown.
+      expect(entry.when).toBeUndefined();
+    });
+  });
+
   describe('createDebugConfig command', () => {
     test('registers perl-lsp.createDebugConfig command', () => {
       const commandIds = pkg.contributes.commands.map((c: any) => c.command);

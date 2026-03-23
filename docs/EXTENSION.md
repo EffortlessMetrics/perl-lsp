@@ -43,6 +43,7 @@ The Marketplace package is designed to work with `PATH`, `serverPath`, or runtim
 | `perl-lsp.perltidyConfig` | `""` | Path to a `.perltidyrc` file. |
 | `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional Perl include paths passed to the server. |
 | `perl-lsp.enableTestIntegration` | `true` | Enable test integration for `.t` and runnable `.pl` files. |
+| `perl-lsp.autoPopulateNewFiles` | `true` | Auto-populate new `.pm` files with a `package` declaration and new `.t` files with `Test::More` boilerplate. Set to `false` to disable. |
 | `perl-lsp.featureProfile` | `"auto"` | Forward a concrete feature profile to `perl-lsp` when needed. |
 
 ## What Ships Today

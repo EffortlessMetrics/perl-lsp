@@ -68,7 +68,9 @@ pub fn extract_substitution_parts_strict(
     text: &str,
 ) -> Result<(String, String, String), SubstitutionError> {
     // Skip 's' prefix
-    let content = text.strip_prefix('s').unwrap_or(text);
+    let after_s = text.strip_prefix('s').unwrap_or(text);
+    // Perl allows whitespace between 's' and its delimiter (e.g. `s { pattern } { replacement }g`)
+    let content = after_s.trim_start();
 
     // Get delimiter - check for missing delimiter (just 's' or 's' followed by nothing)
     let delimiter = match content.chars().next() {

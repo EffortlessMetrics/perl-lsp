@@ -2386,9 +2386,18 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::Use { module, .. } => {
+            NodeKind::Use { module, args, .. } => {
                 let module_name = module.clone();
                 file_index.dependencies.insert(module_name.clone());
+
+                // Also track actual parent/base class names for dependency discovery.
+                // `use parent 'Foo::Bar'` stores module="parent" and args=["'Foo::Bar'"],
+                // so find_dependents("Foo::Bar") would miss files with only use parent.
+                if module == "parent" || module == "base" {
+                    for name in extract_module_names_from_use_args(args) {
+                        file_index.dependencies.insert(name);
+                    }
+                }
 
                 // Track as import
                 file_index.references.entry(module_name).or_default().push(SymbolReference {
@@ -2691,6 +2700,54 @@ impl IndexVisitor {
             end: Position { byte: node.location.end, line: end_line, column: end_col },
         }
     }
+}
+
+/// Extract bare module names from the argument list of a `use parent` / `use base` statement.
+///
+/// The `args` field of `NodeKind::Use` stores raw argument strings as the parser captured them.
+/// For `use parent 'Foo::Bar'` this is `["'Foo::Bar'"]`.
+/// For `use parent qw(Foo::Bar Other::Base)` this is `["qw(Foo::Bar Other::Base)"]`.
+/// For `use parent -norequire, 'Foo::Bar'` this is `["-norequire", "'Foo::Bar'"]`.
+///
+/// Returns the module names with surrounding quotes/qw wrappers stripped.
+/// Tokens starting with `-` or not matching `[\w::']+` are silently skipped.
+fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
+    let joined = args.join(" ");
+
+    // Strip qw(...) wrapper and collect the inner tokens
+    let inner = if let Some(start) = joined.find("qw(") {
+        if let Some(end) = joined[start..].find(')') {
+            joined[start + 3..start + end].to_string()
+        } else {
+            joined.clone()
+        }
+    } else {
+        joined.clone()
+    };
+
+    inner
+        .split_whitespace()
+        .filter_map(|token| {
+            // Skip flags like -norequire and bare punctuation from qw() or parens
+            if token.starts_with('-') {
+                return None;
+            }
+            // Strip surrounding single or double quotes
+            let stripped = token.trim_matches('\'').trim_matches('"');
+            // Strip surrounding parentheses (e.g. `use parent ('Foo')`)
+            let stripped = stripped.trim_matches('(').trim_matches(')');
+            let stripped = stripped.trim_matches('\'').trim_matches('"');
+            // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
+            if stripped.is_empty() {
+                return None;
+            }
+            if stripped.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'') {
+                Some(stripped.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 impl Default for WorkspaceIndex {
@@ -3742,5 +3799,129 @@ Utils::process_data();
         index.remove_file_url(&uri_a);
         assert!(index.find_definition("helper").is_some());
         assert!(index.find_definition("ShadowB::helper").is_some());
+    }
+
+    // -------------------------------------------------------------------------
+    // find_dependents — use parent / use base integration (#2747)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_index_dependency_via_use_parent_end_to_end() {
+        // Regression for #2747: index a file with `use parent 'MyBase'` and verify
+        // that find_dependents("MyBase") returns that file.
+        // 1. Index MyBase.pm
+        // 2. Index child.pl with `use parent 'MyBase'`
+        // 3. find_dependents("MyBase") should return child.pl
+        let index = WorkspaceIndex::new();
+
+        let base_url = url::Url::parse("file:///test/workspace/lib/MyBase.pm").unwrap();
+        index
+            .index_file(base_url, "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string())
+            .expect("indexing MyBase.pm");
+
+        let child_url = url::Url::parse("file:///test/workspace/child.pl").unwrap();
+        index
+            .index_file(child_url, "package Child;\nuse parent 'MyBase';\n1;\n".to_string())
+            .expect("indexing child.pl");
+
+        let dependents = index.find_dependents("MyBase");
+        assert!(
+            !dependents.is_empty(),
+            "find_dependents('MyBase') returned empty — \
+             use parent 'MyBase' should register MyBase as a dependency. \
+             Dependencies in index: {:?}",
+            {
+                let files = index.files.read();
+                files
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.dependencies.iter().cloned().collect::<Vec<_>>()))
+                    .collect::<Vec<_>>()
+            }
+        );
+        assert!(
+            dependents.contains(&"file:///test/workspace/child.pl".to_string()),
+            "child.pl should be in dependents, got: {:?}",
+            dependents
+        );
+    }
+
+    #[test]
+    fn test_parser_produces_correct_args_for_use_parent() {
+        // Regression for #2747: verify that the parser produces args=["'MyBase'"]
+        // for `use parent 'MyBase'`, so extract_module_names_from_use_args strips
+        // the quotes and registers the dependency under the bare name "MyBase".
+        use crate::Parser;
+        let mut p = Parser::new("package Child;\nuse parent 'MyBase';\n1;\n");
+        let ast = p.parse().expect("parse succeeded");
+        if let NodeKind::Program { statements } = &ast.kind {
+            for stmt in statements {
+                if let NodeKind::Use { module, args, .. } = &stmt.kind {
+                    if module == "parent" {
+                        assert_eq!(
+                            args,
+                            &["'MyBase'".to_string()],
+                            "Expected args=[\"'MyBase'\"] for `use parent 'MyBase'`, got: {:?}",
+                            args
+                        );
+                        let extracted = extract_module_names_from_use_args(args);
+                        assert_eq!(
+                            extracted,
+                            vec!["MyBase".to_string()],
+                            "extract_module_names_from_use_args should return [\"MyBase\"], got {:?}",
+                            extracted
+                        );
+                        return; // Test passed
+                    }
+                }
+            }
+            panic!("No Use node with module='parent' found in AST");
+        } else {
+            panic!("Expected Program root");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // extract_module_names_from_use_args — unit tests (#2747)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_module_names_single_quoted() {
+        let names = extract_module_names_from_use_args(&["'Foo::Bar'".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_double_quoted() {
+        let names = extract_module_names_from_use_args(&["\"Foo::Bar\"".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_qw_list() {
+        let names = extract_module_names_from_use_args(&["qw(Foo::Bar Other::Base)".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_norequire_flag() {
+        let names = extract_module_names_from_use_args(&[
+            "-norequire".to_string(),
+            "'Foo::Bar'".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_empty_args() {
+        let names = extract_module_names_from_use_args(&[]);
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_extract_module_names_legacy_separator() {
+        // Perl legacy package separator ' (tick) inside module name
+        let names = extract_module_names_from_use_args(&["'Foo'Bar'".to_string()]);
+        // After stripping outer quotes the raw token is Foo'Bar — a valid legacy name
+        assert_eq!(names, vec!["Foo'Bar"]);
     }
 }

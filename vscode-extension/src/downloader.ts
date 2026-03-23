@@ -22,6 +22,37 @@ interface Release {
     assets: ReleaseAsset[];
 }
 
+/**
+ * Parse the local version string from `perl-lsp --version` stdout.
+ *
+ * The binary prints three lines; only the first is needed:
+ *   perl-lsp 0.12.0
+ *   Git tag: v0.12.0
+ *   Perl Language Server using perl-parser v3
+ *
+ * Returns the semver string (e.g. "0.12.0") or null if the format is unexpected.
+ */
+export function parseLocalVersion(versionOutput: string): string | null {
+    const firstLine = versionOutput.split('\n')[0].trim();
+    const match = /^perl-lsp\s+(\S+)/.exec(firstLine);
+    return match ? match[1] : null;
+}
+
+/**
+ * Numeric semver comparison. Strips a leading 'v' from either argument.
+ * Returns -1 if a < b, 0 if equal, 1 if a > b.
+ */
+export function compareVersions(a: string, b: string): -1 | 0 | 1 {
+    const normalize = (v: string) => v.replace(/^v/, '').split('.').map(n => parseInt(n, 10));
+    const [aMaj, aMin, aPat] = normalize(a);
+    const [bMaj, bMin, bPat] = normalize(b);
+    for (const [x, y] of [[aMaj, bMaj], [aMin, bMin], [aPat, bPat]] as [number, number][]) {
+        if (x < y) { return -1; }
+        if (x > y) { return 1; }
+    }
+    return 0;
+}
+
 export class BinaryDownloader {
     private static readonly REPO_OWNER = 'EffortlessMetrics';
     private static readonly REPO_NAME = 'perl-lsp';
@@ -563,6 +594,98 @@ export class BinaryDownloader {
             `${platform}-${arch}`,
             dapName
         );
+    }
+
+    /**
+     * Silent background update check. Fire-and-forget from activate().
+     *
+     * No-ops when:
+     * - channel === 'tag' (user has pinned a version)
+     * - serverPath is user-configured (downloader doesn't own the binary)
+     * - binary is bundled (under extensionPath, not globalStorageUri)
+     * - updateCheckInterval === 0 (user disabled checks)
+     * - not enough time has elapsed since the last check
+     * - versions are equal or local is ahead
+     *
+     * All errors are logged to the output channel; none are shown to the user.
+     */
+    async checkForUpdateSilent(): Promise<void> {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+
+        // Guard: skip if user pinned a specific version
+        const channel = config.get<string>('channel', 'latest');
+        if (channel === 'tag') { return; }
+
+        // Guard: skip if user manages their own binary
+        const userPath = config.get<string>('serverPath', '');
+        if (userPath) { return; }
+
+        // Guard: only applies to auto-downloaded binaries (under globalStorageUri)
+        const binaryPath = this.getLocalBinaryPath();
+        const storagePath = this.context.globalStorageUri.fsPath;
+        if (!binaryPath.startsWith(storagePath)) { return; }
+        if (!fs.existsSync(binaryPath)) { return; }
+
+        // Guard: check interval (treat negative values same as 0 — disabled)
+        const intervalHours = config.get<number>('updateCheckInterval', 24);
+        if (intervalHours <= 0) { return; }
+        const lastCheck = this.context.globalState.get<number>('perl-lsp.lastUpdateCheck', 0);
+        const elapsedHours = (Date.now() - lastCheck) / (1000 * 60 * 60);
+        if (elapsedHours < intervalHours) { return; }
+
+        // Record that we checked (even if the check fails) to avoid hammering
+        await this.context.globalState.update('perl-lsp.lastUpdateCheck', Date.now());
+
+        try {
+            const localVersion = await this.getLocalVersion(binaryPath);
+            if (!localVersion) {
+                this.outputChannel.appendLine('[update-check] Could not read local version — skipping');
+                return;
+            }
+
+            const release = await this.getLatestRelease();
+            const remoteVersion = release.tag_name.replace(/^v/, '');
+
+            if (compareVersions(localVersion, remoteVersion) >= 0) {
+                this.outputChannel.appendLine(`[update-check] Up to date (${localVersion})`);
+                return;
+            }
+
+            this.outputChannel.appendLine(`[update-check] New version available: ${remoteVersion} (installed: ${localVersion})`);
+
+            const autoUpdate = config.get<boolean>('autoUpdate', false);
+            if (autoUpdate) {
+                this.outputChannel.appendLine(`[update-check] Auto-updating to ${remoteVersion}`);
+                await this.ensureBinary(true);
+                return;
+            }
+
+            const choice = await vscode.window.showInformationMessage(
+                `perl-lsp ${remoteVersion} is available (installed: ${localVersion})`,
+                'Update',
+                'Dismiss',
+                "Don't ask again"
+            );
+
+            if (choice === 'Update') {
+                await this.ensureBinary(true);
+            } else if (choice === "Don't ask again") {
+                await config.update('updateCheckInterval', 0, vscode.ConfigurationTarget.Global);
+            }
+            // 'Dismiss' is a no-op — will check again next interval
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.outputChannel.appendLine(`[update-check] Skipping: ${msg}`);
+        }
+    }
+
+    private async getLocalVersion(binaryPath: string): Promise<string | null> {
+        return new Promise(resolve => {
+            child_process.execFile(binaryPath, ['--version'], { timeout: 5000 }, (err, stdout) => {
+                if (err) { resolve(null); return; }
+                resolve(parseLocalVersion(stdout));
+            });
+        });
     }
 
     private findBinary(dir: string, name: string): string | null {

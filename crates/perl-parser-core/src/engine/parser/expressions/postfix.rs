@@ -616,9 +616,14 @@ impl<'a> Parser<'a> {
                             //
                             // For nullary builtins like shift, pop, caller, wantarray, etc.,
                             // when followed by a binary operator, they should be treated as
-                            // having no arguments (e.g., "shift || 2" means shift() || 2)
-                            let is_nullary_without_args = Self::is_nullary_builtin(bare_name)
-                                && self.peek_kind().is_some_and(Self::is_binary_operator);
+                            // having no arguments (e.g., "shift || 2" means shift() || 2).
+                            // Also applies to optional-arg builtins (defined, length, ord, etc.)
+                            // that implicitly use $_ when no explicit argument is given, so that
+                            // `defined && ...`, `length > 0`, `ord >= 32` parse correctly.
+                            let is_nullary_without_args =
+                                (Self::is_nullary_builtin(bare_name)
+                                    || Self::is_optional_arg_builtin(bare_name))
+                                    && self.peek_kind().is_some_and(Self::is_binary_operator);
 
                             // When a builtin is followed by a comma, it should be treated
                             // as having no arguments.  The comma belongs to an enclosing
@@ -903,9 +908,51 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::WordOr)
                 | Some(TokenKind::WordXor)
                 | Some(TokenKind::WordNot)
+                | Some(TokenKind::DataMarker)
                 | Some(TokenKind::Eof)
                 | None
         )
+    }
+
+    /// Check whether the current peek token is a quote-op name that should be
+    /// treated as a bareword hash key inside a subscript.
+    ///
+    /// Returns `true` only when the token is `m|s|q|qq|qw|qr|qx|tr|y` AND
+    /// the immediately following token is `}` or `,` — meaning the identifier
+    /// cannot be the start of a real quote/regex expression.
+    ///
+    /// Contrast: `qw(a b)` has `qw` followed by `(`, so it returns `false`
+    /// and the normal `parse_expression` path handles it as a `qw(...)` literal.
+    fn peek_is_quote_op_bareword(&mut self) -> bool {
+        if self.peek_kind() == Some(TokenKind::Identifier) {
+            if let Ok(first) = self.tokens.peek() {
+                let is_quote_op_name = matches!(
+                    first.text.as_ref(),
+                    "m" | "s" | "q" | "qq" | "qw" | "qr" | "qx" | "tr" | "y"
+                );
+                if is_quote_op_name {
+                    // Only treat as a bareword key if the NEXT token is `}` or `,`
+                    // (meaning there is no delimiter to start a real quote expression).
+                    if let Ok(second) = self.tokens.peek_second() {
+                        return matches!(
+                            second.kind,
+                            TokenKind::RightBrace | TokenKind::Comma
+                        );
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Consume the next token as a bareword string node (for quote-op names used
+    /// as hash keys, e.g. the `m` in `$h{m}` or `@h{m, s}`).
+    fn consume_as_bareword_string(&mut self) -> ParseResult<Node> {
+        let token = self.tokens.next()?;
+        Ok(Node::new(
+            NodeKind::String { value: token.text.to_string(), interpolated: false },
+            SourceLocation { start: token.start, end: token.end },
+        ))
     }
 
     /// Parse hash subscript key expression, treating lone keywords as bare
@@ -915,9 +962,17 @@ impl<'a> Parser<'a> {
     /// consumed as operators or statement keywords. When one of these appears
     /// inside a hash subscript followed immediately by `}`, it should be treated
     /// as a bare hash key instead.
+    ///
+    /// Additionally handles quote-operator names (`m`, `s`, `q`, etc.) when used
+    /// as hash subscript keys. The lexer suppresses quote-op detection inside
+    /// hash subscripts (hash_brace_depth > 0), emitting them as Identifier tokens.
+    /// This function builds a proper parse tree node for them, including support
+    /// for hash slices like `@h{m, s}` which require a list node.
     fn parse_hash_subscript_key(&mut self) -> ParseResult<Node> {
+        // Classic keyword-as-bareword (not, and, or, xor, do, eval) when directly
+        // before `}`.  These were handled here before this PR and are preserved.
         if let Some(kind) = self.peek_kind() {
-            let is_keyword_key = matches!(
+            let is_simple_keyword_key = matches!(
                 kind,
                 TokenKind::WordNot
                     | TokenKind::WordAnd
@@ -926,7 +981,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::Do
                     | TokenKind::Eval
             );
-            if is_keyword_key {
+            if is_simple_keyword_key {
                 if let Ok(second) = self.tokens.peek_second() {
                     if second.kind == TokenKind::RightBrace {
                         let token = self.tokens.next()?;
@@ -938,6 +993,44 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+
+        // Quote-op names (m, s, q, qq, qw, qr, qx, tr, y) used as bareword hash keys.
+        // The lexer (hash_brace_depth > 0) already emits these as Identifier tokens
+        // rather than triggering quote-op parsing.  Here in the parser we must build
+        // a comma-separated list when multiple such keys appear (hash slice case,
+        // e.g. `@h{m, s}`), since `parse_expression` → `parse_comma` would still
+        // try to interpret `m` as a regex operator at the `parse_primary` level.
+        if self.peek_is_quote_op_bareword() {
+            let first = self.consume_as_bareword_string()?;
+            let start = first.location.start;
+
+            // Single key (common case): `$h{m}` — `}` immediately follows
+            if self.peek_kind() != Some(TokenKind::Comma) {
+                return Ok(first);
+            }
+
+            // Slice case: `@h{m, s, q}` — build a list node from all bareword keys
+            let mut elements = vec![first];
+            while self.peek_kind() == Some(TokenKind::Comma) {
+                self.consume_token()?; // consume `,`
+                if self.peek_kind() == Some(TokenKind::RightBrace) {
+                    break; // trailing comma before `}` is fine
+                }
+                if self.peek_is_quote_op_bareword() {
+                    elements.push(self.consume_as_bareword_string()?);
+                } else {
+                    // Mixed slice like `@h{m, $var}` — parse rest normally
+                    elements.push(self.parse_assignment()?);
+                }
+            }
+
+            let end = elements.last().map(|n| n.location.end).unwrap_or(start);
+            return Ok(Node::new(
+                NodeKind::ArrayLiteral { elements },
+                SourceLocation { start, end },
+            ));
+        }
+
         self.parse_expression()
     }
 }
