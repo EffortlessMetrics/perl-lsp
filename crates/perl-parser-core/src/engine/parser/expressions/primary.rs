@@ -471,13 +471,14 @@ impl<'a> Parser<'a> {
                             ))
                         }
                         "new" => {
-                            // When `new` is immediately before `}` or `=>`, treat it as a
+                            // When `new` is immediately before `}`, `=>`, or `,`, treat it as a
                             // bareword identifier, not an indirect constructor call.
                             // Cases:
                             //   $h{new} = 1          — hash subscript key (} follows)
                             //   $ref->{new}          — arrow hash subscript key
                             //   delete $h->{new}     — delete with arrow subscript
                             //   (new => 1)           — fat-arrow autoquoting
+                            //   @h{new, other}       — hash slice (comma follows)
                             let next_token = self.tokens.peek_second();
                             let next_is_right_brace = matches!(
                                 next_token,
@@ -487,7 +488,11 @@ impl<'a> Parser<'a> {
                                 next_token,
                                 Ok(t) if t.kind == TokenKind::FatArrow
                             );
-                            if next_is_right_brace || next_is_fat_arrow {
+                            let next_is_comma = matches!(
+                                next_token,
+                                Ok(t) if t.kind == TokenKind::Comma
+                            );
+                            if next_is_right_brace || next_is_fat_arrow || next_is_comma {
                                 let tok = self.tokens.next()?;
                                 return Ok(Node::new(
                                     NodeKind::Identifier { name: tok.text.to_string() },

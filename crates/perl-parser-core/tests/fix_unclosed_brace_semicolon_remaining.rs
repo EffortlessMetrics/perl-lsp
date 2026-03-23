@@ -132,3 +132,18 @@ fn test_hash_key_do_still_works() {
 fn test_hash_key_eval_still_works() {
     assert_clean_parse(r#"$h{eval} = 1;"#);
 }
+
+// --- HASH SLICE with 'new' as one of the keys ---
+
+#[test]
+fn test_hash_slice_new_as_first_key() {
+    // @h{new, other} — 'new' followed by comma inside a hash subscript
+    // Without the comma guard this would try to parse 'new' as a constructor call.
+    assert_clean_parse(r#"my @vals = @h{new, other};"#);
+}
+
+#[test]
+fn test_delete_hash_slice_new_key() {
+    // delete @h{new} — delete a single element whose key is 'new'
+    assert_clean_parse(r#"delete $h{new};"#);
+}
