@@ -132,11 +132,15 @@ fn test_non_fixable_diagnostic_has_fixable_false() -> Result<(), Box<dyn std::er
         }
     }
 
-    // If PL105 is triggered, it must have fixable: false
-    if let Some(diag) = items.iter().find(|d| d["code"].as_str() == Some("PL105")) {
-        let data = &diag["data"];
-        assert_eq!(data["fixable"], false, "PL105 has no quick-fix; fixable must be false");
-    }
+    // PL105 (VariableRedeclaration) MUST fire and MUST have fixable: false.
+    // Using ok_or to enforce the requirement — a soft if-let would make this
+    // test vacuous (passes even if the serialization is broken).
+    let diag = items
+        .iter()
+        .find(|d| d["code"].as_str() == Some("PL105"))
+        .ok_or("Expected PL105 (VariableRedeclaration) to fire for double-declare input")?;
+    let data = &diag["data"];
+    assert_eq!(data["fixable"], false, "PL105 has no quick-fix; fixable must be false");
 
     Ok(())
 }
@@ -145,33 +149,25 @@ fn test_non_fixable_diagnostic_has_fixable_false() -> Result<(), Box<dyn std::er
 #[test]
 fn test_suggestion_appended_to_message() -> Result<(), Box<dyn std::error::Error>> {
     let uri = "file:///test_suggestion.pl";
-    // Two-arg open (PL401) should trigger a suggestion
-    let content = "use strict; use warnings;\nopen(FH, \"file.txt\") or die;\n";
+    // Missing strict/warnings triggers PL100/PL101 which both carry suggestions
+    // ("Add 'use strict;' at the top of the file"). This reliably exercises
+    // the suggestion serialization path in handle_document_diagnostic.
+    let content = "print 'hello';\n";
     let server = open_document(uri, content);
     let items = get_diagnostics(&server, uri)?;
 
-    // Find any diagnostic that has a suggestion appended (contains "Suggestion:")
-    // This test verifies the plumbing works for any diagnostic that has suggestions.
-    // If no suggestion-carrying diagnostics fire, we at least verify the data fields.
-    let has_suggestion_message = items
+    // PL100 must fire and its message must contain the appended suggestion text.
+    let pl100 = items
         .iter()
-        .any(|d| d["message"].as_str().map(|m| m.contains("Suggestion:")).unwrap_or(false));
+        .find(|d| d["code"].as_str() == Some("PL100"))
+        .ok_or("Expected PL100 (MissingStrict) diagnostic to fire")?;
 
-    // We may not always trigger a suggestion-bearing diagnostic in this simple test.
-    // At a minimum, verify the structure of any diagnostics with codes is correct.
-    for d in &items {
-        if d["code"].is_string() {
-            let data = &d["data"];
-            assert!(data.is_object(), "data must be an object for coded diagnostics");
-        }
-    }
-
-    // Log whether suggestion was found (soft assertion — this is coverage, not a gate)
-    if !has_suggestion_message {
-        eprintln!(
-            "No suggestion-bearing diagnostic fired for this test input; structure still verified"
-        );
-    }
+    let msg = pl100["message"].as_str().ok_or("message must be a string")?;
+    assert!(
+        msg.contains("Suggestion:"),
+        "PL100 message must include appended suggestion text; got: {:?}",
+        msg
+    );
 
     Ok(())
 }
@@ -227,31 +223,40 @@ fn test_workspace_diagnostic_data_populated() -> Result<(), Box<dyn std::error::
 #[test]
 fn test_related_information_forwarded() -> Result<(), Box<dyn std::error::Error>> {
     let uri = "file:///test_related_info.pl";
-    // Security diagnostics (e.g. eval with string arg) populate related_information
-    // This test verifies the field is present and valid when any lint populates it.
+    // eval "string" fires PL600 (SecurityStringEval) which always populates
+    // related_information with one entry pointing to the eval location.
     let content = "use strict; use warnings;\neval \"dangerous_code()\";\n";
     let server = open_document(uri, content);
     let items = get_diagnostics(&server, uri)?;
 
-    // If any diagnostic has relatedInformation, verify its structure
-    for d in &items {
-        if let Some(ri_arr) = d["relatedInformation"].as_array() {
-            for ri in ri_arr {
-                assert!(
-                    ri["location"].is_object(),
-                    "relatedInformation[].location must be an object"
-                );
-                assert!(
-                    ri["location"]["uri"].is_string(),
-                    "relatedInformation[].location.uri must be a string"
-                );
-                assert!(
-                    ri["location"]["range"].is_object(),
-                    "relatedInformation[].location.range must be an object"
-                );
-                assert!(ri["message"].is_string(), "relatedInformation[].message must be a string");
-            }
-        }
+    // PL600 must fire.
+    let eval_diag = items
+        .iter()
+        .find(|d| d["code"].as_str() == Some("PL600"))
+        .ok_or("Expected PL600 (SecurityStringEval) diagnostic to fire for string eval")?;
+
+    // relatedInformation must be present and non-empty — the internal
+    // Diagnostic for PL600 always carries one RelatedInformation entry.
+    let ri_arr = eval_diag["relatedInformation"]
+        .as_array()
+        .ok_or("PL600 must have relatedInformation array in LSP response")?;
+
+    assert!(!ri_arr.is_empty(), "PL600 relatedInformation must be non-empty");
+
+    for ri in ri_arr {
+        assert!(
+            ri["location"].is_object(),
+            "relatedInformation[].location must be an object"
+        );
+        assert!(
+            ri["location"]["uri"].is_string(),
+            "relatedInformation[].location.uri must be a string"
+        );
+        assert!(
+            ri["location"]["range"].is_object(),
+            "relatedInformation[].location.range must be an object"
+        );
+        assert!(ri["message"].is_string(), "relatedInformation[].message must be a string");
     }
 
     Ok(())
