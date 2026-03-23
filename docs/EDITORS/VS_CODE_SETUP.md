@@ -1,6 +1,6 @@
 # VS Code Setup Guide for perl-lsp
 
-This comprehensive guide helps you set up and configure the Perl Language Server in Visual Studio Code.
+This guide helps you set up and configure the Perl Language Server in Visual Studio Code.
 
 ## Table of Contents
 
@@ -19,14 +19,13 @@ This comprehensive guide helps you set up and configure the Perl Language Server
 
 ### Required
 
-- **VS Code** version 1.80 or later
+- **VS Code** version 1.88 or later
 - **perl-lsp** server installed (see [Installation](#installation))
 
 ### Optional but Recommended
 
 - **Perl** 5.10 or later (for syntax validation)
 - **perltidy** (for code formatting)
-- **perlcritic** (for linting)
 
 ---
 
@@ -77,7 +76,6 @@ perl-lsp --version
 
 # Quick health check
 perl-lsp --health
-# Should output: ok 0.10.0
 ```
 
 ---
@@ -109,6 +107,8 @@ If you prefer using a generic LSP client extension:
 
 ## Configuration
 
+The extension exposes settings in the `perl-lsp.*` namespace. A separate `perl.*` namespace is used for server-side initialization options (see [Advanced Configuration](#advanced-configuration)).
+
 ### Basic Configuration
 
 Add to your workspace `.vscode/settings.json`:
@@ -139,7 +139,6 @@ For project-specific settings, create `.vscode/settings.json` in your project ro
     "local/lib/perl5",
     "vendor/lib"
   ],
-  "perl-lsp.useSystemInc": false,
   "perl-lsp.formatOnSave": true,
   "[perl]": {
     "editor.defaultFormatter": "EffortlessMetrics.perl-lsp-rs",
@@ -160,6 +159,27 @@ Or edit `settings.json` directly:
 1. Press `Ctrl+Shift+P` (Cmd+Shift+P on macOS)
 2. Type "Preferences: Open Settings (JSON)"
 3. Add your configuration
+
+### All Extension Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `perl-lsp.serverPath` | string | `""` | Absolute path to `perl-lsp` binary. Leave empty to auto-download. |
+| `perl-lsp.autoDownload` | boolean | `true` | Auto-download `perl-lsp` binary if not found locally. |
+| `perl-lsp.includePaths` | array | `["lib", "local/lib/perl5"]` | Additional library paths to search for Perl modules. |
+| `perl-lsp.enableDiagnostics` | boolean | `true` | Enable real-time syntax diagnostics. |
+| `perl-lsp.enableSemanticTokens` | boolean | `true` | Enable semantic syntax highlighting. |
+| `perl-lsp.perltidyConfig` | string | `""` | Path to `.perltidyrc` configuration file. |
+| `perl-lsp.enableFormatting` | boolean | `true` | Enable document formatting using `perltidy`. |
+| `perl-lsp.formatOnSave` | boolean | `false` | Format document on save. |
+| `perl-lsp.enableRefactoring` | boolean | `true` | Enable refactoring-related code actions. |
+| `perl-lsp.enableTestIntegration` | boolean | `true` | Enable `Test::More` and `Test2` integration. |
+| `perl-lsp.autoPopulateNewFiles` | boolean | `true` | Auto-populate new `.pm` and `.t` files with boilerplate. |
+| `perl-lsp.featureProfile` | string | `"auto"` | Runtime feature profile: `auto`, `ga`, `ga-lock`, `prod`, `all`. |
+| `perl-lsp.trace.server` | string | `"off"` | LSP traffic logging: `off`, `messages`, `verbose`. |
+| `perl-lsp.channel` | string | `"latest"` | Release channel: `latest`, `stable`, or `tag`. |
+| `perl-lsp.versionTag` | string | `""` | Specific release tag when channel is `tag`. |
+| `perl-lsp.downloadBaseUrl` | string | `""` | Internal base URL for hosting perl-lsp archives (bypasses GitHub). |
 
 ---
 
@@ -208,7 +228,7 @@ sub my_function {
 
 View documentation and type information:
 
-- **Keyboard**: `Ctrl+Space` or hover with mouse
+- **Keyboard**: `Ctrl+K Ctrl+I` or hover with mouse
 - **Shows**: Function signatures, variable types, documentation
 
 ### Code Completion
@@ -236,21 +256,20 @@ Enhanced syntax highlighting based on semantic understanding:
 
 Quick fixes and refactorings:
 
-- **Keyboard**: `Ctrl+.` (Cmd+.` on macOS)
+- **Keyboard**: `Ctrl+.` (Cmd+. on macOS)
 - **Context Menu**: Right-click → "Quick Fix"
 
 Available actions:
 - Extract variable
 - Extract subroutine
-- Optimize imports
-- Add missing pragmas
+- Organize imports
 
 ### Document Symbols
 
 Navigate symbols in the current file:
 
 - **Keyboard**: `Ctrl+Shift+O` (Cmd+Shift+O on macOS)
-- **View**: Outline panel (Ctrl+Shift+B)
+- **View**: Outline panel
 
 ### Workspace Symbols
 
@@ -272,52 +291,19 @@ Format Perl code using perltidy:
 
 - **Keyboard**: `Shift+Alt+F` (Shift+Option+F on macOS)
 - **Command**: Format Document
-- **On Save**: Enable with `formatOnSave` setting
-
-### Inlay Hints
-
-Inline type and parameter hints:
-
-```perl
-sub my_function($name, $count) {
-    return "Hello, $name x$count";
-}
-
-my_function("World", 5);
-# ^ Shows: my_function(/* name: */ "World", /* count: */ 5)
-```
-
-Enable in settings:
-
-```json
-{
-  "perl-lsp.inlayHints.enabled": true,
-  "perl-lsp.inlayHints.parameterHints": true,
-  "perl-lsp.inlayHints.typeHints": true
-}
-```
+- **On Save**: Enable with `perl-lsp.formatOnSave`
 
 ### Test Integration
 
 Run tests directly from VS Code:
 
-```json
-{
-  "perl-lsp.testRunner.enabled": true,
-  "perl-lsp.testRunner.command": "prove",
-  "perl-lsp.testRunner.args": ["-l", "-v"]
-}
-```
+- **Keyboard**: `Shift+Alt+T`
+- **Command Palette**: "Perl: Run Tests in Current File"
+- **Editor toolbar**: Click the beaker icon on `.t` or `.pl` files
 
 ### Code Lens
 
-Reference counts and quick actions:
-
-```perl
-sub my_function {
-    # ^ Shows: 3 references
-}
-```
+Reference counts and quick actions inline in the editor.
 
 ---
 
@@ -334,10 +320,18 @@ sub my_function {
 | Format Document | `Shift+Alt+F` | `Shift+Option+F` |
 | Quick Fix | `Ctrl+.` | `Cmd+.` |
 | Show Hover | `Ctrl+K Ctrl+I` | `Ctrl+K Ctrl+I` |
-| Go to References | `Shift+F12` | `Shift+F12` |
-| Go to Implementation | `Ctrl+F12` | `Ctrl+F12` |
 | Open Symbol by Name | `Ctrl+T` | `Cmd+T` |
 | Show All Symbols | `Ctrl+Shift+O` | `Cmd+Shift+O` |
+
+### Extension-Specific Keybindings
+
+| Action | Windows/Linux | macOS |
+|--------|---------------|-------|
+| Run Tests | `Shift+Alt+T` | `Shift+Option+T` |
+| Restart Server | `Shift+Alt+R` | `Shift+Option+R` |
+| Organize Imports | `Shift+Alt+O` | `Shift+Option+O` |
+| Extract Variable | `Shift+Alt+V` | `Shift+Option+V` |
+| Extract Method | `Shift+Alt+M` | `Shift+Option+M` |
 
 ### Custom Keybindings
 
@@ -392,7 +386,10 @@ Example:
    }
    ```
 
-4. **Test server manually**:
+4. **Run health check**:
+   - Press `Ctrl+Shift+P` → "Perl: Run Health Check"
+
+5. **Test server manually**:
    ```bash
    echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
    ```
@@ -424,7 +421,7 @@ Example:
 
 **Solutions**:
 
-1. **Reduce result caps**:
+1. **Reduce result caps** (server-side limits via `initializationOptions`):
    ```json
    {
      "perl": {
@@ -437,21 +434,7 @@ Example:
    }
    ```
 
-2. **Disable system @INC**:
-   ```json
-   {
-     "perl-lsp.useSystemInc": false
-   }
-   ```
-
-3. **Reduce resolution timeout**:
-   ```json
-   {
-     "perl-lsp.resolutionTimeout": 25
-   }
-   ```
-
-4. **Disable semantic tokens** (if not needed):
+2. **Disable semantic tokens** (if not needed):
    ```json
    {
      "perl-lsp.enableSemanticTokens": false
@@ -514,6 +497,13 @@ Example:
    }
    ```
 
+4. **Set perltidy config path** (optional):
+   ```json
+   {
+     "perl-lsp.perltidyConfig": "/path/to/.perltidyrc"
+   }
+   ```
+
 ### Extension Conflicts
 
 **Symptoms**: Duplicate diagnostics, conflicting keybindings
@@ -542,131 +532,125 @@ For workspaces with multiple folders:
   "perl-lsp.includePaths": [
     "${workspaceFolder}/lib",
     "${workspaceFolder}/local/lib/perl5"
-  ],
-  "perl-lsp.useSystemInc": false
+  ]
 }
 ```
 
-### Environment Variables
+### Feature Profile
 
-Set environment variables for the LSP server:
+Control which LSP features are active:
 
 ```json
 {
-  "perl-lsp.env": {
-    "PERL5LIB": "${workspaceFolder}/lib",
-    "PERL_MB_OPT": "--install_base ${workspaceFolder}/local"
-  }
+  "perl-lsp.featureProfile": "ga"
 }
 ```
 
-### Custom Formatter
+Available profiles:
+- `auto` (default) — follows the server binary build mode
+- `ga-lock` — GA features only, no experimental
+- `ga` — general availability features
+- `prod` / `production` — alias for `ga`
+- `all` — all features including experimental
 
-Use a custom formatter instead of perltidy:
+### Release Channel
+
+Pin to a specific release or use a different download channel:
 
 ```json
 {
-  "perl-lsp.formatting.provider": "custom",
-  "perl-lsp.formatting.command": "my-formatter",
-  "perl-lsp.formatting.args": ["--style", "perl"]
+  "perl-lsp.channel": "tag",
+  "perl-lsp.versionTag": "v0.12.0"
+}
+```
+
+Available channels: `latest`, `stable`, `tag`.
+
+### Internal Deployment
+
+For teams hosting their own perl-lsp binaries:
+
+```json
+{
+  "perl-lsp.serverPath": "/opt/perl-lsp/bin/perl-lsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+Or with an internal download mirror:
+
+```json
+{
+  "perl-lsp.downloadBaseUrl": "https://internal.example.com/perl-lsp/"
 }
 ```
 
 ### Debug Adapter Protocol (DAP)
 
-Enable debugging support:
+Enable debugging support by creating a launch configuration. Run the command:
+
+- Press `Ctrl+Shift+P` → "Perl: Create Debug Configuration"
+
+Or add manually to `.vscode/launch.json`:
 
 ```json
 {
-  "perl-lsp.enableDebugAdapter": true,
-  "perl-lsp.debugAdapter.port": 9257
-}
-```
-
-See [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) for more details.
-
-### Workspace Folders
-
-Configure workspace-specific settings:
-
-```json
-{
-  "perl-lsp.workspaceFolders": [
+  "version": "0.2.0",
+  "configurations": [
     {
-      "uri": "file:///path/to/project1",
-      "name": "Project 1",
-      "settings": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", "local/lib/perl5"]
-          }
-        }
-      }
-    },
-    {
-      "uri": "file:///path/to/project2",
-      "name": "Project 2",
-      "settings": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["src"]
-          }
-        }
-      }
+      "type": "perl",
+      "request": "launch",
+      "name": "Perl: Launch Script",
+      "program": "${workspaceFolder}/script.pl",
+      "stopOnEntry": true
     }
   ]
 }
 ```
 
-### Performance Tuning
+See [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) for more details.
 
-For large workspaces, adjust performance settings:
+### Server-Side Performance Limits
+
+The `perl.*` namespace passes server-side initialization options. These control internal server caps and are separate from the extension's `perl-lsp.*` settings:
 
 ```json
 {
   "perl": {
     "limits": {
-      "workspaceSymbolCap": 100,
-      "referencesCap": 200,
-      "completionCap": 50,
+      "workspaceSymbolCap": 200,
+      "referencesCap": 500,
+      "completionCap": 100,
       "astCacheMaxEntries": 50,
       "maxIndexedFiles": 5000,
       "maxTotalSymbols": 250000,
       "workspaceScanDeadlineMs": 20000,
       "referenceSearchDeadlineMs": 1500
-    },
-    "workspace": {
-      "resolutionTimeout": 25
     }
   }
 }
 ```
 
-### Logging
+### Logging and Tracing
 
 Enable detailed logging for troubleshooting:
 
 ```json
 {
-  "perl-lsp.trace.server": "verbose",
-  "perl-lsp.logLevel": "debug"
+  "perl-lsp.trace.server": "verbose"
 }
 ```
 
-Logs are written to:
-- **Windows**: `%APPDATA%\Code\logs\`
-- **macOS**: `~/Library/Logs/Code/`
-- **Linux**: `~/.config/Code/logs/`
+Logs appear in the VS Code Output panel under "Perl Language Server".
 
 ---
 
 ## Complete Example Configuration
 
-Here's a comprehensive example configuration for a typical Perl project:
+Here is a typical `.vscode/settings.json` for a Perl project using only real extension settings:
 
 ```json
 {
-  // perl-lsp extension settings
   "perl-lsp.serverPath": "",
   "perl-lsp.autoDownload": true,
   "perl-lsp.trace.server": "off",
@@ -676,56 +660,30 @@ Here's a comprehensive example configuration for a typical Perl project:
   "perl-lsp.formatOnSave": true,
   "perl-lsp.enableRefactoring": true,
   "perl-lsp.enableTestIntegration": true,
-
-  // Workspace configuration
   "perl-lsp.includePaths": [
     "lib",
     "local/lib/perl5",
     "vendor/lib"
   ],
-  "perl-lsp.useSystemInc": false,
-  "perl-lsp.resolutionTimeout": 50,
+  "perl-lsp.perltidyConfig": "",
+  "perl-lsp.autoPopulateNewFiles": true,
+  "perl-lsp.featureProfile": "auto",
 
-  // Inlay hints
-  "perl-lsp.inlayHints.enabled": true,
-  "perl-lsp.inlayHints.parameterHints": true,
-  "perl-lsp.inlayHints.typeHints": true,
-  "perl-lsp.inlayHints.maxLength": 30,
-
-  // Test runner
-  "perl-lsp.testRunner.enabled": true,
-  "perl-lsp.testRunner.command": "prove",
-  "perl-lsp.testRunner.args": ["-l", "-v"],
-  "perl-lsp.testRunner.timeout": 60000,
-
-  // Performance limits
-  "perl-lsp.workspaceSymbolCap": 200,
-  "perl-lsp.referencesCap": 500,
-  "perl-lsp.completionCap": 100,
-
-  // Language-specific settings
   "[perl]": {
     "editor.defaultFormatter": "EffortlessMetrics.perl-lsp-rs",
     "editor.formatOnSave": true,
     "editor.tabSize": 4,
-    "editor.insertSpaces": true,
-    "editor.wordBasedSuggestions": true
+    "editor.insertSpaces": true
   },
 
-  // Files to exclude
   "files.exclude": {
     "**/.git": true,
-    "**/.svn": true,
-    "**/.hg": true,
-    "**/CVS": true,
     "**/.DS_Store": true,
     "**/node_modules": true
   },
 
-  // Search exclusions
   "search.exclude": {
     "**/node_modules": true,
-    "**/bower_components": true,
     "**/local": true
   }
 }
@@ -738,6 +696,5 @@ Here's a comprehensive example configuration for a typical Perl project:
 - [Getting Started](../tutorials/GETTING_STARTED.md) - Quick start guide
 - [Configuration Reference](../reference/CONFIG.md) - Complete configuration options
 - [Troubleshooting Guide](../how-to/TROUBLESHOOTING.md) - Common issues and solutions
-- [Performance Tuning](../how-to/PERFORMANCE_TUNING.md) - Performance optimization guide
 - [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) - Debugging setup
 - [Editor Setup](../how-to/EDITOR_SETUP.md) - Other editor configurations
