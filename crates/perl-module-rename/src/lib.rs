@@ -64,35 +64,46 @@ pub fn plan_module_rename_edits(
         let mut rewritten: Option<String> = None;
 
         for (old_variant, new_variant) in &variants {
-            let current_line = rewritten.as_deref().unwrap_or(line);
+            // Re-read after each replacement so patterns compose correctly.
+            // A single source line may contain multiple pattern types
+            // (e.g. `@ISA = qw(Foo::Bar); Foo::Bar::init();`), and each
+            // replacement must see the latest working text.
 
-            // Check import forms first (use/require/use parent/use base)
-            if line_references_module_import(current_line, old_variant) {
-                let (candidate, changed) =
-                    replace_module_token(current_line, old_variant, new_variant);
-                if changed {
-                    rewritten = Some(candidate);
+            // Check import forms (use/require/use parent/use base)
+            {
+                let current_line = rewritten.as_deref().unwrap_or(line);
+                if line_references_module_import(current_line, old_variant) {
+                    let (candidate, changed) =
+                        replace_module_token(current_line, old_variant, new_variant);
+                    if changed {
+                        rewritten = Some(candidate);
+                    }
                 }
-                continue;
             }
 
             // Check @ISA assignments: module name appears standalone in the line
             // (e.g. `@ISA = ('Foo::Bar')`, `our @ISA = qw(Foo::Bar)`)
-            if line_references_isa_assignment(current_line, old_variant) {
-                let (candidate, changed) =
-                    replace_module_token(current_line, old_variant, new_variant);
-                if changed {
-                    rewritten = Some(candidate);
+            {
+                let current_line = rewritten.as_deref().unwrap_or(line);
+                if line_references_isa_assignment(current_line, old_variant) {
+                    let (candidate, changed) =
+                        replace_module_token(current_line, old_variant, new_variant);
+                    if changed {
+                        rewritten = Some(candidate);
+                    }
                 }
-                continue;
             }
 
             // Check qualified function calls: `Foo::Bar::func()` — the module
             // name appears as a namespace prefix followed by `::`.
-            if line_references_qualified_call(current_line, old_variant) {
-                let candidate = replace_module_name_prefix(current_line, old_variant, new_variant);
-                if candidate != current_line {
-                    rewritten = Some(candidate);
+            {
+                let current_line = rewritten.as_deref().unwrap_or(line);
+                if line_references_qualified_call(current_line, old_variant) {
+                    let candidate =
+                        replace_module_name_prefix(current_line, old_variant, new_variant);
+                    if candidate != current_line {
+                        rewritten = Some(candidate);
+                    }
                 }
             }
         }
@@ -539,5 +550,27 @@ mod tests {
             rewritten,
             "use New::Module;\nour @ISA = qw(New::Module);\nmy $x = New::Module::create();\n"
         );
+    }
+
+    #[test]
+    fn plans_isa_and_qualified_call_on_same_line() {
+        // When @ISA assignment and a qualified function call appear on the same
+        // source line, both must be rewritten. The ISA branch must not short-
+        // circuit via `continue` and skip the qualified-call branch.
+        let source = "@ISA = qw(Foo::Bar); Foo::Bar::init();\n";
+        let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Mod");
+        let rewritten = apply_module_rename_edits(source, &edits);
+        assert_eq!(rewritten, "@ISA = qw(New::Mod); New::Mod::init();\n");
+    }
+
+    #[test]
+    fn plans_import_and_qualified_call_on_same_line() {
+        // Same principle: a `use` import and a qualified call on the same line.
+        // The import branch fires first via `continue`; the qualified call must
+        // also be rewritten in a subsequent pass.
+        let source = "use Foo::Bar; Foo::Bar::init();\n";
+        let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Mod");
+        let rewritten = apply_module_rename_edits(source, &edits);
+        assert_eq!(rewritten, "use New::Mod; New::Mod::init();\n");
     }
 }

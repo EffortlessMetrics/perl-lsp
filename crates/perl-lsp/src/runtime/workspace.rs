@@ -797,10 +797,10 @@ impl LspServer {
                         if unhandled {
                             let msg = format!(
                                 "Some references to '{}' may not have been updated. \
-                                 Static method calls (->), qualified calls ({}::func), \
-                                 and @ISA assignments are not automatically rewritten. \
+                                 String literals, comments, and dynamic method calls \
+                                 are not automatically rewritten. \
                                  Use find-and-replace to update them manually.",
-                                old_module, old_module
+                                old_module
                             );
                             if let Err(e) = self
                                 .show_message(crate::runtime::window::MessageType::Warning, &msg)
