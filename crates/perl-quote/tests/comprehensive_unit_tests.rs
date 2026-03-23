@@ -5,7 +5,7 @@ use perl_quote::{
     extract_substitution_parts_strict, extract_transliteration_parts,
     validate_substitution_modifiers,
 };
-use perl_tdd_support::must::{must, must_err};
+use perl_tdd_support::{must, must_err};
 
 /// Helper to convert SubstitutionError results (which don't impl std::error::Error)
 fn strict(input: &str) -> (String, String, String) {
@@ -828,4 +828,38 @@ fn test_strict_subst_slash_in_double_quoted_replacement() {
     assert_eq!(pat, "foo");
     assert_eq!(repl, r#"sprintf("%s/%s", $a, $b)"#);
     assert_eq!(mods, "e");
+}
+
+// ──────────────────────────────────────────────────────────────
+// Issue #2896: s/''/'/g — single-quote as literal replacement char
+// ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_strict_subst_squote_as_replacement_char() {
+    // s/''/'/g — replacement is a literal single-quote character
+    // This is the primary failing case from TAP/Parser/YAMLish/Reader.pm
+    let (pat, repl, mods) = strict("s/''/'/g");
+    assert_eq!(pat, "''");
+    assert_eq!(repl, "'");
+    assert_eq!(mods, "g");
+}
+
+#[test]
+fn test_strict_subst_squote_slash_join_regression() {
+    // Regression guard: join('/', @parts) replacement must still work.
+    // `'` immediately followed by `/` (closing delimiter) then `'` (quote) —
+    // this is the tricky case that requires lookahead.
+    let (pat, repl, mods) = strict(r#"s/([A-Za-z]+)/join('/', @parts)/ge"#);
+    assert_eq!(pat, "([A-Za-z]+)");
+    assert_eq!(repl, "join('/', @parts)");
+    assert_eq!(mods, "ge");
+}
+
+#[test]
+fn test_strict_subst_dquote_as_replacement_char() {
+    // Double-quote variant of the same bug
+    let (pat, repl, mods) = strict(r#"s/""/"/g"#);
+    assert_eq!(pat, r#""""#);
+    assert_eq!(repl, r#"""#);
+    assert_eq!(mods, "g");
 }
