@@ -93,3 +93,42 @@ fn test_typeglob_identifier_regression() {
 fn test_typeglob_in_local_regression() {
     assert_clean_parse("local (*TO_CHLD_R, *TO_CHLD_W);");
 }
+
+// Disambiguation: *<EXPR> must NOT be parsed as a typeglob.
+// The 2-token lookahead must detect that an expression follows the `<`,
+// and fall through to let the operand be parsed as a readline/glob.
+#[test]
+fn test_star_readline_not_typeglob() {
+    // *<STDIN> = glob dereference through a readline, not a typeglob named "<"
+    assert_clean_parse(r#"my $line = *<STDIN>;"#);
+}
+
+#[test]
+fn test_star_diamond_not_typeglob() {
+    // *<> = dereference of the diamond operator, not a typeglob named "<"
+    assert_clean_parse(r#"my $x = *<>;"#);
+}
+
+// Typeglob in list context (before closing bracket or brace)
+#[test]
+fn test_typeglob_less_in_arrayref() {
+    // *< inside an anonymous arrayref: [*<]
+    assert_clean_parse(r#"my $r = [*<];"#);
+}
+
+#[test]
+fn test_typeglob_greater_in_arrayref() {
+    assert_clean_parse(r#"my $r = [*>];"#);
+}
+
+// *( inside a hash value position (before closing brace)
+#[test]
+fn test_typeglob_open_paren_in_hash() {
+    assert_clean_parse(r#"my %h = (gid => *();"#);
+}
+
+// sort map is the same pattern as sort grep — must not be misread as a comparator
+#[test]
+fn test_sort_map_not_comparator() {
+    assert_clean_parse(r#"my @x = sort map { uc($_) } @list;"#);
+}
