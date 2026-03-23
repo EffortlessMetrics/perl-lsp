@@ -244,10 +244,7 @@ fn test_related_information_forwarded() -> Result<(), Box<dyn std::error::Error>
     assert!(!ri_arr.is_empty(), "PL600 relatedInformation must be non-empty");
 
     for ri in ri_arr {
-        assert!(
-            ri["location"].is_object(),
-            "relatedInformation[].location must be an object"
-        );
+        assert!(ri["location"].is_object(), "relatedInformation[].location must be an object");
         assert!(
             ri["location"]["uri"].is_string(),
             "relatedInformation[].location.uri must be a string"
