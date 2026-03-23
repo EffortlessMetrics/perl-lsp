@@ -274,3 +274,52 @@ fn test_local_typeglob_slash() {
 fn test_multiple_punct_typeglobs_same_statement() {
     assert_clean_parse("(*RS, *OFS) = (*/, *,);");
 }
+
+// === Additional edge cases added by deep review ===
+
+// *= as lvalue: typeglob *= can appear on the left side of an assignment.
+// *other = *= aliases the FORMAT_LINES_PER_PAGE slot of *other.
+#[test]
+fn test_typeglob_assign_as_lvalue() {
+    assert_clean_parse("*other = *=;");
+}
+
+// */ at end of file with no trailing semicolon.
+// Exercises the None / Eof branch of is_typeglob_punct_terminator.
+#[test]
+fn test_typeglob_slash_at_eof() {
+    assert_clean_parse("*RS = */");
+}
+
+// *. as a list element followed by a comma separator.
+// Comma is listed as a terminator for the lookahead forms; this confirms it.
+#[test]
+fn test_typeglob_dot_followed_by_comma_in_list() {
+    assert_clean_parse("my @g = (*., *,);");
+}
+
+// *: inside a hash value position (RightParen as terminator for the lookahead).
+#[test]
+fn test_typeglob_colon_in_hash_value() {
+    assert_clean_parse("my %h = (linebreak => *:);");
+}
+
+// Whitespace and newline between */ and ; must not defeat the lookahead.
+// Token stream skips trivia, so peek_second sees the semicolon directly.
+#[test]
+fn test_typeglob_slash_with_newline_before_semi() {
+    assert_clean_parse("*RS = */\n;");
+}
+
+// *| followed by } — RightBrace as terminator for BitwiseOr lookahead.
+#[test]
+fn test_typeglob_pipe_before_closing_brace() {
+    assert_clean_parse("my %h = (flush => *|);");
+}
+
+// Regression: $x * $y / $z stays as multiply-then-divide, not */ typeglob.
+// The * here is infix and never reaches the unary Star arm.
+#[test]
+fn test_multiply_divide_chain_not_typeglob() {
+    assert_clean_parse("my $n = $x * $y / $z;");
+}
