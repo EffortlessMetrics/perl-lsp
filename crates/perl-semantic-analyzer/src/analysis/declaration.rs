@@ -8,7 +8,35 @@ use crate::workspace_index::{SymKind, SymbolKey};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
-/// Type alias for parent map using fast hash
+/// Parent-map from child node to parent node, stored as raw pointers.
+///
+/// # Safety Invariant
+///
+/// Every `*const Node` in this map (both keys and values) must be a pointer
+/// obtained by casting a shared reference (`&Node`) that was derived from the
+/// **same** `Arc<Node>` tree that was passed to [`DeclarationProvider::build_parent_map`].
+/// The pointed-to nodes must remain alive for the entire duration of any code
+/// that inspects the map.
+///
+/// Raw pointers are used as **hash keys only** for O(1) identity-based lookup.
+/// They are **never** dereferenced directly through this map.  Safe references
+/// are recovered via the companion `node_lookup` map
+/// (`FxHashMap<*const Node, &Node>`) that re-derives `&Node` from the live
+/// `Arc<Node>` tree at call time.
+///
+/// # Ownership and Lifetime
+///
+/// The `Arc<Node>` that backs the tree must outlive every `&ParentMap` borrow.
+/// In the LSP server this is guaranteed because both the `Arc<Node>` and the
+/// `ParentMap` are stored together in `DocumentState`, guarded by a
+/// `parking_lot::Mutex`.
+///
+/// # Thread Safety
+///
+/// `*const Node` is `!Send + !Sync`.  Consequently `ParentMap` is `!Send +
+/// !Sync` and must remain on the thread that owns the `Arc<Node>` tree.
+/// LSP request handlers satisfy this requirement because they process each
+/// request synchronously within a single thread context.
 pub type ParentMap = FxHashMap<*const Node, *const Node>;
 
 /// Provider for finding declarations in Perl source code.
@@ -251,16 +279,34 @@ impl<'a> DeclarationProvider<'a> {
     /// ```
     pub fn build_parent_map(node: &Node, map: &mut ParentMap, parent: Option<*const Node>) {
         if let Some(p) = parent {
-            // SAFETY: `node` is a shared reference derived from `Arc<Node>` in `DocumentState.ast`.
-            // The Arc is held alive by the documents HashMap behind a parking_lot Mutex for the
-            // entire lifetime of `DeclarationProvider<'a>` (enforced by the lifetime parameter).
-            // The raw pointer is therefore valid for at least as long as the MutexGuard is held.
+            // SAFETY invariant for the ParentMap:
+            //
+            // 1. `node` is a shared reference (`&Node`) obtained from a live `Arc<Node>`.
+            //    Casting it to `*const Node` produces a pointer that is valid for the
+            //    lifetime of that `Arc`.
+            //
+            // 2. `p` (the parent pointer) was obtained by the same cast in the previous
+            //    recursive frame, so it satisfies the same validity guarantee.
+            //
+            // 3. Neither pointer is **ever** dereferenced through this map.  The map stores
+            //    raw pointers purely as identity keys.  Callers that need to follow a parent
+            //    pointer back to a `&Node` must go through `build_node_lookup_map`, which
+            //    re-derives safe references from the same live `Arc<Node>` tree.
+            //
+            // 4. The caller (LSP runtime) is responsible for ensuring the `Arc<Node>` tree
+            //    remains alive for at least as long as any `&ParentMap` borrow.  In the LSP
+            //    server both the `Arc` and the `ParentMap` live inside `DocumentState`,
+            //    guarded by the same `parking_lot::Mutex`.
+            //
+            // 5. No interior mutability is introduced: `node` is not modified during
+            //    traversal.  The `ParentMap` itself is an exclusive (`&mut`) borrow during
+            //    construction and transitions to a shared borrow (`&`) afterwards.
             map.insert(node as *const _, p);
         }
 
         for child in Self::get_children_static(node) {
-            // SAFETY: Same invariant as above — `child` is a child of `node`, both owned by the
-            // same `Arc<Node>` tree that is live under the documents MutexGuard.
+            // SAFETY: `child` is a child reference of `node`, both living in the same
+            // `Arc<Node>` allocation.  The same invariant from above applies.
             Self::build_parent_map(child, map, Some(node as *const _));
         }
     }
@@ -487,6 +533,11 @@ impl<'a> DeclarationProvider<'a> {
 
     /// Find the current package context for a node
     fn find_current_package<'b>(&'b self, node: &Node) -> Option<&'b str> {
+        // SAFETY: `node` is a shared reference into the `Arc<Node>` AST tree held
+        // by `DeclarationProvider<'a>`.  The raw pointer is used only as a hash key
+        // to query the `parent_map`; it is never dereferenced.  Safe `&Node`
+        // references are recovered through `node_lookup`, which re-derives them
+        // from the same live `Arc<Node>` tree.
         let mut current_ptr: *const Node = node as *const _;
 
         // Build temporary parent map if not provided (for testing)
@@ -904,6 +955,12 @@ impl<'a> DeclarationProvider<'a> {
         Self::get_children_static(node)
     }
 
+    /// Build a lookup map from raw node pointers back to safe references.
+    ///
+    /// This map is the bridge that makes `ParentMap` safe to use: callers
+    /// obtain a `*const Node` from the parent map and look it up here to
+    /// recover a properly-lifetime-bounded `&Node`.  The raw pointer is
+    /// used purely as an identity key — it is never dereferenced directly.
     fn build_node_lookup_map(&self) -> FxHashMap<*const Node, &Node> {
         let mut map = FxHashMap::default();
         Self::build_node_lookup(self.ast.as_ref(), &mut map);
@@ -911,6 +968,11 @@ impl<'a> DeclarationProvider<'a> {
     }
 
     fn build_node_lookup<'b>(node: &'b Node, map: &mut FxHashMap<*const Node, &'b Node>) {
+        // SAFETY: `node` is a shared reference whose lifetime `'b` is tied to
+        // `self.ast` (`Arc<Node>`).  We store the address as a raw-pointer key
+        // alongside the same reference as the value.  The value is the safe
+        // side of this pair — it is the only route through which the pointer
+        // is ever turned back into usable data.
         map.insert(node as *const Node, node);
         for child in Self::get_children_static(node) {
             Self::build_node_lookup(child, map);
