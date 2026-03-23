@@ -5,6 +5,16 @@ use cpan_test_helpers::*;
 // not just those that follow a variable token ($x, @x, %x). This caused quote-op
 // suppression inside sub/if/else/while/for block bodies, leading to parse errors
 // on m//, s///, qr//, etc. wherever hash_brace_depth > 0.
+//
+// NOTE on scope: This fix narrows the `{` handler from mode==ExpectOperator to
+// after_var_subscript==true. This corrects block-open braces after identifiers/keywords
+// (sub, else, etc.). The case where `{` follows `)` or `]` (e.g. `if ($var) {`) still
+// has the same behavior as master — that is a separate pre-existing issue tracked in
+// follow-up work.
+//
+// Verification method: `assert_clean_parse` checks for Error/Missing AST nodes, but
+// some malformed parses (regex eating block delimiters) produce no Error node. Where
+// correctness is critical, tests below also assert the sexp content.
 
 // Pattern 1: m// inside sub body (the core regression)
 #[test]
@@ -230,4 +240,58 @@ sub foo {
 }
 "#;
     assert_clean_parse(source);
+}
+
+// --- SEXP CONTENT TESTS: verify the regex text is correct, not just "no Error node" ---
+// These are stronger than assert_clean_parse alone: a regex eating a block-close brace
+// does not produce an Error node, but the sexp will contain the wrong regex text.
+
+#[test]
+fn test_regex_in_sub_body_correct_content() {
+    // Verifies the regex "/abc/" is parsed correctly, not "/abc/; }" or similar.
+    // Before the fix, hash_brace_depth > 0 inside the sub caused m to be treated
+    // as a bareword, which then caused the regex parser to misread delimiters.
+    let source = r#"sub foo { $x =~ m/abc/; }"#;
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains(r#""/abc/""#),
+        "Expected regex '/abc/' to be parsed correctly, got sexp: {}",
+        sexp
+    );
+}
+
+#[test]
+fn test_regex_in_else_block_correct_content() {
+    // Verifies the else-block regex is not eating the closing brace.
+    let source = r#"if (1) { 1; } else { $y =~ m/pattern/; }"#;
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains(r#""/pattern/""#),
+        "Expected regex '/pattern/' to be parsed correctly, got sexp: {}",
+        sexp
+    );
+}
+
+#[test]
+fn test_substitution_in_sub_body_correct_content() {
+    // Verifies s/foo/bar/ content is not mangled inside a sub body.
+    let source = r#"sub f { $x =~ s/foo/bar/g; }"#;
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains("foo") && sexp.contains("bar"),
+        "Expected s/foo/bar/g to be parsed with correct parts, got sexp: {}",
+        sexp
+    );
+}
+
+#[test]
+fn test_tr_in_sub_body_correct_content() {
+    // Verifies tr/aeiou/AEIOU/ content is not mangled inside a sub body.
+    let source = r#"sub f { $x =~ tr/aeiou/AEIOU/; }"#;
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains("aeiou") && sexp.contains("AEIOU"),
+        "Expected tr/aeiou/AEIOU/ to be parsed with correct parts, got sexp: {}",
+        sexp
+    );
 }
