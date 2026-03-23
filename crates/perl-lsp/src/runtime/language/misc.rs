@@ -402,8 +402,10 @@ impl LspServer {
 
             let mut out = Vec::new();
             if let Some(ref ast) = doc.ast {
-                // Build parent map if not cached
-                let parent_map = crate::selection_range::build_parent_map(ast);
+                // Use the pre-built cached parent map rather than rebuilding on every request.
+                // `doc.parent_map` and `selection_range::build_parent_map` share the same
+                // underlying Node type (`perl_parser_core::ast::Node`), so no conversion is needed.
+                let parent_map = &doc.parent_map;
 
                 for pos in positions {
                     // Positions in array still need per-item extraction with graceful handling
@@ -414,7 +416,7 @@ impl LspServer {
                         pos["character"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
                     let off = self.pos16_to_offset(doc, line, col);
                     let chain =
-                        crate::selection_range::selection_chain(ast, &parent_map, off, &|o| {
+                        crate::selection_range::selection_chain(ast, parent_map, off, &|o| {
                             self.offset_to_pos16(doc, o)
                         });
                     out.push(chain);

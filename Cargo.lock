@@ -2676,6 +2676,7 @@ dependencies = [
  "perl-workspace-index",
  "regex",
  "rustc-hash",
+ "tracing",
 ]
 
 [[package]]
