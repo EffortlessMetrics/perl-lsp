@@ -3054,7 +3054,9 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
 
 fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     let baseline_path = repo_root.join("ci").join("todo_baseline.txt");
-    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive"];
+    // "xtask" is excluded because it is build tooling whose source code documents and implements
+    // the TODO-scanner itself (unwired_scan.rs), producing unavoidable self-referential matches.
+    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask"];
     let exclude_files = [
         repo_root.join("ci").join("check_todos.sh"),
         repo_root.join("crates").join("perl-parser").join("tests").join("missing_docs_ac_tests.rs"),
@@ -3065,6 +3067,12 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("tdd")
             .join("test_generator.rs"),
         repo_root.join("crates").join("perl-ci-hygiene").join("src").join("main.rs"),
+        // Perl code-as-string: contains `TODO` as a Perl package bareword, not an unlinked TODO comment.
+        repo_root
+            .join("crates")
+            .join("perl-parser-core")
+            .join("tests")
+            .join("complex_paren_args_tests.rs"),
     ];
 
     let todo_re = Regex::new(r"TODO|FIXME")?;
