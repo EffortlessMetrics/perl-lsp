@@ -183,6 +183,109 @@ fn recovered_error_has_correct_site_for_arg_list() {
     );
 }
 
+/// Missing `]` before EOF (not before `;`) — tests the new EOF arm added in this PR.
+/// The previous code only had `None` for EOF; `Some(Eof)` was absent and never fired.
+#[test]
+fn missing_bracket_before_eof_emits_recovered() {
+    // Balanced baseline — must parse clean
+    assert_clean_parse("my $v = $arr[$i];");
+
+    let src = "my $v = $arr[$i";
+    let (ast, errors) = parse_errors(src);
+
+    let recovered = count_inserted_closer(&errors);
+    assert!(
+        recovered >= 1,
+        "Expected InsertedCloser for missing ']' before EOF in '{}', got errors: {:?}",
+        src,
+        errors
+    );
+
+    // AST must not be abandoned
+    assert!(
+        matches!(ast.kind, NodeKind::Program { .. }),
+        "Parser must return a Program node for '{}' (partial parse is OK)",
+        src
+    );
+}
+
+/// The `Recovered` error for `]` must record `RecoverySite::ArraySubscript`.
+#[test]
+fn recovered_error_has_correct_site_for_array_subscript() {
+    let src = "my $v = $arr[$i;";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_array_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArraySubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+
+    assert!(
+        has_array_recovery,
+        "Expected Recovered {{ site: ArraySubscript, kind: InsertedCloser }} for '{}', got: {:?}",
+        src, errors
+    );
+}
+
+/// Both inner and outer parens missing — each level independently emits InsertedCloser.
+/// `foo(bar($x` → inner bar's `)` recovered at EOF, then outer foo's `)` also recovered.
+/// This tests that nested recovery does not lose the outer call's recovery.
+#[test]
+fn nested_missing_both_parens_at_eof_emits_two_recovered() {
+    // Balanced baseline
+    assert_clean_parse("foo(bar($x))");
+
+    let src = "foo(bar($x";
+    let (ast, errors) = parse_errors(src);
+
+    let recovered = count_inserted_closer(&errors);
+    assert!(
+        recovered >= 2,
+        "Expected at least 2 InsertedCloser recoveries (one per level) for '{}', got {}: {:?}",
+        src,
+        recovered,
+        errors
+    );
+
+    // Parser still produces a usable Program
+    assert!(
+        matches!(ast.kind, NodeKind::Program { .. }),
+        "Parser must return a Program node for nested missing closers in '{}'",
+        src
+    );
+}
+
+/// Paren missing before EOF inside a list assignment — tests truncated file recovery.
+/// The most common real-world case: user is still typing when LSP analyses the buffer.
+#[test]
+fn missing_paren_at_eof_in_list_assignment_emits_recovered() {
+    assert_clean_parse("my @a = ($x, $y);");
+
+    let src = "my @a = ($x, $y";
+    let (ast, errors) = parse_errors(src);
+
+    let recovered = count_inserted_closer(&errors);
+    assert!(
+        recovered >= 1,
+        "Expected InsertedCloser for truncated list '{}', got errors: {:?}",
+        src,
+        errors
+    );
+
+    // The declaration statement itself must have been produced
+    assert!(
+        matches!(ast.kind, NodeKind::Program { .. }),
+        "Parser must produce a Program for truncated list assignment '{}'",
+        src
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Regression: clean-parse inputs must produce zero Recovered errors
 // ---------------------------------------------------------------------------
