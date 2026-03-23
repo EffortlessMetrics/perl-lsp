@@ -219,7 +219,9 @@ fn find_heredoc_pair(text: &str, start_byte: usize) -> Option<(usize, usize, usi
 /// Returns `(opener_byte, closer_byte)` for the delimiter *pair* containing
 /// `start_byte`, or `None`.
 fn find_regex_delimiter_pair(text: &str, start_byte: usize) -> Option<(usize, usize)> {
-    let ch = char_at(text, start_byte)?;
+    let (start_byte, ch) = char_at(text, start_byte)
+        .map(|c| (start_byte, c))
+        .or_else(|| prev_char_pos(text, start_byte))?;
 
     // The character at cursor must be a non-bracket, non-quote punctuation char
     // that is plausibly a regex delimiter.

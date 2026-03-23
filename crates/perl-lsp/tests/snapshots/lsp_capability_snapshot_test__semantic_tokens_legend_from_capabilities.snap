@@ -1,5 +1,6 @@
 ---
 source: crates/perl-lsp/tests/lsp_capability_snapshot_test.rs
+assertion_line: 119
 expression: "&legend"
 ---
 tokenModifiers:
@@ -13,6 +14,9 @@ tokenModifiers:
   - modification
   - documentation
   - defaultLibrary
+  - scalarVariable
+  - arrayVariable
+  - hashVariable
 tokenTypes:
   - namespace
   - type
