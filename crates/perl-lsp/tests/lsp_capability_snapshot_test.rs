@@ -66,6 +66,10 @@ fn snapshot_code_action_kinds() -> Result<(), Box<dyn std::error::Error>> {
     let caps = &init_result["capabilities"];
     // Extract code action kinds so any addition or removal is caught
     let kinds = caps.get("codeActionProvider").and_then(|p| p.get("codeActionKinds"));
+    assert!(
+        kinds.is_some(),
+        "codeActionProvider.codeActionKinds must be present in server capabilities"
+    );
     assert_yaml_snapshot!("code_action_kinds", &kinds);
     Ok(())
 }
@@ -82,6 +86,10 @@ fn snapshot_completion_trigger_characters() -> Result<(), Box<dyn std::error::Er
 
     let caps = &init_result["capabilities"];
     let triggers = caps.get("completionProvider").and_then(|p| p.get("triggerCharacters"));
+    assert!(
+        triggers.is_some(),
+        "completionProvider.triggerCharacters must be present in server capabilities"
+    );
     assert_yaml_snapshot!("completion_trigger_characters", &triggers);
     Ok(())
 }
@@ -99,6 +107,15 @@ fn snapshot_semantic_tokens_legend() -> Result<(), Box<dyn std::error::Error>> {
 
     let caps = &init_result["capabilities"];
     let legend = caps.get("semanticTokensProvider").and_then(|p| p.get("legend"));
+    // Guard that semanticTokensProvider.legend is present — its removal is a breaking
+    // change because clients have already decoded the legend indices they were given
+    // at initialization. A snapshot mismatch alone might be misread as a trivial
+    // formatting change; this assertion makes the breakage explicit.
+    assert!(
+        legend.is_some(),
+        "semanticTokensProvider.legend must be present in server capabilities — \
+         removing it is a breaking change for all connected clients"
+    );
     assert_yaml_snapshot!("semantic_tokens_legend_from_capabilities", &legend);
     Ok(())
 }

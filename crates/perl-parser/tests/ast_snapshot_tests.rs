@@ -112,6 +112,27 @@ fn snapshot_ast_ternary_operator() {
     assert_snapshot!(parse_sexp("my $x = $cond ? \"yes\" : \"no\";"));
 }
 
+// CPAN edge cases
+#[test]
+fn snapshot_ast_empty_input() {
+    // Empty .pm files are legal Perl; the parser must not panic and must emit an
+    // empty program node.
+    assert_snapshot!(parse_sexp(""));
+}
+
+#[test]
+fn snapshot_ast_use_module_qw() {
+    // `use Module qw(...)` is the most common CPAN import pattern.
+    assert_snapshot!(parse_sexp("use List::Util qw(sum min max first);"));
+}
+
+#[test]
+fn snapshot_ast_qw_list_assignment() {
+    // qw// as a list literal is ubiquitous in Perl — covers the word-list quoting
+    // operator which has special tokenization rules.
+    assert_snapshot!(parse_sexp("my @days = qw(Mon Tue Wed Thu Fri);"));
+}
+
 // ---------------------------------------------------------------------------
 // 2. Error recovery AST snapshots (malformed input)
 // ---------------------------------------------------------------------------

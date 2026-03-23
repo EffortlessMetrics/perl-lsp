@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"my @days = qw(Mon Tue Wed Thu Fri);\")"
+---
+(source_file (my_declaration (variable @ days)(array (string "Mon") (string "Tue") (string "Wed") (string "Thu") (string "Fri"))))
