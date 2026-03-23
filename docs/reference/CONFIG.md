@@ -5,6 +5,8 @@ This document is the authoritative list of all configuration keys for the Perl L
 ## Table of Contents
 
 - [Configuration Format](#configuration-format)
+- [Project Configuration File (.perl-lsp.toml)](#project-configuration-file-perl-lsptoml)
+- [Configuration Precedence](#configuration-precedence)
 - [Workspace Settings](#workspace-settings)
 - [Inlay Hints](#inlay-hints)
 - [Test Runner](#test-runner)
@@ -33,6 +35,110 @@ All LSP server settings are under the `perl` namespace:
   }
 }
 ```
+
+---
+
+## Project Configuration File (.perl-lsp.toml)
+
+`.perl-lsp.toml` is an optional, editor-agnostic project configuration file that you commit to your repository. It lets you share settings with your whole team without requiring each developer to configure their own editor. The file lives at the **workspace root** (the directory containing your `.git` folder or `Makefile.PL` / `cpanfile`).
+
+The server silently skips the file if it does not exist. If the file exists but contains invalid TOML, the server emits a `window/showMessage` warning and continues with defaults.
+
+Unknown keys and sections are silently ignored for forward compatibility.
+
+### File Location
+
+```
+your-project/
+  .git/
+  .perl-lsp.toml   ← add this file
+  lib/
+  t/
+```
+
+### Supported Sections and Keys
+
+#### `[perl]` — Module Resolution
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `include_paths` | `string[]` | `[]` | Additional include paths for module resolution, relative to workspace root. An empty list leaves the built-in defaults (`lib`, `.`, `local/lib/perl5`) unchanged. |
+| `version` | `string` | (none) | Perl version hint, e.g. `"5.38"`. Parsed but not yet wired to diagnostics; reserved for future use. |
+
+#### `[diagnostics]` — Linting
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `perlcritic` | `boolean` | (unset) | Enable perlcritic diagnostics. When unset, the server default (`false`) applies. Requires `perlcritic` installed on the system. |
+| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. 1 = most severe (gentle), 5 = everything (brutal). Must be in the range 1–5; values outside this range are a parse error. |
+
+#### `[features]` — LSP Feature Toggles
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `inlay_hints` | `boolean` | (unset) | Enable or disable all inlay hints globally. When unset, the server default (`true`) applies. |
+
+#### `[formatting]` — Future Use (Reserved)
+
+The `[formatting]` section is reserved for future perltidy configuration and is not yet wired. Keys in this section are silently ignored. You may include it in your file today using the full example below without causing errors.
+
+### Full Example
+
+```toml
+# .perl-lsp.toml — project-wide defaults for perl-lsp
+# Commit this file to share settings across your team.
+# All keys are optional. Unknown keys are silently ignored.
+
+[perl]
+# Perl version hint (reserved for future diagnostic targeting)
+version = "5.38"
+
+# Module search paths relative to workspace root.
+# Leave empty (or omit this key) to keep the built-in defaults:
+#   lib, ., local/lib/perl5
+include_paths = ["lib", "local/lib/perl5"]
+
+[diagnostics]
+# Enable perlcritic linting (opt-in; requires perlcritic installed)
+perlcritic = false
+
+# Minimum severity to report: 1 (most severe) to 5 (everything)
+perlcritic_severity = 3
+
+[features]
+# Toggle all inlay hints globally
+inlay_hints = true
+
+[formatting]
+# Reserved — not yet active. Keys here are silently ignored.
+perltidy = true
+perltidy_profile = ".perltidyrc"
+```
+
+An example file is also available at [`.perl-lsp.toml.example`](../../.perl-lsp.toml.example) in the repository root.
+
+---
+
+## Configuration Precedence
+
+The server applies configuration in three layers, last-write-wins:
+
+```
+.perl-lsp.toml          (lowest priority — project defaults)
+       ↓
+initializationOptions   (set at server startup by your editor)
+       ↓
+didChangeConfiguration  (highest priority — live editor settings)
+```
+
+This means:
+- Values in `.perl-lsp.toml` act as project-wide defaults.
+- Your editor's `initializationOptions` (set once at startup) override TOML values.
+- `workspace/didChangeConfiguration` updates (live settings changes) always win.
+
+Only keys **explicitly set** in `.perl-lsp.toml` override the built-in defaults. Absent keys are untouched, not zeroed.
+
+**Exception for `include_paths`**: an empty `include_paths = []` in the TOML file is treated as "not set" and leaves the built-in defaults (`lib`, `.`, `local/lib/perl5`) unchanged. This prevents an empty list from accidentally wiping your module paths. Set at least one path to override the defaults.
 
 ---
 
