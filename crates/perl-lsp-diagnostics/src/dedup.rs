@@ -10,6 +10,27 @@ use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 /// Parse-error diagnostics whose start offsets fall within this many bytes
 /// of the current cluster head are treated as downstream cascades and
 /// suppressed.  Only the first diagnostic in each cluster is kept.
+///
+/// # Rationale for 10 bytes
+///
+/// This threshold targets **intra-statement cascades**: when the parser
+/// encounters a syntax error inside an expression it may emit several tightly-
+/// clustered errors (e.g. `my $x = = 1;` can trigger two `UnexpectedToken`
+/// errors both pointing at the same offset).  After exact-duplicate removal
+/// (pass 1) the remaining nearby errors are typically within a few bytes of
+/// each other — well inside this threshold.  Tokens in a single syntactic unit
+/// rarely span more than 10 bytes in practice, so the threshold catches
+/// same-expression noise without suppressing genuinely independent errors on
+/// separate lines.
+///
+/// **Design note — why suppress entirely rather than downgrade to `Information`:**
+/// An alternative approach would demote cascade errors to `Information` severity
+/// instead of dropping them.  This was considered and rejected: `Information`
+/// diagnostics still appear as blue underlines in the editor gutter at positions
+/// the user did not make a mistake, which creates confusing noise without adding
+/// actionable context.  Complete suppression is the right choice for cascade
+/// errors — the root-cause error (the cluster head) is the only marker the
+/// user needs.  Lint and scope-analysis diagnostics are never suppressed.
 const CASCADE_THRESHOLD_BYTES: usize = 10;
 
 /// Parse-error diagnostic codes emitted by the parser layer.
