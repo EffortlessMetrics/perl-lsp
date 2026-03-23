@@ -301,3 +301,125 @@ fn test_hash_coderef_call() {
     // Calling a coderef stored in a hash value
     assert_no_errors("my $line = $self->{reader}->();");
 }
+
+// ============================================================
+// Sub-bucket C: $( (real GID) special variable
+// $( is a valid Perl special variable (real group ID of the process).
+// The lexer must consume the '(' as part of the $( token, not treat
+// it as the start of a parenthesized expression.
+// ============================================================
+
+#[test]
+fn test_dollar_lparen_assign() {
+    // PgCommon.pm: $( = $gid;
+    // $( is the real group ID special variable — assignable
+    assert_no_errors("$( = $gid;");
+}
+
+#[test]
+fn test_dollar_lparen_in_comparison() {
+    // PgCommon.pm: if ($( != $gid) { die }
+    assert_no_errors("if ($( != $gid) { die }");
+}
+
+#[test]
+fn test_dollar_lparen_postfix_if() {
+    // PgCommon.pm: error 'Could not change group id' if $( != $gid;
+    assert_no_errors("error 'Could not change group id' if $( != $gid;");
+}
+
+#[test]
+fn test_dollar_lparen_read_in_expr() {
+    // Read $( in arithmetic context
+    assert_no_errors("my $x = $( + 0;");
+}
+
+#[test]
+fn test_dollar_lparen_chain_assign() {
+    // PgCommon.pm: $) = $groups; $( = $gid; $> = $< = $uid;
+    assert_no_errors("$) = $groups; $( = $gid; $> = $< = $uid;");
+}
+
+#[test]
+fn test_dollar_lparen_print() {
+    // print $( — reading real GID
+    assert_no_errors(r#"print "GID: $(\n";"#);
+}
+
+// Regression guard: $) (effective GID) must remain valid after the fix
+#[test]
+fn test_dollar_rparen_still_valid() {
+    assert_no_errors("$) = $groups;");
+}
+
+#[test]
+fn test_dollar_rparen_in_split() {
+    // POSIX.pm: grep !$seen{$_}++, split " ", $)
+    assert_no_errors(r#"my @r = grep !$seen{$_}++, split " ", $);"#);
+}
+
+// ============================================================
+// Sub-bucket D: s/// with single-quote content and / delimiter
+// When the s/// replacement contains a single quote character and the
+// delimiter is '/', the lexer must not mistake the single quote for
+// the start of an inner string literal.
+// ============================================================
+
+#[test]
+fn test_subst_replace_single_quote_with_slash_delim() {
+    // Log::Log4perl: $literal =~ s/''/'/g;
+    // Delimiter is '/', pattern is '' (two single quotes), replacement is ' (one single quote)
+    assert_no_errors(r#"$literal =~ s/''/'/g;"#);
+}
+
+#[test]
+fn test_subst_replace_single_quote_simple() {
+    // Simplified: just replace two single quotes with one
+    assert_no_errors(r#"$x =~ s/''/'/;"#);
+}
+
+#[test]
+fn test_subst_double_quote_to_single() {
+    // Variant: double-quote replacement containing single quote
+    assert_no_errors(r#"$x =~ s/foo/bar'baz/;"#);
+}
+
+#[test]
+fn test_subst_single_quote_in_pattern_and_replacement() {
+    // TAP/Parser: ( my $rv = $1 ) =~ s/''/'/g;
+    // Cascaded match-then-subst with single-quote replacement
+    assert_no_errors(r#"( my $rv = $1 ) =~ s/''/'/g;"#);
+}
+
+#[test]
+fn test_log4perl_combined_pattern() {
+    // Full pattern from Log::Log4perl::DateFormat.pm
+    assert_no_errors(
+        r#"
+if ( $chunk =~ /\A'(.*)'\z/ ) {
+    my $literal = $1;
+    $literal =~ s/''/'/g;
+    $literal =~ s/\%/\%\%/g;
+    my $fmt2 = $literal;
+} elsif ( $chunk =~ /'/ ) {
+    croak "bad format";
+}
+"#,
+    );
+}
+
+// Regression guard: s/// with non-quote delimiters must not be affected
+#[test]
+fn test_subst_slash_delim_no_quotes_clean() {
+    assert_no_errors(r#"$x =~ s/foo/bar/g;"#);
+}
+
+#[test]
+fn test_subst_brace_delim_clean() {
+    assert_no_errors(r#"$x =~ s{foo}{bar}g;"#);
+}
+
+#[test]
+fn test_subst_comma_delim_clean() {
+    assert_no_errors(r#"$x =~ s,foo,bar,g;"#);
+}

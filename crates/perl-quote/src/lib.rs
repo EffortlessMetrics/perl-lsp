@@ -473,20 +473,79 @@ fn extract_unpaired_body(text: &str, closing: char) -> (String, &str) {
     (body, &text[end_pos..])
 }
 
+/// Lookahead helper: determine whether a `quote` char at byte `pos` in `text` is the
+/// opening of a genuine inner string literal that protects `closing` delimiter chars.
+///
+/// Returns `Some((end_pos, true))` when:
+///   - A matching closing `quote` is found on the SAME LINE (no `\n` crossed), AND
+///   - The content between the two `quote` chars contains `closing`.
+///   - `end_pos` is the byte offset just after the closing `quote`.
+///
+/// Returns `None` (or `Some((_, false))`) when:
+///   - A newline or end of `text` is reached before the matching closing `quote`, OR
+///   - The string content does not contain `closing`.
+///
+/// Stopping at newlines prevents cross-statement false positives in multiline source.
+fn scan_inner_string(
+    text: &str,
+    pos: usize,
+    quote: char,
+    delimiter: char,
+) -> Option<(usize, bool)> {
+    let start = pos + quote.len_utf8();
+    let rest = text.get(start..)?;
+    let mut escaped = false;
+    let mut contains_delim = false;
+    let mut end_of_string = None;
+    let mut local_pos = start;
+    for ch in rest.chars() {
+        if escaped {
+            escaped = false;
+            local_pos += ch.len_utf8();
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            local_pos += ch.len_utf8();
+            continue;
+        }
+        // Newline terminates the scan: inner string literals don't span lines.
+        if ch == '\n' {
+            return None;
+        }
+        if ch == delimiter {
+            contains_delim = true;
+        }
+        if ch == quote {
+            end_of_string = Some(local_pos + ch.len_utf8());
+            break;
+        }
+        local_pos += ch.len_utf8();
+    }
+    end_of_string.map(|end| (end, contains_delim))
+}
+
 /// Like `extract_unpaired_body` but skips over string literals (`"..."` / `'...'`)
 /// so that the closing delimiter character inside a string is not mistaken for the
 /// end of the replacement section.  Returns `(body, rest, found_closing)`.
+///
+/// Uses lookahead to determine whether a `'` or `"` is actually an inner string:
+/// only enters string-skip mode when the candidate string (a) has a matching closing
+/// quote on the same line AND (b) contains the closing delimiter in its content.
+/// This prevents lone apostrophes (e.g. the `'` in `s/''/'/g`) from triggering
+/// string-skip, which would cause replacement scanning to cross statement boundaries.
 fn extract_unpaired_body_skip_strings(text: &str, closing: char) -> (String, &str, bool) {
     let mut body = String::new();
-    let mut escaped = false;
     let mut end_pos = text.len();
     let mut found_closing = false;
-    let mut iter = text.char_indices().peekable();
+    let mut pos = 0usize;
+    let mut escaped = false;
 
-    while let Some((i, ch)) = iter.next() {
+    while let Some(ch) = text.get(pos..).and_then(|s| s.chars().next()) {
         if escaped {
             body.push(ch);
             escaped = false;
+            pos += ch.len_utf8();
             continue;
         }
 
@@ -494,30 +553,39 @@ fn extract_unpaired_body_skip_strings(text: &str, closing: char) -> (String, &st
             '\\' => {
                 body.push(ch);
                 escaped = true;
+                pos += ch.len_utf8();
             }
             // Skip over string literals to avoid treating delimiter chars inside
             // "foo/bar" or 'a/b' as the closing delimiter of the replacement.
-            '"' | '\'' => {
+            //
+            // Guard: only enter string-skip when lookahead confirms a matching closing
+            // quote exists on the same line AND the content contains the closing delimiter.
+            '"' | '\'' if ch != closing => {
                 let quote = ch;
-                body.push(ch);
-                let mut inner_escaped = false;
-                for (_, ic) in iter.by_ref() {
-                    body.push(ic);
-                    if inner_escaped {
-                        inner_escaped = false;
-                    } else if ic == '\\' {
-                        inner_escaped = true;
-                    } else if ic == quote {
-                        break;
+                match scan_inner_string(text, pos, quote, closing) {
+                    Some((string_end, true)) => {
+                        // String content contains the closing delimiter → skip the string.
+                        let string_text = &text[pos..string_end];
+                        body.push_str(string_text);
+                        pos = string_end;
+                    }
+                    _ => {
+                        // No closing quote on same line, or content has no delimiter:
+                        // treat the opening quote as a literal character.
+                        body.push(ch);
+                        pos += ch.len_utf8();
                     }
                 }
             }
             c if c == closing => {
-                end_pos = i + ch.len_utf8();
+                end_pos = pos + ch.len_utf8();
                 found_closing = true;
                 break;
             }
-            _ => body.push(ch),
+            _ => {
+                body.push(ch);
+                pos += ch.len_utf8();
+            }
         }
     }
 
