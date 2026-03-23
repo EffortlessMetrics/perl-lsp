@@ -757,13 +757,18 @@ impl<'a> Parser<'a> {
         match self.tokens.peek_second() {
             Ok(token) => {
                 Ok(match token.kind {
-                    // These are unambiguously prototype tokens
+                    // These are unambiguously prototype tokens.
+                    // `+` means "scalar or array/hash ref" (perlsub), valid in prototypes.
+                    // `++` is also valid: Perl's lexer merges two `+` into `Increment`, so
+                    // `(++$)` has peek_second == Increment.
                     TokenKind::Star
                     | TokenKind::Backslash
                     | TokenKind::Semicolon
                     | TokenKind::BitwiseAnd
                     | TokenKind::SubSigil
-                    | TokenKind::GlobSigil => true,
+                    | TokenKind::GlobSigil
+                    | TokenKind::Plus
+                    | TokenKind::Increment => true,
                     // Sigils: peek past to distinguish prototype ($;@%) from signature ($x, @rest)
                     TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil => {
                         match self.tokens.peek_third() {
@@ -810,6 +815,10 @@ impl<'a> Parser<'a> {
                 TokenKind::SubSigil | TokenKind::BitwiseAnd => prototype.push('&'),
                 TokenKind::Semicolon => prototype.push(';'),
                 TokenKind::Backslash => prototype.push('\\'),
+                // `+` means "scalar or array/hash ref" (perlsub prototype character).
+                // `++` is the Increment token produced when two `+` chars appear together.
+                TokenKind::Plus => prototype.push('+'),
+                TokenKind::Increment => prototype.push_str("++"),
                 _ => {
                     // For any other token, just add its text
                     // This handles cases where sigils might be parsed differently

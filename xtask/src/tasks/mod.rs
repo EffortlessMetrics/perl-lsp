@@ -36,4 +36,5 @@ pub mod srp_microcrates;
 pub mod targeted_checks;
 pub mod test;
 pub mod test_lsp;
+pub mod unwired_scan;
 pub mod update_status;

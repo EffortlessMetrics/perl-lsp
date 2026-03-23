@@ -523,6 +523,24 @@ impl<'a> Parser<'a> {
                                 NodeKind::ArrayLiteral { elements: words },
                                 SourceLocation { start, end },
                             );
+                        } else if matches!(
+                            name.as_str(),
+                            "print" | "say" | "printf" | "send"
+                        ) {
+                            // `print( $fh EXPR )` — filehandle-style inside explicit parens.
+                            // parse_args() treats every argument as comma-separated, so
+                            // `print( $fh join(...) )` fails because $fh is parsed as the
+                            // only argument and `join` is unexpected before `)`.
+                            // Use a specialised parser that detects the indirect-filehandle
+                            // pattern: scalar-variable followed by a non-comma expression.
+                            let args = self.parse_print_parens_args()?;
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name, args },
+                                SourceLocation { start, end },
+                            );
                         } else {
                             let args = self.parse_args()?;
                             let start = expr.location.start;
@@ -696,7 +714,11 @@ impl<'a> Parser<'a> {
                                     && matches!(self.peek_kind(), Some(TokenKind::Identifier))
                                     && self.tokens.peek().ok().is_some_and(|t| {
                                         // Named comparator: lowercase identifier that's not a
-                                        // binary string op. e.g. `sort cmp_events @list`
+                                        // binary string op and not a block-list function.
+                                        // e.g. `sort cmp_events @list`
+                                        // Block-list functions (grep, map, sort, etc.) cannot be
+                                        // sort comparators — `sort grep { ... } @list` means
+                                        // sort the result of grep, not `sort grep_func @list`.
                                         let txt: &str = &t.text;
                                         !txt.is_empty()
                                             && txt.starts_with(|c: char| {
@@ -712,6 +734,7 @@ impl<'a> Parser<'a> {
                                                     | "cmp"
                                                     | "x"
                                             )
+                                            && !Self::is_block_list_func(txt)
                                     })
                                 {
                                     // sort FUNCNAME LIST — `sort by_name @list`
@@ -880,6 +903,32 @@ impl<'a> Parser<'a> {
                                     SourceLocation { start, end },
                                 );
                             }
+                        }
+                    } else if matches!(expr.kind, NodeKind::Undef) {
+                        // `undef` is a keyword token (not Identifier) so it
+                        // bypasses the generic builtin-function path above.
+                        // When `undef` is followed by a sigil-starting argument
+                        // (e.g. `undef $var`, `undef @arr`) in an expression context,
+                        // treat it as `undef(EXPR)`.  This handles patterns like
+                        // `close($f) or undef $ret` where `undef` is not at statement
+                        // start and the argument is not separated by a comma.
+                        let next_is_sigil_arg = !self.is_at_statement_end()
+                            && self.tokens.peek().ok().is_some_and(|t| {
+                                t.text.starts_with('$')
+                                    || t.text.starts_with('@')
+                                    || t.text.starts_with('%')
+                            });
+                        if next_is_sigil_arg {
+                            let arg = self.parse_ternary()?;
+                            let start = expr.location.start;
+                            let end = arg.location.end;
+                            expr = Node::new(
+                                NodeKind::FunctionCall {
+                                    name: "undef".to_string(),
+                                    args: vec![arg],
+                                },
+                                SourceLocation { start, end },
+                            );
                         }
                     }
                     break;

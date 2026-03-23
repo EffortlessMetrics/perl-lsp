@@ -821,14 +821,23 @@ impl<'a> Parser<'a> {
                                 && (Self::is_block_list_func(func_name.as_ref())
                                     || matches!(
                                         func_name.as_ref(),
-                                        "exec" | "system" | "print" | "say" | "printf"
+                                        "exec" | "system" | "print" | "say" | "printf" | "send"
                                     ))
                             {
                                 // block-list and filehandle builtins followed by (...) use
                                 // parse_args() so that `map({...} keys ...)` and
                                 // `exec({...} @prog)` work: the block/hash inside the parens
                                 // may be followed by the list without a separating comma.
-                                let paren_args = self.parse_args()?;
+                                // For print/say/printf, use the filehandle-aware variant so
+                                // that `print( $fh EXPR )` works with no comma after $fh.
+                                let paren_args = if matches!(
+                                    func_name.as_ref(),
+                                    "print" | "say" | "printf" | "send"
+                                ) {
+                                    self.parse_print_parens_args()?
+                                } else {
+                                    self.parse_args()?
+                                };
                                 args.extend(paren_args);
                             } else {
                                 // For builtins, use parse_assignment_or_declaration to handle

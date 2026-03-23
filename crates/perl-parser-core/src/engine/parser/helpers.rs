@@ -753,6 +753,15 @@ impl<'a> Parser<'a> {
             // `func File::Spec->catfile(...)` is recognised as a bare call.
             TokenKind::Identifier => {
                 let next_text = next.text.clone();
+                // Special tokens like __PACKAGE__, __FILE__, __LINE__, __SUB__ are
+                // nullary builtins that produce values. They are valid bare-call arguments.
+                // e.g. `croak __PACKAGE__, ": error"` (Encode/Encoder.pm)
+                if matches!(
+                    next_text.as_ref(),
+                    "__PACKAGE__" | "__FILE__" | "__LINE__" | "__SUB__"
+                ) {
+                    return true;
+                }
                 // Allow qualified names (e.g. `File::Spec`, `Scalar::Util`) as arguments.
                 // They start with uppercase but the `::` disambiguates them from constants.
                 if next_text.contains("::") {

@@ -1437,3 +1437,43 @@ fn special_variables_all_have_detail_field() {
         );
     }
 }
+
+// ===========================================================================
+// Issue #2780: Missing builtins, no documentation strings
+// ===========================================================================
+
+/// socket should appear in completions when typing "so" — it is currently missing.
+#[test]
+fn test_missing_builtins_now_present() {
+    let code = "so";
+    let items = completions_at_end(code);
+    let labels_list: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(
+        labels_list.contains(&"socket"),
+        "socket should complete from 'so'; got: {:?}",
+        &labels_list
+    );
+    assert!(labels_list.contains(&"sort"), "sort should still complete from 'so'");
+}
+
+/// print completion must carry a documentation string (not None).
+#[test]
+fn test_builtin_has_documentation() {
+    let code = "pri";
+    let items = completions_at_end(code);
+    let print_item = items.iter().find(|c| c.label == "print");
+    assert!(print_item.is_some(), "print should complete from 'pri'");
+    let doc = print_item.and_then(|c| c.documentation.as_deref());
+    assert!(doc.is_some(), "print completion should have a documentation string, got None");
+}
+
+/// `defined` should appear when typing "def" — it's a builtin, not a keyword.
+#[test]
+fn test_defined_is_a_builtin_not_keyword() {
+    let code = "def";
+    let items = completions_at_end(code);
+    assert!(
+        items.iter().any(|c| c.label == "defined"),
+        "defined should appear in completions from 'def'"
+    );
+}

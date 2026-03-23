@@ -126,6 +126,50 @@ echo "$SAMPLE_PAYLOAD" | OPS_DIR="$TMP_CUSTOM" bash "$HOOKS_DIR/subagent-stop.sh
 assert_file_exists "$TMP_CUSTOM/swarm-metrics.jsonl" "subagent-stop.sh respects custom OPS_DIR"
 
 # ---------------------------------------------------------------------------
+# Test group: task-completed.sh -- metrics write
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== task-completed.sh metrics write ==="
+
+TMP_OPS_TC="$(mktemp -d)"
+SAMPLE_INPUT_TC='{"session_id":"abc123","cwd":"/repo/worktrees/agent-xyz"}'
+
+assert_exit 0 "task-completed exits 0 with metrics payload"   bash -c "echo '${SAMPLE_INPUT_TC}' | OPS_DIR='${TMP_OPS_TC}' bash '${HOOKS_DIR}/task-completed.sh'"
+
+assert_file_exists "${TMP_OPS_TC}/swarm-metrics.jsonl" "task-completed writes swarm-metrics.jsonl"
+
+if [[ -f "${TMP_OPS_TC}/swarm-metrics.jsonl" ]]; then
+  LINE_TC="$(cat "${TMP_OPS_TC}/swarm-metrics.jsonl")"
+  assert_contains "${LINE_TC}" '"event":"task_completed"' "metrics entry has task_completed event"
+  assert_contains "${LINE_TC}" '"session_id":"abc123"' "metrics entry captures session_id"
+fi
+
+TMP_OPS_TC2="$(mktemp -d)"
+assert_exit 0 "task-completed exits 0 with empty payload"   bash -c "echo '{}' | OPS_DIR='${TMP_OPS_TC2}' bash '${HOOKS_DIR}/task-completed.sh'"
+
+rm -rf "${TMP_OPS_TC}" "${TMP_OPS_TC2}" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Test group: subagent-stop.sh -- cwd capture
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== subagent-stop.sh cwd capture ==="
+
+TMP_OPS_SS="$(mktemp -d)"
+CWD_PAYLOAD='{"subagent_type":"builder","cwd":"/repo/worktrees/agent-abc","session_id":"sess1"}'
+
+echo "${CWD_PAYLOAD}" | OPS_DIR="${TMP_OPS_SS}" bash "${HOOKS_DIR}/subagent-stop.sh"
+
+if [[ -f "${TMP_OPS_SS}/swarm-metrics.jsonl" ]]; then
+  LINE_SS="$(tail -1 "${TMP_OPS_SS}/swarm-metrics.jsonl")"
+  assert_contains "${LINE_SS}" '/repo/worktrees/agent-abc' "subagent-stop captures cwd as worktree_path"
+fi
+
+rm -rf "${TMP_OPS_SS}" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
 # Test group: pre-tool-use.sh
 # ---------------------------------------------------------------------------
 

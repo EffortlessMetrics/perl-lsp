@@ -68,7 +68,11 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                 "$".to_string(),
                 "@".to_string(),
                 "%".to_string(),
-                "->".to_string(),
+                // LSP spec requires single-char trigger characters; ">" fires on the
+                // second character of "->" so method-completion still triggers.
+                ">".to_string(),
+                // ":" fires on the second character of "::" for package member completion.
+                ":".to_string(),
             ]),
             all_commit_characters: None,
             work_done_progress_options: WorkDoneProgressOptions::default(),
@@ -244,7 +248,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     if build.on_type_formatting {
         caps.document_on_type_formatting_provider = Some(DocumentOnTypeFormattingOptions {
             first_trigger_character: "}".to_string(),
-            more_trigger_character: Some(vec![";".to_string()]),
+            more_trigger_character: Some(vec![";".to_string(), "\n".to_string()]),
         });
     }
 

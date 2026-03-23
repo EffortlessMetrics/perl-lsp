@@ -1,6 +1,5 @@
 ---
 source: crates/perl-lsp/tests/lsp_features_snapshot_test.rs
-assertion_line: 42
 expression: "&snapshot_data"
 ---
 caps:
@@ -59,6 +58,7 @@ catalog:
   - lsp.configuration
   - lsp.declaration
   - lsp.definition
+  - lsp.diagnostic.unused_variable
   - lsp.diagnostic_refresh
   - lsp.did_change_configuration
   - lsp.did_change_watched_files

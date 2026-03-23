@@ -77,16 +77,18 @@ fn server_info_version_is_semver_shaped() {
 // ============================================================================
 
 #[test]
-fn text_document_sync_is_incremental() -> Result<(), Box<dyn std::error::Error>> {
+fn text_document_sync_is_full() -> Result<(), Box<dyn std::error::Error>> {
+    // The server intentionally uses TextDocumentSyncKind::FULL (1) — it always reparses
+    // the full document on every didChange notification. INCREMENTAL (2) would be
+    // inaccurate because no incremental AST state is maintained between edits.
+    // See capabilities.rs for the documented rationale.
     let caps = capabilities_for(BuildFlags::default());
     let v = serde_json::to_value(&caps)?;
-    // textDocumentSync should be an Options object, not just a Kind
     let sync = v.get("textDocumentSync");
     assert!(sync.is_some(), "textDocumentSync must always be present");
     let sync = sync.ok_or("missing textDocumentSync")?;
-    // Change type should be 2 (Incremental)
     let change = sync.get("change").and_then(|c| c.as_u64());
-    assert_eq!(change, Some(2), "change should be TextDocumentSyncKind::INCREMENTAL (2)");
+    assert_eq!(change, Some(1), "change should be TextDocumentSyncKind::FULL (1)");
     Ok(())
 }
 
@@ -124,7 +126,15 @@ fn completion_trigger_characters_include_sigils() -> Result<(), Box<dyn std::err
     assert!(trigger_strs.contains(&"$"), "should trigger on scalar sigil $");
     assert!(trigger_strs.contains(&"@"), "should trigger on array sigil @");
     assert!(trigger_strs.contains(&"%"), "should trigger on hash sigil %");
-    assert!(trigger_strs.contains(&"->"), "should trigger on arrow operator ->");
+    // LSP spec requires single-char trigger characters; ">" replaces the non-conforming "->"
+    assert!(trigger_strs.contains(&">"), "should trigger on > for -> (LSP spec: single char)");
+    // ":" triggers :: package member completion
+    assert!(trigger_strs.contains(&":"), "should trigger on : for :: package member completion");
+    // The non-conforming two-char "->" must not appear
+    assert!(
+        !trigger_strs.contains(&"->"),
+        "two-char -> must not be advertised; LSP spec requires single-char trigger characters"
+    );
     Ok(())
 }
 
@@ -321,7 +331,7 @@ fn semantic_tokens_legend_has_token_modifiers() -> Result<(), Box<dyn std::error
     let default_library_idx = mod_strs
         .iter()
         .position(|&s| s == "defaultLibrary")
-        .expect("defaultLibrary must be in advertised modifiers");
+        .ok_or("defaultLibrary must be in advertised modifiers")?;
     assert_eq!(
         default_library_idx, 9,
         "defaultLibrary must be at index 9 (bitmask 512); \
@@ -419,6 +429,20 @@ fn on_type_formatting_more_triggers_include_semicolon() -> Result<(), Box<dyn st
         .ok_or("missing moreTriggerCharacter")?;
     let more_strs: Vec<&str> = more.iter().filter_map(|t| t.as_str()).collect();
     assert!(more_strs.contains(&";"), "moreTriggerCharacter should include ';'");
+    Ok(())
+}
+
+#[test]
+fn on_type_formatting_more_triggers_include_newline() -> Result<(), Box<dyn std::error::Error>> {
+    let flags = BuildFlags { on_type_formatting: true, ..Default::default() };
+    let caps = capabilities_for(flags);
+    let v = serde_json::to_value(&caps)?;
+    let more = v
+        .pointer("/documentOnTypeFormattingProvider/moreTriggerCharacter")
+        .and_then(|v| v.as_array())
+        .ok_or("missing moreTriggerCharacter")?;
+    let more_strs: Vec<&str> = more.iter().filter_map(|t| t.as_str()).collect();
+    assert!(more_strs.contains(&"\n"), "moreTriggerCharacter should include newline");
     Ok(())
 }
 

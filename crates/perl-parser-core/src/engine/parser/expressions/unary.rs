@@ -1,3 +1,23 @@
+/// Returns `true` when `kind` is a token that can immediately follow a
+/// single-punctuation typeglob such as `*<`, `*>`, `*(`, or `*)`.
+///
+/// This lets the parser distinguish the typeglob form (e.g. `*REAL_USER_ID = *<;`)
+/// from a dereference expression (e.g. `*<EXPR>`), without consuming the
+/// punctuation character first.
+fn is_typeglob_punct_terminator(kind: Option<TokenKind>) -> bool {
+    matches!(
+        kind,
+        Some(
+            TokenKind::Semicolon
+                | TokenKind::Comma
+                | TokenKind::RightParen
+                | TokenKind::RightBrace
+                | TokenKind::RightBracket
+                | TokenKind::Eof
+        ) | None
+    )
+}
+
 impl<'a> Parser<'a> {
     /// Parse unary expression
     fn parse_unary(&mut self) -> ParseResult<Node> {
@@ -181,6 +201,54 @@ impl<'a> Parser<'a> {
                                         ));
                                     }
                                     // Standalone *^ — fall through to parse operand
+                                }
+                                // Typeglobs for Perl's process-identity punctuation variables.
+                                // English.pm aliases: *REAL_USER_ID = *<; *EFFECTIVE_USER_ID = *>;
+                                //                    *REAL_GROUP_ID = *(; *EFFECTIVE_GROUP_ID = *);
+                                // Use 2-token lookahead so *<EXPR> and *(EXPR) still fall through
+                                // when a real sub-expression follows the punctuation character.
+                                TokenKind::Less => {
+                                    let second_kind =
+                                        self.tokens.peek_second().ok().map(|t| t.kind);
+                                    if is_typeglob_punct_terminator(second_kind) {
+                                        let t = self.tokens.next()?;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name: "<".to_string() },
+                                            SourceLocation { start, end: t.end },
+                                        ));
+                                    }
+                                }
+                                TokenKind::Greater => {
+                                    let second_kind =
+                                        self.tokens.peek_second().ok().map(|t| t.kind);
+                                    if is_typeglob_punct_terminator(second_kind) {
+                                        let t = self.tokens.next()?;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name: ">".to_string() },
+                                            SourceLocation { start, end: t.end },
+                                        ));
+                                    }
+                                }
+                                TokenKind::LeftParen => {
+                                    let second_kind =
+                                        self.tokens.peek_second().ok().map(|t| t.kind);
+                                    if is_typeglob_punct_terminator(second_kind) {
+                                        let t = self.tokens.next()?;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name: "(".to_string() },
+                                            SourceLocation { start, end: t.end },
+                                        ));
+                                    }
+                                }
+                                TokenKind::RightParen => {
+                                    // *) is always a typeglob for $) (effective GID).
+                                    // RightParen cannot start a valid sub-expression in this
+                                    // context, so no lookahead disambiguation is needed.
+                                    let t = self.tokens.next()?;
+                                    return Ok(Node::new(
+                                        NodeKind::Typeglob { name: ")".to_string() },
+                                        SourceLocation { start, end: t.end },
+                                    ));
                                 }
                                 _ => {}
                             }

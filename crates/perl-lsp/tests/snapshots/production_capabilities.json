@@ -18,7 +18,8 @@
       "$",
       "@",
       "%",
-      "->"
+      ">",
+      ":"
     ]
   },
   "declarationProvider": true,
@@ -35,7 +36,8 @@
   "documentOnTypeFormattingProvider": {
     "firstTriggerCharacter": "}",
     "moreTriggerCharacter": [
-      ";"
+      ";",
+      "\n"
     ]
   },
   "documentSymbolProvider": true,

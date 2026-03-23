@@ -474,6 +474,23 @@ impl<'a> Parser<'a> {
                             let new_token = self.tokens.next()?;
                             let start = new_token.start;
 
+                            // If `new` is followed immediately by `(`, treat it as a
+                            // plain function call rather than an indirect constructor.
+                            // e.g. `new($rtsig, $val, $flags)` inside a sub body (POSIX.pm).
+                            // The class name comes from `(` being the next token, not an
+                            // identifier, so there is no target class — it resolves at runtime.
+                            if self.peek_kind() == Some(TokenKind::LeftParen) {
+                                let args = self.parse_args()?;
+                                let end = self.previous_position();
+                                return Ok(Node::new(
+                                    NodeKind::FunctionCall {
+                                        name: String::from("new"),
+                                        args,
+                                    },
+                                    SourceLocation { start, end },
+                                ));
+                            }
+
                             // Constructor target can be qualified (e.g. IO::Handle)
                             let object = Box::new(self.parse_qualified_identifier()?);
                             let mut args = Vec::new();

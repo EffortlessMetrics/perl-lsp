@@ -575,9 +575,10 @@ fn builds_on_type_formatting_with_triggers() -> Result<(), Box<dyn std::error::E
         .document_on_type_formatting_provider
         .as_ref()
         .ok_or("missing on_type_formatting_provider")?;
-    assert_eq!(provider.first_trigger_character, ";");
+    assert_eq!(provider.first_trigger_character, "}");
     let extra = provider.more_trigger_character.as_ref().ok_or("missing more_trigger_character")?;
-    assert!(extra.contains(&"}".to_string()));
+    assert!(extra.contains(&";".to_string()));
+    assert!(extra.contains(&"\n".to_string()));
     Ok(())
 }
 
@@ -1056,10 +1057,11 @@ fn on_type_formatting_trigger_characters() -> Result<(), Box<dyn std::error::Err
         .document_on_type_formatting_provider
         .as_ref()
         .ok_or("missing on_type_formatting_provider")?;
-    assert_eq!(provider.first_trigger_character, ";");
+    assert_eq!(provider.first_trigger_character, "}");
     if let Some(more) = &provider.more_trigger_character {
-        assert!(more.contains(&"}".to_string()));
-        assert_eq!(more.len(), 1, "expected exactly 1 additional trigger character");
+        assert!(more.contains(&";".to_string()));
+        assert!(more.contains(&"\n".to_string()));
+        assert_eq!(more.len(), 2, "expected exactly 2 additional trigger characters");
     } else {
         return Err("more_trigger_character should be Some".into());
     }

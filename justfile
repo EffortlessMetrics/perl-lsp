@@ -442,7 +442,8 @@ ci-gate:
     just ci-parser-features-check && \
     just ci-features-invariants && \
     just hook-check && \
-    just hook-registry-check
+    just hook-registry-check && \
+    just hook-tests
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -752,11 +753,28 @@ hook-registry-check:
 hook-tests:
     @bash ./.ci/scripts/test-hooks.sh
 
+# Show swarm metrics summary
+swarm-summary:
+    @bash scripts/swarm-summary.sh
+
 # Check for machine-specific paths in documentation
 ci-doc-paths:
     @echo "🔍 Checking documentation paths..."
     @bash ci/check_doc_paths.sh docs
     @echo "✅ Documentation paths check passed"
+
+# Verify publication facts against live codebase metrics (informational, non-blocking)
+# Flags WARNING if delta >5%, ERROR if delta >10%. Use --strict to exit 1 on ERROR.
+verify-publication-facts *args='':
+    @echo "📊 Verifying publication facts..."
+    @bash scripts/verify-publication-facts.sh {{args}}
+    @echo "✅ Publication facts verification complete"
+
+# Strict publication facts check for CI (exits 1 on ERROR-level drift)
+ci-publication-facts:
+    @echo "📊 Checking publication facts (strict mode)..."
+    @bash scripts/verify-publication-facts.sh --strict
+    @echo "✅ Publication facts check passed"
 
 # Update derived metrics in docs/project/status/ subsystem files and ROADMAP.md.
 # Optionally pass a subsystem name to regenerate only that one (e.g. just status-update lsp).
@@ -1519,6 +1537,22 @@ dead-code-strict:
 ci-dead-code:
     @echo "🔍 Checking dead code baseline..."
     @cargo xtask dead-code check
+
+# ============================================================================
+# Scan for built-but-not-wired crates (issue #2667)
+# Finds crates with tests but zero direct dependency from perl-lsp.
+
+# Scan for unwired infrastructure (human-readable report)
+unwired-scan:
+    @cargo xtask unwired-scan
+
+# Scan for unwired infrastructure (JSON output)
+unwired-scan-json:
+    @cargo xtask unwired-scan --json
+
+# CI gate: exit 1 if any unwired crates are found
+ci-unwired-scan:
+    @cargo xtask unwired-scan --check
 
 # ============================================================================
 # CI Gate Execution with Receipt Generation (Issue #210)

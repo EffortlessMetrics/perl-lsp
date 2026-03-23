@@ -10,8 +10,8 @@ This article examines each existing Perl language server honestly — their stre
 
 Four tools dominate the Perl LSP space:
 
-1. **PerlNavigator** (~53,000 VSCode installs) — the most-installed Perl VS Code extension
-2. **Perl::LanguageServer** (~293,000 VSCode installs) — the highest install count of any Perl extension
+1. **PerlNavigator** (~53,000 VSCode installs as of early 2026) — the most-installed Perl VS Code extension
+2. **Perl::LanguageServer** (~293,000 VSCode installs as of early 2026) — the highest install count of any Perl extension
 3. **PLS** — a clean PPI-based Perl server with ~117 GitHub stars
 4. **coc-perl** — a thin integration layer for Neovim users
 
@@ -23,7 +23,7 @@ Combined, these tools reach roughly 350,000 installs. But install counts include
 
 **Author**: Brian Scannell (bscan)
 **Architecture**: TypeScript LSP server that calls out to the Perl runtime
-**VSCode installs**: ~53,000
+**VSCode installs**: ~53,000 (VSCode Marketplace, early 2026 — point-in-time, subject to change)
 
 PerlNavigator's distinguishing characteristic is that it delegates syntax checking to `perl -c`. This means it leverages Perl itself for validation — when PerlNavigator says your code has a syntax error, it is running the same check Perl would run. This is both its strength and its central limitation.
 
@@ -39,7 +39,7 @@ Navigation in PerlNavigator is regex-based rather than AST-based. For simple sub
 
 **Author**: Gerald Richter
 **Architecture**: Pure Perl LSP server using PPI
-**VSCode installs**: ~293,000
+**VSCode installs**: ~293,000 (VSCode Marketplace, early 2026 — point-in-time, subject to change)
 
 Perl::LanguageServer has the highest install count, built over years of being the only serious option for many users. It uses PPI (the Perl Parsing Interface), the most mature Perl static parser available.
 
@@ -142,7 +142,7 @@ For the majority of IDE interactions — completion, navigation, hover, diagnost
 | Code execution risk | None | Yes (perl -c) | No (PPI) |
 | Windows support | Native | Limited | No |
 | Accuracy model | Static (85.7% CPAN) | Dynamic (perl -c) | Static (PPI) |
-| Feature breadth | 97 LSP/DAP | ~30 effective | ~20 effective |
+| Feature breadth | 98 LSP/DAP | ~30 effective | ~20 effective |
 | Installation | Single binary | CPAN + Perl runtime | CPAN + Perl runtime |
 | Maturity | Public alpha (0.12.0) | Production | Production |
 | CPAN corpus validation | CI-gated, ratchet-only | None | None |
@@ -155,4 +155,4 @@ The 78% of Perl developers who currently use no LSP tooling are not unserved by 
 
 ---
 
-*Metrics verified against `docs/project/PUBLICATION_FACTS_LEDGER.md`. Feature count (97) verified against `features.toml`. Install counts from VSCode Marketplace, subject to change.*
+*Metrics verified against `docs/project/PUBLICATION_FACTS_LEDGER.md`. Feature count (98) verified against `features.toml`. Install counts from VSCode Marketplace (early 2026), subject to change — refresh before publication. The 78% survey figure is attributed to the 2025 Perl IDE Survey (602 respondents); primary source not independently linked.*
