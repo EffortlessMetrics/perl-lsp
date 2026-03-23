@@ -250,6 +250,90 @@ impl<'a> Parser<'a> {
                                         SourceLocation { start, end: t.end },
                                     ));
                                 }
+                                // *? = typeglob for $? (child process status).
+                                // Question cannot start an expression after *, so no lookahead.
+                                TokenKind::Question => {
+                                    let t = self.tokens.next()?;
+                                    return Ok(Node::new(
+                                        NodeKind::Typeglob { name: "?".to_string() },
+                                        SourceLocation { start, end: t.end },
+                                    ));
+                                }
+                                // *, = typeglob for $, (output field separator).
+                                // Comma cannot start an expression after *, so no lookahead.
+                                TokenKind::Comma => {
+                                    let t = self.tokens.next()?;
+                                    return Ok(Node::new(
+                                        NodeKind::Typeglob { name: ",".to_string() },
+                                        SourceLocation { start, end: t.end },
+                                    ));
+                                }
+                                // *= — the lexer emits StarAssign for the compound assignment
+                                // operator, so Star followed by bare Assign is always the typeglob
+                                // *=  (for $= "format lines per page").  No lookahead needed.
+                                TokenKind::Assign => {
+                                    let t = self.tokens.next()?;
+                                    return Ok(Node::new(
+                                        NodeKind::Typeglob { name: "=".to_string() },
+                                        SourceLocation { start, end: t.end },
+                                    ));
+                                }
+                                // */ = typeglob for $/ (input record separator).
+                                // Use lookahead: if followed by a statement terminator, it's a
+                                // typeglob; otherwise fall through (could be multiply + regex).
+                                TokenKind::Slash => {
+                                    let second_kind =
+                                        self.tokens.peek_second().ok().map(|t| t.kind);
+                                    if is_typeglob_punct_terminator(second_kind) {
+                                        let t = self.tokens.next()?;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name: "/".to_string() },
+                                            SourceLocation { start, end: t.end },
+                                        ));
+                                    }
+                                }
+                                // *. = typeglob for $. (input line number).
+                                // Use lookahead: if followed by a statement terminator, it's a
+                                // typeglob; otherwise fall through (could be multiply + concat).
+                                TokenKind::Dot => {
+                                    let second_kind =
+                                        self.tokens.peek_second().ok().map(|t| t.kind);
+                                    if is_typeglob_punct_terminator(second_kind) {
+                                        let t = self.tokens.next()?;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name: ".".to_string() },
+                                            SourceLocation { start, end: t.end },
+                                        ));
+                                    }
+                                }
+                                // *| = typeglob for $| (output autoflush flag).
+                                // Use lookahead: if followed by a statement terminator, it's a
+                                // typeglob; otherwise fall through (could be multiply + bitwise-or).
+                                TokenKind::BitwiseOr => {
+                                    let second_kind =
+                                        self.tokens.peek_second().ok().map(|t| t.kind);
+                                    if is_typeglob_punct_terminator(second_kind) {
+                                        let t = self.tokens.next()?;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name: "|".to_string() },
+                                            SourceLocation { start, end: t.end },
+                                        ));
+                                    }
+                                }
+                                // *: = typeglob for $: (format line-break characters).
+                                // Use lookahead: if followed by a statement terminator, it's a
+                                // typeglob; otherwise fall through (could be label or ternary colon).
+                                TokenKind::Colon => {
+                                    let second_kind =
+                                        self.tokens.peek_second().ok().map(|t| t.kind);
+                                    if is_typeglob_punct_terminator(second_kind) {
+                                        let t = self.tokens.next()?;
+                                        return Ok(Node::new(
+                                            NodeKind::Typeglob { name: ":".to_string() },
+                                            SourceLocation { start, end: t.end },
+                                        ));
+                                    }
+                                }
                                 _ => {}
                             }
                         }
