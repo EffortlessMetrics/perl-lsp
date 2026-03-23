@@ -123,3 +123,50 @@ fn test_and_not_rhs_no_comma() {
     // not applies only to its operand; comma is still collected
     assert_clean_parse("$a and not $b;");
 }
+
+#[test]
+fn test_and_not_rhs_with_comma() {
+    // `$a and not $b, $c` — comma follows `not $b`; parser collects both elements
+    // after `and` into a list. The `not` applies only to `$b` (same as `or` branch).
+    assert_clean_parse("$a and not $b, $c;");
+}
+
+// === Precedence interaction: and+comma then or ===
+
+#[test]
+fn test_and_comma_then_or() {
+    // `$a and $b, $c or $d` — or at outer level stops comma collection in and branch
+    assert_clean_parse("$a and $b, $c or $d;");
+}
+
+// === Trailing comma before semicolon ===
+
+#[test]
+fn test_and_rhs_trailing_comma() {
+    // `$ok and $n = 1,` — trailing comma before semicolon; silently consumed
+    assert_clean_parse("$ok and $n = 1, ;");
+}
+
+// === and with comma inside parentheses ===
+
+#[test]
+fn test_and_comma_inside_parens() {
+    // `($a and $b, $c)` — comma-collection inside paren context stops at `)`
+    assert_clean_parse("my $x = ($a and $b, $c);");
+}
+
+// === and+comma inside if condition ===
+
+#[test]
+fn test_and_comma_in_if_block() {
+    // Real-world: if block body containing and + comma
+    assert_clean_parse("if ($ok) { $a and $b++, last; }");
+}
+
+// === Chained and with comma on each RHS ===
+
+#[test]
+fn test_and_chain_comma_on_each() {
+    // Each `and` arm independently collects its comma list
+    assert_clean_parse("$a and $b, $c and $d, $e;");
+}
