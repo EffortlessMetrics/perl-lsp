@@ -471,6 +471,30 @@ impl<'a> Parser<'a> {
                             ))
                         }
                         "new" => {
+                            // When `new` is immediately before `}` or `=>`, treat it as a
+                            // bareword identifier, not an indirect constructor call.
+                            // Cases:
+                            //   $h{new} = 1          — hash subscript key (} follows)
+                            //   $ref->{new}          — arrow hash subscript key
+                            //   delete $h->{new}     — delete with arrow subscript
+                            //   (new => 1)           — fat-arrow autoquoting
+                            let next_token = self.tokens.peek_second();
+                            let next_is_right_brace = matches!(
+                                next_token,
+                                Ok(t) if t.kind == TokenKind::RightBrace
+                            );
+                            let next_is_fat_arrow = matches!(
+                                next_token,
+                                Ok(t) if t.kind == TokenKind::FatArrow
+                            );
+                            if next_is_right_brace || next_is_fat_arrow {
+                                let tok = self.tokens.next()?;
+                                return Ok(Node::new(
+                                    NodeKind::Identifier { name: tok.text.to_string() },
+                                    SourceLocation { start: tok.start, end: tok.end },
+                                ));
+                            }
+
                             let new_token = self.tokens.next()?;
                             let start = new_token.start;
 
