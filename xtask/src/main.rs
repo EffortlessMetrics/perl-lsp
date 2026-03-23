@@ -13,6 +13,7 @@ mod utils;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
 use tasks::targeted_checks::CheckMode;
+use tasks::unwired_scan::UnwiredScanConfig;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -492,6 +493,25 @@ enum Commands {
         output: Option<PathBuf>,
     },
 
+    /// Scan for built-but-not-wired crates: those with tests but zero import by perl-lsp
+    ///
+    /// Finds crates that have `#[test]` annotations but are not listed as direct
+    /// dependencies of `perl-lsp`. Also surfaces TODO/FIXME wiring comments.
+    /// Use `--check` to make CI fail when unwired crates are found.
+    UnwiredScan {
+        /// Emit JSON to stdout instead of human-readable output
+        #[arg(long)]
+        json: bool,
+
+        /// Exit 1 if any unwired crates are found (CI gate mode)
+        #[arg(long)]
+        check: bool,
+
+        /// Name of the root LSP crate to check (default: perl-lsp)
+        #[arg(long, default_value = "perl-lsp")]
+        lsp_crate: String,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -815,6 +835,9 @@ fn main() -> Result<()> {
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
+        Commands::UnwiredScan { json, check, lsp_crate } => {
+            unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
+        }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {

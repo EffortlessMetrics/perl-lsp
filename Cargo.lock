@@ -4744,6 +4744,7 @@ dependencies = [
  "serde_yaml_ng",
  "similar",
  "tempfile",
+ "toml",
  "tree-sitter",
  "tree-sitter-perl",
  "walkdir",
