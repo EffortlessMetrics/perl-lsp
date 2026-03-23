@@ -1642,3 +1642,66 @@ fn keyword_sub_has_documentation() {
     let item = must_some(find_item(&items, "sub"));
     assert!(item.documentation.is_some(), "keyword 'sub' should have documentation, got None");
 }
+
+// ===========================================================================
+// 23. Deduplication: builtin beats keyword when both match the same label
+// ===========================================================================
+
+/// Several names appear in both `create_builtins()` and `LSP_COMPLETION_KEYWORDS`
+/// (e.g. `die`, `eval`, `exit`, `warn`, `require`). After deduplication the
+/// completion list must contain exactly one entry for each such name, and that
+/// entry must carry the builtin's tier-3 sort prefix (lower = higher priority)
+/// rather than the keyword's tier-5 prefix.
+///
+/// This guards against regression where both items survive deduplication and
+/// a client receives confusing duplicate completions.
+#[test]
+fn builtin_beats_keyword_on_duplicate_label() {
+    // "die" appears in create_builtins() AND in LSP_COMPLETION_KEYWORDS.
+    let code = "di";
+    let items = completions_at_end(code);
+
+    // Count how many completion items have label "die".
+    let die_items: Vec<_> = items.iter().filter(|i| i.label == "die").collect();
+    assert_eq!(
+        die_items.len(),
+        1,
+        "'die' should appear exactly once after dedup; got {} items",
+        die_items.len()
+    );
+
+    // The surviving item must be the builtin (tier 3_), not the keyword (tier 5_).
+    let sort = must_some(die_items[0].sort_text.as_ref());
+    assert!(
+        sort.starts_with("3_"),
+        "'die' should survive as builtin (3_) not keyword (5_); got sort_text: {sort:?}"
+    );
+
+    // Also verify 'warn' — another overlapping name.
+    let warn_items: Vec<_> = items.iter().filter(|i| i.label == "warn").collect();
+    // warn may or may not match prefix "di", so we only check if it appears
+    // that it appears at most once.
+    assert!(warn_items.len() <= 1, "'warn' should appear at most once in completions for 'di'");
+}
+
+/// Specifically test 'warn' which overlaps builtins and keywords, using a
+/// prefix that only matches 'warn'.
+#[test]
+fn builtin_warn_no_duplicate() {
+    let code = "war";
+    let items = completions_at_end(code);
+
+    let warn_items: Vec<_> = items.iter().filter(|i| i.label == "warn").collect();
+    assert_eq!(
+        warn_items.len(),
+        1,
+        "'warn' should appear exactly once after dedup; got {} items",
+        warn_items.len()
+    );
+
+    let sort = must_some(warn_items[0].sort_text.as_ref());
+    assert!(
+        sort.starts_with("3_"),
+        "'warn' should survive as builtin (3_) not keyword (5_); got sort_text: {sort:?}"
+    );
+}
