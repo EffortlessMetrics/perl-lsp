@@ -160,6 +160,24 @@ fn test_proto_backslash_bracket_guard() {
 }
 
 // ---------------------------------------------------------------------------
+// Edge case: `++` in prototype — lexer merges two `+` into Increment token
+// ---------------------------------------------------------------------------
+
+/// `sub foo(++$)` — Perl allows `++` in prototypes (two consecutive `+` chars).
+/// The lexer produces `Increment` (not two `Plus` tokens), so `is_likely_prototype`
+/// and `parse_prototype` must handle `TokenKind::Increment` explicitly.
+#[test]
+fn test_proto_double_plus() {
+    assert_clean_parse("sub foo(++$) { 1 }");
+}
+
+/// `++` prototype with no other args.
+#[test]
+fn test_proto_double_plus_only() {
+    assert_clean_parse("sub foo(++) { 1 }");
+}
+
+// ---------------------------------------------------------------------------
 // Non-regression: `+` in sub BODY must not be confused with a prototype `+`
 // ---------------------------------------------------------------------------
 
