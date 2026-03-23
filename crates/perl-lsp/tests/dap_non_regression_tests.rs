@@ -4,9 +4,7 @@
 //!
 //! Specification: docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#ac17-lsp-integration-non-regression
 //!
-//! Run with: cargo test -p perl-lsp --test dap_non_regression_tests --features dap-phase3
-
-#![cfg(feature = "dap-phase3")]
+//! Run with: cargo test -p perl-lsp --test dap_non_regression_tests
 
 use anyhow::Result;
 use serde_json::json;
