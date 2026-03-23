@@ -621,7 +621,7 @@
           {
             "id": "configure-settings",
             "title": "Configure Settings",
-            "description": "Open Perl LSP settings to set includePaths, formatting, and feature profiles.",
+            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** — personal overrides, not committed to your repo. Set `perl-lsp.includePaths` here if you see _Can't locate Foo/Bar.pm_ errors. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** — team-wide defaults, committed to your repo root. Useful for sharing `includePaths` or enabling Perl::Critic across the team. Copy `.perl-lsp.toml.example` from the repo root to get started.\n\nEditor settings always override `.perl-lsp.toml`. See CONFIG.md for the full reference.",
             "media": {
               "image": "media/walkthrough/configure-settings.svg",
               "altText": "Configure Settings"
