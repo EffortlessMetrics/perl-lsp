@@ -258,3 +258,58 @@ fn multiple_heredocs_on_one_line() {
     // Line 5 ("normal;") is after both heredocs.
     assert!(compute_on_type_edit(text, 5, 7, ';').is_none()); // `;` is always None
 }
+
+// ==================================================================
+//  Regex quantifiers — `}` must not be misidentified as a block closer
+// ==================================================================
+
+#[test]
+fn close_brace_after_regex_quantifier_does_not_misindent() {
+    // The `{3}` in the regex is a quantifier, not a block. The real block
+    // opener is `{` on line 0. Typing `}` on line 2 should align with line 0.
+    let text = "if ($str =~ /\\w{3}/) {\n  do_something();\n    }";
+    let edits = compute_on_type_edit(text, 2, 5, '}');
+    assert!(edits.is_some());
+    // Should align to line 0 ("if ...") which has indent 0.
+    assert_eq!(first_new_text(&edits).as_deref(), Some(""));
+}
+
+#[test]
+fn close_brace_after_regex_range_quantifier_does_not_misindent() {
+    // The `{2,5}` is a range quantifier; the block opener is on line 0.
+    let text = "if ($x =~ /\\d{2,5}/) {\n  ok();\n    }";
+    let edits = compute_on_type_edit(text, 2, 5, '}');
+    assert!(edits.is_some());
+    assert_eq!(first_new_text(&edits).as_deref(), Some(""));
+}
+
+#[test]
+fn close_brace_with_open_range_quantifier_does_not_misindent() {
+    // {2,} is an open-ended quantifier.
+    let text = "if ($x =~ /a{2,}/) {\n  ok();\n    }";
+    let edits = compute_on_type_edit(text, 2, 5, '}');
+    assert!(edits.is_some());
+    assert_eq!(first_new_text(&edits).as_deref(), Some(""));
+}
+
+// ==================================================================
+//  qw{} — braces inside word-list must not affect indent tracking
+// ==================================================================
+
+#[test]
+fn close_brace_after_qw_block_does_not_misindent() {
+    // The `qw{foo bar}` braces should be ignored; the block opener is on line 0.
+    let text = "foreach my $x (qw{foo bar}) {\n  use($x);\n    }";
+    let edits = compute_on_type_edit(text, 2, 5, '}');
+    assert!(edits.is_some());
+    // Should align to line 0 which has indent 0.
+    assert_eq!(first_new_text(&edits).as_deref(), Some(""));
+}
+
+#[test]
+fn qw_block_already_correct_indent_no_edit() {
+    // When the `}` is already at the right indent, no edit should be emitted.
+    let text = "foreach my $x (qw{a b c}) {\n  use($x);\n}";
+    let edits = compute_on_type_edit(text, 2, 1, '}');
+    assert!(edits.is_none());
+}
