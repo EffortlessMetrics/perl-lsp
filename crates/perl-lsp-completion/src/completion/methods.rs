@@ -66,8 +66,8 @@ pub const DBI_ST_METHODS: &[(&str, &str)] = &[
 /// Each entry is `(name, signature, description)`.
 pub const DBI_DB_METHOD_SIGS: &[(&str, &str, &str)] = &[
     ("do", "do($statement, \\@attr?, @bind_values?)", "Execute a single SQL statement"),
-    ("prepare", "prepare($statement)", "Prepare a SQL statement for execution"),
-    ("prepare_cached", "prepare_cached($statement, \\@attr?)", "Prepare and cache a SQL statement"),
+    ("prepare", "prepare($statement, \\@attr?)", "Prepare a SQL statement for execution"),
+    ("prepare_cached", "prepare_cached($statement, \\@attr?, $if_active?)", "Prepare and cache a SQL statement"),
     (
         "selectrow_array",
         "selectrow_array($statement, \\@attr?, @bind)",
@@ -99,7 +99,7 @@ pub const DBI_DB_METHOD_SIGS: &[(&str, &str, &str)] = &[
     ("disconnect", "disconnect()", "Disconnect from the database"),
     (
         "last_insert_id",
-        "last_insert_id($catalog, $schema, $table, $field)",
+        "last_insert_id($catalog, $schema, $table, $field, \\@attr?)",
         "Get the last inserted row ID",
     ),
     ("quote", "quote($value, $data_type?)", "Quote a string value for use in SQL"),
