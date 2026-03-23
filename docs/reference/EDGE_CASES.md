@@ -75,10 +75,10 @@ list. No diagnostics are produced.
 
 ### POD-only files
 
-POD (Plain Old Documentation) blocks are treated as executable content by the
-parser because they produce statement nodes. A file containing only a POD block
-will therefore still receive the `use strict`/`use warnings` suggestion if no
-pragmas are present.
+POD (Plain Old Documentation) blocks are consumed as trivia by the lexer, the
+same way `#` comments are. A file containing only a POD block therefore
+produces `Program { statements: [] }` — the same as a comment-only file — and
+no diagnostics are produced.
 
 ```perl
 =head1 NAME
@@ -88,8 +88,9 @@ My::Module - description
 =cut
 ```
 
-This behaviour is intentional: POD-only files are typically module files that
-will have code added, and the pragma suggestions are appropriate.
+If you add any Perl code to the file (even a single statement), the empty-file
+guard is lifted and the `use strict`/`use warnings` suggestions will fire
+normally.
 
 ---
 
