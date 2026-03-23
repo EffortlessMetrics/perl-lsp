@@ -195,6 +195,12 @@ export enum DiagnosticSeverity {
   Hint = 3,
 }
 
+export enum ConfigurationTarget {
+  Global = 1,
+  Workspace = 2,
+  WorkspaceFolder = 3,
+}
+
 export const languages = {
   onDidChangeDiagnostics: jest.fn(() => ({ dispose: jest.fn() })),
   getDiagnostics: jest.fn(() => [] as Array<[any, any[]]>),

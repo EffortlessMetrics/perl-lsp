@@ -57,6 +57,7 @@
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",
     "onCommand:perl-lsp.reinstall",
+    "onCommand:perl-lsp.checkForUpdate",
     "onCommand:perl-lsp.createDebugConfig",
     "onCommand:perl-lsp.runHealthCheck",
     "onCommand:perl-lsp.openConfigurationGuide",
@@ -345,6 +346,19 @@
             "order": 5,
             "scope": "machine",
             "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp/`"
+          },
+          "perl-lsp.updateCheckInterval": {
+            "type": "number",
+            "default": 24,
+            "minimum": 0,
+            "order": 6,
+            "markdownDescription": "Hours between background checks for `perl-lsp` binary updates. Set to `0` to disable update checks entirely."
+          },
+          "perl-lsp.autoUpdate": {
+            "type": "boolean",
+            "default": false,
+            "order": 7,
+            "markdownDescription": "Automatically download and install new `perl-lsp` binary releases without prompting. When `false`, a notification is shown instead."
           }
         }
       }
@@ -379,6 +393,12 @@
         "title": "Reinstall Server Binary",
         "category": "Perl",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "perl-lsp.checkForUpdate",
+        "title": "Check for Binary Updates",
+        "category": "Perl",
+        "icon": "$(sync)"
       },
       {
         "command": "perl-lsp.organizeImports",

@@ -465,6 +465,13 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const checkForUpdateCommand = vscode.commands.registerCommand('perl-lsp.checkForUpdate', async () => {
+        const downloader = new BinaryDownloader(context, outputChannel);
+        // Reset the lastUpdateCheck timestamp so the interval guard is bypassed
+        await context.globalState.update('perl-lsp.lastUpdateCheck', 0);
+        await downloader.checkForUpdateSilent();
+    });
+
     context.subscriptions.push(
         showOutputCommand,
         restartCommand,
@@ -473,6 +480,7 @@ export async function activate(context: vscode.ExtensionContext) {
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,
+        checkForUpdateCommand,
         runHealthCheckCommand,
         showWhatsNewCommand,
         openConfigurationGuideCommand,
@@ -488,6 +496,15 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize debug adapter
     activateDebugger(context);
     await initializeLanguageClient(context);
+
+    // Background update check — fire-and-forget after startup completes.
+    // Runs at most once per updateCheckInterval hours; no-ops when serverPath
+    // is user-managed, channel='tag', or updateCheckInterval=0.
+    const updateDownloader = new BinaryDownloader(context, outputChannel);
+    updateDownloader.checkForUpdateSilent().catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`[update-check] Error: ${msg}`);
+    });
 
     // First-run onboarding: show welcome notification once per installation
     const onboarding = new OnboardingManager(context, outputChannel);
