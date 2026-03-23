@@ -821,7 +821,7 @@ impl<'a> Parser<'a> {
                                 && (Self::is_block_list_func(func_name.as_ref())
                                     || matches!(
                                         func_name.as_ref(),
-                                        "exec" | "system" | "print" | "say" | "printf"
+                                        "exec" | "system" | "print" | "say" | "printf" | "send"
                                     ))
                             {
                                 // block-list and filehandle builtins followed by (...) use
