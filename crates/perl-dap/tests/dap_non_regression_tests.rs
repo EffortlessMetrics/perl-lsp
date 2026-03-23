@@ -157,6 +157,10 @@ fn test_unknown_command_returns_structured_failure() {
 // AC:17 — request_seq is faithfully echoed for every command
 fn test_request_seq_echo_for_all_dispatched_commands() {
     // Representative set covering all branches of the dispatch table.
+    // `launch` and `attach` are excluded here — they spawn real Perl processes
+    // and are covered in dap_comprehensive_test, dap_launch_security_test, and
+    // dap_integration_test. The protocol shape invariants below still apply to
+    // all 36 dispatch arms; the exclusions don't weaken the non-regression contract.
     let cases: &[(&str, Option<Value>)] = &[
         ("cancel", None),
         ("configurationDone", None),
