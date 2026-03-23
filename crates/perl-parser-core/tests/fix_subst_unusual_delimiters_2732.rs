@@ -175,34 +175,29 @@ fn test_chained_hash_access_quote_op_keys() {
     assert_clean_parse(source);
 }
 
-// ── Known limitation: non-arrow hash subscript with quote-op keys ────────────
+// ── Non-arrow hash subscript with quote-op keys ──────────────────────────────
 //
-// $h{s} (no arrow) is a pre-existing bug documented in the PR's follow-ups.
-// Without `->`, after_arrow is false so the lexer treats `s` as a quote
-// operator and tries to parse `s}` as a substitution, failing. The is_quote_op_key
-// fix in parse_hash_subscript_key only catches the Identifier token emitted when
-// after_arrow=true (the arrow case). Fixing the non-arrow case requires broader
-// lexer context tracking for hash-subscript `{` and is out of scope for this PR.
-//
-// These tests assert the CURRENT (broken) behavior to prevent silent regression
-// (a future fix must convert these to assert_clean_parse).
+// $h{s} (no arrow) was previously broken — the lexer treated `s` as a quote
+// operator because after_arrow was false. Fixed by subsequent lexer work
+// (after_var_subscript tracking in PR #2833/#2844), which correctly suppresses
+// quote-operator recognition inside hash subscript braces even without `->`.
 
-/// $h{s} — bare hash subscript (no arrow) with quote-op key — known limitation.
-/// This fails with "Missing closing delimiter in substitution" because after_arrow
-/// is false so the lexer treats `s` as a substitution operator.
+/// $h{s} — bare hash subscript (no arrow) with quote-op key.
+/// Previously broken: lexer treated `s` as substitution operator.
+/// Fixed by after_var_subscript lexer tracking.
 #[test]
-fn test_non_arrow_hash_key_s_known_broken() {
-    // TODO(#2732-followup): fix non-arrow $h{s} — convert to assert_clean_parse when fixed
+fn test_non_arrow_hash_key_s() {
     let source = r#"my $x = $h{s};"#;
-    assert_has_error(source, "substitution");
+    assert_clean_parse(source);
 }
 
-/// $h{q} — bare hash subscript with 'q' key — known limitation.
+/// $h{q} — bare hash subscript with 'q' key.
+/// Previously broken: lexer treated `q` as quote operator.
+/// Fixed by after_var_subscript lexer tracking.
 #[test]
-fn test_non_arrow_hash_key_q_known_broken() {
-    // TODO(#2732-followup): fix non-arrow $h{q} — convert to assert_clean_parse when fixed
+fn test_non_arrow_hash_key_q() {
     let source = r#"my $x = $h{q};"#;
-    assert_has_error(source, "");
+    assert_clean_parse(source);
 }
 
 // ── Regression: space before paren delimiter (all four paired chars covered) ─
