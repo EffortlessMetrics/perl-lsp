@@ -18,7 +18,8 @@ completionProvider:
     - $
     - "@"
     - "%"
-    - "->"
+    - ">"
+    - ":"
 declarationProvider: true
 definitionProvider: true
 diagnosticProvider:
@@ -33,6 +34,7 @@ documentOnTypeFormattingProvider:
   firstTriggerCharacter: "}"
   moreTriggerCharacter:
     - ;
+    - "\n"
 documentRangeFormattingProvider: true
 documentSymbolProvider: true
 executeCommandProvider:
