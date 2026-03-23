@@ -2716,10 +2716,15 @@ dependencies = [
  "anyhow",
  "lsp-types",
  "perl-parser-core",
+ "perl-test-must",
  "serde",
  "serde_json",
  "url",
 ]
+
+[[package]]
+name = "perl-test-must"
+version = "0.12.0"
 
 [[package]]
 name = "perl-text-line"
