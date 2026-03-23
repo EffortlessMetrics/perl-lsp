@@ -741,7 +741,13 @@ impl<'a> Parser<'a> {
                     let next_text = self.tokens.peek()?.text.as_ref();
                     if matches!(next_text, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp") {
                         let op_token = self.tokens.next()?;
-                        let right = self.parse_relational()?;
+                        let right = if let Some(missing) =
+                            self.recover_missing_infix_rhs(op_token.start)
+                        {
+                            missing
+                        } else {
+                            self.parse_relational()?
+                        };
                         let start = expr.location.start;
                         let end = right.location.end;
 
@@ -763,7 +769,13 @@ impl<'a> Parser<'a> {
                 | TokenKind::NotMatch
                 | TokenKind::SmartMatch => {
                     let op_token = self.tokens.next()?;
-                    let right = self.parse_relational()?;
+                    let right = if let Some(missing) =
+                        self.recover_missing_infix_rhs(op_token.start)
+                    {
+                        missing
+                    } else {
+                        self.parse_relational()?
+                    };
                     let start = expr.location.start;
                     let end = right.location.end;
 
@@ -869,7 +881,13 @@ impl<'a> Parser<'a> {
                 | TokenKind::Spaceship
                 | TokenKind::StringCompare => {
                     let op_token = self.tokens.next()?;
-                    let right = self.parse_shift()?;
+                    let right = if let Some(missing) =
+                        self.recover_missing_infix_rhs(op_token.start)
+                    {
+                        missing
+                    } else {
+                        self.parse_shift()?
+                    };
                     let start = expr.location.start;
                     let end = right.location.end;
 
@@ -884,8 +902,14 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Identifier => {
                     if self.tokens.peek()?.text.as_ref() == "ISA" {
-                        let _op_token = self.tokens.next()?;
-                        let right = self.parse_shift()?;
+                        let op_token = self.tokens.next()?;
+                        let right = if let Some(missing) =
+                            self.recover_missing_infix_rhs(op_token.start)
+                        {
+                            missing
+                        } else {
+                            self.parse_shift()?
+                        };
                         let start = expr.location.start;
                         let end = right.location.end;
 
@@ -1122,7 +1146,11 @@ impl<'a> Parser<'a> {
     fn parse_power_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::Power) {
             let op_token = self.tokens.next()?;
-            let right = self.parse_unary()?;
+            let right = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                missing
+            } else {
+                self.parse_unary()?
+            };
             let start = expr.location.start;
             let end = right.location.end;
 

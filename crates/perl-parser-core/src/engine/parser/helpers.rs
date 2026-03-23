@@ -538,7 +538,7 @@ impl<'a> Parser<'a> {
     /// At strong followers (`;`, `}`, `{`, statement keywords, or EOF) the
     /// missing closer is inferred rather than returned as an error:
     /// - Emits `ParseError::Recovered { site, kind: InsertedCloser, location }` so
-    ///   callers can count recoveries and gate LSP features.
+    ///   callers can count recoveries and gate LSP features by confidence.
     /// - Returns `Ok(())` to allow parsing to continue.
     ///
     /// At any other token, returns `Err(ParseError::UnexpectedToken)` so the

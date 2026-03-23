@@ -231,6 +231,50 @@ fn clean_defined_or_assign_does_not_emit_recovered() {
 }
 
 // ──────────────────────────────────────────────────────────────
+// Pattern 1: Equality and relational operators (deep review addition)
+// ──────────────────────────────────────────────────────────────
+
+#[test]
+fn missing_rhs_equality_before_semicolon_emits_recovered() {
+    // `$x == ;` — equality operator with missing RHS
+    let errors = parse_errors("my $x = $a ==;");
+    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn missing_rhs_less_than_before_semicolon_emits_recovered() {
+    // `$x < ;` — relational operator with missing RHS
+    let errors = parse_errors("my $x = $a <;");
+    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn missing_rhs_string_eq_before_semicolon_emits_recovered() {
+    // `$s eq ;` — string equality operator with missing RHS
+    let errors = parse_errors("my $x = $s eq;");
+    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn missing_rhs_power_before_semicolon_emits_recovered() {
+    // `$x ** ;` — power operator with missing RHS
+    let errors = parse_errors("my $x = $a **;");
+    assert_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn clean_equality_does_not_emit_recovered() {
+    let errors = parse_errors("my $x = $a == $b;");
+    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn clean_relational_does_not_emit_recovered() {
+    let errors = parse_errors("if ($a < $b) { print 1; }");
+    assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+// ──────────────────────────────────────────────────────────────
 // Downstream stability: sibling statements survive recovery
 // ──────────────────────────────────────────────────────────────
 
