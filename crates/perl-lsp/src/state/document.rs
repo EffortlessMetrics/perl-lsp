@@ -287,4 +287,11 @@ pub struct ClientCapabilities {
     pub show_document_support: bool,
     /// Supports window/workDoneProgress/create request
     pub work_done_progress_support: bool,
+    /// Properties the client can resolve via inlayHint/resolve
+    ///
+    /// Parsed from `capabilities.textDocument.inlayHint.resolveSupport.properties`.
+    /// The server must only include a resolved property in the response when the
+    /// client has declared that property here.  A `None` value means the client
+    /// sent no `resolveSupport` entry at all (i.e. resolve is unsupported).
+    pub inlay_hint_resolve_support: Option<std::collections::HashSet<String>>,
 }
