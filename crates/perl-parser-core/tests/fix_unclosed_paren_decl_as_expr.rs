@@ -125,3 +125,41 @@ fn test_my_decl_in_paren_regression() {
     // `my $x` with no operator in paren context — must still work
     assert_clean_parse(r#"my $x = (my $y);"#);
 }
+
+// ---- Edge cases: less-common operators after declaration ----
+
+#[test]
+fn test_our_equality_in_if_condition() {
+    // Equality operator after declaration (== handled by parse_equality_with)
+    assert_clean_parse(r#"if (our $X == 1) { 1; }"#);
+}
+
+#[test]
+fn test_our_relational_in_paren() {
+    // Relational operator after declaration
+    assert_clean_parse(r#"(our $count > 0);"#);
+}
+
+#[test]
+fn test_our_defined_or_in_paren() {
+    // Defined-or operator after declaration (// is TokenKind::DefinedOr, handled by parse_or_with)
+    assert_clean_parse(r#"(our $X // "default");"#);
+}
+
+#[test]
+fn test_elsif_decl_with_binary_op() {
+    // elsif condition with declaration + binary op (control_flow.rs elsif branch)
+    assert_clean_parse(r#"if (0) { } elsif (our $X && $y) { 1; }"#);
+}
+
+#[test]
+fn test_while_initializer_regression() {
+    // while (my $line = <$fh>) — initializer form must not regress
+    assert_clean_parse(r#"while (my $line = <$fh>) { print $line; }"#);
+}
+
+#[test]
+fn test_our_ternary_after_decl() {
+    // Ternary operator after declaration (handled by parse_ternary_with)
+    assert_clean_parse(r#"(our $X ? "yes" : "no");"#);
+}

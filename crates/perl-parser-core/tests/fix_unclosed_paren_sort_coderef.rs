@@ -77,3 +77,23 @@ fn test_sort_block_in_func_arg_regression() {
     // sort { ... } in function argument — must not regress
     assert_clean_parse(r#"foo(sort { $a <=> $b } @arr);"#);
 }
+
+// ---- Edge cases: less-common but reachable patterns ----
+
+#[test]
+fn test_sort_coderef_empty_list() {
+    // (sort $cmp) with no list — should parse gracefully without unclosed_paren
+    assert_clean_parse(r#"my @s = (sort $cmp);"#);
+}
+
+#[test]
+fn test_sort_coderef_comma_separated_list() {
+    // sort $cmp with an explicit comma-separated list
+    assert_clean_parse(r#"my @s = (sort $cmp $a, $b, $c);"#);
+}
+
+#[test]
+fn test_sort_coderef_map_filtered_list() {
+    // sort $cmp with a map-generated list
+    assert_clean_parse(r#"my @s = (sort $cmp map { lc } @arr);"#);
+}

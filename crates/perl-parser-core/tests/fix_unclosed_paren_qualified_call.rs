@@ -81,3 +81,29 @@ fn test_unqualified_call_string_arg_regression() {
     // Unqualified (croak "err") already worked, must not regress
     assert_clean_parse(r#"(croak "error");"#);
 }
+
+// ---- Edge cases: less-common but reachable patterns ----
+
+#[test]
+fn test_qualified_call_interpolated_string_arg() {
+    // Interpolated string (double-quoted with variable) — TokenKind::String
+    assert_clean_parse(r#"(Carp::croak "Error: $msg");"#);
+}
+
+#[test]
+fn test_qualified_call_single_quoted_arg() {
+    // Single-quoted string '...' — also TokenKind::String
+    assert_clean_parse(r#"(Carp::croak 'hard error');"#);
+}
+
+#[test]
+fn test_qualified_call_no_args_regression() {
+    // (Foo::bar) with no args — must not fire Pattern B, must stay as identifier
+    assert_clean_parse(r#"(Foo::bar);"#);
+}
+
+#[test]
+fn test_deeply_qualified_call_in_paren() {
+    // Three-segment qualified name
+    assert_clean_parse(r#"(Foo::Bar::baz "arg");"#);
+}
