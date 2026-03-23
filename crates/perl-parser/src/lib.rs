@@ -544,6 +544,7 @@ pub use incremental::incremental_v2;
 
 /// Basic TDD utilities and test helpers.
 pub use tdd::tdd_basic;
+#[cfg(test)]
 /// TDD workflow integration for Test-Driven Development support.
 pub use tdd::tdd_workflow;
 /// Intelligent test case generation from parsed Perl code.
@@ -624,6 +625,7 @@ pub use import_optimizer::{
 };
 /// Scope analysis issue types and analyzer.
 pub use scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
+#[cfg(test)]
 /// Test generation, coverage reporting, and refactoring suggestions.
 pub use test_generator::{
     CoverageReport, Priority, RefactoringCategory, RefactoringSuggester, RefactoringSuggestion,
@@ -640,6 +642,7 @@ pub use refactoring::{
     ModernizationPattern, RefactoringConfig, RefactoringEngine, RefactoringOperation,
     RefactoringResult, RefactoringScope, RefactoringType,
 };
+#[cfg(test)]
 /// TDD workflow types: actions, configuration, and cycle management.
 pub use tdd_workflow::{
     AnnotationSeverity, CoverageAnnotation, TddAction, TddConfig, TddCycleResult, TddWorkflow,
