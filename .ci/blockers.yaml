@@ -90,22 +90,6 @@ parser_blockers:
     issue: null
     note: "Tier 1: 69 files. No issue filed."
 
-  - id: "unexpected_word_op_or"
-    category: "operator"
-    affected_files: 43
-    root_cause: "Low-precedence 'or' operator in unexpected position"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 2: 43 files. No issue filed."
-
-  - id: "unexpected_word_op_and"
-    category: "operator"
-    affected_files: 32
-    root_cause: "Low-precedence 'and' operator in unexpected position"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 2: 32 files. No issue filed."
-
   - id: "unclosed_brace_semicolon"
     category: "block"
     affected_files: 21
@@ -113,14 +97,6 @@ parser_blockers:
     status: "needs_investigation"
     issue: null
     note: "Tier 2: 21 files. No issue filed."
-
-  - id: "unexpected_word_op_not"
-    category: "operator"
-    affected_files: 20
-    root_cause: "Low-precedence 'not' operator in unexpected position"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 2: 20 files. No issue filed."
 
   - id: "expected_left_brace"
     category: "block"
@@ -245,6 +221,36 @@ ci_blockers:
 # Format: same schema plus closed_date: "YYYY-MM-DD" and closed_pr: "#NNNN"
 
 archived:
+  - id: "unexpected_word_op_or"
+    category: "operator"
+    affected_files: 43
+    root_cause: "Low-precedence 'or' operator in unexpected position"
+    status: "fixed"
+    issue: "#2753"
+    closed_date: "2026-03-22"
+    closed_pr: "#1922"
+    note: "Fixed by PRs #1922, #2396, #2409, #2626. Zero errors in 7095-file sweep on 2026-03-23. Issue #2753 closed as already-fixed."
+
+  - id: "unexpected_word_op_and"
+    category: "operator"
+    affected_files: 32
+    root_cause: "Low-precedence 'and' operator in unexpected position"
+    status: "fixed"
+    issue: "#2753"
+    closed_date: "2026-03-23"
+    closed_pr: "#2859"
+    note: "Fixed by PRs #1922, #2396, #2409, #2626, #2859 (and+comma). Zero errors in 7095-file sweep on 2026-03-23. Issue #2753 closed as already-fixed."
+
+  - id: "unexpected_word_op_not"
+    category: "operator"
+    affected_files: 20
+    root_cause: "Low-precedence 'not' operator in unexpected position"
+    status: "fixed"
+    issue: "#2753"
+    closed_date: "2026-03-22"
+    closed_pr: "#1922"
+    note: "Fixed by PRs #1922, #2396. Zero errors in 7095-file sweep on 2026-03-23. Issue #2753 closed as already-fixed."
+
   - id: "unclosed_brace"
     category: "block"
     affected_files: 16
