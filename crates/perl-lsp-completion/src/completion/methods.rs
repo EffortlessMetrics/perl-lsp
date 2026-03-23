@@ -67,7 +67,11 @@ pub const DBI_ST_METHODS: &[(&str, &str)] = &[
 pub const DBI_DB_METHOD_SIGS: &[(&str, &str, &str)] = &[
     ("do", "do($statement, \\@attr?, @bind_values?)", "Execute a single SQL statement"),
     ("prepare", "prepare($statement, \\@attr?)", "Prepare a SQL statement for execution"),
-    ("prepare_cached", "prepare_cached($statement, \\@attr?, $if_active?)", "Prepare and cache a SQL statement"),
+    (
+        "prepare_cached",
+        "prepare_cached($statement, \\@attr?, $if_active?)",
+        "Prepare and cache a SQL statement",
+    ),
     (
         "selectrow_array",
         "selectrow_array($statement, \\@attr?, @bind)",
