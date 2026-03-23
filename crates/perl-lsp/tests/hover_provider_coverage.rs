@@ -1359,4 +1359,24 @@ with 'MyApp::Printable', 'MyApp::Serializable';
         );
         Ok(())
     }
+
+    /// Hover on `$obj->execute()` in a NON-DBI file (no `use DBI`) must NOT
+    /// produce DBI documentation.  `execute` is a common method name in many
+    /// frameworks.  The `use DBI` guard must prevent this false positive.
+    #[test]
+    fn test_hover_execute_without_use_dbi_no_false_positive()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // No `use DBI` — this is some hypothetical task-runner framework.
+        let code = "use MyFramework;\nmy $task = MyFramework->new;\n$task->execute();\n";
+        let resp = hover_at(code, "file:///no_dbi_execute.pl", "execute", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for execute")?;
+
+        // Must NOT show DBI documentation (file does not `use DBI`)
+        assert!(
+            !content.contains("**DBI Method**"),
+            "hover on execute without use DBI must NOT return DBI docs, got: {content}"
+        );
+        Ok(())
+    }
 }

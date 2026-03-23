@@ -315,8 +315,11 @@ impl LspServer {
                 }
             }
 
-            // Check DBI method hover: token preceded by ->
-            if !bare.is_empty() && !hover_text.starts_with(['$', '@', '%']) {
+            // Check DBI method hover: token preceded by -> in a DBI-importing file.
+            // Guard on `use DBI` to avoid false positives for common method names like
+            // `execute`, `fetch`, `rows`, `commit`, `rollback` in non-DBI code.
+            let is_dbi_source = text.contains("use DBI") || text.contains("use DBIx");
+            if is_dbi_source && !bare.is_empty() && !hover_text.starts_with(['$', '@', '%']) {
                 if let Some(receiver) = Self::extract_arrow_receiver(text, offset) {
                     if let Some((sig, desc)) =
                         crate::completion::get_dbi_method_documentation(&receiver, bare)
@@ -355,6 +358,9 @@ impl LspServer {
     fn extract_arrow_receiver(text: &str, offset: usize) -> Option<String> {
         let chars: Vec<char> = text.chars().collect();
         let len = chars.len();
+        if len == 0 {
+            return None;
+        }
 
         // Walk to the start of the current token
         let mut tok_start = offset.min(len.saturating_sub(1));
@@ -763,53 +769,60 @@ impl LspServer {
                         })));
                     }
 
-                    // Check DBI method signatures.
+                    // Check DBI method signatures — only for files that import DBI/DBIx,
+                    // to avoid false positives for common method names like `execute`.
                     // find_function_context returns the function name but not paren_pos;
                     // scan backward to find `(` so extract_arrow_receiver can locate `->`.
-                    let paren_offset = {
-                        let chars: Vec<char> = doc.text.chars().collect();
-                        let mut depth = 0usize;
-                        let mut found = None;
-                        let mut k = if offset > 0 { offset - 1 } else { 0 };
-                        loop {
-                            match chars.get(k) {
-                                Some(')') | Some(']') | Some('}') => depth += 1,
-                                Some('(') => {
-                                    if depth == 0 {
-                                        found = Some(k);
-                                        break;
+                    let is_dbi_source =
+                        doc.text.contains("use DBI") || doc.text.contains("use DBIx");
+                    if is_dbi_source {
+                        let paren_offset = {
+                            let chars: Vec<char> = doc.text.chars().collect();
+                            let mut depth = 0usize;
+                            let mut found = None;
+                            let mut k = if offset > 0 { offset - 1 } else { 0 };
+                            loop {
+                                match chars.get(k) {
+                                    Some(')') | Some(']') | Some('}') => depth += 1,
+                                    Some('(') => {
+                                        if depth == 0 {
+                                            found = Some(k);
+                                            break;
+                                        }
+                                        depth = depth.saturating_sub(1);
                                     }
-                                    depth = depth.saturating_sub(1);
+                                    Some('[') | Some('{') => {
+                                        depth = depth.saturating_sub(1);
+                                    }
+                                    _ => {}
                                 }
-                                Some('[') | Some('{') => {
-                                    depth = depth.saturating_sub(1);
+                                if k == 0 {
+                                    break;
                                 }
-                                _ => {}
+                                k -= 1;
                             }
-                            if k == 0 {
-                                break;
-                            }
-                            k -= 1;
-                        }
-                        found
-                    };
-                    if let Some(paren_pos) = paren_offset {
-                        if let Some(receiver) = Self::extract_arrow_receiver(&doc.text, paren_pos) {
-                            if let Some((sig, desc)) =
-                                crate::completion::get_dbi_method_documentation(
-                                    &receiver,
-                                    &function_name,
-                                )
+                            found
+                        };
+                        if let Some(paren_pos) = paren_offset {
+                            if let Some(receiver) =
+                                Self::extract_arrow_receiver(&doc.text, paren_pos)
                             {
-                                return Ok(Some(json!({
-                                    "signatures": [json!({
-                                        "label": sig,
-                                        "documentation": desc,
-                                        "parameters": []
-                                    })],
-                                    "activeSignature": 0,
-                                    "activeParameter": active_param
-                                })));
+                                if let Some((sig, desc)) =
+                                    crate::completion::get_dbi_method_documentation(
+                                        &receiver,
+                                        &function_name,
+                                    )
+                                {
+                                    return Ok(Some(json!({
+                                        "signatures": [json!({
+                                            "label": sig,
+                                            "documentation": desc,
+                                            "parameters": []
+                                        })],
+                                        "activeSignature": 0,
+                                        "activeParameter": active_param
+                                    })));
+                                }
                             }
                         }
                     }
