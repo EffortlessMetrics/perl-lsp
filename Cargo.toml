@@ -61,7 +61,6 @@ members = [
     "crates/perl-lsp-completion-item",
     "crates/perl-lsp-inline-completion",
     "crates/perl-lsp-code-actions",
-    "crates/perl-lsp-inline-completion",
     "crates/perl-lsp-document-highlight",
     "crates/perl-lsp-folding",
     "crates/perl-lsp-selection-range",
@@ -412,7 +411,6 @@ perl-lsp-file-completion = { path = "crates/perl-lsp-file-completion", version =
 perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.12.0" }
 perl-lsp-inline-completion = { path = "crates/perl-lsp-inline-completion", version = "0.12.0" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12.0" }
-perl-lsp-inline-completion = { path = "crates/perl-lsp-inline-completion", version = "0.12.0" }
 perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.0" }
 perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.0" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.12.0" }
