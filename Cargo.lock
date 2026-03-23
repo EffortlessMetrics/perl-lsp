@@ -2702,6 +2702,15 @@ name = "perl-symbol-index"
 version = "0.12.0"
 
 [[package]]
+name = "perl-symbol-surface"
+version = "0.12.0"
+dependencies = [
+ "perl-ast",
+ "perl-position-tracking",
+ "perl-symbol-types",
+]
+
+[[package]]
 name = "perl-symbol-types"
 version = "0.12.0"
 dependencies = [
