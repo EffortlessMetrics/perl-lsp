@@ -1129,8 +1129,10 @@ run_app();
 
     // Must find "helper" in lib.pl with correct URI
     let found_cross_file_callee = calls.iter().any(|call| {
-        call["to"]["name"].as_str() == Some("helper")
-            && call["to"]["uri"].as_str().is_some_and(|u| u.contains("lib.pl"))
+        let uri_match = call["to"]["uri"].as_str().is_some_and(|u| u.contains("lib.pl"));
+        let range_match =
+            call["to"]["range"].is_object() && call["to"]["selectionRange"].is_object();
+        call["to"]["name"].as_str() == Some("helper") && uri_match && range_match
     });
 
     assert!(

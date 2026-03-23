@@ -152,10 +152,19 @@ impl CallHierarchyProvider {
                     let mut parser = crate::parser::Parser::new(doc_text);
                     if let Ok(other_ast) = parser.parse() {
                         let doc_provider = Self::for_doc(doc_text.clone(), doc_uri.clone());
-                        if doc_provider.find_function_by_name(&other_ast, &callee_bare).is_some() {
-                            call.to.uri = doc_uri.clone();
-                            call.to.name = callee_bare.clone();
-                            break;
+                        if let Some(def_node) =
+                            doc_provider.find_function_by_name(&other_ast, &callee_bare)
+                        {
+                            if let NodeKind::Subroutine { name_span, .. } = &def_node.kind {
+                                let range = doc_provider.node_to_range(def_node);
+                                let selection_range =
+                                    doc_provider.selection_range_from_name_span(name_span, &range);
+                                call.to.uri = doc_uri.clone();
+                                call.to.name = callee_bare.clone();
+                                call.to.range = range;
+                                call.to.selection_range = selection_range;
+                                break;
+                            }
                         }
                     }
                 }
@@ -285,7 +294,10 @@ impl CallHierarchyProvider {
                         let ranges = vec![self.node_to_range(node)];
 
                         // Check if we already have a call from this function
-                        if let Some(existing) = calls.iter_mut().find(|c| c.from.name == from.name)
+                        let key = (from.name.as_str(), from.uri.as_str());
+                        if let Some(existing) = calls
+                            .iter_mut()
+                            .find(|c| (c.from.name.as_str(), c.from.uri.as_str()) == key)
                         {
                             existing.from_ranges.extend(ranges);
                         } else {
@@ -302,7 +314,10 @@ impl CallHierarchyProvider {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
 
-                        if let Some(existing) = calls.iter_mut().find(|c| c.from.name == from.name)
+                        let key = (from.name.as_str(), from.uri.as_str());
+                        if let Some(existing) = calls
+                            .iter_mut()
+                            .find(|c| (c.from.name.as_str(), c.from.uri.as_str()) == key)
                         {
                             existing.from_ranges.extend(ranges);
                         } else {
