@@ -29,11 +29,20 @@ pub struct CallHierarchyItem {
     pub detail: Option<String>,
 }
 
+/// Extract the bare (unqualified) name from a potentially qualified Perl name.
+///
+/// `"MyLib::greet"` → `"greet"`, `"greet"` → `"greet"`.
+fn bare_name(name: &str) -> &str {
+    name.rsplit("::").next().unwrap_or(name)
+}
+
 /// Call Hierarchy Provider
 pub struct CallHierarchyProvider {
     source: String,
     uri: String,
     position_mapper: PositionMapper,
+    /// Workspace documents (uri, text) for cross-file call resolution
+    workspace_docs: Vec<(String, String)>,
 }
 
 impl CallHierarchyProvider {
@@ -43,6 +52,7 @@ impl CallHierarchyProvider {
     ///
     /// * `source` - The source code content
     /// * `uri` - The URI of the source file
+    /// * `workspace_docs` - All open workspace documents (uri, text) for cross-file resolution
     ///
     /// # Returns
     ///
@@ -55,13 +65,21 @@ impl CallHierarchyProvider {
     ///
     /// let source = "sub hello { print 'world'; }";
     /// let uri = "file:///path/to/file.pl";
-    /// let provider = CallHierarchyProvider::new(source.to_string(), uri.to_string());
+    /// let provider = CallHierarchyProvider::new(source.to_string(), uri.to_string(), vec![]);
     /// ```
-    pub fn new(source: String, uri: String) -> Self {
+    pub fn new(source: String, uri: String, workspace_docs: Vec<(String, String)>) -> Self {
         // Validate that URI is well-formed (basic security check)
         let uri = if uri.is_empty() { "file:///unknown".to_string() } else { uri };
         let position_mapper = PositionMapper::new(&source);
-        Self { source, uri, position_mapper }
+        Self { source, uri, position_mapper, workspace_docs }
+    }
+
+    /// Create a provider scoped to a single document with no workspace context.
+    /// Used internally when iterating workspace documents for cross-file search.
+    fn for_doc(source: String, uri: String) -> Self {
+        let uri = if uri.is_empty() { "file:///unknown".to_string() } else { uri };
+        let position_mapper = PositionMapper::new(&source);
+        Self { source, uri, position_mapper, workspace_docs: Vec::new() }
     }
 
     /// Prepare call hierarchy - find items at a given position
@@ -72,32 +90,79 @@ impl CallHierarchyProvider {
     }
 
     /// Get incoming calls (callers of a function)
+    ///
+    /// Searches the primary document and all workspace documents for callers.
+    /// Both bare (`greet`) and qualified (`MyLib::greet`) call forms are matched.
     pub fn incoming_calls(
         &self,
         ast: &Node,
         item: &CallHierarchyItem,
     ) -> Vec<CallHierarchyIncomingCall> {
         let mut calls = Vec::new();
+
+        // Search the primary document
         self.find_incoming_calls(ast, &item.name, &mut calls, None);
+
+        // Search all other open workspace documents
+        for (doc_uri, doc_text) in &self.workspace_docs {
+            if doc_uri == &self.uri {
+                continue;
+            }
+            let mut parser = crate::parser::Parser::new(doc_text);
+            if let Ok(other_ast) = parser.parse() {
+                let doc_provider = Self::for_doc(doc_text.clone(), doc_uri.clone());
+                // find_incoming_calls matches both bare and qualified forms internally
+                doc_provider.find_incoming_calls(&other_ast, &item.name, &mut calls, None);
+            }
+        }
+
         calls
     }
 
     /// Get outgoing calls (functions called by this function)
+    ///
+    /// After collecting call sites in the function body, resolves each callee's
+    /// definition URI by searching workspace documents.  Qualified names like
+    /// `MyLib::helper` are stripped to `helper` for the definition lookup.
     pub fn outgoing_calls(
         &self,
         ast: &Node,
         item: &CallHierarchyItem,
     ) -> Vec<CallHierarchyOutgoingCall> {
         // Find the function node
-        if let Some(func_node) = self.find_function_by_name(ast, &item.name) {
-            let mut calls = Vec::new();
-            if let NodeKind::Subroutine { body, .. } = &func_node.kind {
-                self.find_outgoing_calls(body, &mut calls);
-            }
-            calls
-        } else {
-            Vec::new()
+        let func_node = match self.find_function_by_name(ast, &item.name) {
+            Some(n) => n,
+            None => return Vec::new(),
+        };
+        let mut calls = Vec::new();
+        if let NodeKind::Subroutine { body, .. } = &func_node.kind {
+            self.find_outgoing_calls(body, &mut calls);
         }
+
+        // Resolve each callee's definition URI across workspace documents.
+        // When found, also normalise the display name to the bare symbol name
+        // (e.g. "MyLib::helper" → "helper") so clients show the definition name.
+        if !self.workspace_docs.is_empty() {
+            for call in &mut calls {
+                let callee_bare = bare_name(&call.to.name).to_string();
+                for (doc_uri, doc_text) in &self.workspace_docs {
+                    if doc_uri == &self.uri {
+                        continue;
+                    }
+                    let mut parser = crate::parser::Parser::new(doc_text);
+                    if let Ok(other_ast) = parser.parse() {
+                        let doc_provider = Self::for_doc(doc_text.clone(), doc_uri.clone());
+                        if doc_provider.find_function_by_name(&other_ast, &callee_bare).is_some() {
+                            call.to.uri = doc_uri.clone();
+                            call.to.name = callee_bare.clone();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        calls
     }
 
     /// Find a callable item at the given position
@@ -213,7 +278,9 @@ impl CallHierarchyProvider {
                 }
             }
             NodeKind::FunctionCall { name, .. } => {
-                if name == target_name {
+                // Match both exact ("greet") and qualified ("MyLib::greet") call forms
+                let matches = name == target_name || bare_name(name) == bare_name(target_name);
+                if matches {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
 
@@ -678,7 +745,7 @@ sub process_data {
         let mut parser = Parser::new(code);
         if let Ok(ast) = parser.parse() {
             let provider =
-                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
+                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string(), vec![]);
 
             // Find function at position (line 1, char 5) - "main"
             let items = provider.prepare(&ast, 1, 5);
@@ -711,7 +778,7 @@ sub target_func {
         let mut parser = Parser::new(code);
         if let Ok(ast) = parser.parse() {
             let provider =
-                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
+                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string(), vec![]);
 
             let target_item = CallHierarchyItem {
                 name: "target_func".to_string(),
@@ -762,7 +829,7 @@ sub helper {
         let mut parser = Parser::new(code);
         if let Ok(ast) = parser.parse() {
             let provider =
-                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
+                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string(), vec![]);
 
             let main_item = CallHierarchyItem {
                 name: "main".to_string(),

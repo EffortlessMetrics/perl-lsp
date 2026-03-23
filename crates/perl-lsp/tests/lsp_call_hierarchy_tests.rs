@@ -989,3 +989,155 @@ fn test_call_hierarchy_capability_advertised() -> TestResult {
     }
     Ok(())
 }
+
+/// Tests cross-file incoming calls — callers in other open documents must be found.
+///
+/// Regression target for issue #2923: incoming_calls() was limited to the single
+/// file passed to CallHierarchyProvider::new(), so callers in other open docs were
+/// invisible.
+#[test]
+fn test_incoming_calls_cross_file() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    // File 1: lib.pl — defines the target function
+    let lib_uri = "file:///lib.pl";
+    harness.open(
+        lib_uri,
+        r#"
+package MyLib;
+
+sub greet {
+    print "Hello!\n";
+}
+
+1;
+"#,
+    )?;
+
+    // File 2: main.pl — calls greet from another file
+    let main_uri = "file:///main.pl";
+    harness.open(
+        main_uri,
+        r#"
+use MyLib;
+
+sub run_app {
+    MyLib::greet();
+}
+
+run_app();
+"#,
+    )?;
+
+    // Prepare call hierarchy for "greet" in lib.pl (line 3, char 4)
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": lib_uri },
+            "position": { "line": 3, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy: expected array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy should find 'greet'");
+
+    let item = &items[0];
+    assert_eq!(item["name"], "greet", "prepared item should be 'greet'");
+
+    // Request incoming calls for greet
+    let incoming_response =
+        harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
+
+    let calls = incoming_response.as_array().ok_or("incomingCalls: expected array")?;
+
+    // Must find "run_app" from main.pl — the cross-file caller
+    let found_cross_file_caller = calls.iter().any(|call| {
+        call["from"]["name"].as_str() == Some("run_app")
+            && call["from"]["uri"].as_str().is_some_and(|u| u.contains("main.pl"))
+    });
+
+    assert!(
+        found_cross_file_caller,
+        "Should find 'run_app' from main.pl as a cross-file caller of 'greet'. Got: {:?}",
+        calls
+    );
+
+    Ok(())
+}
+
+/// Tests cross-file outgoing calls — callees defined in other open documents
+/// must appear with the correct source URI.
+///
+/// Regression target for issue #2923: outgoing_calls() resolved all callees to the
+/// requesting file's URI regardless of where the callee was actually defined.
+#[test]
+fn test_outgoing_calls_cross_file() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    // File 1: lib.pl — defines the callee
+    let lib_uri = "file:///lib.pl";
+    harness.open(
+        lib_uri,
+        r#"
+package MyLib;
+
+sub helper {
+    print "Helper!\n";
+}
+
+1;
+"#,
+    )?;
+
+    // File 2: main.pl — calls helper from another file
+    let main_uri = "file:///main.pl";
+    harness.open(
+        main_uri,
+        r#"
+use MyLib;
+
+sub run_app {
+    MyLib::helper();
+}
+
+run_app();
+"#,
+    )?;
+
+    // Prepare call hierarchy for "run_app" in main.pl (line 3, char 4)
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": main_uri },
+            "position": { "line": 3, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy: expected array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy should find 'run_app'");
+
+    let item = &items[0];
+    assert_eq!(item["name"], "run_app", "prepared item should be 'run_app'");
+
+    // Request outgoing calls from run_app
+    let outgoing_response =
+        harness.request("callHierarchy/outgoingCalls", json!({ "item": item }))?;
+
+    let calls = outgoing_response.as_array().ok_or("outgoingCalls: expected array")?;
+
+    // Must find "helper" in lib.pl with correct URI
+    let found_cross_file_callee = calls.iter().any(|call| {
+        call["to"]["name"].as_str() == Some("helper")
+            && call["to"]["uri"].as_str().is_some_and(|u| u.contains("lib.pl"))
+    });
+
+    assert!(
+        found_cross_file_callee,
+        "Should find 'helper' from lib.pl as a cross-file outgoing call from 'run_app'. Got: {:?}",
+        calls
+    );
+
+    Ok(())
+}

@@ -377,7 +377,9 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
+                    // prepare() only needs the single file — no workspace scan needed
+                    let provider =
+                        CallHierarchyProvider::new(doc.text.clone(), uri.to_string(), vec![]);
                     if let Some(items) = provider.prepare(ast, line, character) {
                         let json_items: Vec<_> = items.iter().map(|item| item.to_json()).collect();
                         return Ok(Some(json!(json_items)));
@@ -400,18 +402,24 @@ impl LspServer {
 
             eprintln!("Getting incoming calls for: {}", item["name"].as_str().unwrap_or(""));
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    // Reconstruct the CallHierarchyItem from JSON
-                    let ch_item = self.json_to_call_hierarchy_item(item)?;
-
-                    let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
-                    let calls = provider.incoming_calls(ast, &ch_item);
-
-                    let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
-                    return Ok(Some(json!(json_calls)));
+            // Take a single lock, collect all data needed, then release before parsing.
+            let (workspace_docs, doc_text, opt_ast) = {
+                let documents = self.documents_guard();
+                let workspace_docs: Vec<(String, String)> =
+                    documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
+                match self.get_document(&documents, uri) {
+                    Some(doc) => (workspace_docs, doc.text.clone(), doc.ast.clone()),
+                    None => return Ok(Some(json!([]))),
                 }
+            };
+
+            if let Some(ast) = opt_ast {
+                let ch_item = self.json_to_call_hierarchy_item(item)?;
+                let provider =
+                    CallHierarchyProvider::new(doc_text, uri.to_string(), workspace_docs);
+                let calls = provider.incoming_calls(&ast, &ch_item);
+                let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
+                return Ok(Some(json!(json_calls)));
             }
         }
 
@@ -429,18 +437,24 @@ impl LspServer {
 
             eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    // Reconstruct the CallHierarchyItem from JSON
-                    let ch_item = self.json_to_call_hierarchy_item(item)?;
-
-                    let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
-                    let calls = provider.outgoing_calls(ast, &ch_item);
-
-                    let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
-                    return Ok(Some(json!(json_calls)));
+            // Take a single lock, collect all data needed, then release before parsing.
+            let (workspace_docs, doc_text, opt_ast) = {
+                let documents = self.documents_guard();
+                let workspace_docs: Vec<(String, String)> =
+                    documents.iter().map(|(k, v)| (k.clone(), v.text.clone())).collect();
+                match self.get_document(&documents, uri) {
+                    Some(doc) => (workspace_docs, doc.text.clone(), doc.ast.clone()),
+                    None => return Ok(Some(json!([]))),
                 }
+            };
+
+            if let Some(ast) = opt_ast {
+                let ch_item = self.json_to_call_hierarchy_item(item)?;
+                let provider =
+                    CallHierarchyProvider::new(doc_text, uri.to_string(), workspace_docs);
+                let calls = provider.outgoing_calls(&ast, &ch_item);
+                let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
+                return Ok(Some(json!(json_calls)));
             }
         }
 
