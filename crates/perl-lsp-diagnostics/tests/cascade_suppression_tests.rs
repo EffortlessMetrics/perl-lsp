@@ -5,7 +5,8 @@
 
 use std::sync::Arc;
 
-use perl_lsp_diagnostics::{Diagnostic, DiagnosticsProvider};
+use perl_lsp_diagnostics::{Diagnostic, DiagnosticSeverity, DiagnosticsProvider};
+use perl_parser::Parser;
 use perl_parser_core::error::ParseError;
 use perl_parser_core::{Node, NodeKind, SourceLocation};
 
@@ -31,6 +32,29 @@ fn run_diagnostics(source: &str, errors: Vec<ParseError>) -> Vec<Diagnostic> {
     let ast = empty_program(source.len());
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     provider.get_diagnostics(&ast, &errors, source, None)
+}
+
+/// Run the full parser + diagnostics pipeline on real Perl source.
+fn parse_and_diagnose(source: &str) -> Vec<Diagnostic> {
+    let output = Parser::new(source).parse_with_recovery();
+    let ast = Arc::new(output.ast);
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    provider.get_diagnostics(&ast, &output.diagnostics, source, None)
+}
+
+/// Filter to Error-severity parse-error diagnostics only.
+///
+/// Excludes non-Error-severity diagnostics even if they carry a parse-error
+/// code.  Use this when you want to count "alarming" diagnostics shown in red
+/// in the gutter — the key user-visible noise metric.
+fn error_level_parse_diags(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
+    diags
+        .iter()
+        .filter(|d| {
+            d.severity == DiagnosticSeverity::Error
+                && matches!(d.code.as_deref(), Some("PL001") | Some("PL002") | Some("PL003"))
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +317,126 @@ fn exact_duplicate_cascades_all_removed() -> Result<(), Box<dyn std::error::Erro
         1,
         "Exact duplicate + cascade should collapse to a single diagnostic, got {}",
         parse_diags.len()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 9. Real-world: single missing semicolon → at most 2 error-level diagnostics
+//
+// This is the primary user-visible test: a common typo (missing `;`) should
+// not flood the gutter with 5-10 red markers.  Cascade suppression must
+// reduce the noise to at most 2 Error-severity diagnostics.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn single_missing_semicolon_produces_at_most_two_parse_errors()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Missing semicolon after the first assignment.  The parser will recover
+    // and continue, potentially emitting multiple cascade errors.
+    let source = "my $x = 42\nmy $y = 43;\n";
+
+    let diags = parse_and_diagnose(source);
+    let error_diags = error_level_parse_diags(&diags);
+
+    assert!(
+        error_diags.len() <= 2,
+        "A single missing semicolon should produce at most 2 Error-level parse diagnostics, \
+         got {} (cascade suppression is not working): {:?}",
+        error_diags.len(),
+        error_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 10. Real-world: unclosed delimiter causes cascade — only primary survives
+//
+// An unclosed parenthesis may cause the parser to emit multiple downstream
+// errors.  After cascade suppression the user should see at most a small
+// number of Error-level diagnostics, not an explosion of them.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unclosed_paren_does_not_produce_error_explosion() -> Result<(), Box<dyn std::error::Error>> {
+    // An unclosed paren can make the parser confused about every subsequent
+    // statement.  Cascade suppression should prevent more than a handful of
+    // Error-level markers from reaching the user.
+    let source = "my $result = foo(1, 2, 3;\nmy $y = 42;\nmy $z = 99;\n";
+
+    let diags = parse_and_diagnose(source);
+    let error_diags = error_level_parse_diags(&diags);
+
+    // Upper bound: even a nasty delimiter cascade should not produce more than
+    // 5 Error markers.  The exact count may vary as the parser improves, but
+    // the user should never see an explosion.
+    assert!(
+        error_diags.len() <= 5,
+        "Unclosed paren should produce at most 5 Error-level diagnostics after cascade \
+         suppression, got {}: {:?}",
+        error_diags.len(),
+        error_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 11. Real-world: valid Perl produces zero parse-error diagnostics
+//
+// Regression guard: cascade suppression must not accidentally suppress
+// valid-code diagnostics or misfire on clean source.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn valid_perl_produces_no_parse_error_markers() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "use strict;\nuse warnings;\n\nmy $x = 42;\nmy $y = $x + 1;\nprint \"$y\\n\";\n";
+
+    let diags = parse_and_diagnose(source);
+    let error_diags = error_level_parse_diags(&diags);
+
+    assert!(
+        error_diags.is_empty(),
+        "Valid Perl should produce zero Error-level parse diagnostics, got {}: {:?}",
+        error_diags.len(),
+        error_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 12. Real-world: multiple unrelated syntax errors both reported
+//
+// Two syntax errors separated by many bytes (different lines) should each
+// generate an Error-level diagnostic.  Cascade suppression must not over-
+// suppress genuinely independent errors.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn two_independent_syntax_errors_both_reported() -> Result<(), Box<dyn std::error::Error>> {
+    // Synthetic errors at offsets 0 and 60 — well beyond the cascade threshold.
+    // Both should survive suppression.
+    let source =
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    let errors = vec![
+        ParseError::UnexpectedToken {
+            location: 0,
+            expected: "statement".to_string(),
+            found: "x".to_string(),
+        },
+        ParseError::UnexpectedToken {
+            location: 60,
+            expected: "statement".to_string(),
+            found: "x".to_string(),
+        },
+    ];
+
+    let diags = run_diagnostics(source, errors);
+    let error_diags = error_level_parse_diags(&diags);
+
+    assert!(
+        error_diags.len() >= 2,
+        "Two errors 60 bytes apart should both survive cascade suppression, got {}",
+        error_diags.len()
     );
     Ok(())
 }
