@@ -1313,4 +1313,50 @@ with 'MyApp::Printable', 'MyApp::Serializable';
         );
         Ok(())
     }
+
+    /// Hover on a DBI method called through a hash-dereference handle
+    /// (`$self->{dbh}->prepare`) must return DBI documentation, not the
+    /// generic fallback.  The receiver extracted is `"dbh}"` (includes the
+    /// closing brace) and falls through to the unknown-receiver path, which
+    /// searches both tables by method name.
+    #[test]
+    fn test_hover_dbi_method_through_hashref_handle() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use DBI;\n$self->{dbh}->prepare(\"SELECT 1\");\n";
+        // Hover on "prepare" on line 1
+        let resp = hover_at(code, "file:///dbi_hashref_hover.pl", "prepare", 1)?;
+
+        let content =
+            hover_content(&resp).ok_or("expected hover content for hashref DBI prepare")?;
+
+        assert!(
+            !content.starts_with("**Perl**: `prepare`"),
+            "hover on $self->{{dbh}}->prepare must NOT return the generic fallback, got: {content}"
+        );
+        assert!(
+            content.contains("DBI") || content.contains("SQL") || content.contains("statement"),
+            "hover on $self->{{dbh}}->prepare must contain DBI documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on a non-DBI arrow method (`$ua->get`) must NOT produce DBI
+    /// documentation — it must fall through to the generic "**Perl**: `get`"
+    /// card.  This guards against false positives from the DBI check.
+    #[test]
+    fn test_hover_non_dbi_arrow_method_no_false_positive() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code =
+            "use LWP::UserAgent;\nmy $ua = LWP::UserAgent->new;\n$ua->get('http://example.com');\n";
+        // Hover on "get" on line 2
+        let resp = hover_at(code, "file:///lwp_hover.pl", "get", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for $ua->get")?;
+
+        // Must NOT return DBI Method documentation
+        assert!(
+            !content.contains("**DBI Method**"),
+            "hover on $ua->get must NOT return DBI documentation, got: {content}"
+        );
+        Ok(())
+    }
 }
