@@ -245,14 +245,8 @@ mod moo_semantics_e2e_tests {
         // The Moo/Moose hover card now uses "isa: Str, rw" format (from the
         // declaration == "has" early-return path) rather than "is=rw" / "isa=Str"
         // from the old generic attribute rendering path.
-        assert!(
-            hover_text.contains("rw"),
-            "expected rw accessor mode in hover, got: {hover_text}"
-        );
-        assert!(
-            hover_text.contains("Str"),
-            "expected isa type 'Str' in hover, got: {hover_text}"
-        );
+        assert!(hover_text.contains("rw"), "expected rw accessor mode in hover, got: {hover_text}");
+        assert!(hover_text.contains("Str"), "expected isa type 'Str' in hover, got: {hover_text}");
 
         server.shutdown();
         Ok(())
