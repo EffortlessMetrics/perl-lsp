@@ -436,3 +436,291 @@ describe('compareVersions', () => {
     expect(compareVersions('0.12.0-rc1', '0.12.0')).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// checkForUpdateSilent — integration of version check + notification
+// ---------------------------------------------------------------------------
+describe('checkForUpdateSilent', () => {
+  // Build a full context mock that includes globalState storage.
+  function makeFullContext(storagePath?: string): any {
+    const dir = storagePath ?? fs.mkdtempSync(path.join(os.tmpdir(), 'dl-full-'));
+    const store = new Map<string, unknown>();
+    return {
+      globalStorageUri: { fsPath: dir },
+      extensionPath: dir,
+      subscriptions: [],
+      globalState: {
+        get: jest.fn((key: string, defaultValue?: unknown) =>
+          store.has(key) ? store.get(key) : defaultValue
+        ),
+        update: jest.fn((key: string, value: unknown) => {
+          store.set(key, value);
+          return Promise.resolve();
+        }),
+        _store: store,
+      },
+    };
+  }
+
+  let ctx: any;
+  let outputChannel: any;
+  let downloader: BinaryDownloader;
+  let tmpBinary: string;
+
+  beforeEach(() => {
+    // Reset all mocks so call counts don't bleed between tests.
+    jest.clearAllMocks();
+
+    ctx = makeFullContext();
+    outputChannel = {
+      appendLine: jest.fn(),
+      show: jest.fn(),
+      dispose: jest.fn(),
+    };
+    downloader = new BinaryDownloader(ctx, outputChannel);
+
+    // Place a stub binary in the expected auto-download location so
+    // fs.existsSync passes.
+    const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
+    const binDir = path.join(ctx.globalStorageUri.fsPath, 'bin', `${process.platform}-${process.arch}`);
+    fs.mkdirSync(binDir, { recursive: true });
+    tmpBinary = path.join(binDir, binaryName);
+    fs.writeFileSync(tmpBinary, '#!/bin/sh\necho "perl-lsp 0.12.0"');
+  });
+
+  afterEach(() => {
+    // Clean up temp storage directory
+    try {
+      fs.rmSync(ctx.globalStorageUri.fsPath, { recursive: true, force: true });
+    } catch (_e) {
+      // ignore
+    }
+    jest.restoreAllMocks();
+  });
+
+  // Helper: configure getConfiguration mock to return specific values.
+  function mockConfig(overrides: Record<string, unknown>): void {
+    const vscode = require('vscode');
+    vscode.workspace.getConfiguration.mockReturnValue({
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        if (key in overrides) return overrides[key];
+        return defaultValue;
+      }),
+      update: jest.fn(),
+    });
+  }
+
+  test('no-ops when channel is "tag" (user pinned a version)', async () => {
+    mockConfig({ channel: 'tag' });
+    const getLatestSpy = jest.spyOn(downloader as any, 'getLatestRelease');
+
+    await downloader.checkForUpdateSilent();
+
+    expect(getLatestSpy).not.toHaveBeenCalled();
+  });
+
+  test('no-ops when serverPath is user-configured', async () => {
+    mockConfig({ channel: 'latest', serverPath: '/custom/perl-lsp' });
+    const getLatestSpy = jest.spyOn(downloader as any, 'getLatestRelease');
+
+    await downloader.checkForUpdateSilent();
+
+    expect(getLatestSpy).not.toHaveBeenCalled();
+  });
+
+  test('no-ops when updateCheckInterval is 0 (disabled)', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 0 });
+    const getLatestSpy = jest.spyOn(downloader as any, 'getLatestRelease');
+
+    await downloader.checkForUpdateSilent();
+
+    expect(getLatestSpy).not.toHaveBeenCalled();
+  });
+
+  test('no-ops when updateCheckInterval is negative (treated as disabled)', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: -1 });
+    const getLatestSpy = jest.spyOn(downloader as any, 'getLatestRelease');
+
+    await downloader.checkForUpdateSilent();
+
+    expect(getLatestSpy).not.toHaveBeenCalled();
+  });
+
+  test('no-ops when the interval has not elapsed', async () => {
+    // Set lastUpdateCheck to "just now" so elapsed < interval
+    ctx.globalState._store.set('perl-lsp.lastUpdateCheck', Date.now());
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
+    const getLatestSpy = jest.spyOn(downloader as any, 'getLatestRelease');
+
+    await downloader.checkForUpdateSilent();
+
+    expect(getLatestSpy).not.toHaveBeenCalled();
+  });
+
+  test('no-ops when versions are equal — no notification shown', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.12.0',
+      assets: [],
+    });
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue(undefined);
+
+    await downloader.checkForUpdateSilent();
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('no-ops when local version is ahead — no notification shown', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.13.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.12.0',
+      assets: [],
+    });
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue(undefined);
+
+    await downloader.checkForUpdateSilent();
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('shows notification when remote version is newer', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24, autoUpdate: false });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.13.0',
+      assets: [],
+    });
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue(undefined);
+
+    await downloader.checkForUpdateSilent();
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('0.13.0'),
+      'Update',
+      'Dismiss',
+      "Don't ask again"
+    );
+  });
+
+  test('notification message contains installed version', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24, autoUpdate: false });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.13.0',
+      assets: [],
+    });
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue(undefined);
+
+    await downloader.checkForUpdateSilent();
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('0.12.0'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  test('"Don\'t ask again" sets updateCheckInterval to 0', async () => {
+    const updateFn = jest.fn();
+    const vscode = require('vscode');
+    vscode.workspace.getConfiguration.mockReturnValue({
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        const cfg: Record<string, unknown> = {
+          channel: 'latest',
+          serverPath: '',
+          updateCheckInterval: 24,
+          autoUpdate: false,
+        };
+        return key in cfg ? cfg[key] : defaultValue;
+      }),
+      update: updateFn,
+    });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.13.0',
+      assets: [],
+    });
+    vscode.window.showInformationMessage.mockResolvedValue("Don't ask again");
+
+    await downloader.checkForUpdateSilent();
+
+    // ConfigurationTarget.Global === 1 in the vscode mock
+    expect(updateFn).toHaveBeenCalledWith('updateCheckInterval', 0, 1);
+  });
+
+  test('silent failure — logs error but shows no notification on network error', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockRejectedValue(
+      new Error('ETIMEDOUT')
+    );
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue(undefined);
+
+    await downloader.checkForUpdateSilent();
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    expect(outputChannel.appendLine).toHaveBeenCalledWith(
+      expect.stringContaining('[update-check]')
+    );
+  });
+
+  test('silent failure — logs error but shows no notification when getLocalVersion returns null', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue(null);
+    const getLatestSpy = jest.spyOn(downloader as any, 'getLatestRelease');
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue(undefined);
+
+    await downloader.checkForUpdateSilent();
+
+    // getLatestRelease should NOT be called if local version cannot be read
+    expect(getLatestSpy).not.toHaveBeenCalled();
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+
+  test('records lastUpdateCheck timestamp when check runs', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.12.0',
+      assets: [],
+    });
+
+    const before = Date.now();
+    await downloader.checkForUpdateSilent();
+    const after = Date.now();
+
+    expect(ctx.globalState.update).toHaveBeenCalledWith(
+      'perl-lsp.lastUpdateCheck',
+      expect.any(Number)
+    );
+    const recorded = ctx.globalState._store.get('perl-lsp.lastUpdateCheck') as number;
+    expect(recorded).toBeGreaterThanOrEqual(before);
+    expect(recorded).toBeLessThanOrEqual(after);
+  });
+
+  test('strips "v" prefix from remote tag_name before comparison', async () => {
+    // Remote tag is "v0.12.0"; local is "0.12.0" — should be treated as equal.
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24 });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.12.0',
+      assets: [],
+    });
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue(undefined);
+
+    await downloader.checkForUpdateSilent();
+
+    // Must NOT show notification — they are equal after normalization
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+  });
+});
