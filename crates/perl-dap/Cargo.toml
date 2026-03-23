@@ -151,6 +151,11 @@ name = "dap_packaging_tests"
 path = "tests/dap_packaging_tests.rs"
 # AC19: Binary packaging and cross-platform distribution
 
+[[test]]
+name = "dap_protocol_message_tests"
+path = "tests/dap_protocol_message_tests.rs"
+# AC:2783: Protocol message tests for 10 previously untested commands
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
