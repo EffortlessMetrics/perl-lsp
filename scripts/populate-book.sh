@@ -91,6 +91,14 @@ copy_doc "$DOCS_DIR/reference/MUTATION_TESTING_METHODOLOGY.md" "$BOOK_SRC/advanc
 # Reference section
 echo "Setting up Reference..."
 copy_doc "$DOCS_DIR/project/CURRENT_STATUS.md" "$BOOK_SRC/reference/current-status.md"
+# Also copy modular status files (linked from the stub)
+mkdir -p "$BOOK_SRC/reference/status"
+copy_doc "$DOCS_DIR/project/status/index.md" "$BOOK_SRC/reference/status/index.md"
+copy_doc "$DOCS_DIR/project/status/lsp.md" "$BOOK_SRC/reference/status/lsp.md"
+copy_doc "$DOCS_DIR/project/status/tests.md" "$BOOK_SRC/reference/status/tests.md"
+copy_doc "$DOCS_DIR/project/status/parser.md" "$BOOK_SRC/reference/status/parser.md"
+copy_doc "$DOCS_DIR/project/status/quality.md" "$BOOK_SRC/reference/status/quality.md"
+copy_doc "$DOCS_DIR/project/status/release.md" "$BOOK_SRC/reference/status/release.md"
 copy_doc "$DOCS_DIR/project/ROADMAP.md" "$BOOK_SRC/reference/roadmap.md"
 copy_doc "$DOCS_DIR/project/MILESTONES.md" "$BOOK_SRC/reference/milestones.md"
 copy_doc "$DOCS_DIR/reference/STABILITY.md" "$BOOK_SRC/reference/stability.md"

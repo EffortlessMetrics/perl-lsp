@@ -463,19 +463,26 @@ enum Commands {
         command: FeaturesCommand,
     },
 
-    /// Update derived metrics in CURRENT_STATUS.md and ROADMAP.md
+    /// Update derived metrics in docs/project/status/ subsystem files.
     ///
     /// Computes workspace test counts, ignored test counts, feature catalog
     /// metrics from features.toml, corpus statistics, and missing-docs
     /// warnings, then patches the markdown files between fenced markers.
+    ///
+    /// Subsystem files: docs/project/status/{lsp,tests,parser,quality}.md
     UpdateStatus {
-        /// Write updates back to docs/
+        /// Write updates back to docs/project/status/
         #[arg(long)]
         write: bool,
 
         /// Check whether docs are up-to-date (CI gate); exit non-zero if stale
         #[arg(long)]
         check: bool,
+
+        /// Only regenerate one subsystem (lsp, tests, parser, quality).
+        /// When omitted, all four subsystems are regenerated.
+        #[arg(long, value_enum)]
+        only: Option<update_status::StatusSubsystem>,
     },
 
     /// Generate SRP microcrate inventory and split-candidate report
@@ -806,7 +813,7 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Report => features::report(),
         },
-        Commands::UpdateStatus { write, check } => update_status::run(write, check),
+        Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {

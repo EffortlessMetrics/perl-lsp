@@ -1823,14 +1823,15 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
 done
 
 if [ "$TEST_FILES_CHANGED" = true ] && [ -f "$REPO_ROOT/scripts/update-current-status.py" ]; then
-    echo "📊 Test files changed — checking if CURRENT_STATUS.md is up to date..."
+    echo "📊 Test files changed — checking if docs/project/status/ is up to date..."
     if command -v python3 &>/dev/null; then
         python3 "$REPO_ROOT/scripts/update-current-status.py" 2>/dev/null || true
-        if ! git diff --quiet -- docs/project/CURRENT_STATUS.md 2>/dev/null; then
+        if ! git diff --quiet -- docs/project/status/ 2>/dev/null; then
             echo ""
-            echo "⚠️  CURRENT_STATUS.md has stale test counts!"
+            echo "⚠️  docs/project/status/ has stale test counts!"
             echo "   Run: python3 scripts/update-current-status.py"
-            echo "   Then commit the updated file before pushing."
+            echo "   Then commit the updated files before pushing."
+            echo "   git add docs/project/status/"
             echo ""
             exit 1
         fi

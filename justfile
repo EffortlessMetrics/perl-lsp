@@ -758,11 +758,16 @@ ci-doc-paths:
     @bash ci/check_doc_paths.sh docs
     @echo "✅ Documentation paths check passed"
 
-# Update derived metrics in CURRENT_STATUS.md and ROADMAP.md
-status-update:
-    @cargo run -p xtask -- update-status --write
+# Update derived metrics in docs/project/status/ subsystem files and ROADMAP.md.
+# Optionally pass a subsystem name to regenerate only that one (e.g. just status-update lsp).
+status-update subsystem="":
+    @if [ -n "{{subsystem}}" ]; then \
+        cargo run -p xtask -- update-status --write --only {{subsystem}}; \
+    else \
+        cargo run -p xtask -- update-status --write; \
+    fi
 
-# Verify CURRENT_STATUS.md derived metrics are up-to-date
+# Verify docs/project/status/ subsystem files are up-to-date
 status-check:
     @cargo run -p xtask -- update-status --check
 
