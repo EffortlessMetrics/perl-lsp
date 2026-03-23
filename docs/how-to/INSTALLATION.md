@@ -1,6 +1,6 @@
 # Installation Guide
 
-Perl Language Server (perl-lsp) v0.10.0 provides a high-performance Language Server Protocol implementation for Perl with ~100% syntax coverage.
+Perl Language Server (perl-lsp) v0.12.0 provides a high-performance Language Server Protocol implementation for Perl with ~100% syntax coverage.
 
 ## Install from crates.io
 
@@ -24,41 +24,41 @@ cargo install perl-lsp --force
 
 #### Linux x86_64
 ```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.10.0-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.10.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp perl-lsp-0.12.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### Linux aarch64
 ```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-aarch64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.10.0-aarch64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.10.0-aarch64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
+tar xzf perl-lsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
+sudo cp perl-lsp-0.12.0-aarch64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### macOS x86_64
 ```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-x86_64-apple-darwin.tar.gz
-tar xzf perl-lsp-0.10.0-x86_64-apple-darwin.tar.gz
-sudo cp perl-lsp-0.10.0-x86_64-apple-darwin/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-x86_64-apple-darwin.tar.gz
+tar xzf perl-lsp-0.12.0-x86_64-apple-darwin.tar.gz
+sudo cp perl-lsp-0.12.0-x86_64-apple-darwin/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### macOS aarch64 (Apple Silicon)
 ```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-aarch64-apple-darwin.tar.gz
-tar xzf perl-lsp-0.10.0-aarch64-apple-darwin.tar.gz
-sudo cp perl-lsp-0.10.0-aarch64-apple-darwin/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-aarch64-apple-darwin.tar.gz
+tar xzf perl-lsp-0.12.0-aarch64-apple-darwin.tar.gz
+sudo cp perl-lsp-0.12.0-aarch64-apple-darwin/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### Windows x86_64
 ```powershell
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-x86_64-pc-windows-msvc.zip
-Expand-Archive perl-lsp-0.10.0-x86_64-pc-windows-msvc.zip
-Copy-Item perl-lsp-0.10.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\perl-lsp\
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-x86_64-pc-windows-msvc.zip
+Expand-Archive perl-lsp-0.12.0-x86_64-pc-windows-msvc.zip
+Copy-Item perl-lsp-0.12.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\perl-lsp\
 ```
 
 ### Build from Source
@@ -212,7 +212,7 @@ perl-lsp --completion bash         # Generate shell completions
 3. Look for error messages in your editor's LSP logs
 
 #### Slow performance
-1. Ensure you're using the latest version (v0.10.0)
+1. Ensure you're using the latest version (v0.12.0)
 2. Check if your workspace has very large Perl files (>100KB)
 3. Consider using `.perl-lspignore` to exclude unnecessary files
 
