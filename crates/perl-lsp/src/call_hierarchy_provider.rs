@@ -213,7 +213,9 @@ impl CallHierarchyProvider {
                 }
             }
             NodeKind::FunctionCall { name, .. } => {
-                if name == target_name {
+                // Match exact name or package-qualified name (e.g. "Utils::format_string")
+                let matches = name == target_name || name.ends_with(&format!("::{}", target_name));
+                if matches {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
 
@@ -312,6 +314,28 @@ impl CallHierarchyProvider {
             self.find_outgoing_calls(child, calls);
             None::<()>
         });
+    }
+
+    /// Find the definition of a named subroutine in this document and return a
+    /// `CallHierarchyItem` pointing at it.  Returns `None` if not found.
+    pub fn find_definition(&self, name: &str, ast: &Node) -> Option<CallHierarchyItem> {
+        let func_node = self.find_function_by_name(ast, name)?;
+        if let NodeKind::Subroutine { name: func_name, name_span, signature, .. } = &func_node.kind
+        {
+            let range = self.node_to_range(func_node);
+            let selection_range = self.selection_range_from_name_span(name_span, &range);
+            let detail = signature.is_some().then(|| "(signature)".to_string());
+            Some(CallHierarchyItem {
+                name: func_name.clone().unwrap_or_else(|| name.to_string()),
+                kind: "function".to_string(),
+                uri: self.uri.clone(),
+                range,
+                selection_range,
+                detail,
+            })
+        } else {
+            None
+        }
     }
 
     /// Find a function by name

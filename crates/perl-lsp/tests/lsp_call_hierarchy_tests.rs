@@ -989,3 +989,159 @@ fn test_call_hierarchy_capability_advertised() -> TestResult {
     }
     Ok(())
 }
+
+/// Tests fix for issue #2878: call hierarchy must search across workspace files
+/// When format_string is defined in lib/Utils.pm and called from bin/app.pl,
+/// incoming calls from app.pl must appear even though the item URI is Utils.pm.
+#[test]
+fn test_cross_file_incoming_calls() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // File that defines the target subroutine
+    harness.open(
+        "file:///lib/Utils.pm",
+        r#"package Utils;
+
+sub format_string {
+    my $str = shift;
+    return uc($str);
+}
+
+1;
+"#,
+    )?;
+
+    // A second file that calls format_string
+    harness.open(
+        "file:///bin/app.pl",
+        r#"use Utils;
+
+sub process {
+    my $result = Utils::format_string("hello");
+    return $result;
+}
+
+process();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Prepare call hierarchy on format_string in Utils.pm (line 2, char 4 = "format_string")
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": "file:///lib/Utils.pm" },
+            "position": { "line": 2, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy did not return array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array — cursor may be off");
+
+    let item = &items[0];
+    assert_eq!(item["name"], "format_string", "Expected to prepare on format_string");
+
+    // Request incoming calls — must find the caller in the OTHER file
+    let incoming_response =
+        harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
+
+    let calls = incoming_response.as_array().ok_or("incomingCalls did not return array")?;
+
+    let caller_names: Vec<String> =
+        calls.iter().filter_map(|c| c["from"]["name"].as_str()).map(String::from).collect();
+
+    assert!(
+        caller_names.contains(&"process".to_string()),
+        "Expected to find 'process' from bin/app.pl as an incoming caller, got: {:?}",
+        caller_names
+    );
+
+    Ok(())
+}
+
+/// Tests fix for issue #2878: outgoing calls must resolve targets in other workspace files
+/// When process() in bin/app.pl calls Utils::format_string, the outgoing call target
+/// should report the URI of Utils.pm, not app.pl.
+#[test]
+fn test_cross_file_outgoing_calls_uri() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // File that defines the callee
+    harness.open(
+        "file:///lib/Utils.pm",
+        r#"package Utils;
+
+sub format_string {
+    my $str = shift;
+    return uc($str);
+}
+
+1;
+"#,
+    )?;
+
+    // Caller file
+    harness.open(
+        "file:///bin/app.pl",
+        r#"use Utils;
+
+sub process {
+    my $result = Utils::format_string("hello");
+    return $result;
+}
+
+process();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Prepare on "process" in app.pl (line 2, char 4)
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": "file:///bin/app.pl" },
+            "position": { "line": 2, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy returned non-array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array for process");
+
+    let item = &items[0];
+    assert_eq!(item["name"], "process", "Expected to prepare on process");
+
+    // Request outgoing calls
+    let outgoing_response =
+        harness.request("callHierarchy/outgoingCalls", json!({ "item": item }))?;
+
+    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+
+    // Must find format_string as an outgoing call
+    let callee_names: Vec<String> =
+        calls.iter().filter_map(|c| c["to"]["name"].as_str()).map(String::from).collect();
+
+    assert!(
+        callee_names.iter().any(|n| n == "format_string" || n.contains("format_string")),
+        "Expected to find format_string as an outgoing call, got: {:?}",
+        callee_names
+    );
+
+    // The outgoing call target URI should point to Utils.pm, not app.pl
+    let format_string_call =
+        calls.iter().find(|c| c["to"]["name"].as_str() == Some("format_string"));
+
+    if let Some(call) = format_string_call {
+        let target_uri = call["to"]["uri"].as_str().unwrap_or("");
+        assert_eq!(
+            target_uri, "file:///lib/Utils.pm",
+            "format_string target URI should be Utils.pm, got: {:?}",
+            target_uri
+        );
+    }
+
+    Ok(())
+}
