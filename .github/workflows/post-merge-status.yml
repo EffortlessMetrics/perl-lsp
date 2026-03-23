@@ -53,8 +53,9 @@ jobs:
       - name: Commit regenerated files if changed
         # TODO(#follow-up): Switch to creating a PR instead of direct push once a
         # bot token or GitHub App is configured that can bypass branch protection.
-        # For now, the push is best-effort (|| true) so CI stays green even when
-        # branch protection blocks the direct-to-master push.
+        # For now, the push is best-effort (git push || echo warning) so CI stays green
+        # even when branch protection blocks the direct-to-master push. The warning
+        # annotation remains visible in the Actions UI so the failure is not silent.
         run: |
           CHANGED_FILES=$(git diff --name-only -- \
             docs/project/status/lsp.md \
