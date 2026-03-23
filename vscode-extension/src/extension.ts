@@ -16,6 +16,7 @@ import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
 import { generateBoilerplate } from './fileCreation';
+import { handleFormattingError } from './formattingErrors';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -220,6 +221,199 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const extractVariableCommand = vscode.commands.registerCommand('perl-lsp.extractVariable', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('Extract Variable requires an active Perl file with a selection');
+            return;
+        }
+        if (editor.selection.isEmpty) {
+            vscode.window.showWarningMessage('Select an expression to extract as a variable');
+            return;
+        }
+        if (!client) {
+            vscode.window.showWarningMessage('Perl Language Server is not running. Restart the server and try again.');
+            return;
+        }
+        const range = editor.selection;
+        const params = {
+            textDocument: { uri: editor.document.uri.toString() },
+            range: {
+                start: { line: range.start.line, character: range.start.character },
+                end: { line: range.end.line, character: range.end.character },
+            },
+            context: { diagnostics: [], only: ['refactor.extract'], triggerKind: 2 },
+        };
+        type CodeActionResult = Array<{ title: string; kind?: string; edit?: unknown; command?: unknown }> | null;
+        const actions = await client.sendRequest<CodeActionResult>('textDocument/codeAction', params);
+        if (!actions || actions.length === 0) {
+            vscode.window.showInformationMessage('No extract actions available for the selected expression');
+            return;
+        }
+        const variableAction = actions.find(a => a.title.toLowerCase().includes('variable'));
+        const action = variableAction ?? actions[0];
+        if (action.edit) {
+            const workspaceEdit = await client.protocol2CodeConverter.asWorkspaceEdit(
+                action.edit as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0]
+            );
+            if (workspaceEdit) {
+                await vscode.workspace.applyEdit(workspaceEdit);
+            }
+        } else if (action.command) {
+            const cmd = action.command as { command: string; arguments?: unknown[] };
+            await vscode.commands.executeCommand(cmd.command, ...(cmd.arguments ?? []));
+        } else {
+            vscode.window.showInformationMessage('No extract variable action is available for the current selection');
+        }
+    });
+
+    const extractMethodCommand = vscode.commands.registerCommand('perl-lsp.extractMethod', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('Extract Method requires an active Perl file with a selection');
+            return;
+        }
+        if (editor.selection.isEmpty) {
+            vscode.window.showWarningMessage('Select code to extract as a method');
+            return;
+        }
+        if (!client) {
+            vscode.window.showWarningMessage('Perl Language Server is not running. Restart the server and try again.');
+            return;
+        }
+        const range = editor.selection;
+        const params = {
+            textDocument: { uri: editor.document.uri.toString() },
+            range: {
+                start: { line: range.start.line, character: range.start.character },
+                end: { line: range.end.line, character: range.end.character },
+            },
+            context: { diagnostics: [], only: ['refactor.extract'], triggerKind: 2 },
+        };
+        type CodeActionResult = Array<{ title: string; kind?: string; edit?: unknown; command?: unknown }> | null;
+        const actions = await client.sendRequest<CodeActionResult>('textDocument/codeAction', params);
+        if (!actions || actions.length === 0) {
+            vscode.window.showInformationMessage('No extract actions available for the selected code');
+            return;
+        }
+        const subroutineAction = actions.find(
+            a => a.title.toLowerCase().includes('subroutine') || a.title.toLowerCase().includes('method') || a.title.toLowerCase().includes('function')
+        );
+        const action = subroutineAction ?? actions[actions.length - 1];
+        if (action.edit) {
+            const workspaceEdit = await client.protocol2CodeConverter.asWorkspaceEdit(
+                action.edit as Parameters<typeof client.protocol2CodeConverter.asWorkspaceEdit>[0]
+            );
+            if (workspaceEdit) {
+                await vscode.workspace.applyEdit(workspaceEdit);
+            }
+        } else if (action.command) {
+            const cmd = action.command as { command: string; arguments?: unknown[] };
+            await vscode.commands.executeCommand(cmd.command, ...(cmd.arguments ?? []));
+        } else {
+            vscode.window.showInformationMessage('No extract method action is available for the current selection');
+        }
+    });
+
+    const showRefactoringOptionsCommand = vscode.commands.registerCommand('perl-lsp.showRefactoringOptions', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('Refactoring options require an active Perl file');
+            return;
+        }
+
+        interface RefactorAction extends vscode.QuickPickItem {
+            command: string;
+            args?: unknown[];
+        }
+
+        const items: RefactorAction[] = [
+            {
+                label: '$(symbol-variable) Extract Variable',
+                description: 'Shift+Alt+V',
+                detail: editor.selection.isEmpty
+                    ? 'Select an expression first to extract it as a variable'
+                    : 'Extract selected expression as a local variable',
+                command: 'perl-lsp.extractVariable',
+            },
+            {
+                label: '$(symbol-method) Extract Method',
+                description: 'Shift+Alt+M',
+                detail: editor.selection.isEmpty
+                    ? 'Select code first to extract it as a subroutine'
+                    : 'Extract selected code as a named subroutine',
+                command: 'perl-lsp.extractMethod',
+            },
+            {
+                label: '$(organization) Organize Imports',
+                description: 'Shift+Alt+O',
+                detail: 'Sort and deduplicate use statements',
+                command: 'perl-lsp.organizeImports',
+            },
+        ];
+
+        const selection = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Perl Refactoring Options',
+        });
+
+        if (selection) {
+            await vscode.commands.executeCommand(selection.command, ...(selection.args ?? []));
+        }
+    });
+
+    const reportIssueCommand = vscode.commands.registerCommand('perl-lsp.reportIssue', async () => {
+        const extensionVersion = context.extension.packageJSON.version as string ?? 'unknown';
+        const vscodeVersion = vscode.version;
+        const platform = process.platform;
+        const arch = process.arch;
+
+        const getServerVersion = (): Promise<string> =>
+            new Promise(resolve => {
+                if (!currentServerPath) {
+                    resolve('unavailable');
+                    return;
+                }
+                execFile(currentServerPath, ['--version'], { timeout: 3000 }, (err: Error | null, stdout: string) => {
+                    if (err) {
+                        resolve('unavailable');
+                        return;
+                    }
+                    const firstLine = stdout.trim().split('\n')[0] ?? '';
+                    resolve(firstLine.trim() || 'unavailable');
+                });
+            });
+
+        const serverVersion = await getServerVersion();
+
+        const diagnosticInfo = [
+            `perl-lsp server: ${serverVersion}`,
+            `Extension: ${extensionVersion}`,
+            `VS Code: ${vscodeVersion}`,
+            `Platform: ${platform}/${arch}`,
+        ].join('\n');
+
+        const selection = await vscode.window.showInformationMessage(
+            'Open a GitHub issue to report a bug or request a feature.',
+            'Copy Diagnostic Info',
+            'Open Issue Form'
+        );
+
+        if (selection === 'Copy Diagnostic Info') {
+            try {
+                await vscode.env.clipboard.writeText(diagnosticInfo);
+                vscode.window.showInformationMessage('Diagnostic info copied. Paste it into the issue form.');
+            } catch {
+                // Clipboard unavailable — continue to open browser anyway
+            }
+        }
+
+        if (selection === 'Copy Diagnostic Info' || selection === 'Open Issue Form') {
+            const url = vscode.Uri.parse(
+                'https://github.com/EffortlessMetrics/perl-lsp/issues/new?template=bug_report.yml'
+            );
+            await vscode.env.openExternal(url);
+        }
+    });
 
     const formatOnSaveDisposable = vscode.workspace.onWillSaveTextDocument((event) => {
         if (!shouldFormatOnSave(event.document)) {
@@ -280,6 +474,10 @@ export async function activate(context: vscode.ExtensionContext) {
         runHealthCheckCommand,
         showWhatsNewCommand,
         openConfigurationGuideCommand,
+        extractVariableCommand,
+        extractMethodCommand,
+        showRefactoringOptionsCommand,
+        reportIssueCommand,
         formatOnSaveDisposable,
         configurationWatcher,
         fileCreationWatcher,
