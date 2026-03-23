@@ -56,7 +56,7 @@
 
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
-    error::{ParseError, ParseOutput, ParseResult},
+    error::{ParseError, ParseOutput, ParseResult, RecoveryKind, RecoverySite},
     heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},

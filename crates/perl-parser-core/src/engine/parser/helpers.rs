@@ -484,7 +484,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Expect a closing delimiter, recovering gracefully if missing.
-    /// Records error and returns Ok(()) at sync points instead of Err.
+    ///
+    /// At strong followers (`;`, `}`, `{`, statement keywords, or EOF) the
+    /// missing closer is inferred rather than returned as an error:
+    /// - Emits `ParseError::Recovered { site, kind: InsertedCloser, location }` so
+    ///   callers can count recoveries and gate LSP features.
+    /// - Returns `Ok(())` to allow parsing to continue.
+    ///
+    /// At any other token, returns `Err(ParseError::UnexpectedToken)` so the
+    /// caller can propagate or handle it.
     fn expect_closing_delimiter(&mut self, kind: TokenKind) -> ParseResult<()> {
         if self.peek_kind() == Some(kind) {
             self.consume_token()?;
@@ -492,10 +500,12 @@ impl<'a> Parser<'a> {
         }
         if self.is_delimiter_recovery_point() {
             let pos = self.current_position();
-            self.errors.push(ParseError::syntax(
-                format!("Missing '{}' — recovered at statement boundary", kind.display_name()),
-                pos,
-            ));
+            let site = Self::recovery_site_for_closer(kind);
+            self.errors.push(ParseError::Recovered {
+                site,
+                kind: RecoveryKind::InsertedCloser,
+                location: pos,
+            });
             return Ok(());
         }
         let pos = self.current_position();
@@ -506,13 +516,30 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// Check if current token is a delimiter recovery point.
+    /// Map a closing-delimiter token to its [`RecoverySite`] for recovery annotations.
+    #[inline]
+    fn recovery_site_for_closer(kind: TokenKind) -> RecoverySite {
+        match kind {
+            TokenKind::RightParen => RecoverySite::ArgList,
+            TokenKind::RightBracket => RecoverySite::ArraySubscript,
+            TokenKind::RightBrace => RecoverySite::HashSubscript,
+            _ => RecoverySite::ArgList,
+        }
+    }
+
+    /// Check if current token is a strong follower at which a missing closer can
+    /// be inferred.  The set covers hard statement boundaries and EOF.
+    ///
+    /// `peek_kind()` returns `Some(TokenKind::Eof)` at end-of-input (the EOF
+    /// token is sticky) so we match it explicitly alongside `None` (which covers
+    /// the case where the lexer itself returns an error).
     fn is_delimiter_recovery_point(&mut self) -> bool {
         matches!(
             self.peek_kind(),
             Some(TokenKind::Semicolon)
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::LeftBrace)
+                | Some(TokenKind::Eof)
                 | Some(TokenKind::My)
                 | Some(TokenKind::Our)
                 | Some(TokenKind::Local)
