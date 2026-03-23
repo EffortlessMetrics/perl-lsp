@@ -491,11 +491,7 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "srand EXPR",
             Some("Seed the random number generator. Without arg, uses a platform-specific seed."),
         ),
-        "hex" => (
-            "hex ",
-            "hex EXPR",
-            Some("Convert a hex string to a decimal number."),
-        ),
+        "hex" => ("hex ", "hex EXPR", Some("Convert a hex string to a decimal number.")),
         "oct" => (
             "oct ",
             "oct EXPR",
@@ -546,11 +542,9 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             ("getpid", "getpid", Some("Return the process ID of the current process. Same as $$."))
         }
         "getppid" => ("getppid", "getppid", Some("Return the process ID of the parent process.")),
-        "times" => (
-            "times",
-            "times",
-            Some("Return (user, system, cuser, csystem) CPU times in seconds."),
-        ),
+        "times" => {
+            ("times", "times", Some("Return (user, system, cuser, csystem) CPU times in seconds."))
+        }
         // Time
         "time" => (
             "time",
@@ -649,11 +643,9 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "defined EXPR",
             Some("Return true if EXPR has a defined (non-undef) value."),
         ),
-        "undef" => (
-            "undef ",
-            "undef EXPR",
-            Some("Undefine a variable or subroutine, freeing its memory."),
-        ),
+        "undef" => {
+            ("undef ", "undef EXPR", Some("Undefine a variable or subroutine, freeing its memory."))
+        }
         "prototype" => (
             "prototype ",
             "prototype FUNCTION",
@@ -687,9 +679,7 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
         ),
         "rmdir" => ("rmdir ", "rmdir FILENAME", Some("Remove an empty directory.")),
         "chdir" => ("chdir ", "chdir EXPR", Some("Change the working directory to EXPR.")),
-        "chmod" => {
-            ("chmod(, )", "chmod MODE, LIST", Some("Change permissions on files in LIST."))
-        }
+        "chmod" => ("chmod(, )", "chmod MODE, LIST", Some("Change permissions on files in LIST.")),
         "chown" => (
             "chown(, , )",
             "chown UID, GID, LIST",
@@ -718,14 +708,10 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             "readdir DIRHANDLE",
             Some("Return next entry (or all entries in list context) from a directory."),
         ),
-        "closedir" => (
-            "closedir ",
-            "closedir DIRHANDLE",
-            Some("Close a directory handle opened by opendir."),
-        ),
-        "glob" => {
-            ("glob ", "glob EXPR", Some("Expand shell glob patterns in EXPR; like <*.pl>."))
+        "closedir" => {
+            ("closedir ", "closedir DIRHANDLE", Some("Close a directory handle opened by opendir."))
         }
+        "glob" => ("glob ", "glob EXPR", Some("Expand shell glob patterns in EXPR; like <*.pl>.")),
         "truncate" => (
             "truncate(, )",
             "truncate FILEHANDLE|EXPR, LENGTH",
@@ -786,27 +772,19 @@ fn builtin_info(name: &'static str) -> (&'static str, &'static str, Option<&'sta
             Some("Set a socket option."),
         ),
         // User / group
-        "getlogin" => {
-            ("getlogin", "getlogin", Some("Return the login name of the current user."))
-        }
+        "getlogin" => ("getlogin", "getlogin", Some("Return the login name of the current user.")),
         "getpwnam" => {
             ("getpwnam ", "getpwnam NAME", Some("Return the passwd entry for user NAME."))
         }
-        "getpwuid" => {
-            ("getpwuid ", "getpwuid UID", Some("Return the passwd entry for user UID."))
-        }
+        "getpwuid" => ("getpwuid ", "getpwuid UID", Some("Return the passwd entry for user UID.")),
         "getgrnam" => {
             ("getgrnam ", "getgrnam NAME", Some("Return the group entry for group NAME."))
         }
-        "getgrgid" => {
-            ("getgrgid ", "getgrgid GID", Some("Return the group entry for group GID."))
-        }
+        "getgrgid" => ("getgrgid ", "getgrgid GID", Some("Return the group entry for group GID.")),
         // Network lookup
-        "gethostbyname" => (
-            "gethostbyname ",
-            "gethostbyname NAME",
-            Some("Resolve a hostname to its address(es)."),
-        ),
+        "gethostbyname" => {
+            ("gethostbyname ", "gethostbyname NAME", Some("Resolve a hostname to its address(es)."))
+        }
         "gethostbyaddr" => (
             "gethostbyaddr(, )",
             "gethostbyaddr ADDR, ADDRTYPE",
