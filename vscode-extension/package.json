@@ -655,11 +655,11 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
-    "tar": "^7.5.11",
+    "tar": "^7.5.12",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@types/adm-zip": "^0.5.7",
+    "@types/adm-zip": "^0.5.8",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
     "@types/tar": "^7.0.87",
