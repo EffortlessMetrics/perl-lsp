@@ -49,6 +49,13 @@ Every claim in this ledger carries a tier marker that describes how it was obtai
 
 ---
 
+**Test count note**: Three scopes exist. Always specify which you mean:
+- **Tier A (merge-gate, canonical)**: `cargo test --workspace --lib --exclude tree-sitter-perl -- --list | grep ': test$' | wc -l` = ~2,811
+- **All lib tests**: same without `--exclude tree-sitter-perl` = ~2,949
+- **Total (all types)**: lib + doc + integration = ~21,465
+- The earlier "6,326" figure was incorrect — it came from an unverified audit with undocumented methodology. See issue #2672.
+- `update-current-status.py` uses the Tier A (canonical) methodology.
+
 ## Zero-Panic Policy
 
 | Claim | Status | Tier | Note |
@@ -133,6 +140,9 @@ Every claim in this ledger carries a tier marker that describes how it was obtai
 | "2,761 total commits" | 3,307 total commits (2026-03-22) | Ongoing growth |
 | "2,244+ total PRs" | 2,823+ total PRs (2026-03-22) | Ongoing growth |
 | xargs wc -l LOC method | Use `find crates/ -name "*.rs" -print0 \| xargs -0 cat \| wc -l` | xargs batching causes double-counted "total" lines |
+| "6,326 test functions" | ~21,465 total / 2,811 lib (Tier A) | Scope confusion: 6,326 was unverified; worktree duplication inflated grep-based counts; see issue #2672 |
+| "8:1 test-to-code ratio (6,326/755)" | ratio unverified | Numerator was incorrect; 755 public functions count also unverified |
+| "2,871 lib tests" | 2,811 (--exclude tree-sitter-perl) / 2,949 (all) | Previous entry used execution-count methodology; --list methodology is canonical per update-current-status.py |
 
 ---
 

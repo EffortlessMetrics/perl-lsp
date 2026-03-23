@@ -220,9 +220,9 @@ Five pieces of infrastructure found fully built but never connected to users:
 
 Each fix was 10-50 lines. Combined user-visible value: enormous. Issues #2287-#2291 filed.
 
-**6. The 8:1 test-to-code ratio**
+**6. The test-to-code ratio**
 
-6,326 test functions for 755 public functions. Nobody set a target. It emerged from a system that treats verification as the product and code as a side effect.
+The codebase has an unusually high test-to-code ratio. Nobody set a target. It emerged from a system that treats verification as the product and code as a side effect. Exact test counts vary by scope: ~2,811 lib tests (Tier A, canonical merge-gate count), ~304 doc tests, and ~18,350 integration tests (total ~21,465 across all types). See CURRENT_STATUS.md for the canonical figure and methodology.
 
 **7. The patio11 exchange captures the thesis**
 
@@ -422,10 +422,10 @@ Issues filed, ready for builders:
 | **Disk freed** | ~260GB | Worktree cleanup |
 | **Structural issues filed** | 8 | #2287-#2297 |
 | **Interview questions** | 57 (35 + 22 new) | Research output |
-| **Lib test count** | 2,569 | `cargo test --workspace --lib` |
-| **Total test functions** | 6,326 | Test suite audit |
-| **Public functions** | 755 | API surface audit |
-| **Test-to-code ratio** | 8:1 | 6,326 / 755 |
+| **Lib test count** | 2,569 | `cargo test --workspace --lib` (at time of session) |
+| **Total test functions** | ~21,465 (see note) | `cargo test --workspace -- --list` (lib + doc + integration) |
+| **Public functions** | 755 | API surface audit (unverified) |
+| **Test-to-code ratio** | unverified | 6,326 figure was incorrect; see issue #2672 |
 | **Workspace crates** | 132 | `cargo metadata` |
 | **Estimated compute cost** | $30-50 | Session economics ADR |
 
