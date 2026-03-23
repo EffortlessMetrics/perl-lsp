@@ -104,7 +104,7 @@
 //! println!("Token type: {:?}", legend.token_types.get(custom_token[3] as usize));
 //! ```
 
-use perl_lexer::{PerlLexer, TokenType};
+use perl_lexer::{PerlLexer, StringPart, TokenType};
 use perl_parser_core::ast::{Node, NodeKind};
 use rustc_hash::FxHashMap;
 
@@ -195,6 +195,9 @@ pub fn legend() -> TokensLegend {
         "modification",   // bit 7  → 128
         "documentation",  // bit 8  → 256
         "defaultLibrary", // bit 9  → 512
+        "scalarVariable", // bit 10 → 1024
+        "arrayVariable",  // bit 11 → 2048
+        "hashVariable",   // bit 12 → 4096
     ]
     .into_iter()
     .map(|s| s.to_string())
@@ -258,6 +261,19 @@ fn is_special_variable(full_name: &str) -> bool {
     )
 }
 
+/// Find the first occurrence of `needle` in `haystack` starting at byte offset `from`.
+///
+/// Returns the absolute offset within `haystack` where `needle` begins,
+/// or `None` if not found. Used to locate interpolated-string parts within
+/// the full token text so we can derive their absolute source positions.
+fn find_bytes_at(haystack: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(from);
+    }
+    let end = haystack.len().saturating_sub(needle.len());
+    (from..=end).find(|&i| haystack[i..i + needle.len()] == *needle)
+}
+
 /// Collect semantic tokens for LSP highlighting in the Complete stage.
 ///
 /// # Arguments
@@ -314,14 +330,74 @@ pub fn collect_semantic_tokens(
                 }
             }
 
+            TokenType::InterpolatedString(parts) => {
+                // Split the string into literal fragments (string) and variable
+                // interpolations (variable), pushing each as its own token.
+                // This avoids the "longer wins" overlap-removal rule that would
+                // silently discard variable sub-tokens if we also pushed a
+                // whole-string token spanning the entire interpolated string.
+                if len > 0 {
+                    let text_bytes = tok.text.as_bytes();
+                    let mut cursor: usize = 1; // skip opening quote char
+                    for part in parts {
+                        match part {
+                            StringPart::Literal(lit) => {
+                                if let Some(rel) = find_bytes_at(text_bytes, cursor, lit.as_bytes())
+                                {
+                                    let part_start = tok.start + rel;
+                                    let part_end = part_start + lit.len();
+                                    let (psl, psc) = to_pos16(part_start);
+                                    let (pel, pec) = to_pos16(part_end);
+                                    let plen = if psl == pel { pec.saturating_sub(psc) } else { 0 };
+                                    if plen > 0 {
+                                        lexer_tokens.push((
+                                            psl,
+                                            psc,
+                                            plen,
+                                            kind_idx(&leg, "string"),
+                                            0,
+                                        ));
+                                    }
+                                    cursor = rel + lit.len();
+                                }
+                            }
+                            StringPart::Variable(var) => {
+                                if let Some(rel) = find_bytes_at(text_bytes, cursor, var.as_bytes())
+                                {
+                                    let part_start = tok.start + rel;
+                                    let part_end = part_start + var.len();
+                                    let (psl, psc) = to_pos16(part_start);
+                                    let (pel, pec) = to_pos16(part_end);
+                                    let plen = if psl == pel { pec.saturating_sub(psc) } else { 0 };
+                                    if plen > 0 {
+                                        lexer_tokens.push((
+                                            psl,
+                                            psc,
+                                            plen,
+                                            kind_idx(&leg, "variable"),
+                                            0,
+                                        ));
+                                    }
+                                    cursor = rel + var.len();
+                                }
+                            }
+                            // Expression, ArraySlice, MethodCall: defined in StringPart but
+                            // the current lexer never emits them — only Literal and Variable
+                            // are populated. Skip silently.
+                            _ => {}
+                        }
+                    }
+                }
+                continue;
+            }
+
             TokenType::StringLiteral
             | TokenType::QuoteSingle
             | TokenType::QuoteDouble
             | TokenType::QuoteWords
             | TokenType::QuoteCommand
             | TokenType::HeredocStart
-            | TokenType::HeredocBody(_)
-            | TokenType::InterpolatedString(_) => "string",
+            | TokenType::HeredocBody(_) => "string",
 
             TokenType::Number(_) => "number",
 
@@ -508,10 +584,16 @@ pub fn collect_semantic_tokens(
                 let decl_info = decl_spans.iter().find(|(ds, de, _)| *ds <= vs && ve <= *de);
                 let full_name = format!("{sigil}{name}");
                 let special_mod = if is_special_variable(&full_name) { 512 } else { 0 }; // defaultLibrary bit 9
+                let sigil_mod: u32 = match sigil.as_str() {
+                    "$" => 1024, // scalarVariable bit 10
+                    "@" => 2048, // arrayVariable  bit 11
+                    "%" => 4096, // hashVariable   bit 12
+                    _ => 0,      // "&" (code ref), "*" (glob), others
+                };
                 let mods = match decl_info {
-                    Some((_, _, true)) => 1 | 4 | special_mod, // declaration | readonly (our)
-                    Some((_, _, false)) => 1 | special_mod,    // declaration (my/local/state)
-                    None => special_mod,
+                    Some((_, _, true)) => 1 | 4 | special_mod | sigil_mod, // declaration | readonly (our)
+                    Some((_, _, false)) => 1 | special_mod | sigil_mod, // declaration (my/local/state)
+                    None => special_mod | sigil_mod,
                 };
                 ("variable", mods)
             }

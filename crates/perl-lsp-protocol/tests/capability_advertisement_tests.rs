@@ -312,9 +312,10 @@ fn semantic_tokens_legend_has_token_modifiers() -> Result<(), Box<dyn std::error
         .pointer("/semanticTokensProvider/legend/tokenModifiers")
         .and_then(|v| v.as_array())
         .ok_or("missing legend.tokenModifiers")?;
-    // 10 standard LSP modifiers. This count assertion catches modifier legend
-    // desynchronization — if a modifier is added internally but not advertised, this fails.
-    assert_eq!(modifiers.len(), 10, "expected 10 token modifiers; got {:?}", modifiers);
+    // 10 standard LSP modifiers + 3 sigil modifiers (scalarVariable, arrayVariable, hashVariable)
+    // = 13 total. This count assertion catches modifier legend desynchronization —
+    // if a modifier is added internally but not advertised, this fails.
+    assert_eq!(modifiers.len(), 13, "expected 13 token modifiers; got {:?}", modifiers);
     let mod_strs: Vec<&str> = modifiers.iter().filter_map(|t| t.as_str()).collect();
     assert!(mod_strs.contains(&"declaration"), "should include 'declaration' modifier");
     assert!(mod_strs.contains(&"definition"), "should include 'definition' modifier");
@@ -337,6 +338,15 @@ fn semantic_tokens_legend_has_token_modifiers() -> Result<(), Box<dyn std::error
         "defaultLibrary must be at index 9 (bitmask 512); \
          collect_semantic_tokens hardcodes 512 for special variables"
     );
+    // Sigil modifiers at bits 10, 11, 12 (issue #2881)
+    assert!(mod_strs.contains(&"scalarVariable"), "should include 'scalarVariable' modifier");
+    assert!(mod_strs.contains(&"arrayVariable"), "should include 'arrayVariable' modifier");
+    assert!(mod_strs.contains(&"hashVariable"), "should include 'hashVariable' modifier");
+    let scalar_idx = mod_strs
+        .iter()
+        .position(|&s| s == "scalarVariable")
+        .ok_or("scalarVariable must be in advertised modifiers")?;
+    assert_eq!(scalar_idx, 10, "scalarVariable must be at index 10 (bitmask 1024)");
     Ok(())
 }
 
