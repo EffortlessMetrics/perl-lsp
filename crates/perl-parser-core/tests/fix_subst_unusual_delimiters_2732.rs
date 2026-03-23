@@ -330,3 +330,13 @@ sub bootstrap_inherit {
 "#;
     assert_clean_parse(source);
 }
+
+// ── Regression guard for #2895 fix: -s 'filename' must remain a filetest ─────
+
+/// -s 'config.txt' — file-size filetest with a string literal argument.
+/// After the #2895 fix (which allows ' and " after whitespace for non-s operators),
+/// the `op != "s"` guard must keep -s 'filename' as a filetest, NOT a substitution.
+#[test]
+fn test_file_size_test_with_string_literal() {
+    assert_clean_parse(r#"if (-s 'config.txt') { 1 }"#);
+}
