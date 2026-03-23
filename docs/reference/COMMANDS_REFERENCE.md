@@ -27,10 +27,10 @@ perl-lsp --stdio --log  # With debug logging
 ### DAP Server (Debug Adapter)
 ```bash
 # Build DAP server
-cargo build -p perl-parser --bin perl-dap --release
+cargo build -p perl-dap --release
 
 # Install DAP server globally
-cargo install --path crates/perl-parser --bin perl-dap
+cargo install --path crates/perl-dap
 
 # Run the DAP server (for VSCode integration)
 perl-dap --stdio  # Standard DAP transport
@@ -83,7 +83,7 @@ cargo build -p perl-parser --features incremental --release
 cargo build --all
 ```
 
-## Workspace Configuration (v0.8.8+)
+## Workspace Configuration
 
 The workspace uses an exclusion strategy to ensure reliable builds across all platforms:
 
@@ -115,64 +115,26 @@ The xtask crate is excluded from the workspace to maintain clean builds while pr
 
 ## Test Commands
 
-### Workspace Testing (v0.8.8)
+### Workspace Testing
 ```bash
-# Test core published crates (workspace members only)
-cargo test                              # Tests perl-lexer, perl-parser, perl-corpus, perl-lsp
-                                        # Excludes crates with system dependencies
+# Test all workspace crates
+cargo test --workspace --lib            # Library tests only (fast)
+cargo test --workspace                  # All tests
 
-# Test individual published crates
-cargo test -p perl-parser               # Main parser library tests (195 tests)
-cargo test -p perl-lexer                # Lexer tests (40 tests)  
-cargo test -p perl-corpus               # Corpus tests (12 tests)
-cargo test -p perl-lsp                  # LSP integration tests
-
-# Advanced test commands (excluded from workspace, run from xtask directory)
-# cd xtask && cargo run test            # Advanced xtask test suite
-# cd xtask && cargo run corpus          # Dual-scanner corpus comparison
+# Test individual crates
+cargo test -p perl-parser               # Parser tests
+cargo test -p perl-lexer                # Lexer tests
+cargo test -p perl-lsp                  # LSP server tests
+cargo test -p perl-dap                  # DAP server tests
 ```
 
-### Comprehensive Integration Testing
+### LSP Integration Testing
 ```bash
-# LSP E2E tests
-cargo test -p perl-parser --test lsp_comprehensive_e2e_test  # 33 LSP E2E tests
+# Run with reduced thread count for reliability
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
-# Symbol documentation tests (comment extraction)
-cargo test -p perl-parser --test symbol_documentation_tests
-
-# File completion tests
-cargo test -p perl-parser --test file_completion_tests
-
-# DAP tests
-cargo test -p perl-parser --test dap_comprehensive_test
-cargo test -p perl-parser --test dap_integration_test -- --ignored  # Full integration test
-
-# Incremental parsing tests
-cargo test -p perl-parser --test incremental_integration_test --features incremental
-cargo test -p perl-parser --features incremental
-cargo test -p perl-parser incremental_v2::tests            # IncrementalParserV2 tests
-
-# Performance and benchmark tests  
-cargo test -p perl-parser --test incremental_perf_test
-cargo bench incremental --features incremental
-```
-
-### Enhanced Workspace Navigation Tests (v0.8.8)
-```bash
-# Test comprehensive AST traversal with ExpressionStatement support
-cargo test -p perl-parser --test workspace_comprehensive_traversal_test
-
-# Test enhanced code actions and refactoring
-cargo test -p perl-parser code_actions_enhanced
-
-# Test improved call hierarchy provider
-cargo test -p perl-parser call_hierarchy_provider
-
-# Test enhanced workspace indexing and symbol resolution
-cargo test -p perl-parser workspace_index workspace_rename
-
-# Test TDD basic functionality enhancements
-cargo test -p perl-parser tdd_basic
+# Run specific test by name
+cargo test -p perl-parser -- test_name --exact
 ```
 
 ### WSL-Safe Local Gate (*Diataxis: How-to Guide* - Resource-constrained testing)
@@ -214,73 +176,19 @@ CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=2 ./scripts/gate-local.sh
 | `RUST_TEST_THREADS` | 1 | Test parallelism (1 = serial) |
 | `GATE_RELEASE` | unset | Set to "1" for release builds |
 
-### Performance Testing (PR #140) (*Diataxis: How-to Guide* - Test reliability)
+### LSP Test Threading
 
-PR #140 delivers significant performance optimizations for test speed and reliability:
-
-- **LSP behavioral tests**: 1560s+ → 0.31s
-- **User story tests**: 1500s+ → 0.32s
-- **Workspace tests**: 60s+ → 0.26s
-- **Overall suite**: 60s+ → <10s
-
-The testing infrastructure includes adaptive threading configuration that scales timeouts and concurrency based on system constraints, enhanced with intelligent symbol waiting and optimized idle detection cycles.
+The LSP test suite uses adaptive threading. Use `RUST_TEST_THREADS=2` for reliable CI behavior:
 
 ```bash
-# CI testing with adaptive timeouts (PR #140 optimizations)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp              # Adaptive threading behavioral tests
-RUST_TEST_THREADS=2 cargo test -p perl-parser           # Enhanced with intelligent symbol waiting
+# Reliable CI and development default
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
-# Optimized single-threaded testing (maximum reliability)
-RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test  # Exponential backoff protection
+# Override test timeouts for slow environments
+LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp
 
-# High-performance development environment
-cargo test -p perl-lsp                                   # 200ms idle detection cycles (was 1000ms)
-cargo test                                               # <10s total execution (was >60s)
-
-# Enhanced timeout configuration (PR #140 features)
-LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp        # Override adaptive timeouts
-LSP_TEST_SHORT_MS=1000 cargo test -p perl-lsp           # Fine-grained timeout control
-
-# Advanced debugging with performance monitoring
-LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
-RUST_LOG=debug cargo test -p perl-lsp -- --nocapture    # Monitor timeout scaling
-```
-
-#### Performance Matrix (*Diataxis: Reference* - PR #140 achievements)
-
-| Test Suite | Before PR #140 | After PR #140 |
-|------------|----------------|----------------|
-| **lsp_behavioral_tests** | 1560s+ | 0.31s |
-| **lsp_full_coverage_user_stories** | 1500s+ | 0.32s |
-| **Individual workspace tests** | 60s+ | 0.26s |
-| **lsp_golden_tests** | 45s | 2.1s |
-| **Overall test suite** | 60s+ | <10s |
-
-#### Enhanced Thread Configuration Reference (*Diataxis: Reference* - Multi-tier timeout scaling)
-
-| Environment | Thread Count | LSP Harness | Comprehensive | Idle Detection | Use Case |
-|------------|-------------|-------------|--------------|----------------|----------|
-| **CI/GitHub Actions** | 0-2 | 500ms | 15s | 200ms cycles | Resource-constrained automation |
-| **Constrained Dev** | 3-4 | 300ms | 10s | 200ms cycles | Limited hardware development |
-| **Light Constraint** | 5-8 | 200ms | 7.5s | 200ms cycles | Modern development machines |
-| **Full Workstation** | >8 | 200ms | 5s | 200ms cycles | High-performance development |
-
-#### Thread-Aware Test Examples (*Diataxis: Tutorial* - Common testing patterns)
-
-```bash
-# GitHub Actions CI configuration
-- name: Run LSP tests
-  run: RUST_TEST_THREADS=2 cargo test -p perl-lsp
-  timeout-minutes: 10
-
-# Local development on limited hardware
-RUST_TEST_THREADS=4 cargo test -p perl-parser --test lsp_comprehensive_e2e_test
-
-# High-performance workstation (default behavior)
-cargo test  # Uses all available threads, standard 5-second timeouts
-
-# Debug timeout issues
-RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp --test specific_test
+# Debug failing tests
+RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp -- --nocapture
 ```
 
 ## Parser Commands
@@ -308,21 +216,14 @@ cargo run -p perl-parser --example lsp_capabilities
 ### Core LSP Testing (*Diataxis: How-to Guide* - Development workflows)
 
 ```bash
-# Run LSP tests with performance optimizations (v0.8.8+)
-cargo test -p perl-parser lsp
-
-# Run LSP integration tests with controlled threading (recommended)
+# Run LSP tests (recommended thread configuration)
 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
-# Performance testing with enhanced test harness (PR #140)
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp             # Fast mode with mock responses
+# Run parser-side LSP unit tests
+cargo test -p perl-parser lsp
 
-# Optimal CI performance with adaptive configuration
-RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
-
-# Enhanced test harness features (PR #140)
-cargo test -p perl-lsp --test lsp_behavioral_tests       # Adaptive threading tests
-cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # User story tests
+# Fast mode for CI
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
 # Run specific performance-sensitive tests with threading control
 RUST_TEST_THREADS=2 cargo test -p perl-lsp test_completion_detail_formatting -- --test-threads=2
@@ -347,66 +248,36 @@ perl-lsp --stdio < test_requests.jsonrpc
 
 ### LSP Testing Environment Variables (*Diataxis: Reference* - Configuration options)
 
-**RUST_TEST_THREADS** (**Enhanced in PR #140**):
+**RUST_TEST_THREADS**:
 ```bash
-# Control test thread concurrency for optimal performance
+# Control test thread concurrency
 export RUST_TEST_THREADS=2                # Recommended for CI
 
-# Performance testing with adaptive timeouts
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
-
-# Benefits of PR #140 threading optimization:
-# - Significantly faster behavioral test execution
-# - 100% test pass rate (was ~55% due to timeouts)
-# - Intelligent symbol waiting with exponential backoff
-# - Optimized idle detection (1000ms → 200ms cycles)
-# - Enhanced test harness with mock responses and graceful degradation
-
 # Thread configuration examples:
-cargo test -p perl-lsp -- --test-threads=2              # Optimal CI configuration
+cargo test -p perl-lsp -- --test-threads=2              # Reliable CI configuration
 RUST_TEST_THREADS=1 cargo test -p perl-lsp              # Maximum reliability mode
 RUST_TEST_THREADS=4 cargo test -p perl-lsp              # High-performance development
 ```
 
-**LSP_TEST_FALLBACKS** (**NEW in v0.8.8**):
+**LSP test environment**:
 ```bash
-# Enable fast testing mode (reduces test timeouts by ~75%)
-export LSP_TEST_FALLBACKS=1
-
 # Optional external dependencies for enhanced features
 export PERLTIDY_PATH="/usr/local/bin/perltidy"    # Custom perltidy location
 export PERLCRITIC_PATH="/usr/local/bin/perlcritic" # Custom perlcritic location
 
-# Performance characteristics in fallback mode:
-# - Base timeout: 500ms (vs 2000ms)
-# - Wait for idle: 50ms (vs 2000ms)  
-# - Symbol polling: single 200ms attempt (vs progressive backoff)
-# - Result: 99.5% faster test execution (60s+ → 0.26s for workspace tests)
+# Override adaptive test timeouts
+LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp
+LSP_TEST_SHORT_MS=1000 cargo test -p perl-lsp
 
-# Use cases:
-cargo test -p perl-lsp                    # Fast CI/development testing
-LSP_TEST_FALLBACKS=1 cargo test --workspace  # Quick workspace validation
-LSP_TEST_FALLBACKS=1 cargo check --workspace # Fast build verification
+# Debug test output
+LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp -- --nocapture
 ```
 
-**PERL_LSP_INCREMENTAL**:
-```bash
-# Enable incremental parsing
-export PERL_LSP_INCREMENTAL=1
-perl-lsp --stdio
+### LSP executeCommand Integration (*Diataxis: How-to Guide* - Execute command usage)
 
-# Performance benefits:
-# - <1ms LSP updates with 70-99% node reuse efficiency
-# - Production-stable incremental parsing
-# - Enterprise-grade workspace refactoring support
-```
+The LSP server supports `workspace/executeCommand` with integrated perlcritic analysis and advanced code actions.
 
-### LSP executeCommand Integration ⭐ **NEW: Issue #145** (*Diataxis: How-to Guide* - Execute command usage)
-
-The LSP server now supports comprehensive `workspace/executeCommand` functionality with integrated perlcritic analysis and advanced code actions.
-
-#### perl.runCritic Command Usage ⭐ **NEW: Issue #145**
+#### perl.runCritic Command Usage
 
 **Dual Analyzer Strategy Overview** (*Diataxis: Explanation* - Architecture design):
 
@@ -551,7 +422,7 @@ cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_late
 
 #### Supported executeCommand Operations (*Diataxis: Reference* - Complete command list)
 
-**Core Commands** (Available since v0.8.8+):
+**Core Commands**:
 ```bash
 # Test all supported executeCommand operations
 cargo test -p perl-lsp --test lsp_execute_command_tests -- test_supported_commands
@@ -567,9 +438,9 @@ cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_debug
 - ✅ `perl.runFile` - Execute single Perl file with output capture
 - ✅ `perl.runTestSub` - Execute specific test subroutine with isolation
 - ✅ `perl.debugTests` - Debug test execution with breakpoint support
-- ✅ `perl.runCritic` - **NEW**: Perl::Critic analysis with dual analyzer strategy
+- ✅ `perl.runCritic` - Perl::Critic analysis with dual analyzer strategy (external + built-in fallback)
 
-### Advanced Code Actions Testing ⭐ **NEW: Issue #145** (*Diataxis: How-to Guide* - Code action workflows)
+### Advanced Code Actions Testing (*Diataxis: How-to Guide* - Code action workflows)
 
 **Refactoring Operations** (*Diataxis: Tutorial* - Using code actions for refactoring):
 ```bash
@@ -653,20 +524,16 @@ cargo test -p perl-lsp --test lsp_performance_benchmarks -- test_code_actions_th
 
 **Quality Assurance Commands**:
 ```bash
-# Acceptance criteria validation (Issue #145)
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_ac1_execute_command_implementation  # AC1
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_ac2_perlcritic_integration          # AC2
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_ac3_advanced_refactoring_operations   # AC3
-
-# Previously ignored tests now enabled
-cargo test -p perl-lsp --test lsp_behavioral_tests | grep -v "ignored"  # Verify test enablement
+# executeCommand integration tests
+cargo test -p perl-lsp --test lsp_execute_command_tests
+cargo test -p perl-lsp --test lsp_code_actions_tests
 ```
 
 The enhanced executeCommand and code actions integration delivers LSP functionality with <50ms response times, comprehensive error handling, and robust tool integration patterns.
 
 ## Benchmark Commands
 
-### Workspace Benchmarks (v0.8.8)
+### Workspace Benchmarks
 ```bash
 # Run parser benchmarks (workspace crates)
 cargo bench                             # Benchmarks for published crates
@@ -680,7 +547,7 @@ cargo bench -p perl-corpus              # Corpus validation performance
 cargo test -p perl-parser --test incremental_perf_test  # Incremental parsing performance
 ```
 
-### Comprehensive C vs Rust Benchmark Framework (v0.8.8)
+### Comprehensive C vs Rust Benchmark Framework
 ```bash
 # Run complete cross-language benchmark suite with statistical analysis
 cargo xtask bench                       # Complete benchmark workflow with C vs Rust comparison
@@ -721,7 +588,7 @@ cargo run --bin xtask -- validate-memory-profiling  # Test dual-mode memory meas
 
 ## Code Quality Commands
 
-### Workspace Quality Checks (v0.8.8)
+### Workspace Quality Checks
 ```bash
 # Run standard Rust quality checks (workspace crates)
 cargo fmt                              # Format workspace code
@@ -753,7 +620,7 @@ The watch recipes use `bacon.toml` with project-tuned jobs for faster local feed
 
 ## Dual-Scanner Corpus Comparison (*Diataxis: How-to Guide* - Testing procedures)
 
-### Running Dual-Scanner Corpus Tests (v0.8.8+)
+### Running Dual-Scanner Corpus Tests
 ```bash
 # Prerequisites: Install libclang-dev for C scanner support
 sudo apt-get install libclang-dev  # Ubuntu/Debian
@@ -1104,7 +971,7 @@ The unified scanner architecture provides:
 
 ## Edge Case Testing Commands
 
-### Workspace Edge Case Tests (v0.8.8)
+### Workspace Edge Case Tests
 ```bash  
 # Run comprehensive edge case tests (workspace crates)
 cargo test -p perl-parser               # Includes all edge case coverage

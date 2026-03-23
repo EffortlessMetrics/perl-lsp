@@ -91,7 +91,7 @@ cargo test --workspace --lib          # Run all tests
 
 ## Crate Structure
 
-128 workspace members across 129 crate directories (see `cargo metadata --no-deps`). Key crates:
+134 workspace members across 135 crate directories (see `cargo metadata --no-deps`). Key crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
