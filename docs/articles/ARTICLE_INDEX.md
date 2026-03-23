@@ -28,7 +28,7 @@ These documents are polished prose ready for editorial review or direct publicat
 | [ANATOMY_OF_A_SESSION.md](ANATOMY_OF_A_SESSION.md) | "Anatomy of a Session: What Happens When 60 AI Agents Build a Perl LSP for Seven Hours" | Session 3 case study, March 19-20, 2026 |
 | [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) | "Competitive Analysis: Perl Language Servers in 2026" | Honest comparison vs PerlNavigator, Perl::LanguageServer, PLS |
 | [COST_ROI.md](COST_ROI.md) | "Code Is Cheap; Trusted Change Is Not" | Session economics, DevLT model |
-| [FEATURE_CATALOG.md](FEATURE_CATALOG.md) | "perl-lsp Feature Catalog" | 97 LSP/DAP features, structured tour of implementation |
+| [FEATURE_CATALOG.md](FEATURE_CATALOG.md) | "perl-lsp Feature Catalog" | 98 LSP/DAP features, structured tour of implementation |
 | [FUTURE_OF_AGENT_TEAMS.md](FUTURE_OF_AGENT_TEAMS.md) | "Are Agent Teams the Future of Software Development?" | Evidence-backed forward-looking analysis |
 | [KNOWLEDGE_COMPOUNDING.md](KNOWLEDGE_COMPOUNDING.md) | "Knowledge Compounding: How Institutional Memory Becomes a Flywheel" | The self-improving swarm thesis |
 | [PARSER_WINS.md](PARSER_WINS.md) | "Perl Parsing Hall of Fame" | Hardest constructs handled: heredocs, slash ambiguity, fat arrows |

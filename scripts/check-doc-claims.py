@@ -32,8 +32,10 @@ STALE_PATTERNS: list[tuple[str, str, str]] = [
     ("132 crates", "133 crates", "Crate count (132 is stale; ledger: 133)"),
     # LSP feature counts
     ("97 LSP and DAP features", "98 LSP and DAP features", "Feature count (97 is stale; ledger: 98)"),
+    ("97 LSP/DAP features", "98 LSP/DAP features", "Feature count (97 is stale; ledger: 98)"),
     ("97 features defined", "98 features defined", "Feature count (97 is stale; ledger: 98)"),
     ("97 features governed", "98 features governed", "Feature count (97 is stale; ledger: 98)"),
+    ("97 features:", "98 features:", "Feature count (97 is stale; ledger: 98)"),
     # Commit counts
     ("2,700+ commits", "3,200+ commits", "Commit count (2,700+ is stale; ledger: 3,210)"),
     # PR counts

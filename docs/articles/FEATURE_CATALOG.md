@@ -200,7 +200,7 @@ perl-lsp includes a built-in Debug Adapter Protocol server in `crates/perl-dap/`
 
 ## Feature Count
 
-97 features: 87 LSP features across text document, workspace, window, notebook, and protocol areas, plus 10 DAP debug features. All are at GA maturity. The canonical list is in [`features.toml`](../../features.toml).
+98 features: 88 LSP features across text document, workspace, window, notebook, and protocol areas, plus 10 DAP debug features. All are at GA maturity. The canonical list is in [`features.toml`](../../features.toml).
 
 ---
 
