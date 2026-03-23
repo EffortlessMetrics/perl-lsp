@@ -88,7 +88,7 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 | **Formatting** | Perl::Tidy integration |
 | **Code actions** | Organize imports, modernize syntax, quick fixes |
 | **Semantic highlighting** | Context-aware syntax coloring |
-| **Debugging** | Built-in DAP: breakpoints, stepping, variables, watch |
+| **Debugging** | Built-in DAP: breakpoints, stepping, variables, watch — [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) |
 | **And 85+ more...** | Inlay hints, code lens, call hierarchy, folding, color decorators |
 
 The full feature catalog lives in [`features.toml`](features.toml). For live project metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
