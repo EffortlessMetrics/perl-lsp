@@ -478,6 +478,7 @@ impl LspServer {
         }
 
         // Try filesystem resolution as fallback
+        let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
         if let Some(path) =
             self.resolve_module_path_with_uri(module_name, Some(doc_text), Some(doc_uri))
         {
@@ -488,7 +489,7 @@ impl LspServer {
                     "contents": {
                         "kind": "markdown",
                         "value": format!(
-                            "**{module_name}**\n\n`{display}`\n\n[Go to module]({file_uri}){pod_section}"
+                            "**{module_name}**\n\n`{display}`\n\n[Go to module]({file_uri}) \u{2022} {metacpan_link}{pod_section}"
                         ),
                     },
                 });
@@ -497,13 +498,13 @@ impl LspServer {
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{module_name}**\n\n`{display}`{pod_section}"
+                        "**{module_name}**\n\n`{display}`\n\n{metacpan_link}{pod_section}"
                     ),
                 },
             });
         }
 
-        // Not found — show search paths
+        // Not found — show search paths and MetaCPAN link
         let include_paths = {
             let config = self.workspace_config.lock();
             config.include_paths.join(", ")
@@ -513,8 +514,8 @@ impl LspServer {
             "contents": {
                 "kind": "markdown",
                 "value": format!(
-                    "**{}**\n\nNot found in workspace\n\nSearch paths: {}",
-                    module_name, include_paths
+                    "**{}**\n\nNot found in workspace\n\nSearch paths: {}\n\n{}",
+                    module_name, include_paths, metacpan_link
                 ),
             },
         })
@@ -1328,7 +1329,7 @@ impl LspServer {
             let punct = next_ch as char;
             if matches!(
                 punct,
-                '!' | '@' | '?' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`' | '+'
+                '!' | '@' | '?' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`' | '+' | '|'
             ) {
                 return Some(format!("${}", punct));
             }
@@ -1343,6 +1344,34 @@ impl LspServer {
     /// encounters.  Returns a JSON hover response with markdown content, or
     /// `None` if the variable is not in the known set.
     fn get_special_variable_hover(name: &str) -> Option<Value> {
+        // Handle $1-$9 capture group variables with dynamic content.
+        if let Some(digit) = name
+            .strip_prefix('$')
+            .filter(|s| s.len() == 1 && matches!(s.as_bytes().first(), Some(b'1'..=b'9')))
+        {
+            let n: u8 = digit.as_bytes()[0] - b'0';
+            let desc = format!(
+                "**`${n}` \u{2014} Regex Capture Group {n}**\n\n\
+                 Contains the text matched by the {n}{ord} set of parentheses in the \
+                 last successful regex match.  Only valid until the next regex match \
+                 or the end of the enclosing scope.\n\n\
+                 ```perl\n\"2024-03-15\" =~ /(\\d{{4}})-(\\d{{2}})-(\\d{{2}})/;\
+                 \nprint $1;  # \"2024\"  (capture group 1)\n```",
+                ord = match n {
+                    1 => "st",
+                    2 => "nd",
+                    3 => "rd",
+                    _ => "th",
+                }
+            );
+            return Some(json!({
+                "contents": {
+                    "kind": "markdown",
+                    "value": desc,
+                },
+            }));
+        }
+
         let text: &str = match name {
             "$_" => {
                 "**`$_` \u{2014} The Default Variable**\n\n\
@@ -1520,6 +1549,14 @@ impl LspServer {
                  the script began running. Used for age calculations relative to \
                  script startup and for the `-M`, `-A`, `-C` file-test operators.\n\n\
                  ```perl\nprint \"Running for \", time() - $^T, \" seconds\\n\";\n```"
+            }
+            "$|" => {
+                "**`$|` \u{2014} Output Autoflush**\n\n\
+                 If set to a non-zero value, Perl flushes the output buffer of the \
+                 currently selected filehandle after every `print` or `write`. \
+                 Set to `1` to enable autoflush (useful for real-time progress output \
+                 or when writing to pipes).\n\n\
+                 ```perl\n$| = 1;  # enable autoflush on STDOUT\nprint \"Progress: 50%\\n\";\n```"
             }
             _ => return None,
         };

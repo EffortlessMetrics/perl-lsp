@@ -339,3 +339,97 @@ fn test_hover_last_bracket_matched() -> TestResult {
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Tests for issue #2831 – Phase 1 hover doc improvements
+// ---------------------------------------------------------------------------
+
+/// Hovering on $1 (first capture group) should show capture group documentation.
+#[test]
+fn test_hover_capture_group_dollar_1() -> TestResult {
+    // Use a multi-line doc so the hover is on a plain $1 reference
+    // without any nearby regex literal to confuse the regex hover path.
+    // Line 0: m{...} match
+    // Line 1: print $1;   <- hover here at character 6
+    let doc = "m{hello};\nprint $1;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///capture1_2831.pl", doc)?;
+    // line 1: "print $1;" — character 7 = '1' (the digit after '$')
+    // get_token_at_position expands backward to include the '$' sigil
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///capture1_2831.pl"},
+                "position": {"line": 1, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = must_some(hover_value(&result));
+    let lower = val.to_lowercase();
+    // Must specifically mention capture group semantics
+    assert!(
+        lower.contains("capture") || lower.contains("match"),
+        "$1 hover should mention capture group semantics, got: {val}"
+    );
+    Ok(())
+}
+
+/// Hovering on $9 (last supported capture group) should show capture group documentation.
+#[test]
+fn test_hover_capture_group_dollar_9() -> TestResult {
+    // Line 0: m{...} match
+    // Line 1: print $9;   <- hover here at character 6
+    let doc = "m{abcdefghi};\nprint $9;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///capture9_2831.pl", doc)?;
+    // line 1: "print $9;" — character 7 = '9' (the digit after '$')
+    // get_token_at_position expands backward to include the '$' sigil
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///capture9_2831.pl"},
+                "position": {"line": 1, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = must_some(hover_value(&result));
+    let lower = val.to_lowercase();
+    // Must specifically mention capture group semantics
+    assert!(
+        lower.contains("capture") || lower.contains("match"),
+        "$9 hover should mention capture group semantics, got: {val}"
+    );
+    Ok(())
+}
+
+/// Hovering on $| should show output autoflush documentation.
+#[test]
+fn test_hover_output_autoflush() -> TestResult {
+    // "$| = 1;  # enable autoflush\n"
+    //  0123456789
+    // $| starts at offset 0
+    let doc = "$| = 1;  # enable autoflush\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///autoflush_2831.pl", doc)?;
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///autoflush_2831.pl"},
+                "position": {"line": 0, "character": 0}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = must_some(hover_value(&result));
+    let lower = val.to_lowercase();
+    assert!(
+        lower.contains("autoflush") || lower.contains("flush") || lower.contains("buffer"),
+        "$| hover should mention autoflush/buffer, got: {val}"
+    );
+    Ok(())
+}
