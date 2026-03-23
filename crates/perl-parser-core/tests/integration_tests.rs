@@ -17,7 +17,7 @@ fn parser_many_errors_recovers() -> Result<(), Box<dyn std::error::Error>> {
 
     match &ast.kind {
         V1NodeKind::Program { statements } => {
-            assert!(statements.len() >= 1, "should produce at least one statement");
+            assert!(!statements.is_empty(), "should produce at least one statement");
         }
         other => return Err(format!("expected Program, got {:?}", other).into()),
     }
