@@ -1130,18 +1130,28 @@ process();
         callee_names
     );
 
-    // The outgoing call target URI should point to Utils.pm, not app.pl
-    let format_string_call =
-        calls.iter().find(|c| c["to"]["name"].as_str() == Some("format_string"));
-
-    if let Some(call) = format_string_call {
-        let target_uri = call["to"]["uri"].as_str().unwrap_or("");
-        assert_eq!(
-            target_uri, "file:///lib/Utils.pm",
-            "format_string target URI should be Utils.pm, got: {:?}",
-            target_uri
+    // The outgoing call target URI should point to Utils.pm, not app.pl.
+    // The callee name may be stored as "Utils::format_string" (qualified) or "format_string"
+    // (bare) depending on how the AST represents the call site — match both.
+    let format_string_call = calls
+        .iter()
+        .find(|c| {
+            c["to"]["name"]
+                .as_str()
+                .map(|n| n == "format_string" || n.ends_with("::format_string"))
+                .unwrap_or(false)
+        })
+        .expect(
+            "format_string (or Utils::format_string) must appear as an outgoing call \
+             — URI resolution cannot be tested if the call is absent",
         );
-    }
+
+    let target_uri = format_string_call["to"]["uri"].as_str().unwrap_or("");
+    assert_eq!(
+        target_uri, "file:///lib/Utils.pm",
+        "format_string target URI should be Utils.pm, got: {:?}",
+        target_uri
+    );
 
     Ok(())
 }
