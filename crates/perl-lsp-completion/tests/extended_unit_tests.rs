@@ -814,7 +814,8 @@ fn keyword_sort_priority() {
     let items = completions_at_end(code);
     let item = must_some(find_item(&items, "sub"));
     let sort_text = must_some(item.sort_text.as_ref());
-    assert!(sort_text.starts_with("4_"), "keyword sort_text should start with 4_");
+    // Keywords now use tier 5 to rank after core builtins (3_) and workspace (4_).
+    assert!(sort_text.starts_with("5_"), "keyword sort_text should start with 5_");
 }
 
 #[test]
@@ -1475,5 +1476,232 @@ fn test_defined_is_a_builtin_not_keyword() {
     assert!(
         items.iter().any(|c| c.label == "defined"),
         "defined should appear in completions from 'def'"
+    );
+}
+
+// ===========================================================================
+// 21. Relevance-based sort ordering: local -> file -> core -> CPAN (#2832)
+// ===========================================================================
+
+/// Builtins sort before workspace/CPAN symbols.
+///
+/// The tier order is: special vars (0_) < user vars (1_) < user funcs (2_)
+/// < core builtins (3_) < workspace/CPAN (4_) < keywords (5_).
+/// This test verifies that a Perl core builtin sorts ahead of a symbol from
+/// another file (which represents CPAN or project-level workspace symbols).
+#[test]
+fn builtin_ranks_before_workspace_symbol() {
+    let index = Arc::new(WorkspaceIndex::new());
+    let file_url = must(Url::parse("file:///lib/MyModule.pm"));
+    // Index a subroutine named "split_records" — starts with "spl" just like
+    // the builtin "split", so both are candidates for the prefix "spl".
+    let module_code = "package MyModule;\nsub split_records { }\n1;\n";
+    must(index.index_file(file_url, module_code.to_string()));
+
+    let code = "use MyModule;\nspl";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let items = provider.get_completions(code, code.len());
+
+    let builtin_item = must_some(find_item(&items, "split"));
+    // Workspace symbol label is the qualified name
+    let ws_item = find_item(&items, "MyModule::split_records");
+
+    let builtin_sort = must_some(builtin_item.sort_text.as_ref());
+    assert!(
+        builtin_sort.starts_with("3_"),
+        "core builtin 'split' sort_text should start with '3_', got: {builtin_sort:?}"
+    );
+
+    let ws = must_some(ws_item);
+    let ws_sort = must_some(ws.sort_text.as_ref());
+    assert!(
+        ws_sort.starts_with("4_") || ws_sort.starts_with("5_"),
+        "workspace symbol sort_text should start with '4_' or '5_' (after builtins), got: {ws_sort:?}"
+    );
+    assert!(
+        builtin_sort < ws_sort,
+        "builtin 'split' ({builtin_sort:?}) should sort before workspace 'split_records' ({ws_sort:?})"
+    );
+}
+
+/// Workspace symbols use sort prefix "4_" placing them after core builtins ("3_").
+#[test]
+fn workspace_symbol_sort_priority_is_4() {
+    let index = Arc::new(WorkspaceIndex::new());
+    let file_url = must(Url::parse("file:///lib/Util.pm"));
+    let module_code = "package Util;\nsub helper_fn { }\n1;\n";
+    must(index.index_file(file_url, module_code.to_string()));
+
+    let code = "use Util;\nhelper_fn";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let items = provider.get_completions(code, code.len());
+
+    // Workspace symbol label is the qualified name (Module::function).
+    // `use Util;` with no import list means Util is not in the import_map
+    // (import_map has no entry for it), so the `None` arm applies -> tier 4.
+    let ws_item = must_some(find_item(&items, "Util::helper_fn"));
+    let sort_text = must_some(ws_item.sort_text.as_ref());
+    assert!(
+        sort_text.starts_with("4_"),
+        "workspace function sort_text should start with '4_' (CPAN tier, after builtins), got: {sort_text:?}"
+    );
+}
+
+/// Keywords use sort prefix "5_" placing them after CPAN/workspace symbols.
+///
+/// Rationale: when a user types a partial name like "su", they are more
+/// likely looking for their own `sub_name` function or the CPAN symbol
+/// than the `sub` keyword. Keywords come last as they are always available
+/// and match via snippet expansion anyway.
+#[test]
+fn keyword_sort_priority_is_5() {
+    let code = "su";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "sub"));
+    let sort_text = must_some(item.sort_text.as_ref());
+    assert!(
+        sort_text.starts_with("5_"),
+        "keyword 'sub' sort_text should start with '5_', got: {sort_text:?}"
+    );
+}
+
+// ===========================================================================
+// 22. Documentation strings on completion items (#2832)
+// ===========================================================================
+
+/// Common Perl built-in functions should carry a documentation string so that
+/// LSP clients can display hover text in the completion popup.
+#[test]
+fn builtin_print_has_documentation() {
+    let code = "pri";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "print"));
+    assert!(item.documentation.is_some(), "builtin 'print' should have documentation, got None");
+    let doc = must_some(item.documentation.as_ref());
+    assert!(!doc.is_empty(), "builtin 'print' documentation should not be empty");
+}
+
+#[test]
+fn builtin_split_has_documentation() {
+    let code = "spl";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "split"));
+    assert!(item.documentation.is_some(), "builtin 'split' should have documentation, got None");
+}
+
+#[test]
+fn builtin_open_has_documentation() {
+    let code = "ope";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "open"));
+    assert!(item.documentation.is_some(), "builtin 'open' should have documentation, got None");
+}
+
+#[test]
+fn builtin_push_has_documentation() {
+    let code = "pus";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "push"));
+    assert!(item.documentation.is_some(), "builtin 'push' should have documentation, got None");
+}
+
+#[test]
+fn builtin_map_has_documentation() {
+    let code = "ma";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "map"));
+    assert!(item.documentation.is_some(), "builtin 'map' should have documentation, got None");
+}
+
+#[test]
+fn builtin_grep_has_documentation() {
+    let code = "gre";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "grep"));
+    assert!(item.documentation.is_some(), "builtin 'grep' should have documentation, got None");
+}
+
+/// The `if` keyword snippet should carry a brief documentation string.
+#[test]
+fn keyword_if_has_documentation() {
+    let code = "if";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "if"));
+    assert!(item.documentation.is_some(), "keyword 'if' should have documentation, got None");
+}
+
+/// The `sub` keyword snippet should carry a brief documentation string.
+#[test]
+fn keyword_sub_has_documentation() {
+    let code = "su";
+    let items = completions_at_end(code);
+    let item = must_some(find_item(&items, "sub"));
+    assert!(item.documentation.is_some(), "keyword 'sub' should have documentation, got None");
+}
+
+// ===========================================================================
+// 23. Deduplication: builtin beats keyword when both match the same label
+// ===========================================================================
+
+/// Several names appear in both `create_builtins()` and `LSP_COMPLETION_KEYWORDS`
+/// (e.g. `die`, `eval`, `exit`, `warn`, `require`). After deduplication the
+/// completion list must contain exactly one entry for each such name, and that
+/// entry must carry the builtin's tier-3 sort prefix (lower = higher priority)
+/// rather than the keyword's tier-5 prefix.
+///
+/// This guards against regression where both items survive deduplication and
+/// a client receives confusing duplicate completions.
+#[test]
+fn builtin_beats_keyword_on_duplicate_label() {
+    // "die" appears in create_builtins() AND in LSP_COMPLETION_KEYWORDS.
+    let code = "di";
+    let items = completions_at_end(code);
+
+    // Count how many completion items have label "die".
+    let die_items: Vec<_> = items.iter().filter(|i| i.label == "die").collect();
+    assert_eq!(
+        die_items.len(),
+        1,
+        "'die' should appear exactly once after dedup; got {} items",
+        die_items.len()
+    );
+
+    // The surviving item must be the builtin (tier 3_), not the keyword (tier 5_).
+    let sort = must_some(die_items[0].sort_text.as_ref());
+    assert!(
+        sort.starts_with("3_"),
+        "'die' should survive as builtin (3_) not keyword (5_); got sort_text: {sort:?}"
+    );
+
+    // Also verify 'warn' — another overlapping name.
+    let warn_items: Vec<_> = items.iter().filter(|i| i.label == "warn").collect();
+    // warn may or may not match prefix "di", so we only check if it appears
+    // that it appears at most once.
+    assert!(warn_items.len() <= 1, "'warn' should appear at most once in completions for 'di'");
+}
+
+/// Specifically test 'warn' which overlaps builtins and keywords, using a
+/// prefix that only matches 'warn'.
+#[test]
+fn builtin_warn_no_duplicate() {
+    let code = "war";
+    let items = completions_at_end(code);
+
+    let warn_items: Vec<_> = items.iter().filter(|i| i.label == "warn").collect();
+    assert_eq!(
+        warn_items.len(),
+        1,
+        "'warn' should appear exactly once after dedup; got {} items",
+        warn_items.len()
+    );
+
+    let sort = must_some(warn_items[0].sort_text.as_ref());
+    assert!(
+        sort.starts_with("3_"),
+        "'warn' should survive as builtin (3_) not keyword (5_); got sort_text: {sort:?}"
     );
 }

@@ -221,9 +221,58 @@ perl-lsp provides:
 
 ## Project Configuration
 
-For project-specific settings, the server reads configuration from your editor's LSP settings.
+perl-lsp supports two ways to configure your project: a **project configuration file** for team-wide defaults, and **LSP settings** for personal or editor-specific overrides.
 
-### Example: Configure Module Search Paths
+### Project Configuration File (.perl-lsp.toml)
+
+The `.perl-lsp.toml` file lives at your workspace root and is committed to version control. It lets you share configuration with your whole team without requiring each developer to configure their own editor. The file is optional — if it does not exist, the server uses its built-in defaults.
+
+Create a `.perl-lsp.toml` in the root of your project:
+
+```toml
+# .perl-lsp.toml — project-wide defaults for perl-lsp
+
+[perl]
+# Perl version hint (for future use)
+version = "5.38"
+
+# Module include paths relative to workspace root
+include_paths = ["lib", "local/lib/perl5"]
+
+[diagnostics]
+# Enable perlcritic linting (requires perlcritic installed)
+perlcritic = false
+perlcritic_severity = 3
+
+[features]
+# Toggle all inlay hints
+inlay_hints = true
+```
+
+**Key behaviors:**
+- If the file does not exist, the server starts normally with defaults.
+- Unknown keys and sections are silently ignored — safe to add future fields.
+- Invalid TOML produces a warning notification in your editor.
+- An empty `include_paths = []` is treated as "not set" and leaves the defaults unchanged.
+
+A ready-to-copy example is available at [`.perl-lsp.toml.example`](../../.perl-lsp.toml.example) in the repo root.
+
+### Configuration Precedence
+
+Settings are applied in this order, last-write-wins:
+
+```
+.perl-lsp.toml  →  initializationOptions  →  didChangeConfiguration
+(project file)      (editor startup)           (live editor settings)
+```
+
+Editor settings always override the project file. This lets individual developers override team defaults locally.
+
+### LSP Settings (Editor-Specific)
+
+For per-developer or editor-specific settings, configure via your editor's LSP mechanism.
+
+#### Example: Configure Module Search Paths
 
 ```json
 {
@@ -235,7 +284,7 @@ For project-specific settings, the server reads configuration from your editor's
 }
 ```
 
-### Example: Tune for Large Projects
+#### Example: Tune for Large Projects
 
 ```json
 {

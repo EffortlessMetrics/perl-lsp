@@ -151,6 +151,16 @@ name = "dap_packaging_tests"
 path = "tests/dap_packaging_tests.rs"
 # AC19: Binary packaging and cross-platform distribution
 
+[[test]]
+name = "dap_protocol_message_tests"
+path = "tests/dap_protocol_message_tests.rs"
+# AC:2783: Protocol message tests for 10 previously untested commands
+
+[[test]]
+name = "dap_feature_flag_coverage_tests"
+path = "tests/dap_feature_flag_coverage_tests.rs"
+# AC0-AC7: Feature flag coverage for 8 previously untested DAP features (#2784)
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"

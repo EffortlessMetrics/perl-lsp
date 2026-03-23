@@ -78,8 +78,8 @@ pub use tdd::test_generator;
 pub use tdd::test_runner;
 
 /// Safe unwrap replacements for tests.
-pub mod must;
-pub use must::{must, must_err, must_some};
+/// Re-exported from `perl-test-must` for backward compatibility.
+pub use perl_test_must::{must, must_err, must_some};
 
 /// CI Guardrail Ignored Test Monitoring and Governance.
 pub mod governance;

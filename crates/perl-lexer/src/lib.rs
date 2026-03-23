@@ -2553,6 +2553,11 @@ impl<'a> PerlLexer<'a> {
                 }
                 self.after_arrow = false;
                 self.paren_depth = self.paren_depth.saturating_sub(1);
+                // A closing paren ends any var-subscript context: `if ($var)` should
+                // NOT leave after_var_subscript set, otherwise the following `{` would
+                // incorrectly increment hash_brace_depth and suppress regex operators
+                // inside the block body (issue #2844).
+                self.after_var_subscript = false;
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightParen,
@@ -2600,6 +2605,11 @@ impl<'a> PerlLexer<'a> {
             }
             ']' => {
                 self.advance();
+                // A closing `]` from an array subscript leaves us in a state where
+                // a `{` immediately following is a hash subscript — e.g. `$arr[$i]{key}`.
+                // Set after_var_subscript so the `{` handler recognises it as such.
+                // This mirrors the `}` handler's behavior when closing a hash subscript.
+                self.after_var_subscript = true;
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightBracket,

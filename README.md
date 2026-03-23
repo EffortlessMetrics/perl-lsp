@@ -88,7 +88,7 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 | **Formatting** | Perl::Tidy integration |
 | **Code actions** | Organize imports, modernize syntax, quick fixes |
 | **Semantic highlighting** | Context-aware syntax coloring |
-| **Debugging** | Built-in DAP: breakpoints, stepping, variables, watch |
+| **Debugging** | Built-in DAP: breakpoints, stepping, variables, watch — [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) |
 | **And 85+ more...** | Inlay hints, code lens, call hierarchy, folding, color decorators |
 
 The full feature catalog lives in [`features.toml`](features.toml). For live project metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
@@ -141,6 +141,25 @@ perl-lsp is configured through your editor's LSP settings (via `didChangeConfigu
 | `testRunner.timeout` | `60000` | Test execution timeout (ms) |
 
 For Neovim and other editors, pass these as the LSP `settings` table under the `perl-lsp` key.
+
+### Project Configuration File
+
+For team-wide defaults, add a `.perl-lsp.toml` to your repository root. It is editor-agnostic and committed to version control:
+
+```toml
+# .perl-lsp.toml — shared project defaults for perl-lsp
+
+[perl]
+include_paths = ["lib", "local/lib/perl5"]
+
+[diagnostics]
+perlcritic = false
+
+[features]
+inlay_hints = true
+```
+
+Settings from `.perl-lsp.toml` are the lowest-priority layer. Editor settings (`initializationOptions` / `didChangeConfiguration`) always override them. See [CONFIG.md](docs/reference/CONFIG.md) for the full reference including precedence rules.
 
 ## Install
 

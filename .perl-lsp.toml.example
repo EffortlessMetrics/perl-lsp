@@ -1,0 +1,66 @@
+# .perl-lsp.toml — project configuration for perl-lsp
+#
+# Copy this file to your workspace root and rename it to .perl-lsp.toml.
+# Commit it to version control to share team-wide defaults with all editors.
+#
+# All sections and keys are optional. The file may be empty or omitted entirely.
+# Unknown keys and sections are silently ignored for forward compatibility.
+# Invalid TOML produces a warning notification in your editor.
+#
+# Configuration precedence (last-write-wins):
+#   .perl-lsp.toml  ->  initializationOptions  ->  didChangeConfiguration
+#   (this file)         (editor startup)            (live editor settings)
+#
+# Editor settings always override this file, so team members can still
+# customize their own environments.
+
+# ── [perl] ───────────────────────────────────────────────────────────────────
+# Module resolution settings.
+
+[perl]
+
+# Perl version hint for the project (e.g. "5.38", "5.40").
+# Parsed but not yet wired to diagnostics; reserved for future use.
+# version = "5.38"
+
+# Additional module include paths, relative to the workspace root.
+# Overrides the built-in defaults (lib, ., local/lib/perl5) when non-empty.
+# An empty list (include_paths = []) is treated as "not set" and leaves
+# the built-in defaults unchanged.
+#
+# include_paths = ["lib", "local/lib/perl5"]
+
+# ── [diagnostics] ────────────────────────────────────────────────────────────
+# Linting settings. perlcritic is opt-in and requires perlcritic installed.
+
+[diagnostics]
+
+# Enable perlcritic diagnostics (default: false).
+# Requires `perlcritic` available on $PATH.
+#
+# perlcritic = false
+
+# Minimum perlcritic severity to report (1 = most severe, 5 = everything).
+# Default: 3 (Harsh). Must be in the range 1-5.
+# Equivalent to `perlcritic --severity N`.
+#
+# perlcritic_severity = 3
+
+# ── [features] ───────────────────────────────────────────────────────────────
+# LSP feature toggles.
+
+[features]
+
+# Enable or disable all inlay hints globally (default: true).
+# Individual hint types (parameterHints, typeHints, chainedHints) are
+# controlled via editor settings.
+#
+# inlay_hints = true
+
+# ── [formatting] ─────────────────────────────────────────────────────────────
+# Reserved for future perltidy configuration. Not yet active.
+# Keys in this section are silently ignored.
+
+# [formatting]
+# perltidy = true
+# perltidy_profile = ".perltidyrc"

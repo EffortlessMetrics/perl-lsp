@@ -298,5 +298,8 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
             "Reduce nesting depth by extracting inner logic into named subroutines".to_string(),
         ),
         ParseError::Cancelled => None,
+        // Recovered errors: the parser inserted a synthetic node and continued.
+        // No user-facing suggestion is needed — the partial AST is still usable.
+        ParseError::Recovered { .. } => None,
     }
 }

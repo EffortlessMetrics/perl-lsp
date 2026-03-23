@@ -66,10 +66,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-// Import enhanced recovery module
-// mod enhanced_recovery;
-// pub use enhanced_recovery::{RecoveryConfig, EnhancedRecovery, EnhancedErrorRecovery, ErrorContext};
-
 /// Strip Perl-style line comments from `qw()` content.
 ///
 /// In Perl, `#` inside `qw()` begins a comment that extends to the end of the
@@ -113,8 +109,6 @@ pub struct Parser<'a> {
     cancellation_flag: Option<Arc<AtomicBool>>,
     /// Counter to amortize cancellation checks (only check every 64 statements)
     cancellation_check_counter: usize,
-    // Enhanced error recovery state
-    // pub enhanced_recovery: EnhancedRecovery,
 }
 
 // Recursion limit is set conservatively to prevent stack overflow
@@ -158,7 +152,6 @@ impl<'a> Parser<'a> {
             errors: Vec::new(),
             cancellation_flag: None,
             cancellation_check_counter: 0,
-            // enhanced_recovery: EnhancedRecovery::new(RecoveryConfig::default()),
         }
     }
 
@@ -309,130 +302,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-// impl<'a> EnhancedErrorRecovery for Parser<'a> {
-//     fn with_enhanced_recovery() -> Self {
-//         return Parser::new(...) for default enhanced recovery.
-//     }
-//
-//     fn with_enhanced_recovery_config(_config: RecoveryConfig) -> Self {
-//         return Parser::new_with_recovery_config(...) instead.
-//     }
-//
-//     fn recovery_state(&self) -> &EnhancedRecovery {
-//         &self.enhanced_recovery
-//     }
-//
-//     fn recovery_state_mut(&mut self) -> &mut EnhancedRecovery {
-//         &mut self.enhanced_recovery
-//     }
-//
-//     fn create_enhanced_error_node(
-//         &mut self,
-//         error: ParseError,
-//         context: ErrorContext,
-//     ) -> Node {
-//         // Track node creation for memory monitoring
-//         self.enhanced_recovery.track_node();
-//
-//         // Get suggestions based on error type and context
-//         let error_type = match &error {
-//             ParseError::UnexpectedToken { .. } => "unexpected_token",
-//             ParseError::UnclosedDelimiter { .. } => "unclosed_delimiter",
-//             ParseError::UnexpectedEof => "missing_expression",
-//             _ => "syntax_error",
-//         };
-//
-//         let suggestions = self.enhanced_recovery.get_suggestions(error_type, &context);
-//
-//         // Create enhanced error message with suggestions
-//         let mut message = format!("{}", error);
-//         if let Some(best_suggestion) = suggestions.first() {
-//             if best_suggestion.confidence > 0.7 {
-//                 message.push_str(&format!(" Suggestion: {}", best_suggestion.message));
-//             }
-//         }
-//
-//         let start = context.current_token
-//             .as_ref()
-//             .map(|t| t.start)
-//             .unwrap_or(self.current_position());
-//         let end = context.current_token
-//             .as_ref()
-//             .map(|t| t.end)
-//             .unwrap_or(start);
-//
-//         Node::new(
-//             NodeKind::Error {
-//                 message,
-//                 expected: vec![],
-//                 found: context.current_token,
-//                 partial: None, // We don't store suggestions in the AST, just in the message
-//             },
-//             SourceLocation { start, end }
-//         )
-//     }
-//
-//     fn apply_adaptive_recovery(&mut self, error: &ParseError, context: &ErrorContext) -> bool {
-//         // Check resource limits before recovery
-//         if let Err(e) = self.enhanced_recovery.should_continue() {
-//             self.record_error(e);
-//             return false;
-//         }
-//
-//         let strategy = self.enhanced_recovery.apply_adaptive_recovery(error);
-//
-//         match strategy {
-//             enhanced_recovery::RecoveryStrategy::SkipToken => {
-//                 let _ = self.consume_token();
-//                 true
-//             }
-//             enhanced_recovery::RecoveryStrategy::InsertClosing => {
-//                 // Try to insert missing closing delimiter
-//                 if let Some(token) = &context.current_token {
-//                     match token.kind {
-//                         TokenKind::LeftBrace => {
-//                             // Insert closing brace
-//                             self.create_error_node(
-//                                 "Unclosed delimiter".to_string(),
-//                                 vec![TokenKind::LeftBrace],
-//                             );
-//                             true
-//                         }
-//                         TokenKind::LeftParen => {
-//                             // Insert closing parenthesis
-//                             self.create_error_node(
-//                                 "Unclosed delimiter".to_string(),
-//                                 vec![TokenKind::LeftParen],
-//                             );
-//                             true
-//                         }
-//                         TokenKind::LeftBracket => {
-//                             // Insert closing bracket
-//                             self.create_error_node(
-//                                 "Unclosed delimiter".to_string(),
-//                                 vec![TokenKind::LeftBracket],
-//                             );
-//                             true
-//                         }
-//                         _ => false,
-//                     }
-//                 } else {
-//                     false
-//                 }
-//             }
-//             enhanced_recovery::RecoveryStrategy::TreatAsVariable => {
-//                 // Try to treat as variable declaration
-//                 self.create_error_node(
-//                     "Treating as variable declaration".to_string(),
-//                     vec![TokenKind::ScalarSigil],
-//                 );
-//                 true
-//             }
-//             _ => false,
-//         }
-//     }
-// }
-
 include!("helpers.rs");
 include!("heredoc.rs");
 include!("statements.rs");
@@ -449,10 +318,6 @@ include!("expressions/hashes.rs");
 include!("expressions/quotes.rs");
 
 #[cfg(test)]
-mod error_recovery_tests;
-// #[cfg(test)]
-// mod enhanced_recovery_tests;
-#[cfg(test)]
 mod builtin_block_list_tests;
 #[cfg(test)]
 mod builtin_expansion_tests;
@@ -466,6 +331,8 @@ mod complex_args_tests;
 mod control_flow_expr_tests;
 #[cfg(test)]
 mod declaration_in_args_tests;
+#[cfg(test)]
+mod error_recovery_tests;
 #[cfg(test)]
 mod eval_goto_tests;
 #[cfg(test)]
