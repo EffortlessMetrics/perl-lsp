@@ -297,7 +297,7 @@ On the state of AI development:
 
 Steven's CPA background is not flavor -- it is architecture. Every design choice maps to audit and controls thinking:
 
-- **Controls**: Zero-panic policy, high test-to-code ratio (8:1), verification as product
+- **Controls**: Zero-panic policy, high test-to-code ratio (exact ratio unverified; ~2,811 lib tests canonical), verification as product
 - **Materiality**: Focus on visible gaps not nice-to-haves, cost per useful change
 - **Segregation of duties**: Agents build, different agents review, CI gates enforce
 - **Ratchets**: Corpus baseline can only go up, never fall back
@@ -324,7 +324,7 @@ The implication is uncomfortable: the expensive-looking part (scouts reading cod
 
 1. **Is 132 microcrates the right decomposition, or will it become unmaintainable?** The architecture is perfect for agents but hostile to human navigation. What happens when a contributor who isn't Steven tries to add a feature?
 
-2. **Does the 8:1 test-to-code ratio indicate over-testing?** Every test has a maintenance cost. At what ratio does test maintenance itself become the bottleneck?
+2. **Does the high test-to-code ratio indicate over-testing?** Every test has a maintenance cost. At what ratio does test maintenance itself become the bottleneck? (The previously cited 8:1 ratio used an unverified numerator; see issue #2672.)
 
 3. **Can the memory system scale?** 156 files today, growing every session. At 500 files, is it still useful or just noise?
 
