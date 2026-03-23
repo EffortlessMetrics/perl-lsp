@@ -229,29 +229,29 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "join" => Some(BuiltinDoc {
             signature: "join EXPR, LIST",
-            description: "Joins the separate strings of LIST into a single string with fields separated by EXPR, and returns that string.",
+            description: "Joins the separate strings of LIST into a single string with fields separated by EXPR, and returns that string.\n\n```perl\nmy $str = join(', ', 'a', 'b', 'c');  # \"a, b, c\"\nmy $csv = join(',', @fields);\n```",
         }),
         "split" => Some(BuiltinDoc {
             signature: "split /PATTERN/, EXPR, LIMIT\nsplit /PATTERN/, EXPR\nsplit /PATTERN/\nsplit",
-            description: "Splits the string EXPR into a list of strings and returns the list. If LIMIT is specified, splits into at most that many fields.",
+            description: "Splits the string EXPR into a list of strings and returns the list. If LIMIT is specified, splits into at most that many fields.\n\n```perl\nmy @words = split /\\s+/, $line;       # split on whitespace\nmy @fields = split /,/, $csv, 10;    # at most 10 fields\n```",
         }),
 
         // Array/List
         "push" => Some(BuiltinDoc {
             signature: "push ARRAY, LIST",
-            description: "Appends one or more values to the end of ARRAY. Returns the number of elements in the resulting array.",
+            description: "Appends one or more values to the end of ARRAY. Returns the number of elements in the resulting array.\n\n```perl\nmy @list = (1, 2);\npush @list, 3, 4;   # @list is now (1, 2, 3, 4)\n```",
         }),
         "pop" => Some(BuiltinDoc {
             signature: "pop ARRAY\npop",
-            description: "Removes and returns the last element of ARRAY.",
+            description: "Removes and returns the last element of ARRAY.\n\n```perl\nmy @stack = (1, 2, 3);\nmy $top = pop @stack;   # $top = 3, @stack = (1, 2)\n```",
         }),
         "shift" => Some(BuiltinDoc {
             signature: "shift ARRAY\nshift",
-            description: "Removes and returns the first element of ARRAY, shortening the array by 1.",
+            description: "Removes and returns the first element of ARRAY, shortening the array by 1.\n\n```perl\nmy @queue = ('first', 'second');\nmy $item = shift @queue;   # $item = 'first'\n```",
         }),
         "unshift" => Some(BuiltinDoc {
             signature: "unshift ARRAY, LIST",
-            description: "Prepends LIST to the front of ARRAY. Returns the number of elements in the new array.",
+            description: "Prepends LIST to the front of ARRAY. Returns the number of elements in the new array.\n\n```perl\nmy @list = (3, 4);\nunshift @list, 1, 2;   # @list is now (1, 2, 3, 4)\n```",
         }),
         "splice" => Some(BuiltinDoc {
             signature: "splice ARRAY, OFFSET, LENGTH, LIST\nsplice ARRAY, OFFSET, LENGTH\nsplice ARRAY, OFFSET\nsplice ARRAY",
@@ -267,11 +267,11 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
         }),
         "map" => Some(BuiltinDoc {
             signature: "map BLOCK LIST\nmap EXPR, LIST",
-            description: "Evaluates the BLOCK or EXPR for each element of LIST (locally setting $_ to each element) and composes a list of the results. In scalar context, returns the number of elements the expression would produce.",
+            description: "Evaluates the BLOCK or EXPR for each element of LIST (locally setting $_ to each element) and composes a list of the results. In scalar context, returns the number of elements the expression would produce.\n\n```perl\nmy @doubled = map { $_ * 2 } @numbers;\nmy @names   = map { $_->{name} } @records;\n```",
         }),
         "grep" => Some(BuiltinDoc {
             signature: "grep BLOCK LIST\ngrep EXPR, LIST",
-            description: "Evaluates BLOCK or EXPR for each element of LIST and returns the list of elements for which the expression is true. In scalar context, returns the number of matching elements rather than the list.",
+            description: "Evaluates BLOCK or EXPR for each element of LIST and returns the list of elements for which the expression is true. In scalar context, returns the number of matching elements rather than the list.\n\n```perl\nmy @evens = grep { $_ % 2 == 0 } @numbers;\nmy $count = grep { /pattern/ } @lines;\n```",
         }),
         "scalar" => Some(BuiltinDoc {
             signature: "scalar EXPR",
