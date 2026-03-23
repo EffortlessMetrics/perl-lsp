@@ -59,29 +59,33 @@ pub fn add_workspace_symbol_completions(
 
                 let (sort_prefix, detail) = match import_map.get(module) {
                     None => {
-                        // Module not in import_map: not used or `use Module` (import all)
+                        // Module not in import_map: not used or `use Module` (import all).
+                        // Rank at tier 4 (after core builtins at tier 3).
                         let det = symbol
                             .container_name
                             .clone()
                             .unwrap_or_else(|| "workspace".to_string());
-                        ("3_", det)
+                        ("4_", det)
                     }
                     Some(imported_set) if imported_set.is_empty() => {
-                        // Explicit empty import `use Module qw()` — not in namespace
-                        ("4_", "not imported".to_string())
+                        // Explicit empty import `use Module qw()` — not in namespace.
+                        // Rank at tier 5 (lowest, after all useful completions).
+                        ("5_", "not imported".to_string())
                     }
                     Some(imported_set) if imported_set.contains(&symbol.name) => {
-                        // Symbol is explicitly imported — boost priority
+                        // Symbol is explicitly imported — boost priority to tier 2
+                        // (treated like a file-scope symbol).
                         let det = format!("imported from {module}");
                         ("2_", det)
                     }
                     Some(_) => {
-                        // Module used with explicit list, but this symbol wasn't in it
+                        // Module used with explicit list, but this symbol wasn't in it.
+                        // Rank at tier 4 (workspace, after core builtins).
                         let det = symbol
                             .container_name
                             .clone()
                             .unwrap_or_else(|| "workspace".to_string());
-                        ("3_", det)
+                        ("4_", det)
                     }
                 };
 
@@ -119,7 +123,7 @@ pub fn add_workspace_symbol_completions(
 
                 completions.push(CompletionItem {
                     insert_text: Some(label.clone()),
-                    sort_text: Some(format!("3_{}", label)), // Sort after local symbols
+                    sort_text: Some(format!("4_{}", label)), // Tier 4: after core builtins
                     filter_text: Some(label.clone()),
                     label,
                     kind: CompletionItemKind::Variable,
@@ -131,7 +135,7 @@ pub fn add_workspace_symbol_completions(
                 });
             }
             WsSymbolKind::Package => {
-                // Add package completion
+                // Add package completion — tier 4 (workspace, after core builtins)
                 let name = &symbol.name;
                 completions.push(CompletionItem {
                     label: name.clone(),
@@ -139,7 +143,7 @@ pub fn add_workspace_symbol_completions(
                     detail: Some("package".to_string()),
                     documentation: symbol.documentation.clone(),
                     insert_text: Some(name.clone()),
-                    sort_text: Some(format!("3_{name}")),
+                    sort_text: Some(format!("4_{name}")),
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
@@ -147,7 +151,7 @@ pub fn add_workspace_symbol_completions(
                 });
             }
             WsSymbolKind::Constant => {
-                // Add constant completion
+                // Add constant completion — tier 4 (workspace, after core builtins)
                 let name = &symbol.name;
                 completions.push(CompletionItem {
                     label: name.clone(),
@@ -155,7 +159,7 @@ pub fn add_workspace_symbol_completions(
                     detail: symbol.container_name.clone().or_else(|| Some("workspace".to_string())),
                     documentation: symbol.documentation.clone(),
                     insert_text: Some(name.clone()),
-                    sort_text: Some(format!("3_{name}")),
+                    sort_text: Some(format!("4_{name}")),
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),

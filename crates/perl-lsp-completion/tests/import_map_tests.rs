@@ -174,13 +174,15 @@ fn workspace_completion_downranks_explicit_empty_import() {
 
     let items = provider.get_completions(source, pos);
 
-    // sum may appear but should be downranked to "4_" with detail "not imported"
+    // sum may appear but should be downranked to "5_" with detail "not imported".
+    // Tier 5 is the lowest priority tier: symbols explicitly not imported via
+    // `use Module qw()` should appear after everything else (keywords are also 5_).
     if let Some(sum_item) =
         items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum"))
     {
         assert!(
-            sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("4_")),
-            "sum with explicit empty import should be downranked (sort_text '4_'); got: {:?}",
+            sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("5_")),
+            "sum with explicit empty import should be downranked (sort_text '5_'); got: {:?}",
             sum_item.sort_text
         );
         assert!(
@@ -198,7 +200,10 @@ fn workspace_completion_downranks_explicit_empty_import() {
 
 #[test]
 fn workspace_completion_non_imported_stays_normal_priority() {
-    // use List::Util qw(sum) — max is available but not imported, stays at "3_"
+    // use List::Util qw(sum) — max is available in the module but was not
+    // listed in the import. This is the "Some(_)" arm in the import_map match,
+    // which ranks non-imported symbols at tier 4_ (after core builtins at 3_,
+    // before explicitly-not-imported empty-qw symbols at 5_).
     let source = "use List::Util qw(sum);\nma";
     let pos = source.len();
     let index = make_list_util_index();
@@ -209,9 +214,16 @@ fn workspace_completion_non_imported_stays_normal_priority() {
     if let Some(max_item) =
         items.iter().find(|i| i.label == "max" || i.insert_text.as_deref() == Some("max"))
     {
+        // Should NOT be boosted to tier 2_ (only explicitly imported symbols get 2_)
         assert!(
             !max_item.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
-            "max (not imported) should NOT be promoted; got: {:?}",
+            "max (not imported) should NOT be promoted to 2_; got: {:?}",
+            max_item.sort_text
+        );
+        // Should be at tier 4_ (workspace, not imported with explicit list)
+        assert!(
+            max_item.sort_text.as_deref().is_some_and(|s| s.starts_with("4_")),
+            "max (not in explicit import list) should be at tier 4_; got: {:?}",
             max_item.sort_text
         );
     }
