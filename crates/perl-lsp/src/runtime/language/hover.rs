@@ -114,6 +114,25 @@ impl LspServer {
         let analyzer = self.get_or_build_analyzer(uri, text, ast);
 
         if let Some(symbol_info) = analyzer.find_definition(offset) {
+            // Detect Moo/Moose attribute accessors (declaration == "has") early and
+            // render a dedicated card that shows the isa type and accessor mode clearly,
+            // instead of the generic "Subroutine" label which is misleading for accessors.
+            if symbol_info.declaration.as_deref() == Some("has") {
+                let accessor_name = &symbol_info.name;
+                let doc = symbol_info
+                    .documentation
+                    .as_deref()
+                    .unwrap_or("Generated accessor from Moo/Moose `has`");
+                return HoverExtracted::Complete(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Moo/Moose Attribute Accessor**\n\n`{accessor_name}` — {doc}"
+                        ),
+                    },
+                }));
+            }
+
             // Detect method modifier symbols (before/after/around) early and render
             // a dedicated card instead of the generic "Subroutine" label.
             if let Some(modifier_kind) =
