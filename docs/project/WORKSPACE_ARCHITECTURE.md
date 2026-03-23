@@ -90,7 +90,7 @@ The largest family, with 41 crates covering every LSP capability:
   `perl-lsp-semantic-tokens`, `perl-lsp-inlay-hints`, `perl-lsp-formatting`,
   `perl-lsp-code-actions`, `perl-lsp-document-links`,
   `perl-lsp-workspace-symbols`, `perl-lsp-on-type-formatting`
-- **Shared utilities**: `perl-lsp-text-utils`, `perl-lsp-ast-utils`,
+- **Shared utilities**: `perl-lsp-text-utils`, `perl-ast-utils`,
   `perl-lsp-input-validation`, `perl-lsp-symbol-query`,
   `perl-lsp-import-management`, `perl-lsp-critic-parser`
 - **Infrastructure**: `perl-lsp-cancellation`, `perl-lsp-limits`,

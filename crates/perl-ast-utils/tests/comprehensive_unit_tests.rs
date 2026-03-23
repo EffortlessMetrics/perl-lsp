@@ -1,16 +1,16 @@
-//! Comprehensive unit tests for perl-lsp-ast-utils
+//! Comprehensive unit tests for perl-ast-utils
 //!
 //! Tests cover all public API functions with various edge cases and scenarios.
 
-use perl_lsp_ast_utils::{
+use perl_ast::{Node, NodeKind, SourceLocation};
+use perl_ast_utils::{
     find_declaration_position, find_function_insert_position, find_node_at_range,
     find_statement_start, get_indent_at,
 };
-use perl_parser_core::{Node, NodeKind};
 
 // Helper function to create a test node
 fn create_test_node(kind: NodeKind, start: usize, end: usize) -> Node {
-    Node { kind, location: perl_parser_core::SourceLocation { start, end } }
+    Node { kind, location: SourceLocation { start, end } }
 }
 
 // ============================================================================

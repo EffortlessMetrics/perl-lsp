@@ -1,4 +1,4 @@
-# perl-lsp-ast-utils
+# perl-ast-utils
 
 Single-responsibility AST utility helpers used by LSP microcrates.
 

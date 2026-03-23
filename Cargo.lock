@@ -1510,6 +1510,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-ast-utils"
+version = "0.12.0"
+dependencies = [
+ "perl-ast",
+]
+
+[[package]]
 name = "perl-ast-v2"
 version = "0.12.0"
 dependencies = [
@@ -1813,12 +1820,12 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
+ "perl-ast-utils",
  "perl-content-length-framing",
  "perl-dap",
  "perl-diagnostics-codes",
  "perl-incremental-parsing",
  "perl-keywords",
- "perl-lsp-ast-utils",
  "perl-lsp-cancellation",
  "perl-lsp-capability-map",
  "perl-lsp-code-actions",
@@ -1894,13 +1901,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-ast-utils"
-version = "0.12.0"
-dependencies = [
- "perl-parser-core",
-]
-
-[[package]]
 name = "perl-lsp-cancellation"
 version = "0.12.0"
 dependencies = [
@@ -1920,9 +1920,9 @@ dependencies = [
 name = "perl-lsp-code-actions"
 version = "0.12.0"
 dependencies = [
+ "perl-ast-utils",
  "perl-builtins",
  "perl-diagnostics-codes",
- "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
  "perl-lsp-import-management",
  "perl-lsp-rename",
