@@ -483,12 +483,62 @@ impl<'a> Parser<'a> {
         &self.errors
     }
 
+    /// Check whether the current token is a strong follower that cannot be the
+    /// start of an expression — meaning the RHS of an infix operator is absent.
+    ///
+    /// Strong followers are tokens that always terminate an expression context:
+    /// `;`, `}`, `)`, `]`, or EOF.  Encountering one after consuming an infix
+    /// operator is a clear sign that the operand is missing.
+    fn is_infix_rhs_absent(&mut self) -> bool {
+        matches!(
+            self.peek_kind(),
+            Some(TokenKind::Semicolon)
+                | Some(TokenKind::RightBrace)
+                | Some(TokenKind::RightParen)
+                | Some(TokenKind::RightBracket)
+                | Some(TokenKind::Eof)
+                | None
+        )
+    }
+
+    /// If the next token cannot start an expression (i.e., is a strong
+    /// follower), emit a `ParseError::Recovered { InfixRhs, MissingOperand }`
+    /// and return a `NodeKind::MissingExpression` placeholder node.
+    ///
+    /// Returns `None` when the next token IS a valid expression start —
+    /// the caller should parse normally.
+    ///
+    /// # Usage
+    ///
+    /// Call this method immediately after consuming an infix operator but
+    /// before calling the RHS parse function:
+    ///
+    /// ```ignore
+    /// let op_token = self.tokens.next()?;
+    /// if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+    ///     // wrap (left_expr op missing) and continue
+    /// }
+    /// let right = self.parse_something()?;
+    /// ```
+    fn recover_missing_infix_rhs(&mut self, op_pos: usize) -> Option<Node> {
+        if !self.is_infix_rhs_absent() {
+            return None;
+        }
+        self.errors.push(ParseError::Recovered {
+            site: RecoverySite::InfixRhs,
+            kind: RecoveryKind::MissingOperand,
+            location: op_pos,
+        });
+        let pos = op_pos;
+        Some(Node::new(NodeKind::MissingExpression, SourceLocation { start: pos, end: pos }))
+    }
+
     /// Expect a closing delimiter, recovering gracefully if missing.
     ///
     /// At strong followers (`;`, `}`, `{`, statement keywords, or EOF) the
     /// missing closer is inferred rather than returned as an error:
     /// - Emits `ParseError::Recovered { site, kind: InsertedCloser, location }` so
-    ///   callers can count recoveries and gate LSP features.
+    ///   callers can count recoveries and gate LSP features by confidence.
     /// - Returns `Ok(())` to allow parsing to continue.
     ///
     /// At any other token, returns `Err(ParseError::UnexpectedToken)` so the
