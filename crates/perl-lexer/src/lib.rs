@@ -250,12 +250,19 @@ pub struct PerlLexer<'a> {
     after_sub: bool,
     /// Track if we just saw a '->' operator (to suppress s/tr/y as substitution)
     after_arrow: bool,
-    /// Depth of hash-subscript brace nesting (braces opened in ExpectOperator mode).
+    /// Depth of hash-subscript brace nesting.
     /// When > 0, suppresses quote-op detection so `m`, `s`, `q*`, `tr`, `y`
     /// are treated as bareword identifiers (hash keys) rather than regex operators.
     /// Depth tracking means all positions inside `$h{...}` — including after commas
     /// in hash slices like `@h{m, s}` — correctly suppress quote-op misidentification.
     hash_brace_depth: usize,
+    /// Set to `true` immediately after emitting a complete `$var`, `@var`, or `%var`
+    /// token (not bare sigils used for dereference). Cleared by any operator,
+    /// punctuation, or keyword token. The `{` handler increments `hash_brace_depth`
+    /// only when this flag is set, ensuring only genuine hash/slice subscripts
+    /// (e.g. `$h{m}`, `@h{s, tr}`) suppress quote-op detection — not block-opening
+    /// braces after `sub foo`, `if (cond)`, `else`, `while (cond)`, etc.
+    after_var_subscript: bool,
     /// Depth of open parentheses — used to distinguish `(1<<func())` (bitshift)
     /// from `print $fh <<END` (heredoc at statement level, paren_depth == 0).
     paren_depth: usize,
@@ -298,6 +305,7 @@ impl<'a> PerlLexer<'a> {
             after_sub: false,
             after_arrow: false,
             hash_brace_depth: 0,
+            after_var_subscript: false,
             paren_depth: 0,
             current_pos: Position::start(),
             after_newline: true, // Start of file counts as after newline
@@ -706,6 +714,7 @@ impl<'a> PerlLexer<'a> {
         let saved_after_sub = self.after_sub;
         let saved_after_arrow = self.after_arrow;
         let saved_hash_brace_depth = self.hash_brace_depth;
+        let saved_after_var_subscript = self.after_var_subscript;
         let saved_paren_depth = self.paren_depth;
         let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
@@ -725,6 +734,7 @@ impl<'a> PerlLexer<'a> {
         self.after_sub = saved_after_sub;
         self.after_arrow = saved_after_arrow;
         self.hash_brace_depth = saved_hash_brace_depth;
+        self.after_var_subscript = saved_after_var_subscript;
         self.paren_depth = saved_paren_depth;
         self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
@@ -765,6 +775,7 @@ impl<'a> PerlLexer<'a> {
         self.after_sub = false;
         self.after_arrow = false;
         self.hash_brace_depth = 0;
+        self.after_var_subscript = false;
         self.paren_depth = 0;
         self.current_pos = Position::start();
         self.after_newline = true;
@@ -1499,6 +1510,8 @@ impl<'a> PerlLexer<'a> {
 
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
+                    // $#foo is a complete variable token; a following `{` is a subscript.
+                    self.after_var_subscript = true;
 
                     return Some(Token {
                         token_type: TokenType::Identifier(Arc::from(text)),
@@ -1726,6 +1739,11 @@ impl<'a> PerlLexer<'a> {
 
                 let text = &self.input[start..self.position];
                 self.mode = LexerMode::ExpectOperator;
+                // A complete $foo, @foo, %foo token can be followed by a hash/slice
+                // subscript `{`. Set the flag so the `{` handler knows to increment
+                // hash_brace_depth. Glob tokens (*foo) are excluded: they don't take
+                // hash subscripts in the same way.
+                self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
 
                 Some(Token {
                     token_type: TokenType::Identifier(Arc::from(text)),
@@ -2162,6 +2180,8 @@ impl<'a> PerlLexer<'a> {
             };
 
             self.after_arrow = false;
+            // A keyword/identifier is not a variable; `{` after it is a block opener.
+            self.after_var_subscript = false;
             // hash_brace_depth is managed by { and } handlers, not cleared per-token
             Some(Token { token_type, text: Arc::from(text), start, end: self.position })
         } else {
@@ -2455,6 +2475,9 @@ impl<'a> PerlLexer<'a> {
         self.after_sub = false;
         // Track whether this operator is '->' for method name disambiguation
         self.after_arrow = text == "->";
+        // Any operator token ends the "just saw a variable" window; `{` after
+        // an operator is not a hash subscript (e.g. `foo() {`, `+ {`, etc.).
+        self.after_var_subscript = false;
         // Postfix ++ and -- complete a term expression, so next token is an operator
         // (e.g., "$x++ / 2" → / is division, not regex)
         if (text == "++" || text == "--") && self.mode == LexerMode::ExpectOperator {
@@ -2511,6 +2534,7 @@ impl<'a> PerlLexer<'a> {
                     self.prototype_depth += 1;
                 }
                 self.paren_depth += 1;
+                self.after_var_subscript = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftParen,
@@ -2543,6 +2567,7 @@ impl<'a> PerlLexer<'a> {
                 self.after_sub = false;
                 // Semicolon is a statement boundary — any pending method-call chain is over.
                 self.after_arrow = false;
+                self.after_var_subscript = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::Semicolon,
@@ -2553,6 +2578,7 @@ impl<'a> PerlLexer<'a> {
             }
             ',' => {
                 self.advance();
+                self.after_var_subscript = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::Comma,
@@ -2563,6 +2589,7 @@ impl<'a> PerlLexer<'a> {
             }
             '[' => {
                 self.advance();
+                self.after_var_subscript = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftBracket,
@@ -2585,13 +2612,16 @@ impl<'a> PerlLexer<'a> {
                 self.advance();
                 // Opening brace ends prototype window — no prototype follows
                 self.after_sub = false;
-                // If `{` appears in ExpectOperator mode it is a hash subscript opener
-                // (e.g. `$h{...}` or `@h{...}`).  Track depth so all positions inside
-                // the subscript — including after commas in slices like `@h{m, s}` —
-                // suppress quote-op misidentification of bare keys like `m`, `s`, `tr`.
-                if self.mode == LexerMode::ExpectOperator {
+                // `{` is a hash/slice subscript opener only when it immediately follows
+                // a variable token ($x, @x, %x) — tracked by `after_var_subscript`.
+                // This is narrower than the old `mode == ExpectOperator` check, which
+                // incorrectly incremented depth for block-opening braces after `sub foo`,
+                // `if (cond)`, `else`, `while (cond)`, etc., causing quote-op suppression
+                // inside those block bodies and breaking m//, s///, qr//, tr/// etc.
+                if self.after_var_subscript {
                     self.hash_brace_depth = self.hash_brace_depth.saturating_add(1);
                 }
+                self.after_var_subscript = false;
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftBrace,
@@ -2603,8 +2633,18 @@ impl<'a> PerlLexer<'a> {
             '}' => {
                 self.advance();
                 self.after_arrow = false;
-                // Decrement hash subscript brace depth if we were inside one
-                self.hash_brace_depth = self.hash_brace_depth.saturating_sub(1);
+                // Decrement hash subscript brace depth only if we were inside one.
+                // If depth > 0, this closes a hash subscript; enable chained subscripts
+                // like $h{a}{b} by setting after_var_subscript so the next `{` is
+                // recognized as another subscript opener.
+                if self.hash_brace_depth > 0 {
+                    self.hash_brace_depth -= 1;
+                    // The subscript value is now the "variable" for a chained subscript.
+                    self.after_var_subscript = true;
+                } else {
+                    // Block-close `}` — no subscript follows
+                    self.after_var_subscript = false;
+                }
                 self.mode = LexerMode::ExpectOperator;
                 Some(Token {
                     token_type: TokenType::RightBrace,
@@ -3460,6 +3500,7 @@ impl Checkpointable for PerlLexer<'_> {
             after_sub: self.after_sub,
             after_arrow: self.after_arrow,
             hash_brace_depth: self.hash_brace_depth,
+            after_var_subscript: self.after_var_subscript,
             paren_depth: self.paren_depth,
             current_pos: self.current_pos,
             context,
@@ -3475,6 +3516,7 @@ impl Checkpointable for PerlLexer<'_> {
         self.after_sub = checkpoint.after_sub;
         self.after_arrow = checkpoint.after_arrow;
         self.hash_brace_depth = checkpoint.hash_brace_depth;
+        self.after_var_subscript = checkpoint.after_var_subscript;
         self.paren_depth = checkpoint.paren_depth;
         self.current_pos = checkpoint.current_pos;
 
