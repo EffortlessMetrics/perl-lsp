@@ -76,7 +76,7 @@ impl LspServer {
                                 uri.to_string(),
                             )
                         } else {
-                            self.extract_symbol_hover(ast, &doc.text, offset)
+                            self.extract_symbol_hover(uri, ast, &doc.text, offset)
                         }
                     } else {
                         HoverExtracted::None
@@ -100,9 +100,18 @@ impl LspServer {
         Ok(Some(json!(null)))
     }
 
-    /// Extract hover information from semantic analysis (called under document lock)
-    fn extract_symbol_hover(&self, ast: &Node, text: &str, offset: usize) -> HoverExtracted {
-        let analyzer = crate::semantic::SemanticAnalyzer::analyze_with_source(ast, text);
+    /// Extract hover information from semantic analysis (called under document lock).
+    ///
+    /// Uses `get_or_build_analyzer` so repeated hovers on the same document version
+    /// share a single cached `SemanticAnalyzer` rather than re-traversing the AST.
+    fn extract_symbol_hover(
+        &self,
+        uri: &str,
+        ast: &Node,
+        text: &str,
+        offset: usize,
+    ) -> HoverExtracted {
+        let analyzer = self.get_or_build_analyzer(uri, text, ast);
 
         if let Some(symbol_info) = analyzer.find_definition(offset) {
             // Detect method modifier symbols (before/after/around) early and render
