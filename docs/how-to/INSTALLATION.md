@@ -1,6 +1,6 @@
 # Installation Guide
 
-Perl Language Server (perl-lsp) v0.12.0 provides a high-performance Language Server Protocol implementation for Perl with ~100% syntax coverage.
+Perl Language Server (perl-lsp) is a high-performance Language Server Protocol implementation for Perl 5. The current release is [v0.12.0](https://github.com/EffortlessMetrics/perl-lsp/releases/latest) (public alpha).
 
 ## Install from crates.io
 
@@ -18,48 +18,40 @@ cargo install perl-lsp --force
 
 ### Pre-compiled Binaries
 
-1. Download the appropriate binary for your system from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
-2. Extract the archive
-3. Move the `perl-lsp` binary to a directory in your PATH
+1. Go to [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and download the latest release for your platform.
+2. Extract the archive.
+3. Move the `perl-lsp` binary to a directory in your PATH.
 
-#### Linux x86_64
-```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.12.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
-chmod +x /usr/local/bin/perl-lsp
-```
+Binaries are provided for the following platforms:
 
-#### Linux aarch64
-```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.12.0-aarch64-unknown-linux-gnu/perl-lsp /usr/local/bin/
-chmod +x /usr/local/bin/perl-lsp
-```
+| Platform | Binary suffix |
+|----------|--------------|
+| Linux x86_64 | `x86_64-unknown-linux-gnu` |
+| Linux aarch64 | `aarch64-unknown-linux-gnu` |
+| macOS Intel | `x86_64-apple-darwin` |
+| macOS Apple Silicon | `aarch64-apple-darwin` |
+| Windows x86_64 | `x86_64-pc-windows-msvc` |
 
-#### macOS x86_64
+#### Linux / macOS (general)
 ```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-x86_64-apple-darwin.tar.gz
-tar xzf perl-lsp-0.12.0-x86_64-apple-darwin.tar.gz
-sudo cp perl-lsp-0.12.0-x86_64-apple-darwin/perl-lsp /usr/local/bin/
-chmod +x /usr/local/bin/perl-lsp
-```
-
-#### macOS aarch64 (Apple Silicon)
-```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-aarch64-apple-darwin.tar.gz
-tar xzf perl-lsp-0.12.0-aarch64-apple-darwin.tar.gz
-sudo cp perl-lsp-0.12.0-aarch64-apple-darwin/perl-lsp /usr/local/bin/
+# Replace VERSION and ARCH with values from the releases page
+# e.g. VERSION=0.12.0 ARCH=x86_64-unknown-linux-gnu
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${VERSION}/perl-lsp-${VERSION}-${ARCH}.tar.gz
+tar xzf perl-lsp-${VERSION}-${ARCH}.tar.gz
+sudo cp perl-lsp-${VERSION}-${ARCH}/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### Windows x86_64
 ```powershell
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.12.0/perl-lsp-0.12.0-x86_64-pc-windows-msvc.zip
-Expand-Archive perl-lsp-0.12.0-x86_64-pc-windows-msvc.zip
-Copy-Item perl-lsp-0.12.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\perl-lsp\
+# Replace VERSION with the version from the releases page (e.g. 0.12.0)
+$VERSION = "0.12.0"
+Invoke-WebRequest "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$VERSION/perl-lsp-$VERSION-x86_64-pc-windows-msvc.zip" -OutFile perl-lsp.zip
+Expand-Archive perl-lsp.zip -DestinationPath perl-lsp
+Copy-Item perl-lsp\perl-lsp.exe "C:\Program Files\perl-lsp\"
 ```
+
+For the latest version number, always check [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 
 ### Build from Source
 
@@ -148,7 +140,7 @@ perl-lsp --stdio
 
 ## Features
 
-- **~100% Perl Syntax Coverage**: Handles all modern Perl constructs
+- **Broad Perl Syntax Coverage**: Handles Perl 5.8 through 5.40 syntax including modern constructs
 - **Real-time Syntax Checking**: Instant feedback on code issues
 - **Code Completion**: Intelligent autocomplete with type inference
 - **Go-to-Definition**: Navigate to symbol definitions
@@ -212,7 +204,7 @@ perl-lsp --completion bash         # Generate shell completions
 3. Look for error messages in your editor's LSP logs
 
 #### Slow performance
-1. Ensure you're using the latest version (v0.12.0)
+1. Ensure you're using the [latest release](https://github.com/EffortlessMetrics/perl-lsp/releases/latest)
 2. Check if your workspace has very large Perl files (>100KB)
 3. Consider using `.perl-lspignore` to exclude unnecessary files
 

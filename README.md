@@ -24,13 +24,13 @@
 > Install in minutes, get completions and navigation immediately.
 > [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) or [join the conversation](https://github.com/EffortlessMetrics/perl-lsp/discussions).
 
-**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with 97 LSP features, validated against thousands of real-world CPAN modules. Works on Windows, Mac, and Linux out of the box.
+**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with 98 LSP features, validated against thousands of real-world CPAN modules. Works on Windows, Mac, and Linux out of the box.
 
 ## Why perl-lsp?
 
 - **No Perl runtime required** -- a single native binary; no dependency on a working Perl installation for IDE features.
 - **Fast** -- sub-millisecond incremental parsing, under 50ms LSP response times.
-- **Comprehensive** -- 97 LSP/DAP features including completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging.
+- **Comprehensive** -- 98 LSP/DAP features including completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging.
 - **Broad syntax coverage** -- parses Perl 5.8 through 5.40 including heredocs, regex, quoting constructs, formats, and OO frameworks.
 - **CPAN-validated** -- continuously tested against top CPAN distributions with a ratchet-only-forward CI gate that never allows regressions.
 
@@ -207,7 +207,7 @@ Current parse rates and the edge-case roadmap are tracked in [CURRENT_STATUS.md]
 
 ## Architecture
 
-The workspace is organized as 120+ focused Rust crates, each with a single responsibility. The main entry points:
+The workspace is organized as 130+ focused Rust crates, each with a single responsibility. The main entry points:
 
 | Crate | Purpose |
 |-------|---------|

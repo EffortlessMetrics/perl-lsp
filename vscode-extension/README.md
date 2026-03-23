@@ -5,7 +5,7 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 
-A fast, native Perl 5 language server with 26+ IDE features. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
+A fast, native Perl 5 language server with 30+ IDE features. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
 > **0.12.0 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
 
@@ -172,6 +172,8 @@ The `perl-lsp` binary works with any editor that supports the Language Server Pr
 | **Cursor** | This extension |
 | **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
 | **Emacs** | `lsp-mode` or `eglot` |
+| **Helix** | `languages.toml` with `perl-lsp --stdio` |
+| **Sublime Text** | LSP package with `perl-lsp --stdio` |
 | **GitHub Codespaces** | This extension |
 | **Gitpod** | This extension |
 

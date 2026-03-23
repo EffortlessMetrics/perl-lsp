@@ -5,9 +5,9 @@
 
 ## What's True Right Now
 
-- **Release posture**: the current release line is `v0.11.0` public alpha; the active milestone is `v0.12.0` hardening, not a shipped release
+- **Release posture**: `v0.12.0` is the current shipped public alpha; the active milestone is `v0.12.0` hardening and CPAN coverage improvement
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
-- **LSP server**: `features.toml` is the canonical capability catalog; computed coverage is generated from it
+- **LSP server**: `features.toml` is the canonical capability catalog; 98 features all at GA maturity — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `bash scripts/ignored-test-count.sh` is the tracked-test-debt source
 - **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates
 - **Refactoring engine**: inline and move-code flows exist; broader refactoring hardening is still roadmap work
@@ -26,8 +26,8 @@
 
 ## What's Next
 
-**Now (active milestone: v0.12.0 hardening sprint on top of the v0.11.0 release line)**
-- Raise the CPAN top-1000 full-corpus baseline from `72.1%` (`3139/4355`) to `90%+` clean parses while keeping the strict known-clean manifest at `100%`
+**Now (active milestone: v0.12.0 hardening)**
+- Raise the CPAN top-1000 full-corpus baseline from `85.4%` (`3717/4355`) to `90%+` clean parses while keeping the strict known-clean manifest at `100%`
 - Close repo-corpus coverage gaps (`63/68` NodeKinds currently covered) and retire the remaining parser audit `P2` hang-risk candidate
 - Land Moo/Moose/Class::Accessor, `use parent`/`use base`, and export-list disambiguation work needed for public-alpha expectations
 - Raise workspace production-code coverage from the new baseline of `44.7%` lines / `46.9%` functions / `42.6%` regions
@@ -66,5 +66,5 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-03-22 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
+*Last Updated: 2026-03-23 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
 *Canonical docs: [ROADMAP.md](../ROADMAP.md), [../../features.toml](../../features.toml)*
