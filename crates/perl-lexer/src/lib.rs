@@ -2089,13 +2089,19 @@ impl<'a> PerlLexer<'a> {
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
 
-                            // When whitespace precedes the delimiter, only paired delimiters
-                            // are unambiguous. Non-paired chars like `$`, `@`, `,` etc. are
-                            // not valid delimiters after whitespace (e.g. `-s $file`).
+                            // When whitespace precedes the delimiter, only unambiguous
+                            // delimiters are accepted:
+                            //   - Paired delimiters ({, [, (, <) are always safe.
+                            //   - ' and " are safe for all operators EXCEPT `s` — `-s 'filename'`
+                            //     is a valid file-size filetest and must not be treated as a
+                            //     substitution start. All other operators (qw, q, qq, qr, qx, m,
+                            //     tr, y) have no corresponding file-test operator.
+                            //   - Non-paired, non-quote chars ($, @, ,, etc.) remain rejected.
                             let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
+                            let is_quote_char = matches!(next, '\'' | '"') && op != "s";
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
-                                && (!has_whitespace || is_paired_delim);
+                                && (!has_whitespace || is_paired_delim || is_quote_char);
 
                             if is_valid_delim {
                                 self.mode = LexerMode::ExpectDelimiter;

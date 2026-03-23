@@ -175,34 +175,29 @@ fn test_chained_hash_access_quote_op_keys() {
     assert_clean_parse(source);
 }
 
-// ── Known limitation: non-arrow hash subscript with quote-op keys ────────────
+// ── Previously known limitation: non-arrow hash subscript with quote-op keys ──
 //
-// $h{s} (no arrow) is a pre-existing bug documented in the PR's follow-ups.
-// Without `->`, after_arrow is false so the lexer treats `s` as a quote
-// operator and tries to parse `s}` as a substitution, failing. The is_quote_op_key
-// fix in parse_hash_subscript_key only catches the Identifier token emitted when
-// after_arrow=true (the arrow case). Fixing the non-arrow case requires broader
-// lexer context tracking for hash-subscript `{` and is out of scope for this PR.
-//
-// These tests assert the CURRENT (broken) behavior to prevent silent regression
-// (a future fix must convert these to assert_clean_parse).
+// $h{s} (no arrow) was a pre-existing bug. Without `->`, after_arrow was false
+// so the lexer treated `s` as a quote operator. Fixed by hash_brace_depth
+// tracking (#2732): inside `$h{...}`, quote-op names are treated as bareword
+// keys regardless of after_arrow. These tests were converted from assert_has_error
+// to assert_clean_parse when the fix was confirmed.
 
-/// $h{s} — bare hash subscript (no arrow) with quote-op key — known limitation.
-/// This fails with "Missing closing delimiter in substitution" because after_arrow
-/// is false so the lexer treats `s` as a substitution operator.
+/// $h{s} — bare hash subscript (no arrow) with quote-op key.
+/// Previously broken: after_arrow was false so lexer treated `s` as substitution.
+/// Fixed by hash_brace_depth tracking in #2732: inside `$h{...}`, quote-op names
+/// are treated as bareword keys. Converted from assert_has_error per TODO comment.
 #[test]
-fn test_non_arrow_hash_key_s_known_broken() {
-    // TODO(#2732-followup): fix non-arrow $h{s} — convert to assert_clean_parse when fixed
+fn test_non_arrow_hash_key_s_now_clean() {
     let source = r#"my $x = $h{s};"#;
-    assert_has_error(source, "substitution");
+    assert_clean_parse(source);
 }
 
-/// $h{q} — bare hash subscript with 'q' key — known limitation.
+/// $h{q} — bare hash subscript with 'q' key — now fixed via hash_brace_depth.
 #[test]
-fn test_non_arrow_hash_key_q_known_broken() {
-    // TODO(#2732-followup): fix non-arrow $h{q} — convert to assert_clean_parse when fixed
+fn test_non_arrow_hash_key_q_now_clean() {
     let source = r#"my $x = $h{q};"#;
-    assert_has_error(source, "");
+    assert_clean_parse(source);
 }
 
 // ── Regression: space before paren delimiter (all four paired chars covered) ─
@@ -334,4 +329,14 @@ sub bootstrap_inherit {
 1;
 "#;
     assert_clean_parse(source);
+}
+
+// ── Regression guard for #2895 fix: -s 'filename' must remain a filetest ─────
+
+/// -s 'config.txt' — file-size filetest with a string literal argument.
+/// After the #2895 fix (which allows ' and " after whitespace for non-s operators),
+/// the `op != "s"` guard must keep -s 'filename' as a filetest, NOT a substitution.
+#[test]
+fn test_file_size_test_with_string_literal() {
+    assert_clean_parse(r#"if (-s 'config.txt') { 1 }"#);
 }
