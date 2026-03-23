@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"my @arr = (1, 2,\")"
+---
+(source_file (ERROR "expected expression, found end of input at position 16"))

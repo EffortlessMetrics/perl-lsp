@@ -1,0 +1,6 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_errors(\"my %h = (a =>\")"
+---
+expected expression, found end of input at position 13
+expected statement, found end of input at position 13

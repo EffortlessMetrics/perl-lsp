@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"if ($x > 0) { print \\\"pos\\\"; } elsif ($x < 0) { print \\\"neg\\\"; } else { print \\\"zero\\\"; }\")"
+---
+(source_file (if (binary_> (variable $ x) (number 0)) (block (expression_statement (call print ((string_interpolated "\"pos\"")))))) (elsif (binary_< (variable $ x) (number 0)) (block (expression_statement (call print ((string_interpolated "\"neg\"")))))) (else (block (expression_statement (call print ((string_interpolated "\"zero\"")))))))

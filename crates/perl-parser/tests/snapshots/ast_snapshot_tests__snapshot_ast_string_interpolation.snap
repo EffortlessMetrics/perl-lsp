@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"my $name = \\\"world\\\"; my $msg = \\\"Hello, $name!\\\";\")"
+---
+(source_file (my_declaration (variable $ name)(string_interpolated "\"world\"")) (my_declaration (variable $ msg)(string_interpolated "\"Hello, $name!\"")))

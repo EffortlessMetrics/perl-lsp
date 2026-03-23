@@ -1,0 +1,37 @@
+---
+source: crates/perl-lsp/tests/lsp_capability_snapshot_test.rs
+expression: "&legend"
+---
+tokenModifiers:
+  - declaration
+  - definition
+  - readonly
+  - static
+  - deprecated
+  - abstract
+  - async
+  - modification
+  - documentation
+  - defaultLibrary
+tokenTypes:
+  - namespace
+  - type
+  - class
+  - interface
+  - enum
+  - enumMember
+  - typeParameter
+  - function
+  - method
+  - property
+  - macro
+  - variable
+  - parameter
+  - keyword
+  - modifier
+  - comment
+  - string
+  - number
+  - regexp
+  - operator
+  - sql_string
