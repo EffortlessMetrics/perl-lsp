@@ -142,9 +142,9 @@ Skipping parse for <uri> (<N> bytes exceeds <limit> byte limit)
 
 ### Configuring the limit
 
-The limit is set via the `perl.limits.maxFileSizeBytes` key in LSP
-`initializationOptions` or `didChangeConfiguration`. The setting accepts
-an integer number of bytes.
+The limit is set via the `perl.limits.maxFileSizeBytes` key in the LSP
+`workspace/didChangeConfiguration` notification. The setting accepts an
+integer number of bytes.
 
 The limit protects the server from hanging on generated or minified files.
 For typical Perl source files (which rarely exceed 100KB), the default 1MB
@@ -194,9 +194,10 @@ Files with CRLF line endings in actual code also parse correctly.
 ## Unicode Content
 
 The parser handles UTF-8 source correctly. Files with Unicode identifiers,
-string literals, or comments parse without error. The line/column position
-conversion used by the LSP operates on byte offsets, which are also correct
-for multibyte characters.
+string literals, or comments parse without error. The LSP server advertises
+`utf-16` position encoding and converts internal byte offsets to UTF-16 code
+units when reporting positions to the editor, so ranges are correct for files
+containing multibyte characters.
 
 For Perl source that uses non-UTF-8 encodings, add `use encoding '...';`
 or `use utf8;` as appropriate. The LSP does not re-encode files; it trusts
