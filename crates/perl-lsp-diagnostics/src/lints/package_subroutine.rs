@@ -93,31 +93,59 @@ pub fn check_duplicate_package(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
 /// Check for duplicate named subroutine definitions (PL300).
 ///
-/// Walks the entire AST. For each subroutine name seen more than once,
+/// Walks the entire AST. For each fully-qualified subroutine name seen more than once,
 /// emits a warning on the second and every subsequent occurrence.
 /// Anonymous subroutines (`name: None`) are excluded.
 /// `Method` nodes are excluded — class method redefinition semantics differ.
+///
+/// Subroutine names are qualified by the current package context so that
+/// `package Foo; sub new { }` and `package Bar; sub new { }` are treated as
+/// distinct subroutines (`Foo::new` vs `Bar::new`) and do not trigger PL300.
 pub fn check_duplicate_subroutine(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    let mut seen: HashMap<String, usize> = HashMap::new();
+    // Collect all (qualified_name, span) pairs in source order, tracking
+    // the current package as we encounter Package nodes.
+    let mut subs: Vec<(String, (usize, usize))> = Vec::new();
+    let mut current_package = String::from("main");
 
     walk_node(node, &mut |n| {
-        if let NodeKind::Subroutine { name: Some(name), name_span: Some(span), .. } = &n.kind {
-            let count = seen.entry(name.clone()).or_insert(0);
-            *count += 1;
-            if *count > 1 {
-                diagnostics.push(Diagnostic {
-                    range: (span.start, span.end),
-                    severity: DiagnosticSeverity::Warning,
-                    code: Some(DiagnosticCode::DuplicateSubroutine.as_str().to_string()),
-                    message: format!("Subroutine '{}' is defined more than once", name),
-                    related_information: Vec::new(),
-                    tags: Vec::new(),
-                    suggestion: Some(format!(
-                        "Remove or rename the duplicate 'sub {}' definition",
-                        name
-                    )),
-                });
+        match &n.kind {
+            NodeKind::Package { name, .. } => {
+                current_package = name.clone();
             }
+            NodeKind::Subroutine { name: Some(name), name_span: Some(span), .. } => {
+                // Build a fully-qualified key so that Foo::new and Bar::new are distinct.
+                // If the name already contains "::" it is explicitly qualified by the author.
+                let qualified = if name.contains("::") {
+                    name.clone()
+                } else {
+                    format!("{}::{}", current_package, name)
+                };
+                subs.push((qualified, (span.start, span.end)));
+            }
+            _ => {}
         }
     });
+
+    // Second pass: find duplicates in the collected list.
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    for (qualified, span) in subs {
+        let count = seen.entry(qualified.clone()).or_insert(0);
+        *count += 1;
+        if *count > 1 {
+            // Display only the bare name in the message (after the last "::").
+            let display_name = qualified.rsplit("::").next().unwrap_or(&qualified).to_string();
+            diagnostics.push(Diagnostic {
+                range: span,
+                severity: DiagnosticSeverity::Warning,
+                code: Some(DiagnosticCode::DuplicateSubroutine.as_str().to_string()),
+                message: format!("Subroutine '{}' is defined more than once", display_name),
+                related_information: Vec::new(),
+                tags: Vec::new(),
+                suggestion: Some(format!(
+                    "Remove or rename the duplicate 'sub {}' definition",
+                    display_name
+                )),
+            });
+        }
+    }
 }

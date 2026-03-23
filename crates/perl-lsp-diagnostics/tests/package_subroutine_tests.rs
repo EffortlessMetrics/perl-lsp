@@ -180,3 +180,24 @@ fn pl300_absent_when_sub_names_are_different() {
         codes_for(source)
     );
 }
+
+// =========================================================================
+// Edge case: multiple packages each defining sub new — must NOT fire PL300
+// =========================================================================
+
+/// Test 11: PL300 absent when same sub name appears in different packages (package-statement form)
+///
+/// Two packages each declaring `sub new` is common Perl OO style.
+/// PL300 must NOT fire — the names are in different namespaces.
+#[test]
+fn pl300_absent_for_same_sub_name_in_different_packages() {
+    let source =
+        "package Foo;\nsub new { bless {}, shift }\n\npackage Bar;\nsub new { bless {}, shift }\n";
+    assert!(
+        !has_code(source, "PL300"),
+        "PL300 must NOT fire when the same sub name appears in separate packages. \
+         Each package has its own namespace. \
+         Got codes: {:?}",
+        codes_for(source)
+    );
+}
