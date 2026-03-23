@@ -363,6 +363,84 @@ fn parse_error_unknown_code_yields_no_actions_for_that_code() {
     );
 }
 
+// ---- PL001 / PL002 missing-semicolon via message text --------------------
+
+#[test]
+fn pl001_missing_semicolon_message_triggers_fix() {
+    let src = "my $x = 1\n";
+    let diags =
+        [make_diag(0, 9, "PL001", "Missing semicolon after statement. Add `;` here (found `my`)")];
+    let actions = parse_and_get_actions(src, &diags);
+    assert!(
+        has_action_matching(&actions, |a| a.title.contains("semicolon")),
+        "PL001 with missing-semicolon message must offer fix, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn pl002_missing_semicolon_message_triggers_fix() {
+    let src = "my $x = 1\n";
+    let diags =
+        [make_diag(0, 9, "PL002", "Missing semicolon after statement. Add `;` here (found `my`)")];
+    let actions = parse_and_get_actions(src, &diags);
+    assert!(
+        has_action_matching(&actions, |a| a.title.contains("semicolon")),
+        "PL002 with missing-semicolon message must offer fix"
+    );
+}
+
+#[test]
+fn pl001_generic_message_does_not_trigger_semicolon_fix() {
+    let src = "my $x = 1;\n";
+    let diags = [make_diag(0, 9, "PL001", "Unexpected token found `my`")];
+    let actions = parse_and_get_actions(src, &diags);
+    assert!(
+        !has_action_matching(&actions, |a| a.title.contains("semicolon")),
+        "PL001 with unrelated message must not offer semicolon fix"
+    );
+}
+
+#[test]
+fn pl001_semicolon_inserted_before_trailing_whitespace() {
+    // "my $x = 1   \n" — trailing spaces before newline
+    let src = "my $x = 1   \n";
+    let diags =
+        [make_diag(0, 9, "PL001", "Missing semicolon after statement. Add `;` here (found `my`)")];
+    let actions = parse_and_get_actions(src, &diags);
+    let fix = actions.iter().find(|a| a.title.contains("semicolon")).expect("fix must exist");
+    // The insertion point should be right after "1" (byte 9), not after trailing spaces
+    assert_eq!(
+        fix.edit.changes[0].location.start, 9,
+        "semicolon must be inserted after last non-whitespace char (byte 9)"
+    );
+}
+
+#[test]
+fn pl001_heredoc_does_not_trigger_semicolon_fix() {
+    // Source at range start looks like a heredoc — fix must be skipped
+    let src = "<<END\nhello\nEND\n";
+    let diags = [make_diag(0, 5, "PL001", "Missing semicolon after statement. Add `;` here")];
+    let actions = parse_and_get_actions(src, &diags);
+    assert!(
+        !has_action_matching(&actions, |a| a.title.contains("semicolon")),
+        "Heredoc context must not produce semicolon fix"
+    );
+}
+
+#[test]
+fn pl001_eof_without_newline_inserts_at_end() {
+    // No trailing newline — `unwrap_or(source.len())` path
+    let src = "my $x = 1";
+    let diags = [make_diag(0, 9, "PL001", "Missing semicolon after statement. Add `;` here")];
+    let actions = parse_and_get_actions(src, &diags);
+    let fix = actions.iter().find(|a| a.title.contains("semicolon")).expect("fix must exist");
+    assert_eq!(
+        fix.edit.changes[0].location.start, 9,
+        "EOF without newline must insert at source.len()"
+    );
+}
+
 // ---- unused-parameter -----------------------------------------------------
 
 #[test]
