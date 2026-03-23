@@ -82,8 +82,16 @@ impl ImplementationProvider {
             None => return Vec::new(),
         };
 
+        // Compute the enclosing package for the cursor position (Fix B).
+        // This is needed when the cursor lands on a Subroutine node so that
+        // `extract_implementation_target` can use the real package instead of "main".
+        let byte_offset = source
+            .map(|src| crate::position::utf16_line_col_to_offset(src, line, character))
+            .unwrap_or(0);
+        let current_package = crate::declaration::current_package_at(ast, byte_offset);
+
         // Extract what we're looking for implementations of
-        match self.extract_implementation_target(&target_node) {
+        match self.extract_implementation_target(&target_node, current_package) {
             Some(ImplementationTarget::Package(name)) => {
                 self.find_package_implementations(&name, documents)
             }
@@ -98,34 +106,43 @@ impl ImplementationProvider {
         }
     }
 
-    /// Find all implementations of a package (subclasses)
+    /// Find all implementations of a package (subclasses).
     fn find_package_implementations(
         &self,
         base_package: &str,
         documents: &HashMap<String, String>,
     ) -> Vec<LocationLink> {
-        let mut results = Vec::new();
+        self.find_subclass_locations(base_package, documents)
+            .into_iter()
+            .map(|(_name, link)| link)
+            .collect()
+    }
 
-        // Build inheritance index from all documents
+    /// Find subclasses with their package names, for use in method resolution.
+    ///
+    /// Returns `(subclass_package_name, LocationLink_pointing_to_package_declaration)`.
+    fn find_subclass_locations(
+        &self,
+        base_package: &str,
+        documents: &HashMap<String, String>,
+    ) -> Vec<(String, LocationLink)> {
+        let mut results: Vec<(String, LocationLink)> = Vec::new();
+
         let _hierarchy_provider = TypeHierarchyProvider::new();
 
         for (uri, content) in documents {
-            // Parse document
             if let Ok(ast) = crate::Parser::new(content).parse() {
-                // Find packages that inherit from base_package
-                self.find_inheriting_packages(&ast, base_package, uri, content, &mut results);
+                self.find_inheriting_packages_named(&ast, base_package, uri, content, &mut results);
             }
         }
 
         // If we have workspace index, use it for more comprehensive results
         if let Some(ref index) = self.workspace_index {
-            // Query workspace index for implementations
             let symbols = index.find_symbols(base_package);
             for symbol in symbols {
                 if symbol.kind == crate::workspace_index::SymbolKind::Class
                     || symbol.kind == crate::workspace_index::SymbolKind::Package
                 {
-                    // Check if this symbol inherits from base_package
                     if let Some(container) = &symbol.container_name {
                         if container.contains(base_package) {
                             let target_uri = parse_uri(&symbol.uri);
@@ -138,13 +155,15 @@ impl ImplementationProvider {
                                 symbol.range.end.line - 1,
                                 symbol.range.end.column - 1,
                             );
-
-                            results.push(LocationLink {
-                                origin_selection_range: None,
-                                target_uri,
-                                target_range: LspRange::new(lsp_start, lsp_end),
-                                target_selection_range: LspRange::new(lsp_start, lsp_end),
-                            });
+                            results.push((
+                                symbol.name.clone(),
+                                LocationLink {
+                                    origin_selection_range: None,
+                                    target_uri,
+                                    target_range: LspRange::new(lsp_start, lsp_end),
+                                    target_selection_range: LspRange::new(lsp_start, lsp_end),
+                                },
+                            ));
                         }
                     }
                 }
@@ -163,16 +182,17 @@ impl ImplementationProvider {
     ) -> Vec<LocationLink> {
         let mut results = Vec::new();
 
-        // First find all subclasses
-        let subclasses = self.find_package_implementations(package, documents);
+        // First find all subclasses (with their package names for scoped method lookup)
+        let subclasses = self.find_subclass_locations(package, documents);
 
-        // Then find the method in each subclass
-        for subclass_link in &subclasses {
+        // Then find the method in each subclass, restricted to the subclass package scope
+        for (subclass_name, subclass_link) in &subclasses {
             if let Some(doc_content) = documents.get(subclass_link.target_uri.as_str()) {
                 if let Ok(ast) = crate::Parser::new(doc_content).parse() {
-                    self.find_method_in_ast(
+                    self.find_method_in_package(
                         &ast,
                         method,
+                        subclass_name,
                         subclass_link.target_uri.as_str(),
                         doc_content,
                         &mut results,
@@ -184,7 +204,31 @@ impl ImplementationProvider {
         results
     }
 
-    /// Find packages that inherit from base_package in AST
+    /// Find packages that inherit from base_package in AST, returning named pairs.
+    fn find_inheriting_packages_named(
+        &self,
+        node: &Node,
+        base_package: &str,
+        uri: &str,
+        source: &str,
+        results: &mut Vec<(String, LocationLink)>,
+    ) {
+        let mut current_package = String::new();
+        // Track the package node's range so results point to `package Foo;` not `use parent` (Fix C).
+        let mut current_package_range = LspRange::default();
+        self.find_inheriting_packages_recursive(
+            node,
+            base_package,
+            uri,
+            source,
+            &mut current_package,
+            &mut current_package_range,
+            results,
+        );
+    }
+
+    /// Find packages that inherit from base_package in AST (legacy, returns LocationLink only)
+    #[cfg_attr(not(test), allow(dead_code))]
     fn find_inheriting_packages(
         &self,
         node: &Node,
@@ -193,15 +237,9 @@ impl ImplementationProvider {
         source: &str,
         results: &mut Vec<LocationLink>,
     ) {
-        let mut current_package = String::new();
-        self.find_inheriting_packages_recursive(
-            node,
-            base_package,
-            uri,
-            source,
-            &mut current_package,
-            results,
-        );
+        let mut named_results = Vec::new();
+        self.find_inheriting_packages_named(node, base_package, uri, source, &mut named_results);
+        results.extend(named_results.into_iter().map(|(_, link)| link));
     }
 
     fn find_inheriting_packages_recursive(
@@ -211,24 +249,33 @@ impl ImplementationProvider {
         uri: &str,
         source: &str,
         current_package: &mut String,
-        results: &mut Vec<LocationLink>,
+        current_package_range: &mut LspRange,
+        results: &mut Vec<(String, LocationLink)>,
     ) {
         match &node.kind {
             NodeKind::Package { name, .. } => {
                 *current_package = name.clone();
+                // Record this package node's range for use when we later find `use parent` (Fix C).
+                *current_package_range = self.node_to_range(node, source);
             }
             NodeKind::Use { module, args, .. } if module == "base" || module == "parent" => {
-                // Check if any arg matches base_package
+                // Check if any arg matches base_package.
+                // Args are raw token texts (e.g., `'Animal'` with quotes), so strip them first.
                 for arg in args {
-                    if arg == base_package {
-                        // Current package inherits from base_package
+                    let normalized = Self::strip_arg_quotes(arg);
+                    if normalized == base_package {
+                        // Point at the enclosing package declaration, not the `use parent` line (Fix C).
+                        let pkg_range = *current_package_range;
                         let target_uri = parse_uri(uri);
-                        results.push(LocationLink {
-                            origin_selection_range: None,
-                            target_uri,
-                            target_range: self.node_to_range(node, source),
-                            target_selection_range: self.node_to_range(node, source),
-                        });
+                        results.push((
+                            current_package.clone(),
+                            LocationLink {
+                                origin_selection_range: None,
+                                target_uri,
+                                target_range: pkg_range,
+                                target_selection_range: pkg_range,
+                            },
+                        ));
                     }
                 }
             }
@@ -238,13 +285,17 @@ impl ImplementationProvider {
                         if sigil == "@" && name == "ISA" {
                             if let Some(init) = initializer {
                                 if self.contains_parent(init, base_package) {
+                                    let pkg_range = *current_package_range;
                                     let target_uri = parse_uri(uri);
-                                    results.push(LocationLink {
-                                        origin_selection_range: None,
-                                        target_uri,
-                                        target_range: self.node_to_range(node, source),
-                                        target_selection_range: self.node_to_range(node, source),
-                                    });
+                                    results.push((
+                                        current_package.clone(),
+                                        LocationLink {
+                                            origin_selection_range: None,
+                                            target_uri,
+                                            target_range: pkg_range,
+                                            target_selection_range: pkg_range,
+                                        },
+                                    ));
                                 }
                             }
                         }
@@ -259,6 +310,7 @@ impl ImplementationProvider {
                         uri,
                         source,
                         current_package,
+                        current_package_range,
                         results,
                     );
                 }
@@ -267,7 +319,8 @@ impl ImplementationProvider {
         }
     }
 
-    /// Find method definitions in AST
+    /// Find method definitions in AST (any package). Kept for future workspace-index integration.
+    #[allow(dead_code)]
     fn find_method_in_ast(
         &self,
         node: &Node,
@@ -295,17 +348,60 @@ impl ImplementationProvider {
         }
     }
 
-    /// Extract implementation target from node
-    fn extract_implementation_target(&self, node: &Node) -> Option<ImplementationTarget> {
+    /// Find a method defined within a specific package in the AST.
+    ///
+    /// Only emits a result when `method_name` appears after `package_name;` in
+    /// linear-form source (before the next package declaration). This prevents
+    /// cross-package false positives when all subclasses live in the same file.
+    fn find_method_in_package(
+        &self,
+        node: &Node,
+        method_name: &str,
+        package_name: &str,
+        uri: &str,
+        source: &str,
+        results: &mut Vec<LocationLink>,
+    ) {
+        let mut in_target_package = false;
+        if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
+            for stmt in statements {
+                match &stmt.kind {
+                    NodeKind::Package { name, .. } => {
+                        in_target_package = name == package_name;
+                    }
+                    NodeKind::Subroutine { name: Some(name), .. }
+                        if in_target_package && name == method_name =>
+                    {
+                        let target_uri = parse_uri(uri);
+                        results.push(LocationLink {
+                            origin_selection_range: None,
+                            target_uri,
+                            target_range: self.node_to_range(stmt, source),
+                            target_selection_range: self.node_to_range(stmt, source),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// Extract implementation target from node.
+    ///
+    /// `current_package` is the package name enclosing the cursor position,
+    /// determined by `crate::declaration::current_package_at`. It replaces the
+    /// previous hardcoded `"main"` for `Subroutine` nodes (Fix B).
+    fn extract_implementation_target(
+        &self,
+        node: &Node,
+        current_package: &str,
+    ) -> Option<ImplementationTarget> {
         match &node.kind {
             NodeKind::Package { name, .. } => Some(ImplementationTarget::Package(name.clone())),
-            NodeKind::Subroutine { name: Some(method), .. } => {
-                // Would need to track enclosing package
-                Some(ImplementationTarget::Method {
-                    package: "main".to_string(),
-                    method: method.clone(),
-                })
-            }
+            NodeKind::Subroutine { name: Some(method), .. } => Some(ImplementationTarget::Method {
+                package: current_package.to_string(),
+                method: method.clone(),
+            }),
             NodeKind::Identifier { name } if name.contains("::") => {
                 let parts: Vec<&str> = name.split("::").collect();
                 if parts.len() == 2 {
@@ -393,6 +489,22 @@ impl ImplementationProvider {
             }
             _ => false,
         }
+    }
+
+    /// Strip surrounding quotes from a raw `use parent`/`use base` argument token.
+    ///
+    /// The parser stores args as raw token text (e.g., `'Animal'` or `"Animal"`).
+    /// This removes a single layer of matching `'` or `"` delimiters.
+    fn strip_arg_quotes(raw: &str) -> &str {
+        let s = raw.trim();
+        if s.len() >= 2 {
+            if (s.starts_with('\'') && s.ends_with('\''))
+                || (s.starts_with('"') && s.ends_with('"'))
+            {
+                return &s[1..s.len() - 1];
+            }
+        }
+        s
     }
 }
 

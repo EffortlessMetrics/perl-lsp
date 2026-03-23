@@ -237,3 +237,157 @@ my %hash = (key => 'value');
     );
     Ok(())
 }
+
+// --- New tests with real assertions (Fix A: cross-file/inheritance lookup) ---
+
+/// Type definition on `Base->new()` should resolve to `package Base;` at line 1.
+///
+/// Tests Fix A: `find_package_definition_in_docs` searches all open documents so that
+/// same-file lookups work even when the type name comes from a
+/// `Binary { op: "->", left: Identifier("Base"), right: Identifier("new") }` node.
+#[test]
+fn test_type_definition_use_parent_chain_finds_base() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_parent.pl";
+    // Line 0: ""
+    // Line 1: "package Base;"
+    // Line 2: "sub new { bless {}, shift }"
+    // Line 3: ""
+    // Line 4: "package Derived;"
+    // Line 5: "use parent 'Base';"
+    // Line 6: "sub method { }"
+    // Line 7: ""
+    // Line 8: "package main;"
+    // Line 9: "my $obj = Base->new();"
+    harness.open(
+        doc_uri,
+        "\npackage Base;\nsub new { bless {}, shift }\n\npackage Derived;\nuse parent 'Base';\nsub method { }\n\npackage main;\nmy $obj = Base->new();\n",
+    )?;
+
+    // Position (9, 10) is on "Base" in "my $obj = Base->new();"
+    // (line 9, character 10 = 'B' of "Base")
+    let response = harness.type_definition(doc_uri, 9, 10)?;
+
+    // Must return non-empty array — "package Base;" is at line 1 in this document
+    let locations = response.as_array().ok_or("Expected array from type definition, got null")?;
+    assert!(!locations.is_empty(), "Expected at least one location for 'Base' type definition");
+
+    // The result should point to "package Base;" which is at line 1
+    let location = &locations[0];
+    let target_line = location["targetRange"]["start"]["line"]
+        .as_u64()
+        .ok_or("Missing targetRange.start.line in LocationLink")?;
+    assert_eq!(
+        target_line, 1,
+        "Type definition should point to 'package Base;' at line 1, got line {target_line}"
+    );
+
+    Ok(())
+}
+
+/// When two documents are open, type definition should find a package defined in
+/// the second document (not the one containing the reference).
+///
+/// Tests Fix A: `find_package_definition_in_docs` iterates all documents in `doc_map`,
+/// enabling cross-file resolution.
+#[test]
+fn test_type_definition_cross_document_lookup() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    // Document 1: defines the package
+    let lib_uri = "file:///lib/Widget.pm";
+    harness.open(lib_uri, "\npackage Widget;\nsub new { bless {}, shift }\nsub render { }\n")?;
+
+    // Document 2: uses the package — Widget is NOT defined here
+    // Line 0: ""
+    // Line 1: "use Widget;"
+    // Line 2: ""
+    // Line 3: "my $w = Widget->new();"
+    let main_uri = "file:///main.pl";
+    harness.open(main_uri, "\nuse Widget;\n\nmy $w = Widget->new();\n")?;
+
+    // Position (3, 8) is on "Widget" in "my $w = Widget->new();"
+    // (line 3, character 8 = 'W' of "Widget")
+    let response = harness.type_definition(main_uri, 3, 8)?;
+
+    // Must return non-empty array — package Widget is defined in lib_uri
+    let locations = response.as_array().ok_or("Expected array from type definition, got null")?;
+    assert!(
+        !locations.is_empty(),
+        "Expected location for 'Widget' defined in {lib_uri}, got empty array"
+    );
+
+    // The target URI must be the library document
+    let target_uri =
+        locations[0]["targetUri"].as_str().ok_or("Missing targetUri in LocationLink result")?;
+    assert_eq!(
+        target_uri, lib_uri,
+        "Type definition should point to {lib_uri} (where Widget is defined), got {target_uri}"
+    );
+
+    // Package Widget is at line 1 of lib_uri
+    let target_line = locations[0]["targetRange"]["start"]["line"]
+        .as_u64()
+        .ok_or("Missing targetRange.start.line")?;
+    assert_eq!(
+        target_line, 1,
+        "Type definition should point to line 1 ('package Widget;') in {lib_uri}, got line {target_line}"
+    );
+
+    Ok(())
+}
+
+/// The existing `test_type_definition_method_call` weakly asserts `is_array() || is_null()`.
+/// This test strengthens that: when cursor is on `Derived->new()`, the result MUST be
+/// non-empty and point to `package Derived;` at line 4.
+///
+/// This test validates the same-file lookup path works end-to-end with real assertions.
+#[test]
+fn test_type_definition_method_call_strong_assertion() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_strong.pl";
+    // Line 0: ""
+    // Line 1: "package Base;"
+    // Line 2: "sub new { bless {}, shift }"
+    // Line 3: ""
+    // Line 4: "package Derived;"
+    // Line 5: "use parent 'Base';"
+    // Line 6: "sub method { }"
+    // Line 7: ""
+    // Line 8: "package main;"
+    // Line 9: "my $obj = Derived->new();"
+    harness.open(
+        doc_uri,
+        "\npackage Base;\nsub new { bless {}, shift }\n\npackage Derived;\nuse parent 'Base';\nsub method { }\n\npackage main;\nmy $obj = Derived->new();\n",
+    )?;
+
+    // Position (9, 10) is on "Derived" in "my $obj = Derived->new();"
+    // (line 9, character 10 = 'D' of "Derived")
+    let response = harness.type_definition(doc_uri, 9, 10)?;
+
+    // Must be non-null and non-empty
+    let locations = response.as_array().ok_or(
+        "Expected array from type definition, got null — no type found for Derived->new()",
+    )?;
+    assert!(!locations.is_empty(), "Expected location for 'Derived' constructor call, got empty");
+
+    // Result must point to this same document
+    let target_uri = locations[0]["targetUri"].as_str().ok_or("Missing targetUri")?;
+    assert_eq!(target_uri, doc_uri, "Type definition should point to {doc_uri}, got {target_uri}");
+
+    // "package Derived;" is at line 4
+    let target_line = locations[0]["targetRange"]["start"]["line"]
+        .as_u64()
+        .ok_or("Missing targetRange.start.line")?;
+    assert_eq!(
+        target_line, 4,
+        "Type definition should point to 'package Derived;' at line 4, got line {target_line}"
+    );
+
+    Ok(())
+}
