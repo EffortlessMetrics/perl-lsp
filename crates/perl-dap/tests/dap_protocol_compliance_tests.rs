@@ -7,6 +7,10 @@
 //! 4. Response schema validation (required body fields)
 //! 5. Integration scenarios (cancel signal, state transitions)
 
+// Tests use `panic!` in match arms as structured test failure reporters,
+// and `expect()` on response body values that must be present per DAP spec.
+#![allow(clippy::panic, clippy::expect_used)]
+
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::{Value, json};
 use std::sync::mpsc::channel;
@@ -131,13 +135,13 @@ fn test_goto_unknown_target_id_returns_failure() {
     let mut adapter = make_adapter();
     let args = json!({ "threadId": 1, "targetId": 9999 });
     let response = adapter.handle_request(1, "goto", Some(args));
+    // targetId 9999 has never been registered via gotoTargets, so the implementation
+    // removes it from the goto_map (returning None) and unconditionally returns failure.
     match response {
         DapMessage::Response { success, command, message, .. } => {
             assert_eq!(command, "goto");
-            // Either fails due to unknown target OR no active session — both are failure modes
-            if !success {
-                assert!(message.is_some(), "failure must include message");
-            }
+            assert!(!success, "goto with unregistered targetId must fail");
+            assert!(message.is_some(), "failure response must include a message");
         }
         other => panic!("expected Response, got {other:?}"),
     }
