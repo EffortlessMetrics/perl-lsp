@@ -56,9 +56,30 @@ fn test_not_found_error_includes_cpanm() {
 fn test_not_found_error_includes_platform_instructions() {
     let err = FormattingError::PerltidyNotFound("no such file or directory".to_string());
     let msg = format!("{err}");
+    // Each major platform must have its own instruction — check them independently
+    // so removing one fails the test rather than being hidden by another match.
     assert!(
-        msg.contains("apt") || msg.contains("brew") || msg.contains("cpan"),
-        "PerltidyNotFound message should include platform-specific install instructions, got: {msg}"
+        msg.contains("apt"),
+        "PerltidyNotFound message should include apt (Debian/Ubuntu), got: {msg}"
+    );
+    assert!(
+        msg.contains("brew"),
+        "PerltidyNotFound message should include brew (macOS), got: {msg}"
+    );
+    assert!(
+        msg.contains("yum"),
+        "PerltidyNotFound message should include yum (RedHat/Fedora), got: {msg}"
+    );
+}
+
+#[test]
+fn test_not_found_error_cpanm_is_primary_recommendation() {
+    // cpanm must appear as "Recommended" — not just buried in the list.
+    let err = FormattingError::PerltidyNotFound("not found".to_string());
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("Recommended: cpanm Perl::Tidy"),
+        "PerltidyNotFound message should list cpanm as 'Recommended', got: {msg}"
     );
 }
 
@@ -79,11 +100,13 @@ fn test_not_found_error_preserves_underlying_cause() {
 
 #[test]
 fn test_perltidy_error_includes_syntax_hint() {
-    let err = FormattingError::PerltidyError("syntax error near line 5".to_string());
+    // Use a payload that does NOT contain "syntax", "check", or "Perl" itself,
+    // so the assertion can only pass if the format template injects the hint.
+    let err = FormattingError::PerltidyError("non-zero exit code 1".to_string());
     let msg = format!("{err}");
     assert!(
-        msg.contains("syntax") || msg.contains("check") || msg.contains("Perl"),
-        "PerltidyError message should include a hint about checking Perl syntax, got: {msg}"
+        msg.contains("check Perl syntax"),
+        "PerltidyError format template should inject 'check Perl syntax' hint, got: {msg}"
     );
 }
 
@@ -155,9 +178,44 @@ fn test_provider_execution_error_has_actionable_message() {
     let result = provider.format_document("my $x = 1;", &default_options());
     let err = must_err(result);
     let msg = format!("{err}");
-    // The error message should contain context from perltidy's output
+    // Must contain the actionable hint injected by the format template, not just any error word.
     assert!(
-        msg.contains("perltidy") || msg.contains("error"),
-        "Provider execution error should include perltidy context, got: {msg}"
+        msg.contains("check Perl syntax"),
+        "Provider execution error should contain 'check Perl syntax' hint from PerltidyError template, got: {msg}"
+    );
+    // Must also forward the stderr output from perltidy.
+    assert!(
+        msg.contains("Perl::Tidy failed to parse input"),
+        "Provider execution error should include perltidy's stderr output, got: {msg}"
+    );
+}
+
+#[test]
+fn test_provider_execution_error_error_kind() {
+    // Verify the error_kind is PerltidyError (not PerltidyNotFound) for a non-zero exit.
+    let runtime = MockSubprocessRuntime::new();
+    runtime.add_response(MockResponse::failure(b"bad syntax".to_vec(), 1));
+    let provider = FormattingProvider::new(runtime);
+    let result = provider.format_document("my $x = 1;", &default_options());
+    let err = must_err(result);
+    assert_eq!(
+        err.error_kind(),
+        "perltidy_error",
+        "non-zero exit from perltidy should yield error_kind 'perltidy_error', got: {}",
+        err.error_kind()
+    );
+}
+
+#[test]
+fn test_provider_not_found_error_kind() {
+    // ErrorRuntime always returns SubprocessError, which maps to PerltidyNotFound.
+    let provider = FormattingProvider::new(ErrorRuntime);
+    let result = provider.format_document("my $x = 1;", &default_options());
+    let err = must_err(result);
+    assert_eq!(
+        err.error_kind(),
+        "perltidy_not_found",
+        "subprocess launch failure should yield error_kind 'perltidy_not_found', got: {}",
+        err.error_kind()
     );
 }
