@@ -123,7 +123,7 @@
 //!
 //! - **[`test_generator`]**: Intelligent test case generation
 //! - **[`test_runner`]**: Test execution and validation
-//! - **[`tdd_workflow`]**: TDD cycle management and coverage tracking
+//! - **`tdd_workflow`** *(test-only)*: TDD cycle management and coverage tracking
 //!
 //! ## LSP Feature Support
 //!
