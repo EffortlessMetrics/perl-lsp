@@ -105,7 +105,7 @@ The codebase was consistently more mature than the backlog describing it.
 
 ### 4. Microcrates + worktrees = safe parallelism
 
-The 128-crate workspace means 246 agents can work simultaneously without merge conflicts. Each agent gets a git worktree (isolated copy of the repo) and works on a different microcrate.
+The 133-crate workspace means 246 agents can work simultaneously without merge conflicts. Each agent gets a git worktree (isolated copy of the repo) and works on a different microcrate.
 
 ### 5. Cache-read economics
 
