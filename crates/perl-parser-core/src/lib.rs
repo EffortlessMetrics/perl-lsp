@@ -120,8 +120,6 @@ pub use engine::parser::Parser;
 pub use error::classifier as error_classifier;
 /// Error recovery helpers and strategies.
 pub use error::recovery as error_recovery;
-/// Recovery-oriented parser wrapper for error-tolerant workflows.
-pub use error::recovery_parser;
 /// Result of an error recovery attempt.
 pub use error_recovery::RecoveryResult;
 

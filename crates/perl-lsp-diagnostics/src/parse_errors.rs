@@ -73,6 +73,9 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
         }
         ParseError::SyntaxError { .. } => None,
         ParseError::Cancelled => None,
+        // Recovered errors: the parser continued with a synthetic node.
+        // No user-facing suggestion is needed — the partial AST is still usable.
+        ParseError::Recovered { .. } => None,
     };
 
     Diagnostic {
