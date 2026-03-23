@@ -467,6 +467,15 @@ impl CompletionProvider {
             return vec![];
         }
 
+        // When `-` is a trigger character, only proceed for arrow-operator context.
+        // All other uses of `-` (decrement `--`, subtract `-=`, unary minus, etc.)
+        // must return empty so the editor doesn't flood the user with completions.
+        if context.trigger_character == Some('-')
+            && !(context.prefix.ends_with("->") && context.prefix.len() > 2)
+        {
+            return vec![];
+        }
+
         let mut completions = Vec::new();
 
         // After regex close delimiter: offer flag completions.
@@ -505,8 +514,13 @@ impl CompletionProvider {
             );
         } else if self.is_has_options_key_context(source, position) {
             self.add_has_option_completions(&mut completions, &context);
-        } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
-            // Method completion must run before sigil-prefixed variable completion.
+        } else if (context.trigger_character == Some('>') || context.trigger_character == Some('-'))
+            && context.prefix.ends_with("->")
+            && context.prefix.len() > 2
+        {
+            // Method completion for both `>` (second char of `->`) and `-` (first char of
+            // `->`) triggers. The prefix length guard ensures we have an actual receiver
+            // (not bare `->` from a non-arrow context like `$x -=`).
             methods::add_method_completions(&mut completions, &context, source, &self.symbol_table);
             // Add workspace-indexed methods for the receiver's type
             workspace::add_workspace_method_completions(
@@ -861,6 +875,22 @@ impl CompletionProvider {
                 .map(|p| p + 1)
                 .unwrap_or(0);
             (source[receiver_start..position].to_string(), receiver_start)
+        } else if position >= 1
+            && source.as_bytes()[position - 1] == b'-'
+            && (position < 2 || source.as_bytes()[position - 2] != b'-')
+        {
+            // Cursor is right after a lone `-` (not `--`). This fires when `-` is a
+            // trigger character and the user has typed the first char of `->`.
+            // Build the prefix as receiver + `->` so that downstream method-completion
+            // functions see the same shape as the `>` trigger path.
+            let receiver_start = source[..position.saturating_sub(1)]
+                .rfind(|c: char| {
+                    !c.is_alphanumeric() && c != '_' && c != '$' && c != '@' && c != '%' && c != ':'
+                })
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            let receiver = &source[receiver_start..position - 1];
+            (format!("{receiver}->"), receiver_start)
         } else {
             let word_start = source[..position]
                 .rfind(|c: char| {
@@ -2588,5 +2618,129 @@ sub helper { }
         let qrpat = must_some(completions3.iter().find(|c| c.label == "qrpat"));
         let insert3 = qrpat.insert_text.as_deref().unwrap_or_default();
         assert!(insert3.starts_with("qr/"), "qrpat body must start with qr/; got: {insert3:?}");
+    }
+
+    // ── Dash trigger character tests (#2865) ─────────────────────────────────
+    // When `-` is a trigger character, context detection must distinguish
+    // method-call arrows (`->`) from arithmetic/decrement operators.
+
+    #[test]
+    fn test_dash_trigger_fires_method_completion_for_arrow()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // `$obj-` (cursor after `-`) — the `-` is the start of `->`, so method
+        // completions must appear even before the `>` is typed.
+        // Crucially, the result must be ONLY method completions (Function kind),
+        // not the entire keyword/snippet list. Without the `-` trigger feature,
+        // the code returns all completions — this assertion catches that false pass.
+        let code = r#"package MyService;
+sub new { bless {}, shift }
+sub process { }
+sub validate { }
+sub run {
+    my $self = shift;
+    $self-"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyService.pm")?;
+        let module_code = "package MyService;\nsub process { }\nsub validate { }\n1;\n";
+        index.index_file(module_uri, module_code.to_string())?;
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        // Must find method completions from the workspace index
+        assert!(
+            completions.iter().any(|c| c.label == "process" || c.label == "validate"),
+            "dash trigger on `$self-` should produce method completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        // Must NOT return the full keyword/snippet dump — only method completions.
+        // "arrayref", "hashref" are snippets from the generic path; they should not
+        // appear when the context is a method-call arrow.
+        assert!(
+            !completions.iter().any(|c| c.label == "arrayref" || c.label == "hashref"),
+            "dash trigger on `$self-` must not return generic snippets; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_dash_trigger_suppressed_for_subtract_assign() {
+        // `$x -=` (cursor after `-` in `-=`) — must return NO completions.
+        let code = "$x -";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        // Position is at len() which puts cursor right after `-` preceded by space.
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.is_empty(),
+            "dash trigger on `$x -` (subtract context) should return no completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_dash_trigger_suppressed_for_decrement() {
+        // `$x--` — second `-` is preceded by another `-`, must return NO completions.
+        // The guard `source[position-2] != b'-'` prevents treating `--` as `->`.
+        let code = "$x--";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        // Cursor after the second `-`: preceding char is `-`, not an identifier.
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.is_empty(),
+            "dash trigger on `$x--` (decrement context) should return no completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_dash_trigger_suppressed_for_unary_minus() {
+        // `my $x = -$y` — unary minus, `-` preceded by space → no completions.
+        let code = "my $x = -";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.is_empty(),
+            "dash trigger on `my $x = -` (unary minus) should return no completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_dash_trigger_fires_for_hash_deref_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        // `$hash->{key}` — trigger on `-` in `$hash->`, receiver ends with `h`
+        // (alphanumeric), should produce method completions (not a generic dump).
+        let code = r#"package MyService;
+sub new { bless {}, shift }
+sub get_data { }
+sub run {
+    my $hash = {};
+    $hash-"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyService.pm")?;
+        let module_code = "package MyService;\nsub new { }\nsub get_data { }\n1;\n";
+        index.index_file(module_uri, module_code.to_string())?;
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            completions.iter().any(|c| c.label == "get_data" || c.label == "new"),
+            "dash trigger on `$hash-` should produce completions; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        // Must not return generic snippet dump
+        assert!(
+            !completions.iter().any(|c| c.label == "arrayref" || c.label == "hashref"),
+            "dash trigger on `$hash-` must not return generic snippets; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        Ok(())
     }
 }

@@ -73,6 +73,9 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                 ">".to_string(),
                 // ":" fires on the second character of "::" for package member completion.
                 ":".to_string(),
+                // "-" fires on the first character of "->" so method-completion appears
+                // immediately; context detection in completion.rs filters non-arrow uses.
+                "-".to_string(),
             ]),
             all_commit_characters: None,
             work_done_progress_options: WorkDoneProgressOptions::default(),
