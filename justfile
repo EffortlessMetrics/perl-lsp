@@ -758,6 +758,19 @@ ci-doc-paths:
     @bash ci/check_doc_paths.sh docs
     @echo "✅ Documentation paths check passed"
 
+# Verify publication facts against live codebase metrics (informational, non-blocking)
+# Flags WARNING if delta >5%, ERROR if delta >10%. Use --strict to exit 1 on ERROR.
+verify-publication-facts *args='':
+    @echo "📊 Verifying publication facts..."
+    @bash scripts/verify-publication-facts.sh {{args}}
+    @echo "✅ Publication facts verification complete"
+
+# Strict publication facts check for CI (exits 1 on ERROR-level drift)
+ci-publication-facts:
+    @echo "📊 Checking publication facts (strict mode)..."
+    @bash scripts/verify-publication-facts.sh --strict
+    @echo "✅ Publication facts check passed"
+
 # Update derived metrics in docs/project/status/ subsystem files and ROADMAP.md.
 # Optionally pass a subsystem name to regenerate only that one (e.g. just status-update lsp).
 status-update subsystem="":

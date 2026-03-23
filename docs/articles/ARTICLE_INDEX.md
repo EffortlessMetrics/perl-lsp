@@ -232,57 +232,60 @@ These angles have supporting research material but no finalized outline yet:
 
 ## 5. Verification Status
 
-### Verified claims (checked against git log, CI receipts, or source files)
+**Automated check**: Run `just verify-publication-facts` to verify all computable metrics against the ledger. See [../project/PUBLICATION_FACTS_LEDGER.md](../project/PUBLICATION_FACTS_LEDGER.md) for the tier system (A=computed, B=measured, C=estimated, D=external).
 
-All of the following were verified by scout agents on 2026-03-19 and documented in [research/VERIFIED_METRICS.md](research/VERIFIED_METRICS.md):
+### Verified claims (current as of 2026-03-22)
 
-| Claim | Verified Value | Historical Claims | Note |
-|-------|---------------|------------------|------|
-| Lines of Rust | 591,034 | 563,883 / 546K (historical) | Codebase grows; see PUBLICATION_FACTS_LEDGER.md |
-| Workspace crates | 133 | 128-132 | Count changes as microcrates are extracted |
-| Total commits | 3,210 | 2,768 | Per `git log --oneline \| wc -l` (2026-03-21) |
-| LSP features tracked | 98 | 97 | Per `features.toml` (off-by-one corrected) |
-| LSP features implemented | 53/53 advertised | 98 | 100% of advertised features |
-| CPAN corpus files | 4,355 | same | Per `.ci/cpan-corpus-baseline.json` |
-| CPAN ratcheted clean rate | 80.0% | same | 3,484/4,355 as of PR #2039 |
-| Constrained task success rate | ~90% | same | Per memory/feedback files |
-| Unconstrained task success rate | ~50% | same | Per memory/feedback files |
-| Peak commit day | 152 commits to master (Era 4) | "425 commits in 24 hours" | 425 is all-ref artifacts; 152 is merged to master |
-| CI gate time | 3-5 min (B tier) | same | `just ci-gate` |
-| 3-wide merge queue | 3 concurrent merges max | same | CI cancellation cascade |
+Verified by `just verify-publication-facts` against live repo data. Historical values from 2026-03-19 in parentheses where they differ.
 
-### Known discrepancies in published articles
+| Claim | Current Value | 2026-03-19 Value | Tier | Command |
+|-------|--------------|-----------------|------|---------|
+| Lines of Rust | ~597,863 | 563,883 | A | `find crates/ -name "*.rs" -print0 \| xargs -0 cat \| wc -l` |
+| Workspace crates | 132 | 133 | A | `cargo metadata --no-deps \| jq '.packages \| length'` |
+| Total commits | 3,307 | 2,768 | A | `git log --oneline \| wc -l` |
+| LSP features | 98 | 97 | A | `grep -c '^\[\[feature\]\]' features.toml` |
+| CPAN corpus files | 4,355 | 4,355 | A | `jq .total_files .ci/cpan-corpus-baseline.json` |
+| CPAN baseline clean rate | 85.4% (3,717/4,355) | 80.0% (3,484/4,355) | A | `jq .clean_files .ci/cpan-corpus-baseline.json` |
+| Corpus manifest coverage | 47.1% (2,052/4,355) | — | A | `wc -l .ci/cpan-corpus-manifest.txt` |
+| Constrained task success rate | ~90% | same | N | Memory files |
+| Unconstrained task success rate | ~50% | same | N | Memory files |
+| Peak commit day | 308 (2026-03-20) | 152 (Era 4) | A | `git log --format="%ad" --date=format:"%Y-%m-%d" \| sort \| uniq -c \| sort -rn \| head -1` |
+| CI gate time | 3-5 min (B tier) | same | B | `just ci-gate` |
+| 3-wide merge queue | 3 concurrent merges max | same | N | CI cancellation cascade |
 
-These figures appear in polished articles but differ from verified values. Writers should use verified values.
+**LOC method note**: Use `find crates/ -name "*.rs" -print0 | xargs -0 cat | wc -l` — the `xargs wc -l | tail -1` form produces incorrect results when xargs splits into multiple batches.
 
-| Article | Stated Value | Current Verified Value |
-|---------|-------------|------------------------|
-| FIVE_ERAS.md | ~546K LOC (article snapshot) | 591,034 (ledger 2026-03-21) |
-| FIVE_ERAS.md | 130 crates (article snapshot) | 133 (ledger 2026-03-21) |
-| BLOG_MATERIAL_INDEX.md | 425 commits in 24 hours | 321 all-ref artifacts on 2026-03-18 (peak session day) |
-| BLOG_MATERIAL_INDEX.md | ~546K LOC (article snapshot) | 591,034 (ledger 2026-03-21) |
+### Known remaining discrepancies in research/draft documents
 
-### Claims pending verification
+These values appear in research documents (not primary articles) and reflect snapshots from their writing date. They do not need to be updated retroactively — they document the state at that time.
 
-These claims appear in research documents but have not been independently verified:
+| Document | Value | Context |
+|----------|-------|---------|
+| BLOG_MATERIAL_INDEX.md | 425 commits in 24 hours | All-ref artifacts on 2026-03-18; merged-to-master peak was 308 on 2026-03-20 |
+| BLOG_MATERIAL_INDEX.md | 546,283 lines | Snapshot from early March |
+| COST_ROI_ANALYSIS.md | 480,934 LOC | Snapshot from session 3 (earlier) |
 
-| Claim | Source | Status |
-|-------|--------|--------|
-| DevLT 3-5 minutes per PR | COST_ROI_ANALYSIS.md | Model estimate; not measured from CI receipts |
-| $40-79K vs $500K-1.2M cost comparison | COST_ROI_ANALYSIS.md | Model estimate; requires assumption audit |
-| 78% of Perl developers use no language server | COMPETITIVE_ANALYSIS.md | Attributed to "2025 Perl IDE Survey (602 respondents)" — survey source not linked |
-| PerlNavigator ~53,000 VSCode installs | COMPETITIVE_ANALYSIS.md | Point-in-time; marketplace count changes |
-| Perl::LanguageServer ~293,000 VSCode installs | COMPETITIVE_ANALYSIS.md | Point-in-time; marketplace count changes |
-| 90% success rate on constrained tasks (exact) | Multiple articles | The ratio is well-documented in memory files; specific session data not cited |
-| 4:1:2 scout:builder:reviewer ratio | NEW_INTERVIEW_QUESTIONS.md Q38 | Described as converged-on; not derived from a single measurement |
+### Claims pending verification (Tier C/D — non-automatable)
+
+| Claim | Source | Tier | Status |
+|-------|--------|------|--------|
+| DevLT 3-5 minutes per PR | COST_ROI_ANALYSIS.md Section 5 | C | Model estimate; not measured from CI receipts. Methodology documented. |
+| $40-79K vs $500K-1.2M cost comparison | COST_ROI_ANALYSIS.md Section 9 | C | Model estimate; confidence intervals in Section 9. |
+| 78% of Perl developers use no language server | COMPETITIVE_ANALYSIS.md | D | Attributed to 2025 Perl IDE Survey (602 respondents); primary source not linked. |
+| PerlNavigator ~53,000 VSCode installs | COMPETITIVE_ANALYSIS.md | D | Point-in-time (early 2026); marketplace count changes. Article now date-stamped. |
+| Perl::LanguageServer ~293,000 VSCode installs | COMPETITIVE_ANALYSIS.md | D | Point-in-time (early 2026); marketplace count changes. Article now date-stamped. |
+| 90% success rate on constrained tasks | Multiple articles | N | Well-documented in memory files; specific session data not cited. |
+| 4:1:2 scout:builder:reviewer ratio | NEW_INTERVIEW_QUESTIONS.md Q38 | N | Described as converged-on; not derived from a single measurement. |
 
 ### Verification guidance
 
-- For architecture claims, use `cargo metadata --no-deps` and `git log`
-- For corpus claims, use `just cpan-corpus-check` and `.ci/cpan-corpus-baseline.json`
-- For LSP feature claims, use `features.toml` and `scripts/update-current-status.py`
-- For session/agent claims, cross-reference with committed swarm-state files in `.claude/swarm-state/`
-- For CI timing, run the gate locally: `nix develop -c just ci-gate`
+- **Automated**: `just verify-publication-facts` — checks all Tier A metrics in under 60 seconds
+- **Strict mode (CI)**: `just ci-publication-facts` — exits 1 if any metric drifts >10%
+- For architecture claims: `cargo metadata --no-deps` and `git log`
+- For corpus claims: `just cpan-corpus-check` and `.ci/cpan-corpus-baseline.json`
+- For LSP feature claims: `features.toml` and `scripts/update-current-status.py`
+- For session/agent claims: cross-reference `.claude/swarm-state/` committed memory
+- For CI timing: `nix develop -c just ci-gate`
 
 ---
 

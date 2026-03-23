@@ -20,7 +20,7 @@ perl-lsp is a Perl language server written in Rust — a native binary that prov
 
 The codebase:
 
-- **591,034 lines of Rust** across **133 workspace crates**
+- **~598,000 lines of Rust** across **132 workspace crates** (as of 2026-03-22; run `just verify-publication-facts` for the current value)
 - **98 LSP and DAP features**, all at GA maturity
 - **87% mutation score** (industry baseline: 60-70%)
 - **90.9% CPAN corpus manifest coverage** (85.7% baseline clean-parse rate) across 4,355 real-world Perl modules
@@ -70,7 +70,7 @@ The traditional cost estimate ($500K-$1.2M) is built from first principles: 35-4
 
 The swarm cost ($40K-79K) breaks down as approximately $20K compute (estimated from token consumption across ~500 agent sessions) plus $24K-50K of human time at $150-250/hour. The human time figure is the most uncertain — memory files from the project record 5 major development cycles and ~30 planning sessions, but exact hours are not tracked.
 
-**Confidence levels**: The codebase metrics (591K LOC, 133 crates, 200+ PRs) are facts from git. The velocity figure (56 PRs in 5 days) is documented in memory files from the session. The cost estimates are informed approximations, not accounting-precision figures.
+**Confidence levels**: The codebase metrics (~598K LOC, 132 crates, 200+ PRs) are facts from git. The velocity figure (56 PRs in 5 days) is documented in memory files from the session. The cost estimates are informed approximations (Tier C), not accounting-precision figures — see `docs/articles/research/COST_ROI_ANALYSIS.md` Section 9 for confidence intervals and methodology.
 
 ---
 

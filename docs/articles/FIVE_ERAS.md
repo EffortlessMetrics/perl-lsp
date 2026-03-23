@@ -6,7 +6,7 @@
 
 ## Code Is Cheap; Trusted Change Is Not
 
-The perl-lsp project has 3,210 commits, 133 crates, and 591,034 lines of Rust. It implements a Language Server Protocol server, a Debug Adapter Protocol server, a recursive descent parser, and a VSCode extension for Perl. Every line was written or directed by AI.
+The perl-lsp project has over 3,300 commits, 132 crates, and approximately 598,000 lines of Rust. It implements a Language Server Protocol server, a Debug Adapter Protocol server, a recursive descent parser, and a VSCode extension for Perl. Every line was written or directed by AI.
 
 But this is not a story about AI writing code. It is a story about what happens *after* AI writes code — how you review it, test it, integrate it, and trust it. The project passed through five distinct eras of AI-assisted development between July 2025 and March 2026. Each era solved the previous era's problems and created new ones. The trajectory was not a straight line toward faster. It was a curve toward *better*.
 
