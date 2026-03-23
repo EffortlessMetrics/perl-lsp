@@ -500,4 +500,36 @@ mod tests {
         let chars: Vec<char> = "{}".chars().collect();
         assert!(!is_regex_quantifier(&chars, 0));
     }
+
+    #[test]
+    fn extract_braces_multiple_quantifiers_on_one_line() {
+        // Two quantifiers on one line with a real block opener — only the opener
+        // should be pushed.  This would fail before the fix because the old code
+        // pushed all six braces ({, }, {, }, {) and the reversed walk found the
+        // wrong opener.
+        let braces = extract_significant_braces("if (/\\w{2}.*\\d{3}/) {");
+        assert_eq!(braces, vec!['{']);
+    }
+
+    #[test]
+    fn is_regex_quantifier_rejects_unclosed_brace_at_eol() {
+        // '{' with no following content must not panic and must return false.
+        let chars: Vec<char> = "{".chars().collect();
+        assert!(!is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn is_regex_quantifier_rejects_digit_then_eol() {
+        // '{3' with no closing '}' must not panic and must return false.
+        let chars: Vec<char> = "{3".chars().collect();
+        assert!(!is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn extract_braces_qw_block_unterminated() {
+        // Malformed qw{ with no closing '}' must not panic.
+        // The opening qw{ is consumed; no brace is pushed.
+        let braces = extract_significant_braces("my @x = qw{a b c");
+        assert_eq!(braces, vec![]);
+    }
 }
