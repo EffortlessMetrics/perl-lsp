@@ -1,4 +1,10 @@
 #!/bin/bash
+# STATUS: Retracted. See ADR-0032 divergence section.
+# This hook unconditionally exits 2, causing infinite busy-loops when the task list
+# is empty. Not registered in .claude/settings.json -- do not wire it.
+# Kept for historical reference only. Formally retracted 2026-03-22.
+
+# Original behavior (retained for reference):
 # TeammateIdle hook: keeps swarm teammates working
 # Exit 2 = send feedback and keep teammate active
 # Exit 0 = allow idle

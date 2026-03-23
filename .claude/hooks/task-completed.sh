@@ -3,14 +3,21 @@
 # Exit 2 = reject completion with feedback
 # Exit 0 = allow completion
 
+# Read stdin once at the top -- stdin can only be consumed once, so capture before any subshells
+INPUT="$(cat 2>/dev/null || echo '{}')"
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+
 # Quick sanity check: is cargo fmt clean?
-if ! cargo fmt --all -- --check 2>/dev/null; then
-  echo "Task completion blocked: cargo fmt check failed. Run 'cargo fmt --all' before marking complete."
-  exit 2
+# Guard: only run cargo fmt if .rs files exist in the working tree (avoids 2.5s overhead for doc/shell-only agents)
+if git ls-files -- '*.rs' 2>/dev/null | grep -q .; then
+  if ! cargo fmt --all -- --check 2>/dev/null; then
+    echo "Task completion blocked: cargo fmt check failed. Run 'cargo fmt --all' before marking complete."
+    exit 2
+  fi
 fi
 
 # Check if test files were modified and CURRENT_STATUS.md needs updating
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
 if git diff --cached --name-only 2>/dev/null | grep -qE '^crates/.*/tests/.*\.rs$' || \
    git diff --name-only HEAD~1 2>/dev/null | grep -qE '^crates/.*/tests/.*\.rs$'; then
   if command -v python3 &>/dev/null && [ -f "$REPO_ROOT/scripts/update-current-status.py" ]; then
@@ -21,6 +28,26 @@ if git diff --cached --name-only 2>/dev/null | grep -qE '^crates/.*/tests/.*\.rs
       exit 2
     fi
   fi
+fi
+
+# Passive metrics write: capture task completion event into swarm-metrics.jsonl
+# This is advisory (exit 0 always) -- lifecycle ordering prevents a blocking gate here.
+# SubagentStop fires AFTER TaskCompleted, so session-correlated matching is impossible at this point.
+# See: https://github.com/EffortlessMetrics/perl-lsp/issues/2811
+OPS_DIR="${OPS_DIR:-${REPO_ROOT}/.ops-perl-lsp}"
+METRICS_FILE="${OPS_DIR}/swarm-metrics.jsonl"
+
+if command -v jq &>/dev/null; then
+  SESSION_ID="$(echo "${INPUT}" | jq -r '.session_id // empty' 2>/dev/null || echo '')"
+  CWD="$(echo "${INPUT}" | jq -r '.cwd // empty' 2>/dev/null || echo '')"
+  TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  mkdir -p "${OPS_DIR}" 2>/dev/null || true
+  jq -nc \
+    --arg ts "${TIMESTAMP}" \
+    --arg event "task_completed" \
+    --arg session_id "${SESSION_ID}" \
+    --arg cwd "${CWD}" \
+    '{ts:$ts,event:$event,session_id:$session_id,cwd:$cwd}' >> "${METRICS_FILE}" 2>/dev/null || true
 fi
 
 # Allow completion

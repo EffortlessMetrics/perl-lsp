@@ -10,7 +10,8 @@ INPUT="$(cat)"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 AGENT_NAME="$(echo "${INPUT}" | jq -r '.subagent_name // .agent_name // .teammate_name // "unknown"')"
 AGENT_TYPE="$(echo "${INPUT}" | jq -r '.subagent_type // .agent_type // .matcher // "unknown"')"
-WORKTREE_PATH="$(echo "${INPUT}" | jq -r '.worktree_path // .path // .tool_input.worktree_path // empty')"
+# Prefer cwd (platform-provided) over worktree_path (not in platform payload)
+WORKTREE_PATH="$(echo "${INPUT}" | jq -r '.cwd // .worktree_path // .path // empty')"
 SESSION_ID="$(echo "${INPUT}" | jq -r '.session_id // empty')"
 
 jq -nc \
