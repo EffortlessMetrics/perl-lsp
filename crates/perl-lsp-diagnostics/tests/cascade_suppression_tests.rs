@@ -242,6 +242,44 @@ fn errors_at_exactly_threshold_boundary_suppressed() -> Result<(), Box<dyn std::
 }
 
 // ---------------------------------------------------------------------------
+// 5b. Boundary-plus-one: exactly 11 bytes apart — treated as new cluster
+//
+// gap > CASCADE_THRESHOLD_BYTES (10) must create a fresh cluster head.
+// This is the complement of test 5: at exactly threshold the error is
+// suppressed, but at threshold+1 it becomes a new primary.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn errors_at_threshold_plus_one_start_new_cluster() -> Result<(), Box<dyn std::error::Error>> {
+    // Two errors: head at offset 0, second at offset 11 (= threshold + 1).
+    // gap = 11 > 10 → second error starts a new cluster and must be preserved.
+    let source = "x x x x x x x x x x x x x x x x x x x x x x x x x x x x";
+    let errors = vec![
+        ParseError::UnexpectedToken {
+            location: 0,
+            expected: "statement".to_string(),
+            found: "x".to_string(),
+        },
+        ParseError::UnexpectedToken {
+            location: 11,
+            expected: "statement".to_string(),
+            found: "x".to_string(),
+        },
+    ];
+
+    let diags = run_diagnostics(source, errors);
+    let parse_diags = parse_errors_only(&diags);
+
+    assert_eq!(
+        parse_diags.len(),
+        2,
+        "Errors 11 bytes apart (threshold+1) must both survive as separate cluster heads, got {}",
+        parse_diags.len()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // 6. Non-parse-error diagnostics (warnings/hints) are unaffected by suppression
 // ---------------------------------------------------------------------------
 
