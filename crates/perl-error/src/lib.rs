@@ -141,6 +141,42 @@ impl From<perl_regex::RegexError> for ParseError {
     }
 }
 
+/// Where in the parse tree a recovery was performed.
+///
+/// Used by [`ParseError::Recovered`] to describe the syntactic context in which
+/// the parser applied a recovery strategy. LSP providers use this to decide
+/// which features can still be offered after a recovery.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecoverySite {
+    /// Inside a parenthesised argument list `(...)`.
+    ArgList,
+    /// Inside an array subscript `[...]`.
+    ArraySubscript,
+    /// Inside a hash subscript `{...}`.
+    HashSubscript,
+    /// After a `->` dereference arrow (postfix chain).
+    PostfixChain,
+    /// After a binary infix operator (right-hand side missing).
+    InfixRhs,
+}
+
+/// What kind of recovery was applied at a [`RecoverySite`].
+///
+/// Pairs with [`RecoverySite`] in [`ParseError::Recovered`] to describe the
+/// exact repair the parser made. This information lets consumers (e.g. LSP
+/// providers) understand the confidence level of the resulting AST region.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecoveryKind {
+    /// A synthetic closing delimiter (`)` or `]`) was inferred.
+    InsertedCloser,
+    /// A [`NodeKind::MissingExpression`] placeholder was inserted.
+    MissingOperand,
+    /// A postfix chain was cut short due to a missing continuation.
+    TruncatedChain,
+    /// A statement boundary (`;`) was inferred from context.
+    InferredSemicolon,
+}
+
 /// Budget limits for parser operations to prevent runaway parsing.
 ///
 /// These limits ensure the parser terminates in bounded time even when
@@ -431,6 +467,21 @@ pub enum ParseError {
     /// Parsing was cancelled by an external cancellation token
     #[error("Parsing cancelled")]
     Cancelled,
+
+    /// A syntax error was recovered from — parsing continued with a synthetic node.
+    ///
+    /// This variant is emitted alongside the partial AST node that was produced
+    /// by the recovery. LSP providers iterate `parser.errors()` and count
+    /// `Recovered` variants to determine confidence for gating features.
+    #[error("Recovered from {kind:?} at {site:?} (position {location})")]
+    Recovered {
+        /// Where in the parse tree the recovery occurred.
+        site: RecoverySite,
+        /// What kind of repair was applied.
+        kind: RecoveryKind,
+        /// Byte offset of the recovery point in the source.
+        location: usize,
+    },
 }
 
 /// Error classification and diagnostic generation for parsed Perl code.
@@ -482,6 +533,13 @@ pub struct ParseOutput {
     /// Whether parsing completed normally or was terminated early
     /// due to budget exhaustion.
     pub terminated_early: bool,
+
+    /// Number of recovery operations applied during this parse.
+    ///
+    /// Counts the [`ParseError::Recovered`] variants in `diagnostics`.
+    /// LSP providers use this as a confidence signal: `0` means a clean parse,
+    /// `> 0` means at least one synthetic repair was made.
+    pub recovered_count: usize,
 }
 
 impl ParseOutput {
@@ -492,6 +550,7 @@ impl ParseOutput {
             diagnostics: Vec::new(),
             budget_usage: BudgetTracker::new(),
             terminated_early: false,
+            recovered_count: 0,
         }
     }
 
@@ -502,7 +561,9 @@ impl ParseOutput {
     pub fn with_errors(ast: Node, diagnostics: Vec<ParseError>) -> Self {
         let mut budget_usage = BudgetTracker::new();
         budget_usage.errors_emitted = diagnostics.len();
-        Self { ast, diagnostics, budget_usage, terminated_early: false }
+        let recovered_count =
+            diagnostics.iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
+        Self { ast, diagnostics, budget_usage, terminated_early: false, recovered_count }
     }
 
     /// Create a parse output with full budget tracking.
@@ -515,7 +576,9 @@ impl ParseOutput {
         budget_usage: BudgetTracker,
         terminated_early: bool,
     ) -> Self {
-        Self { ast, diagnostics, budget_usage, terminated_early }
+        let recovered_count =
+            diagnostics.iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
+        Self { ast, diagnostics, budget_usage, terminated_early, recovered_count }
     }
 
     /// Check if parse completed without any errors.
@@ -596,6 +659,7 @@ impl ParseError {
         match self {
             ParseError::UnexpectedToken { location, .. } => Some(*location),
             ParseError::SyntaxError { location, .. } => Some(*location),
+            ParseError::Recovered { location, .. } => Some(*location),
             _ => None,
         }
     }
@@ -865,5 +929,115 @@ mod tests {
         assert_eq!(contexts[0].source_line, "line1");
         let suggestion = contexts[0].suggestion.as_deref().unwrap_or("");
         assert!(suggestion.contains("semicolon"));
+    }
+
+    #[test]
+    fn test_recovery_site_and_kind_variants() {
+        // Verify all RecoverySite and RecoveryKind variants are constructible and comparable.
+        let sites = [
+            RecoverySite::ArgList,
+            RecoverySite::ArraySubscript,
+            RecoverySite::HashSubscript,
+            RecoverySite::PostfixChain,
+            RecoverySite::InfixRhs,
+        ];
+        let kinds = [
+            RecoveryKind::InsertedCloser,
+            RecoveryKind::MissingOperand,
+            RecoveryKind::TruncatedChain,
+            RecoveryKind::InferredSemicolon,
+        ];
+        // Each site and kind is debug-formattable and clone-able.
+        for s in &sites {
+            let _ = format!("{s:?}");
+            let _ = s.clone();
+        }
+        for k in &kinds {
+            let _ = format!("{k:?}");
+            let _ = k.clone();
+        }
+        // PartialEq works.
+        assert_eq!(RecoverySite::ArgList, RecoverySite::ArgList);
+        assert_ne!(RecoverySite::ArgList, RecoverySite::PostfixChain);
+        assert_eq!(RecoveryKind::InsertedCloser, RecoveryKind::InsertedCloser);
+        assert_ne!(RecoveryKind::InsertedCloser, RecoveryKind::MissingOperand);
+    }
+
+    #[test]
+    fn test_parse_error_recovered_variant() {
+        let err = ParseError::Recovered {
+            site: RecoverySite::ArgList,
+            kind: RecoveryKind::InsertedCloser,
+            location: 42,
+        };
+        // location() returns Some for Recovered variant.
+        assert_eq!(err.location(), Some(42));
+        // suggestion() returns None for Recovered.
+        assert!(err.suggestion().is_none());
+        // Display works (via thiserror).
+        let s = format!("{err}");
+        assert!(s.contains("Recovered") || s.contains("position 42"));
+    }
+
+    #[test]
+    fn test_parse_output_recovered_count_with_errors() {
+        use perl_ast::{Node, NodeKind, SourceLocation};
+
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![] },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let errors = vec![
+            ParseError::syntax("error 1", 0),
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::MissingOperand,
+                location: 10,
+            },
+            ParseError::Recovered {
+                site: RecoverySite::PostfixChain,
+                kind: RecoveryKind::TruncatedChain,
+                location: 20,
+            },
+        ];
+        let output = ParseOutput::with_errors(ast, errors);
+
+        assert_eq!(output.error_count(), 3);
+        assert_eq!(output.recovered_count, 2);
+    }
+
+    #[test]
+    fn test_parse_output_success_has_zero_recovered_count() {
+        use perl_ast::{Node, NodeKind, SourceLocation};
+
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![] },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let output = ParseOutput::success(ast);
+        assert_eq!(output.recovered_count, 0);
+    }
+
+    #[test]
+    fn test_parse_output_finish_recovered_count() {
+        use perl_ast::{Node, NodeKind, SourceLocation};
+
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![] },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let errors = vec![
+            ParseError::syntax("error", 0),
+            ParseError::Recovered {
+                site: RecoverySite::InfixRhs,
+                kind: RecoveryKind::InferredSemicolon,
+                location: 5,
+            },
+        ];
+        let tracker = BudgetTracker::new();
+        let output = ParseOutput::finish(ast, errors, tracker, false);
+
+        assert_eq!(output.recovered_count, 1);
+        assert!(!output.terminated_early);
     }
 }

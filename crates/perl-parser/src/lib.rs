@@ -385,8 +385,6 @@ pub use engine::quote_parser;
 pub use error::classifier as error_classifier;
 /// Error recovery strategies for resilient parsing.
 pub use error::recovery as error_recovery;
-/// Recovery-mode parser that continues after syntax errors.
-pub use error::recovery_parser;
 /// Parser utilities and helpers.
 pub use perl_parser_core::util;
 
@@ -572,8 +570,6 @@ pub use error::{ParseError, ParseResult};
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
 /// Pragma state tracking for `use strict`, `use warnings`, etc.
 pub use pragma_tracker::{PragmaState, PragmaTracker};
-/// Recovery-mode parser that builds partial ASTs from malformed input.
-pub use recovery_parser::RecoveryParser;
 /// Token types and token stream for lexer output.
 pub use token_stream::{Token, TokenKind, TokenStream};
 /// Trivia (whitespace/comments) attached to AST nodes.
