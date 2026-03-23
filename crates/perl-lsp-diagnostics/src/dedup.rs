@@ -15,10 +15,13 @@ use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 ///
 /// This threshold targets **intra-statement cascades**: when the parser
 /// encounters a syntax error inside an expression it may emit several tightly-
-/// clustered errors (e.g. `my $x = = ;` triggers errors at offsets 8 and 9).
-/// Tokens in a single syntactic unit rarely span more than 10 bytes in
-/// practice, so a threshold of 10 catches same-expression noise without
-/// suppressing genuinely independent errors on separate lines.
+/// clustered errors (e.g. `my $x = = 1;` can trigger two `UnexpectedToken`
+/// errors both pointing at the same offset).  After exact-duplicate removal
+/// (pass 1) the remaining nearby errors are typically within a few bytes of
+/// each other — well inside this threshold.  Tokens in a single syntactic unit
+/// rarely span more than 10 bytes in practice, so the threshold catches
+/// same-expression noise without suppressing genuinely independent errors on
+/// separate lines.
 ///
 /// **Design note — why suppress entirely rather than downgrade to `Information`:**
 /// An alternative approach would demote cascade errors to `Information` severity

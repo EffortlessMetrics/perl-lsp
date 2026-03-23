@@ -324,16 +324,21 @@ fn exact_duplicate_cascades_all_removed() -> Result<(), Box<dyn std::error::Erro
 // ---------------------------------------------------------------------------
 // 9. Real-world: single missing semicolon → at most 2 error-level diagnostics
 //
-// This is the primary user-visible test: a common typo (missing `;`) should
-// not flood the gutter with 5-10 red markers.  Cascade suppression must
-// reduce the noise to at most 2 Error-severity diagnostics.
+// Regression guard: the parser's error-recovery is good enough that a missing
+// semicolon between two simple assignments produces at most a handful of
+// Error-level parse markers.  The v3 recursive descent parser currently emits
+// zero PL-code errors for this exact source (it recovers silently), so this
+// test primarily guards against parser regressions that would suddenly flood
+// the gutter.  See test 9b for a synthetic test that directly exercises the
+// cascade suppression path.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn single_missing_semicolon_produces_at_most_two_parse_errors()
 -> Result<(), Box<dyn std::error::Error>> {
-    // Missing semicolon after the first assignment.  The parser will recover
-    // and continue, potentially emitting multiple cascade errors.
+    // The v3 parser recovers from a missing semicolon without emitting
+    // PL-code errors for this simple two-statement case.  This test guards
+    // against future parser regressions that might produce noisy output.
     let source = "my $x = 42\nmy $y = 43;\n";
 
     let diags = parse_and_diagnose(source);
@@ -342,9 +347,59 @@ fn single_missing_semicolon_produces_at_most_two_parse_errors()
     assert!(
         error_diags.len() <= 2,
         "A single missing semicolon should produce at most 2 Error-level parse diagnostics, \
-         got {} (cascade suppression is not working): {:?}",
+         got {}: {:?}",
         error_diags.len(),
         error_diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// 9b. Cascade suppression reduces multiple synthetic adjacent errors to one
+//
+// This directly exercises the suppress_cascades path: we inject 3 errors
+// within 10 bytes via run_diagnostics and verify that only the first survives.
+// Using error_level_parse_diags (the same filter as the real-world tests)
+// confirms the suppression result is visible at the user-facing layer.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cascade_suppression_reduces_adjacent_errors_to_one_at_error_level()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Three errors tightly clustered at offsets 5, 8, 10 — all within the
+    // 10-byte threshold of the cluster head (offset 5).  After cascade
+    // suppression only the head (offset 5) should remain.
+    let source = "my $x = foo(1, 2, 3\nmy $y = 2;\nmy $z = 3;\n";
+    let errors = vec![
+        ParseError::UnexpectedToken {
+            location: 5,
+            expected: "expression".to_string(),
+            found: "x".to_string(),
+        },
+        ParseError::UnexpectedToken {
+            location: 8,
+            expected: "expression".to_string(),
+            found: "foo".to_string(),
+        },
+        ParseError::UnexpectedToken {
+            location: 10,
+            expected: "expression".to_string(),
+            found: "1".to_string(),
+        },
+    ];
+
+    let diags = run_diagnostics(source, errors);
+    let error_diags = error_level_parse_diags(&diags);
+
+    assert_eq!(
+        error_diags.len(),
+        1,
+        "Three cascade errors within 10 bytes should collapse to one at Error level, got {}",
+        error_diags.len()
+    );
+    assert_eq!(
+        error_diags[0].range.0, 5,
+        "The cluster head (offset 5) should be the survivor"
     );
     Ok(())
 }
