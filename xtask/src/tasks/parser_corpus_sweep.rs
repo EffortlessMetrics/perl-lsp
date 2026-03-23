@@ -39,6 +39,8 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     ("Expected module name or version", "expected_module_name"),
     ("Expected '>' to close angle", "unclosed_angle"),
     ("Substitution operator should be", "substitution_misparse"),
+    ("Missing closing delimiter in substitution", "unclosed_substitution_delimiter"),
+    ("Invalid substitution modifier", "invalid_substitution_modifier"),
     // Expression errors — user-friendly token names ('=>', '->', etc.)
     ("expected expression, found '=>'", "unexpected_fat_arrow_expr"),
     ("expected expression, found '->'", "unexpected_arrow_expr"),
@@ -65,7 +67,7 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     ("expected expression, found ';'", "unexpected_semicolon_expr"),
     ("expected expression, found '}'", "unexpected_rbrace_expr"),
     ("expected expression, found ')'", "unexpected_rparen_expr"),
-    ("expected expression, found 'end of input'", "unexpected_eof_expr"),
+    ("expected expression, found end of input", "unexpected_eof_expr"),
     // Expression errors — closing bracket
     ("expected expression, found ']'", "unexpected_rbracket_expr"),
     // Expression errors — keywords not yet explicitly bucketed
@@ -1297,6 +1299,10 @@ mod tests {
 
     #[test]
     fn test_normalize_error_bucket_all_semantic_buckets_reachable() {
+        // NOTE: This test proves the bucket TABLE is internally consistent (each key matches
+        // itself). It does NOT verify that real parser output triggers these buckets.
+        // Use test_unexpected_eof_expr_from_real_parser_format and similar tests for that.
+        //
         // Verify that every entry in SEMANTIC_BUCKETS can be triggered
         for &(substring, bucket_name) in SEMANTIC_BUCKETS {
             let result = normalize_error_bucket(substring);
@@ -1306,6 +1312,52 @@ mod tests {
                 substring, bucket_name,
             );
         }
+    }
+
+    #[test]
+    fn test_unexpected_eof_expr_from_real_parser_format() {
+        // Real parser output: ParseError::UnexpectedToken with expected="expression",
+        // found=TokenKind::Eof.display_name()="end of input" (NO single quotes).
+        // Formatted as "expected expression, found end of input at position N".
+        // The bucket key must NOT have single quotes around "end of input".
+        assert_eq!(
+            normalize_error_bucket("expected expression, found end of input at position 42"),
+            "unexpected_eof_expr",
+        );
+    }
+
+    #[test]
+    fn test_unexpected_eof_expr_old_quoted_key_does_not_match() {
+        // Verifies the real parser output does not contain the old broken quoted key.
+        // TokenKind::Eof.display_name() returns "end of input" without single quotes.
+        let broken_key = "expected expression, found 'end of input'";
+        let real_output = "expected expression, found end of input at position 42";
+        assert!(
+            !real_output.contains(broken_key),
+            "Quoted key should not match real parser output — quotes are not emitted by Eof.display_name()",
+        );
+    }
+
+    #[test]
+    fn test_substitution_modifier_buckets() {
+        // The prefix "Invalid substitution modifier" must match all modifier variants,
+        // not just one specific letter — confirm two distinct letters both route correctly.
+        assert_eq!(
+            normalize_error_bucket(
+                "Invalid substitution modifier 'T'. Valid modifiers are: g, i, m, s, x, o, e, r"
+            ),
+            "invalid_substitution_modifier",
+        );
+        assert_eq!(
+            normalize_error_bucket(
+                "Invalid substitution modifier 'b'. Valid modifiers are: g, i, m, s, x, o, e, r"
+            ),
+            "invalid_substitution_modifier",
+        );
+        assert_eq!(
+            normalize_error_bucket("Missing closing delimiter in substitution"),
+            "unclosed_substitution_delimiter",
+        );
     }
 
     #[test]
