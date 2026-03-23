@@ -4,8 +4,9 @@
 //! by the dispatch table. These tests do NOT test feature behaviour (that is
 //! covered by the feature tests); they guard against protocol regressions:
 //!
-//! 1. All 36 dispatched command types produce a `DapMessage::Response` — never
-//!    a panic or a spurious `Event`/`Request` variant.
+//! 1. All 37 dispatched command types produce a `DapMessage::Response` — never
+//!    a panic or a spurious `Event`/`Request` variant. (`launch` and `attach`
+//!    are excluded because they spawn real Perl processes; 35 arms are tested here.)
 //! 2. Every response carries the correct `command` echo and `request_seq` echo.
 //! 3. Response sequence numbers are strictly monotonically increasing across a
 //!    multi-request session.
@@ -157,10 +158,10 @@ fn test_unknown_command_returns_structured_failure() {
 // AC:17 — request_seq is faithfully echoed for every command
 fn test_request_seq_echo_for_all_dispatched_commands() {
     // Representative set covering all branches of the dispatch table.
-    // `launch` and `attach` are excluded here — they spawn real Perl processes
-    // and are covered in dap_comprehensive_test, dap_launch_security_test, and
-    // dap_integration_test. The protocol shape invariants below still apply to
-    // all 36 dispatch arms; the exclusions don't weaken the non-regression contract.
+    // `launch` and `attach` are excluded — they spawn real Perl processes and are
+    // covered in dap_comprehensive_test, dap_launch_security_test, and
+    // dap_integration_test. 35 of the 37 dispatch arms are verified here.
+    // `variables` and `inlineValues` are included below to cover every remaining arm.
     let cases: &[(&str, Option<Value>)] = &[
         ("cancel", None),
         ("configurationDone", None),
@@ -195,6 +196,11 @@ fn test_request_seq_echo_for_all_dispatched_commands() {
         ("stepIn", Some(json!({"threadId": 1}))),
         ("stepInTargets", Some(json!({"frameId": 0}))),
         ("stepOut", Some(json!({"threadId": 1}))),
+        // Complete the sweep: inlineValues and variables are the two remaining arms
+        // not covered above. Both are tested here for request_seq echo only; their
+        // body contents are validated in dedicated sections.
+        ("inlineValues", Some(json!({"source": {}, "startLine": 1, "endLine": 5}))),
+        ("variables", Some(json!({"variablesReference": 1}))),
     ];
 
     for (seq, (command, args)) in cases.iter().enumerate() {
@@ -355,8 +361,17 @@ fn test_capabilities_exception_info_consistent() {
     let response = adapter2.handle_request(2, "exceptionInfo", None);
     let (_, _, success, _, _) = unwrap_response(response, "exceptionInfo");
 
+    // Bidirectional consistency: capability and handler must agree in both directions.
     if advertised {
         assert!(success, "exceptionInfo must succeed when capability is advertised");
+    } else {
+        // If capability is not advertised, the handler must also not succeed,
+        // or the capability must be set to true. Mismatched = implementation drift.
+        assert!(
+            !success || advertised,
+            "exceptionInfo handler succeeds but supportsExceptionInfoRequest is not advertised — \
+             set the capability to true or make the handler fail gracefully"
+        );
     }
 }
 
