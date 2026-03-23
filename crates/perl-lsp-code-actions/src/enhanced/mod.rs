@@ -31,6 +31,7 @@
 
 use crate::types::CodeAction;
 use perl_parser_core::ast::{Node, NodeKind};
+use std::collections::HashSet;
 
 mod error_checking;
 mod extract_subroutine;
@@ -62,9 +63,12 @@ impl EnhancedCodeActionsProvider {
         range: (usize, usize),
     ) -> Vec<CodeAction> {
         let mut actions = Vec::new();
+        // Track (stmt_start, var_name) pairs already emitted to prevent duplicate
+        // extract-variable actions when both a parent and child node overlap the range.
+        let mut extract_var_seen: HashSet<(usize, String)> = HashSet::new();
 
         // Find all nodes that overlap the range and collect actions
-        self.collect_actions_for_range(ast, range, &mut actions);
+        self.collect_actions_for_range(ast, range, false, &mut actions, &mut extract_var_seen);
 
         // Global actions (not node-specific)
         actions.extend(self.get_global_refactorings(ast));
@@ -72,24 +76,42 @@ impl EnhancedCodeActionsProvider {
         actions
     }
 
-    /// Recursively collect actions for all nodes in range
+    /// Recursively collect actions for all nodes in range.
+    ///
+    /// `is_control_body` is `true` when the current node is the body block of a
+    /// control-flow construct (`If`, `While`, `For`, `Foreach`, `Subroutine`).
+    /// In that case the node is not offered as "Extract to subroutine" — only
+    /// standalone bare blocks are extractable.
     fn collect_actions_for_range(
         &self,
         node: &Node,
         range: (usize, usize),
+        is_control_body: bool,
         actions: &mut Vec<CodeAction>,
+        extract_var_seen: &mut HashSet<(usize, String)>,
     ) {
         // Check if this node overlaps the range
         if node.location.start <= range.1 && node.location.end >= range.0 {
             let helpers = Helpers::new(&self.source, &self.lines);
 
-            // Extract variable (enhanced version)
-            if self.is_extractable_expression(node) {
-                actions.push(extract_variable::create_extract_variable_action(
-                    node,
-                    &self.source,
-                    &helpers,
-                ));
+            // Extract variable — only emit when the node's end reaches or exceeds the
+            // selection's end. This prevents duplicate actions for nested expressions:
+            // when both a Binary(8..25) and its inner FunctionCall(8..20) overlap a
+            // selection (8..25), the FunctionCall's end (20) is before the selection's
+            // end (25) and is skipped; only the outermost matching node emits an action.
+            // Partial-left overlap (cursor inside expression) is still supported.
+            let node_reaches_selection_end = node.location.end >= range.1;
+            if node_reaches_selection_end && self.is_extractable_expression(node) {
+                let action =
+                    extract_variable::create_extract_variable_action(node, &self.source, &helpers);
+                if let Some(decl) = action.edit.changes.first() {
+                    let key = (decl.location.start, decl.new_text.clone());
+                    if extract_var_seen.insert(key) {
+                        actions.push(action);
+                    }
+                } else {
+                    actions.push(action);
+                }
             }
 
             // Convert old-style loops
@@ -107,8 +129,8 @@ impl EnhancedCodeActionsProvider {
                 actions.push(action);
             }
 
-            // Extract subroutine
-            if self.is_extractable_block(node) {
+            // Extract subroutine — only for standalone blocks, not control-flow bodies
+            if !is_control_body && self.is_extractable_block(node) {
                 actions.push(extract_subroutine::create_extract_subroutine_action(
                     node,
                     &self.source,
@@ -117,88 +139,118 @@ impl EnhancedCodeActionsProvider {
             }
         }
 
-        // Recursively check children
+        // Recursively check children, flagging control-flow body blocks
         match &node.kind {
             NodeKind::Program { statements } => {
                 for stmt in statements {
-                    self.collect_actions_for_range(stmt, range, actions);
+                    self.collect_actions_for_range(stmt, range, false, actions, extract_var_seen);
                 }
             }
             NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.collect_actions_for_range(stmt, range, actions);
+                    self.collect_actions_for_range(stmt, range, false, actions, extract_var_seen);
                 }
             }
             NodeKind::ExpressionStatement { expression } => {
-                self.collect_actions_for_range(expression, range, actions);
+                self.collect_actions_for_range(expression, range, false, actions, extract_var_seen);
             }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-                self.collect_actions_for_range(condition, range, actions);
-                self.collect_actions_for_range(then_branch, range, actions);
+                self.collect_actions_for_range(condition, range, false, actions, extract_var_seen);
+                self.collect_actions_for_range(
+                    then_branch,
+                    range,
+                    true, // then-body is a control-flow block
+                    actions,
+                    extract_var_seen,
+                );
                 for (cond, branch) in elsif_branches {
-                    self.collect_actions_for_range(cond, range, actions);
-                    self.collect_actions_for_range(branch, range, actions);
+                    self.collect_actions_for_range(cond, range, false, actions, extract_var_seen);
+                    self.collect_actions_for_range(branch, range, true, actions, extract_var_seen);
                 }
                 if let Some(branch) = else_branch {
-                    self.collect_actions_for_range(branch, range, actions);
+                    self.collect_actions_for_range(branch, range, true, actions, extract_var_seen);
                 }
             }
             NodeKind::FunctionCall { args, .. } => {
                 for arg in args {
-                    self.collect_actions_for_range(arg, range, actions);
+                    self.collect_actions_for_range(arg, range, false, actions, extract_var_seen);
                 }
             }
             NodeKind::Binary { left, right, .. } => {
-                self.collect_actions_for_range(left, range, actions);
-                self.collect_actions_for_range(right, range, actions);
+                self.collect_actions_for_range(left, range, false, actions, extract_var_seen);
+                self.collect_actions_for_range(right, range, false, actions, extract_var_seen);
             }
             NodeKind::Assignment { lhs, rhs, .. } => {
-                self.collect_actions_for_range(lhs, range, actions);
-                self.collect_actions_for_range(rhs, range, actions);
+                self.collect_actions_for_range(lhs, range, false, actions, extract_var_seen);
+                self.collect_actions_for_range(rhs, range, false, actions, extract_var_seen);
             }
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                self.collect_actions_for_range(variable, range, actions);
+                self.collect_actions_for_range(variable, range, false, actions, extract_var_seen);
                 if let Some(init) = initializer {
-                    self.collect_actions_for_range(init, range, actions);
+                    self.collect_actions_for_range(init, range, false, actions, extract_var_seen);
                 }
             }
             NodeKind::For { init, condition, update, body, .. } => {
                 if let Some(init) = init {
-                    self.collect_actions_for_range(init, range, actions);
+                    self.collect_actions_for_range(init, range, false, actions, extract_var_seen);
                 }
                 if let Some(condition) = condition {
-                    self.collect_actions_for_range(condition, range, actions);
+                    self.collect_actions_for_range(
+                        condition,
+                        range,
+                        false,
+                        actions,
+                        extract_var_seen,
+                    );
                 }
                 if let Some(update) = update {
-                    self.collect_actions_for_range(update, range, actions);
+                    self.collect_actions_for_range(update, range, false, actions, extract_var_seen);
                 }
-                self.collect_actions_for_range(body, range, actions);
+                self.collect_actions_for_range(
+                    body,
+                    range,
+                    true, // loop body is a control-flow block
+                    actions,
+                    extract_var_seen,
+                );
             }
             NodeKind::Foreach { variable, list, body, continue_block } => {
-                self.collect_actions_for_range(variable, range, actions);
-                self.collect_actions_for_range(list, range, actions);
-                self.collect_actions_for_range(body, range, actions);
+                self.collect_actions_for_range(variable, range, false, actions, extract_var_seen);
+                self.collect_actions_for_range(list, range, false, actions, extract_var_seen);
+                self.collect_actions_for_range(body, range, true, actions, extract_var_seen);
                 if let Some(cb) = continue_block {
-                    self.collect_actions_for_range(cb, range, actions);
+                    self.collect_actions_for_range(cb, range, false, actions, extract_var_seen);
                 }
             }
             NodeKind::While { condition, body, .. } => {
-                self.collect_actions_for_range(condition, range, actions);
-                self.collect_actions_for_range(body, range, actions);
+                self.collect_actions_for_range(condition, range, false, actions, extract_var_seen);
+                self.collect_actions_for_range(
+                    body,
+                    range,
+                    true, // loop body is a control-flow block
+                    actions,
+                    extract_var_seen,
+                );
             }
             NodeKind::MethodCall { object, args, .. } => {
-                self.collect_actions_for_range(object, range, actions);
+                self.collect_actions_for_range(object, range, false, actions, extract_var_seen);
                 for arg in args {
-                    self.collect_actions_for_range(arg, range, actions);
+                    self.collect_actions_for_range(arg, range, false, actions, extract_var_seen);
                 }
             }
             NodeKind::Subroutine { body, prototype, signature, .. } => {
-                self.collect_actions_for_range(body, range, actions);
+                self.collect_actions_for_range(
+                    body,
+                    range,
+                    true, // subroutine body block is not a standalone block
+                    actions,
+                    extract_var_seen,
+                );
                 if let Some(proto) = prototype {
-                    self.collect_actions_for_range(proto, range, actions);
+                    self.collect_actions_for_range(proto, range, false, actions, extract_var_seen);
                 }
                 if let Some(sig) = signature {
-                    self.collect_actions_for_range(sig, range, actions);
+                    self.collect_actions_for_range(sig, range, false, actions, extract_var_seen);
                 }
             }
             _ => {}

@@ -275,37 +275,6 @@ impl LspServer {
                 }));
             }
 
-            // Always offer generic debug actions when there are diagnostics
-            if !diagnostics.is_empty() {
-                // Add debug print action
-                code_actions.push(json!({
-                    "title": "Add debug print",
-                    "kind": "refactor.rewrite",
-                    "command": {
-                        "title": "Add debug print",
-                        "command": "perl.addDebugPrint",
-                        "arguments": [json!({ "uri": uri, "range": {
-                            "start": {"line": start_line, "character": start_char},
-                            "end": {"line": end_line, "character": end_char}
-                        }})]
-                    }
-                }));
-
-                // Extract variable action
-                code_actions.push(json!({
-                    "title": "Extract variable",
-                    "kind": "refactor.extract",
-                    "command": {
-                        "title": "Extract variable",
-                        "command": "perl.extractVariable",
-                        "arguments": [json!({ "uri": uri, "range": {
-                            "start": {"line": start_line, "character": start_char},
-                            "end": {"line": end_line, "character": end_char}
-                        }})]
-                    }
-                }));
-            }
-
             // Add missing pragma actions (use strict / use warnings) when applicable
             let mut pragma_actions =
                 crate::code_actions_pragmas::missing_pragmas_actions(uri, &doc.text);
