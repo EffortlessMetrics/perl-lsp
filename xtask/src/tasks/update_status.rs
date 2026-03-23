@@ -1,8 +1,16 @@
-//! Update derived metrics in docs/project/CURRENT_STATUS.md and docs/project/ROADMAP.md.
+//! Update derived metrics in docs/project/status/ subsystem files.
 //!
 //! Rust port of `scripts/update-current-status.py`.  Computes test counts,
 //! feature catalog metrics, corpus statistics, and missing-docs warnings, then
 //! patches the markdown files between fenced markers.
+//!
+//! Subsystem files written:
+//!   - docs/project/status/lsp.md     (LSP coverage + compliance table)
+//!   - docs/project/status/tests.md   (test counts + tracked debt)
+//!   - docs/project/status/parser.md  (corpus stats)
+//!   - docs/project/status/quality.md (mutation score, perf)
+//!
+//! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -16,6 +24,31 @@ use regex::Regex;
 use crate::utils::project_root;
 
 // ---------------------------------------------------------------------------
+// Subsystem selector
+// ---------------------------------------------------------------------------
+
+/// Which subsystems to regenerate.
+#[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
+pub enum StatusSubsystem {
+    Lsp,
+    Tests,
+    Parser,
+    Quality,
+}
+
+impl StatusSubsystem {
+    #[allow(dead_code)]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            StatusSubsystem::Lsp => "lsp",
+            StatusSubsystem::Tests => "tests",
+            StatusSubsystem::Parser => "parser",
+            StatusSubsystem::Quality => "quality",
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -23,31 +56,101 @@ use crate::utils::project_root;
 ///
 /// * `write` – write changes back to disk.
 /// * `check` – verify files are up to date (returns error if stale).
+/// * `only`  – when set, only regenerate the given subsystem; otherwise all four.
 ///
-/// When neither flag is set, defaults to `check`.
-pub fn run(write: bool, check: bool) -> Result<()> {
+/// When neither `write` nor `check` is set, defaults to `check`.
+pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()> {
     let check = if !write && !check { true } else { check };
 
     let root = project_root()?;
 
-    let mut files_to_update: Vec<(&str, PathBuf, String)> = Vec::new();
+    let subsystems: Vec<StatusSubsystem> = match only {
+        Some(s) => vec![s],
+        None => vec![
+            StatusSubsystem::Lsp,
+            StatusSubsystem::Tests,
+            StatusSubsystem::Parser,
+            StatusSubsystem::Quality,
+        ],
+    };
 
-    // --- CURRENT_STATUS.md ---
-    let status_path = root.join("docs/project/CURRENT_STATUS.md");
-    let original_status =
-        fs::read_to_string(&status_path).context("reading docs/project/CURRENT_STATUS.md")?;
-    let updated_status = update_current_status(&root, &original_status)?;
-    if updated_status != original_status {
-        files_to_update.push(("docs/project/CURRENT_STATUS.md", status_path, updated_status));
+    let mut files_to_update: Vec<(&'static str, PathBuf, String)> = Vec::new();
+
+    // Collect metrics once; skip slow collectors not needed by the selected subsystems.
+    let need_lsp = subsystems.contains(&StatusSubsystem::Lsp);
+    let need_tests = subsystems.contains(&StatusSubsystem::Tests);
+    let need_parser = subsystems.contains(&StatusSubsystem::Parser);
+    let need_quality = subsystems.contains(&StatusSubsystem::Quality);
+
+    // --- LSP subsystem ---
+    let cov_opt = if need_lsp { Some(count_lsp_coverage(&root)?) } else { None };
+    let compliance_opt = if need_lsp { Some(compute_compliance_table(&root)?) } else { None };
+
+    if need_lsp {
+        let cov = cov_opt.as_ref().expect("lsp coverage collected");
+        let compliance_table = compliance_opt.as_ref().expect("compliance table collected");
+
+        let lsp_path = root.join("docs/project/status/lsp.md");
+        let original_lsp =
+            fs::read_to_string(&lsp_path).context("reading docs/project/status/lsp.md")?;
+        let updated_lsp = generate_lsp_status(cov, compliance_table, &original_lsp)?;
+        if updated_lsp != original_lsp {
+            files_to_update.push(("docs/project/status/lsp.md", lsp_path, updated_lsp));
+        }
+
+        // Keep ROADMAP.md compliance table in sync
+        let roadmap_path = root.join("docs/project/ROADMAP.md");
+        let original_roadmap =
+            fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
+        let updated_roadmap = update_roadmap(&root, &original_roadmap)?;
+        if updated_roadmap != original_roadmap {
+            files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
+        }
     }
 
-    // --- ROADMAP.md ---
-    let roadmap_path = root.join("docs/project/ROADMAP.md");
-    let original_roadmap =
-        fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
-    let updated_roadmap = update_roadmap(&root, &original_roadmap)?;
-    if updated_roadmap != original_roadmap {
-        files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
+    // --- Tests subsystem ---
+    if need_tests {
+        let tests = count_tests(&root);
+        let missing_docs_current = count_missing_docs_perl_parser(&root);
+        let missing_docs_baseline = read_missing_docs_baseline(&root);
+
+        let tests_path = root.join("docs/project/status/tests.md");
+        let original_tests =
+            fs::read_to_string(&tests_path).context("reading docs/project/status/tests.md")?;
+        let updated_tests = generate_tests_status(
+            &tests,
+            missing_docs_current,
+            missing_docs_baseline,
+            &original_tests,
+        )?;
+        if updated_tests != original_tests {
+            files_to_update.push(("docs/project/status/tests.md", tests_path, updated_tests));
+        }
+    }
+
+    // --- Parser subsystem ---
+    if need_parser {
+        let corpus_sections = count_corpus_sections(&root);
+        let gap_files = count_gap_files(&root);
+
+        let parser_path = root.join("docs/project/status/parser.md");
+        let original_parser =
+            fs::read_to_string(&parser_path).context("reading docs/project/status/parser.md")?;
+        let updated_parser = generate_parser_status(corpus_sections, gap_files, &original_parser)?;
+        if updated_parser != original_parser {
+            files_to_update.push(("docs/project/status/parser.md", parser_path, updated_parser));
+        }
+    }
+
+    // --- Quality subsystem ---
+    if need_quality {
+        let quality_path = root.join("docs/project/status/quality.md");
+        let original_quality =
+            fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
+        let updated_quality = generate_quality_status(&original_quality)?;
+        if updated_quality != original_quality {
+            files_to_update.push(("docs/project/status/quality.md", quality_path, updated_quality));
+        }
     }
 
     if files_to_update.is_empty() {
@@ -291,7 +394,7 @@ fn count_lsp_coverage(root: &Path) -> Result<LspCoverage> {
 }
 
 // ---------------------------------------------------------------------------
-// Compliance table for ROADMAP.md
+// Compliance table for ROADMAP.md and lsp.md
 // ---------------------------------------------------------------------------
 
 fn compute_compliance_table(root: &Path) -> Result<String> {
@@ -407,35 +510,73 @@ fn replace_block(
     Ok(result.into_owned())
 }
 
-/// Replace a single row matching `pattern` with `replacement`.
-fn replace_row(text: &str, pattern: &str, replacement: &str) -> Result<String> {
-    let re = Regex::new(pattern).context("building row replacement regex")?;
+// ---------------------------------------------------------------------------
+// Per-subsystem generators
+// ---------------------------------------------------------------------------
 
-    let mut count = 0;
-    let result = re.replace_all(text, |_caps: &regex::Captures<'_>| {
-        count += 1;
-        replacement.to_string()
-    });
+fn generate_lsp_status(
+    cov: &LspCoverage,
+    compliance_table: &str,
+    original: &str,
+) -> Result<String> {
+    let lsp_target_pct: usize = 100;
+    let lsp_status = if cov.ux_percent >= lsp_target_pct { "PASS" } else { "In progress" };
+    let lsp_table_row = format!(
+        "| **LSP Coverage** | {}% ({}/{} advertised features, `features.toml`) | {}% | {} |",
+        cov.ux_percent, cov.ux_implemented, cov.ux_total, lsp_target_pct, lsp_status
+    );
 
-    if count != 1 {
-        return Err(eyre!("Expected 1 match for row pattern {pattern:?}, got {count}"));
-    }
+    let lsp_coverage_bullet = format!(
+        "- **LSP Coverage**: {}% user-visible feature coverage ({}/{} advertised features from `features.toml`)",
+        cov.ux_percent, cov.ux_implemented, cov.ux_total
+    );
+    let protocol_compliance_bullet = format!(
+        "- **Protocol Compliance**: {}% overall LSP protocol support ({}/{} including plumbing)",
+        cov.protocol_percent, cov.protocol_implemented, cov.protocol_total
+    );
 
-    Ok(result.into_owned())
+    let lsp_target = if cov.ux_percent >= lsp_target_pct {
+        "**Target**: maintain 100% LSP coverage (no regressions)".to_string()
+    } else {
+        format!("**Target**: 100% LSP coverage (from current {}%)", cov.ux_percent)
+    };
+
+    let bullets_content = [
+        lsp_coverage_bullet.as_str(),
+        protocol_compliance_bullet.as_str(),
+        "",
+        lsp_target.as_str(),
+    ]
+    .join("\n");
+
+    let mut text = original.to_string();
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: LSP_COVERAGE -->",
+        "<!-- END: LSP_COVERAGE -->",
+        &lsp_table_row,
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: LSP_METRICS_BULLETS -->",
+        "<!-- END: LSP_METRICS_BULLETS -->",
+        &bullets_content,
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: COMPLIANCE_TABLE -->",
+        "<!-- END: COMPLIANCE_TABLE -->",
+        compliance_table,
+    )?;
+    Ok(text)
 }
 
-// ---------------------------------------------------------------------------
-// CURRENT_STATUS.md update
-// ---------------------------------------------------------------------------
-
-fn update_current_status(root: &Path, original: &str) -> Result<String> {
-    let cov = count_lsp_coverage(root)?;
-    let corpus_sections = count_corpus_sections(root);
-    let gap_files = count_gap_files(root);
-    let tests = count_tests(root);
-    let missing_docs_current = count_missing_docs_perl_parser(root);
-    let missing_docs_baseline = read_missing_docs_baseline(root);
-
+fn generate_tests_status(
+    tests: &TestCounts,
+    missing_docs_current: Option<usize>,
+    missing_docs_baseline: Option<usize>,
+    original: &str,
+) -> Result<String> {
     let tier_a_tests_str =
         tests.tier_a_lib_tests.map_or_else(|| "UNVERIFIED".to_string(), |n| n.to_string());
 
@@ -456,113 +597,63 @@ fn update_current_status(root: &Path, original: &str) -> Result<String> {
         _ => String::new(),
     };
 
-    // Build table row content — uses UX coverage (headline metric)
-    let lsp_target_pct: usize = 100;
-    let lsp_status = if cov.ux_percent >= lsp_target_pct { "PASS" } else { "In progress" };
-    let lsp_table_row = format!(
-        "| **LSP Coverage** | {}% ({}/{} advertised features, `features.toml`) | {}% | {} |",
-        cov.ux_percent, cov.ux_implemented, cov.ux_total, lsp_target_pct, lsp_status
+    let table_rows = format!(
+        "| **Tier A Tests** | {tier_a_tests_str} lib tests (discovered), {ignored_tests_str} ignores (tracked) | 100% pass | PASS |\n\
+         | **Tracked Test Debt** | {tracked_debt_str} ({bug_count_str} bug, {manual_count_str} manual) | 0 | Near-zero |"
     );
 
-    // Build bullets section content
-    let lsp_coverage = format!(
-        "- **LSP Coverage**: {}% user-visible feature coverage ({}/{} advertised features from `features.toml`)",
-        cov.ux_percent, cov.ux_implemented, cov.ux_total
+    let bullets_content = format!(
+        "- **Test Status**: {tier_a_tests_str} lib tests (Tier A), {ignored_tests_str} ignores tracked ({tracked_debt_str} total tracked debt: {bug_count_str} bug, {manual_count_str} manual)\n\
+         - **Docs (perl-parser)**: missing_docs warnings = {missing_docs_str}{baseline_suffix}"
     );
-    let protocol_compliance = format!(
-        "- **Protocol Compliance**: {}% overall LSP protocol support ({}/{} including plumbing)",
-        cov.protocol_percent, cov.protocol_implemented, cov.protocol_total
-    );
-    let parser_coverage = format!(
-        "- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~{corpus_sections} sections) + `test_corpus/` ({gap_files} `.pl` files)"
-    );
-    let test_status = format!(
-        "- **Test Status**: {tier_a_tests_str} lib tests (Tier A), {ignored_tests_str} ignores tracked ({tracked_debt_str} total tracked debt: {bug_count_str} bug, {manual_count_str} manual)"
-    );
-    let docs_status = format!(
-        "- **Docs (perl-parser)**: missing_docs warnings = {missing_docs_str}{baseline_suffix}"
-    );
-    let quality_metrics = "- **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing";
-    let production_status =
-        "- **Production Status**: LSP server public alpha (`just ci-gate` passing)";
-
-    let lsp_target = if cov.ux_percent >= lsp_target_pct {
-        "**Target**: maintain 100% LSP coverage (no regressions)".to_string()
-    } else {
-        format!("**Target**: 100% LSP coverage (from current {}%)", cov.ux_percent)
-    };
-
-    let bullets_content = [
-        lsp_coverage.as_str(),
-        protocol_compliance.as_str(),
-        parser_coverage.as_str(),
-        test_status.as_str(),
-        docs_status.as_str(),
-        quality_metrics,
-        production_status,
-        "",
-        lsp_target.as_str(),
-    ]
-    .join("\n");
 
     let mut text = original.to_string();
-
-    // Replace Tier A Tests row
-    text = replace_row(
-        &text,
-        r"(?m)^\| \*\*Tier A Tests\*\* \| .* \| 100% pass \| .* \|$",
-        &format!(
-            "| **Tier A Tests** | {tier_a_tests_str} lib tests (discovered), {ignored_tests_str} ignores (tracked) | 100% pass | PASS |"
-        ),
-    )?;
-
-    // Replace Tracked Test Debt row
-    text = replace_row(
-        &text,
-        r"(?m)^\| \*\*Tracked Test Debt\*\* \| .* \| 0 \| .* \|$",
-        &format!(
-            "| **Tracked Test Debt** | {tracked_debt_str} ({bug_count_str} bug, {manual_count_str} manual) | 0 | Near-zero |"
-        ),
-    )?;
-
-    // Replace Documentation row
-    text = replace_row(
-        &text,
-        r"(?m)^\| \*\*Documentation\*\* \| .* \| 0 \| .* \|$",
-        &format!(
-            "| **Documentation** | perl-parser missing_docs = {missing_docs_str}{baseline_suffix} | 0 | Ratchet |"
-        ),
-    )?;
-
-    // Replace STATUS_METRICS_TABLE block
     text = replace_block(
         &text,
-        "<!-- BEGIN: STATUS_METRICS_TABLE -->",
-        "<!-- END: STATUS_METRICS_TABLE -->",
-        &lsp_table_row,
+        "<!-- BEGIN: TESTS_TABLE_ROWS -->",
+        "<!-- END: TESTS_TABLE_ROWS -->",
+        &table_rows,
     )?;
-
-    // Replace STATUS_METRICS_BULLETS block
     text = replace_block(
         &text,
-        "<!-- BEGIN: STATUS_METRICS_BULLETS -->",
-        "<!-- END: STATUS_METRICS_BULLETS -->",
+        "<!-- BEGIN: TESTS_METRICS_BULLETS -->",
+        "<!-- END: TESTS_METRICS_BULLETS -->",
         &bullets_content,
     )?;
-
-    // Replace doc violations line (if present)
-    if let Ok(re) = Regex::new(r"(?m)^\-\s+\*\*484 doc violations\*\*:.*$") {
-        let replacement = format!(
-            "- **missing_docs (perl-parser)**: {missing_docs_str}{baseline_suffix} (ratcheted by `ci/check_missing_docs.sh`)"
-        );
-        text = re.replace(&text, replacement.as_str()).into_owned();
-    }
-
     Ok(text)
 }
 
+fn generate_parser_status(
+    corpus_sections: usize,
+    gap_files: usize,
+    original: &str,
+) -> Result<String> {
+    let parser_coverage_bullet = format!(
+        "- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~{corpus_sections} sections) + `test_corpus/` ({gap_files} `.pl` files)"
+    );
+
+    replace_block(
+        original,
+        "<!-- BEGIN: PARSER_METRICS_BULLETS -->",
+        "<!-- END: PARSER_METRICS_BULLETS -->",
+        &parser_coverage_bullet,
+    )
+}
+
+fn generate_quality_status(original: &str) -> Result<String> {
+    let bullets_content = "- **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing\n\
+                           - **Production Status**: LSP server public alpha (`just ci-gate` passing)";
+
+    replace_block(
+        original,
+        "<!-- BEGIN: QUALITY_METRICS_BULLETS -->",
+        "<!-- END: QUALITY_METRICS_BULLETS -->",
+        bullets_content,
+    )
+}
+
 // ---------------------------------------------------------------------------
-// ROADMAP.md update
+// ROADMAP.md update (keeps compliance table in sync)
 // ---------------------------------------------------------------------------
 
 fn update_roadmap(root: &Path, original: &str) -> Result<String> {
@@ -599,25 +690,6 @@ mod tests {
     }
 
     #[test]
-    fn test_replace_row() -> Result<()> {
-        let input = "line1\n| **Foo** | old | bar | baz |\nline3";
-        let result = replace_row(
-            input,
-            r"(?m)^\| \*\*Foo\*\* \| .* \| bar \| .* \|$",
-            "| **Foo** | new | bar | qux |",
-        )?;
-        assert_eq!(result, "line1\n| **Foo** | new | bar | qux |\nline3");
-        Ok(())
-    }
-
-    #[test]
-    fn test_replace_row_no_match() {
-        let input = "no matching row";
-        let result = replace_row(input, r"(?m)^\| \*\*Missing\*\* \|.*$", "replacement");
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_lsp_coverage_from_catalog() -> Result<()> {
         let root = project_root()?;
         let cov = count_lsp_coverage(&root)?;
@@ -642,6 +714,75 @@ mod tests {
         let root = project_root()?;
         let count = count_gap_files(&root);
         assert!(count > 0, "expected nonzero gap .pl files");
+        Ok(())
+    }
+
+    /// All four subsystem status files must exist.
+    #[test]
+    fn test_subsystem_files_exist() -> Result<()> {
+        let root = project_root()?;
+        let status_dir = root.join("docs/project/status");
+        for name in &["lsp.md", "tests.md", "parser.md", "quality.md"] {
+            let path = status_dir.join(name);
+            assert!(path.exists(), "subsystem file missing: {}", path.display());
+        }
+        Ok(())
+    }
+
+    /// The stub CURRENT_STATUS.md must NOT contain any <!-- BEGIN: --> markers.
+    /// If it does, the generator will try to patch it and fail.
+    #[test]
+    fn test_stub_has_no_begin_markers() -> Result<()> {
+        let root = project_root()?;
+        let stub_path = root.join("docs/project/CURRENT_STATUS.md");
+        let content = fs::read_to_string(&stub_path).context("reading CURRENT_STATUS.md")?;
+        assert!(
+            !content.contains("<!-- BEGIN:"),
+            "CURRENT_STATUS.md must not contain <!-- BEGIN: --> markers (it is now a stable stub). \
+             Generated content belongs in docs/project/status/*.md"
+        );
+        Ok(())
+    }
+
+    /// The subsystem files must contain the expected marker blocks.
+    #[test]
+    fn test_subsystem_files_have_markers() -> Result<()> {
+        let root = project_root()?;
+        let status_dir = root.join("docs/project/status");
+
+        let lsp = fs::read_to_string(status_dir.join("lsp.md"))?;
+        assert!(lsp.contains("<!-- BEGIN: LSP_COVERAGE -->"), "lsp.md missing LSP_COVERAGE block");
+        assert!(
+            lsp.contains("<!-- BEGIN: LSP_METRICS_BULLETS -->"),
+            "lsp.md missing LSP_METRICS_BULLETS block"
+        );
+        assert!(
+            lsp.contains("<!-- BEGIN: COMPLIANCE_TABLE -->"),
+            "lsp.md missing COMPLIANCE_TABLE block"
+        );
+
+        let tests = fs::read_to_string(status_dir.join("tests.md"))?;
+        assert!(
+            tests.contains("<!-- BEGIN: TESTS_TABLE_ROWS -->"),
+            "tests.md missing TESTS_TABLE_ROWS block"
+        );
+        assert!(
+            tests.contains("<!-- BEGIN: TESTS_METRICS_BULLETS -->"),
+            "tests.md missing TESTS_METRICS_BULLETS block"
+        );
+
+        let parser = fs::read_to_string(status_dir.join("parser.md"))?;
+        assert!(
+            parser.contains("<!-- BEGIN: PARSER_METRICS_BULLETS -->"),
+            "parser.md missing PARSER_METRICS_BULLETS block"
+        );
+
+        let quality = fs::read_to_string(status_dir.join("quality.md"))?;
+        assert!(
+            quality.contains("<!-- BEGIN: QUALITY_METRICS_BULLETS -->"),
+            "quality.md missing QUALITY_METRICS_BULLETS block"
+        );
+
         Ok(())
     }
 }
