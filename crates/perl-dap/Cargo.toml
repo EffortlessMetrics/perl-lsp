@@ -161,6 +161,11 @@ name = "dap_feature_flag_coverage_tests"
 path = "tests/dap_feature_flag_coverage_tests.rs"
 # AC0-AC7: Feature flag coverage for 8 previously untested DAP features (#2784)
 
+[[test]]
+name = "dap_non_regression_tests"
+path = "tests/dap_non_regression_tests.rs"
+# AC:17 Phase 3 non-regression: protocol shape, seq monotonicity, capabilities consistency (#435)
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
