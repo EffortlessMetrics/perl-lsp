@@ -324,6 +324,13 @@ impl LspServer {
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                             let end_pos =
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
+
+                            // Append suggestion to message when present
+                            let message = match d.suggestion {
+                                Some(ref s) => format!("{}\nSuggestion: {}", d.message, s),
+                                None => d.message.clone(),
+                            };
+
                             let mut diag = json!({
                                 "range": {
                                     "start": {
@@ -343,7 +350,7 @@ impl LspServer {
                                 },
                                 "code": d.code.clone(),
                                 "source": "perl-lsp",
-                                "message": d.message.clone(),
+                                "message": message,
                             });
 
                             // Add diagnostic tags (e.g., Unnecessary, Deprecated)
@@ -351,8 +358,56 @@ impl LspServer {
                                 diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
                             }
 
-                            // Add markdown content if client supports it (LSP 3.18)
-                            if markup_message_support {
+                            // Add relatedInformation when present
+                            if !d.related_information.is_empty() {
+                                diag["relatedInformation"] = json!(
+                                    d.related_information.iter().map(|ri| {
+                                        let ri_start = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.0);
+                                        let ri_end = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.1);
+                                        json!({
+                                            "location": {
+                                                "uri": uri,
+                                                "range": {
+                                                    "start": {"line": ri_start.0, "character": ri_start.1},
+                                                    "end":   {"line": ri_end.0,   "character": ri_end.1},
+                                                }
+                                            },
+                                            "message": ri.message
+                                        })
+                                    }).collect::<Vec<_>>()
+                                );
+                            }
+
+                            // Populate structured data for every diagnostic that has a code.
+                            // This enables client code-action integration and category filtering.
+                            if let Some(ref code_str) = d.code {
+                                let category = DiagnosticCode::parse_code(code_str)
+                                    .map(|dc| format!("{:?}", dc.category()))
+                                    .unwrap_or_else(|| "Other".to_string());
+                                let fixable = is_fixable_diagnostic(code_str);
+                                let tag_strings: Vec<String> =
+                                    d.tags.iter().map(|t| match t {
+                                        InternalDiagnosticTag::Unnecessary => "Unnecessary".to_string(),
+                                        InternalDiagnosticTag::Deprecated => "Deprecated".to_string(),
+                                    }).collect();
+                                let mut data_obj = json!({
+                                    "code": code_str,
+                                    "category": category,
+                                    "fixable": fixable,
+                                    "tags": tag_strings,
+                                });
+                                // Also include messageMarkup if client supports it
+                                if markup_message_support {
+                                    let markdown = self
+                                        .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
+                                    data_obj["messageMarkup"] = json!({
+                                        "kind": "markdown",
+                                        "value": markdown
+                                    });
+                                }
+                                diag["data"] = data_obj;
+                            } else if markup_message_support {
+                                // For codeless diagnostics, set messageMarkup only
                                 let markdown = self
                                     .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
                                 diag["data"] = json!({
@@ -483,7 +538,7 @@ impl LspServer {
                             "resultId": prev
                         })
                     } else {
-                        // Convert diagnostics
+                        // Convert diagnostics (prev_id exists but content changed)
                         let lsp_diagnostics: Vec<Value> = diagnostics
                             .into_iter()
                             .enumerate()
@@ -496,6 +551,12 @@ impl LspServer {
                                     doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                                 let end_pos =
                                     doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
+
+                                let message = match d.suggestion {
+                                    Some(ref s) => format!("{}\nSuggestion: {}", d.message, s),
+                                    None => d.message.clone(),
+                                };
+
                                 let mut diag = json!({
                                     "range": {
                                         "start": {
@@ -515,10 +576,45 @@ impl LspServer {
                                     },
                                     "code": d.code.clone(),
                                     "source": "perl-lsp",
-                                    "message": d.message,
+                                    "message": message,
                                 });
                                 if !d.tags.is_empty() {
                                     diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
+                                }
+                                if !d.related_information.is_empty() {
+                                    diag["relatedInformation"] = json!(
+                                        d.related_information.iter().map(|ri| {
+                                            let ri_start = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.0);
+                                            let ri_end = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.1);
+                                            json!({
+                                                "location": {
+                                                    "uri": uri_str,
+                                                    "range": {
+                                                        "start": {"line": ri_start.0, "character": ri_start.1},
+                                                        "end":   {"line": ri_end.0,   "character": ri_end.1},
+                                                    }
+                                                },
+                                                "message": ri.message
+                                            })
+                                        }).collect::<Vec<_>>()
+                                    );
+                                }
+                                if let Some(ref code_str) = d.code {
+                                    let category = DiagnosticCode::parse_code(code_str)
+                                        .map(|dc| format!("{:?}", dc.category()))
+                                        .unwrap_or_else(|| "Other".to_string());
+                                    let fixable = is_fixable_diagnostic(code_str);
+                                    let tag_strings: Vec<String> =
+                                        d.tags.iter().map(|t| match t {
+                                            InternalDiagnosticTag::Unnecessary => "Unnecessary".to_string(),
+                                            InternalDiagnosticTag::Deprecated => "Deprecated".to_string(),
+                                        }).collect();
+                                    diag["data"] = json!({
+                                        "code": code_str,
+                                        "category": category,
+                                        "fixable": fixable,
+                                        "tags": tag_strings,
+                                    });
                                 }
                                 diag
                             })
@@ -546,6 +642,12 @@ impl LspServer {
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.0);
                             let end_pos =
                                 doc.line_starts.offset_to_position_rope(&doc.rope, d.range.1);
+
+                            let message = match d.suggestion {
+                                Some(ref s) => format!("{}\nSuggestion: {}", d.message, s),
+                                None => d.message.clone(),
+                            };
+
                             let mut diag = json!({
                                 "range": {
                                     "start": {
@@ -563,12 +665,47 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Information => 3,
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
-                                "code": d.code,
+                                "code": d.code.clone(),
                                 "source": "perl-lsp",
-                                "message": d.message,
+                                "message": message,
                             });
                             if !d.tags.is_empty() {
                                 diag["tags"] = json!(Self::diagnostic_tags_to_lsp(&d.tags));
+                            }
+                            if !d.related_information.is_empty() {
+                                diag["relatedInformation"] = json!(
+                                    d.related_information.iter().map(|ri| {
+                                        let ri_start = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.0);
+                                        let ri_end = doc.line_starts.offset_to_position_rope(&doc.rope, ri.location.1);
+                                        json!({
+                                            "location": {
+                                                "uri": uri_str,
+                                                "range": {
+                                                    "start": {"line": ri_start.0, "character": ri_start.1},
+                                                    "end":   {"line": ri_end.0,   "character": ri_end.1},
+                                                }
+                                            },
+                                            "message": ri.message
+                                        })
+                                    }).collect::<Vec<_>>()
+                                );
+                            }
+                            if let Some(ref code_str) = d.code {
+                                let category = DiagnosticCode::parse_code(code_str)
+                                    .map(|dc| format!("{:?}", dc.category()))
+                                    .unwrap_or_else(|| "Other".to_string());
+                                let fixable = is_fixable_diagnostic(code_str);
+                                let tag_strings: Vec<String> =
+                                    d.tags.iter().map(|t| match t {
+                                        InternalDiagnosticTag::Unnecessary => "Unnecessary".to_string(),
+                                        InternalDiagnosticTag::Deprecated => "Deprecated".to_string(),
+                                    }).collect();
+                                diag["data"] = json!({
+                                    "code": code_str,
+                                    "category": category,
+                                    "fixable": fixable,
+                                    "tags": tag_strings,
+                                });
                             }
                             diag
                         })
@@ -693,6 +830,31 @@ impl LspServer {
         _diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
     }
+}
+
+/// Returns `true` when a quick-fix code action exists for the given diagnostic code.
+///
+/// Mirrors the list in `crates/perl-lsp/src/features/diagnostics/pull.rs`.
+/// The authoritative source is `crates/perl-lsp-code-actions/src/code_actions.rs`.
+fn is_fixable_diagnostic(code: &str) -> bool {
+    matches!(
+        DiagnosticCode::parse_code(code),
+        Some(
+            DiagnosticCode::ParseError
+                | DiagnosticCode::MissingStrict
+                | DiagnosticCode::MissingWarnings
+                | DiagnosticCode::UnusedVariable
+                | DiagnosticCode::UndefinedVariable
+                | DiagnosticCode::VariableShadowing
+                | DiagnosticCode::UnusedParameter
+                | DiagnosticCode::UnquotedBareword
+                | DiagnosticCode::BarewordFilehandle
+                | DiagnosticCode::TwoArgOpen
+                | DiagnosticCode::AssignmentInCondition
+                | DiagnosticCode::NumericComparisonWithUndef
+                | DiagnosticCode::DeprecatedDefined
+        )
+    )
 }
 
 /// Convert a built-in analyzer violation to an internal diagnostic.
