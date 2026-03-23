@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"my @arr = (1, 2, 3); push @arr, 4;\")"
+---
+(source_file (my_declaration (variable @ arr)(array (number 1) (number 2) (number 3))) (call push ((variable @ arr) (number 4))))
