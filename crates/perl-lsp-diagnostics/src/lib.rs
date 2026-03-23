@@ -54,6 +54,7 @@ pub use perl_lsp_diagnostic_types::{
 pub use lints::common_mistakes;
 pub use lints::deprecated;
 pub use lints::missing_module;
+pub use lints::package_subroutine;
 pub use lints::security;
 pub use lints::strict_warnings;
 pub use lints::unused_imports;

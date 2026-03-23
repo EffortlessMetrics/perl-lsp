@@ -12,6 +12,9 @@ use perl_semantic_analyzer::symbol::SymbolExtractor;
 use crate::dedup::deduplicate_diagnostics;
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
+use crate::lints::package_subroutine::{
+    check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
+};
 use crate::lints::printf_format::check_printf_format;
 use crate::lints::security::check_security;
 use crate::lints::strict_warnings::check_strict_warnings;
@@ -119,6 +122,11 @@ impl DiagnosticsProvider {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         check_common_mistakes(ast, &symbol_table, &mut diagnostics);
         check_printf_format(ast, &mut diagnostics);
+
+        // Package and subroutine diagnostics (PL200, PL201, PL300)
+        check_missing_package_declaration(ast, &mut diagnostics);
+        check_duplicate_package(ast, &mut diagnostics);
+        check_duplicate_subroutine(ast, &mut diagnostics);
 
         // Security anti-pattern detection (string eval, two-arg open, backtick exec)
         check_security(ast, &mut diagnostics);
