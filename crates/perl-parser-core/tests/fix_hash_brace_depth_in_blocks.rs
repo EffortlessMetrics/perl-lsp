@@ -295,3 +295,84 @@ fn test_tr_in_sub_body_correct_content() {
         sexp
     );
 }
+
+// --- ISSUE #2844: after_var_subscript not cleared by `)` and `]` handlers ---
+//
+// When `$var` sets `after_var_subscript = true` and then `)` or `]` appears,
+// the flag remains set. The following `{` then incorrectly increments
+// `hash_brace_depth`, causing regex operators inside the block to be suppressed.
+//
+// Fix: `)` must clear `after_var_subscript`; `]` must set it to `true`
+// (chained subscripts: `$arr[$i]{key}` must still work).
+
+// Pattern A: if ($var) { m//; } — the canonical broken case from the issue
+#[test]
+fn test_regex_after_if_with_var_condition() {
+    let source = r#"if ($var) { $x =~ m/pattern/; }"#;
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains(r#""/pattern/""#),
+        "Expected regex '/pattern/' inside if($var) block, got sexp: {}",
+        sexp
+    );
+}
+
+// Pattern B: while (func($x)) { m//; }
+#[test]
+fn test_regex_after_while_with_func_arg() {
+    let source = r#"while (func($x)) { $line =~ m/abc/; }"#;
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains(r#""/abc/""#),
+        "Expected regex '/abc/' inside while(func($x)) block, got sexp: {}",
+        sexp
+    );
+}
+
+// Pattern C: if ($x) { $h{m} = 1; } — hash subscript inside if-with-var block
+// must still work after the fix
+#[test]
+fn test_hash_subscript_inside_if_with_var_condition() {
+    let source = r#"if ($x) { $h{m} = 1; }"#;
+    assert_clean_parse(source);
+}
+
+// Pattern D: chained array+hash subscript must still work (regression guard)
+// $arr[$i]{key} — `]` sets after_var_subscript=true so `{` sees it
+#[test]
+fn test_chained_array_hash_subscript() {
+    assert_clean_parse("my $v = $arr[$i]{key};");
+}
+
+// Pattern E: if ($var) { m//; } clean parse (no Error nodes)
+#[test]
+fn test_if_var_regex_clean_parse() {
+    assert_clean_parse(r#"if ($var) { $x =~ m/pattern/; }"#);
+}
+
+// Pattern F: nested if — outer condition has var, inner has regex
+#[test]
+fn test_nested_if_with_var_then_regex() {
+    let source = r#"
+sub process {
+    if ($flag) {
+        if ($str =~ m/foo/) {
+            return 1;
+        }
+    }
+}
+"#;
+    assert_clean_parse(source);
+}
+
+// Pattern G: if ($var) block with s/// substitution
+#[test]
+fn test_substitution_after_if_with_var_condition() {
+    let source = r#"if ($ok) { $x =~ s/foo/bar/; }"#;
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains("foo") && sexp.contains("bar"),
+        "Expected s/foo/bar/ inside if($ok) block, got sexp: {}",
+        sexp
+    );
+}
