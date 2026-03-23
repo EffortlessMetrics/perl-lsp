@@ -423,3 +423,50 @@ fn test_subst_brace_delim_clean() {
 fn test_subst_comma_delim_clean() {
     assert_no_errors(r#"$x =~ s,foo,bar,g;"#);
 }
+
+// ============================================================
+// Edge cases: s/// with single-quote as delimiter
+// When ' is the delimiter, it is the closing char — NOT an inner string opener.
+// The guard `ch != repl_closing` must prevent string-skip for the delimiter itself.
+// ============================================================
+
+#[test]
+fn test_subst_single_quote_delimiter() {
+    // s'pattern'replacement' — single-quote IS the delimiter
+    // The ' in the replacement section closes it; no string-skip should occur.
+    assert_no_errors(r#"$x =~ s'foo'bar'g;"#);
+}
+
+#[test]
+fn test_subst_single_quote_delimiter_empty_replacement() {
+    // s'pattern'' — empty replacement with single-quote delimiter
+    assert_no_errors(r#"$x =~ s'foo'';"#);
+}
+
+#[test]
+fn test_subst_double_quote_delimiter() {
+    // s"pattern"replacement" — double-quote IS the delimiter
+    // The " in the replacement section closes it; no string-skip should occur.
+    assert_no_errors(r#"$x =~ s"foo"bar"g;"#);
+}
+
+// ============================================================
+// Edge cases: s/// replacement containing double-quoted string with delimiter
+// When the replacement contains "str/with/slashes", the lookahead must enter
+// string-skip mode (contains_delim=true) to protect the inner slashes.
+// ============================================================
+
+#[test]
+fn test_subst_double_quoted_replacement_with_delimiter() {
+    // Replacement contains a double-quoted string literal that has slashes
+    // The lookahead should enter string-skip for "foo/bar" because it contains /
+    assert_no_errors(r#"$x =~ s/old/"new\/replacement"/;"#);
+}
+
+#[test]
+fn test_subst_double_quoted_replacement_no_delimiter() {
+    // Replacement contains a double-quoted string literal with no slash
+    // The lookahead should NOT enter string-skip (no delimiter inside)
+    // The quotes are treated as literal chars in the replacement
+    assert_no_errors(r#"$x =~ s/old/"new_replacement"/;"#);
+}
