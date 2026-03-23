@@ -101,7 +101,10 @@
         "async",
         "modification",
         "documentation",
-        "defaultLibrary"
+        "defaultLibrary",
+        "scalarVariable",
+        "arrayVariable",
+        "hashVariable"
       ],
       "tokenTypes": [
         "namespace",

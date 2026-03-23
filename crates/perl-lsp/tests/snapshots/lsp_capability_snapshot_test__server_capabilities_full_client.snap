@@ -1,5 +1,6 @@
 ---
 source: crates/perl-lsp/tests/lsp_capability_snapshot_test.rs
+assertion_line: 52
 expression: caps
 ---
 callHierarchyProvider: true
@@ -85,6 +86,9 @@ semanticTokensProvider:
       - modification
       - documentation
       - defaultLibrary
+      - scalarVariable
+      - arrayVariable
+      - hashVariable
     tokenTypes:
       - namespace
       - type

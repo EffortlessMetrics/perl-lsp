@@ -351,8 +351,9 @@ impl ImplementationProvider {
     /// Find a method defined within a specific package in the AST.
     ///
     /// Only emits a result when `method_name` appears after `package_name;` in
-    /// linear-form source (before the next package declaration). This prevents
-    /// cross-package false positives when all subclasses live in the same file.
+    /// linear-form source (before the next package declaration), or inside a
+    /// block-form package (`package Name { ... }`). This prevents cross-package
+    /// false positives when all subclasses live in the same file.
     fn find_method_in_package(
         &self,
         node: &Node,
@@ -362,27 +363,90 @@ impl ImplementationProvider {
         source: &str,
         results: &mut Vec<LocationLink>,
     ) {
-        let mut in_target_package = false;
+        let mut current_package: Option<String> = None;
+        self.find_method_in_package_with_scope(
+            node,
+            method_name,
+            package_name,
+            uri,
+            source,
+            &mut current_package,
+            results,
+        );
+    }
+
+    fn find_method_in_package_with_scope(
+        &self,
+        node: &Node,
+        method_name: &str,
+        package_name: &str,
+        uri: &str,
+        source: &str,
+        current_package: &mut Option<String>,
+        results: &mut Vec<LocationLink>,
+    ) {
         if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
             for stmt in statements {
                 match &stmt.kind {
+                    NodeKind::Package { name, block: Some(inner), .. } => {
+                        let previous_package = current_package.clone();
+                        *current_package = Some(name.clone());
+                        self.find_method_in_package_with_scope(
+                            inner,
+                            method_name,
+                            package_name,
+                            uri,
+                            source,
+                            current_package,
+                            results,
+                        );
+                        *current_package = previous_package;
+                    }
                     NodeKind::Package { name, .. } => {
-                        in_target_package = name == package_name;
+                        *current_package = Some(name.clone());
                     }
-                    NodeKind::Subroutine { name: Some(name), .. }
-                        if in_target_package && name == method_name =>
-                    {
-                        let target_uri = parse_uri(uri);
-                        results.push(LocationLink {
-                            origin_selection_range: None,
-                            target_uri,
-                            target_range: self.node_to_range(stmt, source),
-                            target_selection_range: self.node_to_range(stmt, source),
-                        });
+                    NodeKind::Subroutine { name: Some(sub_name), .. } => {
+                        if current_package.as_deref() == Some(package_name)
+                            && *sub_name == method_name
+                        {
+                            let target_uri = parse_uri(uri);
+                            results.push(LocationLink {
+                                origin_selection_range: None,
+                                target_uri,
+                                target_range: self.node_to_range(stmt, source),
+                                target_selection_range: self.node_to_range(stmt, source),
+                            });
+                        }
                     }
-                    _ => {}
+                    _ => {
+                        self.find_method_in_package_with_scope(
+                            stmt,
+                            method_name,
+                            package_name,
+                            uri,
+                            source,
+                            current_package,
+                            results,
+                        );
+                    }
                 }
             }
+            return;
+        }
+
+        if let NodeKind::Package { name, block: Some(inner), .. } = &node.kind {
+            let previous_package = current_package.clone();
+            *current_package = Some(name.clone());
+            self.find_method_in_package_with_scope(
+                inner,
+                method_name,
+                package_name,
+                uri,
+                source,
+                current_package,
+                results,
+            );
+            *current_package = previous_package;
         }
     }
 

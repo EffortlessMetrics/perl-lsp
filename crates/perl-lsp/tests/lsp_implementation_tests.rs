@@ -323,3 +323,42 @@ fn test_implementation_multiple_overriders_all_returned() -> Result<(), Box<dyn 
 
     Ok(())
 }
+
+/// Package-block method implementations are discoverable from a parent class
+/// lookup path using linear inheritance declarations.
+#[test]
+fn test_implementation_finds_block_package_methods() -> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_block_pkg.pl";
+    harness.open(
+        doc_uri,
+        "\npackage Base;\nsub speak { 'Base' }\n\npackage Derived;\nuse parent 'Base';\npackage Derived {\n    sub speak { 'Block' }\n}\n",
+    )?;
+
+    // Cursor on `Base::speak`
+    let response = harness.implementation(doc_uri, 2, 4)?;
+    let locations = response.as_array().ok_or("Expected array from implementation, got null")?;
+    assert!(
+        !locations.is_empty(),
+        "Expected at least one implementation for Base::speak in package block form",
+    );
+
+    let mut saw_block_method = false;
+    for loc in locations {
+        let target_uri = loc["targetUri"].as_str().ok_or("Missing targetUri")?;
+        assert_eq!(target_uri, doc_uri);
+        let target_line = loc["targetRange"]["start"]["line"].as_u64().ok_or("Missing line")?;
+        if target_line == 7 {
+            saw_block_method = true;
+        }
+    }
+
+    assert!(
+        saw_block_method,
+        "Expected implementation location to include package-block method at line 7"
+    );
+
+    Ok(())
+}
