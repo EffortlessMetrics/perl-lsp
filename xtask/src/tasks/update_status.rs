@@ -76,24 +76,21 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     let mut files_to_update: Vec<(&'static str, PathBuf, String)> = Vec::new();
 
-    // Collect metrics once; skip slow collectors not needed by the selected subsystems.
+    // Only run slow metric collectors for the selected subsystems.
     let need_lsp = subsystems.contains(&StatusSubsystem::Lsp);
     let need_tests = subsystems.contains(&StatusSubsystem::Tests);
     let need_parser = subsystems.contains(&StatusSubsystem::Parser);
     let need_quality = subsystems.contains(&StatusSubsystem::Quality);
 
     // --- LSP subsystem ---
-    let cov_opt = if need_lsp { Some(count_lsp_coverage(&root)?) } else { None };
-    let compliance_opt = if need_lsp { Some(compute_compliance_table(&root)?) } else { None };
-
     if need_lsp {
-        let cov = cov_opt.as_ref().expect("lsp coverage collected");
-        let compliance_table = compliance_opt.as_ref().expect("compliance table collected");
+        let cov = count_lsp_coverage(&root)?;
+        let compliance_table = compute_compliance_table(&root)?;
 
         let lsp_path = root.join("docs/project/status/lsp.md");
         let original_lsp =
             fs::read_to_string(&lsp_path).context("reading docs/project/status/lsp.md")?;
-        let updated_lsp = generate_lsp_status(cov, compliance_table, &original_lsp)?;
+        let updated_lsp = generate_lsp_status(&cov, &compliance_table, &original_lsp)?;
         if updated_lsp != original_lsp {
             files_to_update.push(("docs/project/status/lsp.md", lsp_path, updated_lsp));
         }

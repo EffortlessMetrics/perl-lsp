@@ -57,7 +57,7 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 ## How to Update
 
 1. Run `just status-update` to regenerate all four subsystem files
-2. Run `just status-update --only parser` to regenerate only the parser subsystem (post-merge)
+2. Run `just status-update parser` to regenerate only the parser subsystem (post-merge)
 3. Run `just status-check` to verify generated sections are current
 4. Run `just ci-gate` to verify the repo-level receipt still passes
 5. Edit narrative sections (this file, `release.md`) only after the evidence is current

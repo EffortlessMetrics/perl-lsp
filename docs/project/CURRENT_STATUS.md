@@ -33,7 +33,7 @@
 
 ```bash
 just status-update            # regenerate all 4 subsystem files
-just status-update --only lsp # regenerate only LSP metrics (fast)
+just status-update lsp        # regenerate only LSP metrics (fast)
 just status-check             # verify subsystem files are current
 ```
 
