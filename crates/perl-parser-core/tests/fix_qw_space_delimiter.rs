@@ -97,6 +97,22 @@ fn qw_parens_unchanged() {
     assert_clean_parse(r#"foo(qw(A B));"#);
 }
 
+// ── Other operators: qr and qx with space + single-quote ─────────────────────
+
+/// my $re = qr 'foo' — qr operator with space + single-quote delimiter.
+/// is_quote_char covers qr (op != "s" is true), so this must be accepted.
+#[test]
+fn qr_space_squote_statement() {
+    assert_clean_parse(r#"my $re = qr 'foo';"#);
+}
+
+/// my $out = qx 'date' — qx operator with space + single-quote delimiter.
+/// is_quote_char covers qx (op != "s" is true), so this must be accepted.
+#[test]
+fn qx_space_squote_statement() {
+    assert_clean_parse(r#"my $out = qx 'date';"#);
+}
+
 // ── Critical regression guard: -s 'filename' must stay a filetest ────────────
 
 /// if (-s 'tmpfile') { ... } — file-size filetest with string literal.
