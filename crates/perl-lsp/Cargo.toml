@@ -38,6 +38,7 @@ perl-lsp-config = { workspace = true }
 perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }
 perl-lsp-code-actions = { workspace = true }
+perl-lsp-inline-completion = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 perl-diagnostics-codes = { workspace = true }
@@ -52,7 +53,6 @@ perl-lsp-semantic-tokens = { workspace = true }
 perl-lsp-launcher = { workspace = true }
 perl-lsp-diagnostic-catalog = { workspace = true }
 # Wired provider crates (#2756) — formerly built but unused in this binary
-perl-lsp-inline-completion = { workspace = true }
 perl-lsp-workspace-symbols = { workspace = true }
 perl-lsp-symbol-query = { workspace = true }
 perl-lsp-completion-item = { workspace = true }
