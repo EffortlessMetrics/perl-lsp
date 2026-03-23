@@ -790,7 +790,8 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Local)
                 | Some(TokenKind::State)
         ) {
-            self.parse_variable_declaration()?
+            let decl = self.parse_variable_declaration()?;
+            self.parse_below_assignment_with(decl)?
         } else {
             self.mark_not_stmt_start();
             self.parse_expression()?
@@ -814,7 +815,8 @@ impl<'a> Parser<'a> {
                     | Some(TokenKind::Local)
                     | Some(TokenKind::State)
             ) {
-                self.parse_variable_declaration()?
+                let decl = self.parse_variable_declaration()?;
+                self.parse_below_assignment_with(decl)?
             } else {
                 self.mark_not_stmt_start();
                 self.parse_expression()?
