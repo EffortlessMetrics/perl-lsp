@@ -1169,10 +1169,30 @@ fn test_debug_adapter_new() {
 
 #[test]
 fn test_feature_catalog_has_feature_known() {
-    // The feature catalog should have some basic DAP features
     let result = perl_dap::feature_catalog::has_feature("dap.breakpoints.basic");
-    // Just verify it doesn't panic and returns a boolean
-    let _: bool = result;
+    assert!(result, "dap.breakpoints.basic should be a registered feature");
+}
+
+#[test]
+fn test_feature_catalog_all_dap_features_registered() {
+    let all_ids = [
+        "dap.core",
+        "dap.breakpoints.basic",
+        "dap.breakpoints.hit_condition",
+        "dap.breakpoints.logpoints",
+        "dap.completions",
+        "dap.exceptions.die",
+        "dap.exceptions.warn",
+        "dap.inline_values",
+        "dap.modules",
+        "dap.watchpoints",
+    ];
+    for id in all_ids {
+        assert!(
+            perl_dap::feature_catalog::has_feature(id),
+            "feature `{id}` should be registered in the DAP catalog"
+        );
+    }
 }
 
 #[test]
