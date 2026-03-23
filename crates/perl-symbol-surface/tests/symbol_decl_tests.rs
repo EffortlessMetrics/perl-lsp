@@ -174,14 +174,10 @@ fn test_variable_list_declaration_produces_one_decl_per_variable() {
     // my ($x, $y);
     // Verifies: each variable in the list gets its own SymbolDecl with correct
     // full_span (the list decl span) and per-variable anchor_span.
-    let var_x = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-        loc(4, 6),
-    );
-    let var_y = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() },
-        loc(8, 10),
-    );
+    let var_x =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(4, 6));
+    let var_y =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() }, loc(8, 10));
     let list_decl = Node::new(
         NodeKind::VariableListDeclaration {
             declarator: "my".to_string(),
@@ -436,8 +432,7 @@ fn test_package_block_context_does_not_leak_to_siblings() {
         },
         loc(14, 27),
     );
-    let program =
-        Node::new(NodeKind::Program { statements: vec![pkg_node, sub_node] }, loc(0, 27));
+    let program = Node::new(NodeKind::Program { statements: vec![pkg_node, sub_node] }, loc(0, 27));
 
     let decls = extract_symbol_decls(&program, None);
 
