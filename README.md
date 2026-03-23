@@ -31,6 +31,7 @@
 - **No Perl runtime required** -- a single native binary; no dependency on a working Perl installation for IDE features.
 - **Fast** -- sub-millisecond incremental parsing, under 50ms LSP response times.
 - **Comprehensive** -- 97 LSP/DAP features including completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging.
+- **Perl-aware hover** -- hover over any special variable (`$_`, `@ARGV`, `%ENV`, `$/`, and 60+ more) to get full built-in documentation inline, without leaving your editor.
 - **Broad syntax coverage** -- parses Perl 5.8 through 5.40 including heredocs, regex, quoting constructs, formats, and OO frameworks.
 - **CPAN-validated** -- continuously tested against top CPAN distributions with a ratchet-only-forward CI gate that never allows regressions.
 
@@ -82,7 +83,7 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 | **Diagnostics** | Real-time parse error detection as you type |
 | **Completions** | 150+ builtins, workspace symbols, modules, and keywords |
 | **Go to definition** | Cross-file navigation for subs, methods, and modules |
-| **Hover** | Function signatures, documentation, and module info |
+| **Hover** | Function signatures, documentation, module info, and **built-in special variable docs** (hover over `$_`, `@ARGV`, `%ENV`, etc. for instant reference) |
 | **Find references** | Locate all usages of a symbol across your workspace |
 | **Rename** | Scoped refactoring across files |
 | **Formatting** | Perl::Tidy integration |
