@@ -186,8 +186,35 @@ impl<'a> Parser<'a> {
     fn parse_word_and_expr_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::WordAnd) {
             let op_token = self.tokens.next()?;
-            // Parse right side as a 'not' expression or assignment
-            let right = self.parse_word_not_expr()?;
+            // Parse right side as a 'not' expression or assignment.
+            // In Perl, comma has higher precedence than word operators, so
+            // `$a and $x = 1, last` parses as `$a and ($x = 1, last)`.
+            // After parsing the first assignment, collect trailing comma elements.
+            let mut right = self.parse_word_not_expr()?;
+
+            // Collect trailing comma-separated elements (comma > and in precedence)
+            if self.peek_kind() == Some(TokenKind::Comma) {
+                let mut elements = vec![right];
+                while self.peek_kind() == Some(TokenKind::Comma) {
+                    self.consume_token()?; // consume ','
+                    match self.peek_kind() {
+                        Some(TokenKind::Semicolon)
+                        | Some(TokenKind::RightParen)
+                        | Some(TokenKind::RightBrace)
+                        | Some(TokenKind::RightBracket)
+                        | None => break,
+                        Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                        _ => {
+                            let elem = self.parse_assignment()?;
+                            elements.push(elem);
+                        }
+                    }
+                }
+                let r_start = elements[0].location.start;
+                let r_end = elements[elements.len() - 1].location.end;
+                right = Self::build_list_or_hash(elements, false, r_start, r_end);
+            }
+
             let start = expr.location.start;
             let end = right.location.end;
 
