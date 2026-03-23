@@ -883,7 +883,18 @@ fn test_initialize_does_not_advertise_disabled_features() -> TestResult {
     let body = get_initialize_body()?;
 
     // Each capability must be false if its feature is disabled.
+    // Derived from handle_initialize in debug_adapter/process.rs:
+    //   supportsConditionalBreakpoints      = supports_basic_breakpoints
+    //   supportsBreakpointLocationsRequest  = supports_basic_breakpoints
+    //   supportsHitConditionalBreakpoints   = supports_hit_conditions
+    //   supportsLogPoints                   = supports_log_points
+    //   supportsInlineValues                = supports_inline_values
+    //   supportsCompletionsRequest          = supports_completions
+    //   supportsModulesRequest              = supports_modules
+    //   supportsDataBreakpoints             = supports_watchpoints
     let feature_to_cap = [
+        ("dap.breakpoints.basic", "supportsConditionalBreakpoints"),
+        ("dap.breakpoints.basic", "supportsBreakpointLocationsRequest"),
         ("dap.breakpoints.hit_condition", "supportsHitConditionalBreakpoints"),
         ("dap.breakpoints.logpoints", "supportsLogPoints"),
         ("dap.inline_values", "supportsInlineValues"),
