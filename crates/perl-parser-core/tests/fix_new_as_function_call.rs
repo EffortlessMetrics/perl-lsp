@@ -50,3 +50,16 @@ fn test_new_indirect_class_still_works() {
 fn test_new_qualified_class_still_works() {
     assert_clean_parse(r#"my $fh = new IO::Handle();"#);
 }
+
+/// new() result used in method chain: new($x)->method() must chain correctly.
+/// The FunctionCall node must surface to parse_postfix for chaining.
+#[test]
+fn test_new_parens_method_chain() {
+    assert_clean_parse(r#"my $v = new($class)->new_method();"#);
+}
+
+/// new() chained into hash subscript.
+#[test]
+fn test_new_parens_hash_chain() {
+    assert_clean_parse(r#"my $v = new($class)->{key};"#);
+}

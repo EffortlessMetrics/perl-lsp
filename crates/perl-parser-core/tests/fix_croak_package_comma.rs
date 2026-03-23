@@ -41,3 +41,17 @@ fn test_package_in_list() {
 fn test_warn_package_multi_args() {
     assert_clean_parse(r#"warn __PACKAGE__, ": something went wrong at ", __FILE__, "\n";"#);
 }
+
+/// __SUB__ as a bare-call argument (coderef to current sub).
+#[test]
+fn test_sub_as_argument() {
+    assert_clean_parse(r#"Scalar::Util::weaken(my $weak = __SUB__);"#);
+}
+
+/// __PACKAGE__ used in string interpolation context must still work.
+#[test]
+fn test_package_in_sprintf() {
+    assert_clean_parse(
+        r#"my $msg = sprintf "%s: error at %s line %d", __PACKAGE__, __FILE__, __LINE__;"#,
+    );
+}

@@ -42,3 +42,29 @@ fn test_grep_regex_in_ternary_branch() {
 fn test_sort_grep_block_standalone() {
     assert_clean_parse(r#"my @x = sort grep { /foo/ } @list;"#);
 }
+
+/// sort map should not be treated as a named comparator either.
+/// `sort map { ... } @list` = sort the result of map, not `sort map_func @list`.
+#[test]
+fn test_sort_map_not_comparator() {
+    assert_clean_parse(r#"my @x = sort map { uc($_) } @list;"#);
+}
+
+/// sort sort (legal Perl): sort the result of an inner sort.
+#[test]
+fn test_sort_sort_not_comparator() {
+    assert_clean_parse(r#"my @x = sort sort @list;"#);
+}
+
+/// Custom comparator names that are NOT block-list functions must still work.
+/// `sort by_name @list` should use `by_name` as a comparator, not a sub-expression.
+#[test]
+fn test_sort_custom_comparator_still_works() {
+    assert_clean_parse(r#"my @sorted = sort by_name @list;"#);
+}
+
+/// sort with a block comparator: sort { $a cmp $b } @list.
+#[test]
+fn test_sort_block_comparator_still_works() {
+    assert_clean_parse(r#"my @sorted = sort { $a cmp $b } @list;"#);
+}
