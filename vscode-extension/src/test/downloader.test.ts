@@ -723,4 +723,37 @@ describe('checkForUpdateSilent', () => {
     // Must NOT show notification — they are equal after normalization
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
+
+  test('autoUpdate=true triggers ensureBinary without showing a notification', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24, autoUpdate: true });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.13.0',
+      assets: [],
+    });
+    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perl-lsp');
+    const vscode = require('vscode');
+
+    await downloader.checkForUpdateSilent();
+
+    // No prompt — downloads silently
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    expect(ensureSpy).toHaveBeenCalledWith(true);
+  });
+
+  test('"Update" button click triggers ensureBinary', async () => {
+    mockConfig({ channel: 'latest', serverPath: '', updateCheckInterval: 24, autoUpdate: false });
+    jest.spyOn(downloader as any, 'getLocalVersion').mockResolvedValue('0.12.0');
+    jest.spyOn(downloader as any, 'getLatestRelease').mockResolvedValue({
+      tag_name: 'v0.13.0',
+      assets: [],
+    });
+    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perl-lsp');
+    const vscode = require('vscode');
+    vscode.window.showInformationMessage.mockResolvedValue('Update');
+
+    await downloader.checkForUpdateSilent();
+
+    expect(ensureSpy).toHaveBeenCalledWith(true);
+  });
 });
