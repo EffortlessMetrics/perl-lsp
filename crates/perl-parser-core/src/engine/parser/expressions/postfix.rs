@@ -286,8 +286,33 @@ impl<'a> Parser<'a> {
                         }
 
                         _ => {
-                            // Just the arrow by itself - could be an error or incomplete
-                            // For now, we'll leave expr unchanged
+                            // `->` was consumed but the next token is not a valid
+                            // postfix continuation (method name, paren, bracket, brace,
+                            // or dereference sigil).  This is a truncated postfix chain.
+                            //
+                            // Emit a structured recovery annotation and wrap the
+                            // partially-parsed expression in an error node so that
+                            // LSP features can still use the prefix (e.g. `$obj`).
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+                            let pos = end;
+                            self.errors.push(ParseError::Recovered {
+                                site: RecoverySite::PostfixChain,
+                                kind: RecoveryKind::TruncatedChain,
+                                location: pos,
+                            });
+                            expr = Node::new(
+                                NodeKind::Error {
+                                    message: "Incomplete arrow expression".to_string(),
+                                    expected: vec![],
+                                    found: self.tokens.peek().ok().cloned(),
+                                    partial: Some(Box::new(expr)),
+                                },
+                                SourceLocation { start, end },
+                            );
+                            // Exit the postfix loop — we cannot continue chaining
+                            // after a malformed arrow.
+                            break;
                         }
                     }
                 }
