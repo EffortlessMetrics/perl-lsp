@@ -18,7 +18,8 @@
       "$",
       "@",
       "%",
-      "->"
+      ">",
+      ":"
     ]
   },
   "declarationProvider": true,
