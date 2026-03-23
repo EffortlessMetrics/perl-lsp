@@ -298,17 +298,23 @@ So when I said 'I think we're already there' — I meant for the IDE features th
 
 ## FROM WHAT SURPRISED US
 
-### Q53: 8:1 test-to-code ratio (6,326 test functions, 755 public functions). Was that intentional or did it accumulate?
+### Q53: High test-to-code ratio. Was that intentional or did it accumulate?
 
-**The Question**: The codebase has roughly 8 test functions for every public function. That is an extreme ratio. Most well-tested projects are 2:1 or 3:1. Was this a design decision, an organic result of mutation testing, or a side effect of how agents write code?
+**The Question**: The codebase has an unusually high test count. That is an extreme ratio. Most well-tested projects are 2:1 or 3:1 test-to-code. Was this a design decision, an organic result of mutation testing, or a side effect of how agents write code?
 
 **Why it's interesting**: If intentional, this reveals a philosophy about where trust comes from. If accidental, it reveals something about how agents produce tests -- possibly over-testing as a default behavior. Either way, the ratio is unusual enough to warrant explanation.
 
 **Evidence from codebase**:
-- Computed test count: 6,326 test functions across workspace
-- Public function count: ~755 (from stability audit or API surface scan)
+- Tier A lib tests (canonical merge-gate): ~2,811 (`cargo test --workspace --lib --exclude tree-sitter-perl -- --list`)
+- Doc tests: ~304
+- Integration tests: ~18,350
+- Total across all test types: ~21,465
+- Note: earlier claims of 6,326 were incorrect; the figure came from an unverified audit that conflated scope (see issue #2672 for full root-cause)
+- Public function count: ~755 (from stability audit or API surface scan; unverified)
 - Mutation testing infrastructure (`cargo-mutants`, dedicated hardening test crates) drives additional test creation
 - Agents are instructed to write tests as part of every parser fix (`/parser-fix` skill includes TDD)
+
+**Methodology note**: Use Tier A (lib tests) for the merge-gate count. Use total (~21,465) for the full story. Always specify which scope.
 
 **Follow-up**: Is there a point where more tests become a maintenance burden? Do you ever delete tests? What's the ideal ratio?
 
