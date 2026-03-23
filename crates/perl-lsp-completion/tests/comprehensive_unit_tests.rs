@@ -1213,7 +1213,9 @@ fn scope_distance_same_scope_variables_alphabetical() {
 
 #[test]
 fn scope_distance_workspace_variables_rank_last() {
-    // Workspace symbols (sort prefix 3_) should rank after local variables (1x_)
+    // Workspace symbols (sort prefix 4_) should rank after local variables (1x_)
+    // and after core builtins (3_). This implements the sort order:
+    // local scope < file scope < core builtins < workspace/CPAN.
     let index = Arc::new(WorkspaceIndex::new());
     let file_url = must(Url::parse("file:///other.pm"));
     let module_code = r#"
@@ -1224,19 +1226,19 @@ sub ws_func { }
 "#;
     must(index.index_file(file_url, module_code.to_string()));
 
-    // Use a prefix that matches both a local variable and a workspace function
+    // Use a prefix that matches a workspace function (none locally defined)
     let code = "my $local_var = 1;\nws_";
     let provider = parse_provider_with_index(code, index);
     let items = provider.get_completions(code, code.len());
 
-    // Find a workspace function completion (sort prefix 3_) vs nothing local
-    // The workspace function should appear with sort prefix starting with 3
-    let ws_func = find_item(&items, "ws_func");
+    // The workspace function should appear with sort prefix starting with '4'
+    // (tier 4 = workspace/CPAN, after core builtins at tier 3)
+    let ws_func = find_item(&items, "Other::ws_func");
     if let Some(ws_item) = ws_func {
         let sort_text = ws_item.sort_text.as_deref().unwrap_or("");
         assert!(
-            sort_text.starts_with('3'),
-            "workspace function sort_text ({:?}) should start with '3' (workspace tier)",
+            sort_text.starts_with('4'),
+            "workspace function sort_text ({:?}) should start with '4' (workspace tier, after builtins)",
             sort_text
         );
     }

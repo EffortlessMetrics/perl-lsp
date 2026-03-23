@@ -174,13 +174,15 @@ fn workspace_completion_downranks_explicit_empty_import() {
 
     let items = provider.get_completions(source, pos);
 
-    // sum may appear but should be downranked to "4_" with detail "not imported"
+    // sum may appear but should be downranked to "5_" with detail "not imported".
+    // Tier 5 is the lowest priority tier: symbols explicitly not imported via
+    // `use Module qw()` should appear after everything else (keywords are also 5_).
     if let Some(sum_item) =
         items.iter().find(|i| i.label == "sum" || i.insert_text.as_deref() == Some("sum"))
     {
         assert!(
-            sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("4_")),
-            "sum with explicit empty import should be downranked (sort_text '4_'); got: {:?}",
+            sum_item.sort_text.as_deref().is_some_and(|s| s.starts_with("5_")),
+            "sum with explicit empty import should be downranked (sort_text '5_'); got: {:?}",
             sum_item.sort_text
         );
         assert!(
