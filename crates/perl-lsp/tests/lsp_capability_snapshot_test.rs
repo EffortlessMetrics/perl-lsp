@@ -15,6 +15,13 @@ use support::lsp_harness::LspHarness;
 
 // ---------------------------------------------------------------------------
 // Capability profile: minimal client (no optional features declared)
+//
+// Note: the server's returned capabilities are driven by build flags and the
+// active feature profile — not by what the client declares. Both the minimal
+// and full client profiles therefore produce identical server capability
+// snapshots today. The two tests are kept separate so that any future change
+// where the server begins negotiating based on client declarations will
+// surface as a snapshot diff rather than a silent behavior change.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -30,6 +37,9 @@ fn snapshot_server_capabilities_minimal_client() -> Result<(), Box<dyn std::erro
 
 // ---------------------------------------------------------------------------
 // Capability profile: full client (all optional features declared)
+//
+// See note above: currently identical to server_capabilities_minimal_client
+// because the server does not gate its capabilities on client declarations.
 // ---------------------------------------------------------------------------
 
 #[test]
