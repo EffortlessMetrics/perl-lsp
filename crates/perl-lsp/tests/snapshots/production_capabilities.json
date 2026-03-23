@@ -36,7 +36,8 @@
   "documentOnTypeFormattingProvider": {
     "firstTriggerCharacter": "}",
     "moreTriggerCharacter": [
-      ";"
+      ";",
+      "\n"
     ]
   },
   "documentSymbolProvider": true,

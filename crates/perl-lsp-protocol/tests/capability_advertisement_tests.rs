@@ -432,6 +432,20 @@ fn on_type_formatting_more_triggers_include_semicolon() -> Result<(), Box<dyn st
     Ok(())
 }
 
+#[test]
+fn on_type_formatting_more_triggers_include_newline() -> Result<(), Box<dyn std::error::Error>> {
+    let flags = BuildFlags { on_type_formatting: true, ..Default::default() };
+    let caps = capabilities_for(flags);
+    let v = serde_json::to_value(&caps)?;
+    let more = v
+        .pointer("/documentOnTypeFormattingProvider/moreTriggerCharacter")
+        .and_then(|v| v.as_array())
+        .ok_or("missing moreTriggerCharacter")?;
+    let more_strs: Vec<&str> = more.iter().filter_map(|t| t.as_str()).collect();
+    assert!(more_strs.contains(&"\n"), "moreTriggerCharacter should include newline");
+    Ok(())
+}
+
 // ============================================================================
 // Capability construction — code lens details
 // ============================================================================

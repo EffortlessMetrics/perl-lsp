@@ -126,3 +126,65 @@ fn on_type_closing_brace_dedent() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
+
+#[test]
+fn on_type_newline_after_open_brace_indents() -> Result<(), Box<dyn std::error::Error>> {
+    let srv = LspServer::new();
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
+    };
+    srv.handle_request(init);
+
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: None,
+    };
+    srv.handle_request(initialized);
+
+    let uri = "file:///newline_indent.pl";
+    // Document text: line 0 = "sub foo {", line 1 = "" (cursor here after pressing Enter)
+    let text = "sub foo {\n\n}\n";
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })),
+    };
+    srv.handle_request(open);
+
+    // Simulate pressing Enter after "sub foo {" — cursor is now at line 1, col 0
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "textDocument/onTypeFormatting".into(),
+        params: Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 1, "character": 0},
+            "ch": "\n",
+            "options": {"tabSize": 4, "insertSpaces": true}
+        })),
+    };
+    let res = srv.handle_request(req).ok_or("onTypeFormatting newline request failed")?;
+    let edits = res.result.ok_or("onTypeFormatting newline response missing result")?;
+
+    // The \n handler should return non-null edits for indentation after open brace
+    assert!(
+        !edits.is_null(),
+        "onTypeFormatting with ch='\\n' after open brace should return edits, got null"
+    );
+    let edits_array = edits.as_array().ok_or("edits result is not an array")?;
+    assert!(!edits_array.is_empty(), "should return indent edits after open brace newline");
+    Ok(())
+}

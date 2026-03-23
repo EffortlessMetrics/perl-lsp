@@ -248,8 +248,8 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
             }
             LSP_ON_TYPE_FORMATTING => {
                 caps.document_on_type_formatting_provider = Some(DocumentOnTypeFormattingOptions {
-                    first_trigger_character: ";".to_string(),
-                    more_trigger_character: Some(vec!["}".to_string()]),
+                    first_trigger_character: "}".to_string(),
+                    more_trigger_character: Some(vec![";".to_string(), "\n".to_string()]),
                 });
             }
             LSP_SELECTION_RANGE => {
