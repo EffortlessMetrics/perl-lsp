@@ -5,6 +5,8 @@
 //! - Counting `#[test]` annotations in source files
 //! - Parsing Cargo.toml dependency lists
 //! - Detecting TODO/FIXME wiring comments
+//! - JSON output mode (--json)
+//! - CI gate mode (--check exits non-zero when findings exist)
 
 use std::fs;
 use std::path::PathBuf;
@@ -488,4 +490,120 @@ fn test_find_unwired_crates_only_with_tests_are_candidates() -> anyhow::Result<(
     assert!(!names.contains(&"perl-wired"), "perl-wired is NOT a candidate");
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// End-to-end subprocess tests: --json and --check modes
+//
+// These tests call the real `cargo xtask unwired-scan` binary against the
+// live workspace so that the JSON serialization and --check exit-code paths
+// are exercised against the actual production code, not a reimplementation.
+//
+// Note: `project_root()` in xtask is baked at compile time via
+// `env!("CARGO_MANIFEST_DIR")`, so the binary always scans the real workspace
+// regardless of `current_dir`. We test against the real workspace, which is
+// known to have ≥1 flagged crate (52 as of initial scan).
+// ---------------------------------------------------------------------------
+
+/// Run `cargo xtask unwired-scan` with extra args against the real workspace.
+fn run_unwired_scan_real(extra_args: &[&str]) -> std::process::Output {
+    use assert_cmd::cargo::cargo_bin;
+    let xtask_bin = cargo_bin("xtask");
+    let mut cmd = std::process::Command::new(xtask_bin);
+    cmd.arg("unwired-scan");
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    cmd.output().expect("run xtask unwired-scan")
+}
+
+/// --check exits non-zero on the real workspace, which has transitive-dep false
+/// positives. The exit code behaviour is the core contract for CI gate usage.
+#[test]
+fn test_check_mode_exits_nonzero_on_real_workspace() {
+    let output = run_unwired_scan_real(&["--check"]);
+    assert!(
+        !output.status.success(),
+        "--check must exit non-zero when any flagged crates exist; got status={:?}",
+        output.status.code()
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unwired crate"),
+        "--check stderr must mention 'unwired crate'; got: {stderr}"
+    );
+}
+
+/// --json emits syntactically valid JSON with all required ScanReport fields.
+#[test]
+fn test_json_mode_emits_valid_json_with_expected_fields() {
+    let output = run_unwired_scan_real(&["--json"]);
+    assert!(
+        output.status.success(),
+        "--json must exit zero (it reports, does not gate); got status={:?}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("--json stdout must be UTF-8");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("--json output must be valid JSON");
+
+    // All top-level fields from ScanReport must be present.
+    for field in ["lsp_crate", "crates", "flagged", "total_crates", "total_flagged"] {
+        assert!(parsed.get(field).is_some(), "JSON must contain '{field}'; full output: {parsed}");
+    }
+
+    // lsp_crate must be the default value.
+    assert_eq!(
+        parsed["lsp_crate"].as_str(),
+        Some("perl-lsp"),
+        "lsp_crate field must be 'perl-lsp'"
+    );
+
+    // The real workspace has crates, so total_crates > 0.
+    let total_crates = parsed["total_crates"].as_u64().expect("total_crates is a number");
+    assert!(total_crates > 0, "real workspace must have at least one examined crate");
+}
+
+/// total_flagged must equal the length of the flagged array — internal
+/// consistency of the ScanReport serialization.
+#[test]
+fn test_json_mode_flagged_count_matches_flagged_array() {
+    let output = run_unwired_scan_real(&["--json"]);
+    assert!(output.status.success(), "--json must exit zero");
+
+    let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
+
+    let flagged_array_len = parsed["flagged"].as_array().expect("flagged is array").len();
+    let total_flagged = parsed["total_flagged"].as_u64().expect("total_flagged is u64") as usize;
+
+    assert_eq!(
+        flagged_array_len, total_flagged,
+        "total_flagged ({total_flagged}) must equal flagged array length ({flagged_array_len})"
+    );
+}
+
+/// Each crate entry in the JSON `crates` array must have the expected fields.
+/// Validates CrateReport serialization shape — catches field renames.
+#[test]
+fn test_json_mode_crate_entries_have_expected_fields() {
+    let output = run_unwired_scan_real(&["--json"]);
+    assert!(output.status.success(), "--json must exit zero");
+
+    let stdout = String::from_utf8(output.stdout).expect("utf8 stdout");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
+
+    let crates = parsed["crates"].as_array().expect("crates is array");
+    assert!(!crates.is_empty(), "real workspace must have at least one crate entry");
+
+    // Check the first crate entry has all CrateReport fields.
+    let first = &crates[0];
+    for field in ["name", "path", "test_count", "is_direct_dep_of_lsp", "wiring_comments"] {
+        assert!(
+            first.get(field).is_some(),
+            "CrateReport JSON must contain '{field}'; entry: {first}"
+        );
+    }
 }
