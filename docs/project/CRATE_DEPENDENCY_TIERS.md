@@ -171,13 +171,13 @@ This tier contains the parser core engine and LSP transport layer.
 | `perl-lsp-launcher` | `perl-lsp-feature-governance` | Typed CLI launch configuration |
 | `perl-lsp-performance` | `perl-parser-core`, `perl-symbol-index` | Performance utilities |
 | `perl-lsp-completion-item` | `perl-parser-core` | LSP completion item types and deterministic sorting |
-| `perl-lsp-ast-utils` | `perl-parser-core` | AST range and insertion helpers |
+| `perl-ast-utils` | `perl-ast` | AST range and insertion helpers |
 | `perl-lsp-folding` | `perl-lexer`, `perl-parser-core` | Perl LSP folding range extraction |
 | `perl-lsp-document-links` | `perl-module-import`, `perl-module-path` | Document-link extraction for use/require |
 | `perl-lsp-workspace-symbols` | `perl-lsp-symbol-query`, `perl-module-path`, `perl-parser-core`, `perl-qualified-name`, `perl-semantic-analyzer` | Workspace symbol provider |
 | `perl-lsp-rename` | `perl-parser-core`, `perl-semantic-analyzer`, `perl-keywords`, `perl-symbol-cursor` | LSP rename provider |
 | `perl-lsp-completion` | `perl-lsp-completion-item`, `perl-parser-core`, `perl-semantic-analyzer`, `perl-workspace-index`, `perl-keywords`, `perl-path-security` | LSP completion engine |
-| `perl-lsp-code-actions` | `perl-parser-core`, `perl-lsp-ast-utils`, `perl-lsp-text-utils`, `perl-lsp-rename`, `perl-lsp-import-management`, `perl-lsp-diagnostics` | LSP code actions provider |
+| `perl-lsp-code-actions` | `perl-parser-core`, `perl-ast-utils`, `perl-lsp-text-utils`, `perl-lsp-rename`, `perl-lsp-import-management`, `perl-lsp-diagnostics` | LSP code actions provider |
 | `perl-lsp-navigation` | `perl-parser-core`, `perl-module-path`, `perl-module-import`, `perl-qualified-name`, `perl-lsp-document-links`, `perl-lsp-symbol-query`, `perl-lsp-workspace-symbols` | LSP navigation providers |
 
 **Count: 19 crates**
@@ -339,7 +339,7 @@ capability providers.
 | `perl-lsp-formatting` | 2 |
 | `perl-lsp-performance` | 2 |
 | `perl-lsp-completion-item` | 2 |
-| `perl-lsp-ast-utils` | 2 |
+| `perl-ast-utils` | 2 |
 | `perl-lsp-folding` | 2 |
 | `perl-lsp-document-links` | 2 |
 | `perl-lsp-workspace-symbols` | 2 |

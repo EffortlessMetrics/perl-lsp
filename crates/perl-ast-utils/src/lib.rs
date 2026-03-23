@@ -6,7 +6,7 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
-use perl_parser_core::{Node, NodeKind};
+use perl_ast::{Node, NodeKind};
 
 /// Find the best position to insert a declaration.
 #[must_use]

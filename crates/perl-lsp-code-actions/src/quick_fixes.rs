@@ -3,8 +3,8 @@
 //! Provides automated fixes for common Perl issues driven by diagnostic codes.
 
 use crate::types::{CodeAction, CodeActionEdit, CodeActionKind, QuickFixDiagnostic};
+use perl_ast_utils::{find_declaration_position, get_indent_at};
 use perl_diagnostics_codes::DiagnosticCode;
-use perl_lsp_ast_utils::{find_declaration_position, get_indent_at};
 use perl_lsp_rename::TextEdit;
 use perl_parser_core::SourceLocation;
 
