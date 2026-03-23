@@ -6,7 +6,9 @@ impl<'a> Parser<'a> {
 
         self.expect(TokenKind::LeftParen)?;
 
-        // Check if this is a variable declaration in the condition
+        // Check if this is a variable declaration in the condition.
+        // After the declaration, apply binary operators so that patterns like
+        // `if (our $CAN_HAZ_XS && $ok)` are handled correctly (issue #2750 Pattern D).
         let condition = if matches!(
             self.peek_kind(),
             Some(TokenKind::My)
@@ -14,7 +16,8 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Local)
                 | Some(TokenKind::State)
         ) {
-            self.parse_variable_declaration()?
+            let decl = self.parse_variable_declaration()?;
+            self.parse_below_assignment_with(decl)?
         } else {
             self.mark_not_stmt_start();
             self.parse_expression()?
@@ -32,7 +35,8 @@ impl<'a> Parser<'a> {
             self.tokens.next()?; // consume 'elsif'
             self.expect(TokenKind::LeftParen)?;
 
-            // Check if this is a variable declaration in the condition
+            // Check if this is a variable declaration in the condition.
+            // After the declaration, apply binary operators (issue #2750 Pattern D).
             let elsif_cond = if matches!(
                 self.peek_kind(),
                 Some(TokenKind::My)
@@ -40,7 +44,8 @@ impl<'a> Parser<'a> {
                     | Some(TokenKind::Local)
                     | Some(TokenKind::State)
             ) {
-                self.parse_variable_declaration()?
+                let decl = self.parse_variable_declaration()?;
+                self.parse_below_assignment_with(decl)?
             } else {
                 self.mark_not_stmt_start();
                 self.parse_expression()?
@@ -105,7 +110,8 @@ impl<'a> Parser<'a> {
                     | Some(TokenKind::Local)
                     | Some(TokenKind::State)
             ) {
-                self.parse_variable_declaration()?
+                let decl = self.parse_variable_declaration()?;
+                self.parse_below_assignment_with(decl)?
             } else {
                 self.mark_not_stmt_start();
                 self.parse_expression()?
@@ -157,7 +163,8 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Local)
                 | Some(TokenKind::State)
         ) {
-            self.parse_variable_declaration()?
+            let decl = self.parse_variable_declaration()?;
+            self.parse_below_assignment_with(decl)?
         } else {
             self.mark_not_stmt_start();
             self.parse_expression()?

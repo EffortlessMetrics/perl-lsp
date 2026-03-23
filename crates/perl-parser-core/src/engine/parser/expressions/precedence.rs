@@ -507,6 +507,38 @@ impl<'a> Parser<'a> {
         Ok(Self::build_list_or_hash(elements, saw_fat_arrow, start, end))
     }
 
+    /// Apply all binary operators below assignment precedence to an already-parsed
+    /// left-hand-side node.
+    ///
+    /// This is used when a variable declaration (`my`/`our`/`local`/`state`) has
+    /// no `=` initializer but is followed by a binary operator in expression context:
+    ///
+    ///   `(our $CAN_HAZ_XS && $ok)`   — `&&` after the declaration
+    ///   `(our $AUTOLOAD =~ /pattern/)` — `=~` after the declaration
+    ///   `(my $x || "default")`        — `||` after the declaration
+    ///
+    /// The chain applies operators from highest to lowest precedence (shift → add →
+    /// mul → relational → equality → bitwise-and → range → bitwise-xor →
+    /// bitwise-or → logical-and → logical-or → ternary) so that the declaration
+    /// node is correctly used as the leftmost operand of whatever operator follows.
+    ///
+    /// Assignment operators (`=`, `+=`, …) are NOT applied here — they are handled
+    /// by `parse_declaration_arg` itself (via the `Some(TokenKind::Assign)` branch).
+    fn parse_below_assignment_with(&mut self, expr: Node) -> ParseResult<Node> {
+        let expr = self.parse_multiplicative_with(expr)?;
+        let expr = self.parse_additive_with(expr)?;
+        let expr = self.parse_shift_with(expr)?;
+        let expr = self.parse_relational_with(expr)?;
+        let expr = self.parse_equality_with(expr)?;
+        let expr = self.parse_bitwise_and_with(expr)?;
+        let expr = self.parse_range_with(expr)?;
+        let expr = self.parse_bitwise_xor_with(expr)?;
+        let expr = self.parse_bitwise_or_with(expr)?;
+        let expr = self.parse_and_with(expr)?;
+        let expr = self.parse_or_with(expr)?;
+        self.parse_ternary_with(expr)
+    }
+
     /// Parse logical OR expression
     fn parse_or(&mut self) -> ParseResult<Node> {
         let expr = self.parse_and()?;
