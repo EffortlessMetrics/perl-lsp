@@ -850,6 +850,138 @@ fn test_functional_dap_modules_without_arguments() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
+// AC8: dap.exceptions.warn
+// ---------------------------------------------------------------------------
+
+/// Feature gate: dap.exceptions.warn is registered in the catalog.
+#[test]
+fn test_feature_gate_dap_exceptions_warn() {
+    assert!(
+        has_feature("dap.exceptions.warn"),
+        "dap.exceptions.warn must be registered in the feature catalog"
+    );
+}
+
+/// Capability test: initialize advertises the `warn` exception filter when feature is enabled.
+#[test]
+fn test_capability_dap_exceptions_warn_filter_in_initialize() -> TestResult {
+    let body = get_initialize_body()?;
+
+    let filters = body
+        .get("exceptionBreakpointFilters")
+        .and_then(|v| v.as_array())
+        .ok_or("Missing exceptionBreakpointFilters")?;
+
+    let has_warn = filters.iter().any(|f| f.get("filter").and_then(|v| v.as_str()) == Some("warn"));
+
+    if has_feature("dap.exceptions.warn") {
+        assert!(
+            has_warn,
+            "warn filter must appear in exceptionBreakpointFilters when feature is enabled"
+        );
+
+        let warn_filter = filters
+            .iter()
+            .find(|f| f.get("filter").and_then(|v| v.as_str()) == Some("warn"))
+            .ok_or("warn filter not found")?;
+
+        assert_eq!(
+            warn_filter.get("label").and_then(|v| v.as_str()),
+            Some("Perl warn() and Carp warnings"),
+            "warn filter must have correct label"
+        );
+    } else {
+        assert!(!has_warn, "warn filter must not appear when dap.exceptions.warn is disabled");
+    }
+    Ok(())
+}
+
+/// Functional test: setExceptionBreakpoints with `warn` filter succeeds.
+#[test]
+fn test_functional_dap_exceptions_warn_set_filter() -> TestResult {
+    let mut adapter = initialize_adapter();
+    let response =
+        adapter.handle_request(2, "setExceptionBreakpoints", Some(json!({ "filters": ["warn"] })));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "setExceptionBreakpoints with warn filter must succeed");
+            assert_eq!(command, "setExceptionBreakpoints");
+        }
+        _ => return Err("Expected setExceptionBreakpoints response".into()),
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// AC9: dap.watchpoints
+// ---------------------------------------------------------------------------
+
+/// Feature gate: dap.watchpoints is registered in the catalog.
+#[test]
+fn test_feature_gate_dap_watchpoints() {
+    assert!(
+        has_feature("dap.watchpoints"),
+        "dap.watchpoints must be registered in the feature catalog"
+    );
+}
+
+/// Capability test: initialize advertises supportsDataBreakpoints when feature is enabled.
+#[test]
+fn test_capability_dap_watchpoints_initialize_response() -> TestResult {
+    let body = get_initialize_body()?;
+
+    if has_feature("dap.watchpoints") {
+        let supports_data_breakpoints =
+            body.get("supportsDataBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
+        assert!(
+            supports_data_breakpoints,
+            "supportsDataBreakpoints must be true when dap.watchpoints is enabled"
+        );
+    }
+    Ok(())
+}
+
+/// Functional test: dataBreakpointInfo and setDataBreakpoints work when watchpoints are enabled.
+#[test]
+fn test_functional_dap_watchpoints_data_breakpoint_roundtrip() -> TestResult {
+    let mut adapter = initialize_adapter();
+
+    // dataBreakpointInfo must succeed for a valid variable name
+    let info_response =
+        adapter.handle_request(2, "dataBreakpointInfo", Some(json!({ "name": "$x" })));
+
+    match info_response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "dataBreakpointInfo must succeed");
+            assert_eq!(command, "dataBreakpointInfo");
+        }
+        _ => return Err("Expected dataBreakpointInfo response".into()),
+    }
+
+    // setDataBreakpoints with a valid breakpoint must succeed and return a breakpoints array
+    let set_response = adapter.handle_request(
+        3,
+        "setDataBreakpoints",
+        Some(json!({ "breakpoints": [{ "dataId": "$x", "accessType": "write" }] })),
+    );
+
+    match set_response {
+        DapMessage::Response { success, command, body: Some(body), .. } => {
+            assert!(success, "setDataBreakpoints must succeed");
+            assert_eq!(command, "setDataBreakpoints");
+            let bps = body
+                .get("breakpoints")
+                .and_then(|v| v.as_array())
+                .ok_or("missing breakpoints array")?;
+            assert_eq!(bps.len(), 1, "setDataBreakpoints must return one record");
+        }
+        _ => return Err("Expected setDataBreakpoints response with body".into()),
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Cross-feature: feature catalog completeness
 // ---------------------------------------------------------------------------
 

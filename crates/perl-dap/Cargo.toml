@@ -159,7 +159,17 @@ path = "tests/dap_protocol_message_tests.rs"
 [[test]]
 name = "dap_feature_flag_coverage_tests"
 path = "tests/dap_feature_flag_coverage_tests.rs"
-# AC0-AC7: Feature flag coverage for 8 previously untested DAP features (#2784)
+# AC0-AC9: Feature flag coverage for 10 DAP features (#2784, #2900)
+
+[[test]]
+name = "dap_warn_exception_tests"
+path = "tests/dap_warn_exception_tests.rs"
+# dap.exceptions.warn: warn filter capability and setExceptionBreakpoints acceptance (#2900)
+
+[[test]]
+name = "dap_watchpoints_tests"
+path = "tests/dap_watchpoints_tests.rs"
+# dap.watchpoints: dataBreakpointInfo + setDataBreakpoints functional tests (#2900)
 
 [[bench]]
 name = "dap_benchmarks"
