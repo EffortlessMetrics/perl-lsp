@@ -150,7 +150,7 @@ fn test_wired_ast_utils_find_function_insert_position() {
 /// Formatting types must be reachable.
 #[test]
 fn test_wired_formatting_types_accessible() {
-    use perl_lsp_formatting_types::{FormatRange};
+    use perl_lsp_formatting_types::FormatRange;
     // FormatRange::whole_document parses the content to find the last line.
     // For a 3-line file the end line must be 2, not 0.
     let content = "line1\nline2\nline3";
@@ -271,7 +271,10 @@ fn test_wired_feature_contracts_accessible() {
     // The canonical profile names are load-bearing — check specific known values.
     let canonicals: Vec<&str> = FEATURE_PROFILE_SPECS.iter().map(|s| s.canonical).collect();
     assert!(canonicals.contains(&"ga-lock"), "FEATURE_PROFILE_SPECS must contain ga-lock profile");
-    assert!(canonicals.contains(&"production"), "FEATURE_PROFILE_SPECS must contain production profile");
+    assert!(
+        canonicals.contains(&"production"),
+        "FEATURE_PROFILE_SPECS must contain production profile"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +288,10 @@ fn test_wired_feature_grid_accessible() {
     let specs = feature_profile_specs();
     // Verify the re-export returns the same data as the underlying contracts crate.
     let canonicals: Vec<&str> = specs.iter().map(|s| s.canonical).collect();
-    assert!(canonicals.contains(&"production"), "feature_profile_specs must include production profile");
+    assert!(
+        canonicals.contains(&"production"),
+        "feature_profile_specs must include production profile"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -309,13 +315,21 @@ fn test_wired_feature_profile_accessible() {
 /// Feature-profile-cli helpers must be reachable.
 #[test]
 fn test_wired_feature_profile_cli_accessible() {
-    use perl_lsp_feature_profile_cli::{feature_profile_supported_tokens, parse_feature_profile_arg};
+    use perl_lsp_feature_profile_cli::{
+        feature_profile_supported_tokens, parse_feature_profile_arg,
+    };
     let tokens = feature_profile_supported_tokens();
     // Check specific tokens are present — this would fail if the list shrank unexpectedly.
     assert!(tokens.contains(&"production"), "supported tokens must include 'production'");
     // parse_feature_profile_arg must successfully parse known tokens.
-    assert!(parse_feature_profile_arg("production").is_ok(), "should parse 'production' as a valid profile");
-    assert!(parse_feature_profile_arg("__invalid__").is_err(), "should reject unknown profile tokens");
+    assert!(
+        parse_feature_profile_arg("production").is_ok(),
+        "should parse 'production' as a valid profile"
+    );
+    assert!(
+        parse_feature_profile_arg("__invalid__").is_err(),
+        "should reject unknown profile tokens"
+    );
 }
 
 // ---------------------------------------------------------------------------

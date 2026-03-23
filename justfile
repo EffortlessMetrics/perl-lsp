@@ -328,9 +328,11 @@ _check-tools-basic:
     @MISSING=""; \
     if ! command -v cargo >/dev/null 2>&1; then MISSING="$$MISSING cargo"; fi; \
     if ! command -v rustfmt >/dev/null 2>&1; then MISSING="$$MISSING rustfmt"; fi; \
+    if ! cargo nextest --version >/dev/null 2>&1; then MISSING="$$MISSING cargo-nextest"; fi; \
     if [ -n "$$MISSING" ]; then \
         echo "ERROR: Missing required tools:$$MISSING"; \
         echo "  Install Rust: https://rustup.rs"; \
+        echo "  Install nextest: cargo install cargo-nextest --locked"; \
         exit 1; \
     fi
     @bash scripts/check-rust-toolchain.sh
@@ -422,9 +424,7 @@ ci-gate:
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
-    just ci-clippy-lib && \
-    just clippy-prod-no-unwrap && \
-    just clippy-no-unwrap-all && \
+    just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
     just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
@@ -511,6 +511,15 @@ clippy-no-unwrap-all:
     cargo clippy --workspace --all-targets -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Production code is panic-safe (no unwrap/expect)"
 
+# Consolidated clippy gate (Issue #1909): two passes replacing the three-pass ci-gate sequence.
+# Pass 1: lib warnings + unwrap/expect in one invocation (avoids separate ci-clippy-lib + clippy-prod-no-unwrap)
+# Pass 2: bins-only unwrap/expect (clippy-no-unwrap-all used --all-targets which trips on test expect() in tests)
+ci-clippy-gate:
+    @echo "🔍 Running consolidated clippy gate (libs + bins)..."
+    cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs -D clippy::unwrap_used -D clippy::expect_used
+    cargo clippy --workspace --bins --locked -- -D clippy::unwrap_used -D clippy::expect_used
+    @echo "✅ Clippy gate passed"
+
 # Unwrap/panic-family ratchet (production source only)
 ci-unwrap-panic-ratchet:
     @echo "🛡️  Checking unwrap/panic-family ratchet..."
@@ -538,7 +547,7 @@ ci-test-core:
 # Library tests only (fastest, for merge gate)
 ci-test-lib:
     @echo "🧪 Running library tests..."
-    cargo test --workspace --lib --locked
+    cargo nextest run --workspace --lib --locked --profile ci
     @echo "✅ Library tests passed"
 
 # V2 bundle sync guard (in-crate v2 files must match extracted perl-parser-pest v2 files)

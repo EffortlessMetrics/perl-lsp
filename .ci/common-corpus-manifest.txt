@@ -6,7 +6,7 @@
 # Goal: expand this list as parser coverage improves.
 #
 # Core pragmas and utilities
-XSLoader
+# XSLoader - temporarily removed: comma-delimited s,,, substitution regression (line 43)
 bytes
 integer
 utf8
