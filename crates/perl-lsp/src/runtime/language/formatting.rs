@@ -5,8 +5,22 @@
 
 use super::super::*;
 use crate::convert::{WirePosition, WireRange};
-use crate::features::formatting::{CodeFormatter, FormattingOptions};
+use crate::features::formatting::{CodeFormatter, FormattingError, FormattingOptions};
 use crate::protocol::{invalid_params, req_position, req_range, req_uri};
+
+/// Build a `JsonRpcError` from a `FormattingError`, populating the `data` field
+/// with a structured object so that VSCode / LSP clients can surface targeted
+/// remediation actions (e.g. "install perltidy" vs "check Perl syntax").
+fn formatting_error_to_rpc(context: &str, e: FormattingError) -> JsonRpcError {
+    let error_kind = e.error_kind();
+    JsonRpcError {
+        code: -32603,
+        message: format!("{}: {}", context, e),
+        data: Some(json!({
+            "error_kind": error_kind,
+        })),
+    }
+}
 
 impl LspServer {
     /// Handle textDocument/onTypeFormatting request
@@ -87,11 +101,7 @@ impl LspServer {
                     }
                     Err(e) => {
                         eprintln!("Formatting error: {}", e);
-                        return Err(JsonRpcError {
-                            code: -32603,
-                            message: format!("Formatting failed: {}", e),
-                            data: None,
-                        });
+                        return Err(formatting_error_to_rpc("Formatting failed", e));
                     }
                 }
             }
@@ -152,11 +162,7 @@ impl LspServer {
                     }
                     Err(e) => {
                         eprintln!("Range formatting error: {}", e);
-                        return Err(JsonRpcError {
-                            code: -32603,
-                            message: format!("Range formatting failed: {}", e),
-                            data: None,
-                        });
+                        return Err(formatting_error_to_rpc("Range formatting failed", e));
                     }
                 }
             }
@@ -243,14 +249,10 @@ impl LspServer {
                         }
                         Err(e) => {
                             eprintln!("Range formatting error for range {}: {}", idx, e);
-                            return Err(JsonRpcError {
-                                code: -32603,
-                                message: format!(
-                                    "Range formatting failed for range {}: {}",
-                                    idx, e
-                                ),
-                                data: None,
-                            });
+                            return Err(formatting_error_to_rpc(
+                                &format!("Range formatting failed for range {}", idx),
+                                e,
+                            ));
                         }
                     }
                 }
@@ -279,5 +281,63 @@ impl LspServer {
         }
 
         Ok(Some(json!([])))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::features::formatting::FormattingError;
+    use perl_tdd_support::must_some;
+
+    #[test]
+    fn formatting_error_to_rpc_not_found_has_data_field() {
+        let err = FormattingError::PerltidyNotFound("command not found".to_string());
+        let rpc = formatting_error_to_rpc("Formatting failed", err);
+        assert_eq!(rpc.code, -32603);
+        assert!(rpc.message.contains("Formatting failed"), "message should contain context prefix");
+        assert!(
+            rpc.message.contains("perltidy not found"),
+            "message should contain the error description"
+        );
+        assert!(
+            rpc.message.contains("cpanm Perl::Tidy"),
+            "message should contain cpanm install recommendation"
+        );
+        let data = must_some(rpc.data);
+        assert_eq!(
+            data["error_kind"].as_str(),
+            Some("perltidy_not_found"),
+            "data.error_kind should be 'perltidy_not_found'"
+        );
+    }
+
+    #[test]
+    fn formatting_error_to_rpc_execution_error_has_data_field() {
+        let err = FormattingError::PerltidyError("syntax error at line 3".to_string());
+        let rpc = formatting_error_to_rpc("Range formatting failed", err);
+        assert_eq!(rpc.code, -32603);
+        assert!(rpc.message.contains("Range formatting failed"));
+        assert!(
+            rpc.message.contains("check Perl syntax") || rpc.message.contains("perltidy error")
+        );
+        let data = must_some(rpc.data);
+        assert_eq!(
+            data["error_kind"].as_str(),
+            Some("perltidy_error"),
+            "data.error_kind should be 'perltidy_error'"
+        );
+    }
+
+    #[test]
+    fn formatting_error_to_rpc_io_error_has_data_field() {
+        let err = FormattingError::IoError("disk full".to_string());
+        let rpc = formatting_error_to_rpc("Formatting failed", err);
+        let data = must_some(rpc.data);
+        assert_eq!(
+            data["error_kind"].as_str(),
+            Some("io_error"),
+            "data.error_kind should be 'io_error'"
+        );
     }
 }
