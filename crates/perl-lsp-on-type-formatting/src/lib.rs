@@ -26,7 +26,23 @@ use serde_json::json;
 ///
 /// When the cursor falls inside a heredoc body, all on-type formatting is
 /// suppressed to avoid corrupting heredoc content.
-pub fn compute_on_type_edit(text: &str, line: u32, _col: u32, ch: char) -> Option<Vec<Value>> {
+///
+/// # POD suppression
+///
+/// When the cursor falls inside a POD block (`=pod`/`=head1`/etc. … `=cut`),
+/// all on-type formatting is suppressed to avoid corrupting documentation.
+///
+/// # `indent_step`
+///
+/// The number of spaces to add or remove per indentation level. Corresponds
+/// to the LSP client's `tabSize` option. Typical values: 2, 4.
+pub fn compute_on_type_edit(
+    text: &str,
+    line: u32,
+    _col: u32,
+    ch: char,
+    indent_step: usize,
+) -> Option<Vec<Value>> {
     // `str::lines()` drops a trailing empty line, but the LSP cursor can be
     // on a line that only exists because of a trailing `\n`.  We manually
     // append an empty element when the text ends with a newline to keep
@@ -45,21 +61,26 @@ pub fn compute_on_type_edit(text: &str, line: u32, _col: u32, ch: char) -> Optio
         return None;
     }
 
+    // Suppress all formatting inside POD blocks.
+    if is_inside_pod(&lines, line as usize) {
+        return None;
+    }
+
     match ch {
-        '}' => handle_close_brace(&lines, line),
+        '}' => handle_close_brace(&lines, line, indent_step),
         ';' => None, // Semicolons preserve existing indentation.
-        '\n' | '\r' => handle_newline(&lines, line),
+        '\n' | '\r' => handle_newline(&lines, line, indent_step),
         _ => None,
     }
 }
 
 /// Handle `}` — re-indent the closing brace to match its opening `{`.
-fn handle_close_brace(lines: &[&str], line: u32) -> Option<Vec<Value>> {
+fn handle_close_brace(lines: &[&str], line: u32, indent_step: usize) -> Option<Vec<Value>> {
     let current_line = lines[line as usize];
     let current_indent = get_indentation(current_line);
 
     let target_indent = find_matching_brace_indent(lines, line as usize)
-        .unwrap_or_else(|| current_indent.saturating_sub(2));
+        .unwrap_or_else(|| current_indent.saturating_sub(indent_step));
 
     if current_indent != target_indent {
         Some(vec![json!({
@@ -75,7 +96,7 @@ fn handle_close_brace(lines: &[&str], line: u32) -> Option<Vec<Value>> {
 }
 
 /// Handle `\n` — set indentation of the new blank line based on the previous line.
-fn handle_newline(lines: &[&str], line: u32) -> Option<Vec<Value>> {
+fn handle_newline(lines: &[&str], line: u32, indent_step: usize) -> Option<Vec<Value>> {
     if line == 0 {
         return None;
     }
@@ -86,7 +107,7 @@ fn handle_newline(lines: &[&str], line: u32) -> Option<Vec<Value>> {
 
     let indent = if trimmed.ends_with('{') {
         // Indent after opening brace.
-        prev_indent + 2
+        prev_indent + indent_step
     } else if trimmed.ends_with('}') {
         // Dedent after closing brace (the `}` line itself is already at the
         // correct indentation so the *next* line should match).
@@ -308,6 +329,61 @@ fn is_inside_heredoc(lines: &[&str], target_line: usize) -> bool {
             }
             // Body starts on the next line.
             inside = true;
+        }
+    }
+
+    false
+}
+
+/// POD keyword prefixes that open a POD block when at column 0.
+const POD_OPENERS: &[&str] =
+    &["=pod", "=head1", "=head2", "=head3", "=head4", "=over", "=begin", "=item"];
+
+/// Determine whether `target_line` falls inside a POD block.
+///
+/// A POD block starts when a line begins with one of the POD opener keywords
+/// (`=pod`, `=head1`–`=head4`, `=over`, `=begin`, `=item`) at column 0.
+/// The block ends when a line begins with `=cut` or `=end` at column 0
+/// (trailing whitespace on the terminator line is allowed).
+///
+/// This is a lightweight heuristic that does not require a full parse tree,
+/// modeled on `is_inside_heredoc`.
+fn is_inside_pod(lines: &[&str], target_line: usize) -> bool {
+    let mut inside = false;
+
+    for (line_idx, &line) in lines.iter().enumerate() {
+        if line_idx > target_line {
+            break;
+        }
+
+        if inside {
+            // Check for terminator: `=cut` or `=end` at column 0 (trailing
+            // whitespace is allowed, matching Perl's own pod parsing rules).
+            let trimmed = line.trim_end();
+            let is_end =
+                trimmed == "=end" || trimmed.starts_with("=end ") || trimmed.starts_with("=end\t");
+            if trimmed == "=cut" || is_end {
+                inside = false;
+                continue;
+            }
+            if line_idx == target_line {
+                return true;
+            }
+            continue;
+        }
+
+        // Fast pre-check: POD lines always start with '='.
+        if line.starts_with('=') {
+            for opener in POD_OPENERS {
+                // Must be an exact keyword or followed by whitespace/EOL.
+                let rest = &line[opener.len().min(line.len())..];
+                if line.starts_with(opener)
+                    && (rest.is_empty() || rest.starts_with(char::is_whitespace))
+                {
+                    inside = true;
+                    break;
+                }
+            }
         }
     }
 

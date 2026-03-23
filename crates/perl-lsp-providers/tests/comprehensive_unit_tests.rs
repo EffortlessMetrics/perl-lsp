@@ -319,7 +319,7 @@ mod on_type_formatting_tests {
     #[test]
     fn open_brace_is_not_a_trigger() {
         let text = "sub foo {";
-        let edits = compute_on_type_edit(text, 0, 9, '{');
+        let edits = compute_on_type_edit(text, 0, 9, '{', 2);
         assert!(edits.is_none(), "open brace is not an on-type formatting trigger");
     }
 
@@ -327,7 +327,7 @@ mod on_type_formatting_tests {
     fn close_brace_adjusts_indent() {
         let text = "sub foo {\n    print 1;\n    }";
         // Typing '}' on line 2
-        let edits = compute_on_type_edit(text, 2, 5, '}');
+        let edits = compute_on_type_edit(text, 2, 5, '}', 2);
         // Closing brace with mismatch should produce edits
         assert!(edits.is_some() || edits.is_none()); // May or may not adjust
     }
@@ -335,7 +335,7 @@ mod on_type_formatting_tests {
     #[test]
     fn close_brace_already_correct_indent() {
         let text = "sub foo {\n    print 1;\n}";
-        let edits = compute_on_type_edit(text, 2, 1, '}');
+        let edits = compute_on_type_edit(text, 2, 1, '}', 2);
         // Already at correct indent - None is valid
         assert!(edits.is_none());
     }
@@ -343,7 +343,7 @@ mod on_type_formatting_tests {
     #[test]
     fn semicolon_maintains_indent() {
         let text = "    my $x = 1;";
-        let edits = compute_on_type_edit(text, 0, 14, ';');
+        let edits = compute_on_type_edit(text, 0, 14, ';', 2);
         assert!(edits.is_none(), "semicolon preserves existing indentation");
     }
 
@@ -351,7 +351,7 @@ mod on_type_formatting_tests {
     fn newline_after_brace_increases_indent() {
         // line 1 must exist in the text for the '\n' handler to work
         let text = "sub foo {\n    ";
-        let edits = compute_on_type_edit(text, 1, 0, '\n');
+        let edits = compute_on_type_edit(text, 1, 0, '\n', 2);
         // Newline on line 1 looks at line 0 which ends with '{' -> should indent
         assert!(edits.is_some(), "newline after brace should indent");
     }
@@ -359,27 +359,27 @@ mod on_type_formatting_tests {
     #[test]
     fn newline_on_first_line_returns_none() {
         let text = "my $x = 1;";
-        let edits = compute_on_type_edit(text, 0, 10, '\n');
+        let edits = compute_on_type_edit(text, 0, 10, '\n', 2);
         assert!(edits.is_none());
     }
 
     #[test]
     fn unknown_char_returns_none() {
         let text = "my $x = 1;";
-        let edits = compute_on_type_edit(text, 0, 5, 'a');
+        let edits = compute_on_type_edit(text, 0, 5, 'a', 2);
         assert!(edits.is_none());
     }
 
     #[test]
     fn line_beyond_text_returns_none() {
         let text = "line 1\nline 2";
-        let edits = compute_on_type_edit(text, 99, 0, '{');
+        let edits = compute_on_type_edit(text, 99, 0, '{', 2);
         assert!(edits.is_none());
     }
 
     #[test]
     fn empty_text() {
-        let edits = compute_on_type_edit("", 0, 0, '{');
+        let edits = compute_on_type_edit("", 0, 0, '{', 2);
         // Empty text has no lines at line 0 in some implementations
         // Accept either None or Some
         let _ = edits;
@@ -388,21 +388,21 @@ mod on_type_formatting_tests {
     #[test]
     fn close_brace_on_first_line() {
         let text = "}";
-        let edits = compute_on_type_edit(text, 0, 1, '}');
+        let edits = compute_on_type_edit(text, 0, 1, '}', 2);
         assert!(edits.is_none(), "close brace on line 0 returns None");
     }
 
     #[test]
     fn carriage_return_trigger() {
         let text = "sub foo {\n    ";
-        let edits = compute_on_type_edit(text, 1, 0, '\r');
+        let edits = compute_on_type_edit(text, 1, 0, '\r', 2);
         assert!(edits.is_some(), "carriage return should behave like newline");
     }
 
     #[test]
     fn nested_braces_indent() {
         let text = "sub foo {\n    if (1) {\n        ";
-        let edits = compute_on_type_edit(text, 2, 0, '\n');
+        let edits = compute_on_type_edit(text, 2, 0, '\n', 2);
         assert!(edits.is_some());
     }
 
@@ -410,7 +410,7 @@ mod on_type_formatting_tests {
     fn close_brace_finds_matching_open() {
         let text = "sub foo {\n    if (1) {\n        print 1;\n    }\n}";
         // Closing brace for outer sub at line 4
-        let edits = compute_on_type_edit(text, 4, 1, '}');
+        let edits = compute_on_type_edit(text, 4, 1, '}', 2);
         // Already correct indent -> None
         assert!(edits.is_none());
     }

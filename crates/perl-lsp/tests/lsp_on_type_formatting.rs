@@ -188,3 +188,71 @@ fn on_type_newline_after_open_brace_indents() -> Result<(), Box<dyn std::error::
     assert!(!edits_array.is_empty(), "should return indent edits after open brace newline");
     Ok(())
 }
+
+#[test]
+fn on_type_tab_size_4_produces_four_space_indent() -> Result<(), Box<dyn std::error::Error>> {
+    // Verify that tabSize:4 is actually threaded through to the formatter:
+    // pressing Enter after `{` with tabSize=4 should produce "    " (4 spaces),
+    // not "  " (the old hardcoded 2-space step).
+    let srv = LspServer::new();
+    let init = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "initialize".into(),
+        params: Some(json!({"capabilities":{}})),
+    };
+    srv.handle_request(init);
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "initialized".into(),
+        params: None,
+    };
+    srv.handle_request(initialized);
+
+    let uri = "file:///tab_size_4.pl";
+    // line 0 = "if ($x) {", line 1 = "" (the new blank line after Enter)
+    let text = "if ($x) {\n\n}\n";
+    let open = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "textDocument/didOpen".into(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text
+            }
+        })),
+    };
+    srv.handle_request(open);
+
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "textDocument/onTypeFormatting".into(),
+        params: Some(json!({
+            "textDocument": {"uri": uri},
+            "position": {"line": 1, "character": 0},
+            "ch": "\n",
+            "options": {"tabSize": 4, "insertSpaces": true}
+        })),
+    };
+    let res = srv.handle_request(req).ok_or("onTypeFormatting tabSize:4 request failed")?;
+    let edits = res.result.ok_or("onTypeFormatting tabSize:4 response missing result")?;
+
+    let edits_array = edits.as_array().ok_or("edits result is not an array")?;
+    assert!(!edits_array.is_empty(), "should return indent edit");
+
+    let new_text = edits_array[0]
+        .get("newText")
+        .and_then(|v| v.as_str())
+        .ok_or("edit missing newText")?;
+    assert_eq!(
+        new_text, "    ",
+        "tabSize:4 should produce 4 spaces, got {:?}",
+        new_text
+    );
+    Ok(())
+}
