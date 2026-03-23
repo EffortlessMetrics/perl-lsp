@@ -397,10 +397,7 @@ fn cascade_suppression_reduces_adjacent_errors_to_one_at_error_level()
         "Three cascade errors within 10 bytes should collapse to one at Error level, got {}",
         error_diags.len()
     );
-    assert_eq!(
-        error_diags[0].range.0, 5,
-        "The cluster head (offset 5) should be the survivor"
-    );
+    assert_eq!(error_diags[0].range.0, 5, "The cluster head (offset 5) should be the survivor");
     Ok(())
 }
 
