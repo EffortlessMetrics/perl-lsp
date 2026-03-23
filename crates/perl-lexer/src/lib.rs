@@ -1719,6 +1719,7 @@ impl<'a> PerlLexer<'a> {
                                 | '>'
                                 | '<'
                                 | ')'
+                                | '(' // $( = real group ID of this process
                         )
                     {
                         self.advance(); // consume the special character
@@ -2900,6 +2901,61 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    /// Lookahead to determine whether a `quote` char at byte `pos` in `input` is the start
+    /// of a genuine inner string literal that protects `closing` delimiter characters.
+    ///
+    /// Returns `true` when:
+    ///   1. A matching closing `quote` is found on the SAME LINE (no newlines crossed), AND
+    ///   2. The string content (between the two `quote` chars) contains `closing`.
+    ///
+    /// Returns `false` when:
+    ///   - A newline is reached before the matching closing `quote`, OR
+    ///   - End of input is reached, OR
+    ///   - The string content between the quotes does not contain `closing`.
+    ///
+    /// Stopping at newlines prevents the scan from crossing into subsequent statements,
+    /// which would cause the substitution to consume far more than its actual replacement.
+    fn repl_inner_string_lookahead(input: &str, pos: usize, quote: char, closing: char) -> bool {
+        let input_bytes = input.as_bytes();
+        let mut p = pos + quote.len_utf8(); // start after the opening quote
+        let mut escaped = false;
+        let mut content_has_closing = false;
+        while p < input_bytes.len() {
+            let byte = input_bytes[p];
+            if escaped {
+                escaped = false;
+                p += 1;
+                continue;
+            }
+            if byte == b'\\' {
+                escaped = true;
+                p += 1;
+                continue;
+            }
+            if byte == b'\n' {
+                // Inner string literals don't span lines; this is a literal quote char.
+                return false;
+            }
+            let ch = if byte < 128 {
+                byte as char
+            } else {
+                match input.get(p..).and_then(|s| s.chars().next()) {
+                    Some(c) => c,
+                    None => break,
+                }
+            };
+            if ch == closing {
+                content_has_closing = true;
+            }
+            if ch == quote {
+                // Found the matching closing quote on the same line.
+                return content_has_closing;
+            }
+            p += ch.len_utf8();
+        }
+        false
+    }
+
     fn parse_substitution(&mut self, start: usize) -> Option<Token> {
         // We've already consumed 's'
         let delimiter = self.current_char()?;
@@ -2987,7 +3043,23 @@ impl<'a> PerlLexer<'a> {
                 }
                 // Skip over string literals so that `/` inside "foo/bar" or 'a/b'
                 // is not mistaken for the closing delimiter of the replacement.
-                '"' | '\'' => {
+                //
+                // Guard: only enter string-skip mode when lookahead confirms that:
+                //   1. A matching closing quote exists on the SAME LINE (no newlines crossed), AND
+                //   2. The string content between the quotes contains the closing delimiter.
+                //
+                // This prevents lone apostrophes (e.g. the single `'` in `s/''/'/g`) from
+                // triggering string-skip, which would cause the scan to consume past the
+                // substitution boundary into subsequent source lines.
+                '"' | '\''
+                    if ch != repl_closing
+                        && Self::repl_inner_string_lookahead(
+                            self.input,
+                            self.position,
+                            ch,
+                            repl_closing,
+                        ) =>
+                {
                     let quote = ch;
                     self.advance(); // consume opening quote
                     while let Some(inner) = self.current_char() {
