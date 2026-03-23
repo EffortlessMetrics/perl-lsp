@@ -147,7 +147,10 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_bareword(&self.source, &qf_diag));
                     }
                     // PL001: General parse error (stable code)
-                    c if c == DiagnosticCode::ParseError.as_str() => {
+                    // PL002: Syntax error — same quick-fix routing as PL001
+                    c if c == DiagnosticCode::ParseError.as_str()
+                        || c == DiagnosticCode::SyntaxError.as_str() =>
+                    {
                         actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, c));
                     }
                     // parse-error-* subcodes (legacy subtype codes from error classifier)

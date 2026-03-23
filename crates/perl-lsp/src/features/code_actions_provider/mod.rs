@@ -135,6 +135,14 @@ impl CodeActionsProvider {
             Some(code) if code.starts_with("parse-error-") => {
                 fixes::fix_parse_error(self, diagnostic, code)
             }
+            // PL001 / PL002 are general parse error codes. When the diagnostic message
+            // indicates a missing semicolon, route through the same fix as
+            // "parse-error-missingsemicolon" so the quick-fix fires correctly.
+            Some("PL001") | Some("PL002")
+                if diagnostic.message.to_ascii_lowercase().contains("missing semicolon") =>
+            {
+                fixes::fix_parse_error(self, diagnostic, "parse-error-missingsemicolon")
+            }
             _ => Vec::new(),
         }
     }
@@ -1077,5 +1085,78 @@ mod tests {
 
         let range = source_utils::find_declaration_range(&provider, "$y", 6);
         assert_eq!(range, None);
+    }
+
+    // ── Quick-fix: PL001 / PL002 missing-semicolon via message text ─────
+
+    #[test]
+    fn test_pl001_missing_semicolon_message_triggers_fix() {
+        let source = "my $x = 1\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+
+        let diagnostic = make_diagnostic(
+            (0, 9),
+            DiagnosticSeverity::Error,
+            "PL001",
+            "Missing semicolon after statement. Add `;` here (found `my`)",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert_eq!(actions.len(), 1, "Expected 1 action, got: {:?}", actions);
+        assert_eq!(actions[0].title, "Add missing semicolon");
+        assert_eq!(actions[0].kind, CodeActionKind::QuickFix);
+    }
+
+    #[test]
+    fn test_pl002_missing_semicolon_message_triggers_fix() {
+        let source = "my $x = 1\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+
+        let diagnostic = make_diagnostic(
+            (0, 9),
+            DiagnosticSeverity::Error,
+            "PL002",
+            "Missing semicolon after statement. Add `;` here",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Add missing semicolon");
+    }
+
+    #[test]
+    fn test_pl001_generic_message_returns_no_semicolon_fix() {
+        let source = "my $x = 1;\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+
+        let diagnostic = make_diagnostic(
+            (0, 9),
+            DiagnosticSeverity::Error,
+            "PL001",
+            "Unexpected token at line 1",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert!(actions.is_empty(), "PL001 with unrelated message must not produce actions");
+    }
+
+    #[test]
+    fn test_pl001_semicolon_inserted_at_line_end() {
+        // "my $x = 1\n" — semicolon should be inserted after "1" (before \n)
+        let source = "my $x = 1\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+
+        let diagnostic = make_diagnostic(
+            (0, 9),
+            DiagnosticSeverity::Error,
+            "PL001",
+            "Missing semicolon after statement. Add `;` here",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert_eq!(actions.len(), 1);
+        // find_line_end from diagnostic.range.1=9 -> finds '\n' at offset 0 from pos 9 -> returns 9
+        assert_eq!(actions[0].edit.range, (9, 9));
+        assert_eq!(actions[0].edit.new_text, ";");
     }
 }
