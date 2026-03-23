@@ -61,6 +61,115 @@ pub const DBI_ST_METHODS: &[(&str, &str)] = &[
     ("rows", "Get the number of rows affected"),
 ];
 
+/// Parameter signatures for DBI database-handle methods.
+///
+/// Each entry is `(name, signature, description)`.
+pub const DBI_DB_METHOD_SIGS: &[(&str, &str, &str)] = &[
+    ("do", "do($statement, \\@attr?, @bind_values?)", "Execute a single SQL statement"),
+    ("prepare", "prepare($statement)", "Prepare a SQL statement for execution"),
+    ("prepare_cached", "prepare_cached($statement, \\@attr?)", "Prepare and cache a SQL statement"),
+    (
+        "selectrow_array",
+        "selectrow_array($statement, \\@attr?, @bind)",
+        "Execute and return first row as list",
+    ),
+    (
+        "selectrow_arrayref",
+        "selectrow_arrayref($statement, \\@attr?, @bind)",
+        "Execute and return first row as arrayref",
+    ),
+    (
+        "selectrow_hashref",
+        "selectrow_hashref($statement, \\@attr?, @bind)",
+        "Execute and return first row as hashref",
+    ),
+    (
+        "selectall_arrayref",
+        "selectall_arrayref($statement, \\@attr?, @bind)",
+        "Execute and return all rows as arrayref",
+    ),
+    (
+        "selectall_hashref",
+        "selectall_hashref($statement, $key_field, \\@attr?, @bind)",
+        "Execute and return all rows as hashref",
+    ),
+    ("begin_work", "begin_work()", "Begin a database transaction"),
+    ("commit", "commit()", "Commit the current transaction"),
+    ("rollback", "rollback()", "Rollback the current transaction"),
+    ("disconnect", "disconnect()", "Disconnect from the database"),
+    (
+        "last_insert_id",
+        "last_insert_id($catalog, $schema, $table, $field)",
+        "Get the last inserted row ID",
+    ),
+    ("quote", "quote($value, $data_type?)", "Quote a string value for use in SQL"),
+    ("quote_identifier", "quote_identifier($name)", "Quote an identifier for SQL"),
+    ("ping", "ping()", "Check if the database connection is still alive"),
+];
+
+/// Parameter signatures for DBI statement-handle methods.
+///
+/// Each entry is `(name, signature, description)`.
+pub const DBI_ST_METHOD_SIGS: &[(&str, &str, &str)] = &[
+    (
+        "bind_param",
+        "bind_param($param_num, $bind_value, \\@attr?)",
+        "Bind a value to a placeholder",
+    ),
+    (
+        "bind_param_inout",
+        "bind_param_inout($param_num, \\$bind_value, $max_len)",
+        "Bind an in/out parameter",
+    ),
+    ("execute", "execute(@bind_values?)", "Execute the prepared statement"),
+    ("fetch", "fetch()", "Fetch the next row as arrayref (alias for fetchrow_arrayref)"),
+    ("fetchrow_array", "fetchrow_array()", "Fetch the next row as a list"),
+    ("fetchrow_arrayref", "fetchrow_arrayref()", "Fetch the next row as an arrayref"),
+    ("fetchrow_hashref", "fetchrow_hashref($name?)", "Fetch the next row as a hashref"),
+    (
+        "fetchall_arrayref",
+        "fetchall_arrayref($slice?, $max_rows?)",
+        "Fetch all remaining rows as arrayref",
+    ),
+    (
+        "fetchall_hashref",
+        "fetchall_hashref($key_field)",
+        "Fetch all remaining rows as hashref of hashrefs",
+    ),
+    ("finish", "finish()", "Indicate no more rows will be fetched"),
+    ("rows", "rows()", "Return the number of rows affected or returned"),
+];
+
+/// Look up DBI method documentation by receiver hint and method name.
+///
+/// `receiver_hint` is the variable name or token before `->` (e.g. `"$dbh"`, `"$sth"`).
+/// Returns `(signature, description)` or `None` if not a known DBI method.
+///
+/// When the receiver is ambiguous, database-handle methods take priority.
+pub fn get_dbi_method_documentation(
+    receiver_hint: &str,
+    method_name: &str,
+) -> Option<(&'static str, &'static str)> {
+    let is_db = receiver_hint.ends_with("dbh")
+        || receiver_hint.contains("DBI")
+        || receiver_hint.contains("connect");
+    let is_st = receiver_hint.ends_with("sth");
+
+    let table: &[(&str, &str, &str)] = if is_db {
+        DBI_DB_METHOD_SIGS
+    } else if is_st {
+        DBI_ST_METHOD_SIGS
+    } else {
+        // Unknown receiver — check db table first, then st table
+        if let Some(entry) = DBI_DB_METHOD_SIGS.iter().find(|(n, _, _)| *n == method_name) {
+            return Some((entry.1, entry.2));
+        }
+        DBI_ST_METHOD_SIGS
+    };
+
+    table.iter().find(|(n, _, _)| *n == method_name).map(|(_, sig, desc)| (*sig, *desc))
+}
+
 /// Infer receiver type from context (for DBI method completion)
 pub fn infer_receiver_type(context: &CompletionContext, source: &str) -> Option<String> {
     // Look backwards from the position to find the receiver

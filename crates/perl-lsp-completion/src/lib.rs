@@ -26,5 +26,5 @@ mod completion;
 
 pub use completion::{
     CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider,
-    get_test_more_documentation,
+    get_dbi_method_documentation, get_test_more_documentation,
 };
