@@ -24,6 +24,8 @@ These documents are polished prose ready for editorial review or direct publicat
 | File | Title | Notes |
 |------|-------|-------|
 | [ARTICLE_OUTLINES.md](ARTICLE_OUTLINES.md) | "perl-lsp Launch Articles: Structured Outlines" | 8 publication-ready article outlines with section outlines, pull quotes, interview cross-refs |
+| [SESSION_6_ECONOMICS.md](SESSION_6_ECONOMICS.md) | "Era 7 Session 6: 59 PRs, 200+ Agents, Research-First Pipeline" | Session economics, CI cascade fix, research-first ROI |
+| [SESSION_7_ECONOMICS.md](SESSION_7_ECONOMICS.md) | "Era 7 Session 7: Multi-Pass Review as Infrastructure, Not Overhead" | Per-stage catch documentation, deleted test files, vacuous test pattern, haiku vs sonnet analysis |
 | [AI_NATIVE_OPERATIONS.md](AI_NATIVE_OPERATIONS.md) | "AI-Native Operations: When the System Improves Itself" | Three modes: assisted, swarm, native |
 | [ANATOMY_OF_A_SESSION.md](ANATOMY_OF_A_SESSION.md) | "Anatomy of a Session: What Happens When 60 AI Agents Build a Perl LSP for Seven Hours" | Session 3 case study, March 19-20, 2026 |
 | [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) | "Competitive Analysis: Perl Language Servers in 2026" | Honest comparison vs PerlNavigator, Perl::LanguageServer, PLS |
