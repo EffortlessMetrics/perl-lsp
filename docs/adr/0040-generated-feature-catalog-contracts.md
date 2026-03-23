@@ -1,4 +1,4 @@
-# ADR-0036: Generated Feature Catalog Contracts from `features.toml`
+# ADR-0040: Generated Feature Catalog Contracts from `features.toml`
 
 **Status**: Accepted
 **Date**: 2026-03-18

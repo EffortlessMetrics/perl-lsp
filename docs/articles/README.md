@@ -109,7 +109,7 @@ These documents intentionally preserve dated observations and period-specific me
 - [research/COUNTER_INTUITIVE_INSIGHTS.md](research/COUNTER_INTUITIVE_INSIGHTS.md) — surprising findings that invert common assumptions
 - [research/HINDSIGHT_FINDINGS.md](research/HINDSIGHT_FINDINGS.md) — things that are obvious in hindsight but were invisible at the time
 - [research/CPAN_CORPUS_AUDIT.md](research/CPAN_CORPUS_AUDIT.md) — detailed CPAN corpus analysis and coverage audit
-- [research/MICROCRATE_EVOLUTION.md](research/MICROCRATE_EVOLUTION.md) — 2 to 132 crates: emergent architecture from swarm development
+- [research/MICROCRATE_EVOLUTION.md](research/MICROCRATE_EVOLUTION.md) — 2 to 133 crates: emergent architecture from swarm development
 - [research/TREE_SITTER_BREAKAGE.md](research/TREE_SITTER_BREAKAGE.md) — 7 tree-sitter breakage patterns and mode-based lexer insight
 - [research/INTERVIEW_QUESTIONS.md](research/INTERVIEW_QUESTIONS.md) — 57 interview questions (35 original + 22 generated from session discoveries)
 - [research/BUILDER_SPECS_PHASE_A.md](research/BUILDER_SPECS_PHASE_A.md) — builder-ready specifications from scout findings

@@ -8,7 +8,7 @@ retries = 0
 [profile.ci]
 # CI profile with retry support for flaky tests
 retries = 2
-# Fail fast to save CI time
+# Run all tests even after failures (false = don't stop early; report all failures)
 fail-fast = false
 # Slow timeout to handle constrained CI environments
 slow-timeout = { period = "60s", terminate-after = 2 }
@@ -19,7 +19,7 @@ leak-timeout = "10s"
 # Generate JUnit reports for CI integration
 path = "target/nextest/ci/junit.xml"
 
-[profile.ci.overrides]
+[[profile.ci.overrides]]
 # LSP integration tests may need more time in CI
 filter = 'package(perl-lsp)'
 slow-timeout = { period = "120s", terminate-after = 3 }

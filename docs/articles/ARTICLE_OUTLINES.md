@@ -25,7 +25,7 @@ Eight publication-ready article outlines for the perl-lsp 0.12.0 public alpha la
    - Traditional bottleneck: one senior developer reviewing serially
 
 3. **The Architecture That Enables Parallelism**
-   - 131 crates, zero circular dependencies
+   - 133 crates, zero circular dependencies
    - Microcrate architecture as the unit of safe parallel work
    - Git worktree isolation: no shared mutable state between agents
 
@@ -463,7 +463,7 @@ Eight publication-ready article outlines for the perl-lsp 0.12.0 public alpha la
    - The question: what is the unit of safe parallel work?
 
 2. **The Microcrate Architecture**
-   - 131 crates organized into families: `perl-module-*`, `perl-lsp-*`, `perl-dap-*`
+   - 133 crates organized into families: `perl-module-*`, `perl-lsp-*`, `perl-dap-*`
    - Each crate: single responsibility, narrow public API, independently testable
    - Smallest crate: `perl-line-index` (44 lines); largest: `perl-lsp` (120,596 lines)
 
@@ -473,7 +473,7 @@ Eight publication-ready article outlines for the perl-lsp 0.12.0 public alpha la
    - ADR-0008: the formal decision and its rationale
 
 4. **Zero Circular Dependencies**
-   - 131 crates, zero cycles in the dependency graph
+   - 133 crates, zero cycles in the dependency graph
    - Family organization prevents accidental coupling
    - Rust's type system enforces boundaries at compile time
 
@@ -484,7 +484,7 @@ Eight publication-ready article outlines for the perl-lsp 0.12.0 public alpha la
 
 6. **Tradeoffs and Tooling Limits**
    - `cargo build` is fast per-crate but workspace-wide compilation is slower
-   - IDE integration: rust-analyzer handles 131 crates but needs memory
+   - IDE integration: rust-analyzer handles 133 crates but needs memory
    - Dependency management: `cargo machete` for unused deps, `semver-check` for API stability
 
 7. **Feature Governance**
@@ -495,7 +495,7 @@ Eight publication-ready article outlines for the perl-lsp 0.12.0 public alpha la
 ### Pull quotes
 
 1. "You cannot run 100 agents in parallel on a monolithic codebase. You can on 130 microcrates with formalized boundaries."
-2. "131 crates, zero circular dependencies. The microcrate architecture makes this possible: each crate has a single responsibility and a narrow public API."
+2. "133 crates, zero circular dependencies. The microcrate architecture makes this possible: each crate has a single responsibility and a narrow public API."
 3. "The smallest meaningful crate is `perl-line-index` at 44 lines. Tiny, correct, and depended on by dozens of other crates."
 
 ### Interview questions to enhance

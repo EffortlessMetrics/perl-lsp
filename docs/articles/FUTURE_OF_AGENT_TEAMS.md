@@ -6,11 +6,11 @@
 
 ## 1. What We've Proven
 
-perl-lsp is not a thought experiment. It is 546,000 lines of Rust, 131 workspace crates, and 2,200+ pull requests -- all built by AI agents under human direction. The claims below are drawn from `git log`, CI receipts, and committed operational artifacts. They are observable, not asserted.
+perl-lsp is not a thought experiment. It is 591,034 lines of Rust, 133 workspace crates, and 2,646+ pull requests -- all built by AI agents under human direction. The claims below are drawn from `git log`, CI receipts, and committed operational artifacts. They are observable, not asserted.
 
 ### 50+ agents building production software simultaneously
 
-In Cycle 5 (March 2026), 100 agents were spawned in a single session. Each worked in its own git worktree on its own crate. Zero branch conflicts. The microcrate architecture -- 131 workspace members, average 4,200 lines per crate -- meant agents had isolated work areas with formalized boundaries. Two agents editing different crates in different worktrees cannot produce a merge conflict. The architecture is the parallelism enabler.
+In Cycle 5 (March 2026), 100 agents were spawned in a single session. Each worked in its own git worktree on its own crate. Zero branch conflicts. The microcrate architecture -- 133 workspace members, average ~4,450 lines per crate -- meant agents had isolated work areas with formalized boundaries. Two agents editing different crates in different worktrees cannot produce a merge conflict. The architecture is the parallelism enabler.
 
 ### 85%+ corpus coverage on 4,355 real-world files
 
@@ -66,7 +66,7 @@ perl-lsp succeeded because five specific conditions were met. Each is a prerequi
 
 Agents need isolated work areas. Two agents editing the same file produce merge conflicts. Two agents editing the same function produce semantic conflicts even without merge conflicts. The finer the decomposition, the more parallelism you get.
 
-perl-lsp's 131 crates enable 100 parallel agents. A monolith with 3 packages enables 3. The microcrate architecture was not built for agents -- it was built during Era 3 as an investment in modularity. But without it, the swarm could not have scaled. Any project attempting agent teams must first answer: can two agents work simultaneously without touching the same files?
+perl-lsp's 133 crates enable 100 parallel agents. A monolith with 3 packages enables 3. The microcrate architecture was not built for agents -- it was built during Era 3 as an investment in modularity. But without it, the swarm could not have scaled. Any project attempting agent teams must first answer: can two agents work simultaneously without touching the same files?
 
 ### Strong CI gates
 

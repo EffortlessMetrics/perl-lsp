@@ -146,6 +146,11 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
 
+            // Reject stale requests (parity with hover.rs:51-53 and completion.rs:312)
+            let req_version =
+                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            self.ensure_latest(uri, req_version)?;
+
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
@@ -254,7 +259,7 @@ impl LspServer {
                 // Performance monitoring
                 let dt = t0.elapsed();
                 if doc.text.len() < 50_000 && dt > std::time::Duration::from_millis(50) {
-                    eprintln!("[warn] slow declaration: {:?} (uri={})", dt, uri);
+                    tracing::warn!(elapsed = ?dt, uri, "slow declaration");
                 }
             }
         }
@@ -269,6 +274,11 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+
+            // Reject stale requests (parity with hover.rs:51-53 and completion.rs:312)
+            let req_version =
+                params["textDocument"]["version"].as_i64().and_then(|n| i32::try_from(n).ok());
+            self.ensure_latest(uri, req_version)?;
 
             // First, extract module reference info while holding the document lock briefly
             // We need to release the lock before calling resolve_module_to_path to avoid deadlock
@@ -480,11 +490,11 @@ impl LspServer {
                             if let Some(symbol_key) =
                                 crate::declaration::symbol_at_cursor(ast, offset, current_package)
                             {
-                                eprintln!("Looking for definition of {:?}", symbol_key);
+                                tracing::debug!(symbol_key = ?symbol_key, "looking for definition");
 
                                 // Try to find definition using the symbol key
                                 if let Some(def_location) = workspace_index.find_def(&symbol_key) {
-                                    eprintln!("Found definition at {:?}", def_location);
+                                    tracing::debug!(location = ?def_location, "found definition");
                                     // Convert internal Location to LSP Location
                                     if let Some(lsp_location) =
                                         crate::workspace_index::lsp_adapter::to_lsp_location(
@@ -506,9 +516,9 @@ impl LspServer {
                                 if let Some(def_location) =
                                     workspace_index.find_definition(&symbol_name)
                                 {
-                                    eprintln!(
-                                        "Found definition via find_definition for {}",
-                                        symbol_name
+                                    tracing::debug!(
+                                        symbol_name,
+                                        "found definition via find_definition"
                                     );
                                     // Convert internal Location to LSP Location
                                     if let Some(lsp_location) =

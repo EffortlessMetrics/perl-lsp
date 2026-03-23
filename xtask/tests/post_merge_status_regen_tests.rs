@@ -1,11 +1,13 @@
-//! Post-merge CURRENT_STATUS.md regeneration validation tests.
+//! Post-merge status regeneration validation tests.
 //!
+//! Tests for issue #2801: split monolithic CURRENT_STATUS.md into modular status files.
 //! Tests for issue #2296: infra: centralize CURRENT_STATUS.md rendering (post-merge regeneration).
 //!
 //! Validates:
 //! - The `policy_checks` gate no longer blocks PRs with a `--check` on CURRENT_STATUS.md.
-//! - A post-merge workflow exists to auto-regenerate CURRENT_STATUS.md on push to master.
-//! - The GATE_REGISTRY.toml policy gate command does not require a freshness check either.
+//! - A post-merge workflow exists to auto-regenerate the status subsystem files.
+//! - The GATE_REGISTRY.toml policy gate command does not require a freshness check.
+//! - The modular structure (4 generated files + stable stub) is correctly wired.
 
 use std::fs;
 use std::path::PathBuf;
@@ -76,7 +78,7 @@ fn test_gate_registry_policy_does_not_require_status_check() {
     );
 }
 
-/// A post-merge workflow must exist that regenerates CURRENT_STATUS.md on push to master.
+/// A post-merge workflow must exist that regenerates status subsystem files on push to master.
 #[test]
 fn test_post_merge_status_workflow_exists() {
     let root = project_root();
@@ -85,8 +87,8 @@ fn test_post_merge_status_workflow_exists() {
     assert!(
         workflow_path.exists(),
         "Missing post-merge status workflow at .github/workflows/post-merge-status.yml.\n\
-         This workflow is required to auto-regenerate CURRENT_STATUS.md after merges.\n\
-         See issue #2296."
+         This workflow is required to auto-regenerate status files after merges.\n\
+         See issue #2296 and issue #2801."
     );
 }
 
@@ -139,8 +141,65 @@ fn test_post_merge_workflow_auto_commits() {
 
     assert!(
         content.contains("git commit") || content.contains("git push"),
-        "post-merge-status.yml must commit and push regenerated CURRENT_STATUS.md.\n\
+        "post-merge-status.yml must commit and push regenerated status files.\n\
          Workflow content:\n{}",
         content
+    );
+}
+
+/// The post-merge workflow must commit files in docs/project/status/ — NOT CURRENT_STATUS.md alone.
+#[test]
+fn test_post_merge_workflow_commits_status_directory() {
+    let root = project_root();
+    let workflow_path = root.join(".github/workflows/post-merge-status.yml");
+
+    let content =
+        fs::read_to_string(&workflow_path).expect("post-merge-status.yml should be readable");
+
+    // The workflow must add files from the status/ subdirectory.
+    assert!(
+        content.contains("docs/project/status/"),
+        "post-merge-status.yml must commit files in docs/project/status/ (modular structure).\n\
+         After issue #2801, CURRENT_STATUS.md is a stable stub — status/ files are generated.\n\
+         Workflow content:\n{}",
+        content
+    );
+}
+
+/// The post-merge workflow must NOT git-add CURRENT_STATUS.md (it is now human-owned stable stub).
+#[test]
+fn test_post_merge_workflow_does_not_add_current_status() {
+    let root = project_root();
+    let workflow_path = root.join(".github/workflows/post-merge-status.yml");
+
+    let content =
+        fs::read_to_string(&workflow_path).expect("post-merge-status.yml should be readable");
+
+    // The workflow must not try to commit CURRENT_STATUS.md — it's a stable human-owned stub now.
+    assert!(
+        !content.contains("git add docs/project/CURRENT_STATUS.md"),
+        "post-merge-status.yml must not git-add CURRENT_STATUS.md.\n\
+         After issue #2801, CURRENT_STATUS.md is a stable human-owned stub.\n\
+         Generated metrics are in docs/project/status/*.md\n\
+         Workflow content:\n{}",
+        content
+    );
+}
+
+/// The stub CURRENT_STATUS.md must not contain any <!-- BEGIN: --> markers.
+/// If it does, `xtask update-status --check` will try to patch it and fail.
+#[test]
+fn test_stub_current_status_has_no_begin_markers() {
+    let root = project_root();
+    let stub_path = root.join("docs/project/CURRENT_STATUS.md");
+
+    let content = fs::read_to_string(&stub_path)
+        .expect("docs/project/CURRENT_STATUS.md should exist as a stub");
+
+    assert!(
+        !content.contains("<!-- BEGIN:"),
+        "CURRENT_STATUS.md must not contain <!-- BEGIN: --> markers.\n\
+         It is now a stable stub — generated content belongs in docs/project/status/*.md\n\
+         Remove all <!-- BEGIN: ... --> blocks from CURRENT_STATUS.md."
     );
 }

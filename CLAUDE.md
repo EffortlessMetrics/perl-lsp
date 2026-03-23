@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Latest Release**: 0.12.0 | **Metrics**: [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
+**Latest Release**: 0.12.0 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
 
 ## Orchestration Model
 
@@ -71,7 +71,7 @@ Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accura
 - Don't rebase PRs unless merge conflicts exist
 - Merge in batches of 3 (CI cancellation cascade -- rapid merges cancel each other's CI runs)
 - Run `just cpan-corpus-ratchet` after parser fix merges
-- CURRENT_STATUS.md is regenerated automatically post-merge (no manual step needed)
+- `docs/project/status/*.md` subsystem files are regenerated automatically post-merge (no manual step needed)
 
 ## Quick Reference
 
@@ -211,10 +211,11 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 ## Truth Sources
 
 Metrics are **computed, not hand-edited**:
-- `CURRENT_STATUS.md` auto-generated via `scripts/update-current-status.py`
+- `docs/project/status/*.md` subsystem files auto-generated via `just status-update` (writes lsp.md, tests.md, parser.md, quality.md)
+- `docs/project/CURRENT_STATUS.md` is now a stable stub linking to the subsystem files (no `<!-- BEGIN: -->` markers)
 - `features.toml` is the canonical LSP capability definition
 - Test output and CI receipts are evidence for all claims
-- `README.md` must not contain volatile metrics -- link to CURRENT_STATUS.md
+- `README.md` must not contain volatile metrics -- link to `docs/project/status/index.md`
 - `.ci/blockers.yaml` is manually maintained — verify counts against `parser-corpus-baseline.json` before trusting `affected_files` values
 
 ## Coding Standards
@@ -230,11 +231,11 @@ Invoke `/coding-standards` for full detail.
 - **Prefer**: `.first()` over `.get(0)`, `.push(char)` over `.push_str("x")`, `or_default()` over `or_insert_with(Vec::new)`
 - **Avoid**: unnecessary `.clone()` on Copy types
 - **Regex**: `Option<Regex>` with `.ok()` for graceful degradation
-- After adding tests, no manual status update needed — CURRENT_STATUS.md is auto-regenerated post-merge
+- After adding tests, no manual status update needed — `docs/project/status/*.md` files are auto-regenerated post-merge
 
 ## Documentation
 
-[CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [features.toml](features.toml)
+[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [features.toml](features.toml)
 
 ## Contributing
 

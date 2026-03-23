@@ -206,6 +206,13 @@ pub struct LspServer {
     feature_profile: FeatureProfile,
     /// Cache of extracted POD documentation keyed by resolved file path.
     pod_cache: Arc<Mutex<HashMap<PathBuf, perl_pod::PodDoc>>>,
+    /// Cache of SemanticAnalyzer results keyed by (normalized_uri, content_hash).
+    ///
+    /// Avoids re-running the full O(n) AST traversal on repeated hover/definition
+    /// requests to the same document version. Content hash provides automatic
+    /// invalidation when source text changes — no TTL needed.
+    pub(crate) semantic_analyzer_cache:
+        Arc<Mutex<HashMap<(String, u64), Arc<crate::semantic::SemanticAnalyzer>>>>,
     /// Count of background workspace indexing tasks currently in flight.
     ///
     /// Incremented before spawning a background `index_file` task, decremented

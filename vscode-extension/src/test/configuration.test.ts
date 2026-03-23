@@ -309,6 +309,26 @@ describe('package.json contributes', () => {
       }
     });
 
+    test('trace.server has enumDescriptions matching its enum values', () => {
+      const trace = properties['perl-lsp.trace.server'];
+      expect(Array.isArray(trace.enumDescriptions)).toBe(true);
+      expect(trace.enumDescriptions.length).toBe(trace.enum.length);
+      for (const desc of trace.enumDescriptions) {
+        expect(typeof desc).toBe('string');
+        expect(desc.length).toBeGreaterThan(0);
+      }
+    });
+
+    test('channel has enumDescriptions matching its enum values', () => {
+      const channel = properties['perl-lsp.channel'];
+      expect(Array.isArray(channel.enumDescriptions)).toBe(true);
+      expect(channel.enumDescriptions.length).toBe(channel.enum.length);
+      for (const desc of channel.enumDescriptions) {
+        expect(typeof desc).toBe('string');
+        expect(desc.length).toBeGreaterThan(0);
+      }
+    });
+
     test('defines enableDiagnostics with default true', () => {
       expect(properties['perl-lsp.enableDiagnostics'].default).toBe(true);
     });

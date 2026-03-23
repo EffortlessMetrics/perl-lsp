@@ -1,9 +1,14 @@
 name: Post-Merge Status Regeneration
 
-# Automatically regenerates docs/project/CURRENT_STATUS.md after every merge to master.
+# Automatically regenerates docs/project/status/*.md after every merge to master.
 # This eliminates the #1 merge friction point: PRs no longer need to edit CURRENT_STATUS.md
 # themselves, ending the cascade of merge conflicts on that hot shared file.
-# See issue #2296.
+#
+# The status directory contains four generated files (lsp.md, tests.md, parser.md, quality.md)
+# and three human-owned files (index.md, release.md). Only the generated files are committed.
+# CURRENT_STATUS.md is now a stable stub — it is never touched by this workflow.
+#
+# See issue #2801 (split CURRENT_STATUS.md) and issue #2296 (original post-merge regen).
 
 on:
   push:
@@ -20,7 +25,7 @@ permissions:
 
 jobs:
   regenerate-status:
-    name: Regenerate CURRENT_STATUS.md
+    name: Regenerate status subsystem files
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -42,18 +47,30 @@ jobs:
           cache-on-failure: true
           shared-key: post-merge-status-${{ hashFiles('Cargo.lock') }}
 
-      - name: Regenerate CURRENT_STATUS.md and ROADMAP.md
+      - name: Regenerate all status subsystem files and ROADMAP.md
         run: cargo run -p xtask -- update-status --write
 
       - name: Commit regenerated files if changed
         run: |
-          if ! git diff --quiet -- docs/project/CURRENT_STATUS.md docs/project/ROADMAP.md; then
+          CHANGED_FILES=$(git diff --name-only -- \
+            docs/project/status/lsp.md \
+            docs/project/status/tests.md \
+            docs/project/status/parser.md \
+            docs/project/status/quality.md \
+            docs/project/ROADMAP.md)
+
+          if [ -n "$CHANGED_FILES" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add docs/project/CURRENT_STATUS.md docs/project/ROADMAP.md
-            git commit -m "chore(docs): regenerate CURRENT_STATUS.md post-merge [skip ci]"
+            git add \
+              docs/project/status/lsp.md \
+              docs/project/status/tests.md \
+              docs/project/status/parser.md \
+              docs/project/status/quality.md \
+              docs/project/ROADMAP.md
+            git commit -m "chore(docs): regenerate status subsystem files post-merge [skip ci]"
             git push
-            echo "::notice::Regenerated CURRENT_STATUS.md and pushed."
+            echo "::notice::Regenerated status files and pushed."
           else
-            echo "::notice::CURRENT_STATUS.md already up to date -- nothing to commit."
+            echo "::notice::Status files already up to date -- nothing to commit."
           fi

@@ -92,6 +92,9 @@ where
         NodeKind::Unary { operand, .. } => {
             walk_node(operand, func);
         }
+        NodeKind::Package { block: Some(blk), .. } => {
+            walk_node(blk, func);
+        }
         NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
             walk_node(body, func);
         }

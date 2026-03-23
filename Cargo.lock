@@ -1981,7 +1981,10 @@ dependencies = [
 name = "perl-lsp-config"
 version = "0.12.0"
 dependencies = [
+ "serde",
  "serde_json",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -2673,6 +2676,7 @@ dependencies = [
  "perl-workspace-index",
  "regex",
  "rustc-hash",
+ "tracing",
 ]
 
 [[package]]

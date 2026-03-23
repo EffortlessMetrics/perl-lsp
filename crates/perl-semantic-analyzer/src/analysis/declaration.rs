@@ -171,25 +171,22 @@ impl<'a> DeclarationProvider<'a> {
         self
     }
 
+    /// Returns `true` if this provider is still fresh (version matches).
+    ///
+    /// In both debug and release builds: logs a warning and returns `false` on mismatch so
+    /// callers can return `None` early instead of operating on a stale AST snapshot.
     #[inline]
     #[track_caller]
-    fn assert_fresh(&self, current_version: i32) {
-        #[cfg(debug_assertions)]
-        {
-            debug_assert!(
-                self.doc_version != i32::MIN,
-                "DeclarationProvider: with_doc_version() not called - provider must be initialized with document version"
+    fn is_fresh(&self, current_version: i32) -> bool {
+        if self.doc_version != current_version {
+            tracing::warn!(
+                provider_version = self.doc_version,
+                current_version,
+                "DeclarationProvider used after AST refresh — returning empty result"
             );
-            debug_assert_eq!(
-                self.doc_version, current_version,
-                "DeclarationProvider used after AST refresh (provider version: {}, current: {})",
-                self.doc_version, current_version
-            );
+            return false;
         }
-
-        // Suppress unused warning in release builds
-        #[cfg(not(debug_assertions))]
-        let _ = current_version;
+        true
     }
 
     /// Debug-only cycle detection for parent map
@@ -254,10 +251,16 @@ impl<'a> DeclarationProvider<'a> {
     /// ```
     pub fn build_parent_map(node: &Node, map: &mut ParentMap, parent: Option<*const Node>) {
         if let Some(p) = parent {
+            // SAFETY: `node` is a shared reference derived from `Arc<Node>` in `DocumentState.ast`.
+            // The Arc is held alive by the documents HashMap behind a parking_lot Mutex for the
+            // entire lifetime of `DeclarationProvider<'a>` (enforced by the lifetime parameter).
+            // The raw pointer is therefore valid for at least as long as the MutexGuard is held.
             map.insert(node as *const _, p);
         }
 
         for child in Self::get_children_static(node) {
+            // SAFETY: Same invariant as above — `child` is a child of `node`, both owned by the
+            // same `Arc<Node>` tree that is live under the documents MutexGuard.
             Self::build_parent_map(child, map, Some(node as *const _));
         }
     }
@@ -268,8 +271,10 @@ impl<'a> DeclarationProvider<'a> {
         offset: usize,
         current_version: i32,
     ) -> Option<Vec<LocationLink>> {
-        // Assert this provider is still fresh (not stale after AST refresh)
-        self.assert_fresh(current_version);
+        // Guard against stale provider usage after AST refresh (both debug and release)
+        if !self.is_fresh(current_version) {
+            return None;
+        }
 
         // Find the node at the cursor position
         let node = self.find_node_at_offset(&self.ast, offset)?;
@@ -293,6 +298,10 @@ impl<'a> DeclarationProvider<'a> {
     /// Find variable declaration using scope-aware lookup
     fn find_variable_declaration(&self, usage: &Node, var_name: &str) -> Option<Vec<LocationLink>> {
         // Walk upwards through scopes to find the nearest declaration
+        // SAFETY: `usage` is a shared reference into the `Arc<Node>` AST tree held by
+        // `DeclarationProvider<'a>`. The raw pointer is used only as a HashMap key for O(1)
+        // parent lookup and is never dereferenced directly; lookups go through `build_node_lookup_map`
+        // which re-derives safe `&Node` references from the same Arc tree.
         let mut current_ptr: *const Node = usage as *const _;
 
         // Build temporary parent map if not provided (for testing)

@@ -23,7 +23,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) | Draft | 2026-01-28 | LSP Cancellation | Cancellation infrastructure for responsive editor interactions |
 | [ADR-007](ADR_007_SUBSTITUTION_OPERATOR_PARSING.md) | Accepted | 2025-01-20 | Substitution Parsing | Comprehensive s/// parsing with all modifiers |
 
-### Architecture Series (0008–0036)
+### Architecture Series (0008–0040)
 
 | ADR | Status | Date | Title | Description |
 |-----|--------|------|-------|-------------|
@@ -57,6 +57,8 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0035](0035-deterministic-module-resolution.md) | Accepted | 2026-03-18 | Deterministic Module Resolution | Canonicalized names, explicit precedence, workspace-safe paths, and lib/ fallback for module lookup |
 | [ADR-0036](0036-marker-framed-debugger-queries.md) | Accepted | 2026-03-18 | Marker-Framed Debugger Queries | Unique debugger output markers plus poison-safe shared state for resilient native DAP queries |
 | [ADR-0038](0038-session-economics.md) | Accepted | 2026-03-19 | Session Economics | Agent lifecycle cost model and swarm wind-down policy to preserve context budget |
+| [ADR-0039](0039-raw-pointer-parent-map.md) | Accepted | 2026-03-18 | Raw-Pointer Parent Map | Sidecar parent cache using raw pointers for efficient upward AST traversal without tree-sitter API changes |
+| [ADR-0040](0040-generated-feature-catalog-contracts.md) | Accepted | 2026-03-18 | Generated Feature Catalog Contracts | Build-time compilation of `features.toml` into generated Rust contracts via perl-feature-catalog |
 
 ## About ADRs
 

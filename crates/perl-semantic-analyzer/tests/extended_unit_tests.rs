@@ -279,6 +279,66 @@ fn declaration_provider_with_doc_version() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+/// Fix 2 (Phase 1): assert_fresh must return None on version mismatch in both debug and
+/// release builds.  Before the fix, the release build silently ignores the mismatch
+/// because `assert_fresh` was a debug-only no-op; `find_declaration` could still return
+/// results from a stale provider.  After the fix, a version mismatch always returns None.
+#[test]
+fn declaration_provider_version_mismatch_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "my $x = 1; my $y = $x;";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let ast_arc = Arc::new(ast);
+
+    let mut parent_map = ParentMap::default();
+    DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
+
+    // Use any valid offset inside the source; the stale-version guard fires before
+    // any node lookup so the exact position is irrelevant to what we are testing.
+    // Provider was built with version=1 but current_version=2 is passed to find_declaration.
+    let offset_of_y_usage = must_some(code.find("$y")) + 1; // skip '$' — offset inside source
+    let provider =
+        DeclarationProvider::new(ast_arc, code.to_string(), "file:///test.pl".to_string())
+            .with_parent_map(&parent_map)
+            .with_doc_version(1);
+
+    // Version mismatch: provider version=1, current_version=2
+    let result = provider.find_declaration(offset_of_y_usage, 2);
+    assert!(
+        result.is_none(),
+        "stale provider (version mismatch) must return None, not a result from the old AST"
+    );
+    Ok(())
+}
+
+/// Fix 2 (Phase 1, negative): assert_fresh must NOT suppress results when versions match.
+#[test]
+fn declaration_provider_matching_version_returns_result() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = "my $x = 1; print $x;";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let ast_arc = Arc::new(ast);
+
+    let mut parent_map = ParentMap::default();
+    DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
+
+    // $x usage is at the `print $x` site
+    let offset_of_x_usage = must_some(code.rfind("$x"));
+    let provider =
+        DeclarationProvider::new(ast_arc, code.to_string(), "file:///test.pl".to_string())
+            .with_parent_map(&parent_map)
+            .with_doc_version(3);
+
+    // Versions match: provider version=3, current_version=3 → should find the declaration
+    let result = provider.find_declaration(offset_of_x_usage, 3);
+    assert!(
+        result.is_some(),
+        "matching-version provider must still return a result for a declared variable"
+    );
+    Ok(())
+}
+
 #[test]
 fn declaration_provider_get_node_text() -> Result<(), Box<dyn std::error::Error>> {
     let code = "sub hello { 1 }";
