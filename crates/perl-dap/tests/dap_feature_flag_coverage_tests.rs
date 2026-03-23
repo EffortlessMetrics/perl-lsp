@@ -890,6 +890,11 @@ fn test_capability_dap_exceptions_warn_filter_in_initialize() -> TestResult {
             Some("Perl warn() and Carp warnings"),
             "warn filter must have correct label"
         );
+        assert_eq!(
+            warn_filter.get("default").and_then(|v| v.as_bool()),
+            Some(false),
+            "warn filter default must be false (non-intrusive by default)"
+        );
     } else {
         assert!(!has_warn, "warn filter must not appear when dap.exceptions.warn is disabled");
     }
@@ -931,12 +936,18 @@ fn test_feature_gate_dap_watchpoints() {
 fn test_capability_dap_watchpoints_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
 
+    let supports_data_breakpoints =
+        body.get("supportsDataBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
+
     if has_feature("dap.watchpoints") {
-        let supports_data_breakpoints =
-            body.get("supportsDataBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
         assert!(
             supports_data_breakpoints,
             "supportsDataBreakpoints must be true when dap.watchpoints is enabled"
+        );
+    } else {
+        assert!(
+            !supports_data_breakpoints,
+            "supportsDataBreakpoints must be false when dap.watchpoints is disabled"
         );
     }
     Ok(())
@@ -975,6 +986,8 @@ fn test_functional_dap_watchpoints_data_breakpoint_roundtrip() -> TestResult {
                 .and_then(|v| v.as_array())
                 .ok_or("missing breakpoints array")?;
             assert_eq!(bps.len(), 1, "setDataBreakpoints must return one record");
+            let verified = bps[0].get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+            assert!(verified, "returned breakpoint must be verified");
         }
         _ => return Err("Expected setDataBreakpoints response with body".into()),
     }
