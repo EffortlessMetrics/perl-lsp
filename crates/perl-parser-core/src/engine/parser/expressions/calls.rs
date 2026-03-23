@@ -509,6 +509,80 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse arguments for `print(…)`, `say(…)`, `printf(…)`, `send(…)` with
+    /// explicit parentheses, detecting the optional filehandle (indirect-object)
+    /// as the first argument.
+    ///
+    /// Perl allows `print( $fh EXPR )` where `$fh` is a scalar variable acting
+    /// as the filehandle, with the message list following without a comma.
+    /// `parse_args` treats every argument as comma-separated, so the above
+    /// would fail when `EXPR` is not preceded by a comma.  This function
+    /// detects the pattern and falls back to `parse_args` when the first
+    /// argument is not a scalar filehandle.
+    fn parse_print_parens_args(&mut self) -> ParseResult<Vec<Node>> {
+        self.with_recursion_guard(|s| {
+            s.expect(TokenKind::LeftParen)?;
+
+            if s.peek_kind() == Some(TokenKind::RightParen) {
+                s.expect_closing_delimiter(TokenKind::RightParen)?;
+                return Ok(vec![]);
+            }
+
+            // Peek ahead: if the first token is a scalar variable ($fh) and the
+            // token after it is NOT a comma, fat-arrow, or `)`, treat it as the
+            // indirect filehandle (no comma before the message list).
+            let first_is_scalar = s.tokens.peek().is_ok_and(|t| {
+                t.text.starts_with('$') && t.text.len() > 1
+            });
+            let second_is_not_separator = s.tokens.peek_second().is_ok_and(|t| {
+                !matches!(
+                    t.kind,
+                    TokenKind::Comma | TokenKind::FatArrow | TokenKind::RightParen
+                )
+            });
+
+            if first_is_scalar && second_is_not_separator {
+                // Filehandle form: parse $fh as first argument, then remaining args
+                // without requiring a comma separator.
+                let mut args = Vec::new();
+                let filehandle = s.parse_assignment_or_declaration()?;
+                args.push(filehandle);
+
+                // Collect remaining arguments (no comma required after filehandle)
+                while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
+                    if matches!(s.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow))
+                    {
+                        s.tokens.next()?;
+                    }
+                    if s.peek_kind() == Some(TokenKind::RightParen) {
+                        break;
+                    }
+                    args.push(s.parse_assignment_or_declaration()?);
+                }
+
+                s.expect_closing_delimiter(TokenKind::RightParen)?;
+                Ok(args)
+            } else {
+                // Regular argument list — parse comma-separated args then close paren.
+                let mut args = Vec::new();
+
+                while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
+                    let arg = s.parse_assignment_or_declaration()?;
+                    args.push(arg);
+                    match s.peek_kind() {
+                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
+                            s.tokens.next()?;
+                        }
+                        _ => break,
+                    }
+                }
+
+                s.expect_closing_delimiter(TokenKind::RightParen)?;
+                Ok(args)
+            }
+        })
+    }
+
     /// Parse function arguments
     /// Handles both comma-separated and fat-comma-separated arguments.
     /// Fat comma (=>) auto-quotes bareword identifiers on its left side.

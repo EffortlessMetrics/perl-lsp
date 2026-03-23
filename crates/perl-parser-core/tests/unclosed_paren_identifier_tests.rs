@@ -728,3 +728,159 @@ fn dancer_post_route() {
 fn dancer_any_route() {
     assert_clean_parse(r#"any '/ping' => sub { return 'pong' };"#);
 }
+
+// === undef EXPR in expression context (#2834) ===
+// undef is a keyword token (TokenKind::Undef), not Identifier.
+// When used as `undef $var` in an expression (not at statement start),
+// the postfix chain must recognise it and parse the argument.
+
+#[test]
+fn undef_expr_in_paren_or() {
+    // From Storable.pm: close(FILE) or undef $ret
+    assert_clean_parse(r#"if ($x or undef $ret) { 1 }"#);
+}
+
+#[test]
+fn undef_expr_negated_or() {
+    // From Storable.pm: if (!(close(FILE) or undef $ret) || $@)
+    assert_clean_parse(r#"if (!(close($f) or undef $ret)) { die; }"#);
+}
+
+#[test]
+fn undef_expr_nested_parens() {
+    // undef inside nested parens with or
+    assert_clean_parse(r#"my $ok = ($x || undef $y);"#);
+}
+
+// === x repetition operator with non-sigil identifier as RHS (#2834) ===
+// In `'-' x width $title`, the RHS of `x` is an unqualified identifier
+// (imported function) applied to a sigil argument. The parser must accept
+// a plain identifier as the start of the x-operator RHS.
+
+#[test]
+fn x_rep_with_identifier_func() {
+    // From Debconf: ('-' x width $title)
+    assert_clean_parse(r#"my $s = ('-' x width $title);"#);
+}
+
+#[test]
+fn x_rep_identifier_in_list() {
+    // As it appears in the original: unshift @lines, $t, ('-' x width $t), '';
+    assert_clean_parse(r#"unshift @lines, $title, ('-' x width $title), '';"#);
+}
+
+// === print(FILEHANDLE LIST) with explicit parens (#2834) ===
+// `print( $fh EXPR )` — filehandle inside explicit parens.
+// The parser must detect the indirect-object pattern even when
+// print is called with explicit parentheses.
+
+#[test]
+fn print_parens_filehandle_join() {
+    // From IPC::Run3::ProfLogger: print( $fh join(...) )
+    assert_clean_parse(r#"print( $fh join(" ", @items) );"#);
+}
+
+#[test]
+fn print_parens_filehandle_string() {
+    // print( $fh "message" ) — string after filehandle var
+    assert_clean_parse(r#"print( $fh "hello\n" );"#);
+}
+
+#[test]
+fn print_parens_filehandle_var() {
+    // print( $fh $msg ) — variable after filehandle
+    assert_clean_parse(r#"print( $fh $msg );"#);
+}
+
+// === Additional edge case coverage (#2834 deep review) ===
+
+#[test]
+fn undef_no_arg_in_expr() {
+    // Plain `undef` with no argument in expression context — must not consume next token
+    assert_clean_parse(r#"my $x = $y || undef;"#);
+}
+
+#[test]
+fn undef_no_arg_in_ternary() {
+    // undef as rhs of ternary — no argument
+    assert_clean_parse(r#"my $x = $cond ? 1 : undef;"#);
+}
+
+#[test]
+fn undef_array_arg_in_expr() {
+    // undef @arr in expression context (% sigil also supported)
+    assert_clean_parse(r#"$x or undef @arr;"#);
+}
+
+#[test]
+fn print_parens_empty() {
+    // print() with empty parens — early exit path
+    assert_clean_parse(r#"print();"#);
+}
+
+#[test]
+fn print_parens_single_scalar_no_fh() {
+    // print($msg) — single scalar, is the message not the filehandle
+    // second token is ), so second_is_not_separator=false => regular parse
+    assert_clean_parse(r#"print($msg);"#);
+}
+
+#[test]
+fn print_parens_with_explicit_comma() {
+    // print($fh, $msg) — with comma: second is Comma, regular parse
+    assert_clean_parse(r#"print($fh, "hello\n");"#);
+}
+
+#[test]
+fn say_parens_filehandle() {
+    // say with explicit parens and filehandle
+    assert_clean_parse(r#"say($fh "line\n");"#);
+}
+
+#[test]
+fn printf_parens_filehandle_format() {
+    // printf($fh "%s\n", $val) — printf with filehandle and format string
+    assert_clean_parse(r#"printf($fh "%s\n", $val);"#);
+}
+
+#[test]
+fn x_rep_with_builtin_func() {
+    // "str" x length($s) — length is Identifier, not keyword in this context
+    assert_clean_parse(r#"my $s = "-" x length($title);"#);
+}
+
+#[test]
+fn x_rep_with_constant() {
+    // "str" x CONSTANT — bareword constant as RHS
+    assert_clean_parse(r#"my $s = "*" x COLS;"#);
+}
+
+#[test]
+fn x_rep_with_expr_rhs() {
+    // "str" x (func()) — parenthesized expression as RHS (was already working)
+    assert_clean_parse(r#"my $s = "-" x (5 + 3);"#);
+}
+
+#[test]
+fn print_parens_filehandle_list() {
+    // print($fh @arr) — array arg after filehandle (second token is @arr, not a separator)
+    assert_clean_parse(r#"print($fh @lines);"#);
+}
+
+#[test]
+fn undef_in_return_expr() {
+    // return undef — undef at statement boundary, no sigil follows
+    assert_clean_parse(r#"sub f { return undef; }"#);
+}
+
+#[test]
+fn undef_hash_arg_in_expr() {
+    // undef %hash in expression context
+    assert_clean_parse(r#"$ok or undef %cache;"#);
+}
+
+#[test]
+fn send_parens_filehandle_stmt() {
+    // send($sock "msg") — send with explicit parens and socket as filehandle, at statement level
+    assert_clean_parse(r#"send($sock "data\n");"#);
+}
