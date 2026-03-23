@@ -728,3 +728,66 @@ fn dancer_post_route() {
 fn dancer_any_route() {
     assert_clean_parse(r#"any '/ping' => sub { return 'pong' };"#);
 }
+
+// === undef EXPR in expression context (#2834) ===
+// undef is a keyword token (TokenKind::Undef), not Identifier.
+// When used as `undef $var` in an expression (not at statement start),
+// the postfix chain must recognise it and parse the argument.
+
+#[test]
+fn undef_expr_in_paren_or() {
+    // From Storable.pm: close(FILE) or undef $ret
+    assert_clean_parse(r#"if ($x or undef $ret) { 1 }"#);
+}
+
+#[test]
+fn undef_expr_negated_or() {
+    // From Storable.pm: if (!(close(FILE) or undef $ret) || $@)
+    assert_clean_parse(r#"if (!(close($f) or undef $ret)) { die; }"#);
+}
+
+#[test]
+fn undef_expr_nested_parens() {
+    // undef inside nested parens with or
+    assert_clean_parse(r#"my $ok = ($x || undef $y);"#);
+}
+
+// === x repetition operator with non-sigil identifier as RHS (#2834) ===
+// In `'-' x width $title`, the RHS of `x` is an unqualified identifier
+// (imported function) applied to a sigil argument. The parser must accept
+// a plain identifier as the start of the x-operator RHS.
+
+#[test]
+fn x_rep_with_identifier_func() {
+    // From Debconf: ('-' x width $title)
+    assert_clean_parse(r#"my $s = ('-' x width $title);"#);
+}
+
+#[test]
+fn x_rep_identifier_in_list() {
+    // As it appears in the original: unshift @lines, $t, ('-' x width $t), '';
+    assert_clean_parse(r#"unshift @lines, $title, ('-' x width $title), '';"#);
+}
+
+// === print(FILEHANDLE LIST) with explicit parens (#2834) ===
+// `print( $fh EXPR )` — filehandle inside explicit parens.
+// The parser must detect the indirect-object pattern even when
+// print is called with explicit parentheses.
+
+#[test]
+fn print_parens_filehandle_join() {
+    // From IPC::Run3::ProfLogger: print( $fh join(...) )
+    assert_clean_parse(r#"print( $fh join(" ", @items) );"#);
+}
+
+#[test]
+fn print_parens_filehandle_string() {
+    // print( $fh "message" ) — string after filehandle var
+    assert_clean_parse(r#"print( $fh "hello\n" );"#);
+}
+
+#[test]
+fn print_parens_filehandle_var() {
+    // print( $fh $msg ) — variable after filehandle
+    assert_clean_parse(r#"print( $fh $msg );"#);
+}

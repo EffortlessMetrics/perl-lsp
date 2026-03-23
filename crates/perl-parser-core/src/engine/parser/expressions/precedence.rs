@@ -968,9 +968,21 @@ impl<'a> Parser<'a> {
                             | TokenKind::BitwiseNot => true,
                             TokenKind::Identifier => {
                                 let t = next.text.as_ref();
-                                t.starts_with('$')
-                                    || t.starts_with('@')
-                                    || t.starts_with('%')
+                                // Sigil-prefixed pseudo-identifiers count as operand starts
+                                if t.starts_with('$') || t.starts_with('@') || t.starts_with('%') {
+                                    true
+                                } else {
+                                    // A plain identifier (e.g. an imported function like `width`)
+                                    // can also be the start of the x-repetition RHS, provided it
+                                    // is not a binary operator keyword (or, and, not, eq, ne, …).
+                                    // This allows `'-' x width $n` inside parentheses.
+                                    !matches!(
+                                        t,
+                                        "or" | "and" | "not" | "xor"
+                                            | "eq" | "ne" | "lt" | "le" | "gt" | "ge"
+                                            | "cmp" | "x"
+                                    )
+                                }
                             }
                             _ => false,
                         }
