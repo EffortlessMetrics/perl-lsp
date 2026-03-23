@@ -7,6 +7,232 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This section covers 583 commits across ~90 PRs since the 0.12.0 finalization
+(2026-03-20), spanning Era 7 sessions 1-4. Key themes: parser corpus push toward
+100% CPAN, Moose/Moo class intelligence, diagnostic pipeline wiring, VS Code UX
+polish, performance hardening, and swarm infrastructure maturation.
+
+### Added
+
+#### Parser
+- **Error Recovery Substrate**: New `RecoverySite` and `RecoveryKind` infrastructure for structured recovery from parse failures (#2843, #2868)
+- **Parser Corpus Push**: Addressed top CPAN corpus error buckets — `and`+comma, `+` prototype, unclosed-paren identifier, typeglob punctuation `*<` `*>` `*(` `*)`, s///e replacement, x-operator precedence, C-style for loops, keyword hash keys in `use` imports (#2149, #2189, #2254, #2261, #2395, #2461, #2625, #2684, #2703, #2731, #2732, #2755, #2826, #2829, #2834-#2835, #2856, #2859)
+- **Parser Disambiguation**: Phase-block keywords as statement labels, anonymous sub with attributes, `bless []` as function call, regex-op names as hash subscript keys, leading `::` qualifier in subroutine names (#2601, #2710, #2754)
+
+#### LSP Features
+- **Per-Feature Disable**: `initializationOptions.disabledFeatures` allows users to opt out of individual LSP features (#2170, #2766)
+- **Editor-Agnostic Project Config**: `.perl-lsp.toml` configuration file for project-level settings, recognized by all editors (#2053, #2805)
+- **Semantic Token Delta Encoding**: LSP 3.16 delta encoding for semantic tokens reduces bandwidth on edits (#2743)
+- **Document Ranges Formatting**: Advertise `documentRangesFormattingProvider` to close LSP 3.18 gap
+- **Workspace Symbol Resolve**: Emit documentation and fix `containerName` in `workspace/symbol/resolve` (#2100, #2798)
+- **Diagnostic Pull Path**: Wire diagnostic enrichment through pull diagnostic runtime path (#2102, #2795)
+- **Diagnostic Data Field**: Populate `Diagnostic.data` field for client-side diagnostic actions (#2592)
+- **Progress Notifications**: `$/progress` notifications during workspace indexing (#2317, #2356)
+- **Parse Error Telemetry**: Opt-in parse error telemetry wired into diagnostic pipeline (#2740)
+- **Startup Diagnostic**: Structured startup message to stderr for editor log integration (#2054, #2807)
+- **On-Type Formatting**: Advertise `\n` as formatting trigger character (#2746, #2779)
+- **POD Symbols in Outline**: `=head` POD sections appear in document symbol outline (#2614)
+- **Signature Help Retrigger**: Added retrigger characters for complex Perl call signatures
+- **InlayHint Resolve**: Wire `inlayHint/resolve` `labelDetails.location` for click-to-definition
+- **Commit Characters**: Add `commit_characters` to `CompletionItem` for both handlers (#2597)
+- **Binary File Guard**: Prevent parser from processing binary files in `didOpen`/`didChange` (#2107, #2764)
+- **CRLF Guard**: Add CRLF line-ending guard in `position_to_offset_rope` (#2108, #2736)
+
+#### Moose/Moo Intelligence
+- **Class Model Wired**: `ClassModel` detection wired into `SemanticAnalyzer` (#1661, #2741)
+- **Goto-Definition for Methods**: `$self->` and `$class->` method calls resolve via workspace index (#2536, #2831, #2858)
+- **Type Hierarchy**: C3 MRO linearization for Moose inheritance chains; `extends`/`with` wired into `TypeHierarchyProvider` (#2720); cross-file supertypes/subtypes via workspace scan (#2738)
+- **Role Composition Hover**: Hover card for `with`-applied roles showing consumed methods (#2325, #2745)
+- **Method Modifier Hover**: Dedicated hover card for `before`/`after`/`around` modifiers (#2744)
+- **Attribute Introspection**: `builder`, `coerce`, `predicate`, `clearer`, `trigger` in attribute hover (#2366)
+
+#### Hover
+- **Phase Blocks**: BEGIN/END/INIT/CHECK/UNITCHECK get hover documentation and diagnostics (#2623)
+- **Special Variables**: Educational hover tooltips for Perl special variables (`$!`, `$@`, `$/`, etc.) (#2262, #2347)
+- **Tied Variables**: Show tied class and tie magic method docs on hover (#2609)
+- **Context-Sensitive Builtins**: Scalar/list context docs for 11 context-sensitive builtins (#2630)
+- **Perl Built-in Examples**: Phase 1 hover docs with capture vars, autoflush, MetaCPAN links, examples (#2831, #2839)
+- **Subroutine Complexity**: Complexity indicator shown in sub hover card
+- **POD on Use Statements**: Show POD documentation when hovering on `use Module` (#2304)
+- **Type Inference Display**: Wire `TypeInferenceEngine` to hover for inferred variable type (#2726)
+- **Regex Pattern Explainer**: Explain regex patterns in human-readable format (#2048)
+- **die/warn Enrich**: Enrich `die`/`warn` hover with docs and add `croak` modernize action (#2606)
+
+#### Completion
+- **85 Missing Built-ins**: Add 85 missing Perl built-ins with documentation; fix LSP trigger characters (#2780, #2813)
+- **Relevance Sorting**: Relevance-based completion ranking with docs on builtins/keywords (#2832, #2841)
+- **Import-Aware Sort**: Workspace symbols sorted by import proximity (#2645)
+- **Auto-Import on Selection**: Auto-insert `use Module` when selecting an unimported symbol (#2322)
+- **Regex Operator Snippets**: 13 regex operator snippets and regex flag completions (#2607, #2635)
+- **Named Capture Groups**: Named capture group completions after `(?<name>)` (#2635)
+- **Template Toolkit**: Directive/filter snippet completions for `.tt` files (#2350, #2735)
+- **Test::More Snippets**: `ok`/`is`/`like` function hover documentation in completions
+- **Built-in Snippets**: Built-in Perl snippet completions for common idioms
+
+#### Diagnostics
+- **PL200/PL201/PL300 Wired**: Emit `use strict`, `use warnings`, `package` diagnostics through the pipeline (#2781, #2803)
+- **PL405 Format Arity**: `printf`/`sprintf` format specifier arity lint (#2636)
+- **PL701 Module Not Found**: `ModuleNotFound` lint using workspace resolver (#2619)
+- **Perl Version Compatibility**: Warnings for syntax requiring specific Perl versions (#2050, #2739)
+- **Security Lints**: Security-focused lints for `eval`, two-arg `open`, backtick patterns; wire into pipeline (#2724)
+- **Unused Import Detection**: Detect and grey-out potentially unused imports
+- **Heredoc Anti-Pattern**: Warning for heredoc anti-patterns (#2438)
+- **Dead Code Detection**: Wire dead code analysis into diagnostic pipeline
+- **Perl::Critic Integration**: Wire perlcritic with severity/profile config and byte-offset mapping (opt-in) (#2362)
+- **Auto-Quote Suggestion**: Suggest quoting bareword warnings (#2365)
+- **Suppress on Empty Files**: Suppress `strict`/`warnings` lint on empty files (#2112, #2792)
+- **Context Hints**: Add `context_hint()` to `DiagnosticCode` with catalog surfacing
+
+#### Navigation
+- **Go-to-Test / Go-to-Implementation**: Navigate between test files and implementation (#2532)
+- **use parent/use base**: Workspace rename respects `use parent`/`use base` dependency graph (#2747, #2782)
+- **Module Resolution**: Parse `use lib` and `FindBin` for include path resolution (#1662, #2620)
+- **Inline Rename Scope**: Route `all_occurrences` to workspace-wide lookup (#439, #2765)
+
+#### VS Code Extension
+- **Report Issue Command**: One-click issue reporting from the command palette (#2160, #2748)
+- **Extension Auto-Update Check**: Notify users when a new version is available (#2165, #2796)
+- **Special Variables Reference**: Command to open special variable reference panel (#2318, #2763)
+- **Debugger Setup Wizard**: Interactive DAP configuration wizard (#2338, #2762)
+- **Interactive Onboarding Walkthrough**: First-run walkthrough for new users (#2046)
+- **Smart File Creation**: New Perl file command inserts package boilerplate
+- **What's New Panel**: Show release notes webview on extension update
+- **Status Bar Health Widget**: Show file count and error counts in status bar
+- **Version in Status Bar**: Display `perl-lsp` version in status bar (#2340)
+- **Formatting Error Toasts**: Surface formatting errors as toast notifications (#2111, #2793)
+- **Wire 4 Unimplemented Commands**: `extractVariable`, `extractMethod`, `showRefactoringOptions`, `reportIssue` (#2849, #2854)
+- **Refactoring Discoverability**: Keyboard shortcuts and menu entries for refactoring actions
+- **Boilerplate Snippets**: Perl boilerplate snippet library (#2314)
+
+#### Code Actions
+- **Portable Shebang**: Quick-fix to suggest portable shebang line (#2255)
+- **Modernization Suggestions**: Perl modernization code actions (say, given/when, etc.)
+- **Bareword Filehandle Fix**: Quick-fix for `bareword-filehandle` and two-arg `open` patterns
+- **Find Undefined Functions**: Wire `find_undefined_functions` to semantic analyzer (#2692, #2719)
+
+#### Code Lens
+- **Test File Lenses**: Detect test functions and provide `Run Test`/`Debug Test` lenses
+- **Subtest Lenses**: Subtest detection with `perl.runSubtest` command (#2617, #2673)
+
+#### Performance
+- **SemanticAnalyzer LRU Cache**: Cache hover/definition lookups to avoid repeated analysis (#2074, #2806)
+- **Asynchronous Workspace Indexing**: Non-blocking workspace scan (#2352)
+- **Request Prioritization**: Cancel stale requests; prioritize interactive over background work
+- **perltidy/perlcritic Timeout**: Thread-based subprocess timeout prevents editor hangs (#2616)
+- **Parser Cancellation**: Cancellation token checks in parser hot path for responsive LSP (#2615)
+- **Debounced Diagnostics**: Debounce diagnostic publication during rapid typing
+- **SymbolIndex Queries**: Wire `SymbolIndex` into completion and workspace symbols for O(1) lookups (#2728)
+- **Deferred Health Check**: Move VS Code health check from activation to first-error path (#2715)
+- **Workspace-Index CPAN Tuning**: Tune index for CPAN-scale workspaces (#1664)
+
+#### CLI
+- **--check-project**: Parsability report for a directory tree (#2534)
+- **--check-format json**: Machine-readable JSON output for CI integration (#2734)
+
+#### Infrastructure
+- **Blocker Ledger**: Track known blockers to prevent scout rediscovery (#2586)
+- **Corpus Sweep Schema 1.2.0**: Add `files_by_bucket` to baseline schema (#2585)
+- **17 New Error Buckets**: Decompose `unexpected_token_in_expr` catch-all (#2611, #2814)
+- **Unwired Infrastructure Scanner**: Find built-but-not-wired crates automatically (#2667, #2827)
+- **Snapshot Testing**: Systematize snapshot tests for AST and error messages (#2104, #2823)
+- **nextest**: Enable cargo-nextest for `ci-test-lib` (#1909, #2804)
+
+### Fixed
+
+#### Parser
+- `and` operator collecting comma-separated RHS expressions (#2856, #2859)
+- `+` prototype character handling, fixes `unexpected_rbrace_expr` (#2835, #2838)
+- Unclosed-paren identifier patterns (#2834, #2840)
+- Typeglob punctuation variables `*<`, `*>`, `*(`, `*)` (#2755, #2826)
+- Keyword hash keys and `q{}` in `use` imports (#2189, #2723)
+- Keyword tokens as package names (#2150, #2706)
+- C-style `foreach` loops (#2149, #2703)
+- Leading `::` qualifier in subroutine names (#2710)
+- `s///e` replacement with `/` inside string literals (#2395)
+- x operator RHS precedence with `**` (#2625, #2684)
+- Substitution/transliteration modifier parsing regression (#2732, #2776)
+- Soft recovery for unclosed bracket in postfix expressions (#2148, #2688)
+- `unexpected_token_in_expr` decomposed into 4 sub-patterns (#2731, #2767)
+- Optional-arg unary builtins before binary operators (#2730, #2775)
+- Top corpus error buckets — multiple CPAN patterns fixed (#2461, #2829)
+- Sigil-peek heuristic for imported unary functions (#1943)
+- `$self->` and `$this->` method resolution via workspace index (#2536)
+- Regex-op names as hash subscript keys (#2754, #2789)
+- Phase-block keywords as statement labels
+- Strip `#` comments from `qw()` content before word-splitting (#2618)
+- Fat-arrow pairs as ternary branch expressions (#2402, #2613)
+- Word operators after `return`, loop control, indirect calls, paren lists
+- Missing special variables `$>`, `$<`, `$)` and empty `while` condition
+- Handle `my $var->{key} = ...` lvalue declaration
+- `defined`/`ref` without arg when followed by word operators (#2626)
+- `bless []` as function call, not subscript (#2387)
+- File-test-no-operand and `CORE::` builtins in grep/map context (#2674)
+- `ref ne/eq` and `or` comma-expr in `grep` blocks (#2388)
+- v-strings in expression and comparison contexts
+- Recover inline from missing semicolons in C-style for loops (#2593)
+- Relex slash as regex at statement start after closing brace
+- Replace restrictive import parser in `parse_no` with depth-tracking slurp
+
+#### Lexer
+- `after_var_subscript` flag clearing on `)` — fixes `if($var){m//}` (#2844, #2851)
+- `hash_brace_depth` narrowed to `after_var_subscript` — fixes quote-op suppression in blocks (#2833, #2837)
+- `try_heredoc` guarded against ExpectOperator mode — fixes bitshift-in-paren (#2750, #2769)
+- Whitespace-separated quote delimiters restricted to paired chars (#2732 regression, #2815)
+
+#### LSP Runtime
+- ABBA lock ordering deadlock eliminated; lock contention reduced (#2712)
+- Reentrant deadlock in `publish_diagnostics` fixed (#2646)
+- Concurrent workspace indexing scan prevention (#2641, #2711)
+- `ParentMap` safety improvements Phase 1 (#2810, #2819)
+- Semantic token legend synchronized with capability advertisement (#2103, #2772)
+- Advertise `TextDocumentSyncKind::Full` (not `Incremental`) to match actual behavior
+- Depth underflow panic in linked-editing backward bracket scan (#2603)
+- 5 advertised-but-unhandled commands wired in `execute-command` provider (#2691, #2717)
+
+#### Code Actions
+- 4 defects in extract variable/subroutine refactoring (#349, #2797)
+- Diagnostics lint checks wired into `get_diagnostics()` pipeline (#2544)
+
+#### Security
+- macOS sandbox path injection and profile file-path bug (#2749, #2799)
+- `strict`/`warnings` false positives suppressed on empty files (#2112, #2792)
+
+#### Tests
+- Replace `unwrap`/`expect` with `must`/`must_some` across workspace (#2649, #2721-#2727)
+- Use AST walk instead of string matching in `assert_clean_parse` (#2553, #2559)
+- Fix stale capability snapshots blocking CI (#2855)
+
+### Changed
+
+#### Refactoring
+- **17 Built-but-Unwired Crates Wired**: Wire 17 LSP provider microcrates into the runtime (#2756, #2768)
+- **7 Dead Navigation Functions Removed**: Delete prototype navigation functions from `perl-lsp` (#2713)
+- **`semantic.rs` God File Split**: 3,256-line `semantic.rs` split into 6 focused sub-modules
+- **Status Docs Modularized**: Monolithic `CURRENT_STATUS.md` split into `docs/project/status/*.md` subsystem files (#2801, #2830)
+- **`perl-lsp-inline-completion` Wired**: Replace inline duplicate impl with microcrate (#2758, #2786)
+- **Dead Code Cleanup**: Remove dead `perl-symbol-table` crate (#2714), dead `perl-source-editing` crate (#2699, #2716), dead `IndexAccessMode` lint suppressors (#2702, #2790)
+- **`perl-test-must` Extracted**: New micro-crate extracted from `perl-tdd-support` (#2842, #2864)
+- **Test Modules Extracted**: Inline test modules moved to `tests/` directories (#2462-#2466)
+- **`logos` Lexer Archived**: Broken logos experiment archived; `chumsky` dependency removed (#2612)
+- **ADR Renumbering**: Duplicate ADR-0035/0036 renumbered to ADR-0039/0040 (#2808, #2816)
+
+#### CI
+- Consolidate clippy passes; enable nextest for library tests (#1909, #2804)
+- Pre-push hook updated to track test counts (#2128)
+
+#### CPAN Corpus
+- Corpus baseline ratcheted from 85.7% toward 90%+ through multiple parser fix waves
+
+### Performance
+
+- **SemanticAnalyzer LRU Cache**: Avoid repeated analysis on hover/definition (#2074, #2806)
+- **Async Workspace Indexing**: Non-blocking index scan for large workspaces (#2352)
+- **Parser Cancellation Token**: Check cancellation in parser hot path (#2615)
+- **Debounced Diagnostics**: Debounce publication during rapid typing
+- **SymbolIndex O(1) Queries**: Wire `SymbolIndex` for completion and workspace symbols (#2728)
+- **perltidy/perlcritic Timeout**: Subprocess timeout prevents editor hangs (#2616)
+- **CPAN-Scale Index Tuning**: Workspace index tuned for large CPAN workspaces (#1664)
+
 ## [0.12.0] - 2026-03-20
 
 This release is the **public alpha launch** -- the first release intended for broad
