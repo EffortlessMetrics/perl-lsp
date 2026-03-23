@@ -91,10 +91,23 @@ sub safe_value (+) {
 }
 
 /// Named sub with attribute AND `+` prototype (attribute comes before).
-/// Attribute parsing must not consume the `(` opening the prototype.
+/// Tests parser tolerance: `sub foo : lvalue (+)` is not valid Perl (Perl requires
+/// prototype before attributes), but the parser should not crash on it.
 #[test]
 fn test_named_sub_attr_then_plus_proto() {
     assert_clean_parse("sub foo : lvalue (+) { 1 }");
+}
+
+/// Correct Perl ordering: prototype THEN attribute.
+/// `sub foo (+) : lvalue { ... }` is valid Perl (perlsub spec).
+/// NOTE: This is a KNOWN pre-existing parser limitation (tracked in fix_expected_colon):
+/// the parser does not yet support attributes after prototypes. The `+` prototype itself
+/// is parsed correctly; only the `: lvalue` suffix fails. This `#[ignore]` documents the
+/// gap without blocking the fix for the `+` prototype character.
+#[test]
+#[ignore = "pre-existing: parser does not support proto-then-attribute ordering (fix_expected_colon)"]
+fn test_proto_then_attr_correct_order() {
+    assert_clean_parse("sub foo (+) : lvalue { $_[0] }");
 }
 
 // ---------------------------------------------------------------------------
@@ -144,4 +157,29 @@ fn test_proto_amp_semicolon_guard() {
 #[test]
 fn test_proto_backslash_bracket_guard() {
     assert_clean_parse(r#"sub foo (\[$@%]) { 1 }"#);
+}
+
+// ---------------------------------------------------------------------------
+// Non-regression: `+` in sub BODY must not be confused with a prototype `+`
+// ---------------------------------------------------------------------------
+
+/// `+` inside the body of a sub (as an arithmetic operator) must parse cleanly.
+/// is_likely_prototype is only called at sub-declaration time, never inside a body,
+/// so this is verifying the parser's overall structural correctness for `+` as operator.
+#[test]
+fn test_sub_body_plus_expression() {
+    assert_clean_parse(
+        r#"
+sub add_one {
+    my ($x) = @_;
+    return $x + 1;
+}
+"#,
+    );
+}
+
+/// Anonymous sub with `+` in body — ensure no false prototype detection.
+#[test]
+fn test_anon_sub_body_plus_expression() {
+    assert_clean_parse("my $f = sub { $_[0] + $_[1] };");
 }
