@@ -1,370 +1,229 @@
-# Perl Heredoc Edge Case Handling
+# LSP Edge Case Handling
 
-This document consolidates all information about edge case handling in the Pure Rust Perl parser.
+This document describes how perl-lsp handles edge cases that often confuse users
+into thinking the server is broken when it is working correctly.
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [Known Parsing Limitations](#known-parsing-limitations)
-3. [Why These Edge Cases Are Hard](#why-these-edge-cases-are-hard)
-4. [Implementation Architecture](#implementation-architecture)
-5. [Supported Edge Cases](#supported-edge-cases)
-6. [Testing Strategy](#testing-strategy)
-7. [Performance Characteristics](#performance-characteristics)
-8. [Usage Guide](#usage-guide)
-9. [Technical Details](#technical-details)
+1. [Empty and Trivially-Empty Files](#empty-and-trivially-empty-files)
+2. [Comment-Only and POD-Only Files](#comment-only-and-pod-only-files)
+3. [Files with `__END__` or `__DATA__`](#files-with-__end__-or-__data__)
+4. [Large Files](#large-files)
+5. [Binary Files](#binary-files)
+6. [Single-Line Files Without a Trailing Newline](#single-line-files-without-a-trailing-newline)
+7. [Windows CRLF Line Endings](#windows-crlf-line-endings)
+8. [Unicode Content](#unicode-content)
+9. [Parser Edge Cases (Heredocs)](#parser-edge-cases-heredocs)
+10. [Diagnostic Code Reference](#diagnostic-code-reference)
 
-## Overview
+---
 
-The Pure Rust Perl parser provides comprehensive support for most Perl constructs while maintaining tree-sitter compatibility. This document covers both parsing limitations and heredoc-specific edge cases.
+## Empty and Trivially-Empty Files
 
-### Coverage Statistics (Updated for PR #124)
-- **~99.997%** - Direct parsing of Perl code (✅ Verified, enhanced with single-quote delimiter support)
-- **~0.003%** - Design limitations (heredoc-in-string only)
-- **~0.001%** - Theoretical edge cases (require interpreter)
-- **100%** - Edge case test coverage (15/15 passing)
+### What happens
 
-**Latest Enhancement (PR #124)**: Single-quote substitution delimiters (`s'pattern'replacement'`) further reduce parsing limitations and improve coverage for alternative delimiter styles commonly used in Perl codebases.
+Opening an empty `.pl` or `.pm` file produces:
 
-### Recent Improvements - Regex/Substitution Parsing
+- Zero parse errors (the file is valid Perl)
+- Zero diagnostics (no strict/warnings suggestions)
+- Empty completion list (correct — nothing is defined)
+- Empty go-to-definition results (correct — no symbols exist)
 
-**PR #124 - Single-Quote Delimiter Support (*Diataxis: Reference* - Latest parser enhancements)**:
-- ✅ **Single-Quote Substitution Delimiters**: Complete support for `s'pattern'replacement'modifiers` syntax variations
-- ✅ **Enhanced Lexical Recognition**: Intelligent parsing distinguishes single-quote delimiters from string literals
-- ✅ **Complete Operator Coverage**: Full support for `s'`, `y'`, and `tr'` with single-quote delimiters
-- ✅ **Edge Case Handling**: Proper support for escaped quotes (`s'it\'s'it is'`), empty patterns/replacements (`s''bar'`, `s'foo''`)
-- ✅ **Comprehensive Testing**: 17+ test cases covering all single-quote delimiter variations and edge cases
+This is intentional. An empty file is valid Perl. The `use strict` and
+`use warnings` suggestions (codes `PL100` and `PL101`) are suppressed for
+files with no executable content because the suggestions would fire
+immediately on every new file a developer creates, before they have typed
+a single line. The guard was added in PR #2792 and lives in
+`crates/perl-lsp-diagnostics/src/lints/strict_warnings.rs`.
 
-**PR #42 - Enhanced Substitution Parsing**:
-- ✅ **Dedicated Substitution AST Nodes**: Added separate `NodeKind::Substitution` for proper s/// operator parsing
-- ✅ **Enhanced S-expression Output**: Substitution operations now generate correct `(substitution)` nodes instead of generic `(regex)` nodes
-- ✅ **Backward Compatibility**: Fallback mechanisms preserve existing behavior when new parser fails
-- ✅ **Improved Test Coverage**: All substitution tests passing with enhanced pattern/replacement/modifier parsing
-- ✅ **Structural Compatibility**: Maintains tree-sitter AST format while improving semantic accuracy
+### Files considered "no executable content"
 
-**Impact**: These improvements provide comprehensive delimiter support for regex substitution operations, including traditional slash delimiters (`s/pattern/replacement/`), braces (`s{pattern}{replacement}`), and now single-quote delimiters (`s'pattern'replacement'`), offering better AST representation for IDE tools and static analysis.
+The parser classifies a file as having no executable content when its
+abstract syntax tree produces `Program { statements: [] }`. This covers:
 
-## Known Parsing Limitations
+| Input | Parser result | Strict/warnings? |
+|-------|--------------|-----------------|
+| Empty string (`""`) | `Program { statements: [] }` | Suppressed |
+| Whitespace only (`"   \n\t\n"`) | `Program { statements: [] }` | Suppressed |
+| Single comment (`"# comment\n"`) | `Program { statements: [] }` | Suppressed |
+| Shebang only (`"#!/usr/bin/perl\n"`) | `Program { statements: [] }` | Suppressed |
+| Shebang + comments | `Program { statements: [] }` | Suppressed |
+| CRLF whitespace (`"\r\n\r\n"`) | `Program { statements: [] }` | Suppressed |
+| Actual code (`"my $x = 1;\n"`) | `Program { statements: [...] }` | Fires normally |
 
-Before discussing heredoc edge cases, here are the main parsing limitations:
+### Why the user might think LSP is broken
 
-### Design Limitations (mostly fixed, ~0.004% impact)  
-1. **Heredoc-in-string** - `"$prefix<<$end_tag"` - heredocs initiated within interpolated strings
+- No error squiggles appear on an empty file. This is correct.
+- Completion returns nothing. This is correct.
+- Go-to-definition returns nothing. This is correct.
+- The only sign the server is running is that the status bar shows the
+  server is active.
 
-See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for details and workarounds.
+---
 
-## Why These Edge Cases Are Hard
+## Comment-Only and POD-Only Files
 
-Perl heredocs present unique parsing challenges because they:
+### Comment-only files
 
-1. **Require Runtime State**: Some delimiters are computed at runtime
-2. **Cross Lexical Boundaries**: Heredoc bodies appear lines after their declaration
-3. **Depend on Execution Phase**: BEGIN/END blocks change parsing behavior
-4. **Interact with Encoding**: Mid-file encoding changes affect delimiter matching
-5. **Use Dynamic Features**: Tied filehandles, source filters, and eval
-
-These features make certain heredoc patterns theoretically impossible to parse statically.
-
-## Implementation Architecture
-
-### Three-Layer Architecture
-
-```
-┌─────────────────────────────────────────┐
-│        Tree-sitter AST                  │  ← Always valid, tool-compatible
-├─────────────────────────────────────────┤
-│     Edge Case Detection                 │  ← Identifies problematic patterns  
-├─────────────────────────────────────────┤
-│  Diagnostics & Recommendations          │  ← Separate channel, rich feedback
-└─────────────────────────────────────────┘
-```
-
-### Key Components
-
-1. **Phase-Aware Parser** (`phase_aware_parser.rs`)
-   - Tracks BEGIN, CHECK, INIT, END blocks
-   - Handles phase-dependent heredocs
-   - Provides phase-specific diagnostics
-
-2. **Enhanced Dynamic Delimiter Recovery** (`dynamic_delimiter_recovery.rs`) ✨
-   - **Advanced pattern recognition** for delimiter variables across all Perl variable types
-   - Support for scalar (`my $delim = "EOF"`), array (`my @delims = ("END", "DONE")`), and hash assignments
-   - **Confidence scoring system** based on variable naming patterns (delim, end, eof, marker, etc.)
-   - **Multiple recovery strategies**: Conservative, BestGuess, Interactive, Sandbox
-   - Enhanced regex patterns supporting all Perl variable declaration types (`my`, `our`, `local`, `state`)
-
-3. **Enhanced Variable Resolution** (`scope_analyzer.rs`) ✨
-   - **Complex variable pattern recognition** supporting hash access, array access, and method calls
-   - **Hash key context detection** to reduce false bareword warnings in subscript contexts
-   - **Recursive resolution mechanisms** with fallback strategies for nested patterns
-   - Support patterns: `$hash{key}` → `%hash`, `$array[idx]` → `@array`, `$obj->method` → base variable
-   - **Improved diagnostics** for undefined variables under `use strict` with enhanced accuracy
-
-4. **Encoding-Aware Lexer** (`encoding_aware_lexer.rs`)
-   - Tracks encoding pragmas
-   - Handles mid-file changes
-   - Supports UTF-8, Latin-1, etc.
-
-5. **Tree-sitter Adapter** (`tree_sitter_adapter.rs`)
-   - Ensures valid AST output
-   - Separates diagnostics
-   - Provides metadata
-
-## Supported Edge Cases
-
-The parser now successfully handles 14/15 edge case tests (93% coverage):
-
-### 1. Dynamic Delimiters ✅
+A file containing only `#` comments parses cleanly with an empty statements
+list. No diagnostics are produced.
 
 ```perl
-# Variable delimiter - WORKS
-my $delim = "EOF";
-print <<$delim;
-Content
-EOF
-
-# Array element - WORKS
-$array[1] = <<EOF;
-Content
-EOF
-
-# Package variable - WORKS
-$Package::var = <<EOF;
-Content
-EOF
-
-# Nested expression - WORKS
-${${var}} = <<EOF;
-Content
-EOF
-
-# Special variables - WORKS
-$$ = <<EOF;
-Content
-EOF
+# This is a comment-only file.
+# LSP is working correctly — there is simply nothing to analyse.
 ```
 
-**Recovery Strategy**: Enhanced confidence scoring, pattern matching, special variable detection
+### POD-only files
 
-### 2. Enhanced Variable Pattern Resolution ✨
-
-The scope analyzer now supports complex variable access patterns that are common in real-world Perl code:
+POD (Plain Old Documentation) blocks are consumed as trivia by the lexer, the
+same way `#` comments are. A file containing only a POD block therefore
+produces `Program { statements: [] }` — the same as a comment-only file — and
+no diagnostics are produced.
 
 ```perl
-# Hash access patterns - WORKS
-my %config = (host => 'localhost', port => 3000);
-print $config{host};  # Correctly resolves %config
+=head1 NAME
 
-# Array access patterns - WORKS  
-my @items = qw(foo bar baz);
-my $first = $items[0];  # Correctly resolves @items
+My::Module - description
 
-# Method call patterns - WORKS
-my $obj = SomeClass->new();
-$obj->method();  # Correctly resolves $obj
-
-# Complex nested patterns - WORKS
-my %data = (users => [{ name => 'John' }]);
-print $data{users}->[0]->{name};  # Advanced resolution
-
-# Hash slice patterns - WORKS
-my @values = @config{qw(host port)};  # Correctly identifies hash context
+=cut
 ```
 
-**Implementation Features**:
-- Recursive pattern matching with fallback resolution
-- Hash key context detection reduces false bareword warnings
-- Support for method calls, array/hash access, complex dereference patterns
-- Enhanced diagnostics accuracy under `use strict`
+If you add any Perl code to the file (even a single statement), the empty-file
+guard is lifted and the `use strict`/`use warnings` suggestions will fire
+normally.
 
-### 3. Phase-Dependent Heredocs
+---
+
+## Files with `__END__` or `__DATA__`
+
+The LSP parses only the code section of a file — the portion before the first
+`__END__` or `__DATA__` marker on a line by itself. Everything after the marker
+is ignored by the parser.
 
 ```perl
-BEGIN {
-    # Compile-time heredoc
-    our $CONFIG = <<'END';
-    config data
-END
-}
+use strict;
+use warnings;
 
-END {
-    # Cleanup heredoc
-    print <<'CLEANUP';
-    cleanup code
-CLEANUP
-}
+my $data = do { local $/; <DATA> };
+
+__DATA__
+This is raw data — not parsed as Perl.
+Any content here is invisible to the LSP.
 ```
 
-**Handling**: Phase tracking, compile-time evaluation hints
+This means:
 
-### 4. Encoding-Aware Heredocs
+- Symbols defined before `__END__`/`__DATA__` are fully indexed.
+- Symbols defined after are not indexed and will not appear in completions.
+- No diagnostics are generated for the data section.
 
-```perl
-use utf8;
-print <<'終了';
-Japanese content
-終了
+The `__END__` or `__DATA__` marker alone (with no code before it) produces
+`Program { statements: [DataSection {...}] }` — a non-empty statements list —
+so strict/warnings diagnostics still fire for such files. This is correct
+because the file has executable content (the data section marker is a
+statement).
 
-use encoding 'latin1';
-print <<'FIN';
-Latin-1 content
-FIN
+---
+
+## Large Files
+
+Files exceeding the size limit (default: **1 MB**, configurable via
+`.perl-lsp.toml`) are skipped by the parser. The LSP:
+
+1. Stores the file text so text-sync operations work.
+2. Publishes an empty diagnostics list (no squiggles).
+3. Returns empty results for all LSP features (completion, go-to-definition,
+   hover, etc.).
+
+The server logs a warning:
+
+```
+Skipping parse for <uri> (<N> bytes exceeds <limit> byte limit)
 ```
 
-**Handling**: Encoding pragma tracking, multi-encoding support
+### Configuring the limit
 
-### 5. Anti-Pattern Combinations
+The limit is set via the `perl.limits.maxFileSizeBytes` key in the LSP
+`workspace/didChangeConfiguration` notification. The setting accepts an
+integer number of bytes.
 
-```perl
-# Multiple issues
-BEGIN {
-    my $d = shift || "EOF";
-    $::config = <<$d;  # Phase + dynamic
-    Complex case
-EOF
-}
-```
+The limit protects the server from hanging on generated or minified files.
+For typical Perl source files (which rarely exceed 100KB), the default 1MB
+limit is never triggered.
 
-**Handling**: Layered detection, combined diagnostics
+---
 
-## Testing Strategy
+## Binary Files
 
-### Test Categories
+The LSP detects binary content by checking for null bytes (`\0`) in the file
+text received via the LSP `textDocument/didOpen` or `textDocument/didChange`
+notification. When null bytes are detected:
 
-1. **Unit Tests** (`edge_case_tests.rs`)
-   - Each edge case type
-   - Recovery strategies
-   - Diagnostic accuracy
+1. Parsing is skipped.
+2. A single `Information`-level diagnostic is published:
+   > "File appears to contain binary content (null bytes detected). Perl
+   > diagnostics are disabled."
+3. All LSP features return empty results.
 
-2. **Integration Tests** (`integration_tests.rs`)
-   - Full pipeline
-   - Mixed scenarios
-   - Real-world patterns
+### Why this matters
 
-3. **Benchmarks** (`edge_case_benchmarks.rs`)
-   - Performance overhead
-   - Memory usage
-   - Scaling behavior
+Binary files occasionally have a `.pl` extension (for example, compiled XS
+shared objects in some distributions). Without this guard, the parser would
+attempt to parse binary data and could produce confusing noise.
 
-### Running Tests
+---
 
-```bash
-# All edge case tests
-cargo xtask test-edge-cases
+## Single-Line Files Without a Trailing Newline
 
-# With benchmarks
-cargo xtask test-edge-cases --bench
+The parser handles single-line files without a trailing newline correctly.
+A file containing only `my $x = 1;` (no newline) parses identically to one
+containing `my $x = 1;\n`. No special handling is required.
 
-# Coverage report
-cargo xtask test-edge-cases --coverage
-```
+---
 
-## Performance Characteristics (Validated v0.1.0)
+## Windows CRLF Line Endings
 
-| Scenario | Overhead | Absolute Time | Test Status |
-|----------|----------|---------------|-------------|
-| Clean code | Baseline | ~180µs/KB | ✅ Verified |
-| Single edge case | Minimal | ~200µs/KB | ✅ Verified |
-| Multiple edge cases | <10% | ~200µs/KB | ✅ Verified |
-| All 15 edge cases | <10% | ~200µs/KB | ✅ 100% Pass |
+CRLF (`\r\n`) line endings are treated as whitespace by the lexer. A file
+containing only `\r\n` sequences is indistinguishable from a file containing
+only `\n` sequences — both produce `Program { statements: [] }` and no
+diagnostics.
 
-Memory usage scales linearly. Arc<str> provides efficient string sharing.
+Files with CRLF line endings in actual code also parse correctly.
 
-## Usage Guide
+---
 
-### Command Line
+## Unicode Content
 
-```bash
-# Test edge cases
-cargo xtask test-edge-cases
+The parser handles UTF-8 source correctly. Files with Unicode identifiers,
+string literals, or comments parse without error. The LSP server advertises
+`utf-16` position encoding and converts internal byte offsets to UTF-16 code
+units when reporting positions to the editor, so ranges are correct for files
+containing multibyte characters.
 
-# Parse with edge case handling
-cargo xtask parse-rust file.pl --sexp
-```
+For Perl source that uses non-UTF-8 encodings, add `use encoding '...';`
+or `use utf8;` as appropriate. The LSP does not re-encode files; it trusts
+that the editor delivers UTF-8 text.
 
-### Programmatic API
+---
 
-```rust
-use tree_sitter_perl::{
-    edge_case_handler::{EdgeCaseHandler, EdgeCaseConfig},
-    dynamic_delimiter_recovery::RecoveryMode,
-    tree_sitter_adapter::TreeSitterAdapter,
-};
+## Parser Edge Cases (Heredocs)
 
-// Configure
-let config = EdgeCaseConfig {
-    recovery_mode: RecoveryMode::BestGuess,
-    enable_phase_tracking: true,
-    enable_encoding_tracking: true,
-    max_recovery_attempts: 5,
-};
+Heredocs with dynamic delimiters, phase-dependent evaluation (`BEGIN`/`END`
+blocks), or source filters cannot be fully parsed statically. The parser
+degrades gracefully for these patterns rather than failing. See
+[KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the exhaustive list.
 
-// Analyze
-let mut handler = EdgeCaseHandler::new(config);
-let analysis = handler.analyze(perl_code);
+---
 
-// Convert to tree-sitter
-let output = TreeSitterAdapter::convert_to_tree_sitter(
-    analysis.ast,
-    analysis.diagnostics,
-    perl_code,
-);
-```
+## Diagnostic Code Reference
 
-### Output Format
+Codes relevant to the edge cases above:
 
-```json
-{
-  "tree": {
-    "type": "source_file",
-    "children": [{
-      "type": "dynamic_heredoc_delimiter",
-      "isError": true
-    }]
-  },
-  "diagnostics": [{
-    "severity": "warning",
-    "code": "PERL103",
-    "message": "Dynamic delimiter requires runtime evaluation",
-    "location": { "line": 42, "column": 10 },
-    "suggestion": "Use static delimiter for better tooling support"
-  }],
-  "metadata": {
-    "parse_coverage": 95.2,
-    "edge_case_count": 1
-  }
-}
-```
+| Code | Severity | Condition | Suppressed for empty files? |
+|------|----------|-----------|-----------------------------|
+| `PL100` | Information | `use strict` not found | Yes — when `statements` is empty |
+| `PL101` | Information | `use warnings` not found | Yes — when `statements` is empty |
+| `PL111` | Warning | Misspelled pragma | No — only fires when a `use` statement exists |
 
-## Technical Details
-
-### AST Node Types
-
-- `dynamic_heredoc_delimiter` - Runtime-computed delimiter
-- `phase_dependent_heredoc` - BEGIN/END block heredoc
-- `encoding_sensitive_heredoc` - Encoding-dependent
-- `tied_handle_heredoc` - Tied filehandle output
-- `heredoc_body_error` - Unresolved body
-
-### Diagnostic Codes
-
-- `PERL101` - Static delimiter suggested
-- `PERL102` - Phase-dependent heredoc
-- `PERL103` - Dynamic delimiter detected
-- `PERL104` - Encoding change affects parsing
-- `PERL105` - Tied handle detected
-
-### Recovery Modes
-
-1. **Conservative**: Minimal assumptions, high confidence
-2. **BestGuess**: Heuristics and patterns
-3. **Interactive**: User provides hints
-4. **Sandbox**: Controlled execution (planned)
-
-## See Also
-
-- [Implementation Plan](EDGE_CASE_IMPLEMENTATION_PLAN.md) - Original design
-- [Test Coverage](EDGE_CASE_TEST_COVERAGE.md) - Testing details
-- [Tree-sitter Compatibility](../explanation/TREE_SITTER_COMPATIBILITY.md) - AST format
-
-This consolidated documentation supersedes individual edge case files and provides the authoritative reference for edge case handling in the Pure Rust Perl parser.
+For the full code registry see
+[`crates/perl-diagnostics-codes/src/lib.rs`](../../crates/perl-diagnostics-codes/src/lib.rs).

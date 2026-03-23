@@ -244,4 +244,17 @@ mod tests {
             "misspelled pragma should still be detected in non-empty files"
         );
     }
+
+    #[test]
+    fn pod_only_no_strict_warnings_diagnostic() {
+        // POD blocks are consumed as trivia by the lexer, so a POD-only file
+        // produces Program { statements: [] }.  The empty-file guard fires and
+        // suppresses PL100/PL101 — the same as comment-only files.
+        // EDGE_CASES.md documents this behaviour.
+        let pod_only = "=head1 NAME\n\nMy::Module - description\n\n=cut\n";
+        assert!(
+            strict_warnings_diags(pod_only).is_empty(),
+            "POD-only file should not get strict/warnings diagnostics — POD is trivia"
+        );
+    }
 }
