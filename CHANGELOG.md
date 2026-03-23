@@ -167,10 +167,9 @@ polish, performance hardening, and swarm infrastructure maturation.
 - `defined`/`ref` without arg when followed by word operators (#2626)
 - `bless []` as function call, not subscript (#2387)
 - File-test-no-operand and `CORE::` builtins in grep/map context (#2674)
-- Handle `ref ne/eq` and or-comma-expr in grep blocks (#2388)
+- `ref ne/eq` and `or` comma-expr in `grep` blocks (#2388)
 - v-strings in expression and comparison contexts
 - Recover inline from missing semicolons in C-style for loops (#2593)
-- `ref ne/eq` and `or` comma-expr in `grep` blocks (#2388)
 - Relex slash as regex at statement start after closing brace
 - Replace restrictive import parser in `parse_no` with depth-tracking slurp
 
