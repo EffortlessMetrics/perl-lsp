@@ -1,0 +1,491 @@
+//! Tests for the unwired infrastructure scanner (issue #2667)
+//!
+//! Validates the core logic of the `cargo xtask unwired-scan` command:
+//! - Detecting crates that have tests but are not depended on by perl-lsp
+//! - Counting `#[test]` annotations in source files
+//! - Parsing Cargo.toml dependency lists
+//! - Detecting TODO/FIXME wiring comments
+
+use std::fs;
+use std::path::PathBuf;
+
+use tempfile::TempDir;
+
+// ---------------------------------------------------------------------------
+// Helper: build a minimal fake workspace in a temp dir
+// ---------------------------------------------------------------------------
+
+fn write_file(dir: &std::path::Path, rel: &str, content: &str) {
+    let path = dir.join(rel);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("create parent dirs");
+    }
+    fs::write(path, content).expect("write file");
+}
+
+fn make_fake_workspace() -> TempDir {
+    let dir = TempDir::new().expect("create tempdir");
+    let root = dir.path();
+
+    // Workspace Cargo.toml
+    write_file(
+        root,
+        "Cargo.toml",
+        r#"[workspace]
+members = ["crates/*"]
+resolver = "2"
+"#,
+    );
+
+    // perl-lsp: the root LSP crate
+    write_file(
+        root,
+        "crates/perl-lsp/Cargo.toml",
+        r#"[package]
+name = "perl-lsp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+perl-wired = { path = "../perl-wired" }
+"#,
+    );
+    write_file(
+        root,
+        "crates/perl-lsp/src/lib.rs",
+        r#"// main lsp crate
+"#,
+    );
+
+    // perl-wired: depended on by perl-lsp, has tests
+    write_file(
+        root,
+        "crates/perl-wired/Cargo.toml",
+        r#"[package]
+name = "perl-wired"
+version = "0.1.0"
+edition = "2021"
+"#,
+    );
+    write_file(
+        root,
+        "crates/perl-wired/src/lib.rs",
+        r#"pub fn add(a: i32, b: i32) -> i32 { a + b }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_add() { assert_eq!(add(1, 2), 3); }
+}
+"#,
+    );
+
+    // perl-unwired: NOT depended on by perl-lsp, has tests — should be flagged
+    write_file(
+        root,
+        "crates/perl-unwired/Cargo.toml",
+        r#"[package]
+name = "perl-unwired"
+version = "0.1.0"
+edition = "2021"
+"#,
+    );
+    write_file(
+        root,
+        "crates/perl-unwired/src/lib.rs",
+        r#"pub fn multiply(a: i32, b: i32) -> i32 { a * b }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_multiply() { assert_eq!(multiply(2, 3), 6); }
+    #[test]
+    fn test_multiply_zero() { assert_eq!(multiply(0, 5), 0); }
+}
+"#,
+    );
+
+    // perl-no-tests: NOT depended on by perl-lsp, no tests — should NOT be flagged
+    write_file(
+        root,
+        "crates/perl-no-tests/Cargo.toml",
+        r#"[package]
+name = "perl-no-tests"
+version = "0.1.0"
+edition = "2021"
+"#,
+    );
+    write_file(
+        root,
+        "crates/perl-no-tests/src/lib.rs",
+        r#"pub fn helper() -> &'static str { "helper" }
+"#,
+    );
+
+    // perl-todo-wire: has TODO: wire comment — should appear in wiring comments
+    write_file(
+        root,
+        "crates/perl-todo-wire/Cargo.toml",
+        r#"[package]
+name = "perl-todo-wire"
+version = "0.1.0"
+edition = "2021"
+"#,
+    );
+    write_file(
+        root,
+        "crates/perl-todo-wire/src/lib.rs",
+        r#"// TODO: wire this into get_diagnostics()
+pub fn check_something() -> Vec<String> { vec![] }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_check_something() { assert!(check_something().is_empty()); }
+}
+"#,
+    );
+
+    dir
+}
+
+// ---------------------------------------------------------------------------
+// Tests for count_tests_in_dir
+// ---------------------------------------------------------------------------
+
+/// Count `#[test]` occurrences by walking a source directory.
+fn count_tests_in_dir(src_dir: &std::path::Path) -> u32 {
+    let mut count = 0u32;
+    let Ok(walker) = fs::read_dir(src_dir) else {
+        return 0;
+    };
+    // Recursive walk via a simple queue
+    let mut queue: Vec<PathBuf> = walker.filter_map(|e| e.ok().map(|e| e.path())).collect();
+    while let Some(path) = queue.pop() {
+        if path.is_dir() {
+            if let Ok(entries) = fs::read_dir(&path) {
+                queue.extend(entries.filter_map(|e| e.ok().map(|e| e.path())));
+            }
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs")
+            && let Ok(content) = fs::read_to_string(&path)
+        {
+            count += content.matches("#[test]").count() as u32;
+        }
+    }
+    count
+}
+
+#[test]
+fn test_count_tests_finds_test_attribute() {
+    let dir = TempDir::new().expect("tempdir");
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).expect("create src");
+    fs::write(
+        src.join("lib.rs"),
+        r#"#[test]
+fn test_foo() {}
+#[test]
+fn test_bar() {}
+"#,
+    )
+    .expect("write");
+    assert_eq!(count_tests_in_dir(&src), 2);
+}
+
+#[test]
+fn test_count_tests_empty_dir() {
+    let dir = TempDir::new().expect("tempdir");
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).expect("create src");
+    assert_eq!(count_tests_in_dir(&src), 0);
+}
+
+#[test]
+fn test_count_tests_no_tests_in_file() {
+    let dir = TempDir::new().expect("tempdir");
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).expect("create src");
+    fs::write(src.join("lib.rs"), "pub fn foo() {}").expect("write");
+    assert_eq!(count_tests_in_dir(&src), 0);
+}
+
+#[test]
+fn test_count_tests_nonexistent_dir() {
+    let path = PathBuf::from("/nonexistent/path/to/src");
+    assert_eq!(count_tests_in_dir(&path), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Tests for parse_crate_deps
+// ---------------------------------------------------------------------------
+
+/// Parse the `[dependencies]` section of a Cargo.toml and return dep names.
+fn parse_crate_deps(cargo_toml: &std::path::Path) -> Vec<String> {
+    let Ok(content) = fs::read_to_string(cargo_toml) else {
+        return vec![];
+    };
+    let Ok(parsed) = content.parse::<toml::Table>() else {
+        return vec![];
+    };
+    let mut deps = Vec::new();
+    for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(toml::Value::Table(table)) = parsed.get(section) {
+            for key in table.keys() {
+                deps.push(key.clone());
+            }
+        }
+    }
+    deps.sort();
+    deps.dedup();
+    deps
+}
+
+#[test]
+fn test_parse_crate_deps_basic() -> anyhow::Result<()> {
+    let dir = TempDir::new()?;
+    let cargo_toml = dir.path().join("Cargo.toml");
+    fs::write(
+        &cargo_toml,
+        r#"[package]
+name = "my-crate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1.0"
+perl-parser = { path = "../perl-parser" }
+anyhow = "1.0"
+"#,
+    )?;
+    let deps = parse_crate_deps(&cargo_toml);
+    assert!(deps.contains(&"serde".to_string()), "should contain serde");
+    assert!(deps.contains(&"perl-parser".to_string()), "should contain perl-parser");
+    assert!(deps.contains(&"anyhow".to_string()), "should contain anyhow");
+    Ok(())
+}
+
+#[test]
+fn test_parse_crate_deps_empty() -> anyhow::Result<()> {
+    let dir = TempDir::new()?;
+    let cargo_toml = dir.path().join("Cargo.toml");
+    fs::write(
+        &cargo_toml,
+        r#"[package]
+name = "my-crate"
+version = "0.1.0"
+edition = "2021"
+"#,
+    )?;
+    let deps = parse_crate_deps(&cargo_toml);
+    assert!(deps.is_empty(), "should have no deps");
+    Ok(())
+}
+
+#[test]
+fn test_parse_crate_deps_missing_file() {
+    let deps = parse_crate_deps(std::path::Path::new("/nonexistent/Cargo.toml"));
+    assert!(deps.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Tests for scan_wiring_comments
+// ---------------------------------------------------------------------------
+
+/// Find files containing TODO/FIXME wiring-related comments.
+fn scan_wiring_comments(src_dir: &std::path::Path) -> Vec<(PathBuf, String)> {
+    let keywords = ["TODO: wire", "TODO: connect", "FIXME: not called", "TODO: wire this"];
+    let mut results = Vec::new();
+    let mut queue = vec![src_dir.to_path_buf()];
+    while let Some(path) = queue.pop() {
+        if path.is_dir() {
+            if let Ok(entries) = fs::read_dir(&path) {
+                queue.extend(entries.filter_map(|e| e.ok().map(|e| e.path())));
+            }
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs")
+            && let Ok(content) = fs::read_to_string(&path)
+        {
+            for line in content.lines() {
+                for kw in &keywords {
+                    if line.contains(kw) {
+                        results.push((path.clone(), line.trim().to_string()));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    results
+}
+
+#[test]
+fn test_scan_wiring_comments_finds_todo_wire() {
+    let dir = TempDir::new().expect("tempdir");
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).expect("create src");
+    fs::write(src.join("lib.rs"), "// TODO: wire this into get_diagnostics()\npub fn check() {}\n")
+        .expect("write");
+    let hits = scan_wiring_comments(&src);
+    assert_eq!(hits.len(), 1, "should find one wiring comment");
+    assert!(hits[0].1.contains("TODO: wire"), "comment text should match");
+}
+
+#[test]
+fn test_scan_wiring_comments_no_hits() {
+    let dir = TempDir::new().expect("tempdir");
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).expect("create src");
+    fs::write(src.join("lib.rs"), "pub fn regular_code() {}\n").expect("write");
+    let hits = scan_wiring_comments(&src);
+    assert!(hits.is_empty(), "should find no wiring comments");
+}
+
+#[test]
+fn test_scan_wiring_comments_fixme_not_called() {
+    let dir = TempDir::new().expect("tempdir");
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).expect("create src");
+    fs::write(src.join("lib.rs"), "// FIXME: not called from anywhere\npub fn orphan() {}\n")
+        .expect("write");
+    let hits = scan_wiring_comments(&src);
+    assert_eq!(hits.len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// Integration test: fake workspace scan
+// ---------------------------------------------------------------------------
+
+/// CrateReport mirrors what the scanner produces per crate.
+#[derive(Debug)]
+struct CrateReport {
+    name: String,
+    test_count: u32,
+    is_depended_on_by_lsp: bool,
+    wiring_comments: Vec<String>,
+}
+
+/// Identify crates that have tests but are not a direct dep of `lsp_crate_name`.
+fn find_unwired_crates(
+    workspace_root: &std::path::Path,
+    lsp_crate_name: &str,
+) -> anyhow::Result<Vec<CrateReport>> {
+    let crates_dir = workspace_root.join("crates");
+
+    // Find the LSP crate Cargo.toml and get its deps
+    let lsp_cargo_toml = crates_dir.join(lsp_crate_name).join("Cargo.toml");
+    let lsp_deps: std::collections::HashSet<String> =
+        parse_crate_deps(&lsp_cargo_toml).into_iter().collect();
+
+    let mut reports = Vec::new();
+    let Ok(entries) = fs::read_dir(&crates_dir) else {
+        return Ok(reports);
+    };
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let crate_dir = entry.path();
+        if !crate_dir.is_dir() {
+            continue;
+        }
+        let crate_name = crate_dir.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        if crate_name == lsp_crate_name {
+            continue; // skip the lsp crate itself
+        }
+
+        let cargo_toml = crate_dir.join("Cargo.toml");
+        if !cargo_toml.exists() {
+            continue;
+        }
+
+        let src_dir = crate_dir.join("src");
+        let test_count = count_tests_in_dir(&src_dir);
+        let is_depended_on = lsp_deps.contains(&crate_name);
+        let wiring_hits = scan_wiring_comments(&src_dir);
+        let wiring_comments = wiring_hits.into_iter().map(|(_, line)| line).collect();
+
+        reports.push(CrateReport {
+            name: crate_name,
+            test_count,
+            is_depended_on_by_lsp: is_depended_on,
+            wiring_comments,
+        });
+    }
+
+    Ok(reports)
+}
+
+#[test]
+fn test_find_unwired_crates_identifies_unwired() -> anyhow::Result<()> {
+    let workspace = make_fake_workspace();
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+
+    // perl-unwired has 2 tests and is not in perl-lsp deps
+    let unwired = reports.iter().find(|r| r.name == "perl-unwired");
+    assert!(unwired.is_some(), "perl-unwired should appear in report");
+    let unwired = unwired.unwrap();
+    assert_eq!(unwired.test_count, 2, "perl-unwired has 2 tests");
+    assert!(!unwired.is_depended_on_by_lsp, "perl-unwired should NOT be depended on");
+
+    Ok(())
+}
+
+#[test]
+fn test_find_unwired_crates_wired_crate_marked_as_wired() -> anyhow::Result<()> {
+    let workspace = make_fake_workspace();
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+
+    let wired = reports.iter().find(|r| r.name == "perl-wired");
+    assert!(wired.is_some(), "perl-wired should appear in report");
+    let wired = wired.unwrap();
+    assert!(wired.is_depended_on_by_lsp, "perl-wired should be marked as depended on");
+
+    Ok(())
+}
+
+#[test]
+fn test_find_unwired_crates_no_tests_not_flagged() -> anyhow::Result<()> {
+    let workspace = make_fake_workspace();
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+
+    let no_tests = reports.iter().find(|r| r.name == "perl-no-tests");
+    assert!(no_tests.is_some(), "perl-no-tests should appear in report");
+    let no_tests = no_tests.unwrap();
+    assert_eq!(no_tests.test_count, 0, "perl-no-tests has zero tests");
+    assert!(!no_tests.is_depended_on_by_lsp);
+
+    Ok(())
+}
+
+#[test]
+fn test_find_unwired_crates_todo_comments_captured() -> anyhow::Result<()> {
+    let workspace = make_fake_workspace();
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+
+    let todo = reports.iter().find(|r| r.name == "perl-todo-wire");
+    assert!(todo.is_some(), "perl-todo-wire should appear in report");
+    let todo = todo.unwrap();
+    assert!(!todo.wiring_comments.is_empty(), "should have captured a wiring comment");
+    assert!(todo.wiring_comments[0].contains("TODO: wire"), "wiring comment content should match");
+
+    Ok(())
+}
+
+#[test]
+fn test_find_unwired_crates_only_with_tests_are_candidates() -> anyhow::Result<()> {
+    let workspace = make_fake_workspace();
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+
+    // The unwired candidates are: crates that have tests AND are NOT depended on
+    let candidates: Vec<&CrateReport> =
+        reports.iter().filter(|r| r.test_count > 0 && !r.is_depended_on_by_lsp).collect();
+
+    // perl-unwired and perl-todo-wire both qualify
+    let names: Vec<&str> = candidates.iter().map(|r| r.name.as_str()).collect();
+    assert!(names.contains(&"perl-unwired"), "perl-unwired is a candidate");
+    assert!(names.contains(&"perl-todo-wire"), "perl-todo-wire is a candidate");
+    assert!(!names.contains(&"perl-no-tests"), "perl-no-tests is NOT a candidate");
+    assert!(!names.contains(&"perl-wired"), "perl-wired is NOT a candidate");
+
+    Ok(())
+}

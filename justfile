@@ -1521,6 +1521,22 @@ ci-dead-code:
     @cargo xtask dead-code check
 
 # ============================================================================
+# Scan for built-but-not-wired crates (issue #2667)
+# Finds crates with tests but zero direct dependency from perl-lsp.
+
+# Scan for unwired infrastructure (human-readable report)
+unwired-scan:
+    @cargo xtask unwired-scan
+
+# Scan for unwired infrastructure (JSON output)
+unwired-scan-json:
+    @cargo xtask unwired-scan --json
+
+# CI gate: exit 1 if any unwired crates are found
+ci-unwired-scan:
+    @cargo xtask unwired-scan --check
+
+# ============================================================================
 # CI Gate Execution with Receipt Generation (Issue #210)
 # ============================================================================
 
