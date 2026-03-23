@@ -26,7 +26,8 @@ fn test_constant_error_prefix_name_is_clean() {
 /// Verify that assert_has_error still correctly identifies real parse errors.
 #[test]
 fn test_assert_has_error_still_catches_real_errors() {
-    // A bare semicolon where an expression is required is a real parse error.
+    // Phase 2: `my $x = ;` now recovers with a MissingExpression node (not an Error node
+    // with "expected expression" text). Use the sexp name "missing_expression" as the needle.
     let source = "my $x = ;";
-    assert_has_error(source, "expected expression");
+    assert_has_error(source, "missing_expression");
 }

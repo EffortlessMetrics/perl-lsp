@@ -116,8 +116,12 @@ impl<'a> Parser<'a> {
             // Perl allows `our $x ||= 0;` and `my $y .= "suffix";`
             let assign_op = self.peek_compound_assign_op();
             let initializer = if let Some(op) = assign_op {
-                self.tokens.next()?;
-                let rhs = self.parse_expression()?;
+                let op_token = self.tokens.next()?;
+                let rhs = if let Some(missing) = self.recover_missing_infix_rhs(op_token.start) {
+                    missing
+                } else {
+                    self.parse_expression()?
+                };
                 if op == "=" {
                     Some(Box::new(rhs))
                 } else {
