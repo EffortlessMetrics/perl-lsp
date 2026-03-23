@@ -696,7 +696,11 @@ impl<'a> Parser<'a> {
                                     && matches!(self.peek_kind(), Some(TokenKind::Identifier))
                                     && self.tokens.peek().ok().is_some_and(|t| {
                                         // Named comparator: lowercase identifier that's not a
-                                        // binary string op. e.g. `sort cmp_events @list`
+                                        // binary string op and not a block-list function.
+                                        // e.g. `sort cmp_events @list`
+                                        // Block-list functions (grep, map, sort, etc.) cannot be
+                                        // sort comparators — `sort grep { ... } @list` means
+                                        // sort the result of grep, not `sort grep_func @list`.
                                         let txt: &str = &t.text;
                                         !txt.is_empty()
                                             && txt.starts_with(|c: char| {
@@ -712,6 +716,7 @@ impl<'a> Parser<'a> {
                                                     | "cmp"
                                                     | "x"
                                             )
+                                            && !Self::is_block_list_func(txt)
                                     })
                                 {
                                     // sort FUNCNAME LIST — `sort by_name @list`
