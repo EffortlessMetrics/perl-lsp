@@ -23,15 +23,17 @@ fn find_statement_start_does_not_break_on_newline() {
 #[test]
 fn finds_statement_start_after_semicolon() {
     // source: "my $a = 1;\nmy $b = length($x);\n"
-    //                     ^10 = one past ';' at 9
-    // The statement containing "length" starts at byte 10 (right after the ';').
-    // The '\n' at byte 10 is NOT a boundary — the result is one past the ';'.
+    //            byte 9=';', byte 10='\n', byte 11='m'
+    // find_statement_start sees the ';' at 9 → raw = 10, then skips the '\n'
+    // at byte 10, returning 11 — the first real character of the next statement.
+    // This ensures the extracted declaration is inserted on its own line, not
+    // appended to the end of "my $a = 1;".
     let source = "my $a = 1;\nmy $b = length($x);\n";
     let lines: Vec<String> = source.lines().map(ToString::to_string).collect();
     let helpers = TextEditHelpers::new(source, &lines);
 
     let pos = source.find("length").unwrap_or(0);
-    assert_eq!(helpers.find_statement_start(pos), 10);
+    assert_eq!(helpers.find_statement_start(pos), 11);
 }
 
 #[test]

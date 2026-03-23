@@ -50,8 +50,10 @@ fn find_statement_start_at_exact_end_of_source() {
     let source = "my $x = 1;\n";
     let lines = make_lines(source);
     let h = helpers(source, &lines);
-    // At len(), searching up to len() - should find last delimiter at pos 9 (';') -> 10
+    // ';' at byte 9 → raw=10; byte 10 is '\n' → skip → 11 == source.len().
+    // The result must be at most source.len() (end-of-string insert is valid).
     let result = h.find_statement_start(source.len());
+    assert_eq!(result, 11, "after skipping trailing newline, result is source.len()");
     assert!(result <= source.len(), "result must not exceed source length");
 }
 
