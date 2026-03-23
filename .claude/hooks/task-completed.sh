@@ -9,8 +9,11 @@ INPUT="$(cat 2>/dev/null || echo '{}')"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
 
 # Quick sanity check: is cargo fmt clean?
-# Guard: only run cargo fmt if .rs files exist in the working tree (avoids 2.5s overhead for doc/shell-only agents)
-if git ls-files -- '*.rs' 2>/dev/null | grep -q .; then
+# Guard: only run cargo fmt if the agent staged or recently committed .rs files.
+# Note: git ls-files checks ALL tracked files (always matches in this repo), not modified files.
+# We use git diff to detect actual .rs work by this agent -- same pattern as the test-file check below.
+if git diff --cached --name-only 2>/dev/null | grep -q '\.rs$' || \
+   git diff --name-only HEAD~1 2>/dev/null | grep -q '\.rs$'; then
   if ! cargo fmt --all -- --check 2>/dev/null; then
     echo "Task completion blocked: cargo fmt check failed. Run 'cargo fmt --all' before marking complete."
     exit 2
