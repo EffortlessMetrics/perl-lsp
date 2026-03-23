@@ -459,6 +459,9 @@ impl LspServer {
     /// When a module file is found, extracts POD documentation and includes
     /// it in the hover display. Results are cached per file path.
     fn build_module_hover(&self, module_name: &str, doc_text: &str, doc_uri: &str) -> Value {
+        // MetaCPAN link is included in every branch — compute once up front.
+        let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
+
         // Try URI resolution (handles open docs + workspace folders)
         if let Some(uri) =
             self.resolve_module_to_path_with_doc(module_name, Some(doc_text), Some(doc_uri))
@@ -471,14 +474,13 @@ impl LspServer {
                 "contents": {
                     "kind": "markdown",
                     "value": format!(
-                        "**{module_name}**\n\n`{display_path}`\n\n[Go to module]({uri}){pod_section}"
+                        "**{module_name}**\n\n`{display_path}`\n\n[Go to module]({uri}) \u{2022} {metacpan_link}{pod_section}"
                     ),
                 },
             });
         }
 
         // Try filesystem resolution as fallback
-        let metacpan_link = format!("[View on MetaCPAN](https://metacpan.org/pod/{module_name})");
         if let Some(path) =
             self.resolve_module_path_with_uri(module_name, Some(doc_text), Some(doc_uri))
         {

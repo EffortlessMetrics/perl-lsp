@@ -157,3 +157,103 @@ fn test_hover_builtin_grep_includes_example() -> TestResult {
     );
     Ok(())
 }
+
+/// Hover on `join` should show a usage example in a Perl code fence.
+#[test]
+fn test_hover_builtin_join_includes_example() -> TestResult {
+    let doc = "my $str = join(', ', @parts);\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///join_2831.pl", doc)?;
+    // 'join' starts at character 10
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///join_2831.pl"},
+                "position": {"line": 0, "character": 10}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for join")?;
+    assert!(
+        val.contains("```perl"),
+        "join hover should include a ```perl code fence example, got: {val}"
+    );
+    Ok(())
+}
+
+/// Hover on `pop` should show a usage example in a Perl code fence.
+#[test]
+fn test_hover_builtin_pop_includes_example() -> TestResult {
+    let doc = "my $last = pop @stack;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pop_2831.pl", doc)?;
+    // 'pop' starts at character 11
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///pop_2831.pl"},
+                "position": {"line": 0, "character": 11}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for pop")?;
+    assert!(
+        val.contains("```perl"),
+        "pop hover should include a ```perl code fence example, got: {val}"
+    );
+    Ok(())
+}
+
+/// Hover on `shift` should show a usage example in a Perl code fence.
+#[test]
+fn test_hover_builtin_shift_includes_example() -> TestResult {
+    let doc = "my $first = shift @queue;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///shift_2831.pl", doc)?;
+    // 'shift' starts at character 12
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///shift_2831.pl"},
+                "position": {"line": 0, "character": 12}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for shift")?;
+    assert!(
+        val.contains("```perl"),
+        "shift hover should include a ```perl code fence example, got: {val}"
+    );
+    Ok(())
+}
+
+/// Hover on `unshift` should show a usage example in a Perl code fence.
+#[test]
+fn test_hover_builtin_unshift_includes_example() -> TestResult {
+    let doc = "unshift @list, 0;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///unshift_2831.pl", doc)?;
+    // 'unshift' starts at character 0
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///unshift_2831.pl"},
+                "position": {"line": 0, "character": 0}
+            }),
+        )
+        .unwrap_or(json!(null));
+    let val = hover_value(&result).ok_or("Expected hover for unshift")?;
+    assert!(
+        val.contains("```perl"),
+        "unshift hover should include a ```perl code fence example, got: {val}"
+    );
+    Ok(())
+}
