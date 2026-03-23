@@ -69,7 +69,8 @@ emit_result() {
     esac
 
     if $JSON_MODE; then
-        RESULTS+=("{\"status\":\"$status\",\"metric\":\"$metric\",\"message\":\"$message\"}")
+        # Use jq --arg for JSON-safe encoding -- avoids injection from values with quotes or backslashes
+        RESULTS+=("$(jq -nc --arg status "$status" --arg metric "$metric" --arg message "$message"             '{status:$status,metric:$metric,message:$message}')")
     else
         printf "%s  %s  %s\n" "$symbol" "$(_pad "$metric")" "$message"
     fi
