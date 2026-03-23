@@ -120,7 +120,8 @@ fn get_indentation(line: &str) -> usize {
 /// line's indentation.
 ///
 /// Braces that appear inside single-quoted strings, double-quoted strings,
-/// or comments (`#` to end-of-line) are ignored.
+/// comments (`#` to end-of-line), `qw{...}` blocks, or regex quantifiers
+/// (`{n}`, `{n,}`, `{n,m}`) are ignored.
 fn find_matching_brace_indent(lines: &[&str], closing_line: usize) -> Option<usize> {
     let mut brace_count: i32 = 1;
 
@@ -185,7 +186,32 @@ fn extract_significant_braces(line: &str) -> Vec<char> {
                 // Skip closing quote if present.
                 i += 1;
             }
-            '{' | '}' => {
+            'q' if i + 2 < len && chars[i + 1] == 'w' && chars[i + 2] == '{' => {
+                // qw{...} word-list constructor — skip the entire block.
+                i += 3; // skip 'q', 'w', '{'
+                while i < len && chars[i] != '}' {
+                    i += 1;
+                }
+                // Skip closing '}'.
+                i += 1;
+            }
+            '{' => {
+                // Check if this is a regex quantifier {n}, {n,}, or {n,m}.
+                // Pattern: { digits [, [digits]] }
+                if is_regex_quantifier(&chars, i) {
+                    // Skip past the closing '}'.
+                    i += 1;
+                    while i < len && chars[i] != '}' {
+                        i += 1;
+                    }
+                    // Skip the closing '}'.
+                    i += 1;
+                } else {
+                    braces.push(c);
+                    i += 1;
+                }
+            }
+            '}' => {
                 braces.push(c);
                 i += 1;
             }
@@ -196,6 +222,42 @@ fn extract_significant_braces(line: &str) -> Vec<char> {
     }
 
     braces
+}
+
+/// Returns `true` if the `{` at position `start` in `chars` opens a regex
+/// quantifier of the form `{n}`, `{n,}`, or `{n,m}` where n and m are
+/// non-negative integers (digit sequences).
+fn is_regex_quantifier(chars: &[char], start: usize) -> bool {
+    let len = chars.len();
+    let mut i = start + 1; // move past '{'
+
+    // Must start with at least one digit.
+    if i >= len || !chars[i].is_ascii_digit() {
+        return false;
+    }
+    while i < len && chars[i].is_ascii_digit() {
+        i += 1;
+    }
+
+    // Now either '}' (exact quantifier) or ',' (range quantifier).
+    if i >= len {
+        return false;
+    }
+    if chars[i] == '}' {
+        return true; // {n}
+    }
+    if chars[i] != ',' {
+        return false;
+    }
+    i += 1; // skip ','
+
+    // Optional second digit sequence.
+    while i < len && chars[i].is_ascii_digit() {
+        i += 1;
+    }
+
+    // Must end with '}'.
+    i < len && chars[i] == '}'
 }
 
 /// Determine whether `target_line` falls inside a heredoc body.
@@ -371,5 +433,103 @@ mod tests {
         assert_eq!(get_indentation("    foo"), 4);
         assert_eq!(get_indentation("foo"), 0);
         assert_eq!(get_indentation("  "), 2);
+    }
+
+    #[test]
+    fn extract_braces_skips_regex_quantifier_exact() {
+        // {3} is a regex quantifier — neither brace should be counted.
+        let braces = extract_significant_braces("my $x = /\\w{3}/;");
+        assert_eq!(braces, vec![]);
+    }
+
+    #[test]
+    fn extract_braces_skips_regex_quantifier_range() {
+        // {2,5} is a regex quantifier — neither brace should be counted.
+        let braces = extract_significant_braces("if ($str =~ /\\d{2,5}/) {");
+        assert_eq!(braces, vec!['{']);
+    }
+
+    #[test]
+    fn extract_braces_skips_regex_quantifier_open_range() {
+        // {2,} is a regex quantifier (at least n) — neither brace counted.
+        let braces = extract_significant_braces("my $x = /a{2,}/;");
+        assert_eq!(braces, vec![]);
+    }
+
+    #[test]
+    fn extract_braces_skips_qw_block() {
+        // qw{...} — neither brace should be counted.
+        let braces = extract_significant_braces("my @a = qw{foo bar baz};");
+        assert_eq!(braces, vec![]);
+    }
+
+    #[test]
+    fn extract_braces_qw_block_before_real_brace() {
+        // qw{...} followed by a real block opener.
+        let braces = extract_significant_braces("foreach my $x (qw{a b}) {");
+        assert_eq!(braces, vec!['{']);
+    }
+
+    #[test]
+    fn is_regex_quantifier_exact() {
+        let chars: Vec<char> = "{3}".chars().collect();
+        assert!(is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn is_regex_quantifier_range() {
+        let chars: Vec<char> = "{2,5}".chars().collect();
+        assert!(is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn is_regex_quantifier_open_range() {
+        let chars: Vec<char> = "{2,}".chars().collect();
+        assert!(is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn is_regex_quantifier_rejects_hash_block() {
+        // A hash/block opener like `{` followed by non-digit is NOT a quantifier.
+        let chars: Vec<char> = "{ key => 1 }".chars().collect();
+        assert!(!is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn is_regex_quantifier_rejects_empty_braces() {
+        let chars: Vec<char> = "{}".chars().collect();
+        assert!(!is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn extract_braces_multiple_quantifiers_on_one_line() {
+        // Two quantifiers on one line with a real block opener — only the opener
+        // should be pushed.  This would fail before the fix because the old code
+        // pushed all six braces ({, }, {, }, {) and the reversed walk found the
+        // wrong opener.
+        let braces = extract_significant_braces("if (/\\w{2}.*\\d{3}/) {");
+        assert_eq!(braces, vec!['{']);
+    }
+
+    #[test]
+    fn is_regex_quantifier_rejects_unclosed_brace_at_eol() {
+        // '{' with no following content must not panic and must return false.
+        let chars: Vec<char> = "{".chars().collect();
+        assert!(!is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn is_regex_quantifier_rejects_digit_then_eol() {
+        // '{3' with no closing '}' must not panic and must return false.
+        let chars: Vec<char> = "{3".chars().collect();
+        assert!(!is_regex_quantifier(&chars, 0));
+    }
+
+    #[test]
+    fn extract_braces_qw_block_unterminated() {
+        // Malformed qw{ with no closing '}' must not panic.
+        // The opening qw{ is consumed; no brace is pushed.
+        let braces = extract_significant_braces("my @x = qw{a b c");
+        assert_eq!(braces, vec![]);
     }
 }
