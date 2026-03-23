@@ -249,14 +249,20 @@ fn test_my_variable_has_declaration_without_readonly() {
 
 #[test]
 fn test_non_declared_variable_has_zero_modifiers() {
-    // A variable used without my/our/local/state should have modifiers = 0
+    // A scalar variable used without my/our/local/state should have only the
+    // scalarVariable sigil modifier (bit 10 = 1024) and no declaration bits.
     let code = "sub f {\n    return $global;\n}";
     let tokens = tokens_for(code);
     let var_idx = type_idx("variable");
     let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == var_idx).collect();
     if !var_tokens.is_empty() {
-        let has_zero_mods = var_tokens.iter().any(|t| t[4] == 0);
-        assert!(has_zero_mods, "undeclared variable should have modifier bitmask = 0");
+        let scalar_mod_bit: u32 = 1 << 10; // scalarVariable
+        let declaration_bit: u32 = 1;
+        // No declaration bit; only the sigil modifier is expected
+        let has_no_decl = var_tokens.iter().any(|t| (t[4] & declaration_bit) == 0);
+        assert!(has_no_decl, "undeclared variable should not have declaration modifier bit");
+        let has_scalar_mod = var_tokens.iter().any(|t| (t[4] & scalar_mod_bit) != 0);
+        assert!(has_scalar_mod, "undeclared $global should still have scalarVariable modifier");
     }
 }
 

@@ -119,8 +119,9 @@ fn legend_token_type_count() {
 #[test]
 fn legend_modifier_count() {
     let leg = legend();
-    // 10 standard LSP modifiers (must match capabilities_for() advertisement)
-    assert_eq!(leg.modifiers.len(), 10, "expected 10 modifiers");
+    // 10 standard LSP modifiers + 3 sigil modifiers (scalarVariable, arrayVariable, hashVariable)
+    // = 13 total (must match capabilities_for() advertisement)
+    assert_eq!(leg.modifiers.len(), 13, "expected 13 modifiers");
 }
 
 #[test]
@@ -1322,4 +1323,110 @@ fn complex_code_produces_many_token_types() {
     assert!(types_present.contains(ns_idx), "should have namespace tokens");
     assert!(types_present.contains(var_idx), "should have variable tokens");
     assert!(types_present.contains(re_idx), "should have regexp tokens");
+}
+
+// ===========================================================================
+// Issue #2881 — Gap 1: Variable sigil modifiers (scalarVariable/arrayVariable/hashVariable)
+// ===========================================================================
+
+/// The legend must advertise the three new sigil modifiers at bits 10, 11, 12.
+#[test]
+fn legend_has_sigil_modifiers() {
+    let leg = legend();
+    let mods = &leg.modifiers;
+    assert!(mods.contains(&"scalarVariable".to_string()), "legend missing scalarVariable modifier");
+    assert!(mods.contains(&"arrayVariable".to_string()), "legend missing arrayVariable modifier");
+    assert!(mods.contains(&"hashVariable".to_string()), "legend missing hashVariable modifier");
+    // Bit positions must be 10, 11, 12 — legend position is the bit index
+    let scalar_bit = must_some(mods.iter().position(|m| m == "scalarVariable"));
+    assert_eq!(scalar_bit, 10, "scalarVariable must be at bit 10 (position 10 in modifiers list)");
+    let array_bit = must_some(mods.iter().position(|m| m == "arrayVariable"));
+    assert_eq!(array_bit, 11, "arrayVariable must be at bit 11 (position 11 in modifiers list)");
+    let hash_bit = must_some(mods.iter().position(|m| m == "hashVariable"));
+    assert_eq!(hash_bit, 12, "hashVariable must be at bit 12 (position 12 in modifiers list)");
+}
+
+/// A scalar variable `$x` must receive the `scalarVariable` modifier bit (1 << 10 = 1024).
+#[test]
+fn scalar_variable_gets_scalar_sigil_modifier() {
+    let tokens = tokens_for("my $x = 1;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let scalar_mod_bit: u32 = 1 << 10; // 1024
+    let has_scalar_mod = tokens.iter().any(|t| t[3] == *var_idx && (t[4] & scalar_mod_bit) != 0);
+    assert!(has_scalar_mod, "$x should have scalarVariable modifier (bit 10 = 1024)");
+}
+
+/// An array variable `@arr` must receive the `arrayVariable` modifier bit (1 << 11 = 2048).
+#[test]
+fn array_variable_gets_array_sigil_modifier() {
+    let tokens = tokens_for("my @arr = ();");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let array_mod_bit: u32 = 1 << 11; // 2048
+    let has_array_mod = tokens.iter().any(|t| t[3] == *var_idx && (t[4] & array_mod_bit) != 0);
+    assert!(has_array_mod, "@arr should have arrayVariable modifier (bit 11 = 2048)");
+}
+
+/// A hash variable `%h` must receive the `hashVariable` modifier bit (1 << 12 = 4096).
+#[test]
+fn hash_variable_gets_hash_sigil_modifier() {
+    let tokens = tokens_for("my %h = ();");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let hash_mod_bit: u32 = 1 << 12; // 4096
+    let has_hash_mod = tokens.iter().any(|t| t[3] == *var_idx && (t[4] & hash_mod_bit) != 0);
+    assert!(has_hash_mod, "%h should have hashVariable modifier (bit 12 = 4096)");
+}
+
+// ===========================================================================
+// Issue #2881 — Gap 2: Interpolated string variable token emission
+// ===========================================================================
+
+/// A double-quoted string with an embedded variable must produce both a `string`
+/// token (for the literal fragment) and a `variable` token (for `$name`).
+#[test]
+fn interpolated_string_emits_variable_token() {
+    let code = r#"my $name = "Alice"; my $greeting = "Hello $name";"#;
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let str_idx = must_some(leg.map.get("string"));
+    let has_var = tokens.iter().any(|t| t[3] == *var_idx);
+    let has_str = tokens.iter().any(|t| t[3] == *str_idx);
+    assert!(has_var, "should have variable token inside interpolated string");
+    assert!(has_str, "should have string token for literal parts of interpolated string");
+}
+
+/// A variable that appears twice in the same interpolated string must produce
+/// two separate variable tokens (cursor re-scan must advance past the first match).
+#[test]
+fn interpolated_string_duplicate_variable_gets_two_tokens() {
+    let code = r#"my $x = 1; my $s = "$x and $x";"#;
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    // $x declaration (1) + $x first-in-string (1) + $x second-in-string (1) = at least 3
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert!(
+        var_count >= 3,
+        "should have at least 3 variable tokens ($x decl + 2 in string); got {var_count}"
+    );
+}
+
+/// A single-quoted string `'$name'` must NOT produce a variable token from inside
+/// the quotes — only the `$s` declaration should be a variable token.
+#[test]
+fn single_quoted_string_no_variable_token_inside() {
+    let code = r#"my $s = '$name';"#;
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let str_idx = must_some(leg.map.get("string"));
+    // Single-quoted string must produce a string token
+    let has_str = tokens.iter().any(|t| t[3] == *str_idx);
+    assert!(has_str, "single-quoted string should produce string token");
+    // Only $s declaration should be a variable; nothing from inside '$name'
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert_eq!(var_count, 1, "should have only the $s declaration variable, got {var_count}");
 }
