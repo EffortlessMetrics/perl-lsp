@@ -142,6 +142,25 @@ perl-lsp is configured through your editor's LSP settings (via `didChangeConfigu
 
 For Neovim and other editors, pass these as the LSP `settings` table under the `perl-lsp` key.
 
+### Project Configuration File
+
+For team-wide defaults, add a `.perl-lsp.toml` to your repository root. It is editor-agnostic and committed to version control:
+
+```toml
+# .perl-lsp.toml — shared project defaults for perl-lsp
+
+[perl]
+include_paths = ["lib", "local/lib/perl5"]
+
+[diagnostics]
+perlcritic = false
+
+[features]
+inlay_hints = true
+```
+
+Settings from `.perl-lsp.toml` are the lowest-priority layer. Editor settings (`initializationOptions` / `didChangeConfiguration`) always override them. See [CONFIG.md](docs/reference/CONFIG.md) for the full reference including precedence rules.
+
 ## Install
 
 ### From crates.io

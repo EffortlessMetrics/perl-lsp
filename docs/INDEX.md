@@ -11,6 +11,7 @@ Choose the path that matches what you are trying to do:
 | Install the language server | [Installation Guide](how-to/INSTALLATION.md) |
 | Get a working editor setup quickly | [Getting Started](tutorials/GETTING_STARTED.md) |
 | Configure editor or workspace settings | [Configuration Reference](reference/CONFIG.md) |
+| Share project settings with my team | [Project Configuration File (.perl-lsp.toml)](reference/CONFIG.md#project-configuration-file-perl-lsptoml) |
 | Troubleshoot startup, indexing, or editor issues | [Troubleshooting](how-to/TROUBLESHOOTING.md) |
 | Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
 | Work on LSP features as a contributor | [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) |
