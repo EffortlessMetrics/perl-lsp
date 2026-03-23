@@ -60,7 +60,6 @@
     "onCommand:perl-lsp.createDebugConfig",
     "onCommand:perl-lsp.runHealthCheck",
     "onCommand:perl-lsp.openConfigurationGuide",
-    "onCommand:perl-lsp.runHealthCheck",
     "onWalkthrough:perl-lsp.gettingStarted"
   ],
   "contributes": {
@@ -434,6 +433,12 @@
         "title": "Open Configuration Guide",
         "category": "Perl",
         "icon": "$(gear)"
+      },
+      {
+        "command": "perl-lsp.reportIssue",
+        "title": "Report Issue",
+        "category": "Perl",
+        "icon": "$(github)"
       }
     ],
     "menus": {
@@ -483,6 +488,9 @@
         },
         {
           "command": "perl-lsp.openConfigurationGuide"
+        },
+        {
+          "command": "perl-lsp.reportIssue"
         }
       ],
       "editor/title": [
