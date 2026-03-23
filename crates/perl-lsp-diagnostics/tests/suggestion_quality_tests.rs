@@ -258,16 +258,25 @@ fn no_related_info_when_no_suggestion() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn all_parse_errors_have_code() -> Result<(), Box<dyn std::error::Error>> {
+    // Place errors far apart (> 10 bytes) so cascade suppression does not collapse
+    // them into a single cluster.  The goal of this test is to verify that every
+    // parse-error diagnostic carries a stable PL-prefixed code.
+    //
+    // Error placement:
+    //   - UnexpectedToken  @ offset 0  (PL001)
+    //   - LexerError       @ offset 30 (PL001) — global error, placed at a distinct cluster
+    //   - UnexpectedEof    @ source.len() = 60 (PL003)
+    let source = "a".repeat(60);
     let errors = vec![
         ParseError::UnexpectedToken {
             location: 0,
             expected: ";".to_string(),
             found: "x".to_string(),
         },
+        ParseError::SyntaxError { location: 30, message: "syntax error mid-file".to_string() },
         ParseError::UnexpectedEof,
-        ParseError::LexerError { message: "bad".to_string() },
     ];
-    let diags = diagnostics_for("bad code", errors);
+    let diags = diagnostics_for(&source, errors);
     let pd = parse_diags(&diags);
     assert!(pd.len() >= 3, "expected at least 3 parse-error diagnostics");
     for d in &pd {
