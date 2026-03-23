@@ -6,6 +6,10 @@
 //!
 //! Each section is tagged with // AC:ID referencing issue #2783.
 
+// Tests use `panic!` in match arms as structured test failure reporters,
+// and `expect()` on response body values that must be present per DAP spec.
+#![allow(clippy::panic, clippy::expect_used)]
+
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 
@@ -13,6 +17,7 @@ use serde_json::json;
 // Helpers
 // ============================================================================
 
+#[allow(clippy::panic)]
 fn assert_response(msg: DapMessage, expected_command: &str) -> (bool, Option<String>) {
     match msg {
         DapMessage::Response { success, command, message, .. } => {
@@ -94,16 +99,19 @@ fn test_breakpoint_locations_sequence_numbers() {
 }
 
 #[test]
-fn test_breakpoint_locations_path_traversal_rejected() {
-    // AC:2783 — path traversal attempts must be rejected
+fn test_breakpoint_locations_path_traversal_does_not_panic() {
+    // AC:2783 — path traversal paths must not panic.
+    // Without a workspace root set (pre-launch), validate_source_path allows any path
+    // through with a warning — defense-in-depth only blocks when a workspace boundary
+    // is known.  The security contract here is: no panic, no crash, structured response.
     let mut adapter = DebugAdapter::new();
     let args = json!({
         "source": { "path": "/../../../etc/passwd" },
         "line": 1
     });
     let msg = adapter.handle_request(1, "breakpointLocations", Some(args));
-    // Either rejected with failure OR returns success with empty list (both safe).
-    // The important check: no panic and response is for the right command.
+    // Either rejected with failure OR returns success with empty list — both are safe.
+    // The critical invariant: no panic and response carries the right command name.
     match msg {
         DapMessage::Response { command, .. } => {
             assert_eq!(command, "breakpointLocations");
