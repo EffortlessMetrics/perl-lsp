@@ -3,7 +3,9 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "worktree": {
-    "symlinkDirectories": ["target"]
+    "symlinkDirectories": [
+      "target"
+    ]
   },
   "permissions": {
     "defaultMode": "bypassPermissions",
@@ -68,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'You have full autonomy within your scope. Follow your todo list. No unwrap/expect/panic in production. Crate CLAUDE.md files provide local context.'"
+            "command": "echo 'Standards: no unwrap/expect/panic in production (use ? or ok_or_else). No git stash in worktrees (shared list, use git restore). Set CARGO_TARGET_DIR per worktree. Never git add -A (use specific files). Run cargo fmt + clippy before committing. CLAUDE.md has full context.'"
           }
         ]
       }

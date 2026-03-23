@@ -442,7 +442,8 @@ ci-gate:
     just ci-parser-features-check && \
     just ci-features-invariants && \
     just hook-check && \
-    just hook-registry-check
+    just hook-registry-check && \
+    just hook-tests
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -751,6 +752,10 @@ hook-registry-check:
 # Run all hook tests (behavior, registry, executable-bit)
 hook-tests:
     @bash ./.ci/scripts/test-hooks.sh
+
+# Show swarm metrics summary
+swarm-summary:
+    @bash scripts/swarm-summary.sh
 
 # Check for machine-specific paths in documentation
 ci-doc-paths:
