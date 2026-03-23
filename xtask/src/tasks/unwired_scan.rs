@@ -144,6 +144,12 @@ pub fn scan(workspace_root: &Path, lsp_crate: &str) -> Result<ScanReport> {
 
     // Direct dependencies of the LSP crate.
     let lsp_cargo = crates_dir.join(lsp_crate).join("Cargo.toml");
+    if !lsp_cargo.exists() {
+        color_eyre::eyre::bail!(
+            "LSP crate Cargo.toml not found: {} — pass the correct crate name via --lsp-crate",
+            lsp_cargo.display()
+        );
+    }
     let lsp_deps = parse_crate_deps(&lsp_cargo);
 
     let mut crate_reports: Vec<CrateReport> = Vec::new();
@@ -533,5 +539,22 @@ mod tests {
         let workspace = fake_workspace();
         let report = scan(workspace.path(), "perl-lsp").unwrap();
         assert!(!report.crates.iter().any(|r| r.name == "perl-lsp"));
+    }
+
+    /// Passing a nonexistent --lsp-crate must return an error, not silently
+    /// flag every crate in the workspace.
+    #[test]
+    fn test_scan_errors_on_missing_lsp_crate() {
+        let workspace = fake_workspace();
+        let result = scan(workspace.path(), "nonexistent-crate");
+        assert!(
+            result.is_err(),
+            "scan() must return Err when the lsp_crate Cargo.toml does not exist"
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("not found") || msg.contains("nonexistent-crate"),
+            "error message should mention what was missing; got: {msg}"
+        );
     }
 }
