@@ -310,12 +310,14 @@ fn provider_lexer_error() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn provider_multiple_errors() -> Result<(), Box<dyn std::error::Error>> {
+    // Errors must be more than 10 bytes apart so cascade suppression does not
+    // collapse them into a single cluster.
     let ast = Arc::new(program(vec![]));
-    let source = "x; y; z;";
+    let source = "aaa_long_sep_one; bbb_long_sep_two; ccc_long_sep_three;";
     let errors = vec![
         ParseError::SyntaxError { location: 0, message: "err1".to_string() },
-        ParseError::SyntaxError { location: 3, message: "err2".to_string() },
-        ParseError::SyntaxError { location: 6, message: "err3".to_string() },
+        ParseError::SyntaxError { location: 18, message: "err2".to_string() },
+        ParseError::SyntaxError { location: 36, message: "err3".to_string() },
     ];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = provider.get_diagnostics(&ast, &errors, source, None);

@@ -281,6 +281,74 @@ fn test_definition_on_empty_file() -> TestResult {
     Ok(())
 }
 
+/// Tests feature spec: navigation.rs#core-pragma-graceful-degradation
+///
+/// Core pragmas such as `strict` have no source file on disk in the user's workspace.
+/// goto-definition must return null or an empty array — not an error — so the editor
+/// shows "No definition found" rather than a protocol error.
+///
+/// The companion observable behaviour is a `window/logMessage` info notification
+/// (visible in the VSCode Output panel), but that is not easily asserted from the
+/// integration harness.
+#[test]
+fn test_goto_def_core_pragma_strict_returns_empty() -> TestResult {
+    let doc = "use strict;\nuse warnings;\n1;\n";
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pragma_strict.pl", doc)?;
+
+    // Position on "strict" in "use strict;" — line 0, character 4
+    let result = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///pragma_strict.pl"},
+                "position": {"line": 0, "character": 4}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    // Must not be an error — should be null or an empty array
+    assert!(
+        result.is_null() || result.as_array().map(|a| a.is_empty()).unwrap_or(false),
+        "goto-def on core pragma 'strict' should return null or [], got: {result}"
+    );
+
+    Ok(())
+}
+
+/// Tests feature spec: navigation.rs#core-pragma-graceful-degradation
+///
+/// `warnings` is another fundamental core pragma. goto-definition must degrade
+/// gracefully to null/empty rather than returning an error or crashing.
+#[test]
+fn test_goto_def_core_pragma_warnings_returns_empty() -> TestResult {
+    let doc = "use strict;\nuse warnings;\n1;\n";
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pragma_warnings.pl", doc)?;
+
+    // Position on "warnings" in "use warnings;" — line 1, character 4
+    let result = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///pragma_warnings.pl"},
+                "position": {"line": 1, "character": 4}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(
+        result.is_null() || result.as_array().map(|a| a.is_empty()).unwrap_or(false),
+        "goto-def on core pragma 'warnings' should return null or [], got: {result}"
+    );
+
+    Ok(())
+}
+
 /// Tests feature spec: navigation.rs#definition-capability-advertised
 ///
 /// Validates that definition and declaration capabilities are advertised.

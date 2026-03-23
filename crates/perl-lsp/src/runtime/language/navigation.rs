@@ -85,6 +85,54 @@ fn get_var_method_regex() -> Result<&'static regex::Regex, JsonRpcError> {
         })
 }
 
+/// Returns `true` if the module name is a known Perl core pragma or standard module
+/// that will never be found on disk in a user's workspace.
+///
+/// This list covers the pragmas and core modules that every Perl installation ships
+/// with and that users most commonly reference with `use` or `require`.  It is
+/// intentionally conservative — if a module is not listed here and is not found in
+/// the workspace, the definition handler falls through to the normal "not found"
+/// path unchanged.
+fn is_core_perl_module(name: &str) -> bool {
+    matches!(
+        name,
+        "strict"
+            | "warnings"
+            | "warnings::register"
+            | "utf8"
+            | "feature"
+            | "constant"
+            | "vars"
+            | "lib"
+            | "parent"
+            | "base"
+            | "overload"
+            | "overloading"
+            | "Scalar::Util"
+            | "List::Util"
+            | "Carp"
+            | "Exporter"
+            | "POSIX"
+            | "Data::Dumper"
+            | "File::Basename"
+            | "File::Path"
+            | "File::Spec"
+            | "Storable"
+            | "Encode"
+            | "MIME::Base64"
+            | "Digest::MD5"
+            | "Digest::SHA"
+            | "IO::File"
+            | "IO::Handle"
+            | "Fcntl"
+            | "Socket"
+            | "Time::HiRes"
+            | "Time::Local"
+            | "Getopt::Long"
+            | "Pod::Usage"
+    )
+}
+
 /// Look up a symbol definition in the workspace index.
 ///
 /// Tries two lookup strategies:
@@ -338,6 +386,23 @@ impl LspServer {
                             },
                         },
                     }])));
+                } else if is_core_perl_module(&module_name) {
+                    // Core pragma — not on disk in the user's workspace, so no file jump
+                    // is possible.  Log an info message to the LSP output channel
+                    // (visible in the VSCode Output panel) so users can discover that
+                    // hover (K) shows documentation for core modules.
+                    let _ = self.log_message(
+                        crate::runtime::window::MessageType::Info,
+                        &format!(
+                            "'{module_name}' is a Perl core module. \
+                             No source file is available for goto-definition. \
+                             Use hover (K) to view documentation."
+                        ),
+                    );
+                    tracing::debug!(
+                        module = %module_name,
+                        "core pragma requested via goto-def — no file target"
+                    );
                 }
             }
 

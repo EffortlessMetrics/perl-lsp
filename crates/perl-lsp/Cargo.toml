@@ -56,7 +56,7 @@ perl-lsp-diagnostic-catalog = { workspace = true }
 perl-lsp-workspace-symbols = { workspace = true }
 perl-lsp-symbol-query = { workspace = true }
 perl-lsp-completion-item = { workspace = true }
-perl-lsp-ast-utils = { workspace = true }
+perl-ast-utils = { workspace = true }
 perl-lsp-formatting-types = { workspace = true }
 perl-lsp-critic-parser = { workspace = true }
 perl-lsp-import-management = { workspace = true }

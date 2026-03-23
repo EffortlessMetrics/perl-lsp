@@ -3,8 +3,8 @@
 //! Provides automated fixes for common Perl issues driven by diagnostic codes.
 
 use crate::types::{CodeAction, CodeActionEdit, CodeActionKind, QuickFixDiagnostic};
+use perl_ast_utils::{find_declaration_position, get_indent_at};
 use perl_diagnostics_codes::DiagnosticCode;
-use perl_lsp_ast_utils::{find_declaration_position, get_indent_at};
 use perl_lsp_rename::TextEdit;
 use perl_parser_core::SourceLocation;
 
@@ -353,6 +353,40 @@ pub fn fix_parse_error(
                 },
                 is_preferred: true,
             });
+        }
+        "PL001" | "PL002"
+            if diagnostic.message.to_ascii_lowercase().contains("missing semicolon") =>
+        {
+            // PL001/PL002 are general parse error codes. When the message indicates a missing
+            // semicolon, apply the same fix — but skip heredoc contexts where insertion is wrong.
+            let at_heredoc = source[diagnostic.range.0..].get(..2).is_some_and(|s| s == "<<");
+            if !at_heredoc {
+                let line_end = source[diagnostic.range.0..]
+                    .find('\n')
+                    .map(|p| diagnostic.range.0 + p)
+                    .unwrap_or(source.len());
+
+                // Insert before trailing whitespace
+                let mut end_pos = line_end;
+                while end_pos > diagnostic.range.0
+                    && source.as_bytes()[end_pos - 1].is_ascii_whitespace()
+                {
+                    end_pos -= 1;
+                }
+
+                actions.push(CodeAction {
+                    title: "Add missing semicolon".to_string(),
+                    kind: CodeActionKind::QuickFix,
+                    diagnostics: vec![code.to_string()],
+                    edit: CodeActionEdit {
+                        changes: vec![TextEdit {
+                            location: SourceLocation { start: end_pos, end: end_pos },
+                            new_text: ";".to_string(),
+                        }],
+                    },
+                    is_preferred: true,
+                });
+            }
         }
         "parse-error-unclosedstring" => {
             // Add closing quote

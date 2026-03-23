@@ -344,27 +344,32 @@ fn test_multiple_diagnostics_multiple_parse_errors() -> Result<(), Box<dyn std::
 
 #[test]
 fn test_multiple_diagnostics_each_has_distinct_range() -> Result<(), Box<dyn std::error::Error>> {
-    // Synthetic test: three errors at different locations should produce three diagnostics
-    let source = "aaa; bbb; ccc;";
+    // Synthetic test: three errors at well-separated locations should each survive
+    // cascade suppression.  Errors must be more than 10 bytes apart so they are
+    // treated as independent primary errors rather than cascades of a single failure.
+    let source = "aaa_long_token_here; bbb_long_token_there; ccc_long_token_final;";
     let ast = Arc::new(perl_parser_core::Node::new(
         perl_parser_core::NodeKind::Program { statements: vec![] },
         perl_parser_core::SourceLocation { start: 0, end: source.len() },
     ));
     let errors = vec![
         ParseError::SyntaxError { location: 0, message: "error at aaa".to_string() },
-        ParseError::SyntaxError { location: 5, message: "error at bbb".to_string() },
-        ParseError::SyntaxError { location: 10, message: "error at ccc".to_string() },
+        ParseError::SyntaxError { location: 21, message: "error at bbb".to_string() },
+        ParseError::SyntaxError { location: 43, message: "error at ccc".to_string() },
     ];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diags = provider.get_diagnostics(&ast, &errors, source, None);
     let pe = parse_error_diags(&diags);
 
-    assert!(pe.len() >= 3, "Three distinct errors should produce at least 3 diagnostics");
+    assert!(
+        pe.len() >= 3,
+        "Three distinct errors (>10 bytes apart) should produce at least 3 diagnostics"
+    );
     // Verify they have distinct start offsets
     let starts: Vec<usize> = pe.iter().map(|d| d.range.0).collect();
     assert!(starts.contains(&0), "Should have diagnostic at offset 0");
-    assert!(starts.contains(&5), "Should have diagnostic at offset 5");
-    assert!(starts.contains(&10), "Should have diagnostic at offset 10");
+    assert!(starts.contains(&21), "Should have diagnostic at offset 21");
+    assert!(starts.contains(&43), "Should have diagnostic at offset 43");
     Ok(())
 }
 

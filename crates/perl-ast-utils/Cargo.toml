@@ -1,5 +1,5 @@
 [package]
-name = "perl-lsp-ast-utils"
+name = "perl-ast-utils"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://docs.rs/perl-lsp-ast-utils"
+documentation = "https://docs.rs/perl-ast-utils"
 keywords = ["perl", "lsp", "ast", "utilities"]
 categories = ["development-tools", "text-editors"]
 include = [
@@ -26,7 +26,10 @@ include = [
 doctest = false
 
 [dependencies]
-perl-parser-core = { workspace = true }
+perl-ast = { workspace = true }
+
+[dev-dependencies]
+perl-ast = { workspace = true }
 
 [lints]
 workspace = true
