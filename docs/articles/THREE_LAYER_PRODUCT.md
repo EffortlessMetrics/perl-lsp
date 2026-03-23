@@ -22,16 +22,16 @@ The numbers:
 
 | Metric | Value |
 |--------|-------|
-| Lines of Rust | 546,000+ |
-| Workspace crates | 131 |
+| Lines of Rust | 591,034 |
+| Workspace crates | 133 |
 | Parser generations | 3 (C/tree-sitter, Pest PEG, recursive descent) |
-| LSP features governed | 97 |
+| LSP features governed | 98 |
 | LSP 3.18 compliance | 99% |
-| CPAN corpus parse rate | 80%+ |
-| Commits | 2,700+ |
-| Pull requests | 2,200+ |
+| CPAN corpus manifest coverage | 90.9% |
+| Commits | 3,200+ |
+| Pull requests | 2,646+ |
 
-Layer 1 is a serious piece of software. Three parser generations taught a lesson --- only recursive descent was flexible enough for Perl's context-sensitive syntax. The microcrate architecture (131 crates, zero circular dependencies, average crate size 4,200 lines) was an intentional investment in modularity that took months of the project's slowest era to build. Dual indexing solves the symbol search problem. Feature governance prevents half-shipped capabilities.
+Layer 1 is a serious piece of software. Three parser generations taught a lesson --- only recursive descent was flexible enough for Perl's context-sensitive syntax. The microcrate architecture (133 crates, zero circular dependencies, average crate size ~4,450 lines) was an intentional investment in modularity that took months of the project's slowest era to build. Dual indexing solves the symbol search problem. Feature governance prevents half-shipped capabilities.
 
 This is the layer that every software project has. The product. The code. The thing someone would pay for or depend on.
 

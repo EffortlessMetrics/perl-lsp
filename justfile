@@ -732,6 +732,13 @@ ci-policy:
     @echo "⚖️  Checking project policies..."
     just ci-check-todos
     @bash ./.ci/scripts/check-from-raw.sh
+    just ci-doc-claims
+
+# Check article inline claims against PUBLICATION_FACTS_LEDGER.md
+ci-doc-claims:
+    @echo "📄 Checking article claims against publication ledger..."
+    @python3 scripts/check-doc-claims.py
+    @echo "✅ Doc claims check passed"
 
 # Check all registered hook scripts are executable
 hook-check:

@@ -1,6 +1,6 @@
 # perl-lsp as a Reference Implementation of Agentic Software Development
 
-*546K lines of Rust. 131 crates. 2,700+ commits. Five AI development eras. One human directing strategy. Everything else done by agents.*
+*591K lines of Rust. 133 crates. 3,200+ commits. Five AI development eras. One human directing strategy. Everything else done by agents.*
 
 ---
 
@@ -10,7 +10,7 @@ perl-lsp is a Language Server Protocol server, a Debug Adapter Protocol server, 
 
 That makes it interesting. What makes it a reference implementation is that it did this five different ways, measured each one, and kept the receipts.
 
-Between July 2025 and March 2026, the project passed through five distinct eras of AI-assisted development -- from single-conversation pairing to 100-agent parallel swarms. Each era solved the previous era's problems, created new ones, and left behind artifacts that tell you exactly what worked and what did not. The git history, the branch names, the CI logs, the memory files, and the 2,200+ pull requests form a complete, reproducible record of how AI agents can build production software at scale.
+Between July 2025 and March 2026, the project passed through five distinct eras of AI-assisted development -- from single-conversation pairing to 100-agent parallel swarms. Each era solved the previous era's problems, created new ones, and left behind artifacts that tell you exactly what worked and what did not. The git history, the branch names, the CI logs, the memory files, and the 2,646+ pull requests form a complete, reproducible record of how AI agents can build production software at scale.
 
 Most discussions of AI-assisted development operate on anecdote. perl-lsp operates on evidence. The codebase is open source. The methodology is documented. The numbers are drawn from `git log`, not from memory.
 
@@ -18,15 +18,15 @@ Most discussions of AI-assisted development operate on anecdote. perl-lsp operat
 
 | Metric | Value |
 |--------|-------|
-| Lines of Rust | 546,000+ |
-| Workspace crates | 131 |
-| Total commits | 2,700+ |
-| Pull requests | 2,200+ |
-| GitHub issues | 2,200+ |
+| Lines of Rust | 591,034 |
+| Workspace crates | 133 |
+| Total commits | 3,200+ |
+| Pull requests | 2,646+ |
+| GitHub issues | 2,641+ |
 | Development eras | 5 |
-| LSP features governed | 97 |
+| LSP features governed | 98 |
 | CI merge gates | 13 |
-| CPAN corpus parse rate | 80%+ |
+| CPAN corpus manifest coverage | 90.9% |
 | Memory files (institutional knowledge) | 90+ |
 
 ---
@@ -80,21 +80,21 @@ These patterns are not specific to Perl, Rust, or language servers. They are str
 
 ### Microcrate architecture for agent safety
 
-perl-lsp has 131 workspace crates, zero circular dependencies, and an average crate size of 4,200 lines. The smallest crate is 44 lines. The architecture follows a rule: one idea per crate.
+perl-lsp has 133 workspace crates, zero circular dependencies, and an average crate size of ~4,450 lines. The smallest crate is 44 lines. The architecture follows a rule: one idea per crate.
 
-This decomposition is the parallelism enabler. Two agents editing different crates in different worktrees cannot produce a merge conflict. The finer the decomposition, the more parallelism you get. 131 crates enable 100 parallel agents. A monolith with 3 packages enables 3.
+This decomposition is the parallelism enabler. Two agents editing different crates in different worktrees cannot produce a merge conflict. The finer the decomposition, the more parallelism you get. 133 crates enable 100 parallel agents. A monolith with 3 packages enables 3.
 
-The microcrate architecture was not built for agents. It was built during Era 3 -- the slowest era, with 8.9 commits per active day -- as an intentional investment in modularity. Every subsequent era's speed was enabled by that slowdown. You cannot run 100 agents in parallel on a monolithic codebase. You can on 131 microcrates with formalized boundaries.
+The microcrate architecture was not built for agents. It was built during Era 3 -- the slowest era, with 8.9 commits per active day -- as an intentional investment in modularity. Every subsequent era's speed was enabled by that slowdown. You cannot run 100 agents in parallel on a monolithic codebase. You can on 133 microcrates with formalized boundaries.
 
 ### Corpus-driven development
 
-The CPAN corpus is the test oracle. 4,355 real-world Perl files from CPAN, each tested for clean parsing. This is not a synthetic test suite. These are files that real Perl developers wrote for real projects. When the parser handles 80% of them, that means something different from passing 80% of hand-written tests.
+The CPAN corpus is the test oracle. 4,355 real-world Perl files from CPAN, each tested for clean parsing. This is not a synthetic test suite. These are files that real Perl developers wrote for real projects. When the parser handles 90.9% of them (manifest coverage), that means something different from passing 90.9% of hand-written tests.
 
 The corpus drives development in a direct way: every file that fails to parse is a bug report with a reproduction case. Scout agents read the failing files, trace the error to the parser function that rejects them, and write issues with the exact construct that needs handling. The corpus is simultaneously the test oracle, the bug tracker, and the development backlog.
 
 ### Feature governance pipeline
 
-Every LSP capability goes through a governance pipeline: `features.toml` (97 features defined) to microcrate implementation to runtime feature gates. A feature cannot be advertised to clients until it passes through all three stages. This prevents the common failure mode of shipping half-implemented features that break client expectations.
+Every LSP capability goes through a governance pipeline: `features.toml` (98 features defined) to microcrate implementation to runtime feature gates. A feature cannot be advertised to clients until it passes through all three stages. This prevents the common failure mode of shipping half-implemented features that break client expectations.
 
 ### Three-tier CI gates
 
@@ -186,7 +186,7 @@ The right metric is not speed. It is: how much human attention does each commit 
 
 ## 5. For Language Server Builders
 
-The 131-crate architecture was not planned from the start. It emerged through five eras of incremental decomposition, and the decisions that shaped it are preserved in the git history and the 7 ADRs in `docs/adr/`.
+The 133-crate architecture was not planned from the start. It emerged through five eras of incremental decomposition, and the decisions that shaped it are preserved in the git history and the 7 ADRs in `docs/adr/`.
 
 ### Architecture lessons
 
@@ -194,9 +194,9 @@ The 131-crate architecture was not planned from the start. It emerged through fi
 
 **Dual indexing solves the symbol search problem.** Workspace symbols are indexed under both their qualified name (`Foo::Bar::baz`) and their bare name (`baz`). This means go-to-definition and workspace symbol search both work regardless of how the user types the query. See PR #122 for the original design.
 
-**Feature governance prevents half-shipped capabilities.** Every LSP feature goes through `features.toml` (definition), microcrate (implementation), and runtime gate (activation). A feature cannot be advertised to clients until it passes all three stages. At 97 features defined and 99% LSP 3.18 compliance, this pipeline has proven it scales.
+**Feature governance prevents half-shipped capabilities.** Every LSP feature goes through `features.toml` (definition), microcrate (implementation), and runtime gate (activation). A feature cannot be advertised to clients until it passes all three stages. At 98 features defined and 99% LSP 3.18 compliance, this pipeline has proven it scales.
 
-**Microcrate decomposition pays compound interest.** The average crate is 4,200 lines. The smallest is 44 lines. This granularity has costs -- more `Cargo.toml` files, more dependency edges -- but the benefits compound: each crate has a clear owner, a narrow API surface, independent tests, and can be modified without touching other crates. For a project that wants AI agents to work in parallel, this is not optional.
+**Microcrate decomposition pays compound interest.** The average crate is ~4,450 lines. The smallest is 44 lines. This granularity has costs -- more `Cargo.toml` files, more dependency edges -- but the benefits compound: each crate has a clear owner, a narrow API surface, independent tests, and can be modified without touching other crates. For a project that wants AI agents to work in parallel, this is not optional.
 
 ### Perl-specific parsing challenges
 
@@ -208,7 +208,7 @@ These are documented in detail in [PARSING_PERL.md](PARSING_PERL.md), but the hi
 - Perl has dozens of punctuation variables (`$/`, `$\`, `$;`) that overlap with operators.
 - `format` switches the parser into a completely different mini-language.
 
-The 80% CPAN parse rate was achieved by a hand-written recursive descent parser with explicit context threading. The folklore says "only Perl can parse Perl." This project is testing that claim with evidence.
+The 90.9% CPAN corpus manifest coverage was achieved by a hand-written recursive descent parser with explicit context threading. The folklore says "only Perl can parse Perl." This project is testing that claim with evidence.
 
 ---
 
@@ -266,9 +266,9 @@ perl-lsp offers several properties that make it suitable for empirical study.
 
 ### Available data
 
-- **Complete git history**: 2,700+ commits with conventional commit messages, branch naming conventions that identify the tooling era, and merge patterns that show coordination overhead.
-- **Pull request archive**: 2,200+ PRs with descriptions, review comments, CI results, and merge/close outcomes. The PR stream contains both successful and failed agent work.
-- **Issue archive**: 2,200+ issues with typed labels, file-path references, and cross-links to PRs. Scout-generated issues include function names, line numbers, and fix approaches.
+- **Complete git history**: 3,200+ commits with conventional commit messages, branch naming conventions that identify the tooling era, and merge patterns that show coordination overhead.
+- **Pull request archive**: 2,646+ PRs with descriptions, review comments, CI results, and merge/close outcomes. The PR stream contains both successful and failed agent work.
+- **Issue archive**: 2,641+ issues with typed labels, file-path references, and cross-links to PRs. Scout-generated issues include function names, line numbers, and fix approaches.
 - **Memory system**: 90+ files encoding cross-session learnings, feedback corrections, project state snapshots, and reference pointers. This is a record of how institutional knowledge accumulates in an AI-assisted project.
 - **Methodology artifacts**: Skills, hooks, agent definitions, and coordinator configurations are all versioned in git. The evolution from `agents2` through `agents6` to the current skill-based system is fully preserved.
 
@@ -305,3 +305,5 @@ The code is open source. The methodology is documented. The receipts are in the 
 ---
 
 *perl-lsp is an open-source Perl Language Server. The git history, PR archive, issue tracker, and methodology artifacts referenced in this article are publicly available. All numbers are drawn from `git log`, `gh pr list`, and `gh issue list` as of March 2026.*
+
+*Metrics verified against `docs/project/PUBLICATION_FACTS_LEDGER.md`. All codebase statistics (LOC, crate count, commit count, PR count, feature count, corpus coverage) are sourced from the ledger, which records verification commands and dates.*
