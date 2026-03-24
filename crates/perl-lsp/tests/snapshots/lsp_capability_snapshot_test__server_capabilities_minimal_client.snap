@@ -1,5 +1,6 @@
 ---
 source: crates/perl-lsp/tests/lsp_capability_snapshot_test.rs
+assertion_line: 34
 expression: caps
 ---
 callHierarchyProvider: true
@@ -20,6 +21,7 @@ completionProvider:
     - "%"
     - ">"
     - ":"
+    - "-"
 declarationProvider: true
 definitionProvider: true
 diagnosticProvider:
@@ -85,6 +87,9 @@ semanticTokensProvider:
       - modification
       - documentation
       - defaultLibrary
+      - scalarVariable
+      - arrayVariable
+      - hashVariable
     tokenTypes:
       - namespace
       - type

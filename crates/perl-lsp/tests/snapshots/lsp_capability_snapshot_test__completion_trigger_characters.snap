@@ -1,5 +1,6 @@
 ---
 source: crates/perl-lsp/tests/lsp_capability_snapshot_test.rs
+assertion_line: 93
 expression: "&triggers"
 ---
 - $
@@ -7,3 +8,4 @@ expression: "&triggers"
 - "%"
 - ">"
 - ":"
+- "-"
