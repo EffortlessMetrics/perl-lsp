@@ -26,6 +26,7 @@
 
 use perl_semantic_analyzer::analysis::declaration::{DeclarationProvider, ParentMap};
 use perl_semantic_analyzer::{Node, NodeKind, SourceLocation};
+use perl_tdd_support::{must, must_some};
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
@@ -177,11 +178,11 @@ fn parent_map_grandchild_chain_terminates_at_root() {
     let var_ptr: *const Node = var as *const _;
 
     // var → decl
-    let var_parent = map.get(&var_ptr).copied().expect("Variable must have a parent entry");
+    let var_parent = must_some(map.get(&var_ptr).copied());
     assert_eq!(var_parent, decl_ptr, "Variable's parent must be the VariableDeclaration");
 
     // decl → root
-    let decl_parent = map.get(&decl_ptr).copied().expect("VariableDeclaration must have a parent");
+    let decl_parent = must_some(map.get(&decl_ptr).copied());
     assert_eq!(decl_parent, root_ptr, "VariableDeclaration's parent must be the Program root");
 
     // Root itself is not in the map (already tested above; guard here too)
@@ -308,7 +309,7 @@ fn parent_map_stable_across_two_builds() {
 
     // Every key/value in map1 must appear identically in map2.
     for (&key, &val) in &map1 {
-        let val2 = map2.get(&key).copied().expect("map2 must contain the same key");
+        let val2 = must_some(map2.get(&key).copied());
         assert_eq!(val, val2, "Same key {:p} must map to same parent in both builds", key);
     }
 }
@@ -323,7 +324,7 @@ fn parent_map_built_from_real_parsed_code() {
 
     let code = "my $x = 1;\nmy $y = 2;\n";
     let mut parser = Parser::new(code);
-    let ast_node = parser.parse().expect("should parse valid Perl");
+    let ast_node = must(parser.parse());
     let ast = Arc::new(ast_node);
 
     let mut map: ParentMap = ParentMap::default();
@@ -415,7 +416,7 @@ fn declaration_provider_accepts_valid_parent_map() {
 
     let code = "my $x = 1; $x;";
     let mut parser = Parser::new(code);
-    let ast_node = parser.parse().expect("should parse");
+    let ast_node = must(parser.parse());
     let ast = Arc::new(ast_node);
 
     let mut map: ParentMap = ParentMap::default();

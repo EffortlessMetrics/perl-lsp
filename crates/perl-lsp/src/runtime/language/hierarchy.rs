@@ -390,35 +390,65 @@ impl LspServer {
     }
 
     /// Handle incoming calls request
+    ///
+    /// Searches ALL open workspace documents for callers of the target function,
+    /// not just the document that contains the function definition.
     pub(crate) fn handle_incoming_calls(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let item = &params["item"];
-            let uri = item["uri"].as_str().unwrap_or("");
+            let target_name = item["name"].as_str().unwrap_or("");
 
-            eprintln!("Getting incoming calls for: {}", item["name"].as_str().unwrap_or(""));
+            eprintln!("Getting incoming calls for: {}", target_name);
 
+            let ch_item = self.json_to_call_hierarchy_item(item)?;
+
+            // Snapshot (doc_uri, text, ast) for all open documents so we can
+            // release the lock before the per-document provider work.
             let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    // Reconstruct the CallHierarchyItem from JSON
-                    let ch_item = self.json_to_call_hierarchy_item(item)?;
+            let doc_snapshots: Vec<(String, String, std::sync::Arc<perl_parser::ast::Node>)> =
+                documents
+                    .iter()
+                    .filter_map(|(doc_uri, doc)| {
+                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
+                    })
+                    .collect();
+            drop(documents);
 
-                    let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
-                    let calls = provider.incoming_calls(ast, &ch_item);
+            // Incoming call results keyed by (from_name, from_uri) to deduplicate
+            // callers that appear in multiple scan passes.
+            let mut seen: std::collections::HashMap<(String, String), usize> =
+                std::collections::HashMap::new();
+            let mut all_calls: Vec<crate::call_hierarchy_provider::CallHierarchyIncomingCall> =
+                Vec::new();
 
-                    let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
-                    return Ok(Some(json!(json_calls)));
+            for (doc_uri, doc_text, ast) in doc_snapshots {
+                let provider = CallHierarchyProvider::new(doc_text, doc_uri.clone());
+                let calls = provider.incoming_calls(&ast, &ch_item);
+                for call in calls {
+                    let key = (call.from.name.clone(), call.from.uri.clone());
+                    if let Some(&idx) = seen.get(&key) {
+                        all_calls[idx].from_ranges.extend(call.from_ranges);
+                    } else {
+                        seen.insert(key, all_calls.len());
+                        all_calls.push(call);
+                    }
                 }
             }
+
+            let json_calls: Vec<_> = all_calls.iter().map(|c| c.to_json()).collect();
+            return Ok(Some(json!(json_calls)));
         }
 
         Ok(Some(json!([])))
     }
 
     /// Handle outgoing calls request
+    ///
+    /// Finds all calls made within the target function, then resolves each
+    /// callee's definition URI by searching all open workspace documents.
     pub(crate) fn handle_outgoing_calls(
         &self,
         params: Option<Value>,
@@ -429,19 +459,56 @@ impl LspServer {
 
             eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
 
+            // Snapshot all open documents for cross-file callee resolution.
             let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            let doc_snapshots: Vec<(String, String, std::sync::Arc<perl_parser::ast::Node>)> =
+                documents
+                    .iter()
+                    .filter_map(|(doc_uri, doc)| {
+                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
+                    })
+                    .collect();
+
+            // Find outgoing calls within the target function's file.
+            let mut calls = if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    // Reconstruct the CallHierarchyItem from JSON
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
-
                     let provider = CallHierarchyProvider::new(doc.text.clone(), uri.to_string());
-                    let calls = provider.outgoing_calls(ast, &ch_item);
+                    provider.outgoing_calls(ast, &ch_item)
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            };
+            drop(documents);
 
-                    let json_calls: Vec<_> = calls.iter().map(|call| call.to_json()).collect();
-                    return Ok(Some(json!(json_calls)));
+            // Resolve each callee's definition URI from workspace documents.
+            // Strip any package qualifier (e.g. "Utils::format_string" -> "format_string")
+            // before searching, since the provider stores bare names from AST nodes.
+            for call in &mut calls {
+                let bare_name =
+                    call.to.name.split("::").last().unwrap_or(&call.to.name).to_string();
+                'outer: for (doc_uri, doc_text, ast) in &doc_snapshots {
+                    let provider = CallHierarchyProvider::new(doc_text.clone(), doc_uri.clone());
+                    if doc_uri == &call.to.uri {
+                        // Already pointing at this file — keep if definition exists here.
+                        if provider.find_definition(&bare_name, ast).is_some() {
+                            break 'outer;
+                        }
+                        continue;
+                    }
+                    if let Some(def_item) = provider.find_definition(&bare_name, ast) {
+                        call.to.uri = def_item.uri;
+                        call.to.range = def_item.range;
+                        call.to.selection_range = def_item.selection_range;
+                        break 'outer;
+                    }
                 }
             }
+
+            let json_calls: Vec<_> = calls.iter().map(|c| c.to_json()).collect();
+            return Ok(Some(json!(json_calls)));
         }
 
         Ok(Some(json!([])))
