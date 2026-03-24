@@ -44,8 +44,31 @@ impl TypeDefinitionProvider {
         // Get the type name from the node
         let type_name = self.extract_type_name(&target_node)?;
 
-        // Find the package/class definition
-        self.find_package_definition(ast, &type_name, uri, source_text)
+        // Find the package/class definition — search all open documents
+        self.find_package_definition_in_docs(&type_name, uri, documents)
+    }
+
+    /// Find a package definition across all open documents.
+    ///
+    /// Re-parses every document in `documents` (including the current file) and
+    /// collects all locations where `package <package_name>` is declared. This
+    /// enables cross-file go-to-type-definition (Fix A).
+    #[cfg(feature = "lsp-compat")]
+    fn find_package_definition_in_docs(
+        &self,
+        package_name: &str,
+        _origin_uri: &str,
+        documents: &HashMap<String, String>,
+    ) -> Option<Vec<LocationLink>> {
+        let mut locations = Vec::new();
+
+        for (doc_uri, source_text) in documents {
+            if let Ok(ast) = perl_parser_core::Parser::new(source_text).parse() {
+                self.find_package_in_node(&ast, package_name, doc_uri, source_text, &mut locations);
+            }
+        }
+
+        if !locations.is_empty() { Some(locations) } else { None }
     }
 
     /// Extract type name from a node
@@ -174,8 +197,9 @@ impl TypeDefinitionProvider {
         }
     }
 
-    /// Find package definition in the AST
+    /// Find package definition in the AST (used in unit tests).
     #[cfg(feature = "lsp-compat")]
+    #[cfg_attr(not(test), allow(dead_code))]
     fn find_package_definition(
         &self,
         ast: &Node,
