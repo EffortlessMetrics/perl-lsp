@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- No unreleased changes have been recorded yet.
+
+## [0.12.0] - 2026-03-24
+
 This section covers 583 commits across ~90 PRs since the 0.12.0 finalization
 (2026-03-20), spanning Era 7 sessions 1-4. Key themes: parser corpus push toward
 100% CPAN, Moose/Moo class intelligence, diagnostic pipeline wiring, VS Code UX
