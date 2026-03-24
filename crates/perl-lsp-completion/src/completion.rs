@@ -108,6 +108,7 @@ mod workspace;
 // Re-export public types
 pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
+pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
 
 use perl_parser_core::ast::Node;

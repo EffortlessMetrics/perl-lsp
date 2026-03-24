@@ -1172,4 +1172,211 @@ with 'MyApp::Printable', 'MyApp::Serializable';
         );
         Ok(())
     }
+
+    // ── DBI method hover documentation (issue #2888) ──────────────────────
+
+    /// Helper: extract signature label from a textDocument/signatureHelp JSON-RPC response.
+    fn signature_label(resp: &Value) -> Option<String> {
+        resp.get("result")?
+            .get("signatures")?
+            .as_array()?
+            .first()?
+            .get("label")?
+            .as_str()
+            .map(|s| s.to_string())
+    }
+
+    /// Hover on a DBI database-handle method must return DBI documentation,
+    /// not the generic "**Perl**: `prepare`" fallback.
+    ///
+    /// This test FAILS before the fix (returns generic card) and PASSES after.
+    #[test]
+    fn test_hover_dbi_db_method_prepare_returns_documentation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use DBI;\nmy $dbh = DBI->connect('dbi:SQLite:test.db', '', '');\n$dbh->prepare(\"SELECT 1\");\n";
+        // Hover on "prepare" on line 2
+        let resp = hover_at(code, "file:///dbi_hover.pl", "prepare", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for DBI prepare")?;
+
+        // Must NOT return the generic token fallback
+        assert!(
+            !content.starts_with("**Perl**: `prepare`"),
+            "hover on DBI prepare must NOT return the generic fallback card, got: {content}"
+        );
+        // Must show DBI-specific documentation
+        assert!(
+            content.contains("DBI") || content.contains("SQL") || content.contains("statement"),
+            "hover on DBI prepare must contain DBI-related documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on a DBI statement-handle method must return DBI documentation.
+    #[test]
+    fn test_hover_dbi_st_method_fetchrow_hashref_returns_documentation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use DBI;\nmy $sth = $dbh->prepare('SELECT 1');\n$sth->fetchrow_hashref();\n";
+        // Hover on "fetchrow_hashref" on line 2
+        let resp = hover_at(code, "file:///dbi_sth_hover.pl", "fetchrow_hashref", 2)?;
+
+        let content =
+            hover_content(&resp).ok_or("expected hover content for DBI fetchrow_hashref")?;
+
+        assert!(
+            !content.starts_with("**Perl**: `fetchrow_hashref`"),
+            "hover on DBI fetchrow_hashref must NOT return the generic fallback, got: {content}"
+        );
+        assert!(
+            content.contains("DBI") || content.contains("hashref") || content.contains("row"),
+            "hover on DBI fetchrow_hashref must contain DBI-related documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on DBI execute() method must return real documentation.
+    #[test]
+    fn test_hover_dbi_st_method_execute_returns_documentation()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use DBI;\nmy $sth = $dbh->prepare('SELECT 1');\n$sth->execute();\n";
+        let resp = hover_at(code, "file:///dbi_execute_hover.pl", "execute", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for DBI execute")?;
+
+        assert!(
+            !content.starts_with("**Perl**: `execute`"),
+            "hover on DBI execute must NOT return the generic fallback, got: {content}"
+        );
+        assert!(
+            content.contains("DBI") || content.contains("statement") || content.contains("Execute"),
+            "hover on DBI execute must contain DBI-related documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Signature help for `$dbh->prepare(` must show the real DBI signature
+    /// with `$statement` parameter, not the generic `prepare(...)` fallback.
+    ///
+    /// This test FAILS before the fix (returns `prepare(...)`) and PASSES after.
+    #[test]
+    fn test_signature_help_dbi_prepare_returns_real_signature()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // The cursor is inside the prepare() call — after the opening paren
+        let code =
+            "use DBI;\nmy $dbh = DBI->connect('dbi:SQLite:test.db', '', '');\n$dbh->prepare(";
+        let server = TestServerBuilder::new().build();
+        let uri = "file:///dbi_sig.pl";
+        server.open_document(uri, code);
+
+        // Position after the opening `(` on line 2, character 14 (after "prepare(")
+        let resp = server.get_signature_help(uri, 2, 14);
+
+        let label = signature_label(&resp)
+            .ok_or("expected signature label for DBI prepare() signature help")?;
+
+        // Must NOT be the generic fallback
+        assert!(
+            label != "prepare(...)",
+            "signature help for DBI prepare must NOT return generic fallback, got: {label}"
+        );
+        // Must contain parameter name from the real DBI signature
+        assert!(
+            label.contains("$statement") || label.contains("statement"),
+            "signature help for DBI prepare must include $statement parameter, got: {label}"
+        );
+        Ok(())
+    }
+
+    /// Signature help for `$sth->execute(` must show DBI execute signature.
+    #[test]
+    fn test_signature_help_dbi_execute_returns_real_signature()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Trailing space inside the parens so cursor can be positioned after `(`
+        let code = "use DBI;\nmy $sth = $dbh->prepare('SELECT ?');\n$sth->execute( ";
+        let server = TestServerBuilder::new().build();
+        let uri = "file:///dbi_execute_sig.pl";
+        server.open_document(uri, code);
+
+        // Position inside `(` — character 14 is the space after `(`
+        let resp = server.get_signature_help(uri, 2, 14);
+
+        let label = signature_label(&resp)
+            .ok_or("expected signature label for DBI execute() signature help")?;
+
+        assert!(
+            label != "execute(...)",
+            "signature help for DBI execute must NOT return generic fallback, got: {label}"
+        );
+        assert!(
+            label.contains("bind_values") || label.contains("execute"),
+            "signature help for DBI execute must include bind parameter info, got: {label}"
+        );
+        Ok(())
+    }
+
+    /// Hover on a DBI method called through a hash-dereference handle
+    /// (`$self->{dbh}->prepare`) must return DBI documentation, not the
+    /// generic fallback.  The receiver extracted is `"dbh}"` (includes the
+    /// closing brace) and falls through to the unknown-receiver path, which
+    /// searches both tables by method name.
+    #[test]
+    fn test_hover_dbi_method_through_hashref_handle() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use DBI;\n$self->{dbh}->prepare(\"SELECT 1\");\n";
+        // Hover on "prepare" on line 1
+        let resp = hover_at(code, "file:///dbi_hashref_hover.pl", "prepare", 1)?;
+
+        let content =
+            hover_content(&resp).ok_or("expected hover content for hashref DBI prepare")?;
+
+        assert!(
+            !content.starts_with("**Perl**: `prepare`"),
+            "hover on $self->{{dbh}}->prepare must NOT return the generic fallback, got: {content}"
+        );
+        assert!(
+            content.contains("DBI") || content.contains("SQL") || content.contains("statement"),
+            "hover on $self->{{dbh}}->prepare must contain DBI documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on a non-DBI arrow method (`$ua->get`) must NOT produce DBI
+    /// documentation — it must fall through to the generic "**Perl**: `get`"
+    /// card.  This guards against false positives from the DBI check.
+    #[test]
+    fn test_hover_non_dbi_arrow_method_no_false_positive() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code =
+            "use LWP::UserAgent;\nmy $ua = LWP::UserAgent->new;\n$ua->get('http://example.com');\n";
+        // Hover on "get" on line 2
+        let resp = hover_at(code, "file:///lwp_hover.pl", "get", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for $ua->get")?;
+
+        // Must NOT return DBI Method documentation
+        assert!(
+            !content.contains("**DBI Method**"),
+            "hover on $ua->get must NOT return DBI documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hover on `$obj->execute()` in a NON-DBI file (no `use DBI`) must NOT
+    /// produce DBI documentation.  `execute` is a common method name in many
+    /// frameworks.  The `use DBI` guard must prevent this false positive.
+    #[test]
+    fn test_hover_execute_without_use_dbi_no_false_positive()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // No `use DBI` — this is some hypothetical task-runner framework.
+        let code = "use MyFramework;\nmy $task = MyFramework->new;\n$task->execute();\n";
+        let resp = hover_at(code, "file:///no_dbi_execute.pl", "execute", 2)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for execute")?;
+
+        // Must NOT show DBI documentation (file does not `use DBI`)
+        assert!(
+            !content.contains("**DBI Method**"),
+            "hover on execute without use DBI must NOT return DBI docs, got: {content}"
+        );
+        Ok(())
+    }
 }
