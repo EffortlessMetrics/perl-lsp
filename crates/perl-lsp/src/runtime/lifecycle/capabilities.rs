@@ -140,6 +140,22 @@ impl LspServer {
                         .pointer("/window/workDoneProgress")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
+
+                    // textDocument/inlayHint resolveSupport.properties
+                    // Collect the property names the client can resolve (e.g. "label.location")
+                    if let Some(properties) =
+                        cap_val.pointer("/textDocument/inlayHint/resolveSupport/properties")
+                    {
+                        let props: std::collections::HashSet<String> = properties
+                            .as_array()
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        caps.inlay_hint_resolve_support = Some(props);
+                    }
                 }
             } // caps lock released here
 

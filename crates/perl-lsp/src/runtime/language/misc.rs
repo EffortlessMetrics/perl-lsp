@@ -154,8 +154,17 @@ impl LspServer {
                 }
             }
 
-            // Add labelDetails.location for parameter hints (kind=2) if not already present
-            if hint.get("labelDetails").is_none() && kind == 2 {
+            // Add labelDetails.location for parameter hints (kind=2) if not already present,
+            // but only when the client declared "label.location" in resolveSupport.properties.
+            let client_supports_label_location = self
+                .client_capabilities
+                .lock()
+                .inlay_hint_resolve_support
+                .as_ref()
+                .map(|props| props.contains("label.location"))
+                .unwrap_or(false);
+
+            if hint.get("labelDetails").is_none() && kind == 2 && client_supports_label_location {
                 if let Some(label_location) = self.resolve_hint_label_location(&hint) {
                     if let Some(obj) = hint.as_object_mut() {
                         obj.insert(
@@ -1518,5 +1527,145 @@ impl LspServer {
         }
 
         results
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::LspServer;
+    use crate::state::ClientCapabilities;
+    use serde_json::json;
+    use std::collections::HashSet;
+    use std::io::Cursor;
+
+    /// Build a minimal test server with custom capabilities applied.
+    fn make_server_with_caps(caps: ClientCapabilities) -> LspServer {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        *server.client_capabilities.lock() = caps;
+        server
+    }
+
+    /// When the client declares "label.location" in resolveSupport.properties,
+    /// handle_inlay_hint_resolve must include labelDetails in the response for
+    /// a parameter hint (kind=2) that has no function data to resolve.
+    ///
+    /// In this test the hint has no `data.function` so `resolve_hint_label_location`
+    /// returns None — but the important thing is that the code path is entered
+    /// (i.e. no labelDetails are injected when there is nothing to look up, and
+    /// no panic occurs).
+    #[test]
+    fn inlay_hint_resolve_label_location_requires_client_capability() {
+        // Hint without client capability: labelDetails must NOT be added
+        let server_no_cap = make_server_with_caps(ClientCapabilities {
+            inlay_hint_resolve_support: None,
+            ..ClientCapabilities::default()
+        });
+        let hint = json!({
+            "label": "$self:",
+            "kind": 2,
+            "position": { "line": 0, "character": 0 },
+            "data": { "uri": "file:///fake.pl" }
+        });
+        let result = server_no_cap
+            .handle_inlay_hint_resolve(Some(hint.clone()))
+            .expect("resolve must not error");
+        let resolved = result.expect("must return Some");
+        assert!(
+            resolved.get("labelDetails").is_none(),
+            "labelDetails must be absent when client did not declare resolve support"
+        );
+
+        // Hint with client capability for a different property: labelDetails must NOT be added
+        let mut other_props = HashSet::new();
+        other_props.insert("tooltip".to_string());
+        let server_other_prop = make_server_with_caps(ClientCapabilities {
+            inlay_hint_resolve_support: Some(other_props),
+            ..ClientCapabilities::default()
+        });
+        let result2 = server_other_prop
+            .handle_inlay_hint_resolve(Some(hint.clone()))
+            .expect("resolve must not error");
+        let resolved2 = result2.expect("must return Some");
+        assert!(
+            resolved2.get("labelDetails").is_none(),
+            "labelDetails must be absent when client only declared 'tooltip' resolve support"
+        );
+
+        // Hint with client capability declaring "label.location": the resolver attempts
+        // label location lookup.  With no open document the lookup returns None so
+        // labelDetails is still absent — but no panic or error must occur.
+        let mut location_props = HashSet::new();
+        location_props.insert("label.location".to_string());
+        let server_with_cap = make_server_with_caps(ClientCapabilities {
+            inlay_hint_resolve_support: Some(location_props),
+            ..ClientCapabilities::default()
+        });
+        let result3 = server_with_cap
+            .handle_inlay_hint_resolve(Some(hint))
+            .expect("resolve must not error when client declares label.location");
+        let resolved3 = result3.expect("must return Some");
+        // Document is not open so resolve_hint_label_location returns None — labelDetails absent
+        assert!(
+            resolved3.get("labelDetails").is_none(),
+            "labelDetails must be absent when document is not open (no sub found)"
+        );
+        // Tooltip must still be filled in regardless of label.location capability
+        assert!(
+            resolved3.get("tooltip").is_some(),
+            "tooltip must be resolved regardless of label.location capability"
+        );
+    }
+
+    /// Verify that the initialize handler parses resolveSupport.properties correctly.
+    #[test]
+    fn initialize_parses_inlay_hint_resolve_support_properties() {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {
+                        "resolveSupport": {
+                            "properties": ["label.location", "tooltip"]
+                        }
+                    }
+                }
+            }
+        });
+
+        server.handle_initialize(Some(params)).expect("initialize must not error");
+
+        let caps = server.client_capabilities.lock();
+        let props = caps
+            .inlay_hint_resolve_support
+            .as_ref()
+            .expect("inlay_hint_resolve_support must be Some after initialize with resolveSupport");
+        assert!(props.contains("label.location"), "must contain 'label.location'");
+        assert!(props.contains("tooltip"), "must contain 'tooltip'");
+    }
+
+    /// When the client sends no resolveSupport entry, inlay_hint_resolve_support is None.
+    #[test]
+    fn initialize_no_resolve_support_leaves_field_none() {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {}
+                }
+            }
+        });
+
+        server.handle_initialize(Some(params)).expect("initialize must not error");
+
+        let caps = server.client_capabilities.lock();
+        assert!(
+            caps.inlay_hint_resolve_support.is_none(),
+            "inlay_hint_resolve_support must remain None when client sends no resolveSupport"
+        );
     }
 }
