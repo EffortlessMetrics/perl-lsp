@@ -171,6 +171,11 @@ name = "dap_watchpoints_tests"
 path = "tests/dap_watchpoints_tests.rs"
 # dap.watchpoints: dataBreakpointInfo + setDataBreakpoints functional tests (#2900)
 
+[[test]]
+name = "dap_non_regression_tests"
+path = "tests/dap_non_regression_tests.rs"
+# AC:17 Phase 3 non-regression: protocol shape, seq monotonicity, capabilities consistency (#435)
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
