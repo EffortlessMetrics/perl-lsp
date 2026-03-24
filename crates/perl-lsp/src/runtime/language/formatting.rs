@@ -40,9 +40,15 @@ impl LspServer {
                 data: None,
             })?;
 
-            if let Some(edits) =
-                crate::on_type_formatting::compute_on_type_edit(&doc.text, line, col, ch)
-            {
+            let indent_step = p["options"]["tabSize"].as_u64().unwrap_or(4) as usize;
+
+            if let Some(edits) = crate::on_type_formatting::compute_on_type_edit(
+                &doc.text,
+                line,
+                col,
+                ch,
+                indent_step,
+            ) {
                 return Ok(Some(json!(edits)));
             }
         }
