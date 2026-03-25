@@ -489,14 +489,22 @@ impl LspServer {
             for call in &mut calls {
                 let bare_name =
                     call.to.name.split("::").last().unwrap_or(&call.to.name).to_string();
+                // For qualified calls (e.g. `Utils::format_string`), prefer the
+                // package-matching file first.  For bare calls, accept any match.
+                let qualified_pkg = call
+                    .to
+                    .name
+                    .rsplit_once("::")
+                    .map(|(pkg, _)| pkg.replace("::", "/"));
+
                 'outer: for (doc_uri, doc_text, ast) in &doc_snapshots {
                     let provider = CallHierarchyProvider::new(doc_text.clone(), doc_uri.clone());
-                    if doc_uri == &call.to.uri {
-                        // Already pointing at this file — keep if definition exists here.
-                        if provider.find_definition(&bare_name, ast).is_some() {
-                            break 'outer;
+                    if let Some(ref pkg_path) = qualified_pkg {
+                        // Qualified call — only match files whose URI contains the
+                        // package path (e.g. "Utils" → ".../Utils.pm").
+                        if !doc_uri.as_str().contains(pkg_path) {
+                            continue;
                         }
-                        continue;
                     }
                     if let Some(def_item) = provider.find_definition(&bare_name, ast) {
                         call.to.uri = def_item.uri;
