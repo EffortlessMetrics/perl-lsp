@@ -1680,10 +1680,9 @@ release-check: release-gate semver-check
     else
       echo "  No banned panic constructs found"
     fi
-    echo "Running cargo publish dry-run..."
-    cargo publish --dry-run -p perl-parser 2>&1 | tail -1
-    cargo publish --dry-run -p perl-lsp 2>&1 | tail -1
-    echo "  Publish dry-run passed"
+    echo "Running crates.io launch prep..."
+    cargo xtask prep-crates-io-launch --mode core
+    echo "  Crates.io launch prep passed"
     echo "Building perl-dap release binary..."
     cargo build -p perl-dap --release --locked
     echo "  perl-dap release build passed"

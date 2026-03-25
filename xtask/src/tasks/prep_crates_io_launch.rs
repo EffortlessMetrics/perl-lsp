@@ -107,7 +107,11 @@ fn package_patch_args(metadata: &CargoMetadata) -> Vec<String> {
         };
         let rel_dir = crate_dir.strip_prefix(workspace_root).unwrap_or(crate_dir);
 
-        args.push(format!("--config=patch.crates-io.{}.path={}", package.name, rel_dir.display()));
+        args.push(format!(
+            "--config=patch.crates-io.{}.path=\"{}\"",
+            package.name,
+            rel_dir.display()
+        ));
     }
 
     args

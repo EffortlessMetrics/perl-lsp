@@ -56,7 +56,6 @@ perl-lsp-diagnostic-catalog = { workspace = true }
 perl-lsp-workspace-symbols = { workspace = true }
 perl-lsp-symbol-query = { workspace = true }
 perl-lsp-completion-item = { workspace = true }
-perl-ast-utils = { workspace = true }
 perl-lsp-formatting-types = { workspace = true }
 perl-lsp-critic-parser = { workspace = true }
 perl-lsp-import-management = { workspace = true }
@@ -147,6 +146,7 @@ perl-content-length-framing = { workspace = true }
 which = "8.0.2"
 parking_lot = "0.12.5"
 criterion = "0.8.1"
+perl-ast-utils = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
