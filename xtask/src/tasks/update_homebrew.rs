@@ -179,7 +179,7 @@ fn build_brew_formula(
     let linux_x64_filename = artifact_filename(&config.prefix, version, LIN_X64);
 
     format!(
-r#class PerlLsp < Formula
+r##"class PerlLsp < Formula
   desc "Fast, reliable Perl language server with 100% syntax coverage"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"
@@ -246,7 +246,7 @@ r#class PerlLsp < Formula
     assert_match(/Content-Length/, output)
   end
 end
-"#,
+"##,
         owner = config.owner,
         repo = config.repo,
         base = base,

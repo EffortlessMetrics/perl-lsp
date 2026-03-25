@@ -104,7 +104,7 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
     let lin_x64_filename = artifact_filename(&config.prefix, &config.version, LIN_X64);
 
     format!(
-r#class PerlLsp < Formula
+r##"class PerlLsp < Formula
   desc "Perl language server"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"
@@ -140,7 +140,7 @@ r#class PerlLsp < Formula
     assert_match "perl-lsp", shell_output("#{bin}/perl-lsp --version")
   end
 end
-"#,
+"##,
         owner = config.owner,
         repo = config.repo,
         version = config.version,
