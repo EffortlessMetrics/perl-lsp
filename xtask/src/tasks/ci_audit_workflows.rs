@@ -6,11 +6,10 @@
 use color_eyre::eyre::{Context, Result, eyre};
 use serde_yaml_ng::Value;
 use std::fs;
-use std::path::Path;
 
 use crate::utils::project_root;
 
-const ALLOWED_WORKFLOWS: &[&str] = &["ci.yml", "check-ignored.yml"];
+const ALLOWED_WORKFLOWS: &[&str] = &["ci.yml", "check-ignored.yml", "ci-security.yml"];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
 

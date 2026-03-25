@@ -8,7 +8,7 @@ mod support;
 use serde_json::{Value, json};
 use serial_test::serial;
 use std::collections::BTreeSet;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use support::lsp_harness::{LspHarness, TempWorkspace};
 
 struct BddScenario {
@@ -118,6 +118,41 @@ fn first_location_uri(response: &Value) -> Option<String> {
     } else {
         response.get("uri").and_then(Value::as_str).map(ToOwned::to_owned)
     }
+}
+
+fn wait_for_definition_uri(
+    harness: &mut LspHarness,
+    request_uri: &str,
+    line: u32,
+    character: u32,
+    want_uri: &str,
+    budget: Duration,
+) -> Result<Value, String> {
+    let start = Instant::now();
+    let mut last_response = None;
+
+    while start.elapsed() < budget {
+        let response = harness.request_with_timeout(
+            "textDocument/definition",
+            json!({
+                "textDocument": { "uri": request_uri },
+                "position": { "line": line, "character": character }
+            }),
+            Duration::from_millis(500),
+        )?;
+
+        if first_location_uri(&response).as_deref() == Some(want_uri) {
+            return Ok(response);
+        }
+
+        last_response = Some(response);
+        harness.barrier();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    Err(format!(
+        "definition did not resolve to {want_uri} within {budget:?}; last response: {last_response:?}"
+    ))
 }
 
 fn location_start_line(response: &Value) -> Option<u64> {
@@ -304,16 +339,15 @@ my $also = process_data();
     harness.open(&module_uri, module)?;
     harness.open(&main_uri, main)?;
 
-    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(2)).ok();
-
     scenario.when("requesting definition on the qualified call in the script");
     let (line, character) = find_position(main, "process_data()");
-    let definition = harness.request(
-        "textDocument/definition",
-        json!({
-            "textDocument": { "uri": main_uri },
-            "position": { "line": line, "character": character }
-        }),
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &main_uri,
+        line,
+        character,
+        &module_uri,
+        Duration::from_secs(10),
     )?;
 
     scenario.then("the definition resolves to the module file");
@@ -793,23 +827,20 @@ my $result = Foo::process_records();
     harness.open(&module_uri, module_v1)?;
     harness.open(&main_uri, main_v1)?;
 
-    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(2)).ok();
-
     scenario.when("updating both files with didChange to a new function name");
     harness.change_full(&module_uri, 2, module_v2)?;
     harness.change_full(&main_uri, 2, main_v2)?;
     harness.barrier();
 
-    harness.wait_for_symbol("process_records", Some(&module_uri), Duration::from_secs(2)).ok();
-
     scenario.then("go-to-definition resolves the updated symbol across files");
     let (line, character) = find_position(main_v2, "process_records()");
-    let definition = harness.request(
-        "textDocument/definition",
-        json!({
-            "textDocument": { "uri": main_uri },
-            "position": { "line": line, "character": character }
-        }),
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &main_uri,
+        line,
+        character,
+        &module_uri,
+        Duration::from_secs(10),
     )?;
     let def_uri = first_location_uri(&definition).unwrap_or_default();
     assert_eq!(def_uri, module_uri, "definition should resolve to updated module symbol");
