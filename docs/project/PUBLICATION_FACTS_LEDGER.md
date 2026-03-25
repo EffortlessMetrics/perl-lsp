@@ -29,7 +29,7 @@ Every claim in this ledger carries a tier marker that describes how it was obtai
 | Claim | Verified | Source | Date | Tier | Command |
 |-------|----------|--------|------|------|---------|
 | Lines of Rust | 597,863 | wc via cat | 2026-03-22 | A | `find crates/ -name "*.rs" -print0 \| xargs -0 cat \| wc -l` |
-| Workspace crates | 132 | cargo metadata | 2026-03-22 | A | `cargo metadata --no-deps \| jq '.packages \| length'` |
+| Workspace crates | 134 | cargo metadata | 2026-03-25 | A | `cargo metadata --no-deps \| jq '.packages \| length'` |
 | LSP features | 98 | features.toml | 2026-03-22 | A | `grep -c '^\[\[feature\]\]' features.toml` |
 | Total commits | 3,307 | git log | 2026-03-22 | A | `git log --oneline \| wc -l` |
 | Total PRs | 2,823+ | GitHub | 2026-03-22 | A | `gh pr list --state all --limit 1 --json number` |
@@ -131,8 +131,8 @@ Every claim in this ledger carries a tier marker that describes how it was obtai
 | "546K lines" | ~598K lines (2026-03-22) | Codebase grew |
 | "563K lines" (COST_ROI.md) | ~598K lines | COST_ROI.md used an earlier snapshot |
 | "591K lines" | 598K lines (2026-03-22) | Ongoing growth |
-| "128 crates" | 132 crates (2026-03-22) | Codebase grew |
-| "132-133 crates" | 132 crates (2026-03-22) | Minor fluctuation; 133 was from a peak; 132 current |
+| "128 crates" | 134 crates (2026-03-25) | Codebase grew |
+| "132-133 crates" | 134 crates (2026-03-25) | Ongoing growth; 134 is the current verified value |
 | "97 features" | 98 features | Off by one |
 | "2,673 lib tests" | 2,871 lib tests | 198 new tests added across Era 7 |
 | "85.7% corpus" without qualifier | Use "85.4% baseline clean rate (3,717/4,355)" | Two distinct corpus metrics exist; must specify which |
