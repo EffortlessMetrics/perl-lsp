@@ -1,7 +1,7 @@
 //! Generate Homebrew formula and VS Code asset metadata from cargo-dist checksums.
 
 use color_eyre::eyre::{Context, Result, eyre};
-use serde_json::json;
+use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -165,15 +165,34 @@ fn build_asset_map(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) -> 
     let win_x64 = artifact_filename(&config.prefix, &config.version, WIN_X64);
     let win_arm = artifact_filename(&config.prefix, &config.version, WIN_ARM);
 
-    let payload = json!({
-        "v": &config.version,
-        "linux-x64":   { "url": format!("{base}/{linux_x64}"), "sha256": assets.lin_x64 },
-        "linux-arm64": { "url": format!("{base}/{linux_arm}"), "sha256": assets.lin_arm },
-        "macos-x64":   { "url": format!("{base}/{mac_x64}"), "sha256": assets.mac_x64 },
-        "macos-arm64": { "url": format!("{base}/{mac_arm}"), "sha256": assets.mac_arm },
-        "win-x64":     { "url": format!("{base}/{win_x64}"), "sha256": assets.win_x64 },
-        "win-arm64":   { "url": format!("{base}/{win_arm}"), "sha256": assets.win_arm },
-    });
+    let url = |file: &str| format!("{base}/{file}");
+    let mut payload = Map::new();
+    payload.insert("v".to_string(), json!(&config.version));
+    payload.insert(
+        "linux-x64".to_string(),
+        json!({ "url": url(linux_x64), "sha256": assets.lin_x64 }),
+    );
+    payload.insert(
+        "linux-arm64".to_string(),
+        json!({ "url": url(linux_arm), "sha256": assets.lin_arm }),
+    );
+    payload.insert(
+        "macos-x64".to_string(),
+        json!({ "url": url(mac_x64), "sha256": assets.mac_x64 }),
+    );
+    payload.insert(
+        "macos-arm64".to_string(),
+        json!({ "url": url(mac_arm), "sha256": assets.mac_arm }),
+    );
+    payload.insert(
+        "win-x64".to_string(),
+        json!({ "url": url(win_x64), "sha256": assets.win_x64 }),
+    );
+    payload.insert(
+        "win-arm64".to_string(),
+        json!({ "url": url(win_arm), "sha256": assets.win_arm }),
+    );
+    let payload = Value::Object(payload);
     serde_json::to_string_pretty(&payload).map_err(Into::into)
 }
 
