@@ -757,13 +757,17 @@ mod tests {
         let timestamp = read_timestamp(&run, &["created_at", "createdAt"])
             .ok_or_else(|| eyre!("expected timestamp"))?;
 
-        assert_eq!(timestamp, DateTime::parse_from_rfc3339("2026-03-25T12:00:00Z")?.with_timezone(&Utc));
+        assert_eq!(
+            timestamp,
+            DateTime::parse_from_rfc3339("2026-03-25T12:00:00Z")?.with_timezone(&Utc)
+        );
         Ok(())
     }
 
     #[test]
     fn baseline_report_keeps_zero_minute_runs_and_excludes_skips_from_success_rate() -> Result<()> {
-        let generated_at = DateTime::parse_from_rfc3339("2026-03-25T12:00:00Z")?.with_timezone(&Utc);
+        let generated_at =
+            DateTime::parse_from_rfc3339("2026-03-25T12:00:00Z")?.with_timezone(&Utc);
         let cutoff = DateTime::parse_from_rfc3339("2026-03-24T12:00:00Z")?.with_timezone(&Utc);
         let runs = vec![
             json!({
@@ -790,10 +794,8 @@ mod tests {
 
         let report = build_baseline_report("master", 1, generated_at, cutoff, &runs)
             .ok_or_else(|| eyre!("expected baseline report"))?;
-        let workflow = report
-            .workflows
-            .get("CI")
-            .ok_or_else(|| eyre!("expected workflow report"))?;
+        let workflow =
+            report.workflows.get("CI").ok_or_else(|| eyre!("expected workflow report"))?;
 
         assert_eq!(workflow.total_runs, 3);
         assert_eq!(workflow.completed_runs, 2);

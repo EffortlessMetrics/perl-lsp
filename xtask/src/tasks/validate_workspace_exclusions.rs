@@ -47,10 +47,7 @@ pub fn run() -> Result<()> {
     println!("==========================================");
     println!();
     println!("Summary:");
-    println!(
-        "  - {} directories excluded from workspace",
-        known_excluded_directories().count()
-    );
+    println!("  - {} directories excluded from workspace", known_excluded_directories().count());
     println!("  - Exclusion strategy clearly documented");
     println!("  - No accidental dependencies on excluded crates");
     println!("  - workspace.dependencies clean");
@@ -118,10 +115,7 @@ fn check_workspace_dependencies(root: &Path) -> Result<()> {
                 }
 
                 if name.as_str() == "tree-sitter-perl" {
-                    if value
-                        .as_table()
-                        .and_then(|value| value.get("path"))
-                        .and_then(Value::as_str)
+                    if value.as_table().and_then(|value| value.get("path")).and_then(Value::as_str)
                         == Some("crates/tree-sitter-perl-rs")
                     {
                         return None;
@@ -250,10 +244,7 @@ fn excluded_set() -> HashSet<&'static str> {
 }
 
 fn known_excluded_directories() -> impl Iterator<Item = &'static str> {
-    REQUIRED_EXCLUDED_DIRECTORIES
-        .iter()
-        .chain(OPTIONAL_EXCLUDED_DIRECTORIES.iter())
-        .copied()
+    REQUIRED_EXCLUDED_DIRECTORIES.iter().chain(OPTIONAL_EXCLUDED_DIRECTORIES.iter()).copied()
 }
 
 fn workspace_exclude_values<'a>(manifest: &'a Value) -> Result<Vec<&'a str>> {
