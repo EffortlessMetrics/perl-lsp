@@ -1,6 +1,5 @@
 //! Generate the parser feature matrix documentation from a corpus audit report.
 
-use crate::tasks::corpus_audit;
 use crate::utils::project_root;
 use chrono::Local;
 use color_eyre::eyre::{Context, ContextCompat, Result, bail, eyre};

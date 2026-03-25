@@ -1,7 +1,7 @@
 //! Worktree maintenance helpers used by local agent operations.
 
 use crate::utils::project_root;
-use color_eyre::eyre::{Result, bail, eyre};
+use color_eyre::eyre::{Result, bail};
 use std::process::{Command, Stdio};
 use std::str;
 
