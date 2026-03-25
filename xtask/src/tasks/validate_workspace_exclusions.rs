@@ -10,18 +10,23 @@ use std::path::Path;
 use std::process::Command;
 use toml::Value;
 
-const EXCLUDED_DIRECTORIES: &[&str] = &["tree-sitter-perl", "fuzz"];
-const EXCLUDED_CRATES: &[&str] = &["tree-sitter-perl-c"];
+const REQUIRED_EXCLUDED_DIRECTORIES: &[&str] =
+    &["tree-sitter-perl", "crates/tree-sitter-perl-c", "fuzz"];
+const OPTIONAL_EXCLUDED_DIRECTORIES: &[&str] = &["archive"];
+const EXCLUDED_CRATES: &[&str] = &["tree-sitter-perl", "tree-sitter-perl-c", "perl-parser-fuzz"];
 const PROJECT_CARGO_TOML: &str = "Cargo.toml";
 
 #[derive(Deserialize)]
 struct Metadata {
+    workspace_members: Vec<String>,
     packages: Vec<MetadataPackage>,
 }
 
 #[derive(Deserialize)]
 struct MetadataPackage {
+    id: String,
     name: String,
+    manifest_path: String,
 }
 
 pub fn run() -> Result<()> {
@@ -42,7 +47,10 @@ pub fn run() -> Result<()> {
     println!("==========================================");
     println!();
     println!("Summary:");
-    println!("  - {} directories excluded from workspace", EXCLUDED_DIRECTORIES.len());
+    println!(
+        "  - {} directories excluded from workspace",
+        known_excluded_directories().count()
+    );
     println!("  - Exclusion strategy clearly documented");
     println!("  - No accidental dependencies on excluded crates");
     println!("  - workspace.dependencies clean");
@@ -53,7 +61,7 @@ pub fn run() -> Result<()> {
 fn check_excluded_directories_exist(root: &Path) -> Result<()> {
     println!("✓ Checking excluded directories exist...");
 
-    let missing = EXCLUDED_DIRECTORIES
+    let missing = REQUIRED_EXCLUDED_DIRECTORIES
         .iter()
         .filter(|excluded| !root.join(excluded).exists())
         .map(|excluded| excluded.to_string())
@@ -63,7 +71,7 @@ fn check_excluded_directories_exist(root: &Path) -> Result<()> {
         bail!("❌ ERROR: Excluded directories do not exist: {}", missing.join(", "));
     }
 
-    println!("  All excluded directories exist");
+    println!("  All required excluded directories exist");
     println!();
     Ok(())
 }
@@ -102,7 +110,29 @@ fn check_workspace_dependencies(root: &Path) -> Result<()> {
 
     if let Some(workspace_dependencies) = workspace_dependencies {
         let excluded = excluded_set();
-        if workspace_dependencies.keys().any(|dep| excluded.contains(dep.as_str())) {
+        let offending = workspace_dependencies
+            .iter()
+            .filter_map(|(name, value)| {
+                if !excluded.contains(name.as_str()) {
+                    return None;
+                }
+
+                if name.as_str() == "tree-sitter-perl" {
+                    if value
+                        .as_table()
+                        .and_then(|value| value.get("path"))
+                        .and_then(Value::as_str)
+                        == Some("crates/tree-sitter-perl-rs")
+                    {
+                        return None;
+                    }
+                }
+
+                Some(name.as_str())
+            })
+            .collect::<Vec<_>>();
+
+        if !offending.is_empty() {
             bail!("❌ ERROR: workspace.dependencies references excluded crates");
         }
     }
@@ -122,24 +152,14 @@ fn check_exclude_section(root: &Path) -> Result<()> {
     let manifest: Value =
         toml::from_str(&content).context("Failed to parse workspace Cargo.toml")?;
 
-    let exclude = manifest
-        .get("workspace")
-        .and_then(|workspace| workspace.get("exclude"))
-        .and_then(Value::as_array)
-        .ok_or_else(|| eyre!("Workspace has no [workspace].exclude array"))?;
-
-    let exclude_values: Vec<&str> = exclude.iter().filter_map(Value::as_str).collect();
-    let missing = EXCLUDED_DIRECTORIES
-        .iter()
-        .filter(|entry| !exclude_values.contains(entry))
-        .map(|entry| entry.to_string())
-        .collect::<Vec<_>>();
+    let exclude_values = workspace_exclude_values(&manifest)?;
+    let missing = missing_required_excluded_directories(&exclude_values);
 
     if !missing.is_empty() {
         bail!("❌ ERROR: Excluded paths missing from [workspace].exclude: {}", missing.join(", "));
     }
 
-    println!("  All expected paths are in exclude section");
+    println!("  Required excluded paths are in [workspace].exclude");
     println!();
     Ok(())
 }
@@ -148,14 +168,8 @@ fn check_workspace_members(root: &Path) -> Result<()> {
     println!("✓ Checking workspace members don't include excluded crates...");
 
     let metadata = load_cargo_metadata(root)?;
-    let excluded = excluded_set();
-    let offending = metadata
-        .packages
-        .iter()
-        .filter(|pkg| excluded.contains(pkg.name.as_str()))
-        .map(|pkg| pkg.name.clone())
-        .collect::<Vec<_>>();
-    let member_count = metadata.packages.len();
+    let offending = excluded_workspace_member_names(&metadata);
+    let member_count = metadata.workspace_members.len();
 
     if !offending.is_empty() {
         bail!("❌ ERROR: Excluded crates found in workspace members: {}", offending.join(", "));
@@ -235,6 +249,50 @@ fn excluded_set() -> HashSet<&'static str> {
     EXCLUDED_CRATES.iter().copied().collect()
 }
 
+fn known_excluded_directories() -> impl Iterator<Item = &'static str> {
+    REQUIRED_EXCLUDED_DIRECTORIES
+        .iter()
+        .chain(OPTIONAL_EXCLUDED_DIRECTORIES.iter())
+        .copied()
+}
+
+fn workspace_exclude_values<'a>(manifest: &'a Value) -> Result<Vec<&'a str>> {
+    let exclude = manifest
+        .get("workspace")
+        .and_then(|workspace| workspace.get("exclude"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| eyre!("Workspace has no [workspace].exclude array"))?;
+
+    Ok(exclude.iter().filter_map(Value::as_str).collect())
+}
+
+fn missing_required_excluded_directories(exclude_values: &[&str]) -> Vec<String> {
+    REQUIRED_EXCLUDED_DIRECTORIES
+        .iter()
+        .filter(|entry| !exclude_values.contains(entry))
+        .map(|entry| entry.to_string())
+        .collect()
+}
+
+fn manifest_is_in_excluded_directory(manifest_path: &str) -> bool {
+    let manifest_dir =
+        Path::new(manifest_path).parent().unwrap_or_else(|| Path::new(manifest_path));
+
+    known_excluded_directories().any(|entry| manifest_dir.ends_with(entry))
+}
+
+fn excluded_workspace_member_names(metadata: &Metadata) -> Vec<String> {
+    let workspace_member_ids = metadata.workspace_members.iter().collect::<HashSet<_>>();
+
+    metadata
+        .packages
+        .iter()
+        .filter(|pkg| workspace_member_ids.contains(&pkg.id))
+        .filter(|pkg| manifest_is_in_excluded_directory(&pkg.manifest_path))
+        .map(|pkg| pkg.name.clone())
+        .collect()
+}
+
 fn load_cargo_metadata(root: &Path) -> Result<Metadata> {
     let output = Command::new("cargo")
         .current_dir(root)
@@ -249,4 +307,81 @@ fn load_cargo_metadata(root: &Path) -> Result<Metadata> {
     let stdout =
         String::from_utf8(output.stdout).context("`cargo metadata` output was not valid UTF-8")?;
     serde_json::from_str(&stdout).context("Failed to parse `cargo metadata` JSON")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workspace_exclude_values_reads_workspace_table() -> Result<()> {
+        let manifest: Value = toml::from_str(
+            r#"
+exclude = ["wrong-root-level-entry"]
+
+[workspace]
+exclude = ["tree-sitter-perl", "crates/tree-sitter-perl-c", "fuzz"]
+"#,
+        )?;
+
+        let exclude = workspace_exclude_values(&manifest)?;
+
+        assert_eq!(exclude, vec!["tree-sitter-perl", "crates/tree-sitter-perl-c", "fuzz"]);
+        Ok(())
+    }
+
+    #[test]
+    fn missing_required_excluded_paths_ignores_optional_entries() {
+        let exclude_values = vec!["tree-sitter-perl", "crates/tree-sitter-perl-c", "fuzz"];
+
+        let missing = missing_required_excluded_directories(&exclude_values);
+
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn missing_required_excluded_paths_flags_missing_required_path() {
+        let exclude_values = vec!["tree-sitter-perl", "crates/tree-sitter-perl-c"];
+
+        let missing = missing_required_excluded_directories(&exclude_values);
+
+        assert_eq!(missing, vec!["fuzz".to_string()]);
+    }
+
+    #[test]
+    fn manifest_is_in_excluded_directory_uses_manifest_parent() -> Result<()> {
+        let manifest = Path::new("/repo/crates/tree-sitter-perl-c/Cargo.toml");
+        let manifest_dir =
+            manifest.parent().ok_or_else(|| eyre!("Expected manifest path to have a parent"))?;
+
+        assert!(manifest_dir.ends_with("crates/tree-sitter-perl-c"));
+        assert!(!manifest.ends_with("crates/tree-sitter-perl-c"));
+        assert!(manifest_is_in_excluded_directory("/repo/crates/tree-sitter-perl-c/Cargo.toml"));
+        Ok(())
+    }
+
+    #[test]
+    fn excluded_workspace_member_names_flags_members_by_manifest_directory() {
+        let excluded_id =
+            String::from("tree-sitter-perl-c 0.1.0 (path+file:///repo/crates/tree-sitter-perl-c)");
+        let metadata = Metadata {
+            workspace_members: vec![excluded_id.clone()],
+            packages: vec![
+                MetadataPackage {
+                    id: excluded_id,
+                    name: String::from("tree-sitter-perl-c"),
+                    manifest_path: String::from("/repo/crates/tree-sitter-perl-c/Cargo.toml"),
+                },
+                MetadataPackage {
+                    id: String::from("other 0.1.0 (path+file:///repo/crates/other)"),
+                    name: String::from("other"),
+                    manifest_path: String::from("/repo/crates/other/Cargo.toml"),
+                },
+            ],
+        };
+
+        let offending = excluded_workspace_member_names(&metadata);
+
+        assert_eq!(offending, vec!["tree-sitter-perl-c".to_string()]);
+    }
 }
