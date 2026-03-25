@@ -195,6 +195,9 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
             if conclusion.is_empty() {
                 continue;
             }
+            if conclusion == "skipped" {
+                continue;
+            }
 
             let entry = workflow_stats.entry(workflow_name).or_default();
             entry.runs += 1;
