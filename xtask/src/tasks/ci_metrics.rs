@@ -178,9 +178,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
                 if elapsed > 0 { u64::try_from(elapsed).ok() } else { None }
             });
 
-            let Some(elapsed_seconds) = elapsed_seconds else {
-                continue;
-            };
+            let elapsed_seconds = elapsed_seconds.unwrap_or(0);
             let elapsed_minutes = (elapsed_seconds + 59) / 60;
 
             let workflow_name = run
