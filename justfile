@@ -185,17 +185,32 @@ security-audit:
 # Production hardening security scan
 security-hardening:
     @echo "Running production hardening security scan..."
-    @./scripts/security-hardening.sh
+    @cargo xtask security-hardening
 
 # Production hardening performance scan
 performance-hardening:
     @echo "Running production hardening performance scan..."
-    @./scripts/performance-hardening.sh
+    @cargo xtask performance-hardening
 
 # Production hardening E2E validation
 e2e-validation:
     @echo "Running production hardening E2E validation..."
-    @./scripts/e2e-validation.sh
+    @cargo xtask e2e-validate
+
+# Generate Homebrew formula + VS Code asset map from release checksums
+inject-sha-assets version owner repo prefix checksums brew_out asset_map_out:
+    @cargo xtask inject-sha-assets \
+        --version "{{version}}" \
+        --owner "{{owner}}" \
+        --repo "{{repo}}" \
+        --prefix "{{prefix}}" \
+        --checksums "{{checksums}}" \
+        --brew-out "{{brew_out}}" \
+        --asset-map-out "{{asset_map_out}}"
+
+# Generate Homebrew formula from release SHA256SUMS
+update-homebrew version:
+    @cargo xtask update-homebrew --version "{{version}}"
 
 # Complete production hardening validation
 production-hardening: security-hardening performance-hardening e2e-validation
@@ -205,7 +220,7 @@ production-hardening: security-hardening performance-hardening e2e-validation
 # Production gates validation
 production-gates-validation:
     @echo "Running production gates validation..."
-    @./scripts/production-gates-validation.sh
+    @cargo xtask production-gates-validation
 
 # Complete Phase 6 production readiness validation
 phase6-production-readiness: production-hardening production-gates-validation
@@ -280,17 +295,8 @@ fuzz-bounded:
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
-# Benchmarks (requires criterion) - legacy target, prefer 'just bench'
-benchmarks:
-    @echo "Running benchmarks..."
-    @mkdir -p benchmarks/results
-    @if cargo bench --workspace --locked --no-run 2>/dev/null; then \
-        cargo bench --workspace --locked -- --noplot 2>&1 | tee benchmarks/results/raw-output.txt || echo "Benchmark run completed"; \
-        echo ""; \
-        echo "For structured results, run: just bench"; \
-    else \
-        echo "SKIP: No benchmarks configured or build failed"; \
-    fi
+# `bench` is the canonical benchmark target; keep this as a compatibility alias.
+benchmarks: bench
 
 # ============================================================================
 # CI Aliases and Convenience Targets
@@ -312,7 +318,7 @@ doctor:
     @echo "=============================================="
     @echo "  perl-lsp developer environment doctor"
     @echo "=============================================="
-    @bash scripts/devex-doctor.sh
+    @cargo xtask devex-doctor
 
 # Short alias for the developer environment quick check
 devex: doctor
@@ -335,7 +341,7 @@ _check-tools-basic:
         echo "  Install nextest: cargo install cargo-nextest --locked"; \
         exit 1; \
     fi
-    @bash scripts/check-rust-toolchain.sh
+    @cargo xtask check-toolchain
 
 # ============================================================================
 # CI Validation Commands (Issue #211)
@@ -348,14 +354,16 @@ _check-tools-basic:
 # Phase 0: publish receipts to review/receipts/YYYY-MM-DD/
 receipts date='':
     @d="{{date}}"; \
-    if [ -z "$$d" ]; then d="$$(date -u +%Y-%m-%d)"; fi; \
-    echo "Publishing receipts for $$d"; \
-    bash scripts/publish-receipts.sh "$$d"
+    if [ -z "$$d" ]; then \
+        cargo xtask publish-receipts; \
+    else \
+        cargo xtask publish-receipts "$$d"; \
+    fi
 
 # Issue #211: measure CI lane runtimes locally (baseline before cleanup)
 ci-measure:
     @echo "Measuring CI lane runtimes..."
-    @bash .ci/scripts/measure-ci-time.sh
+    @cargo xtask ci-measure
 
 # Fast merge gate on MSRV (~2-5 min) - proves 1.92 compatibility
 ci-gate-msrv:
@@ -414,7 +422,7 @@ ci-check-no-nested-lock:
 
 # Audit workflows for ungated expensive jobs
 ci-workflow-audit:
-    @python3 scripts/ci-audit-workflows.py
+    @cargo xtask ci-audit-workflows
 
 # Fast merge gate (~2-5 min) - REQUIRED for all merges
 # This is the canonical pre-push check (same as merge-gate with legacy checks)
@@ -463,7 +471,7 @@ gates-list:
 # Run old shell-based gate runner (deprecated, kept for compatibility)
 gates-legacy:
     @echo "🧾 Running legacy gate runner..."
-    @bash scripts/run-gates.sh
+    @cargo xtask gates --tier merge-gate --receipt
 
 # Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
 ci-full:
@@ -524,19 +532,19 @@ ci-clippy-gate:
 # Unwrap/panic-family ratchet (production source only)
 ci-unwrap-panic-ratchet:
     @echo "🛡️  Checking unwrap/panic-family ratchet..."
-    @bash ci/check_unwraps_prod.sh
+    @cargo xtask ci-hygiene check-unwraps-prod
     @echo "✅ Unwrap/panic-family ratchet passed"
 
 # Unsafe syntax ratchet (production source only)
 ci-unsafe-ratchet:
     @echo "🛡️  Checking unsafe syntax ratchet..."
-    @bash ci/check_unsafe_prod.sh
+    @cargo xtask ci-hygiene check-unsafe-prod
     @echo "✅ Unsafe syntax ratchet passed"
 
 # Forbid fatal constructs gate - catches abort/exit/panic that Clippy misses
 ci-forbid-fatal:
     @echo "🚫 Checking for forbidden fatal constructs..."
-    @bash scripts/forbid-fatal-constructs.sh --verbose
+    @cargo xtask forbid-fatal-constructs -- --verbose
     @echo "✅ No forbidden fatal constructs"
 
 # Core tests (fast, essential)
@@ -554,7 +562,7 @@ ci-test-lib:
 # V2 bundle sync guard (in-crate v2 files must match extracted perl-parser-pest v2 files)
 ci-v2-bundle-sync:
     @echo "🔍 Checking v2 bundle sync..."
-    bash scripts/check-v2-bundle-sync.sh
+    cargo xtask ci-hygiene check-v2-bundle-sync
     @echo "✅ V2 bundle sync check passed"
 
 # V2 parser parity guard (in-crate v2 vs extracted perl-parser-pest v2)
@@ -725,55 +733,55 @@ clean:
 # Missing docs ratcheting check (Issue #197)
 ci-docs-check:
     @echo "📝 Checking missing docs baseline..."
-    @bash ci/check_missing_docs.sh
+    @cargo xtask ci-hygiene check-missing-docs
     @echo "✅ Missing docs check passed"
 
 # Policy and governance checks
 ci-policy:
     @echo "⚖️  Checking project policies..."
     just ci-check-todos
-    @bash ./.ci/scripts/check-from-raw.sh
+    @cargo xtask check-from-raw
     just ci-doc-claims
 
 # Check article inline claims against PUBLICATION_FACTS_LEDGER.md
 ci-doc-claims:
     @echo "📄 Checking article claims against publication ledger..."
-    @python3 scripts/check-doc-claims.py
+    @cargo xtask doc-claims
     @echo "✅ Doc claims check passed"
 
 # Check all registered hook scripts are executable
 hook-check:
-    @bash ./.ci/scripts/check-hook-executable.sh
+    @cargo xtask hook-check
 
 # Check hook registry in settings.json matches files on disk
 hook-registry-check:
-    @bash ./.ci/scripts/check-hook-registry.sh
+    @cargo xtask hook-registry-check
 
 # Run all hook tests (behavior, registry, executable-bit)
 hook-tests:
-    @bash ./.ci/scripts/test-hooks.sh
+    @cargo xtask hook-tests
 
 # Show swarm metrics summary
 swarm-summary:
-    @bash scripts/swarm-summary.sh
+    @cargo xtask swarm-summary
 
 # Check for machine-specific paths in documentation
 ci-doc-paths:
     @echo "🔍 Checking documentation paths..."
-    @bash ci/check_doc_paths.sh docs
+    @cargo xtask ci-hygiene check-doc-paths docs
     @echo "✅ Documentation paths check passed"
 
 # Verify publication facts against live codebase metrics (informational, non-blocking)
 # Flags WARNING if delta >5%, ERROR if delta >10%. Use --strict to exit 1 on ERROR.
 verify-publication-facts *args='':
     @echo "📊 Verifying publication facts..."
-    @bash scripts/verify-publication-facts.sh {{args}}
+    @cargo xtask verify-publication-facts {{args}}
     @echo "✅ Publication facts verification complete"
 
 # Strict publication facts check for CI (exits 1 on ERROR-level drift)
 ci-publication-facts:
     @echo "📊 Checking publication facts (strict mode)..."
-    @bash scripts/verify-publication-facts.sh --strict
+    @cargo xtask verify-publication-facts --strict
     @echo "✅ Publication facts check passed"
 
 # Update derived metrics in docs/project/status/ subsystem files and ROADMAP.md.
@@ -823,17 +831,17 @@ parser-audit:
 # Check parser features baseline (CI mode, fails on regression)
 ci-parser-features-check:
     @echo "🔍 Checking parser features baseline..."
-    @bash ci/check_parse_errors.sh
+    @cargo xtask ci-hygiene check-parse-errors
 
 # Check features.toml invariants (GA+advertised must have tests, no duplicates)
 ci-features-invariants:
     @echo "🔍 Checking features.toml invariants..."
-    @python3 scripts/check_features_invariants.py
+    @cargo xtask features invariants
 
 # Update parser feature matrix document from audit report
 parser-matrix-update:
     @echo "📝 Updating parser feature matrix..."
-    @python3 scripts/update-parser-matrix.py
+    @cargo xtask parser-matrix
 
 # ============================================================================
 # GitHub Repository Management
@@ -842,23 +850,23 @@ parser-matrix-update:
 # Ensure label taxonomy exists (idempotent, safe to rerun)
 gh-labels:
     @echo "🏷️  Ensuring label taxonomy..."
-    @bash scripts/gh/ensure-labels.sh
+    @cargo xtask gh-labels
     @echo "✅ Labels ready"
 
 # Show issues missing required taxonomy labels
 gh-triage:
     @echo "🔍 Issues needing taxonomy labels..."
-    @bash scripts/gh/issues-needing-triage.sh 500
+    @cargo xtask gh-triage
 
 # Backfill prefixed labels from legacy labels (dry run)
 gh-backfill-dry:
     @echo "🔄 Dry run: showing labels to backfill..."
-    @bash scripts/gh/backfill-prefixed-labels.sh
+    @cargo xtask gh-backfill-prefixed-labels
 
 # Backfill prefixed labels from legacy labels (apply)
 gh-backfill:
     @echo "🔄 Applying prefixed label backfill..."
-    @bash scripts/gh/backfill-prefixed-labels.sh --apply
+    @cargo xtask gh-backfill-prefixed-labels --apply
 
 # ============================================================================
 # Bug Tracking (BUG category ignored tests)
@@ -868,7 +876,7 @@ gh-backfill:
 bugs:
     @echo "🐛 Bug Queue Status"
     @echo "==================="
-    @VERBOSE=1 bash scripts/ignored-test-count.sh 2>&1 | sed -n '/=== bug/,/===/p' | head -30
+    @VERBOSE=1 cargo xtask ci-hygiene ignored-test-count 2>&1 | sed -n '/=== bug/,/===/p' | head -30
 
 # Wave A: COMPLETE - these were test brittleness issues, not parser bugs
 bugs-wave-a:
@@ -957,15 +965,15 @@ health-detail:
 
 # Show ignored test counts (categorised summary with baseline delta)
 ignored-tests:
-    cargo run -p xtask -- ignored-tests
+    cargo xtask ignored-tests
 
 # Show ignored test counts with per-test detail
 ignored-tests-verbose:
-    cargo run -p xtask -- ignored-tests --verbose
+    cargo xtask ignored-tests --verbose
 
 # Update ignored test baseline after intentional changes
 ignored-tests-update:
-    cargo run -p xtask -- ignored-tests --update
+    cargo xtask ignored-tests --update
 
 # ============================================================================
 # Milestone Verification
@@ -979,7 +987,7 @@ milestone-v0_9-check:
     @just ci-gate
     @echo ""
     @echo "📋 Step 2: Checking ignored test breakdown..."
-    @bash scripts/ignored-test-count.sh
+    @cargo xtask ci-hygiene ignored-test-count
     @echo ""
     @echo "📋 Step 3: Verifying metrics consistency..."
     @just status-check
@@ -994,37 +1002,37 @@ milestone-v0_9-check:
 # Harvest raw facts from a merged PR
 forensics-harvest pr:
     @echo "🔬 Harvesting raw facts from PR {{pr}}..."
-    ./scripts/forensics/pr-harvest.sh {{pr}}
+    @cargo xtask forensics-harvest {{pr}}
     @echo "✅ Harvest complete"
 
 # Compute temporal topology (convergence, friction, oscillations)
 forensics-temporal pr:
     @echo "⏱️  Computing temporal topology for PR {{pr}}..."
-    ./scripts/forensics/temporal-analysis.sh {{pr}}
+    @cargo xtask forensics-temporal {{pr}}
     @echo "✅ Temporal analysis complete"
 
 # Run static analysis deltas (quick mode)
 forensics-telemetry-quick pr:
     @echo "📊 Running quick telemetry for PR {{pr}}..."
-    ./scripts/forensics/telemetry-runner.sh {{pr}} --mode quick
+    @cargo xtask forensics-telemetry-quick {{pr}}
     @echo "✅ Quick telemetry complete"
 
 # Run static analysis deltas (full mode with exhibit-grade tools)
 forensics-telemetry-full pr:
     @echo "📊 Running full telemetry for PR {{pr}}..."
-    ./scripts/forensics/telemetry-runner.sh {{pr}} --mode full
+    @cargo xtask forensics-telemetry-full {{pr}}
     @echo "✅ Full telemetry complete"
 
 # Generate complete dossier (runs full pipeline)
 forensics-dossier pr:
     @echo "📁 Generating complete dossier for PR {{pr}}..."
-    ./scripts/forensics/dossier-runner.sh {{pr}}
+    @cargo xtask forensics-dossier {{pr}}
     @echo "✅ Dossier generation complete"
 
 # Render dossier markdown from existing YAML outputs
 forensics-render pr format='full':
     @echo "📝 Rendering dossier for PR {{pr}} (format: {{format}})..."
-    ./scripts/forensics/render-dossier.sh {{pr}} --format {{format}}
+    @cargo xtask forensics-render {{pr}} --format {{format}}
     @echo "✅ Rendering complete"
 
 # ============================================================================
@@ -1037,28 +1045,28 @@ forensics-render pr format='full':
 bench:
     @echo "📊 Running full benchmark suite..."
     @mkdir -p benchmarks/results
-    ./benchmarks/scripts/run-benchmarks.sh --output benchmarks/results/latest.json
+    @cargo xtask bench-run --output benchmarks/results/latest.json
     @echo ""
     @echo "Results saved to benchmarks/results/latest.json"
-    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json
+    @cargo xtask bench-format
 
 # Quick smoke benchmarks (fast, ~30s)
 bench-quick:
     @echo "⚡ Running quick benchmark smoke test..."
     @mkdir -p benchmarks/results
-    ./benchmarks/scripts/run-benchmarks.sh --quick --output benchmarks/results/latest.json
+    @cargo xtask bench-run --quick --output benchmarks/results/latest.json
     @echo ""
-    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --receipt
+    @cargo xtask bench-format --receipt
 
 # Compare current results against baseline
 bench-compare:
     @echo "📈 Comparing against baseline..."
-    ./benchmarks/scripts/compare.sh
+    @cargo xtask bench-compare
 
 # Compare with failure on regression (for CI)
 bench-compare-strict:
     @echo "📈 Comparing against baseline (strict mode)..."
-    ./benchmarks/scripts/compare.sh --fail-on-regression
+    @cargo xtask bench-compare --fail-on-regression
 
 # Save current results as a new baseline
 bench-baseline version='':
@@ -1079,47 +1087,57 @@ bench-baseline version='':
 # Run parser benchmarks only
 bench-parser:
     @echo "📊 Running parser benchmarks..."
-    ./benchmarks/scripts/run-benchmarks.sh --category parser
+    @cargo xtask bench-run --category parser --output benchmarks/results/latest.json
 
 # Run lexer benchmarks only
 bench-lexer:
     @echo "📊 Running lexer benchmarks..."
-    ./benchmarks/scripts/run-benchmarks.sh --category lexer
+    @cargo xtask bench-run --category lexer --output benchmarks/results/latest.json
 
 # Run LSP benchmarks only
 bench-lsp:
     @echo "📊 Running LSP benchmarks..."
-    ./benchmarks/scripts/run-benchmarks.sh --category lsp
+    @cargo xtask bench-run --category lsp --output benchmarks/results/latest.json
 
 # Run workspace index benchmarks only
 bench-index:
     @echo "📊 Running workspace index benchmarks..."
-    ./benchmarks/scripts/run-benchmarks.sh --category index
+    @cargo xtask bench-run --category index --output benchmarks/results/latest.json
 
 # Format benchmark results as receipt
 bench-receipt:
     @echo "📋 Generating benchmark receipt..."
-    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --receipt
+    @cargo xtask bench-format --receipt
 
 # Format benchmark results as markdown
 bench-markdown:
     @echo "📋 Generating benchmark markdown..."
-    @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --markdown
+    @cargo xtask bench-format --markdown
 
 # Generate performance regression alerts (terminal)
 bench-alert:
     @echo "📊 Checking for performance regressions..."
-    @python3 ./benchmarks/scripts/alert.py
+    @cargo xtask bench-alert
 
 # Generate performance regression alerts (markdown for PR)
 bench-alert-md:
     @echo "📊 Generating performance alert (markdown)..."
-    @python3 ./benchmarks/scripts/alert.py --format markdown
+    @cargo xtask bench-alert --format markdown
 
 # Check for critical performance regressions (exits non-zero)
 bench-alert-check:
     @echo "🔍 Checking for critical regressions..."
-    @python3 ./benchmarks/scripts/alert.py --check
+    @cargo xtask bench-alert --check
+
+# Extract Criterion benchmark output from target/criterion artifacts
+bench-extract:
+    @echo "📊 Extracting benchmark results from Criterion..."
+    @cargo xtask bench-extract
+
+# Run benchmark alert regression self-checks
+bench-alert-test:
+    @echo "🧪 Running benchmark alert regression tests..."
+    @cargo xtask bench-alert-test
 
 
 # Run all performance benchmarks and save baseline for 0.12.0
@@ -1236,7 +1254,7 @@ debt-unquarantine name:
 debt-pr-summary:
     @echo "## Technical Debt Status"
     @echo ""
-    @cargo xtask debt-report --json | python3 scripts/debt-pr-summary.py
+    @cargo xtask debt-report --summary
 
 # ============================================================================
 # CI Guardrail Tests (Issue #364)
@@ -1269,7 +1287,14 @@ guardrail-run-ignored:
 # crates.io launch dry-run checks
 prep-crates-io-launch mode='core':
     @echo "🚀 Running crates.io launch prep (mode={{mode}})..."
-    @bash scripts/prep-crates-io-launch.sh --{{mode}}
+    @if [ "{{mode}}" = "--all" ] || [ "{{mode}}" = "all" ]; then \
+        cargo xtask prep-crates-io-launch --mode all; \
+    elif [ "{{mode}}" = "--core" ] || [ "{{mode}}" = "core" ]; then \
+        cargo xtask prep-crates-io-launch --mode core; \
+    else \
+        echo "Invalid mode '{{mode}}' (expected core/all or --core/--all)"; \
+        exit 1; \
+    fi
 
 # ============================================================================
 # SemVer Breaking Change Detection (Issue #277)
@@ -1416,7 +1441,7 @@ fuzz-regression duration='30':
 # Build documentation site with mdBook
 docs-build:
     @echo "📖 Building mdBook documentation site..."
-    @bash scripts/populate-book.sh
+    @cargo xtask populate-book
     mdbook build book
     @echo "✅ Documentation site built successfully"
     @echo "📂 Output: book/book/index.html"
@@ -1424,7 +1449,7 @@ docs-build:
 # Serve documentation site locally
 docs-serve:
     @echo "📖 Serving mdBook documentation site..."
-    @bash scripts/populate-book.sh
+    @cargo xtask populate-book
     @echo "🌐 Starting local server at http://localhost:3000"
     @echo "Press Ctrl+C to stop"
     mdbook serve book --port 3000 --open
@@ -1560,31 +1585,25 @@ ci-unwired-scan:
 
 # CI gate: check unlinked-item compliance
 ci-check-todos:
-    @bash ci/check_todos.sh
+    @cargo xtask ci-hygiene check-todos
 
 # Fast merge gate with receipt generation
 ci-gate-with-receipts:
     @echo "🚪 Running fast merge gate with receipts..."
     @mkdir -p .receipts/$(date +%Y%m%d)
-    @RECEIPT_DIR=".receipts/$(date +%Y%m%d)" bash -c '\
-        ./scripts/execute-gate.sh workflow-audit --receipt-dir "$RECEIPT_DIR" && \
-        ./scripts/execute-gate.sh no-nested-lock --receipt-dir "$RECEIPT_DIR" && \
-        ./scripts/execute-gate.sh format --receipt-dir "$RECEIPT_DIR" && \
-        ./scripts/execute-gate.sh clippy-lib --receipt-dir "$RECEIPT_DIR" && \
-        ./scripts/execute-gate.sh test-lib --receipt-dir "$RECEIPT_DIR" && \
-        ./scripts/execute-gate.sh policy --receipt-dir "$RECEIPT_DIR" && \
-        ./scripts/execute-gate.sh lsp-definition --receipt-dir "$RECEIPT_DIR" \
-    '
+    @for gate in workflow-audit no-nested-lock format clippy-lib test-lib policy lsp-definition; do \
+        cargo xtask gates --gate "$${gate}" --receipt --receipt-path ".receipts/$(date +%Y%m%d)/$${gate}.json" || exit 1; \
+    done
     @echo "✅ Merge gate passed with receipts!"
     @echo "📁 Receipts: .receipts/$(date +%Y%m%d)/"
 
 # Gate execution for individual gate (with receipt)
 gate-execute gate_id:
-    @./scripts/execute-gate.sh {{gate_id}} --receipt-dir .receipts/$(date +%Y%m%d)
+    @cargo xtask gates --gate "{{gate_id}}" --receipt --receipt-path ".receipts/$(date +%Y%m%d)/{{gate_id}}.json"
 
 # Show gate registry
 gate-list:
-    @python3 scripts/list-gates.py
+    @cargo xtask gates --list
 
 # ============================================================================
 # Release Gate (Slice C: Release candidate validation)
@@ -1598,12 +1617,19 @@ release-build:
 
 # Version sync check (Slice B: single source of version truth)
 version-check:
-    @echo "Checking version sync..."
-    @bash scripts/check-version-sync.sh
+    @cargo xtask check-version-sync
 
 # Turnkey PR-driven release orchestrator for 0.x.y releases.
-release-turnkey VERSION:
-    @bash scripts/release-turnkey-pr.sh "{{VERSION}}"
+release-turnkey VERSION *ARGS="":
+    @cargo xtask release-turnkey "{{VERSION}}" {{ARGS}}
+
+# Dispatch publish-to-crates.io workflow for a release version.
+publish-release VERSION *ARGS="":
+    @cargo xtask publish-release "{{VERSION}}" {{ARGS}}
+
+# Run post-release installed-binary smoke test for a release version.
+smoke-test-release VERSION:
+    @cargo xtask smoke-test-release "{{VERSION}}"
 
 # Release gate: full validation for release candidates (~10 min)
 # Composes: ci-gate + release-specific checks

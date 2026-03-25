@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-MODE="core"
-
 usage() {
   cat <<'USAGE'
-Usage: scripts/prep-crates-io-launch.sh [--core|--all]
+Usage:
+  scripts/prep-crates-io-launch.sh [--core|--all]
 
-Runs crates.io launch readiness checks:
+Runs crates.io launch readiness checks through xtask:
   1) cargo check --locked for selected crates
-  2) cargo package dry-run validation for selected crates
+  2) cargo package --no-verify dry-run validation for selected crates
 
 Options:
   --core      Validate public launch crates (default)
@@ -20,60 +17,29 @@ Options:
 USAGE
 }
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --core)
-      MODE="core"
-      ;;
-    --all)
-      MODE="all"
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown option: $1" >&2
-      usage
-      exit 2
-      ;;
-  esac
-  shift
-done
-
-if [[ "$MODE" == "core" ]]; then
-  mapfile -t CRATES < <(printf '%s\n' \
-    perl-parser \
-    perl-lexer \
-    perl-lsp \
-    perl-dap \
-    perl-corpus)
-else
-  mapfile -t CRATES < <(
-    cd "$ROOT_DIR"
-    python3 - <<'PY'
-from pathlib import Path
-import tomllib
-
-data = tomllib.loads(Path("Cargo.toml").read_text())
-for crate in data["workspace"]["metadata"]["publish"]["allow"]:
-    print(crate)
-PY
-  )
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
 fi
 
-echo "🚀 crates.io launch prep (${MODE})"
-echo "📦 Running cargo check + cargo package dry-run for ${#CRATES[@]} crate(s)"
+MODE="${1:---core}"
+shift || true
+if [[ $# -gt 0 ]]; then
+  echo "Too many arguments" >&2
+  usage
+  exit 2
+fi
 
-for crate in "${CRATES[@]}"; do
-  echo ""
-  echo "==> ${crate}"
-  (
-    cd "$ROOT_DIR"
-    cargo check --locked -p "$crate"
-    CARGO_PACKAGE_NO_VERIFY=1 scripts/cargo-package-workspace-dry-run.sh "$crate" >/dev/null
-  )
-done
-
-echo ""
-echo "✅ crates.io launch prep completed (${MODE})"
+case "$MODE" in
+  --core|core)
+    exec cargo xtask prep-crates-io-launch --mode core
+    ;;
+  --all|all)
+    exec cargo xtask prep-crates-io-launch --mode all
+    ;;
+  *)
+    echo "Unknown mode: $MODE" >&2
+    usage
+    exit 2
+    ;;
+esac

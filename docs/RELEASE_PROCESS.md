@@ -83,7 +83,7 @@ git checkout master
 git reset --hard origin/master
 
 # optional but recommended: use the turnkey orchestrator
-scripts/release-turnkey-pr.sh <0.x.y>
+cargo xtask release-turnkey <0.x.y>
 ```
 
 Or run the two workflow dispatches manually with `gh`:

@@ -47,7 +47,7 @@ All merge-blocking gates must pass:
 
 - [ ] All version strings agree across `Cargo.toml` (workspace), `features.toml`,
       `package.json` (VSCode extension), and any `build.rs` references
-- [ ] Verified by `scripts/check-version-sync.sh`
+- [ ] Verified by `just version-check`
 
 ### 4. SemVer Check **[automated]**
 

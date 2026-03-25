@@ -82,7 +82,7 @@ After publish completes:
 To run the entire path from PR creation through publish dispatch:
 
 ```bash
-scripts/release-turnkey-pr.sh <0.x.y>
+cargo xtask release-turnkey <0.x.y>
 ```
 
 Use `--skip-crates` to run validation and release without crates.io publishing when needed.
