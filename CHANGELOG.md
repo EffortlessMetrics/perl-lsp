@@ -237,7 +237,6 @@ polish, performance hardening, and swarm infrastructure maturation.
 - **perltidy/perlcritic Timeout**: Subprocess timeout prevents editor hangs (#2616)
 - **CPAN-Scale Index Tuning**: Workspace index tuned for large CPAN workspaces (#1664)
 
-## [0.12.0] - 2026-03-20
 
 This release is the **public alpha launch** -- the first release intended for broad
 external adoption. It spans 590+ commits and 200+ merged PRs, delivering major parser

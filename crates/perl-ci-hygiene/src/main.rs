@@ -242,11 +242,13 @@ fn run() -> Result<i32> {
     Ok(code)
 }
 
-const CI_REPORT_CRATES_EXCLUDE: [&str; 9] = [
+const CI_REPORT_CRATES_EXCLUDE: [&str; 11] = [
     "tree-sitter-perl-c",
     "tree-sitter-perl-rs",
     "perl-parser-pest",
     "perl-tdd-support",
+    "perl-test-must",
+    "perl-ci-hygiene",
     "perl-ts-heredoc-analysis",
     "perl-ts-logos-lexer",
     "perl-ts-heredoc-parser",
@@ -257,7 +259,12 @@ const CI_REPORT_CRATES_EXCLUDE: [&str; 9] = [
 const CI_TEST_FILE_SUFFIXES: [&str; 3] = ["_test.rs", "_tests.rs", "tests.rs"];
 
 fn is_excluded_test_path(path: &Path) -> bool {
-    if path.components().any(|component| component.as_os_str() == OsStr::new("tests")) {
+    if path.components().any(|component| {
+        let value = component.as_os_str();
+        value == OsStr::new("tests")
+            || value == OsStr::new("benches")
+            || value == OsStr::new("examples")
+    }) {
         return true;
     }
 
@@ -2808,7 +2815,8 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
             if line_no >= test_start {
                 continue;
             }
-            if unwrap_re.is_match(line)
+            if !comment_re.is_match(line)
+                && unwrap_re.is_match(line)
                 && !(line.contains("self.expect(")
                     || line.contains("s.expect(")
                     || line.contains("self.context.expect("))

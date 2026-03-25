@@ -20,7 +20,7 @@ perl-lsp is a Perl language server written in Rust — a native binary that prov
 
 The codebase:
 
-- **~598,000 lines of Rust** across **132 workspace crates** (as of 2026-03-22; run `just verify-publication-facts` for the current value)
+- **~598,000 lines of Rust** across **134 workspace crates** (as of 2026-03-25; run `just verify-publication-facts` for the current value)
 - **98 LSP and DAP features**, all at GA maturity
 - **87% mutation score** (industry baseline: 60-70%)
 - **90.9% CPAN corpus manifest coverage** (85.7% baseline clean-parse rate) across 4,355 real-world Perl modules
@@ -70,7 +70,7 @@ The traditional cost estimate ($500K-$1.2M) is built from first principles: 35-4
 
 The swarm cost ($40K-79K) breaks down as approximately $20K compute (estimated from token consumption across ~500 agent sessions) plus $24K-50K of human time at $150-250/hour. The human time figure is the most uncertain — memory files from the project record 5 major development cycles and ~30 planning sessions, but exact hours are not tracked.
 
-**Confidence levels**: The codebase metrics (~598K LOC, 132 crates, 200+ PRs) are facts from git. The velocity figure (56 PRs in 5 days) is documented in memory files from the session. The cost estimates are informed approximations (Tier C), not accounting-precision figures — see `docs/articles/research/COST_ROI_ANALYSIS.md` Section 9 for confidence intervals and methodology.
+**Confidence levels**: The codebase metrics (~598K LOC, 134 crates, 200+ PRs) are facts from git. The velocity figure (56 PRs in 5 days) is documented in memory files from the session. The cost estimates are informed approximations (Tier C), not accounting-precision figures — see `docs/articles/research/COST_ROI_ANALYSIS.md` Section 9 for confidence intervals and methodology.
 
 ---
 
@@ -78,9 +78,9 @@ The swarm cost ($40K-79K) breaks down as approximately $20K compute (estimated f
 
 Four architectural decisions made the swarm economics possible. None of them were obvious at the start of the project.
 
-**1. Microcrate architecture (133 crates, zero circular dependencies)**
+**1. Microcrate architecture (134 crates, zero circular dependencies)**
 
-A monolithic codebase cannot support 75 parallel agents. If every agent touches shared files, merge conflicts are guaranteed. 133 crates — each with a single responsibility and a narrow public API — means that most pairs of agents are working in separate crates entirely. No conflict is possible.
+A monolithic codebase cannot support 75 parallel agents. If every agent touches shared files, merge conflicts are guaranteed. 134 crates — each with a single responsibility and a narrow public API — means that most pairs of agents are working in separate crates entirely. No conflict is possible.
 
 This was not planned from day one. It emerged from Era 3 (October 2025 through February 2026), a deliberate slowdown to extract god files into microcrates before scaling up. The slowdown cost 4 months. Without it, Era 5's 75-agent sessions would have been unusable.
 
@@ -153,7 +153,7 @@ The scout-constrain-build pattern requires good scouts. Good scouts require doma
 - **$40K-79K** total cost vs $500K-$1.2M traditional equivalent
 - **3-5 minutes** of human attention per merged PR (DevLT)
 - **87%** mutation score on a production codebase
-- **133 crates**, zero merge conflicts across 100 parallel agents
+- **134 crates**, zero merge conflicts across 100 parallel agents
 - **56 PRs** created in 5 days at peak velocity
 
 The project is public at [github.com/EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp). The methodology is captured in `docs/articles/SWARM_METHODOLOGY.md`. The economics are documented with confidence intervals in `docs/articles/research/COST_ROI_ANALYSIS.md`.

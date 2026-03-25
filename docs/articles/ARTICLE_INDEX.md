@@ -151,7 +151,7 @@ Supporting research and source material. All files are in [research/](research/)
 | [research/COUNTER_INTUITIVE_INSIGHTS.md](research/COUNTER_INTUITIVE_INSIGHTS.md) | Surprising findings that invert common assumptions about AI-assisted development |
 | [research/HINDSIGHT_FINDINGS.md](research/HINDSIGHT_FINDINGS.md) | Things that are obvious in hindsight but were invisible at build time |
 | [research/CPAN_CORPUS_AUDIT.md](research/CPAN_CORPUS_AUDIT.md) | Detailed CPAN corpus analysis: 4,355 files, top error buckets, coverage by module category |
-| [research/MICROCRATE_EVOLUTION.md](research/MICROCRATE_EVOLUTION.md) | How the codebase grew from 2 to 133 crates: emergent architecture from swarm development |
+| [research/MICROCRATE_EVOLUTION.md](research/MICROCRATE_EVOLUTION.md) | How the codebase grew from 2 to 134 crates: emergent architecture from swarm development |
 | [research/TREE_SITTER_BREAKAGE.md](research/TREE_SITTER_BREAKAGE.md) | 7 tree-sitter breakage patterns and the mode-based lexer insight that drove v3 |
 | [research/INTERVIEW_QUESTIONS.md](research/INTERVIEW_QUESTIONS.md) | 57 interview questions (35 original + 22 generated from session discoveries) |
 | [research/BUILDER_SPECS_PHASE_A.md](research/BUILDER_SPECS_PHASE_A.md) | Builder-ready specifications from session 3 scout findings |
@@ -243,7 +243,7 @@ Verified by `just verify-publication-facts` against live repo data. Historical v
 | Claim | Current Value | 2026-03-19 Value | Tier | Command |
 |-------|--------------|-----------------|------|---------|
 | Lines of Rust | ~597,863 | 563,883 | A | `find crates/ -name "*.rs" -print0 \| xargs -0 cat \| wc -l` |
-| Workspace crates | 132 | 133 | A | `cargo metadata --no-deps \| jq '.packages \| length'` |
+| Workspace crates | 134 | 133 | A | `cargo metadata --no-deps \| jq '.packages \| length'` |
 | Total commits | 3,307 | 2,768 | A | `git log --oneline \| wc -l` |
 | LSP features | 98 | 97 | A | `grep -c '^\[\[feature\]\]' features.toml` |
 | CPAN corpus files | 4,355 | 4,355 | A | `jq .total_files .ci/cpan-corpus-baseline.json` |
