@@ -181,7 +181,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
             let Some(elapsed_seconds) = elapsed_seconds else {
                 continue;
             };
-            let elapsed_minutes = elapsed_seconds / 60;
+            let elapsed_minutes = (elapsed_seconds + 59) / 60;
 
             let workflow_name = run
                 .get("name")
