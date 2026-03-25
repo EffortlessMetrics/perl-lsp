@@ -50,8 +50,8 @@ pub fn run() -> Result<()> {
     files.sort();
 
     let mut hits: Vec<ClaimHit> = Vec::new();
-    for md_file in files {
-        let text = fs::read_to_string(&md_file)
+    for md_file in &files {
+        let text = fs::read_to_string(md_file)
             .with_context(|| format!("failed to read article file {}", md_file.display()))?;
         for (line_no, line) in text.lines().enumerate() {
             for &(stale, replacement, description) in STALE_PATTERNS {

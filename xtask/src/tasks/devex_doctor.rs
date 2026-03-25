@@ -158,7 +158,8 @@ fn is_component_installed(component: &str) -> bool {
 fn show_version(program: &str, command: &str, args: &[&str]) {
     match Command::new(command).args(args).output() {
         Ok(output) if output.status.success() => {
-            let first_line = String::from_utf8_lossy(&output.stdout).lines().next().unwrap_or("");
+            let output = String::from_utf8_lossy(&output.stdout);
+            let first_line = output.lines().next().unwrap_or("");
             pass(&format!("{program} version: {first_line}"));
         }
         _ => warn(&format!("{program} version check failed")),

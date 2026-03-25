@@ -68,7 +68,7 @@ pub fn run_hook_registry_check() -> Result<()> {
 
     let mut failed = 0u32;
 
-    for path in commands {
+    for path in &commands {
         let abs_path = root.join(&path);
         if !abs_path.exists() {
             println!("::error::Registered hook script missing: {}", path);

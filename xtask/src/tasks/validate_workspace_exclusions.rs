@@ -129,7 +129,6 @@ fn check_exclude_section(root: &Path) -> Result<()> {
         .ok_or_else(|| eyre!("Workspace has no root-level `exclude` array"))?;
 
     let exclude_values: Vec<&str> = exclude.iter().filter_map(Value::as_str).collect();
-    let excluded = excluded_set();
     let missing = EXCLUDED_CRATES
         .iter()
         .filter(|entry| !exclude_values.contains(entry))
