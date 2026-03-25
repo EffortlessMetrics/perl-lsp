@@ -491,11 +491,8 @@ impl LspServer {
                     call.to.name.split("::").last().unwrap_or(&call.to.name).to_string();
                 // For qualified calls (e.g. `Utils::format_string`), prefer the
                 // package-matching file first.  For bare calls, accept any match.
-                let qualified_pkg = call
-                    .to
-                    .name
-                    .rsplit_once("::")
-                    .map(|(pkg, _)| pkg.replace("::", "/"));
+                let qualified_pkg =
+                    call.to.name.rsplit_once("::").map(|(pkg, _)| pkg.replace("::", "/"));
 
                 'outer: for (doc_uri, doc_text, ast) in &doc_snapshots {
                     let provider = CallHierarchyProvider::new(doc_text.clone(), doc_uri.clone());
