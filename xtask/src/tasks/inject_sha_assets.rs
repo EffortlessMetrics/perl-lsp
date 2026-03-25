@@ -182,7 +182,8 @@ fn build_asset_map(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) -> 
         "macos-arm64".to_string(),
         json!({ "url": url(&mac_arm), "sha256": assets.mac_arm }),
     );
-    payload.insert("win-x64".to_string(), json!({ "url": url(&win_x64), "sha256": assets.win_x64 }));
+    payload
+        .insert("win-x64".to_string(), json!({ "url": url(&win_x64), "sha256": assets.win_x64 }));
     payload
         .insert("win-arm64".to_string(), json!({ "url": url(&win_arm), "sha256": assets.win_arm }));
     let payload = Value::Object(payload);

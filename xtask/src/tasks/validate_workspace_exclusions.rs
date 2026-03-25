@@ -10,8 +10,7 @@ use std::path::Path;
 use std::process::Command;
 use toml::Value;
 
-const EXCLUDED_DIRECTORIES: &[&str] =
-    &["tree-sitter-perl", "fuzz"];
+const EXCLUDED_DIRECTORIES: &[&str] = &["tree-sitter-perl", "fuzz"];
 const EXCLUDED_CRATES: &[&str] = &["tree-sitter-perl-c"];
 const PROJECT_CARGO_TOML: &str = "Cargo.toml";
 
