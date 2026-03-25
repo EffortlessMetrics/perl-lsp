@@ -1310,9 +1310,12 @@ semver-check:
 
 # Check specific package for breaking changes
 semver-check-package package:
-    @echo "🔍 Checking {{package}} for SemVer breaking changes..."
-    @just _semver-check-install
-    @cargo semver-checks check-release -p {{package}} --baseline-rev $(just _semver-baseline-tag)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔍 Checking {{package}} for SemVer breaking changes..."
+    just _semver-check-install
+    BASELINE="$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+    cargo semver-checks check-release -p {{package}} --baseline-rev "$BASELINE"
 
 # Check all published packages
 semver-check-all:
@@ -1325,12 +1328,15 @@ semver-check-all:
 
 # Generate breaking changes report
 semver-report:
-    @echo "📊 Generating SemVer breaking changes report..."
-    @just _semver-check-install
-    @mkdir -p target/semver-reports
-    @cargo semver-checks check-release --workspace --baseline-rev $(just _semver-baseline-tag) \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "📊 Generating SemVer breaking changes report..."
+    just _semver-check-install
+    mkdir -p target/semver-reports
+    BASELINE="$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+    cargo semver-checks check-release --workspace --baseline-rev "$BASELINE" \
         --output-format json > target/semver-reports/breaking-changes.json || true
-    @echo "Report saved to: target/semver-reports/breaking-changes.json"
+    echo "Report saved to: target/semver-reports/breaking-changes.json"
 
 # List all available baseline tags
 semver-list-baselines:
@@ -1339,9 +1345,12 @@ semver-list-baselines:
 
 # Show what changed in public API since last release
 semver-diff package='perl-parser':
-    @echo "📝 Public API changes in {{package}} since last release:"
-    @just _semver-check-install
-    @cargo semver-checks check-release -p {{package}} --baseline-rev $(just _semver-baseline-tag) || true
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "📝 Public API changes in {{package}} since last release:"
+    just _semver-check-install
+    BASELINE="$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+    cargo semver-checks check-release -p {{package}} --baseline-rev "$BASELINE" || true
 
 # Private helper: install cargo-semver-checks if missing
 [private]
@@ -1354,18 +1363,21 @@ _semver-check-install:
 # Private helper: run semver checks on core packages
 [private]
 _semver-check-run:
-    @BASELINE=$(just _semver-baseline-tag); \
-    echo "Using baseline: $$BASELINE"; \
-    echo ""; \
-    echo "Checking perl-parser..."; \
-    cargo semver-checks check-release -p perl-parser --baseline-rev "$$BASELINE" || EXIT_CODE=1; \
-    echo ""; \
-    echo "Checking perl-lexer..."; \
-    cargo semver-checks check-release -p perl-lexer --baseline-rev "$$BASELINE" || EXIT_CODE=1; \
-    echo ""; \
-    echo "Checking perl-parser-core..."; \
-    cargo semver-checks check-release -p perl-parser-core --baseline-rev "$$BASELINE" || EXIT_CODE=1; \
-    exit $${EXIT_CODE:-0}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    BASELINE="$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+    EXIT_CODE=0
+    echo "Using baseline: $BASELINE"
+    echo
+    echo "Checking perl-parser..."
+    cargo semver-checks check-release -p perl-parser --baseline-rev "$BASELINE" || EXIT_CODE=1
+    echo
+    echo "Checking perl-lexer..."
+    cargo semver-checks check-release -p perl-lexer --baseline-rev "$BASELINE" || EXIT_CODE=1
+    echo
+    echo "Checking perl-parser-core..."
+    cargo semver-checks check-release -p perl-parser-core --baseline-rev "$BASELINE" || EXIT_CODE=1
+    exit "$EXIT_CODE"
 
 # Private helper: get baseline tag for comparison
 [private]
@@ -1668,10 +1680,9 @@ release-check: release-gate semver-check
     else
       echo "  No banned panic constructs found"
     fi
-    echo "Running cargo publish dry-run..."
-    cargo publish --dry-run -p perl-parser 2>&1 | tail -1
-    cargo publish --dry-run -p perl-lsp 2>&1 | tail -1
-    echo "  Publish dry-run passed"
+    echo "Running crates.io launch prep..."
+    cargo xtask prep-crates-io-launch --mode core
+    echo "  Crates.io launch prep passed"
     echo "Building perl-dap release binary..."
     cargo build -p perl-dap --release --locked
     echo "  perl-dap release build passed"

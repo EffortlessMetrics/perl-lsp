@@ -368,6 +368,9 @@ enum Commands {
         output: PathBuf,
     },
 
+    /// Run version-sync checks from `perl-ci-hygiene`.
+    CheckVersionSync,
+
     /// Check for disallowed direct `ExitStatus::from_raw()` usage.
     CheckFromRaw,
 
@@ -1233,6 +1236,7 @@ fn main() -> Result<()> {
         Commands::CiBaseline { branch, days, limit, output } => {
             ci_metrics::run_ci_baseline(branch, days, limit, output)
         }
+        Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
