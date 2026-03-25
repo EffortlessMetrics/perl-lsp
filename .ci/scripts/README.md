@@ -6,7 +6,9 @@ This directory contains scripts for measuring and analyzing CI performance metri
 
 ### measure-ci-baseline.sh
 
-Collects workflow run data from GitHub Actions and calculates baseline metrics.
+Collects workflow run data from GitHub Actions and calculates baseline metrics via
+`cargo xtask ci-baseline` (the underlying implementation), with this wrapper
+script retained as a convenience entrypoint.
 
 **Features:**
 - Fetches workflow runs from specified branch
@@ -19,41 +21,49 @@ Collects workflow run data from GitHub Actions and calculates baseline metrics.
 
 **Prerequisites:**
 - [GitHub CLI (gh)](https://cli.github.com/) - installed and authenticated
-- [jq](https://stedolan.github.io/jq/) - for JSON processing
+- Rust toolchain - for the workspace xtask binary
+- `cargo` - comes with Rust, used to run `cargo xtask`
 
 **Installation of prerequisites:**
 
 ```bash
 # macOS
-brew install gh jq
+brew install gh
 
 # Ubuntu/Debian
-sudo apt install gh jq
+sudo apt install gh
 
-# Then authenticate
+# Authenticate once for CLI queries
 gh auth login
 ```
 
-**Usage:**
+**Usage (canonical):**
 
 ```bash
 # Basic usage (analyzes master branch, last 30 days)
-./measure-ci-baseline.sh
+cargo xtask ci-baseline
 
 # Analyze a different branch
-./measure-ci-baseline.sh --branch main
+cargo xtask ci-baseline --branch main
 
 # Analyze last 7 days only
-./measure-ci-baseline.sh --days 7
+cargo xtask ci-baseline --days 7
 
 # Fetch more runs for higher accuracy
-./measure-ci-baseline.sh --limit 500
+cargo xtask ci-baseline --limit 500
 
 # Custom output directory
-./measure-ci-baseline.sh --output ./reports
+cargo xtask ci-baseline --output ./reports
 
 # All options
-./measure-ci-baseline.sh --branch master --days 30 --limit 200 --output .ci
+cargo xtask ci-baseline --branch master --days 30 --limit 200 --output .ci
+```
+
+**Usage (wrapper shim):**
+
+```bash
+# Run the shim script (delegates to `cargo xtask ci-baseline`)
+./measure-ci-baseline.sh
 ```
 
 **Options:**
@@ -111,10 +121,10 @@ gh auth login
 
 ```bash
 # Run before making CI changes
-./measure-ci-baseline.sh --output .ci/before
+cargo xtask ci-baseline --output .ci/before
 
 # After changes
-./measure-ci-baseline.sh --output .ci/after
+cargo xtask ci-baseline --output .ci/after
 
 # Compare the JSON files to measure improvement
 ```
@@ -130,8 +140,8 @@ gh auth login
 
 ```bash
 # Compare feature branch to main
-./measure-ci-baseline.sh --branch main --output .ci/main-baseline
-./measure-ci-baseline.sh --branch feature-x --output .ci/feature-baseline
+cargo xtask ci-baseline --branch main --output .ci/main-baseline
+cargo xtask ci-baseline --branch feature-x --output .ci/feature-baseline
 ```
 
 ## Interpreting Results
@@ -166,20 +176,6 @@ Use this to:
 ```bash
 gh auth login
 # Follow the prompts to authenticate
-```
-
-### "jq: command not found"
-
-Install jq for your platform:
-```bash
-# macOS
-brew install jq
-
-# Ubuntu/Debian  
-sudo apt install jq
-
-# RHEL/CentOS
-sudo yum install jq
 ```
 
 ### No workflow runs found
