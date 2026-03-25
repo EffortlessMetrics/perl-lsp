@@ -1,7 +1,7 @@
 //! Generate Homebrew formula and VS Code asset metadata from cargo-dist checksums.
 
 use color_eyre::eyre::{Context, Result, eyre};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -41,14 +41,17 @@ pub fn run(config: InjectShaAssetsConfig) -> Result<()> {
     let win_sha_x64 = checksum_for(&config, WIN_X64, &checksums)?;
     let win_sha_arm = checksum_for(&config, WIN_ARM, &checksums)?;
 
-    let brew_formula = build_brew_formula(&config, &AssetShaMap {
-        mac_arm: &mac_sha_arm,
-        mac_x64: &mac_sha_x64,
-        lin_arm: &lin_sha_arm,
-        lin_x64: &lin_sha_x64,
-        win_x64: &win_sha_x64,
-        win_arm: &win_sha_arm,
-    });
+    let brew_formula = build_brew_formula(
+        &config,
+        &AssetShaMap {
+            mac_arm: &mac_sha_arm,
+            mac_x64: &mac_sha_x64,
+            lin_arm: &lin_sha_arm,
+            lin_x64: &lin_sha_x64,
+            win_x64: &win_sha_x64,
+            win_arm: &win_sha_arm,
+        },
+    );
     let asset_map = build_asset_map(
         &config,
         &AssetShaMap {
@@ -80,10 +83,7 @@ fn checksum_for<'a>(
     checksums: &'a BTreeMap<String, String>,
 ) -> Result<String> {
     let filename = format!("{}-{}-{}", config.prefix, config.version, artifact_suffix);
-    checksums
-        .get(&filename)
-        .cloned()
-        .ok_or_else(|| eyre!("missing checksum for {}", filename))
+    checksums.get(&filename).cloned().ok_or_else(|| eyre!("missing checksum for {}", filename))
 }
 
 struct AssetShaMap<'a> {
@@ -104,7 +104,7 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
     let lin_x64_filename = artifact_filename(&config.prefix, &config.version, LIN_X64);
 
     format!(
-r##"class PerlLsp < Formula
+        r##"class PerlLsp < Formula
   desc "Perl language server"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"
@@ -176,28 +176,24 @@ fn build_asset_map(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) -> 
         "linux-arm64".to_string(),
         json!({ "url": url(linux_arm), "sha256": assets.lin_arm }),
     );
-    payload.insert(
-        "macos-x64".to_string(),
-        json!({ "url": url(mac_x64), "sha256": assets.mac_x64 }),
-    );
+    payload
+        .insert("macos-x64".to_string(), json!({ "url": url(mac_x64), "sha256": assets.mac_x64 }));
     payload.insert(
         "macos-arm64".to_string(),
         json!({ "url": url(mac_arm), "sha256": assets.mac_arm }),
     );
-    payload.insert(
-        "win-x64".to_string(),
-        json!({ "url": url(win_x64), "sha256": assets.win_x64 }),
-    );
-    payload.insert(
-        "win-arm64".to_string(),
-        json!({ "url": url(win_arm), "sha256": assets.win_arm }),
-    );
+    payload.insert("win-x64".to_string(), json!({ "url": url(win_x64), "sha256": assets.win_x64 }));
+    payload
+        .insert("win-arm64".to_string(), json!({ "url": url(win_arm), "sha256": assets.win_arm }));
     let payload = Value::Object(payload);
     serde_json::to_string_pretty(&payload).map_err(Into::into)
 }
 
 fn release_base_url(config: &InjectShaAssetsConfig) -> String {
-    format!("https://github.com/{}/{}/releases/download/{}", config.owner, config.repo, config.version)
+    format!(
+        "https://github.com/{}/{}/releases/download/{}",
+        config.owner, config.repo, config.version
+    )
 }
 
 fn artifact_filename(prefix: &str, version: &str, artifact_suffix: &str) -> String {

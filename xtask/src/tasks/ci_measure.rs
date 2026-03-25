@@ -1,5 +1,5 @@
 use chrono::Utc;
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde::Serialize;
 use std::fs;
 use std::process::Command;
@@ -53,11 +53,7 @@ pub fn run() -> Result<()> {
 
         let elapsed = (start.elapsed().as_secs_f64() * 1000.0).round() / 1000.0;
         let returncode = status.code().unwrap_or(-1);
-        let record = CiLaneResult {
-            name: name.to_string(),
-            seconds: elapsed,
-            returncode,
-        };
+        let record = CiLaneResult { name: name.to_string(), seconds: elapsed, returncode };
         ndjson.push_str(&serde_json::to_string(&record)?);
         ndjson.push('\n');
 
@@ -69,23 +65,15 @@ pub fn run() -> Result<()> {
         lanes.push(record);
     }
 
-    let payload = CiMeasurePayload {
-        generated_at: Utc::now().to_rfc3339(),
-        lanes,
-        total_seconds,
-    };
+    let payload = CiMeasurePayload { generated_at: Utc::now().to_rfc3339(), lanes, total_seconds };
 
     let ndjson_path = artifacts_dir.join("ci-time.ndjson");
     let json_path = artifacts_dir.join("ci-time.json");
     let md_path = artifacts_dir.join("ci-time.md");
 
     fs::write(&ndjson_path, ndjson).context("Failed to write ci-time.ndjson")?;
-    fs::write(
-        &json_path,
-        serde_json::to_string_pretty(&payload)?
-            .as_bytes(),
-    )
-    .context("Failed to write ci-time.json")?;
+    fs::write(&json_path, serde_json::to_string_pretty(&payload)?.as_bytes())
+        .context("Failed to write ci-time.json")?;
 
     let mut markdown = String::new();
     markdown.push_str("# CI Timing Baseline\n\n");
@@ -93,7 +81,8 @@ pub fn run() -> Result<()> {
     markdown.push_str(&format!("- Total: `{}s`\n\n", payload.total_seconds));
     markdown.push_str("| Lane | Seconds | RC |\n|------|---------|----|\n");
     for lane in &payload.lanes {
-        markdown.push_str(&format!("| `{}` | {} | {} |\n", lane.name, lane.seconds, lane.returncode));
+        markdown
+            .push_str(&format!("| `{}` | {} | {} |\n", lane.name, lane.seconds, lane.returncode));
     }
     fs::write(&md_path, markdown).context("Failed to write ci-time.md")?;
 

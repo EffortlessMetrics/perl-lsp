@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
 };
 
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde_json::Value;
 
 pub fn run(ops_dir: PathBuf) -> Result<()> {
@@ -50,7 +50,11 @@ pub fn run(ops_dir: PathBuf) -> Result<()> {
         if event.as_ref() == "task_completed" {
             task_completed.push((ts.to_string(), cwd.to_string()));
         } else if event.as_ref() == "subagent_stop" {
-            subagent_stops.push((ts.to_string(), agent_type.to_string(), worktree_path.to_string()));
+            subagent_stops.push((
+                ts.to_string(),
+                agent_type.to_string(),
+                worktree_path.to_string(),
+            ));
         }
     }
 
@@ -87,9 +91,7 @@ fn print_counts(label: &str, counts: &HashMap<String, usize>) {
     println!("{label}");
     let mut rows: Vec<(&String, &usize)> = counts.iter().collect();
     rows.sort_by(|(a_label, a_count), (b_label, b_count)| {
-        b_count
-            .cmp(a_count)
-            .then_with(|| a_label.cmp(b_label))
+        b_count.cmp(a_count).then_with(|| a_label.cmp(b_label))
     });
 
     for (key, count) in rows {
@@ -98,11 +100,7 @@ fn print_counts(label: &str, counts: &HashMap<String, usize>) {
     println!();
 }
 
-fn print_last_pairs<T>(
-    rows: &[(T, T)],
-    limit: usize,
-    mut printer: impl FnMut(&T, &T),
-) {
+fn print_last_pairs<T>(rows: &[(T, T)], limit: usize, mut printer: impl FnMut(&T, &T)) {
     if rows.is_empty() {
         return;
     }
@@ -113,11 +111,7 @@ fn print_last_pairs<T>(
     }
 }
 
-fn print_last_triplets<T>(
-    rows: &[(T, T, T)],
-    limit: usize,
-    mut printer: impl FnMut(&T, &T, &T),
-) {
+fn print_last_triplets<T>(rows: &[(T, T, T)], limit: usize, mut printer: impl FnMut(&T, &T, &T)) {
     if rows.is_empty() {
         return;
     }

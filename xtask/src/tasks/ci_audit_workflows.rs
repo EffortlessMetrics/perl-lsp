@@ -10,17 +10,9 @@ use std::path::Path;
 
 use crate::utils::project_root;
 
-const ALLOWED_WORKFLOWS: &[&str] = &[
-    "ci.yml",
-    "check-ignored.yml",
-];
+const ALLOWED_WORKFLOWS: &[&str] = &["ci.yml", "check-ignored.yml"];
 
-const ALLOWED_UNGATED_JOBS: &[&str] = &[
-    "tautology-check",
-    "test-metrics",
-    "fmt",
-    "clippy",
-];
+const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
 
 pub fn run() -> Result<()> {
     let root = project_root()?;
@@ -119,9 +111,7 @@ fn has_pr_trigger(workflow: &Value) -> bool {
         Value::Sequence(values) => {
             values.iter().any(|value| value.as_str() == Some("pull_request"))
         }
-        Value::Mapping(values) => {
-            values.contains_key(&Value::String("pull_request".to_string()))
-        }
+        Value::Mapping(values) => values.contains_key(&Value::String("pull_request".to_string())),
         Value::String(value) => value == "pull_request",
         _ => false,
     }
@@ -148,8 +138,7 @@ jobs:
 
     #[test]
     fn pr_trigger_matches_list_form() {
-        let workflow =
-            serde_yaml_ng::from_str(r#"on: [push, pull_request]"#).expect("valid yaml");
+        let workflow = serde_yaml_ng::from_str(r#"on: [push, pull_request]"#).expect("valid yaml");
         assert!(has_pr_trigger(&workflow));
     }
 

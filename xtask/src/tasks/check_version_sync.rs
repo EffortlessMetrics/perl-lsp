@@ -4,7 +4,7 @@
 //! if present and otherwise falls back to `cargo run`.
 
 use crate::utils::project_root;
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use std::process::Command;
 
 pub fn run() -> Result<()> {
@@ -20,9 +20,7 @@ pub fn run() -> Result<()> {
             "run",
             "--quiet",
             "--manifest-path",
-            root.join("Cargo.toml")
-                .to_string_lossy()
-                .as_ref(),
+            root.join("Cargo.toml").to_string_lossy().as_ref(),
             "-p",
             "perl-ci-hygiene",
             "--",
@@ -38,4 +36,3 @@ pub fn run() -> Result<()> {
 
     Ok(())
 }
-

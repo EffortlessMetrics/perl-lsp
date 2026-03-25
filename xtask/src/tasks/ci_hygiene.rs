@@ -3,7 +3,7 @@
 //! This task keeps shell wrappers thin and delegates to the crate directly,
 //! either via an existing local debug binary or via `cargo run`.
 
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use std::path::PathBuf;
 use std::process::Command;
 

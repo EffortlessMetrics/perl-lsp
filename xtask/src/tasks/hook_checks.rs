@@ -1,4 +1,4 @@
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::HashSet;
@@ -86,10 +86,7 @@ pub fn run_hook_registry_check() -> Result<()> {
     }
 
     if failed == 0 {
-        println!(
-            "Hook registry check passed ({} scripts verified)",
-            commands.len()
-        );
+        println!("Hook registry check passed ({} scripts verified)", commands.len());
         Ok(())
     } else {
         bail!("Hook registry check failed for {failed} script(s)");
@@ -120,17 +117,32 @@ pub fn run_hook_tests() -> Result<()> {
     let mut fail = 0u32;
 
     let task_completed_no_payload = run_script(task_completed.as_path(), None, None)?;
-    assert_exit_code(0, "task-completed passes with no staged .rs files", task_completed_no_payload.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    assert_exit_code(
+        0,
+        "task-completed passes with no staged .rs files",
+        task_completed_no_payload.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
-    let temp_root = PathBuf::from(std::env::temp_dir())
-        .join(format!("xtask-hook-tests-{}", SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()));
+    let temp_root = PathBuf::from(std::env::temp_dir()).join(format!(
+        "xtask-hook-tests-{}",
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+    ));
     fs::create_dir_all(&temp_root).context("Failed to create temporary ops directory")?;
 
-    let sample_payload = r#"{"subagent_name":"test-agent","subagent_type":"builder","session_id":"abc123"}"#;
+    let sample_payload =
+        r#"{"subagent_name":"test-agent","subagent_type":"builder","session_id":"abc123"}"#;
     let temp_ops = temp_root.join("subagent-stop");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
     let subagent_out = run_script(&subagent_stop, Some(sample_payload), Some(temp_ops.as_path()))?;
-    assert_exit_code(0, "subagent-stop exits 0 with payload", subagent_out.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    assert_exit_code(
+        0,
+        "subagent-stop exits 0 with payload",
+        subagent_out.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
     let output = read_file(temp_ops.join("swarm-metrics.jsonl"), "Subagent-stop output file")?;
     assert_contains(
@@ -154,7 +166,13 @@ pub fn run_hook_tests() -> Result<()> {
     let sample_payload_tc = r#"{"session_id":"abc123","cwd":"/repo/worktrees/agent-xyz"}"#;
     let task_completed_with_payload =
         run_script(&task_completed, Some(sample_payload_tc), Some(temp_ops.as_path()))?;
-    assert_exit_code(0, "task-completed exits 0 with metrics payload", task_completed_with_payload.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    assert_exit_code(
+        0,
+        "task-completed exits 0 with metrics payload",
+        task_completed_with_payload.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
     let output = read_file(temp_ops.join("swarm-metrics.jsonl"), "task-completed metrics file")?;
     assert_contains(
@@ -178,25 +196,57 @@ pub fn run_hook_tests() -> Result<()> {
 
     let safe_payload = r#"{"tool_input":{"command":"git status"}}"#;
     let pre_tool_safe = run_script(&pre_tool_use, Some(safe_payload), None)?;
-    assert_exit_code(0, "pre-tool-use allows safe commands", pre_tool_safe.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    assert_exit_code(
+        0,
+        "pre-tool-use allows safe commands",
+        pre_tool_safe.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
     let forced_payload = r#"{"tool_input":{"command":"git push --force"}}"#;
     let pre_tool_forced = run_script(&pre_tool_use, Some(forced_payload), None)?;
-    assert_exit_code(2, "pre-tool-use blocks git push --force", pre_tool_forced.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    assert_exit_code(
+        2,
+        "pre-tool-use blocks git push --force",
+        pre_tool_forced.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
     let reset_payload = r#"{"tool_input":{"command":"git reset --hard"}}"#;
     let pre_tool_reset = run_script(&pre_tool_use, Some(reset_payload), None)?;
-    assert_exit_code(2, "pre-tool-use blocks git reset --hard", pre_tool_reset.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    assert_exit_code(
+        2,
+        "pre-tool-use blocks git reset --hard",
+        pre_tool_reset.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
     let empty_payload = r#"{"tool_input":{}}"#;
     let pre_tool_empty = run_script(&pre_tool_use, Some(empty_payload), None)?;
-    assert_exit_code(0, "pre-tool-use allows empty command", pre_tool_empty.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    assert_exit_code(
+        0,
+        "pre-tool-use allows empty command",
+        pre_tool_empty.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
     let temp_ops = temp_root.join("subagent-stop-cwd");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
-    let payload_with_cwd = r#"{"subagent_type":"builder","cwd":"/repo/worktrees/agent-abc","session_id":"sess1"}"#;
-    let subagent_out = run_script(&subagent_stop, Some(payload_with_cwd), Some(temp_ops.as_path()))?;
-    assert_exit_code(0, "subagent-stop exits 0 with cwd payload", subagent_out.status.code().unwrap_or(-1), &mut pass, &mut fail);
+    let payload_with_cwd =
+        r#"{"subagent_type":"builder","cwd":"/repo/worktrees/agent-abc","session_id":"sess1"}"#;
+    let subagent_out =
+        run_script(&subagent_stop, Some(payload_with_cwd), Some(temp_ops.as_path()))?;
+    assert_exit_code(
+        0,
+        "subagent-stop exits 0 with cwd payload",
+        subagent_out.status.code().unwrap_or(-1),
+        &mut pass,
+        &mut fail,
+    );
 
     if pass > 0 || fail > 0 {
         println!("\n=== Results: {} passed, {} failed ===", pass, fail);
@@ -274,10 +324,8 @@ fn extract_hook_commands(document: &Value) -> Vec<String> {
         }
     }
 
-    let mut out: Vec<String> = commands
-        .into_iter()
-        .filter(|command| command.ends_with(".sh"))
-        .collect();
+    let mut out: Vec<String> =
+        commands.into_iter().filter(|command| command.ends_with(".sh")).collect();
     out.sort_unstable();
     out
 }

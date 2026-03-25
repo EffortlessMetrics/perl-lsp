@@ -1,4 +1,4 @@
-use color_eyre::eyre::{bail, Context, Result, eyre};
+use color_eyre::eyre::{Context, Result, bail, eyre};
 use perl_feature_catalog::{Catalog, Maturity};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -64,11 +64,8 @@ fn check_invariants() -> Result<()> {
     }
 
     let total = catalog.features().len();
-    let ga_advertised = catalog
-        .features()
-        .iter()
-        .filter(|f| f.advertised && f.maturity == Maturity::Ga)
-        .count();
+    let ga_advertised =
+        catalog.features().iter().filter(|f| f.advertised && f.maturity == Maturity::Ga).count();
     let headline_features = catalog
         .features()
         .iter()

@@ -144,10 +144,7 @@ fn command_path(program: &str) -> Option<String> {
 }
 
 fn is_component_installed(component: &str) -> bool {
-    let output = match Command::new("rustup")
-        .args(["component", "list", "--installed"])
-        .output()
-    {
+    let output = match Command::new("rustup").args(["component", "list", "--installed"]).output() {
         Ok(output) if output.status.success() => output,
         _ => return false,
     };
@@ -161,10 +158,7 @@ fn is_component_installed(component: &str) -> bool {
 fn show_version(program: &str, command: &str, args: &[&str]) {
     match Command::new(command).args(args).output() {
         Ok(output) if output.status.success() => {
-            let first_line = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .next()
-                .unwrap_or("");
+            let first_line = String::from_utf8_lossy(&output.stdout).lines().next().unwrap_or("");
             pass(&format!("{program} version: {first_line}"));
         }
         _ => warn(&format!("{program} version check failed")),

@@ -1,7 +1,7 @@
 //! Benchmark task wrappers and helpers.
 
 use chrono::Utc;
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -11,7 +11,11 @@ use walkdir::WalkDir;
 
 use crate::utils::project_root;
 
-pub fn run_benchmarks(output: Option<PathBuf>, quick: bool, category: Option<String>) -> Result<()> {
+pub fn run_benchmarks(
+    output: Option<PathBuf>,
+    quick: bool,
+    category: Option<String>,
+) -> Result<()> {
     let root = project_root()?;
     let script = root.join("benchmarks").join("scripts").join("run-benchmarks.sh");
 
@@ -140,7 +144,8 @@ pub fn test_alert_system() -> Result<()> {
     let baseline_path = root.join("benchmarks/baselines/v0.9.0.json");
     let config_path = root.join(".ci/benchmark-thresholds.yaml");
     let workdir = root.join("target").join("xtask").join("bench-alert-test");
-    fs::create_dir_all(&workdir).with_context(|| format!("Failed to create {}", workdir.display()))?;
+    fs::create_dir_all(&workdir)
+        .with_context(|| format!("Failed to create {}", workdir.display()))?;
 
     if !alert_script.exists() {
         bail!("Missing benchmark alert script at {}", alert_script.display());
@@ -300,7 +305,8 @@ fn run_alert_check_case(
     fs::write(&current_path, serde_json::to_string_pretty(&current)?)
         .with_context(|| format!("Failed to write {}", current_path.display()))?;
 
-    let config_path = root.join("target").join("xtask").join("bench-alert-test").join("critical_check.yaml");
+    let config_path =
+        root.join("target").join("xtask").join("bench-alert-test").join("critical_check.yaml");
     let mut config_payload = String::new();
     config_payload.push_str("defaults:\n");
     config_payload.push_str("  warn_threshold_pct: 10\n");
@@ -399,7 +405,8 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
         let bench_name = parts[1].as_str();
         let category = categorize_benchmark(group, bench_name);
 
-        let file_content = fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+        let file_content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
         let estimate: Value = serde_json::from_str(&file_content)
             .with_context(|| format!("Invalid JSON in {}", path.display()))?;
 
@@ -410,9 +417,9 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
                 continue;
             }
         };
-        let mean_ns = extract_u64(mean.get("point_estimate"))
-            .or_else(|_| extract_u64(mean.get("estimate"))
-            .or_else(|_| extract_u64(mean.get("value"))))?;
+        let mean_ns = extract_u64(mean.get("point_estimate")).or_else(|_| {
+            extract_u64(mean.get("estimate")).or_else(|_| extract_u64(mean.get("value")))
+        })?;
         let confidence = mean.get("confidence_interval").and_then(Value::as_object);
         let low_ns = confidence
             .and_then(|object| object.get("lower_bound"))
@@ -432,7 +439,10 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
         entry.insert("unit".to_string(), Value::String(unit));
         entry.insert("display".to_string(), Value::String(display));
 
-        by_category.entry(category).or_default().insert(bench_name.to_string(), Value::Object(entry));
+        by_category
+            .entry(category)
+            .or_default()
+            .insert(bench_name.to_string(), Value::Object(entry));
     }
 
     Ok(by_category)
@@ -499,10 +509,8 @@ fn git_status(root: &Path) -> Result<(String, bool)> {
 }
 
 fn rust_version() -> Result<String> {
-    let output = Command::new("rustc")
-        .arg("--version")
-        .output()
-        .context("Failed to run rustc --version")?;
+    let output =
+        Command::new("rustc").arg("--version").output().context("Failed to run rustc --version")?;
     if !output.status.success() {
         return Ok("unknown".to_string());
     }
@@ -514,8 +522,10 @@ fn rust_version() -> Result<String> {
 }
 
 fn load_json(path: &Path) -> Result<Value> {
-    let content = fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(serde_json::from_str(&content).with_context(|| format!("Invalid JSON in {}", path.display()))?)
+    let content =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    Ok(serde_json::from_str(&content)
+        .with_context(|| format!("Invalid JSON in {}", path.display()))?)
 }
 
 fn run_script(script: &Path, args: &[&str], label: &str) -> Result<()> {

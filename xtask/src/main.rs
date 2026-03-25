@@ -1141,19 +1141,15 @@ fn main() -> Result<()> {
             brew_out,
             asset_map_out,
         }),
-        Commands::UpdateHomebrew {
-            version,
-            owner,
-            repo,
-            prefix,
-            output,
-        } => update_homebrew::run(update_homebrew::UpdateHomebrewConfig {
-            version,
-            owner,
-            repo,
-            prefix,
-            output,
-        }),
+        Commands::UpdateHomebrew { version, owner, repo, prefix, output } => {
+            update_homebrew::run(update_homebrew::UpdateHomebrewConfig {
+                version,
+                owner,
+                repo,
+                prefix,
+                output,
+            })
+        }
         Commands::Compare {
             c_only,
             rust_only,
@@ -1234,12 +1230,9 @@ fn main() -> Result<()> {
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
         Commands::CiMeasure => ci_measure::run(),
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
-        Commands::CiBaseline {
-            branch,
-            days,
-            limit,
-            output,
-        } => ci_metrics::run_ci_baseline(branch, days, limit, output),
+        Commands::CiBaseline { branch, days, limit, output } => {
+            ci_metrics::run_ci_baseline(branch, days, limit, output)
+        }
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
@@ -1253,9 +1246,7 @@ fn main() -> Result<()> {
         Commands::VerifyPublicationFacts { args } => publication_facts::run(args),
         Commands::GhLabels => github::run_labels(),
         Commands::GhTriage { limit } => github::run_issues_needing_triage(limit),
-        Commands::GhBackfillPrefixedLabels { apply } => {
-            github::run_backfill_prefixed_labels(apply)
-        }
+        Commands::GhBackfillPrefixedLabels { apply } => github::run_backfill_prefixed_labels(apply),
         Commands::CorpusAudit { corpus_path, output, check, fresh } => {
             corpus_audit::run(corpus_audit::AuditConfig {
                 corpus_path,
@@ -1265,9 +1256,7 @@ fn main() -> Result<()> {
                 check,
             })
         }
-        Commands::ParserMatrix { report, output } => {
-            parser_matrix::run_with_paths(report, output)?
-        }
+        Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output)?,
         #[cfg(feature = "legacy")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
@@ -1277,11 +1266,9 @@ fn main() -> Result<()> {
         }
         Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
-        Commands::PublishRelease {
-            version,
-            dry_run,
-            git_ref,
-        } => publish::publish_release(version, dry_run, git_ref),
+        Commands::PublishRelease { version, dry_run, git_ref } => {
+            publish::publish_release(version, dry_run, git_ref)
+        }
         Commands::HookCheck => hook_checks::run_hook_check(),
         Commands::HookRegistryCheck => hook_checks::run_hook_registry_check(),
         Commands::HookTests => hook_checks::run_hook_tests(),
@@ -1419,16 +1406,11 @@ fn main() -> Result<()> {
         Commands::SwarmSummary { ops_dir } => swarm_summary::run(ops_dir),
         Commands::PopulateBook => populate_book::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
-        Commands::BuildTimingReceipt {
-            clean,
-            incremental,
-            tests,
-            output,
-            baseline,
-        } => build_timing::run_receipt(clean, incremental, tests, output, baseline),
-        Commands::CompareBuildTiming { baseline, current } => build_timing::run_compare(
-            baseline,
-            current,
-        ),
+        Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
+            build_timing::run_receipt(clean, incremental, tests, output, baseline)
+        }
+        Commands::CompareBuildTiming { baseline, current } => {
+            build_timing::run_compare(baseline, current)
+        }
     }
 }

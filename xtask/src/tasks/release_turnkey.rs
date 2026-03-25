@@ -4,7 +4,7 @@
 //! `scripts/release-turnkey-pr.sh` while exposing the command through
 //! `cargo xtask release-turnkey`.
 
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use std::process::Command;
 
 use crate::utils::project_root;

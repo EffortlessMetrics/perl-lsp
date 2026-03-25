@@ -1,6 +1,6 @@
 //! Production hardening maintenance tasks.
 
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use std::path::Path;
 use std::process::Command;
 

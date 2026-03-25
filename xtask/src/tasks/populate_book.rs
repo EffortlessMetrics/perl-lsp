@@ -1,6 +1,6 @@
 //! Populate mdBook source tree from project documentation files.
 
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use std::process::Command;
 
 use crate::utils::project_root;

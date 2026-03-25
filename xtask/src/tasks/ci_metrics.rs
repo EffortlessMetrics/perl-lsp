@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
 use std::collections::{BTreeMap, HashMap};
@@ -176,11 +176,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
             let elapsed_seconds = match (start, end) {
                 (Some(start_ts), Some(end_ts)) => {
                     let elapsed = (end_ts - start_ts).num_seconds();
-                    if elapsed > 0 {
-                        u64::try_from(elapsed).ok()
-                    } else {
-                        None
-                    }
+                    if elapsed > 0 { u64::try_from(elapsed).ok() } else { None }
                 }
                 _ => None,
             };
@@ -219,19 +215,15 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
 
     if total_runs == 0 {
         if json_output {
-            println!(
-                "{{\"error\": \"No workflow runs found\", \"period_days\": {days}}}",
-            );
+            println!("{{\"error\": \"No workflow runs found\", \"period_days\": {days}}}",);
         } else {
             println!("No workflow runs found in the last {days} days");
         }
         return Ok(());
     }
 
-    let mut sorted_workflows: Vec<(String, CostCounters)> = workflow_stats
-        .into_iter()
-        .map(|(name, counters)| (name, counters))
-        .collect();
+    let mut sorted_workflows: Vec<(String, CostCounters)> =
+        workflow_stats.into_iter().map(|(name, counters)| (name, counters)).collect();
 
     sorted_workflows.sort_by(|(name_a, counters_a), (name_b, counters_b)| {
         let cost_a = counters_a.minutes as f64 * COST_PER_MINUTE;
@@ -244,11 +236,8 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
 
     let mut workflow_payloads = Vec::with_capacity(sorted_workflows.len());
     for (name, counters) in sorted_workflows {
-        let average_minutes = if counters.runs > 0 {
-            counters.minutes as f64 / counters.runs as f64
-        } else {
-            0.0
-        };
+        let average_minutes =
+            if counters.runs > 0 { counters.minutes as f64 / counters.runs as f64 } else { 0.0 };
 
         workflow_payloads.push(CiCostWorkflow {
             name,
@@ -260,11 +249,8 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
     }
 
     let monthly_minutes = (total_minutes as f64) * 30.0 / (days as f64);
-    let monthly_minutes = if monthly_minutes.is_sign_negative() {
-        0
-    } else {
-        monthly_minutes.round() as u64
-    };
+    let monthly_minutes =
+        if monthly_minutes.is_sign_negative() { 0 } else { monthly_minutes.round() as u64 };
     let monthly_cost = round_two_decimals(monthly_minutes as f64 * COST_PER_MINUTE);
     let annual_cost = round_two_decimals(monthly_cost * 12.0);
     let total_cost = round_two_decimals(total_minutes as f64 * COST_PER_MINUTE);
@@ -304,7 +290,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("===============================================================================" );
+    println!("===============================================================================");
     println!("                    CI Cost Analysis Report");
     println!("===============================================================================");
     println!("Period: Last {days} days (since {})", report.start_date);
@@ -325,32 +311,16 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
         report.failed_runs,
         percent(report.failed_runs, report.total_runs)
     );
-    println!(
-        "{:<30} {:>10} minutes",
-        "Total CI time:",
-        report.total_minutes
-    );
+    println!("{:<30} {:>10} minutes", "Total CI time:", report.total_minutes);
     println!("{:<30} ${:.2}", "Total cost:", report.total_cost);
 
     println!("===============================================================================");
     println!("                     Monthly Projection");
     println!("===============================================================================");
-    println!(
-        "{:<30} {:>10} minutes",
-        "Estimated monthly usage:",
-        monthly_minutes
-    );
+    println!("{:<30} {:>10} minutes", "Estimated monthly usage:", monthly_minutes);
     println!("{:<30} ${:.2}", "Estimated monthly cost:", monthly_cost);
-    println!(
-        "{:<30} ${:.0}",
-        "Monthly budget target:",
-        MONTHLY_BUDGET_TARGET
-    );
-    println!(
-        "{:<30} {:.1}%",
-        "Budget utilization:",
-        budget_percentage
-    );
+    println!("{:<30} ${:.0}", "Monthly budget target:", MONTHLY_BUDGET_TARGET);
+    println!("{:<30} {:.1}%", "Budget utilization:", budget_percentage);
     if monthly_cost <= MONTHLY_BUDGET_TARGET {
         println!("Budget utilization: within budget");
     } else {
@@ -361,11 +331,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
     println!("                      Annual Projection");
     println!("===============================================================================");
     println!("{:<30} ${:.2}", "Estimated annual cost:", annual_cost);
-    println!(
-        "{:<30} ${:.0}",
-        "Annual budget target:",
-        ANNUAL_BUDGET_TARGET
-    );
+    println!("{:<30} ${:.0}", "Annual budget target:", ANNUAL_BUDGET_TARGET);
     if annual_cost <= ANNUAL_BUDGET_TARGET {
         println!("Annual projection within budget");
     } else {
@@ -431,12 +397,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn run_ci_baseline(
-    branch: String,
-    days: u64,
-    limit: usize,
-    output_dir: PathBuf,
-) -> Result<()> {
+pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: PathBuf) -> Result<()> {
     let root = project_root()?;
     if days == 0 {
         bail!("--days must be greater than zero");
@@ -460,8 +421,8 @@ pub fn run_ci_baseline(
         ],
     )?;
 
-    let runs: Vec<Value> = serde_json::from_str(&runs_json)
-        .context("failed to parse JSON output from gh run list")?;
+    let runs: Vec<Value> =
+        serde_json::from_str(&runs_json).context("failed to parse JSON output from gh run list")?;
 
     let cutoff = Utc::now() - ChronoDuration::days(days as i64);
     let mut workflow_counters: BTreeMap<String, BaselineCounters> = BTreeMap::new();
@@ -560,15 +521,10 @@ pub fn run_ci_baseline(
         );
     }
 
-    let total_runs: u64 = workflow_reports
-        .values()
-        .map(|workflow| workflow.total_runs)
-        .sum();
+    let total_runs: u64 = workflow_reports.values().map(|workflow| workflow.total_runs).sum();
 
-    let total_billable: u64 = workflow_reports
-        .values()
-        .map(|workflow| workflow.billable_minutes)
-        .sum();
+    let total_billable: u64 =
+        workflow_reports.values().map(|workflow| workflow.billable_minutes).sum();
 
     let total_success: u64 = workflow_reports.values().map(|workflow| workflow.success_count).sum();
     let total_completed: u64 = workflow_reports
@@ -606,7 +562,8 @@ pub fn run_ci_baseline(
 
     let md_path = output_dir.join("ci_baseline.md");
     let markdown = build_baseline_markdown(&report)?;
-    fs::write(&md_path, markdown).with_context(|| format!("failed to write {}", md_path.display()))?;
+    fs::write(&md_path, markdown)
+        .with_context(|| format!("failed to write {}", md_path.display()))?;
 
     println!("");
     println!("======================================");
@@ -616,10 +573,7 @@ pub fn run_ci_baseline(
     println!("Analysis period:     Last {} days", report.days_analyzed);
     println!("Total runs:          {}", report.summary.total_runs);
     println!("Total billable:      {}m", report.summary.total_billable_minutes);
-    println!(
-        "Overall success:     {:.1}%",
-        report.summary.overall_success_rate_percent
-    );
+    println!("Overall success:     {:.1}%", report.summary.overall_success_rate_percent);
     println!("Output JSON:         {}", json_path.display());
     println!("Output markdown:     {}", md_path.display());
     println!("======================================");
@@ -642,12 +596,16 @@ fn run_gh_auth_check(root: &Path) -> Result<()> {
 }
 
 fn parse_repo_info(root: &Path) -> Result<RepoInfo> {
-    let repo_json = run_gh_command(root, "reading repository info", vec![
-        "repo".to_string(),
-        "view".to_string(),
-        "--json".to_string(),
-        "owner,name".to_string(),
-    ])?;
+    let repo_json = run_gh_command(
+        root,
+        "reading repository info",
+        vec![
+            "repo".to_string(),
+            "view".to_string(),
+            "--json".to_string(),
+            "owner,name".to_string(),
+        ],
+    )?;
 
     serde_json::from_str(&repo_json).context("failed to parse gh repo view JSON")
 }
@@ -660,10 +618,7 @@ fn run_gh_command(root: &Path, action: &str, args: Vec<String>) -> Result<String
         .with_context(|| format!("failed to execute gh command while {action}"))?;
 
     if !output.status.success() {
-        bail!(
-            "gh command failed while {action}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        bail!("gh command failed while {action}: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     Ok(String::from_utf8(output.stdout).context("gh output was not valid UTF-8")?)
@@ -688,11 +643,7 @@ fn round_one_decimal(value: f64) -> f64 {
 }
 
 fn percent(part: u64, total: u64) -> f64 {
-    if total == 0 {
-        0.0
-    } else {
-        round_one_decimal((part as f64 * 100.0) / (total as f64))
-    }
+    if total == 0 { 0.0 } else { round_one_decimal((part as f64 * 100.0) / (total as f64)) }
 }
 
 fn percentile(values: &[u64], percentile: f64) -> u64 {
@@ -714,20 +665,13 @@ fn workflow_key(name: &str) -> String {
         }
     }
 
-    if key.is_empty() {
-        "workflow".to_string()
-    } else {
-        key
-    }
+    if key.is_empty() { "workflow".to_string() } else { key }
 }
 
 fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
     let mut out = String::new();
     out.push_str("# CI Baseline Metrics Report\n\n");
-    out.push_str(&format!(
-        "**Generated:** {}\n",
-        report.generated_at.replace('T', " ")
-    ));
+    out.push_str(&format!("**Generated:** {}\n", report.generated_at.replace('T', " ")));
     out.push_str(&format!("**Branch:** {}\n", report.branch));
     out.push_str(&format!("**Analysis Period:** Last {} days\n\n", report.days_analyzed));
 

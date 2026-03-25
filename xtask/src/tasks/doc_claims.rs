@@ -20,20 +20,12 @@ const STALE_PATTERNS: &[(&str, &str, &str)] = &[
         "98 LSP and DAP features",
         "Feature count (97 is stale; ledger: 98)",
     ),
-    (
-        "97 LSP/DAP features",
-        "98 LSP/DAP features",
-        "Feature count (97 is stale; ledger: 98)",
-    ),
+    ("97 LSP/DAP features", "98 LSP/DAP features", "Feature count (97 is stale; ledger: 98)"),
     ("97 features defined", "98 features defined", "Feature count (97 is stale; ledger: 98)"),
     ("97 features governed", "98 features governed", "Feature count (97 is stale; ledger: 98)"),
     ("97 features:", "98 features:", "Feature count (97 is stale; ledger: 98)"),
     ("2,700+ commits", "3,200+ commits", "Commit count (2,700+ is stale; ledger: 3,210)"),
-    (
-        "2,200+ pull requests",
-        "2,646+ pull requests",
-        "PR count (2,200+ is stale; ledger: 2,646+)",
-    ),
+    ("2,200+ pull requests", "2,646+ pull requests", "PR count (2,200+ is stale; ledger: 2,646+)"),
     ("2,200+ PRs", "2,646+ PRs", "PR count (2,200+ is stale; ledger: 2,646+)"),
 ];
 
@@ -64,13 +56,7 @@ pub fn run() -> Result<()> {
         for (line_no, line) in text.lines().enumerate() {
             for &(stale, replacement, description) in STALE_PATTERNS {
                 if line.contains(stale) {
-                    hits.push((
-                        md_file.clone(),
-                        line_no + 1,
-                        stale,
-                        replacement,
-                        description,
-                    ));
+                    hits.push((md_file.clone(), line_no + 1, stale, replacement, description));
                 }
             }
         }
@@ -88,18 +74,13 @@ pub fn run() -> Result<()> {
     eprintln!("DOC CLAIM VIOLATIONS:");
     eprintln!("{}", "=".repeat(60));
     for (file, line_no, stale, replacement, description) in &hits {
-        let rel = file
-            .strip_prefix(&root)
-            .map_or_else(|_| file.as_path(), |path| path);
+        let rel = file.strip_prefix(&root).map_or_else(|_| file.as_path(), |path| path);
         eprintln!("  {}:{}: {}", rel.display(), line_no, description);
         eprintln!("    found:    {:?}", stale);
         eprintln!("    expected: {:?}", replacement);
     }
     eprintln!("{}", "=".repeat(60));
     eprintln!("{} stale claim(s) found in docs/articles.", hits.len());
-    eprintln!(
-        "\nTo fix: update the article to match docs/project/PUBLICATION_FACTS_LEDGER.md"
-    );
+    eprintln!("\nTo fix: update the article to match docs/project/PUBLICATION_FACTS_LEDGER.md");
     bail!("doc claim check failed");
 }
-

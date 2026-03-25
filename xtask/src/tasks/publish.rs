@@ -1,5 +1,6 @@
 //! Publishing functionality for crates and VSCode extension
 
+use crate::utils::project_root;
 use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -7,7 +8,6 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
-use crate::utils::project_root;
 
 pub fn publish_crates(yes: bool, dry_run: bool) -> Result<()> {
     println!("📦 Publishing crates to crates.io");

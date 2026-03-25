@@ -10,13 +10,8 @@ use std::process::Command;
 
 use crate::utils::project_root;
 
-const CORE_LAUNCH_CRATES: &[&str] = &[
-    "perl-parser",
-    "perl-lexer",
-    "perl-lsp",
-    "perl-dap",
-    "perl-corpus",
-];
+const CORE_LAUNCH_CRATES: &[&str] =
+    &["perl-parser", "perl-lexer", "perl-lsp", "perl-dap", "perl-corpus"];
 
 #[derive(Deserialize)]
 struct RootCargoManifest {
@@ -61,7 +56,8 @@ pub fn run(all: bool) -> Result<()> {
 
     let metadata = load_cargo_metadata(&root)?;
     let patch_args = package_patch_args(&metadata);
-    let package_names: HashSet<_> = metadata.packages.iter().map(|package| package.name.as_str()).collect();
+    let package_names: HashSet<_> =
+        metadata.packages.iter().map(|package| package.name.as_str()).collect();
 
     let unknown = launch_crates
         .iter()
@@ -69,11 +65,7 @@ pub fn run(all: bool) -> Result<()> {
         .collect::<Vec<_>>();
 
     if !unknown.is_empty() {
-        let unknown_list = unknown
-            .iter()
-            .map(|name| name.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let unknown_list = unknown.iter().map(|name| name.as_str()).collect::<Vec<_>>().join(", ");
         bail!("unknown crates for launch prep: {unknown_list}");
     }
 
@@ -81,7 +73,10 @@ pub fn run(all: bool) -> Result<()> {
         "🚀 crates.io launch prep ({})",
         if all { "all publish-allowlist crates" } else { "core launch crates" }
     );
-    println!("📦 Running cargo check + cargo package (dry-run) for {} crate(s)", launch_crates.len());
+    println!(
+        "📦 Running cargo check + cargo package (dry-run) for {} crate(s)",
+        launch_crates.len()
+    );
 
     for crate_name in launch_crates {
         println!();
@@ -91,10 +86,7 @@ pub fn run(all: bool) -> Result<()> {
     }
 
     println!();
-    println!(
-        "✅ crates.io launch prep completed ({})",
-        if all { "all" } else { "core" }
-    );
+    println!("✅ crates.io launch prep completed ({})", if all { "all" } else { "core" });
 
     Ok(())
 }
@@ -115,11 +107,7 @@ fn package_patch_args(metadata: &CargoMetadata) -> Vec<String> {
         };
         let rel_dir = crate_dir.strip_prefix(workspace_root).unwrap_or(crate_dir);
 
-        args.push(format!(
-            "--config=patch.crates-io.{}.path={}",
-            package.name,
-            rel_dir.display()
-        ));
+        args.push(format!("--config=patch.crates-io.{}.path={}", package.name, rel_dir.display()));
     }
 
     args
@@ -143,22 +131,19 @@ fn load_cargo_metadata(root: &Path) -> Result<CargoMetadata> {
         .context("failed to run cargo metadata")?;
 
     if !output.status.success() {
-        bail!(
-            "cargo metadata failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim_end()
-        );
+        bail!("cargo metadata failed: {}", String::from_utf8_lossy(&output.stderr).trim_end());
     }
 
-    let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)
-        .context("failed to parse cargo metadata output")?;
+    let metadata: CargoMetadata =
+        serde_json::from_slice(&output.stdout).context("failed to parse cargo metadata output")?;
     Ok(metadata)
 }
 
 fn load_publish_allowlist(root: &Path) -> Result<Vec<String>> {
     let manifest_text = fs::read_to_string(root.join("Cargo.toml"))
         .context("failed to read workspace Cargo.toml")?;
-    let manifest: RootCargoManifest = toml::from_str(&manifest_text)
-        .context("failed to parse workspace Cargo.toml")?;
+    let manifest: RootCargoManifest =
+        toml::from_str(&manifest_text).context("failed to parse workspace Cargo.toml")?;
 
     let allowlist = manifest
         .workspace
@@ -166,9 +151,7 @@ fn load_publish_allowlist(root: &Path) -> Result<Vec<String>> {
         .and_then(|metadata| metadata.publish)
         .and_then(|publish| publish.allow)
         .ok_or_else(|| {
-            color_eyre::eyre::eyre!(
-                "[workspace.metadata.publish.allow] is missing from Cargo.toml"
-            )
+            color_eyre::eyre::eyre!("[workspace.metadata.publish.allow] is missing from Cargo.toml")
         })?;
 
     if allowlist.is_empty() {

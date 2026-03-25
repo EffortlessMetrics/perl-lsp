@@ -10,7 +10,8 @@ use std::path::Path;
 use std::process::Command;
 use toml::Value;
 
-const EXCLUDED_DIRECTORIES: &[&str] = &["tree-sitter-perl", "crates/tree-sitter-perl-c", "fuzz", "archive"];
+const EXCLUDED_DIRECTORIES: &[&str] =
+    &["tree-sitter-perl", "crates/tree-sitter-perl-c", "fuzz", "archive"];
 const EXCLUDED_CRATES: &[&str] = &["tree-sitter-perl", "tree-sitter-perl-c", "fuzz", "archive"];
 const PROJECT_CARGO_TOML: &str = "Cargo.toml";
 
@@ -60,10 +61,7 @@ fn check_excluded_directories_exist(root: &Path) -> Result<()> {
         .collect::<Vec<_>>();
 
     if !missing.is_empty() {
-        bail!(
-            "❌ ERROR: Excluded directories do not exist: {}",
-            missing.join(", ")
-        );
+        bail!("❌ ERROR: Excluded directories do not exist: {}", missing.join(", "));
     }
 
     println!("  All excluded directories exist");
@@ -95,7 +93,8 @@ fn check_workspace_dependencies(root: &Path) -> Result<()> {
     let content = fs::read_to_string(&cargo_toml).with_context(|| {
         format!("Failed to read workspace Cargo.toml at {}", cargo_toml.display())
     })?;
-    let manifest: Value = toml::from_str(&content).context("Failed to parse workspace Cargo.toml")?;
+    let manifest: Value =
+        toml::from_str(&content).context("Failed to parse workspace Cargo.toml")?;
 
     let workspace_dependencies = manifest
         .get("workspace")
@@ -121,7 +120,8 @@ fn check_exclude_section(root: &Path) -> Result<()> {
     let content = fs::read_to_string(&cargo_toml).with_context(|| {
         format!("Failed to read workspace Cargo.toml at {}", cargo_toml.display())
     })?;
-    let manifest: Value = toml::from_str(&content).context("Failed to parse workspace Cargo.toml")?;
+    let manifest: Value =
+        toml::from_str(&content).context("Failed to parse workspace Cargo.toml")?;
 
     let exclude = manifest
         .get("exclude")
@@ -137,10 +137,7 @@ fn check_exclude_section(root: &Path) -> Result<()> {
         .collect::<Vec<_>>();
 
     if !missing.is_empty() {
-        bail!(
-            "❌ ERROR: Excluded crates missing from exclude section: {}",
-            missing.join(", ")
-        );
+        bail!("❌ ERROR: Excluded crates missing from exclude section: {}", missing.join(", "));
     }
 
     println!("  All expected crates are in exclude section");
@@ -165,10 +162,7 @@ fn check_workspace_members(root: &Path) -> Result<()> {
         bail!("❌ ERROR: Excluded crates found in workspace members: {}", offending.join(", "));
     }
 
-    println!(
-        "  Workspace has {} members (excluded crates not included)",
-        member_count
-    );
+    println!("  Workspace has {} members (excluded crates not included)", member_count);
     println!();
     Ok(())
 }
@@ -179,11 +173,7 @@ fn check_member_dependencies(root: &Path) -> Result<()> {
     let excluded = excluded_set();
     let crate_pattern = format!(
         r"(?m)^\s*({})\s*=",
-        excluded
-            .iter()
-            .map(|entry| regex::escape(entry))
-            .collect::<Vec<_>>()
-            .join("|")
+        excluded.iter().map(|entry| regex::escape(entry)).collect::<Vec<_>>().join("|")
     );
     let exclusion_re = Regex::new(&crate_pattern).context("Failed to compile dependency regex")?;
 
@@ -200,10 +190,8 @@ fn check_member_dependencies(root: &Path) -> Result<()> {
             continue;
         }
 
-        let crate_name = entry
-            .file_name()
-            .into_string()
-            .unwrap_or_else(|_| String::from("<invalid>"));
+        let crate_name =
+            entry.file_name().into_string().unwrap_or_else(|_| String::from("<invalid>"));
         let content = fs::read_to_string(&manifest)
             .with_context(|| format!("Failed to read {}", manifest.display()))?;
 

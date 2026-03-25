@@ -28,8 +28,8 @@ pub fn run(doctor: bool) -> Result<()> {
 
     let raw = std::fs::read_to_string(&toolchain_file)
         .with_context(|| format!("Failed to read {}", toolchain_file.display()))?;
-    let toolchain: RustToolchainFile = toml::from_str(&raw)
-        .context("Failed to parse rust-toolchain.toml")?;
+    let toolchain: RustToolchainFile =
+        toml::from_str(&raw).context("Failed to parse rust-toolchain.toml")?;
     let required = toolchain.channel.trim().trim_matches('\"').trim_matches('\'').to_string();
     let required_parts = parse_version_parts(&required);
 
@@ -38,10 +38,8 @@ pub fn run(doctor: bool) -> Result<()> {
         return Ok(());
     }
 
-    let rustc_output = Command::new("rustc")
-        .arg("--version")
-        .output()
-        .context("Failed to run rustc --version")?;
+    let rustc_output =
+        Command::new("rustc").arg("--version").output().context("Failed to run rustc --version")?;
     let rustc_text = String::from_utf8(rustc_output.stdout)
         .context("rustc --version output is not valid UTF-8")?;
     let current = rustc_text
@@ -67,7 +65,9 @@ pub fn run(doctor: bool) -> Result<()> {
         }
         Ordering::Greater => {
             if doctor {
-                println!("⚠️  Using Rust {current} while rust-toolchain.toml pins {required}; use 'rustup override set {required}' for exact parity");
+                println!(
+                    "⚠️  Using Rust {current} while rust-toolchain.toml pins {required}; use 'rustup override set {required}' for exact parity"
+                );
             } else {
                 println!("✅ Rust {current} satisfies pinned MSRV {required}");
             }
@@ -81,11 +81,7 @@ fn parse_version_parts(version: &str) -> Vec<u32> {
     version
         .split(|c| c == '.' || c == '-' || c == '+')
         .filter_map(|part| {
-            part.chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect::<String>()
-                .parse::<u32>()
-                .ok()
+            part.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u32>().ok()
         })
         .collect()
 }

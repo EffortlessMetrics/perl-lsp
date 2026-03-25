@@ -3,7 +3,7 @@
 use crate::tasks::corpus_audit;
 use crate::utils::project_root;
 use chrono::Local;
-use color_eyre::eyre::{bail, eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, bail, eyre};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -27,10 +27,7 @@ const CATEGORY_TAXONOMY: &[(&str, &str, &str)] = &[
 ];
 
 pub fn run() -> Result<()> {
-    run_with_paths(
-        PathBuf::from(DEFAULT_REPORT_PATH),
-        PathBuf::from(DEFAULT_OUTPUT_PATH),
-    )
+    run_with_paths(PathBuf::from(DEFAULT_REPORT_PATH), PathBuf::from(DEFAULT_OUTPUT_PATH))
 }
 
 pub fn run_with_paths(report: PathBuf, output: PathBuf) -> Result<()> {
@@ -41,7 +38,8 @@ pub fn run_with_paths(report: PathBuf, output: PathBuf) -> Result<()> {
     let report = load_report(&report_path)?;
     let output = generate_matrix(&root, &report)?;
     fs::create_dir_all(output_path.parent().context("matrix output parent path missing")?)?;
-    fs::write(&output_path, output).context(format!("failed to write {}", output_path.display()))?;
+    fs::write(&output_path, output)
+        .context(format!("failed to write {}", output_path.display()))?;
 
     println!("Updated {}", output_path.display());
     println!(
@@ -70,7 +68,8 @@ fn load_report(path: &Path) -> Result<AuditReport> {
 }
 
 fn get_git_sha(root: &Path) -> String {
-    let output = Command::new("git").arg("rev-parse").arg("--short").arg("HEAD").current_dir(root).output();
+    let output =
+        Command::new("git").arg("rev-parse").arg("--short").arg("HEAD").current_dir(root).output();
     match output {
         Ok(result) => {
             if result.status.success() {
@@ -103,11 +102,7 @@ fn get_crate_version(root: &Path, crate_name: &str) -> String {
 }
 
 fn success_rate(outcomes: &corpus_audit::report::ParseOutcomesSummary) -> f64 {
-    if outcomes.total == 0 {
-        0.0
-    } else {
-        outcomes.ok as f64 * 100.0 / outcomes.total as f64
-    }
+    if outcomes.total == 0 { 0.0 } else { outcomes.ok as f64 * 100.0 / outcomes.total as f64 }
 }
 
 fn format_location(file: &FailingFile) -> Option<String> {
@@ -140,8 +135,9 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
 
     lines.push("# Parser Feature Matrix".to_string());
     lines.push(String::new());
-    lines.push("> **Issue #180**: This document tracks parser coverage and missing features."
-        .to_string());
+    lines.push(
+        "> **Issue #180**: This document tracks parser coverage and missing features.".to_string(),
+    );
     lines.push(String::new());
     lines.push("## Provenance".to_string());
     lines.push(String::new());
@@ -190,11 +186,18 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
     }
 
     lines.push(String::new());
-    lines.push("*Test Corpus Inventory* measures whether the test corpus contains examples of each".to_string());
-    lines.push("GA (generally available) feature defined in `features.toml`. It does NOT measure"
-        .to_string());
-    lines.push("whether those features parse successfully—that's what Parse Success Rate tracks."
-        .to_string());
+    lines.push(
+        "*Test Corpus Inventory* measures whether the test corpus contains examples of each"
+            .to_string(),
+    );
+    lines.push(
+        "GA (generally available) feature defined in `features.toml`. It does NOT measure"
+            .to_string(),
+    );
+    lines.push(
+        "whether those features parse successfully—that's what Parse Success Rate tracks."
+            .to_string(),
+    );
     lines.push(String::new());
     lines.push("## Error Breakdown by Category".to_string());
     lines.push(String::new());
@@ -294,22 +297,26 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
     lines.push("- Baseline stored in `ci/parse_errors_baseline.txt`".to_string());
     lines.push("- CI fails if parse errors **increase**".to_string());
     lines.push("- CI passes if parse errors stay same or decrease".to_string());
-    lines.push("- When errors decrease, update baseline: `echo N > ci/parse_errors_baseline.txt`"
-        .to_string());
+    lines.push(
+        "- When errors decrease, update baseline: `echo N > ci/parse_errors_baseline.txt`"
+            .to_string(),
+    );
     lines.push(String::new());
 
-    lines.push("**Philosophy**: Baseline updates are only allowed when the parser actually improves"
-        .to_string());
-    lines.push("(error count decreases), never to paper over regressions. The ratchet ensures the"
-        .to_string());
+    lines.push(
+        "**Philosophy**: Baseline updates are only allowed when the parser actually improves"
+            .to_string(),
+    );
+    lines.push(
+        "(error count decreases), never to paper over regressions. The ratchet ensures the"
+            .to_string(),
+    );
     lines.push("codebase only gets easier to reason about over time.".to_string());
     lines.push(String::new());
 
     lines.push("## Related Documentation".to_string());
     lines.push(String::new());
-    lines.push(
-        "- [CLAUDE.md](../CLAUDE.md) - Project overview and commands".to_string(),
-    );
+    lines.push("- [CLAUDE.md](../CLAUDE.md) - Project overview and commands".to_string());
     lines.push(
         "- [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - LSP server architecture"
             .to_string(),

@@ -38,30 +38,10 @@ pub fn run(config: UpdateHomebrewConfig) -> Result<()> {
     let raw_sums = download_sha256sums(&sums_url)?;
     let checksums = parse_sha256sums(&raw_sums)?;
 
-    let mac_sha_arm = checksum_for(
-        &config,
-        MAC_ARM,
-        &checksums,
-        &release_version,
-    )?;
-    let mac_sha_x64 = checksum_for(
-        &config,
-        MAC_X64,
-        &checksums,
-        &release_version,
-    )?;
-    let linux_sha_arm = checksum_for(
-        &config,
-        LIN_ARM,
-        &checksums,
-        &release_version,
-    )?;
-    let linux_sha_x64 = checksum_for(
-        &config,
-        LIN_X64,
-        &checksums,
-        &release_version,
-    )?;
+    let mac_sha_arm = checksum_for(&config, MAC_ARM, &checksums, &release_version)?;
+    let mac_sha_x64 = checksum_for(&config, MAC_X64, &checksums, &release_version)?;
+    let linux_sha_arm = checksum_for(&config, LIN_ARM, &checksums, &release_version)?;
+    let linux_sha_x64 = checksum_for(&config, LIN_X64, &checksums, &release_version)?;
 
     let formula = build_brew_formula(
         &config,
@@ -128,7 +108,8 @@ fn download_sha256sums(url: &str) -> Result<String> {
         return Err(eyre!("failed to fetch SHA256SUMS from {url}: {stderr}"));
     }
 
-    String::from_utf8(output.stdout).with_context(|| format!("response from {url} was not valid UTF-8"))
+    String::from_utf8(output.stdout)
+        .with_context(|| format!("response from {url} was not valid UTF-8"))
 }
 
 fn parse_sha256sums(raw: &str) -> Result<BTreeMap<String, String>> {
@@ -157,10 +138,7 @@ fn checksum_for(
     version: &str,
 ) -> Result<String> {
     let filename = format!("{}-{}-{artifact}", config.prefix, version);
-    checksums
-        .get(&filename)
-        .cloned()
-        .ok_or_else(|| eyre!("missing checksum for {filename}"))
+    checksums.get(&filename).cloned().ok_or_else(|| eyre!("missing checksum for {filename}"))
 }
 
 fn build_brew_formula(
@@ -179,7 +157,7 @@ fn build_brew_formula(
     let linux_x64_filename = artifact_filename(&config.prefix, version, LIN_X64);
 
     format!(
-r##"class PerlLsp < Formula
+        r##"class PerlLsp < Formula
   desc "Fast, reliable Perl language server with 100% syntax coverage"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"

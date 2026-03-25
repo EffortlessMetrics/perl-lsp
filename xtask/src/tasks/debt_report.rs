@@ -534,10 +534,7 @@ fn format_summary_markdown(report: &Report) -> String {
     lines.push("|----------|-------|--------|--------|".to_string());
     lines.push(format!("| Quarantined Tests | {} | {} | {} |", q.count, q.budget, q.status));
     lines.push(format!("| Known Issues | {} | {} | {} |", k.count, k.budget, k.status));
-    lines.push(format!(
-        "| Technical Debt | {} | {} | {} |",
-        t.count, t.budget, t.status
-    ));
+    lines.push(format!("| Technical Debt | {} | {} | {} |", t.count, t.budget, t.status));
 
     if q.expired > 0 {
         lines.push(String::new());
