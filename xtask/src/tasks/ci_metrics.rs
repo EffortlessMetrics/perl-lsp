@@ -425,10 +425,57 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
     let runs: Vec<Value> =
         serde_json::from_str(&runs_json).context("failed to parse JSON output from gh run list")?;
 
-    let cutoff = Utc::now() - ChronoDuration::days(days as i64);
+    let generated_at = Utc::now();
+    let cutoff = generated_at - ChronoDuration::days(days as i64);
+    let report = match build_baseline_report(&branch, days, generated_at, cutoff, &runs) {
+        Some(report) => report,
+        None => {
+            println!("No workflow runs found in requested period");
+            return Ok(());
+        }
+    };
+
+    let output_dir = root.join(output_dir);
+    fs::create_dir_all(&output_dir).context("failed to create output directory")?;
+
+    let json_path = output_dir.join("ci_baseline.json");
+    fs::write(
+        &json_path,
+        serde_json::to_string_pretty(&report).context("failed to serialize baseline report")?,
+    )
+    .with_context(|| format!("failed to write {}", json_path.display()))?;
+
+    let md_path = output_dir.join("ci_baseline.md");
+    let markdown = build_baseline_markdown(&report)?;
+    fs::write(&md_path, markdown)
+        .with_context(|| format!("failed to write {}", md_path.display()))?;
+
+    println!("");
+    println!("======================================");
+    println!("CI Baseline Summary");
+    println!("======================================");
+    println!("Branch:              {}", report.branch);
+    println!("Analysis period:     Last {} days", report.days_analyzed);
+    println!("Total runs:          {}", report.summary.total_runs);
+    println!("Total billable:      {}m", report.summary.total_billable_minutes);
+    println!("Overall success:     {:.1}%", report.summary.overall_success_rate_percent);
+    println!("Output JSON:         {}", json_path.display());
+    println!("Output markdown:     {}", md_path.display());
+    println!("======================================");
+
+    Ok(())
+}
+
+fn build_baseline_report(
+    branch: &str,
+    days: u64,
+    generated_at: DateTime<Utc>,
+    cutoff: DateTime<Utc>,
+    runs: &[Value],
+) -> Option<BaselineReport> {
     let mut workflow_counters: BTreeMap<String, BaselineCounters> = BTreeMap::new();
 
-    for run in &runs {
+    for run in runs {
         let created = match read_timestamp(run, &["createdAt", "created_at"]) {
             Some(value) => value,
             None => continue,
@@ -481,8 +528,7 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
     }
 
     if workflow_counters.is_empty() {
-        println!("No workflow runs found in requested period");
-        return Ok(());
+        return None;
     }
 
     let mut workflow_reports = BTreeMap::new();
@@ -541,9 +587,9 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
         0.0
     };
 
-    let report = BaselineReport {
-        generated_at: Utc::now().to_rfc3339(),
-        branch: branch.clone(),
+    Some(BaselineReport {
+        generated_at: generated_at.to_rfc3339(),
+        branch: branch.to_string(),
         days_analyzed: days,
         workflows: workflow_reports,
         summary: BaselineSummary {
@@ -551,37 +597,7 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
             total_billable_minutes: total_billable,
             overall_success_rate_percent,
         },
-    };
-
-    let output_dir = root.join(output_dir);
-    fs::create_dir_all(&output_dir).context("failed to create output directory")?;
-
-    let json_path = output_dir.join("ci_baseline.json");
-    fs::write(
-        &json_path,
-        serde_json::to_string_pretty(&report).context("failed to serialize baseline report")?,
-    )
-    .with_context(|| format!("failed to write {}", json_path.display()))?;
-
-    let md_path = output_dir.join("ci_baseline.md");
-    let markdown = build_baseline_markdown(&report)?;
-    fs::write(&md_path, markdown)
-        .with_context(|| format!("failed to write {}", md_path.display()))?;
-
-    println!("");
-    println!("======================================");
-    println!("CI Baseline Summary");
-    println!("======================================");
-    println!("Branch:              {}", report.branch);
-    println!("Analysis period:     Last {} days", report.days_analyzed);
-    println!("Total runs:          {}", report.summary.total_runs);
-    println!("Total billable:      {}m", report.summary.total_billable_minutes);
-    println!("Overall success:     {:.1}%", report.summary.overall_success_rate_percent);
-    println!("Output JSON:         {}", json_path.display());
-    println!("Output markdown:     {}", md_path.display());
-    println!("======================================");
-
-    Ok(())
+    })
 }
 
 fn run_gh_auth_check(root: &Path) -> Result<()> {
@@ -629,7 +645,10 @@ fn run_gh_command(root: &Path, action: &str, args: Vec<String>) -> Result<String
 
 fn read_timestamp(run: &Value, keys: &[&str]) -> Option<DateTime<Utc>> {
     for key in keys {
-        let value = run.get(*key).and_then(Value::as_str)?;
+        let value = match run.get(*key).and_then(Value::as_str) {
+            Some(value) => value,
+            None => continue,
+        };
         if let Ok(timestamp) = DateTime::parse_from_rfc3339(value) {
             return Some(timestamp.with_timezone(&Utc));
         }
@@ -698,7 +717,7 @@ fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
         out.push_str(&format!(
             "| {} | {} | {:.1}% | {}s | {}s | {}m |\n",
             workflow.name,
-            workflow.completed_runs,
+            workflow.total_runs,
             workflow.success_rate_percent,
             workflow.median_duration_seconds,
             workflow.p95_duration_seconds,
@@ -721,4 +740,74 @@ fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
     out.push_str("---\nGenerated by cargo xtask ci-baseline\n");
 
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use color_eyre::eyre::eyre;
+    use serde_json::json;
+
+    #[test]
+    fn read_timestamp_uses_fallback_keys() -> Result<()> {
+        let run = json!({
+            "createdAt": "2026-03-25T12:00:00Z"
+        });
+
+        let timestamp = read_timestamp(&run, &["created_at", "createdAt"])
+            .ok_or_else(|| eyre!("expected timestamp"))?;
+
+        assert_eq!(timestamp, DateTime::parse_from_rfc3339("2026-03-25T12:00:00Z")?.with_timezone(&Utc));
+        Ok(())
+    }
+
+    #[test]
+    fn baseline_report_keeps_zero_minute_runs_and_excludes_skips_from_success_rate() -> Result<()> {
+        let generated_at = DateTime::parse_from_rfc3339("2026-03-25T12:00:00Z")?.with_timezone(&Utc);
+        let cutoff = DateTime::parse_from_rfc3339("2026-03-24T12:00:00Z")?.with_timezone(&Utc);
+        let runs = vec![
+            json!({
+                "workflowName": "CI",
+                "conclusion": "success",
+                "createdAt": "2026-03-25T11:00:00Z",
+                "startedAt": "2026-03-25T11:00:00Z",
+                "updatedAt": "2026-03-25T11:01:30Z"
+            }),
+            json!({
+                "workflowName": "CI",
+                "conclusion": "skipped",
+                "createdAt": "2026-03-25T10:00:00Z",
+                "startedAt": "2026-03-25T10:00:00Z",
+                "updatedAt": "2026-03-25T10:00:30Z"
+            }),
+            json!({
+                "workflowName": "CI",
+                "conclusion": "failure",
+                "createdAt": "2026-03-25T09:00:00Z",
+                "startedAt": "2026-03-25T09:00:00Z"
+            }),
+        ];
+
+        let report = build_baseline_report("master", 1, generated_at, cutoff, &runs)
+            .ok_or_else(|| eyre!("expected baseline report"))?;
+        let workflow = report
+            .workflows
+            .get("CI")
+            .ok_or_else(|| eyre!("expected workflow report"))?;
+
+        assert_eq!(workflow.total_runs, 3);
+        assert_eq!(workflow.completed_runs, 2);
+        assert_eq!(workflow.success_count, 1);
+        assert_eq!(workflow.failure_count, 1);
+        assert_eq!(workflow.skipped_count, 1);
+        assert_eq!(workflow.billable_minutes, 2);
+        assert_eq!(report.summary.total_runs, 3);
+        assert_eq!(report.summary.total_billable_minutes, 2);
+        assert_eq!(report.summary.overall_success_rate_percent, 50.0);
+
+        let markdown = build_baseline_markdown(&report)?;
+        assert!(markdown.contains("| CI | 3 | 50.0% | 90s | 90s | 2m |"));
+
+        Ok(())
+    }
 }
