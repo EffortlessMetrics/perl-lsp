@@ -30,7 +30,13 @@ pub fn run(doctor: bool) -> Result<()> {
         .with_context(|| format!("Failed to read {}", toolchain_file.display()))?;
     let toolchain: RustToolchainFile =
         toml::from_str(&raw).context("Failed to parse rust-toolchain.toml")?;
-    let required = toolchain.channel.trim().trim_matches('\"').trim_matches('\'').to_string();
+    let required = toolchain
+        .toolchain
+        .channel
+        .trim()
+        .trim_matches('\"')
+        .trim_matches('\'')
+        .to_string();
     let required_parts = parse_version_parts(&required);
 
     if required_parts.is_empty() {

@@ -202,9 +202,9 @@ fn build_brew_formula(
         Install the "Perl Language Server" extension from the marketplace
 
       Neovim (with lspconfig):
-        require('lspconfig').perl_lsp.setup{
-          cmd = {'#{{opt_bin}}/perl-lsp', '--stdio'}
-        }
+        require('lspconfig').perl_lsp.setup{{
+          cmd = {{'#{{opt_bin}}/perl-lsp', '--stdio'}}
+        }}
 
       Emacs (with lsp-mode):
         (lsp-register-client

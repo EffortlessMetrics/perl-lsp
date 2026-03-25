@@ -1102,7 +1102,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
-        Commands::CheckToolchain { doctor } => check_toolchain::run(doctor)?,
+        Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::Build { release, features, c_scanner, rust_scanner } => {
             build::run(release, features, c_scanner, rust_scanner)
         }
@@ -1214,7 +1214,7 @@ fn main() -> Result<()> {
             workflow_timeout,
         }),
         Commands::PrepCratesIoLaunch { mode } => {
-            prep_crates_io_launch::run(matches!(mode, PrepCratesMode::All))?
+            prep_crates_io_launch::run(matches!(mode, PrepCratesMode::All))
         }
         Commands::TestHeredoc { release, verbose } => {
             // Run heredoc tests using the test module with heredoc suite
@@ -1256,7 +1256,7 @@ fn main() -> Result<()> {
                 check,
             })
         }
-        Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output)?,
+        Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output),
         #[cfg(feature = "legacy")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())

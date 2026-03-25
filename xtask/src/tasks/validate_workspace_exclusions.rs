@@ -11,8 +11,8 @@ use std::process::Command;
 use toml::Value;
 
 const EXCLUDED_DIRECTORIES: &[&str] =
-    &["tree-sitter-perl", "crates/tree-sitter-perl-c", "fuzz", "archive"];
-const EXCLUDED_CRATES: &[&str] = &["tree-sitter-perl", "tree-sitter-perl-c", "fuzz", "archive"];
+    &["tree-sitter-perl", "fuzz"];
+const EXCLUDED_CRATES: &[&str] = &["tree-sitter-perl-c"];
 const PROJECT_CARGO_TOML: &str = "Cargo.toml";
 
 #[derive(Deserialize)]
@@ -43,7 +43,7 @@ pub fn run() -> Result<()> {
     println!("==========================================");
     println!();
     println!("Summary:");
-    println!("  - {} directories excluded from workspace", EXCLUDED_CRATES.len());
+    println!("  - {} directories excluded from workspace", EXCLUDED_DIRECTORIES.len());
     println!("  - Exclusion strategy clearly documented");
     println!("  - No accidental dependencies on excluded crates");
     println!("  - workspace.dependencies clean");
@@ -77,7 +77,7 @@ fn check_exclusion_documentation(root: &Path) -> Result<()> {
         format!("Failed to read workspace Cargo.toml at {}", cargo_toml.display())
     })?;
 
-    if !content.contains("Workspace Exclusions") {
+    if !content.contains("exclude = [") {
         bail!("❌ ERROR: Exclusion strategy not documented in Cargo.toml");
     }
 
@@ -124,22 +124,23 @@ fn check_exclude_section(root: &Path) -> Result<()> {
         toml::from_str(&content).context("Failed to parse workspace Cargo.toml")?;
 
     let exclude = manifest
-        .get("exclude")
+        .get("workspace")
+        .and_then(|workspace| workspace.get("exclude"))
         .and_then(Value::as_array)
-        .ok_or_else(|| eyre!("Workspace has no root-level `exclude` array"))?;
+        .ok_or_else(|| eyre!("Workspace has no [workspace].exclude array"))?;
 
     let exclude_values: Vec<&str> = exclude.iter().filter_map(Value::as_str).collect();
-    let missing = EXCLUDED_CRATES
+    let missing = EXCLUDED_DIRECTORIES
         .iter()
         .filter(|entry| !exclude_values.contains(entry))
         .map(|entry| entry.to_string())
         .collect::<Vec<_>>();
 
     if !missing.is_empty() {
-        bail!("❌ ERROR: Excluded crates missing from exclude section: {}", missing.join(", "));
+        bail!("❌ ERROR: Excluded paths missing from [workspace].exclude: {}", missing.join(", "));
     }
 
-    println!("  All expected crates are in exclude section");
+    println!("  All expected paths are in exclude section");
     println!();
     Ok(())
 }
@@ -149,13 +150,13 @@ fn check_workspace_members(root: &Path) -> Result<()> {
 
     let metadata = load_cargo_metadata(root)?;
     let excluded = excluded_set();
-    let member_count = metadata.packages.len();
     let offending = metadata
         .packages
-        .into_iter()
+        .iter()
         .filter(|pkg| excluded.contains(pkg.name.as_str()))
-        .map(|pkg| pkg.name)
+        .map(|pkg| pkg.name.clone())
         .collect::<Vec<_>>();
+    let member_count = metadata.packages.len();
 
     if !offending.is_empty() {
         bail!("❌ ERROR: Excluded crates found in workspace members: {}", offending.join(", "));

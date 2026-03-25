@@ -3,13 +3,13 @@
 use crate::tasks::corpus_audit;
 use crate::utils::project_root;
 use chrono::Local;
-use color_eyre::eyre::{Context, Result, bail, eyre};
+use color_eyre::eyre::{Context, ContextCompat, Result, bail, eyre};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use toml::Value;
 
-use super::corpus_audit::report::{AuditReport, FailingFile};
+use super::corpus_audit::{AuditReport, FailingFile, ParseOutcomesSummary};
 
 const DEFAULT_REPORT_PATH: &str = "corpus_audit_report.json";
 const DEFAULT_OUTPUT_PATH: &str = "docs/reference/PARSER_FEATURE_MATRIX.md";
@@ -101,7 +101,7 @@ fn get_crate_version(root: &Path, crate_name: &str) -> String {
         .unwrap_or_else(|| UNKNOWN.to_string())
 }
 
-fn success_rate(outcomes: &corpus_audit::report::ParseOutcomesSummary) -> f64 {
+fn success_rate(outcomes: &ParseOutcomesSummary) -> f64 {
     if outcomes.total == 0 { 0.0 } else { outcomes.ok as f64 * 100.0 / outcomes.total as f64 }
 }
 
@@ -131,7 +131,7 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
     let baseline = baseline_error_count(root)?;
     let success_rate = success_rate(outcomes);
     let ga_coverage = report.ga_coverage.coverage_percentage;
-    let mut lines = Vec::new();
+    let mut lines: Vec<String> = Vec::new();
 
     lines.push("# Parser Feature Matrix".to_string());
     lines.push(String::new());
@@ -206,7 +206,7 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
     lines.push("| Category | Count | Priority | Description |".to_string());
     lines.push("|----------|-------|----------|-------------|".to_string());
 
-    let mut categories = CATEGORY_TAXONOMY
+    let mut categories: Vec<(String, usize, String, String)> = CATEGORY_TAXONOMY
         .iter()
         .map(|(name, priority, description)| {
             (
@@ -217,9 +217,12 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
             )
         })
         .collect::<Vec<_>>();
-    categories.sort_by(|(a_name, a_count, ..), (b_name, b_count, ..)| {
-        b_count.cmp(a_count).then_with(|| a_name.cmp(b_name))
-    });
+    categories.sort_by(
+        |(a_name, a_count, ..): &(String, usize, String, String),
+         (b_name, b_count, ..): &(String, usize, String, String)| {
+            b_count.cmp(a_count).then_with(|| a_name.cmp(b_name))
+        },
+    );
     for (name, count, priority, description) in categories {
         lines.push(format!("| {name} | {count} | {priority} | {description} |"));
     }
@@ -229,7 +232,7 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
     lines.push(String::new());
 
     if outcomes.failing_files.is_empty() {
-        lines.push("*No failing files* ✅");
+        lines.push("*No failing files* ✅".to_string());
     } else {
         for file in &outcomes.failing_files {
             lines.push(format!("### `{}`", file.path));
@@ -244,7 +247,7 @@ fn generate_matrix(root: &Path, report: &AuditReport) -> Result<String> {
             if let Some(snippet) = &file.code_snippet {
                 lines.push(String::new());
                 lines.push("```perl".to_string());
-                lines.push(snippet.clone());
+                lines.push(snippet.to_string());
                 lines.push("```".to_string());
             }
             lines.push(String::new());

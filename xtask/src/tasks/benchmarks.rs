@@ -160,7 +160,7 @@ pub fn test_alert_system() -> Result<()> {
     let baseline = load_json(&baseline_path)?;
 
     run_alert_case(
-        root,
+        &root,
         &alert_script,
         &config_path,
         &baseline_path,
@@ -172,7 +172,7 @@ pub fn test_alert_system() -> Result<()> {
         true,
     )?;
     run_alert_case(
-        root,
+        &root,
         &alert_script,
         &config_path,
         &baseline_path,
@@ -184,7 +184,7 @@ pub fn test_alert_system() -> Result<()> {
         true,
     )?;
     run_alert_case(
-        root,
+        &root,
         &alert_script,
         &config_path,
         &baseline_path,
@@ -196,7 +196,7 @@ pub fn test_alert_system() -> Result<()> {
         true,
     )?;
     run_alert_case(
-        root,
+        &root,
         &alert_script,
         &config_path,
         &baseline_path,
@@ -208,7 +208,7 @@ pub fn test_alert_system() -> Result<()> {
         true,
     )?;
     run_alert_case(
-        root,
+        &root,
         &alert_script,
         &config_path,
         &baseline_path,
@@ -220,14 +220,14 @@ pub fn test_alert_system() -> Result<()> {
         true,
     )?;
     run_alert_check_case(
-        root,
+        &root,
         &alert_script,
         &baseline_path,
         &baseline,
         workdir.join("alert_test_check.json"),
     )?;
     run_alert_case(
-        root,
+        &root,
         &alert_script,
         &config_path,
         &baseline_path,
@@ -381,7 +381,7 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
         return Ok(BTreeMap::new());
     }
 
-    let mut by_category = BTreeMap::new();
+    let mut by_category: BTreeMap<String, Map<String, Value>> = BTreeMap::new();
     for entry in WalkDir::new(criterion_dir) {
         let entry = entry?;
         if !entry.file_type().is_file() || entry.file_name() != "estimates.json" {

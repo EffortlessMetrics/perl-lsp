@@ -34,7 +34,7 @@ struct SystemInfo {
     os: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct BuildMeasurement {
     duration_seconds: f64,
     command: String,
@@ -99,7 +99,7 @@ pub fn run_receipt(
 
     if run_incremental {
         let providers_dir = root.join("crates/perl-lsp-providers");
-        run_command_silently(root, &["cargo", "build", "--workspace", "--locked"]);
+        run_command_silently(&root, &["cargo", "build", "--workspace", "--locked"]);
         if providers_dir.exists() {
             touch_file(&root.join(LSP_PROVIDERS_LIB))?;
             let measurement = measure_command(
@@ -149,9 +149,12 @@ pub fn run_receipt(
 
     if baseline {
         println!();
-        println!("Baseline saved to: {output_path}");
+        println!("Baseline saved to: {}", output_path.display());
         println!("Use this baseline to compare against future measurements:");
-        println!("  cargo xtask compare-build-timing {output_path} <new-measurement.json>");
+        println!(
+            "  cargo xtask compare-build-timing {} <new-measurement.json>",
+            output_path.display()
+        );
     }
 
     Ok(())

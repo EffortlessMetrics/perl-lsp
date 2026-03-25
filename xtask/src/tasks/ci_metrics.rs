@@ -173,13 +173,10 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
                 .or_else(|| read_timestamp(run, &["completed_at", "completedAt"]))
                 .or_else(|| read_timestamp(run, &["finished_at", "finishedAt"]));
 
-            let elapsed_seconds = match (start, end) {
-                (Some(start_ts), Some(end_ts)) => {
-                    let elapsed = (end_ts - start_ts).num_seconds();
-                    if elapsed > 0 { u64::try_from(elapsed).ok() } else { None }
-                }
-                _ => None,
-            };
+            let elapsed_seconds = end.and_then(|end_ts| {
+                let elapsed = (end_ts - start).num_seconds();
+                if elapsed > 0 { u64::try_from(elapsed).ok() } else { None }
+            });
 
             let Some(elapsed_seconds) = elapsed_seconds else {
                 continue;
@@ -195,6 +192,9 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
                 .to_string();
 
             let conclusion = run.get("conclusion").and_then(Value::as_str).unwrap_or("");
+            if conclusion.is_empty() {
+                continue;
+            }
 
             let entry = workflow_stats.entry(workflow_name).or_default();
             entry.runs += 1;
@@ -416,7 +416,7 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
             "--branch".to_string(),
             branch.clone(),
             "--json".to_string(),
-            "name,conclusion,createdAt,updatedAt,databaseId,workflowName,status,runStartedAt"
+            "name,conclusion,createdAt,updatedAt,databaseId,workflowName,status,startedAt"
                 .to_string(),
         ],
     )?;
@@ -443,9 +443,12 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
             .unwrap_or("(unknown workflow)");
 
         let conclusion = run.get("conclusion").and_then(Value::as_str).unwrap_or("");
+        if conclusion.is_empty() {
+            continue;
+        }
 
         let mut duration_seconds = 0_u64;
-        let start = read_timestamp(run, &["runStartedAt", "run_started_at"])
+        let start = read_timestamp(run, &["startedAt", "runStartedAt", "run_started_at"])
             .or_else(|| read_timestamp(run, &["createdAt", "created_at"]));
         let end = read_timestamp(run, &["updatedAt", "updated_at"]);
         if let (Some(start_ts), Some(end_ts)) = (start, end) {
@@ -462,9 +465,8 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
 
         match conclusion {
             "success" => counters.success_count += 1,
-            "failure" => counters.failure_count += 1,
             "skipped" => counters.skipped_count += 1,
-            _ => {}
+            _ => counters.failure_count += 1,
         }
 
         if conclusion == "skipped" {

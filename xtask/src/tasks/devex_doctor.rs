@@ -88,7 +88,10 @@ pub fn run() -> Result<()> {
 
 fn check_command(program: &str, label: &str, missing_required: &mut bool) {
     if has_command(program) {
-        pass(&format!("{label}: found ({})", command_path(program).unwrap_or(program)));
+        pass(&format!(
+            "{label}: found ({})",
+            command_path(program).unwrap_or(program.to_string())
+        ));
     } else {
         warn(&format!("{label}: not found"));
         *missing_required = true;
@@ -97,7 +100,10 @@ fn check_command(program: &str, label: &str, missing_required: &mut bool) {
 
 fn check_command_optional(program: &str, label: &str) {
     if has_command(program) {
-        pass(&format!("{label}: found ({})", command_path(program).unwrap_or(program)));
+        pass(&format!(
+            "{label}: found ({})",
+            command_path(program).unwrap_or(program.to_string())
+        ));
     } else {
         warn(&format!("{label}: not found"));
     }

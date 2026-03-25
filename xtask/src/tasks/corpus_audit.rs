@@ -23,8 +23,10 @@ mod timeout_detection;
 use corpus::{CorpusFile, parse_corpus_files};
 use ga_alignment::check_ga_feature_alignment;
 use nodekind_analysis::analyze_nodekind_coverage;
-use report::{AuditReport, generate_report};
+use report::generate_report;
 use timeout_detection::{ParseOutcome, detect_timeout_risks, parse_with_timeout};
+
+pub use report::{AuditReport, FailingFile, ParseOutcomesSummary};
 
 /// Default timeout for parsing individual files
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);

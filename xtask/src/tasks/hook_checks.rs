@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Context, Result, bail};
+use color_eyre::eyre::{Context, ContextCompat, Result, bail};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::HashSet;

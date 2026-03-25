@@ -137,7 +137,7 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
   end
 
   test do
-    assert_match "perl-lsp", shell_output("#{bin}/perl-lsp --version")
+    assert_match "perl-lsp", shell_output("#{{bin}}/perl-lsp --version")
   end
 end
 "##,
@@ -170,21 +170,21 @@ fn build_asset_map(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) -> 
     payload.insert("v".to_string(), json!(&config.version));
     payload.insert(
         "linux-x64".to_string(),
-        json!({ "url": url(linux_x64), "sha256": assets.lin_x64 }),
+        json!({ "url": url(&linux_x64), "sha256": assets.lin_x64 }),
     );
     payload.insert(
         "linux-arm64".to_string(),
-        json!({ "url": url(linux_arm), "sha256": assets.lin_arm }),
+        json!({ "url": url(&linux_arm), "sha256": assets.lin_arm }),
     );
     payload
-        .insert("macos-x64".to_string(), json!({ "url": url(mac_x64), "sha256": assets.mac_x64 }));
+        .insert("macos-x64".to_string(), json!({ "url": url(&mac_x64), "sha256": assets.mac_x64 }));
     payload.insert(
         "macos-arm64".to_string(),
-        json!({ "url": url(mac_arm), "sha256": assets.mac_arm }),
+        json!({ "url": url(&mac_arm), "sha256": assets.mac_arm }),
     );
-    payload.insert("win-x64".to_string(), json!({ "url": url(win_x64), "sha256": assets.win_x64 }));
+    payload.insert("win-x64".to_string(), json!({ "url": url(&win_x64), "sha256": assets.win_x64 }));
     payload
-        .insert("win-arm64".to_string(), json!({ "url": url(win_arm), "sha256": assets.win_arm }));
+        .insert("win-arm64".to_string(), json!({ "url": url(&win_arm), "sha256": assets.win_arm }));
     let payload = Value::Object(payload);
     serde_json::to_string_pretty(&payload).map_err(Into::into)
 }
@@ -212,7 +212,7 @@ fn write_output(path: Option<&Path>, content: &str, name: &str) -> Result<()> {
         }
         fs::write(path, format!("{content}\n"))
             .with_context(|| format!("failed to write {name} {}", path.display()))?;
-        println!("[inject] wrote {path}");
+        println!("[inject] wrote {}", path.display());
     } else {
         print!("{content}\n");
     }
