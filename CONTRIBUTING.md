@@ -95,6 +95,28 @@ bash scripts/install-githooks.sh
 1. Push your branch and open a PR
 2. Describe your changes and link related issues (e.g., "Fixes #123")
 3. All PRs run format checks, clippy, and tests automatically in CI
+4. Merge with a conventional, descriptive squash commit
+
+Once checks are green and reviews are complete, use an explicit conventional commit
+subject when squashing so history is release-friendly and changelog-friendly.
+
+```bash
+pr=<number>
+gh pr merge "$pr" --squash \
+  --subject "feat(lsp): ... " \
+  --body "PR summary:
+- ...
+```
+
+Conventional subject format:
+
+- `feat(scope): imperative summary`
+- `fix(scope): imperative summary`
+- `chore(scope): imperative summary`
+- include `!` for breaking changes, e.g. `feat!: ...`
+
+Do not rely on PR title defaults (often noisy, e.g. `(...#NNNN)`), because they
+break commit consistency for changelog generation.
 
 #### CI Labels (Opt-in)
 
@@ -118,6 +140,8 @@ For full CI details, see [CI & Automation](docs/project/CI.md).
 - Run `cargo fmt --all` before every commit
 - Fix all `cargo clippy --workspace` warnings
 - Use [conventional commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, etc.
+- For squash merges, prefer scope-qualified forms such as
+  `feat(lsp): ...`, `fix(dap): ...`, `chore(release): ...`, etc.
 
 ### Banned in Production Code
 

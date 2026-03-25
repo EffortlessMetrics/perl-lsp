@@ -334,42 +334,32 @@ jobs:
 
 ## Monitoring
 
-### Using `scripts/ci-cost-monitor.sh`
+### Monitoring CI cost
 
-**Note**: This script doesn't exist yet. Below is the specification for creating it.
+Run the XTASK implementation directly:
 
 ```bash
-#!/bin/bash
-# scripts/ci-cost-monitor.sh
-# Estimates CI costs from GitHub Actions API
-
-# Usage:
-#   bash scripts/ci-cost-monitor.sh [--month YYYY-MM] [--repo owner/name]
-
-# Fetch workflow runs for the month
-# Calculate total minutes per runner type
-# Multiply by pricing
-# Output cost breakdown and trends
+cargo xtask ci-cost-monitor
 ```
 
-**Planned implementation** (Issue #211 Phase 3):
+If you prefer using the shim script, it delegates to the same command:
 
 ```bash
-# Show current month costs
+# Via shim
 bash scripts/ci-cost-monitor.sh
+```
 
-# Output:
-# CI Cost Report (2025-01)
-# ========================
-# Linux:    127 min × $0.008 = $1.02
-# Windows:   45 min × $0.016 = $0.72
-# macOS:      0 min × $0.080 = $0.00
-# ────────────────────────────────────
-# Total:                       $1.74
-#
-# PRs:        18
-# Avg/PR:     $0.097
-# Trend:      ↓ 12% vs last month
+Examples:
+
+```bash
+# Show costs for the last 30 days
+cargo xtask ci-cost-monitor
+
+# Show JSON output for CI automation
+cargo xtask ci-cost-monitor --json
+
+# Show costs for the last 7 days
+cargo xtask ci-cost-monitor --days 7
 ```
 
 ### Reading GitHub Billing Reports

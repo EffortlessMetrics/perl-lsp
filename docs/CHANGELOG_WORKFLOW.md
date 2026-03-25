@@ -182,7 +182,7 @@ The changelog is automatically generated during releases via the release orchest
 ```bash
 # Recommended: run both workflow steps through gh automation.
 # Canonical command for RC orchestration:
-./scripts/release-turnkey-pr.sh <0.x.y>
+cargo xtask release-turnkey <0.x.y>
 ```
 
 ### Alternative Manual Release Process
@@ -190,7 +190,7 @@ The changelog is automatically generated during releases via the release orchest
 ```bash
 # 1. Generate changelog content
 # Use the same canonical flow entrypoint:
-./scripts/release-turnkey-pr.sh <0.x.y> --no-auto-merge --no-wait-release
+cargo xtask release-turnkey <0.x.y> --no-auto-merge --no-wait-release
 
 # 2. Manually review and merge the generated version bump PR.
 
@@ -286,13 +286,19 @@ Every commit should follow the conventional commit format. This ensures:
 - Proper categorization
 - Automatic semantic versioning
 
-### 3. Group Related Changes
+### 3. Keep Squash Merges Explicitly Conventional
 
-Use PR merges with conventional commit messages:
+Use explicit subject/body on squash merges so merged history stays descriptive:
 
 ```bash
-# Instead of multiple small commits, use PR title
-feat(parser): add comprehensive heredoc support (#123)
+pr=2943
+gh pr merge "$pr" --squash \
+  --subject "feat(lsp): improve type definition and implementation with OO inheritance support" \
+  --body "PR summary:
+- improve OO lookup fallback for type definitions and implementations
+- add coverage for inherited methods and signatures
+- preserve existing behavior for non-OO dispatch paths"
+  --delete-branch
 ```
 
 ### 4. Document Breaking Changes

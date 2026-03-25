@@ -37,7 +37,7 @@ nix develop -c just ci-gate
 1. `cargo fmt --check --all` - Format check
 2. `cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs` - Lint
 3. `cargo test --workspace --lib --locked` - Library tests
-4. `.ci/scripts/check-from-raw.sh` - Policy checks
+4. `cargo xtask check-from-raw` - Policy checks
 5. LSP semantic definition tests
 
 ### What `just ci-full` Adds

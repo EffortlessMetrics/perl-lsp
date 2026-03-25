@@ -198,6 +198,7 @@ struct CriticalDebt {
 pub struct DebtReportConfig {
     pub check: bool,
     pub json: bool,
+    pub summary: bool,
     pub expired: bool,
     pub ledger: Option<PathBuf>,
 }
@@ -523,6 +524,26 @@ fn format_console_report(report: &Report) -> String {
     lines.join("\n")
 }
 
+fn format_summary_markdown(report: &Report) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let q = &report.summary.quarantined_tests;
+    let k = &report.summary.known_issues;
+    let t = &report.summary.technical_debt;
+
+    lines.push("| Category | Count | Budget | Status |".to_string());
+    lines.push("|----------|-------|--------|--------|".to_string());
+    lines.push(format!("| Quarantined Tests | {} | {} | {} |", q.count, q.budget, q.status));
+    lines.push(format!("| Known Issues | {} | {} | {} |", k.count, k.budget, k.status));
+    lines.push(format!("| Technical Debt | {} | {} | {} |", t.count, t.budget, t.status));
+
+    if q.expired > 0 {
+        lines.push(String::new());
+        lines.push(format!("**Warning:** {0} expired quarantine(s) need attention!", q.expired));
+    }
+
+    lines.join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -553,6 +574,13 @@ pub fn run(config: DebtReportConfig) -> Result<()> {
             return Err(eyre!("Expired quarantines found"));
         }
         return Ok(());
+    }
+
+    if config.summary {
+        println!("{}", format_summary_markdown(&report));
+        if !config.check {
+            return Ok(());
+        }
     }
 
     // Produce output

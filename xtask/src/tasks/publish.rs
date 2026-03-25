@@ -1,5 +1,6 @@
 //! Publishing functionality for crates and VSCode extension
 
+use crate::utils::project_root;
 use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -198,6 +199,50 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
     println!(
         "View in marketplace: https://marketplace.visualstudio.com/items?itemName=perl.language-server"
     );
+
+    Ok(())
+}
+
+pub fn publish_release(version: String, dry_run: bool, git_ref: Option<String>) -> Result<()> {
+    let root = project_root()?;
+    let ref_name = git_ref.unwrap_or_else(|| format!("v{version}"));
+
+    let status = Command::new("gh")
+        .current_dir(&root)
+        .args([
+            "workflow",
+            "run",
+            "Publish to crates.io",
+            "--ref",
+            &ref_name,
+            "-f",
+            &format!("version={version}"),
+            "-f",
+            &format!("dry_run={dry_run}"),
+        ])
+        .status()?;
+
+    if !status.success() {
+        bail!("publish-release workflow dispatch failed");
+    }
+
+    println!("Dispatched \"Publish to crates.io\" for {version} on ref {ref_name}.");
+    Ok(())
+}
+
+pub fn smoke_test_release(version: String) -> Result<()> {
+    let root = project_root()?;
+    let script = root.join("scripts").join("smoke-test-release.sh");
+    let status = Command::new("bash")
+        .arg(script)
+        .arg(version)
+        .current_dir(&root)
+        .env("XTASK_SMOKE_TEST_RELEASE", "1")
+        .status()?;
+
+    if !status.success() {
+        bail!("smoke-test-release failed");
+    }
 
     Ok(())
 }

@@ -4,8 +4,8 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/prepare-release.sh <0.x.y> [release-turnkey-pr options]
-  scripts/prepare-release.sh --version <0.x.y> [release-turnkey-pr options]
+  scripts/prepare-release.sh <0.x.y> [release-turnkey options]
+  scripts/prepare-release.sh --version <0.x.y> [release-turnkey options]
 
 Examples:
   scripts/prepare-release.sh 0.11.0
@@ -53,9 +53,7 @@ esac
 validate_version "$VERSION"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TURNKEY_SCRIPT="$SCRIPT_DIR/release-turnkey-pr.sh"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
-[[ -e "$TURNKEY_SCRIPT" ]] || die "missing release script: $TURNKEY_SCRIPT"
-[[ -x "$TURNKEY_SCRIPT" ]] || die "release script is not executable: $TURNKEY_SCRIPT"
-
-exec "$TURNKEY_SCRIPT" --version "$VERSION" "$@"
+exec cargo xtask release-turnkey --version "$VERSION" "$@"

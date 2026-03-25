@@ -33,7 +33,7 @@ grep '^version' features.toml | head -1
 # Expected: version = "NEW_VERSION"
 
 # Automated check (must print nothing)
-bash scripts/check-version-sync.sh
+cargo xtask check-version-sync
 ```
 
 Fail if any string mismatches. Fix with:
@@ -636,7 +636,7 @@ gh workflow run release-orchestration.yml \
 | `CHANGELOG.md` | Promote `[Unreleased]` to `[NEW_VERSION] - DATE` | Manual edit |
 | `docs/project/status/index.md` | Release posture narrative | Manual edit after ship |
 
-The `scripts/check-version-sync.sh` script validates all of the above except `CHANGELOG.md`.
+`cargo xtask check-version-sync` validates all of the above except `CHANGELOG.md`.
 
 ---
 

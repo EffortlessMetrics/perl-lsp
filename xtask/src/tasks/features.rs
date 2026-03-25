@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Context, Result, eyre};
+use color_eyre::eyre::{Context, Result, bail, eyre};
 use perl_feature_catalog::{Catalog, Maturity};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -18,11 +18,64 @@ pub fn report() -> Result<()> {
     generate_report()
 }
 
+pub fn invariants() -> Result<()> {
+    check_invariants()
+}
+
 fn load_features() -> Result<Catalog> {
     let manifest_dir = env::current_dir().context("Failed to get current working directory")?;
     let (catalog, _) = perl_feature_catalog::load_catalog_for_build(&manifest_dir)
         .context("Failed to load features catalog from features.toml")?;
     Ok(catalog)
+}
+
+fn check_invariants() -> Result<()> {
+    println!("🔍 Checking features.toml invariants...");
+
+    let catalog = load_features()?;
+    let mut violations = Vec::new();
+    let mut seen_ids = BTreeSet::new();
+
+    for feature in catalog.features() {
+        if !seen_ids.insert(feature.id.clone()) {
+            violations.push(format!("DUPLICATE_ID: {:?} appears more than once", feature.id));
+        }
+
+        if feature.advertised && feature.maturity == Maturity::Ga && feature.tests.is_empty() {
+            if feature.counts_in_coverage {
+                violations.push(format!(
+                    "UNTESTED_GA: {:?} is advertised+GA but has no tests. Either add tests or set counts_in_coverage=false (if it's protocol plumbing).",
+                    feature.id
+                ));
+            }
+        }
+    }
+
+    if !violations.is_empty() {
+        let violations_count = violations.len();
+        println!("FEATURE INVARIANT VIOLATIONS:");
+        println!("{}", "=".repeat(50));
+        for violation in violations {
+            println!("  - {violation}");
+        }
+        println!("{}", "=".repeat(50));
+        println!("{violations_count} violation(s) found.");
+        bail!("feature invariants check failed");
+    }
+
+    let total = catalog.features().len();
+    let ga_advertised =
+        catalog.features().iter().filter(|f| f.advertised && f.maturity == Maturity::Ga).count();
+    let headline_features = catalog
+        .features()
+        .iter()
+        .filter(|f| f.advertised && f.maturity == Maturity::Ga && f.counts_in_coverage)
+        .count();
+
+    println!(
+        "Feature invariants OK: {total} features, {ga_advertised} GA+advertised, {headline_features} in headline metric"
+    );
+    Ok(())
 }
 
 fn sync_docs_impl() -> Result<()> {

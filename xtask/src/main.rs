@@ -3,7 +3,7 @@
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::Result;
 use std::path::PathBuf;
 
@@ -34,6 +34,14 @@ enum Commands {
 
     /// Run format and clippy checks only (no tests)
     CheckOnly,
+
+    /// Verify local Rust toolchain meets the pinned MSRV in rust-toolchain.toml.
+    CheckToolchain {
+        /// Show a warning when rustc satisfies the minimum MSRV but differs
+        /// from the exact pinned channel string.
+        #[arg(long)]
+        doctor: bool,
+    },
 
     /// Build project with various configurations
     Build {
@@ -123,6 +131,118 @@ enum Commands {
         report: bool,
     },
 
+    /// Run the benchmark script wrapper (`benchmarks/scripts/run-benchmarks.sh`).
+    BenchRun {
+        /// Write benchmark results to a JSON file.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Run quick smoke benchmarks with reduced sample size.
+        #[arg(long)]
+        quick: bool,
+
+        /// Restrict benchmarks to a specific category.
+        #[arg(long)]
+        category: Option<String>,
+    },
+
+    /// Compare benchmark output receipts (`benchmarks/scripts/compare.sh`).
+    BenchCompare {
+        /// Enable strict mode (exit non-zero on regression).
+        #[arg(long)]
+        fail_on_regression: bool,
+    },
+
+    /// Format benchmark JSON via `benchmarks/scripts/format-results.py`.
+    BenchFormat {
+        /// Emit a receipt summary for CI.
+        #[arg(long)]
+        receipt: bool,
+
+        /// Emit markdown summary.
+        #[arg(long)]
+        markdown: bool,
+    },
+
+    /// Extract and normalize Criterion benchmark outputs (`target/criterion/.../estimates.json`).
+    BenchExtract {
+        /// Root path that contains `target/criterion`.
+        #[arg(long)]
+        base_path: Option<PathBuf>,
+
+        /// Output JSON path.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Run benchmark alert checks (`benchmarks/scripts/alert.py`).
+    BenchAlert {
+        /// Output markdown alerts.
+        #[arg(long)]
+        format: Option<String>,
+
+        /// Run checks and fail on warning conditions.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Run the local benchmark alert regression test suite.
+    BenchAlertTest,
+
+    /// Generate Homebrew formula and VS Code asset map from checksums JSON.
+    InjectShaAssets {
+        /// Version tag used by release artifacts (e.g. v0.8.3).
+        #[arg(long)]
+        version: String,
+
+        /// GitHub organization owning the release repository.
+        #[arg(long)]
+        owner: String,
+
+        /// GitHub repository name for releases.
+        #[arg(long)]
+        repo: String,
+
+        /// Artifact prefix for release filenames.
+        #[arg(long)]
+        prefix: String,
+
+        /// Path to checksums JSON from cargo-dist.
+        #[arg(long)]
+        checksums: PathBuf,
+
+        /// Optional output path for generated Homebrew formula.
+        #[arg(long)]
+        brew_out: Option<PathBuf>,
+
+        /// Optional output path for generated VS Code extension asset map.
+        #[arg(long)]
+        asset_map_out: Option<PathBuf>,
+    },
+
+    /// Generate Homebrew formula from a release SHA256SUMS file.
+    UpdateHomebrew {
+        /// Release version tag used by release artifacts (e.g. v0.8.3).
+        #[arg(long)]
+        version: String,
+
+        /// GitHub organization owning the release repository.
+        #[arg(long, default_value = "EffortlessMetrics")]
+        owner: String,
+
+        /// GitHub repository name for releases.
+        #[arg(long, default_value = "perl-lsp")]
+        repo: String,
+
+        /// Artifact prefix for release filenames.
+        #[arg(long, default_value = "perl-lsp")]
+        prefix: String,
+
+        /// Output path for generated Homebrew formula.
+        #[arg(long, default_value = "homebrew/perl-lsp.rb")]
+        output: PathBuf,
+    },
+
     /// Generate documentation
     Doc {
         /// Open docs in browser
@@ -209,6 +329,121 @@ enum Commands {
         strict: bool,
     },
 
+    /// Run a developer environment smoke check.
+    DevexDoctor,
+
+    /// Audit CI workflows for PR-safety and spend-risk controls.
+    CiAuditWorkflows,
+
+    /// Measure CI lane runtimes and emit timing artifacts.
+    CiMeasure,
+
+    /// Analyze GitHub Actions costs over a recent period.
+    CiCostMonitor {
+        /// Number of days to analyze.
+        #[arg(long, default_value_t = 30)]
+        days: u64,
+
+        /// Emit machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Measure CI baseline from recent workflow runs.
+    CiBaseline {
+        /// Branch to analyze.
+        #[arg(short, long, default_value = "master")]
+        branch: String,
+
+        /// Number of days to analyze.
+        #[arg(short, long, default_value_t = 30)]
+        days: u64,
+
+        /// Max runs to fetch.
+        #[arg(short, long, default_value_t = 200)]
+        limit: usize,
+
+        /// Output directory for ci_baseline artifacts.
+        #[arg(short, long, default_value = ".ci")]
+        output: PathBuf,
+    },
+
+    /// Check for disallowed direct `ExitStatus::from_raw()` usage.
+    CheckFromRaw,
+
+    /// Run production security hardening checks.
+    SecurityHardening,
+
+    /// Run production performance hardening checks.
+    PerformanceHardening,
+
+    /// Validate production hardening gate posture and SLOs.
+    ProductionGatesValidation,
+
+    /// Harvest forensics data for a merged PR.
+    ForensicsHarvest {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Analyze temporal behavior for a merged PR.
+    ForensicsTemporal {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Run quick static telemetry for a merged PR.
+    ForensicsTelemetryQuick {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Run full static telemetry for a merged PR.
+    ForensicsTelemetryFull {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Generate a full forensics dossier for a merged PR.
+    ForensicsDossier {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Render a forensics dossier for a merged PR.
+    ForensicsRender {
+        /// PR number or identifier.
+        pr: String,
+
+        /// Output format for the rendered dossier (`full` or `summary`).
+        #[arg(default_value = "full")]
+        format: String,
+    },
+
+    /// Verify publication claims from `docs/project/PUBLICATION_FACTS_LEDGER.md`.
+    VerifyPublicationFacts {
+        /// Forward extra args to the checker (`--strict`, `--json`).
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Ensure issue labels are present and correctly configured in GitHub.
+    GhLabels,
+
+    /// Show open issues missing required taxonomy labels from GitHub.
+    GhTriage {
+        /// Maximum number of issues to list.
+        #[arg(default_value = "500")]
+        limit: usize,
+    },
+
+    /// Backfill prefixed labels on GitHub issues (dry run by default).
+    GhBackfillPrefixedLabels {
+        /// Apply label updates instead of dry run.
+        #[arg(long)]
+        apply: bool,
+    },
+
     /// Generate bindings
     #[cfg(feature = "parser-tasks")]
     Bindings {
@@ -260,6 +495,64 @@ enum Commands {
         yes: bool,
     },
 
+    /// Trigger PR-driven release orchestration workflow
+    ReleaseTurnkey {
+        /// Release version (preferred: use `--version`; positional is also accepted).
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Release version as positional argument.
+        #[arg(value_name = "VERSION")]
+        positional_version: Option<String>,
+
+        /// Trigger prerelease mode for workflows.
+        #[arg(long)]
+        prerelease: bool,
+
+        /// Validate commands only; do not trigger workflows.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip crates.io publish workflow.
+        #[arg(long)]
+        skip_crates: bool,
+
+        /// Skip VSCode extension publish workflow.
+        #[arg(long)]
+        skip_extension: bool,
+
+        /// Skip Docker image publish workflow.
+        #[arg(long)]
+        skip_docker: bool,
+
+        /// Base branch for release orchestration.
+        #[arg(long)]
+        base_branch: Option<String>,
+
+        /// Do not auto-merge the version bump PR.
+        #[arg(long)]
+        no_auto_merge: bool,
+
+        /// Do not wait for the version bump PR merge.
+        #[arg(long)]
+        no_wait_pr_merge: bool,
+
+        /// Do not wait for release workflows to finish.
+        #[arg(long)]
+        no_wait_release: bool,
+
+        /// Workflow wait timeout in seconds.
+        #[arg(long)]
+        workflow_timeout: Option<u64>,
+    },
+
+    /// Run crates.io launch-preparation checks.
+    PrepCratesIoLaunch {
+        /// Launch mode: `core` for launch-critical crates, `all` for all publishable crates.
+        #[arg(long, value_enum, default_value = "core")]
+        mode: PrepCratesMode,
+    },
+
     /// Run heredoc-specific tests
     TestHeredoc {
         /// Run tests in release mode
@@ -303,6 +596,17 @@ enum Commands {
         /// Fresh mode (regenerate report even if it exists)
         #[arg(long)]
         fresh: bool,
+    },
+
+    /// Generate parser feature matrix from a parser-audit report.
+    ParserMatrix {
+        /// Path to parser audit report JSON.
+        #[arg(long, default_value = "corpus_audit_report.json")]
+        report: PathBuf,
+
+        /// Output path for generated matrix documentation.
+        #[arg(long, default_value = "docs/reference/PARSER_FEATURE_MATRIX.md")]
+        output: PathBuf,
     },
 
     /// Run three-way parser comparison
@@ -351,6 +655,49 @@ enum Commands {
         /// Dry run (don't actually publish)
         #[arg(long)]
         dry_run: bool,
+    },
+
+    /// Dispatch the "Publish to crates.io" workflow for a release
+    PublishRelease {
+        /// Release version (for example 0.x.y)
+        version: String,
+
+        /// Dry run (don't actually publish)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Target git ref (defaults to v<version>)
+        #[arg(long = "ref")]
+        git_ref: Option<String>,
+    },
+
+    /// Run a full release smoke test via installed binaries
+    SmokeTestRelease {
+        /// Release version to smoke-test (for example 0.x.y)
+        version: String,
+    },
+
+    /// Run forbidden-fatal construct checks from `perl-ci-hygiene`.
+    ForbidFatalConstructs {
+        /// Forwarded arguments for `forbid-fatal-constructs`.
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Run arbitrary `perl-ci-hygiene` subcommands.
+    CiHygiene {
+        /// Subcommand name for `perl-ci-hygiene`.
+        command: String,
+
+        /// Arguments to pass to the subcommand.
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Publish a review receipt bundle in `review/receipts/YYYY-MM-DD/`.
+    PublishReceipts {
+        /// Optional date override in `YYYY-MM-DD` format.
+        date: Option<String>,
     },
 
     /// Publish VSCode extension to marketplace
@@ -449,6 +796,10 @@ enum Commands {
         #[arg(long)]
         json: bool,
 
+        /// Output a compact markdown summary table.
+        #[arg(long)]
+        summary: bool,
+
         /// Show only expired quarantines
         #[arg(long)]
         expired: bool,
@@ -457,6 +808,9 @@ enum Commands {
         #[arg(long)]
         ledger: Option<PathBuf>,
     },
+
+    /// Check invariants in features.toml
+    DocClaims,
 
     /// Manage feature catalog and LSP compliance
     Features {
@@ -588,6 +942,15 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Verify hook scripts are executable.
+    HookCheck,
+
+    /// Verify hook registry references are present and executable.
+    HookRegistryCheck,
+
+    /// Run hook behavior tests and output summaries.
+    HookTests,
+
     /// Run targeted clippy/test checks for crates changed since a base ref
     ///
     /// Detects which crates have changed since the given base git ref
@@ -601,6 +964,53 @@ enum Commands {
         /// Check mode: clippy, test, or all (default: all)
         #[arg(long, value_enum, default_value = "all")]
         mode: CheckMode,
+    },
+
+    /// Remove stale `.claude/worktrees` entries and prune Git metadata.
+    WorktreeCleanup,
+
+    /// Show summary statistics from swarm-metrics.jsonl.
+    SwarmSummary {
+        /// Path to operations directory (defaults to `.ops-perl-lsp`).
+        #[arg(default_value = ".ops-perl-lsp")]
+        ops_dir: PathBuf,
+    },
+
+    /// Populate mdBook source directory from `docs/`.
+    PopulateBook,
+
+    /// Validate workspace exclusion strategy and dependency invariants.
+    ValidateWorkspaceExclusions,
+
+    /// Generate a build-timing receipt JSON with workspace duration metrics.
+    BuildTimingReceipt {
+        /// Measure clean build with `cargo build --workspace --locked`.
+        #[arg(long)]
+        clean: bool,
+
+        /// Measure incremental rebuild using incremental crate touch.
+        #[arg(long)]
+        incremental: bool,
+
+        /// Measure test build with `cargo test --workspace --lib --locked`.
+        #[arg(long)]
+        tests: bool,
+
+        /// Output file for the generated receipt.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Write the baseline artifact (`artifacts/build-timing-baseline.json`).
+        #[arg(long)]
+        baseline: bool,
+    },
+
+    /// Compare two build-timing receipts and print a markdown report.
+    CompareBuildTiming {
+        /// Baseline receipt JSON path.
+        baseline: PathBuf,
+        /// Current receipt JSON path.
+        current: PathBuf,
     },
 }
 
@@ -671,8 +1081,17 @@ enum FeaturesCommand {
     /// Verify features match capabilities
     Verify,
 
+    /// Run feature catalog invariant checks
+    Invariants,
+
     /// Generate compliance report
     Report,
+}
+
+#[derive(ValueEnum, Clone)]
+enum PrepCratesMode {
+    Core,
+    All,
 }
 
 fn main() -> Result<()> {
@@ -683,6 +1102,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
+        Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::Build { release, features, c_scanner, rust_scanner } => {
             build::run(release, features, c_scanner, rust_scanner)
         }
@@ -690,6 +1110,46 @@ fn main() -> Result<()> {
             test::run(release, suite, features, verbose, coverage)
         }
         Commands::Bench { name, save, output } => bench::run(name, save, output),
+        Commands::BenchRun { output, quick, category } => {
+            benchmarks::run_benchmarks(output, quick, category)
+        }
+        Commands::BenchCompare { fail_on_regression } => {
+            benchmarks::compare_benchmarks(fail_on_regression)
+        }
+        Commands::BenchFormat { receipt, markdown } => {
+            benchmarks::format_benchmarks(receipt, markdown)
+        }
+        Commands::BenchExtract { base_path, output } => {
+            benchmarks::extract_criterion(base_path, output)
+        }
+        Commands::BenchAlert { format, check } => benchmarks::alert_benchmarks(format, check),
+        Commands::BenchAlertTest => benchmarks::test_alert_system(),
+        Commands::InjectShaAssets {
+            version,
+            owner,
+            repo,
+            prefix,
+            checksums,
+            brew_out,
+            asset_map_out,
+        } => inject_sha_assets::run(inject_sha_assets::InjectShaAssetsConfig {
+            version,
+            owner,
+            repo,
+            prefix,
+            checksums,
+            brew_out,
+            asset_map_out,
+        }),
+        Commands::UpdateHomebrew { version, owner, repo, prefix, output } => {
+            update_homebrew::run(update_homebrew::UpdateHomebrewConfig {
+                version,
+                owner,
+                repo,
+                prefix,
+                output,
+            })
+        }
         Commands::Compare {
             c_only,
             rust_only,
@@ -721,10 +1181,41 @@ fn main() -> Result<()> {
         #[cfg(feature = "parser-tasks")]
         Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),
+        Commands::DevexDoctor => devex_doctor::run(),
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
         }
         Commands::Release { version, yes } => release::run(version, yes),
+        Commands::ReleaseTurnkey {
+            version,
+            positional_version,
+            prerelease,
+            dry_run,
+            skip_crates,
+            skip_extension,
+            skip_docker,
+            base_branch,
+            no_auto_merge,
+            no_wait_pr_merge,
+            no_wait_release,
+            workflow_timeout,
+        } => release_turnkey::run(release_turnkey::ReleaseTurnkeyConfig {
+            version,
+            positional_version,
+            prerelease,
+            dry_run,
+            skip_crates,
+            skip_extension,
+            skip_docker,
+            base_branch,
+            no_auto_merge,
+            no_wait_pr_merge,
+            no_wait_release,
+            workflow_timeout,
+        }),
+        Commands::PrepCratesIoLaunch { mode } => {
+            prep_crates_io_launch::run(matches!(mode, PrepCratesMode::All))
+        }
         Commands::TestHeredoc { release, verbose } => {
             // Run heredoc tests using the test module with heredoc suite
             test::run(
@@ -736,6 +1227,26 @@ fn main() -> Result<()> {
             )
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
+        Commands::CiAuditWorkflows => ci_audit_workflows::run(),
+        Commands::CiMeasure => ci_measure::run(),
+        Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
+        Commands::CiBaseline { branch, days, limit, output } => {
+            ci_metrics::run_ci_baseline(branch, days, limit, output)
+        }
+        Commands::CheckFromRaw => ci_policy::check_from_raw(),
+        Commands::SecurityHardening => hardening::security_hardening(),
+        Commands::PerformanceHardening => hardening::performance_hardening(),
+        Commands::ProductionGatesValidation => hardening::production_gates_validation(),
+        Commands::ForensicsHarvest { pr } => forensics::run_harvest(&pr),
+        Commands::ForensicsTemporal { pr } => forensics::run_temporal(&pr),
+        Commands::ForensicsTelemetryQuick { pr } => forensics::run_telemetry_quick(&pr),
+        Commands::ForensicsTelemetryFull { pr } => forensics::run_telemetry_full(&pr),
+        Commands::ForensicsDossier { pr } => forensics::run_dossier(&pr),
+        Commands::ForensicsRender { pr, format } => forensics::run_render(&pr, &format),
+        Commands::VerifyPublicationFacts { args } => publication_facts::run(args),
+        Commands::GhLabels => github::run_labels(),
+        Commands::GhTriage { limit } => github::run_issues_needing_triage(limit),
+        Commands::GhBackfillPrefixedLabels { apply } => github::run_backfill_prefixed_labels(apply),
         Commands::CorpusAudit { corpus_path, output, check, fresh } => {
             corpus_audit::run(corpus_audit::AuditConfig {
                 corpus_path,
@@ -745,6 +1256,7 @@ fn main() -> Result<()> {
                 check,
             })
         }
+        Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output),
         #[cfg(feature = "legacy")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
@@ -754,7 +1266,17 @@ fn main() -> Result<()> {
         }
         Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
+        Commands::PublishRelease { version, dry_run, git_ref } => {
+            publish::publish_release(version, dry_run, git_ref)
+        }
+        Commands::HookCheck => hook_checks::run_hook_check(),
+        Commands::HookRegistryCheck => hook_checks::run_hook_registry_check(),
+        Commands::HookTests => hook_checks::run_hook_tests(),
+        Commands::ForbidFatalConstructs { args } => forbid_fatal_constructs::run(args),
+        Commands::CiHygiene { command, args } => ci_hygiene::run(command, args),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
+        Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
+        Commands::PublishReceipts { date } => publish_receipts::run(date),
         Commands::ParserCorpusSweep {
             roots,
             manifest,
@@ -825,12 +1347,20 @@ fn main() -> Result<()> {
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
         }
-        Commands::DebtReport { check, json, expired, ledger } => {
-            debt_report::run(debt_report::DebtReportConfig { check, json, expired, ledger })
+        Commands::DebtReport { check, json, summary, expired, ledger } => {
+            debt_report::run(debt_report::DebtReportConfig {
+                check,
+                json,
+                summary,
+                expired,
+                ledger,
+            })
         }
+        Commands::DocClaims => doc_claims::run(),
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),
             FeaturesCommand::Verify => features::verify(),
+            FeaturesCommand::Invariants => features::invariants(),
             FeaturesCommand::Report => features::report(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
@@ -872,5 +1402,15 @@ fn main() -> Result<()> {
             verbose,
         }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
+        Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::SwarmSummary { ops_dir } => swarm_summary::run(ops_dir),
+        Commands::PopulateBook => populate_book::run(),
+        Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
+        Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
+            build_timing::run_receipt(clean, incremental, tests, output, baseline)
+        }
+        Commands::CompareBuildTiming { baseline, current } => {
+            build_timing::run_compare(baseline, current)
+        }
     }
 }

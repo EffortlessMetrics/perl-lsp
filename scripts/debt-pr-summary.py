@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
-"""
-Generate a markdown-formatted debt summary suitable for PR comments.
 
-Reads JSON from stdin (from debt-report.py --json) and outputs markdown table.
-"""
+"""Compatibility shim for PR debt summary output."""
 
 import json
+import subprocess
 import sys
+from pathlib import Path
 
 
-def main():
+def _print_summary_from_json(raw: str) -> int:
     try:
-        r = json.load(sys.stdin)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON input: {e}", file=sys.stderr)
-        sys.exit(1)
+        payload = json.loads(raw)
+    except json.JSONDecodeError as err:
+        print(f"Error: Invalid JSON input: {err}", file=sys.stderr)
+        return 1
 
-    s = r.get("summary", {})
-    q = s.get("quarantined_tests", {})
-    k = s.get("known_issues", {})
-    t = s.get("technical_debt", {})
+    summary = payload.get("summary", {})
+    q = summary.get("quarantined_tests", {})
+    k = summary.get("known_issues", {})
+    t = summary.get("technical_debt", {})
 
     print("| Category | Count | Budget | Status |")
     print("|----------|-------|--------|--------|")
@@ -31,6 +30,15 @@ def main():
         print("")
         print(f"**Warning:** {q['expired']} expired quarantine(s) need attention!")
 
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raw = sys.stdin.read()
+    if raw.strip():
+        raise SystemExit(_print_summary_from_json(raw))
+
+    repo_root = Path(__file__).resolve().parents[1]
+    raise SystemExit(
+        subprocess.call(["cargo", "xtask", "debt-report", "--summary"], cwd=repo_root)
+    )
