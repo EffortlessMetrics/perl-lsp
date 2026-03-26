@@ -505,6 +505,10 @@ export async function activate(context: vscode.ExtensionContext) {
         await downloader.checkForUpdateSilent();
     });
 
+    const arrowCompletionWatcher = vscode.workspace.onDidChangeTextDocument((event) => {
+        maybeNudgeArrowCompletion(event);
+    });
+
     context.subscriptions.push(
         showOutputCommand,
         restartCommand,
@@ -531,6 +535,7 @@ export async function activate(context: vscode.ExtensionContext) {
         formatOnSaveDisposable,
         configurationWatcher,
         fileCreationWatcher,
+        arrowCompletionWatcher,
     );
 
     // Initialize debug adapter
@@ -777,6 +782,43 @@ function createLanguageClient(serverPath: string): LanguageClient {
     );
     lc.setTrace(getTraceLevel());
     return lc;
+}
+
+export function shouldNudgeArrowCompletion(linePrefix: string): boolean {
+    if (!linePrefix.endsWith('-')) {
+        return false;
+    }
+
+    const beforeDash = linePrefix.slice(0, -1);
+    if (beforeDash.length === 0 || /\s$/.test(beforeDash) || beforeDash.endsWith(':')) {
+        return false;
+    }
+
+    return /(?:\$[\w:]+|[@%][\w:]+|[A-Z]\w*)$/.test(beforeDash);
+}
+
+export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent): void {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || event.document !== editor.document || event.document.languageId !== 'perl') {
+        return;
+    }
+
+    if (event.contentChanges.length !== 1) {
+        return;
+    }
+
+    const change = event.contentChanges[0];
+    if (change.rangeLength !== 0 || change.text !== '-') {
+        return;
+    }
+
+    const lineText = event.document.lineAt(change.range.start.line).text;
+    const linePrefix = lineText.slice(0, change.range.start.character + change.text.length);
+    if (!shouldNudgeArrowCompletion(linePrefix)) {
+        return;
+    }
+
+    void vscode.commands.executeCommand('editor.action.triggerSuggest');
 }
 
 /**
