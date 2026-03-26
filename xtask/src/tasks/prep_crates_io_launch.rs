@@ -74,7 +74,7 @@ pub fn run(all: bool) -> Result<()> {
         if all { "all publish-allowlist crates" } else { "core launch crates" }
     );
     println!(
-        "📦 Running cargo check + cargo package (dry-run) for {} crate(s)",
+        "📦 Running cargo check + cargo publish --dry-run for {} crate(s)",
         launch_crates.len()
     );
 
@@ -82,7 +82,7 @@ pub fn run(all: bool) -> Result<()> {
         println!();
         println!("==> {crate_name}");
         run_cargo_check(&root, &crate_name)?;
-        run_cargo_package_dry_run(&root, &crate_name, &patch_args)?;
+        run_cargo_publish_dry_run(&root, &crate_name, &patch_args)?;
     }
 
     println!();
@@ -183,9 +183,13 @@ fn run_cargo_check(root: &Path, crate_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_cargo_package_dry_run(root: &Path, crate_name: &str, patch_args: &[String]) -> Result<()> {
-    let mut args = vec!["package".to_string(), "-p".to_string(), crate_name.to_string()];
-    args.push("--no-verify".to_string());
+fn run_cargo_publish_dry_run(root: &Path, crate_name: &str, patch_args: &[String]) -> Result<()> {
+    let mut args = vec![
+        "publish".to_string(),
+        "--dry-run".to_string(),
+        "-p".to_string(),
+        crate_name.to_string(),
+    ];
     args.extend(patch_args.iter().cloned());
 
     let output = Command::new("cargo")
@@ -196,7 +200,7 @@ fn run_cargo_package_dry_run(root: &Path, crate_name: &str, patch_args: &[String
 
     if !output.status.success() {
         bail!(
-            "cargo package dry-run failed for {crate_name}: {}",
+            "cargo publish dry-run failed for {crate_name}: {}",
             String::from_utf8_lossy(&output.stderr).trim_end()
         );
     }
