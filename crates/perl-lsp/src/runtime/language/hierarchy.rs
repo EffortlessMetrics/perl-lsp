@@ -708,18 +708,21 @@ impl LspServer {
             };
             drop(documents);
 
+            let mut resolved_with_workspace = vec![false; calls.len()];
+
             #[cfg(feature = "workspace")]
             {
                 let access_mode = route_index_access(self.coordinator());
                 if let IndexAccessMode::Full(coordinator) = access_mode {
                     let workspace_symbols = coordinator.index().search_symbols("");
-                    for call in &mut calls {
+                    for (idx, call) in calls.iter_mut().enumerate() {
                         if let Some(resolved_item) = self.resolve_workspace_outgoing_target(
                             &workspace_symbols,
                             &ch_item,
                             call,
                         ) {
                             call.to = resolved_item;
+                            resolved_with_workspace[idx] = true;
                         }
                     }
                 }
@@ -728,7 +731,10 @@ impl LspServer {
             // Resolve each callee's definition URI from workspace documents.
             // Strip any package qualifier (e.g. "Utils::format_string" -> "format_string")
             // before searching, since the provider stores bare names from AST nodes.
-            for call in &mut calls {
+            for (idx, call) in calls.iter_mut().enumerate() {
+                if resolved_with_workspace[idx] {
+                    continue;
+                }
                 let bare_name =
                     call.to.name.split("::").last().unwrap_or(&call.to.name).to_string();
                 'outer: for (doc_uri, doc_text, ast) in &doc_snapshots {
