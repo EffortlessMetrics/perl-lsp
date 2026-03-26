@@ -114,13 +114,11 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
   });
 
   describe('activation events', () => {
-    test('activates on checkSyntax command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.checkSyntax');
-    });
-
-    test('activates on runCurrentTest command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.runCurrentTest');
-    });
+    for (const id of NEW_COMMAND_IDS) {
+      test(`activates on ${id} command`, () => {
+        expect(pkg.activationEvents).toContain(`onCommand:${id}`);
+      });
+    }
   });
 });
 

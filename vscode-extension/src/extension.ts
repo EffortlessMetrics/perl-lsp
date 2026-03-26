@@ -944,7 +944,7 @@ async function runCheckSyntax(): Promise<void> {
 
     const perlArgs: string[] = [];
     for (const inc of includePaths) {
-        const resolved = workspaceRoot ? path.join(workspaceRoot, inc) : inc;
+        const resolved = workspaceRoot && !path.isAbsolute(inc) ? path.join(workspaceRoot, inc) : inc;
         perlArgs.push('-I', resolved);
     }
     perlArgs.push('-c', filePath);
@@ -961,13 +961,36 @@ async function runCheckSyntax(): Promise<void> {
                         outputChannel.appendLine(`[check-syntax] ${output}`);
                         outputChannel.show();
                     }
+                    resolve();
                 });
             } else {
-                vscode.window.showInformationMessage(`Syntax OK: ${path.basename(filePath)}`);
+                vscode.window.showInformationMessage(`Syntax OK: ${path.basename(filePath)}`).then(() => {
+                    resolve();
+                });
             }
-            resolve();
         });
     });
+}
+
+async function runProveTask(name: string, args: string[], cwd?: string): Promise<void> {
+    const scope = cwd
+        ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(cwd)) ?? vscode.TaskScope.Global
+        : vscode.TaskScope.Global;
+    const execution = new vscode.ProcessExecution('prove', args, cwd ? { cwd } : undefined);
+    const task = new vscode.Task(
+        { type: 'perl-lsp' },
+        scope,
+        name,
+        'perl-lsp',
+        execution,
+    );
+    task.presentationOptions = {
+        reveal: vscode.TaskRevealKind.Always,
+        panel: vscode.TaskPanelKind.Shared,
+        clear: false,
+        showReuseMessage: false,
+    };
+    await vscode.tasks.executeTask(task);
 }
 
 async function runCurrentTestWithProve(): Promise<void> {
@@ -985,12 +1008,7 @@ async function runCurrentTestWithProve(): Promise<void> {
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
     const cwd = workspaceFolder?.uri.fsPath;
 
-    const terminal = getOrCreateTerminal('Perl Tests');
-    terminal.show(true);
-    const proveCmd = cwd
-        ? `cd ${JSON.stringify(cwd)} && prove -v ${JSON.stringify(filePath)}`
-        : `prove -v ${JSON.stringify(filePath)}`;
-    terminal.sendText(proveCmd);
+    await runProveTask('Perl Tests: Current File', ['-v', filePath], cwd);
 }
 
 async function runAllTestsWithProve(): Promise<void> {
@@ -1001,17 +1019,16 @@ async function runAllTestsWithProve(): Promise<void> {
     }
 
     const cwd = workspaceFolders[0].uri.fsPath;
-    const terminal = getOrCreateTerminal('Perl Tests');
-    terminal.show(true);
-    terminal.sendText(`cd ${JSON.stringify(cwd)} && prove -r t/`);
+    await runProveTask('Perl Tests: All', ['-r', 't/'], cwd);
 }
 
 async function showIncPaths(): Promise<void> {
     return new Promise(resolve => {
         execFile('perl', ['-e', 'print join("\\n", @INC)'], { timeout: 5000 }, (error, stdout) => {
             if (error) {
-                vscode.window.showErrorMessage(`Failed to get @INC: ${error.message}`);
-                resolve();
+                vscode.window.showErrorMessage(`Failed to get @INC: ${error.message}`).then(() => {
+                    resolve();
+                });
                 return;
             }
 
@@ -1036,7 +1053,7 @@ async function openPerlModule(): Promise<void> {
         return;
     }
 
-    const pmFiles = await vscode.workspace.findFiles('**/*.pm', '**/node_modules/**', 500);
+    const pmFiles = await vscode.workspace.findFiles('**/*.pm', '{**/node_modules/**,**/blib/**}', 500);
     if (pmFiles.length === 0) {
         vscode.window.showInformationMessage('No .pm module files found in workspace');
         return;
@@ -1101,11 +1118,6 @@ async function showParserAst(): Promise<void> {
             'Show Parser AST is not supported by the current perl-lsp version'
         );
     }
-}
-
-function getOrCreateTerminal(name: string): vscode.Terminal {
-    const existing = vscode.window.terminals.find(t => t.name === name);
-    return existing ?? vscode.window.createTerminal(name);
 }
 
 async function reinstallServerBinary(context: vscode.ExtensionContext) {
