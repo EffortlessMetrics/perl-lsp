@@ -1,6 +1,7 @@
 use perl_parser::PositionMapper;
 use perl_parser::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition, WireRange};
+use regex::Regex;
 use serde_json::{Value, json};
 
 /// LSP wire type alias for position (0-based line/character with UTF-16 counting)
@@ -27,6 +28,8 @@ pub struct CallHierarchyItem {
     pub selection_range: Range,
     /// Optional additional detail about the symbol
     pub detail: Option<String>,
+    /// Optional fully-qualified name for disambiguating cross-package symbols
+    pub qualified_name: Option<String>,
 }
 
 /// Call Hierarchy Provider
@@ -78,7 +81,7 @@ impl CallHierarchyProvider {
         item: &CallHierarchyItem,
     ) -> Vec<CallHierarchyIncomingCall> {
         let mut calls = Vec::new();
-        self.find_incoming_calls(ast, &item.name, &mut calls, None);
+        self.find_incoming_calls(ast, item, &mut calls, None);
         calls
     }
 
@@ -98,6 +101,50 @@ impl CallHierarchyProvider {
         } else {
             Vec::new()
         }
+    }
+
+    fn package_name_at_offset(&self, offset: usize) -> Option<String> {
+        let package_regex = Regex::new(r"(?m)\bpackage\s+([a-zA-Z_][\w:]*)\s*;").ok()?;
+        let mut current_package = None;
+        for cap in package_regex.captures_iter(&self.source) {
+            if let Some(m) = cap.get(0) {
+                if m.start() > offset {
+                    break;
+                }
+                if let Some(pkg) = cap.get(1) {
+                    current_package = Some(pkg.as_str().to_string());
+                }
+            }
+        }
+
+        current_package
+    }
+
+    fn qualified_name_for(&self, name: &str, offset: usize) -> Option<String> {
+        if name.contains("::") {
+            return Some(name.to_string());
+        }
+
+        self.package_name_at_offset(offset).map(|pkg| format!("{pkg}::{name}"))
+    }
+
+    fn call_matches_target(&self, call_name: &str, item: &CallHierarchyItem) -> bool {
+        if call_name == item.name {
+            return true;
+        }
+
+        if let Some(target_qn) = &item.qualified_name {
+            if call_name == target_qn {
+                return true;
+            }
+            if call_name.ends_with(&format!("::{}", item.name))
+                && target_qn.ends_with(&format!("::{}", item.name))
+            {
+                return call_name == target_qn;
+            }
+        }
+
+        call_name.ends_with(&format!("::{}", item.name))
     }
 
     /// Find a callable item at the given position
@@ -126,6 +173,8 @@ impl CallHierarchyProvider {
                                     range,
                                     selection_range,
                                     detail,
+                                    qualified_name: self
+                                        .qualified_name_for(name_str, node.location.start),
                                 });
                             }
                         } else {
@@ -146,6 +195,8 @@ impl CallHierarchyProvider {
                                 range,
                                 selection_range,
                                 detail,
+                                qualified_name: self
+                                    .qualified_name_for(name_str, node.location.start),
                             });
                         }
                     }
@@ -159,6 +210,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        qualified_name: self.qualified_name_for(method, node.location.start),
                     });
                 }
                 NodeKind::FunctionCall { name, .. } => {
@@ -170,6 +222,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        qualified_name: self.qualified_name_for(name, node.location.start),
                     });
                 }
                 _ => {}
@@ -186,7 +239,7 @@ impl CallHierarchyProvider {
     fn find_incoming_calls(
         &self,
         node: &Node,
-        target_name: &str,
+        target_item: &CallHierarchyItem,
         calls: &mut Vec<CallHierarchyIncomingCall>,
         current_function: Option<&CallHierarchyItem>,
     ) {
@@ -203,18 +256,18 @@ impl CallHierarchyProvider {
                         range,
                         selection_range,
                         detail: None,
+                        qualified_name: self.qualified_name_for(name_str, node.location.start),
                     };
 
                     // Search within this function
                     self.visit_children(node, |child| {
-                        self.find_incoming_calls(child, target_name, calls, Some(&item));
+                        self.find_incoming_calls(child, target_item, calls, Some(&item));
                         None::<()>
                     });
                 }
             }
             NodeKind::FunctionCall { name, .. } => {
-                // Match exact name or package-qualified name (e.g. "Utils::format_string")
-                let matches = name == target_name || name.ends_with(&format!("::{}", target_name));
+                let matches = self.call_matches_target(name, target_item);
                 if matches {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
@@ -233,7 +286,7 @@ impl CallHierarchyProvider {
                 }
             }
             NodeKind::MethodCall { method, .. } => {
-                if method == target_name {
+                if self.call_matches_target(method, target_item) {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
 
@@ -254,7 +307,7 @@ impl CallHierarchyProvider {
 
         // Visit children
         self.visit_children(node, |child| {
-            self.find_incoming_calls(child, target_name, calls, current_function);
+            self.find_incoming_calls(child, target_item, calls, current_function);
             None::<()>
         });
     }
@@ -271,6 +324,7 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail: None,
+                    qualified_name: self.qualified_name_for(name, node.location.start),
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -296,6 +350,7 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail,
+                    qualified_name: self.qualified_name_for(method, node.location.start),
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -332,6 +387,7 @@ impl CallHierarchyProvider {
                 range,
                 selection_range,
                 detail,
+                qualified_name: self.qualified_name_for(name, func_node.location.start),
             })
         } else {
             None
@@ -628,6 +684,21 @@ impl CallHierarchyItem {
         if let Some(detail) = &self.detail {
             item["detail"] = json!(detail);
         }
+        item["data"] = json!({
+            "uri": self.uri,
+            "name": self.name,
+            "qualified_name": self.qualified_name,
+            "range": {
+                "start": {
+                    "line": self.range.start.line,
+                    "character": self.range.start.character
+                },
+                "end": {
+                    "line": self.range.end.line,
+                    "character": self.range.end.character
+                }
+            }
+        });
 
         item
     }
@@ -750,6 +821,7 @@ sub target_func {
                     end: Position { line: 10, character: 15 },
                 },
                 detail: None,
+                qualified_name: None,
             };
 
             let incoming = provider.incoming_calls(&ast, &target_item);
@@ -801,6 +873,7 @@ sub helper {
                     end: Position { line: 1, character: 8 },
                 },
                 detail: None,
+                qualified_name: None,
             };
 
             let outgoing = provider.outgoing_calls(&ast, &main_item);

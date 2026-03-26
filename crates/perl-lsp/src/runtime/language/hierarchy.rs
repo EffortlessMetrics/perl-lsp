@@ -553,7 +553,12 @@ impl LspServer {
         };
 
         let detail = json["detail"].as_str().map(|s| s.to_string());
+        let qualified_name = json
+            .get("data")
+            .and_then(|data| data.get("qualified_name"))
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
 
-        Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail })
+        Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail, qualified_name })
     }
 }
