@@ -187,6 +187,7 @@ fn run_cargo_publish_dry_run(root: &Path, crate_name: &str, patch_args: &[String
     let mut args = vec![
         "publish".to_string(),
         "--dry-run".to_string(),
+        "--locked".to_string(),
         "-p".to_string(),
         crate_name.to_string(),
     ];
