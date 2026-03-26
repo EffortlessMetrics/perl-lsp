@@ -27,6 +27,10 @@ pub struct CallHierarchyItem {
     pub selection_range: Range,
     /// Optional additional detail about the symbol
     pub detail: Option<String>,
+    /// Optional package/class name containing this callable
+    pub package_name: Option<String>,
+    /// Optional fully-qualified callable name
+    pub qualified_name: Option<String>,
 }
 
 /// Call Hierarchy Provider
@@ -37,6 +41,12 @@ pub struct CallHierarchyProvider {
 }
 
 impl CallHierarchyProvider {
+    fn extract_qualified_call_name(&self, node: &Node) -> Option<String> {
+        let snippet = self.source.get(node.location.start..node.location.end)?.trim();
+        let callee = snippet.split('(').next()?.trim();
+        callee.contains("::").then(|| callee.to_string())
+    }
+
     /// Create a new call hierarchy provider for a source file
     ///
     /// # Arguments
@@ -126,6 +136,8 @@ impl CallHierarchyProvider {
                                     range,
                                     selection_range,
                                     detail,
+                                    package_name: None,
+                                    qualified_name: None,
                                 });
                             }
                         } else {
@@ -146,6 +158,8 @@ impl CallHierarchyProvider {
                                 range,
                                 selection_range,
                                 detail,
+                                package_name: None,
+                                qualified_name: None,
                             });
                         }
                     }
@@ -159,6 +173,8 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        package_name: None,
+                        qualified_name: None,
                     });
                 }
                 NodeKind::FunctionCall { name, .. } => {
@@ -170,6 +186,8 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        package_name: None,
+                        qualified_name: None,
                     });
                 }
                 _ => {}
@@ -203,6 +221,8 @@ impl CallHierarchyProvider {
                         range,
                         selection_range,
                         detail: None,
+                        package_name: None,
+                        qualified_name: None,
                     };
 
                     // Search within this function
@@ -264,6 +284,7 @@ impl CallHierarchyProvider {
         let uri = &self.uri;
         match &node.kind {
             NodeKind::FunctionCall { name, .. } => {
+                let qualified_name = self.extract_qualified_call_name(node);
                 let item = CallHierarchyItem {
                     name: name.clone(),
                     kind: "function".to_string(),
@@ -271,6 +292,10 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail: None,
+                    package_name: qualified_name.as_deref().and_then(|qualified| {
+                        qualified.rsplit_once("::").map(|(pkg, _)| pkg.to_string())
+                    }),
+                    qualified_name,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -296,6 +321,8 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail,
+                    package_name: None,
+                    qualified_name: None,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -332,6 +359,8 @@ impl CallHierarchyProvider {
                 range,
                 selection_range,
                 detail,
+                package_name: None,
+                qualified_name: None,
             })
         } else {
             None
@@ -627,6 +656,13 @@ impl CallHierarchyItem {
 
         if let Some(detail) = &self.detail {
             item["detail"] = json!(detail);
+        }
+
+        if self.package_name.is_some() || self.qualified_name.is_some() {
+            item["data"] = json!({
+                "packageName": self.package_name,
+                "qualifiedName": self.qualified_name,
+            });
         }
 
         item
