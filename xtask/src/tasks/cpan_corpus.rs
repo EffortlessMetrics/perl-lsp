@@ -312,10 +312,11 @@ fn reset_install_dir(install_dir: &Path, launcher: Option<&CpanmLauncher>) -> Re
     fs::create_dir_all(install_dir).context("Failed to create install directory")?;
 
     let preserved_cpanm = match launcher {
-        Some(CpanmLauncher::Bootstrapped(path)) if path.exists() => Some(
-            fs::read(path)
-                .with_context(|| format!("Failed to read bootstrapped cpanm: {}", path.display()))?,
-        ),
+        Some(CpanmLauncher::Bootstrapped(path)) if path.exists() => {
+            Some(fs::read(path).with_context(|| {
+                format!("Failed to read bootstrapped cpanm: {}", path.display())
+            })?)
+        }
         _ => None,
     };
 
@@ -718,10 +719,7 @@ Some other line";
         fs::write(&man_file, "man")?;
         fs::write(&cpanm_path, "#!/usr/bin/env perl\n")?;
 
-        reset_install_dir(
-            &install_dir,
-            Some(&CpanmLauncher::Bootstrapped(cpanm_path.clone())),
-        )?;
+        reset_install_dir(&install_dir, Some(&CpanmLauncher::Bootstrapped(cpanm_path.clone())))?;
 
         assert!(cache_file.exists());
         assert!(cpanm_path.exists());
