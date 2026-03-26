@@ -304,10 +304,11 @@ fn reset_install_dir(install_dir: &Path, launcher: &CpanmLauncher) -> Result<()>
     fs::create_dir_all(install_dir).context("Failed to create install directory")?;
 
     let preserved_cpanm = match launcher {
-        CpanmLauncher::Bootstrapped(path) if path.exists() => Some(
-            fs::read(path)
-                .with_context(|| format!("Failed to read bootstrapped cpanm: {}", path.display()))?,
-        ),
+        CpanmLauncher::Bootstrapped(path) if path.exists() => {
+            Some(fs::read(path).with_context(|| {
+                format!("Failed to read bootstrapped cpanm: {}", path.display())
+            })?)
+        }
         _ => None,
     };
 
@@ -324,7 +325,8 @@ fn reset_install_dir(install_dir: &Path, launcher: &CpanmLauncher) -> Result<()>
             fs::remove_dir_all(&path)
                 .with_context(|| format!("Failed to clear {}", path.display()))?;
         } else {
-            fs::remove_file(&path).with_context(|| format!("Failed to clear {}", path.display()))?;
+            fs::remove_file(&path)
+                .with_context(|| format!("Failed to clear {}", path.display()))?;
         }
     }
 
@@ -610,9 +612,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_test_dir(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_nanos());
+        let nanos =
+            SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |duration| duration.as_nanos());
         std::env::temp_dir().join(format!("perl-lsp-{name}-{}-{nanos}", std::process::id()))
     }
 
