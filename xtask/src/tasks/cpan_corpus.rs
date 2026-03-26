@@ -176,11 +176,8 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         config.install_dir.display()
     );
 
-    let preserved_dist_list = config
-        .dist_list
-        .strip_prefix(&config.install_dir)
-        .ok()
-        .map(|_| config.dist_list.as_path());
+    let preserved_dist_list =
+        config.dist_list.strip_prefix(&config.install_dir).ok().map(|_| config.dist_list.as_path());
 
     let cpanm = if Command::new("cpanm").arg("--version").output().is_ok() {
         let launcher = CpanmLauncher::System;
@@ -338,9 +335,9 @@ fn reset_install_dir(
         if path.file_name().is_some_and(|name| name == CPANM_CACHE_DIR) && path.is_dir() {
             continue;
         }
-        if preserved_file.is_some_and(|preserved| {
-            preserved == path || preserved.strip_prefix(&path).is_ok()
-        }) {
+        if preserved_file
+            .is_some_and(|preserved| preserved == path || preserved.strip_prefix(&path).is_ok())
+        {
             continue;
         }
 
