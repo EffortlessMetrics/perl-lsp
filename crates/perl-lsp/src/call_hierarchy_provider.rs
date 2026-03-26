@@ -786,6 +786,8 @@ sub target_func {
                     end: Position { line: 10, character: 15 },
                 },
                 detail: None,
+                package_name: None,
+                qualified_name: None,
             };
 
             let incoming = provider.incoming_calls(&ast, &target_item);
@@ -837,6 +839,8 @@ sub helper {
                     end: Position { line: 1, character: 8 },
                 },
                 detail: None,
+                package_name: None,
+                qualified_name: None,
             };
 
             let outgoing = provider.outgoing_calls(&ast, &main_item);
