@@ -1,0 +1,64 @@
+name: PR Title Check
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+  checks: write
+
+jobs:
+  validate-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const actor = context.actor;
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            const login = pr.user.login;
+
+            if (actor === 'dependabot[bot]' || login.includes('dependabot')) {
+              core.info('Exempt: dependabot PR');
+              return;
+            }
+
+            const labels = pr.labels.map(l => l.name);
+            if (labels.includes('skip-title-check')) {
+              core.info('Exempt: skip-title-check label present');
+              return;
+            }
+
+            if (/^v?\d+\.\d+\.\d+$/.test(title.trim())) {
+              core.info('Exempt: release stamp title');
+              return;
+            }
+
+            if (!/#\d+/.test(title)) {
+              core.setFailed(
+                `PR title must reference an issue (e.g. "feat: add thing (#42)"). Got: "${title}"`
+              );
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: [
+                  '## \u26a0\ufe0f PR Title Check Failed',
+                  '',
+                  'This PR\'s title does not include an **issue reference** (`#<number>`).',
+                  '',
+                  '**Expected format:** `type: description (#1234)`',
+                  '',
+                  'Please update the title to reference the relevant issue. If this PR doesn\'t need one, add the `skip-title-check` label.',
+                  '',
+                  `Current title: \`${title}\``,
+                ].join('\n'),
+              });
+              return;
+            }
+
+            core.info('PR title passes validation.');
