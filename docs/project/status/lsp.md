@@ -23,4 +23,11 @@
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
 |------|-------------|-------|----------|
+| debug | 10 | 10 | 100% |
+| notebook | 2 | 2 | 100% |
+| protocol | 9 | 9 | 100% |
+| text_document | 42 | 42 | 100% |
+| window | 9 | 9 | 100% |
+| workspace | 26 | 26 | 100% |
+| **Overall** | **98** | **98** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
