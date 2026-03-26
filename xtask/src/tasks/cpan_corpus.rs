@@ -176,12 +176,18 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         config.install_dir.display()
     );
 
+    let preserved_dist_list = config
+        .dist_list
+        .strip_prefix(&config.install_dir)
+        .ok()
+        .map(|_| config.dist_list.as_path());
+
     let cpanm = if Command::new("cpanm").arg("--version").output().is_ok() {
         let launcher = CpanmLauncher::System;
-        reset_install_dir(&config.install_dir, Some(&launcher))?;
+        reset_install_dir(&config.install_dir, Some(&launcher), preserved_dist_list)?;
         launcher
     } else {
-        reset_install_dir(&config.install_dir, None)?;
+        reset_install_dir(&config.install_dir, None, preserved_dist_list)?;
         resolve_cpanm_launcher(config)?
     };
 
@@ -308,7 +314,11 @@ fn cpanm_home_path(install_dir: &Path) -> PathBuf {
     install_dir.join(CPANM_CACHE_DIR)
 }
 
-fn reset_install_dir(install_dir: &Path, launcher: Option<&CpanmLauncher>) -> Result<()> {
+fn reset_install_dir(
+    install_dir: &Path,
+    launcher: Option<&CpanmLauncher>,
+    preserved_file: Option<&Path>,
+) -> Result<()> {
     fs::create_dir_all(install_dir).context("Failed to create install directory")?;
 
     let preserved_cpanm = match launcher {
@@ -326,6 +336,11 @@ fn reset_install_dir(install_dir: &Path, launcher: Option<&CpanmLauncher>) -> Re
         let entry = entry.context("Failed to read install directory entry")?;
         let path = entry.path();
         if path.file_name().is_some_and(|name| name == CPANM_CACHE_DIR) && path.is_dir() {
+            continue;
+        }
+        if preserved_file.is_some_and(|preserved| {
+            preserved == path || preserved.strip_prefix(&path).is_ok()
+        }) {
             continue;
         }
 
@@ -719,7 +734,11 @@ Some other line";
         fs::write(&man_file, "man")?;
         fs::write(&cpanm_path, "#!/usr/bin/env perl\n")?;
 
-        reset_install_dir(&install_dir, Some(&CpanmLauncher::Bootstrapped(cpanm_path.clone())))?;
+        reset_install_dir(
+            &install_dir,
+            Some(&CpanmLauncher::Bootstrapped(cpanm_path.clone())),
+            None,
+        )?;
 
         assert!(cache_file.exists());
         assert!(cpanm_path.exists());
@@ -740,10 +759,30 @@ Some other line";
         fs::create_dir_all(&cache_dir)?;
         fs::write(&stale_bin, "old")?;
 
-        reset_install_dir(&install_dir, Some(&CpanmLauncher::System))?;
+        reset_install_dir(&install_dir, Some(&CpanmLauncher::System), None)?;
 
         assert!(!install_dir.join("bin").exists());
         assert!(cache_dir.exists());
+
+        fs::remove_dir_all(&install_dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_reset_install_dir_preserves_dist_list_under_install_dir() -> Result<()> {
+        let install_dir = unique_test_dir("cpan-reset-dist-list");
+        let dist_list = install_dir.join("lists/top-1000.txt");
+        let stale_lib = install_dir.join("lib/perl5/Test.pm");
+
+        fs::create_dir_all(dist_list.parent().unwrap_or(&install_dir))?;
+        fs::create_dir_all(stale_lib.parent().unwrap_or(&install_dir))?;
+        fs::write(&dist_list, "Test-Simple\n")?;
+        fs::write(&stale_lib, "module")?;
+
+        reset_install_dir(&install_dir, Some(&CpanmLauncher::System), Some(&dist_list))?;
+
+        assert!(dist_list.exists());
+        assert!(!install_dir.join("lib").exists());
 
         fs::remove_dir_all(&install_dir)?;
         Ok(())
