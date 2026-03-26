@@ -1156,3 +1156,148 @@ process();
 
     Ok(())
 }
+
+/// Tests fix for issue #2878: package-qualified calls must disambiguate between
+/// multiple same-named subs in different packages.
+#[test]
+fn test_cross_file_outgoing_calls_disambiguate_package_qualified_target() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/Alpha.pm",
+        r#"package Alpha;
+
+sub run {
+    return "alpha";
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///lib/Beta.pm",
+        r#"package Beta;
+
+sub run {
+    return "beta";
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///bin/app.pl",
+        r#"use Alpha;
+use Beta;
+
+sub orchestrate {
+    return Beta::run();
+}
+"#,
+    )?;
+
+    harness.barrier();
+
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": "file:///bin/app.pl" },
+            "position": { "line": 3, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy returned non-array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array for orchestrate");
+
+    let outgoing_response =
+        harness.request("callHierarchy/outgoingCalls", json!({ "item": &items[0] }))?;
+    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+
+    let run_call = calls
+        .iter()
+        .find(|call| call["to"]["name"].as_str().map(|name| name.ends_with("run")).unwrap_or(false))
+        .ok_or("expected outgoing run() call")?;
+
+    assert_eq!(
+        run_call["to"]["uri"], "file:///lib/Beta.pm",
+        "package-qualified Beta::run() should resolve to Beta.pm",
+    );
+
+    Ok(())
+}
+
+/// Tests fix for issue #2878: workspace-backed incoming calls should refresh after edits.
+#[test]
+fn test_cross_file_incoming_calls_refresh_after_change() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/Utils.pm",
+        r#"package Utils;
+
+sub format_string {
+    my $str = shift;
+    return uc($str);
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///bin/app.pl",
+        r#"use Utils;
+
+sub process {
+    return Utils::format_string("hello");
+}
+"#,
+    )?;
+
+    harness.barrier();
+
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": "file:///lib/Utils.pm" },
+            "position": { "line": 2, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy did not return array")?;
+    let item = items.first().ok_or("prepareCallHierarchy returned empty array")?;
+
+    let incoming_before =
+        harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
+    let before_calls = incoming_before.as_array().ok_or("incomingCalls did not return array")?;
+    assert!(
+        before_calls.iter().any(|call| call["from"]["name"] == "process"),
+        "expected process() as incoming caller before edit"
+    );
+
+    harness.change_full(
+        "file:///bin/app.pl",
+        2,
+        r#"use Utils;
+
+sub process {
+    return "done";
+}
+"#,
+    )?;
+    harness.barrier();
+
+    let incoming_after = harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
+    let after_calls = incoming_after.as_array().ok_or("incomingCalls did not return array")?;
+    assert!(
+        after_calls.iter().all(|call| call["from"]["name"] != "process"),
+        "process() should disappear from incoming callers after edit, got: {:?}",
+        after_calls
+    );
+
+    Ok(())
+}
