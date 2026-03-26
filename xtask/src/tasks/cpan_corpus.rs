@@ -178,8 +178,11 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
 
     let local_lib =
         config.install_dir.canonicalize().unwrap_or_else(|_| config.install_dir.clone());
+    let normalized_distributions: Vec<String> =
+        distributions.iter().map(|dist| normalize_distribution_for_cpanm(dist)).collect();
+    let install_items = normalized_distributions.len();
     let cpanm = resolve_cpanm_launcher(config)?;
-    let cpanm_home = cpanm_home_path(&config.install_dir);
+    let cpanm_home = cpanm_home_path(&local_lib);
     fs::create_dir_all(&cpanm_home).context("Failed to create cpanm cache directory")?;
 
     // Install in batches to avoid overly long command lines
@@ -187,7 +190,7 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
     let mut installed = 0usize;
     let mut failed = 0usize;
 
-    for (batch_idx, chunk) in distributions.chunks(batch_size).enumerate() {
+    for (batch_idx, chunk) in normalized_distributions.chunks(batch_size).enumerate() {
         let batch_num = batch_idx + 1;
         let total_batches = distributions.len().div_ceil(batch_size);
         println!("Batch {batch_num}/{total_batches}: installing {} distributions...", chunk.len());
@@ -206,22 +209,21 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         }
 
         let output = cmd.output().context("Failed to run cpanm")?;
-
-        if output.status.success() {
-            installed += chunk.len();
-        } else {
-            // cpanm may partially succeed; count individual results if verbose
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            if config.verbose {
-                eprintln!("cpanm batch {batch_num} warnings:\n{stderr}");
-            }
-            // Approximate: some may have installed, some may have failed
-            installed += chunk.len().saturating_sub(1);
-            failed += 1;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !output.status.success() && config.verbose {
+            eprintln!("cpanm batch {batch_num} warnings:\n{stderr}");
         }
+
+        let failed_in_batch = count_cpanm_failures(&stderr);
+        failed += failed_in_batch;
+        installed += chunk.len().saturating_sub(failed_in_batch);
     }
 
-    println!("\nInstall complete: ~{installed} installed, {failed} batches had errors");
+    if failed > 0 {
+        println!("\nInstall complete: {installed} installed, {failed} install failures");
+    } else {
+        println!("\nInstall complete: {installed} installed, {install_items} requested");
+    }
 
     // Write inventory of installed .pm files
     let lib_perl5 = local_lib.join("lib/perl5");
@@ -237,6 +239,29 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn normalize_distribution_for_cpanm(distribution: &str) -> String {
+    if distribution == "libwww-perl" {
+        return "LWP".to_string();
+    }
+
+    if distribution.contains('-') {
+        distribution.replace('-', "::")
+    } else {
+        distribution.to_string()
+    }
+}
+
+fn count_cpanm_failures(stderr: &str) -> usize {
+    stderr
+        .lines()
+        .filter(|line| {
+            line.contains("Couldn't find module or a distribution")
+                || line.contains("Failed to fetch distribution")
+                || line.contains("No such file or directory")
+        })
+        .count()
 }
 
 #[derive(Debug, Clone)]
@@ -598,5 +623,25 @@ mod tests {
     fn test_cpanm_home_path() {
         let install_dir = PathBuf::from("target/cpan-corpus");
         assert_eq!(cpanm_home_path(&install_dir), install_dir.join(".cpanm"));
+    }
+
+    #[test]
+    fn test_normalize_distribution_for_cpanm() {
+        assert_eq!(normalize_distribution_for_cpanm("Try-Tiny"), "Try::Tiny");
+        assert_eq!(normalize_distribution_for_cpanm("ExtUtils-MakeMaker"), "ExtUtils::MakeMaker");
+        assert_eq!(
+            normalize_distribution_for_cpanm("namespace-autoclean"),
+            "namespace::autoclean"
+        );
+        assert_eq!(normalize_distribution_for_cpanm("libwww-perl"), "LWP");
+        assert_eq!(normalize_distribution_for_cpanm("PathTools"), "PathTools");
+    }
+
+    #[test]
+    fn test_count_cpanm_failures() {
+        let stderr = "! Couldn't find module or a distribution Test-Simple\n\
+! Failed to fetch distribution Foo\n\
+Some other line";
+        assert_eq!(count_cpanm_failures(stderr), 2);
     }
 }
