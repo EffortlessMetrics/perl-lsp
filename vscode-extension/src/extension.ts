@@ -794,7 +794,7 @@ export function shouldNudgeArrowCompletion(linePrefix: string): boolean {
         return false;
     }
 
-    return /(?:\$[\w:]+|[@%][\w:]+|\)|\]|\}|[A-Z]\w*)$/.test(beforeDash);
+    return /(?:\$[\w:]+|[@%][\w:]+|[A-Z]\w*)$/.test(beforeDash);
 }
 
 export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent): void {

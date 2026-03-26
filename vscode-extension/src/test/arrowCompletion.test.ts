@@ -65,4 +65,10 @@ describe('arrow completion nudge', () => {
     expect(shouldNudgeArrowCompletion('Foo:-')).toBe(false);
     expect(shouldNudgeArrowCompletion('Foo::')).toBe(false);
   });
+
+  test('does not treat closing delimiters as arrow intent', () => {
+    expect(shouldNudgeArrowCompletion('$arr[0]-')).toBe(false);
+    expect(shouldNudgeArrowCompletion('(foo)-')).toBe(false);
+    expect(shouldNudgeArrowCompletion('$h{key}-')).toBe(false);
+  });
 });
