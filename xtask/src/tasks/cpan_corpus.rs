@@ -629,10 +629,7 @@ mod tests {
     fn test_normalize_distribution_for_cpanm() {
         assert_eq!(normalize_distribution_for_cpanm("Try-Tiny"), "Try::Tiny");
         assert_eq!(normalize_distribution_for_cpanm("ExtUtils-MakeMaker"), "ExtUtils::MakeMaker");
-        assert_eq!(
-            normalize_distribution_for_cpanm("namespace-autoclean"),
-            "namespace::autoclean"
-        );
+        assert_eq!(normalize_distribution_for_cpanm("namespace-autoclean"), "namespace::autoclean");
         assert_eq!(normalize_distribution_for_cpanm("libwww-perl"), "LWP");
         assert_eq!(normalize_distribution_for_cpanm("PathTools"), "PathTools");
     }
