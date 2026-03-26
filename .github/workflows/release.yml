@@ -4,6 +4,8 @@ name: Release
 # Cost: ~$0.50 per release (across all platforms)
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
