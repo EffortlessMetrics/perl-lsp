@@ -3,6 +3,13 @@ use perl_parser::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition, WireRange};
 use regex::Regex;
 use serde_json::{Value, json};
+use std::sync::OnceLock;
+
+static PACKAGE_REGEX: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+fn package_regex() -> Option<&'static Regex> {
+    PACKAGE_REGEX.get_or_init(|| Regex::new(r"(?m)\bpackage\s+([a-zA-Z_][\w:]*)\s*;")).as_ref().ok()
+}
 
 /// LSP wire type alias for position (0-based line/character with UTF-16 counting)
 pub type Position = WirePosition;
@@ -104,9 +111,8 @@ impl CallHierarchyProvider {
     }
 
     fn package_name_at_offset(&self, offset: usize) -> Option<String> {
-        let package_regex = Regex::new(r"(?m)\bpackage\s+([a-zA-Z_][\w:]*)\s*;").ok()?;
         let mut current_package = None;
-        for cap in package_regex.captures_iter(&self.source) {
+        for cap in package_regex()?.captures_iter(&self.source) {
             if let Some(m) = cap.get(0) {
                 if m.start() > offset {
                     break;
@@ -129,22 +135,20 @@ impl CallHierarchyProvider {
     }
 
     fn call_matches_target(&self, call_name: &str, item: &CallHierarchyItem) -> bool {
-        if call_name == item.name {
-            return true;
-        }
-
         if let Some(target_qn) = &item.qualified_name {
             if call_name == target_qn {
                 return true;
             }
-            if call_name.ends_with(&format!("::{}", item.name))
-                && target_qn.ends_with(&format!("::{}", item.name))
-            {
-                return call_name == target_qn;
+            // Fully-qualified call that doesn't match the target FQN should not
+            // fall back to suffix matching (avoids Foo::render vs Bar::render collisions).
+            if call_name.contains("::") {
+                return false;
             }
+            // Bare call fallback when we have a target FQN (e.g. same-package call).
+            return call_name == item.name;
         }
 
-        call_name.ends_with(&format!("::{}", item.name))
+        call_name == item.name || call_name.ends_with(&format!("::{}", item.name))
     }
 
     /// Find a callable item at the given position
@@ -884,6 +888,49 @@ sub helper {
             assert!(called_names.contains(&&"helper".to_string()));
             assert!(called_names.contains(&&"process_data".to_string()));
             assert!(called_names.contains(&&"method_call".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_incoming_calls_respect_qualified_name() {
+        let code = r#"
+package Foo;
+sub render { }
+
+package Bar;
+sub render { }
+
+package Main;
+sub caller_foo { Foo::render(); }
+sub caller_bar { Bar::render(); }
+"#;
+
+        let mut parser = Parser::new(code);
+        if let Ok(ast) = parser.parse() {
+            let provider =
+                CallHierarchyProvider::new(code.to_string(), "file:///test.pl".to_string());
+
+            let target_item = CallHierarchyItem {
+                name: "render".to_string(),
+                kind: "function".to_string(),
+                uri: "file:///test.pl".to_string(),
+                range: Range {
+                    start: Position { line: 1, character: 0 },
+                    end: Position { line: 1, character: 15 },
+                },
+                selection_range: Range {
+                    start: Position { line: 1, character: 4 },
+                    end: Position { line: 1, character: 10 },
+                },
+                detail: None,
+                qualified_name: Some("Foo::render".to_string()),
+            };
+
+            let incoming = provider.incoming_calls(&ast, &target_item);
+            let caller_names: Vec<_> = incoming.iter().map(|c| c.from.name.as_str()).collect();
+
+            assert!(caller_names.contains(&"caller_foo"));
+            assert!(!caller_names.contains(&"caller_bar"));
         }
     }
 }
