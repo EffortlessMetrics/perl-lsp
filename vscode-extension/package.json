@@ -57,6 +57,13 @@
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",
     "onCommand:perl-lsp.reinstall",
+    "onCommand:perl-lsp.checkSyntax",
+    "onCommand:perl-lsp.runCurrentTest",
+    "onCommand:perl-lsp.runAllTests",
+    "onCommand:perl-lsp.formatDocument",
+    "onCommand:perl-lsp.showIncPaths",
+    "onCommand:perl-lsp.openModule",
+    "onCommand:perl-lsp.showParserAst",
     "onCommand:perl-lsp.checkForUpdate",
     "onCommand:perl-lsp.createDebugConfig",
     "onCommand:perl-lsp.runHealthCheck",
@@ -449,6 +456,48 @@
         "icon": "$(pulse)"
       },
       {
+        "command": "perl-lsp.checkSyntax",
+        "title": "Check Syntax",
+        "category": "Perl",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "perl-lsp.runCurrentTest",
+        "title": "Run Current Test",
+        "category": "Perl",
+        "icon": "$(play)"
+      },
+      {
+        "command": "perl-lsp.runAllTests",
+        "title": "Run All Tests",
+        "category": "Perl",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "perl-lsp.formatDocument",
+        "title": "Format Document",
+        "category": "Perl",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "perl-lsp.showIncPaths",
+        "title": "Show @INC Paths",
+        "category": "Perl",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "perl-lsp.openModule",
+        "title": "Open Module",
+        "category": "Perl",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "perl-lsp.showParserAst",
+        "title": "Show Parser AST",
+        "category": "Perl",
+        "icon": "$(symbol-structure)"
+      },
+      {
         "command": "perl-lsp.openConfigurationGuide",
         "title": "Open Configuration Guide",
         "category": "Perl",
@@ -486,6 +535,34 @@
         {
           "command": "perl-lsp.runTests",
           "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/"
+        },
+        {
+          "command": "perl-lsp.checkSyntax",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.runCurrentTest",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.runAllTests",
+          "when": "workspaceFolderCount >= 1"
+        },
+        {
+          "command": "perl-lsp.formatDocument",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.showIncPaths",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.openModule",
+          "when": "workspaceFolderCount >= 1"
+        },
+        {
+          "command": "perl-lsp.showParserAst",
+          "when": "editorLangId == perl"
         },
         {
           "command": "perl-lsp.extractVariable",
