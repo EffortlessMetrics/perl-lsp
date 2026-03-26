@@ -24,6 +24,8 @@ const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
 const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
 /// Default install target directory
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
+/// cpanm cache directory preserved across install resets
+const CPANM_CACHE_DIR: &str = ".cpanm";
 /// Standalone cpanm bootstrap URL
 const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 /// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
@@ -174,8 +176,14 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         config.install_dir.display()
     );
 
-    let cpanm = resolve_cpanm_launcher(config)?;
-    reset_install_dir(&config.install_dir, &cpanm)?;
+    let cpanm = if Command::new("cpanm").arg("--version").output().is_ok() {
+        let launcher = CpanmLauncher::System;
+        reset_install_dir(&config.install_dir, Some(&launcher))?;
+        launcher
+    } else {
+        reset_install_dir(&config.install_dir, None)?;
+        resolve_cpanm_launcher(config)?
+    };
 
     let local_lib =
         config.install_dir.canonicalize().unwrap_or_else(|_| config.install_dir.clone());
@@ -297,18 +305,17 @@ fn bootstrap_cpanm_path(install_dir: &Path) -> PathBuf {
 }
 
 fn cpanm_home_path(install_dir: &Path) -> PathBuf {
-    install_dir.join(".cpanm")
+    install_dir.join(CPANM_CACHE_DIR)
 }
 
-fn reset_install_dir(install_dir: &Path, launcher: &CpanmLauncher) -> Result<()> {
+fn reset_install_dir(install_dir: &Path, launcher: Option<&CpanmLauncher>) -> Result<()> {
     fs::create_dir_all(install_dir).context("Failed to create install directory")?;
 
     let preserved_cpanm = match launcher {
-        CpanmLauncher::Bootstrapped(path) if path.exists() => {
-            Some(fs::read(path).with_context(|| {
-                format!("Failed to read bootstrapped cpanm: {}", path.display())
-            })?)
-        }
+        Some(CpanmLauncher::Bootstrapped(path)) if path.exists() => Some(
+            fs::read(path)
+                .with_context(|| format!("Failed to read bootstrapped cpanm: {}", path.display()))?,
+        ),
         _ => None,
     };
 
@@ -317,7 +324,7 @@ fn reset_install_dir(install_dir: &Path, launcher: &CpanmLauncher) -> Result<()>
     {
         let entry = entry.context("Failed to read install directory entry")?;
         let path = entry.path();
-        if path.file_name().is_some_and(|name| name == ".cpanm") {
+        if path.file_name().is_some_and(|name| name == CPANM_CACHE_DIR) && path.is_dir() {
             continue;
         }
 
@@ -696,7 +703,7 @@ Some other line";
     #[test]
     fn test_reset_install_dir_preserves_cache_and_bootstrapped_cpanm() -> Result<()> {
         let install_dir = unique_test_dir("cpan-reset-preserve");
-        let cache_dir = install_dir.join(".cpanm");
+        let cache_dir = install_dir.join(CPANM_CACHE_DIR);
         let cache_file = cache_dir.join("cache.txt");
         let lib_file = install_dir.join("lib/perl5/Test.pm");
         let man_file = install_dir.join("man/man3/Test.3pm");
@@ -711,7 +718,10 @@ Some other line";
         fs::write(&man_file, "man")?;
         fs::write(&cpanm_path, "#!/usr/bin/env perl\n")?;
 
-        reset_install_dir(&install_dir, &CpanmLauncher::Bootstrapped(cpanm_path.clone()))?;
+        reset_install_dir(
+            &install_dir,
+            Some(&CpanmLauncher::Bootstrapped(cpanm_path.clone())),
+        )?;
 
         assert!(cache_file.exists());
         assert!(cpanm_path.exists());
@@ -726,13 +736,13 @@ Some other line";
     fn test_reset_install_dir_removes_stale_bin_for_system_cpanm() -> Result<()> {
         let install_dir = unique_test_dir("cpan-reset-system");
         let stale_bin = install_dir.join("bin/old-tool");
-        let cache_dir = install_dir.join(".cpanm");
+        let cache_dir = install_dir.join(CPANM_CACHE_DIR);
 
         fs::create_dir_all(stale_bin.parent().unwrap_or(&install_dir))?;
         fs::create_dir_all(&cache_dir)?;
         fs::write(&stale_bin, "old")?;
 
-        reset_install_dir(&install_dir, &CpanmLauncher::System)?;
+        reset_install_dir(&install_dir, Some(&CpanmLauncher::System))?;
 
         assert!(!install_dir.join("bin").exists());
         assert!(cache_dir.exists());
