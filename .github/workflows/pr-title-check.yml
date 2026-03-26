@@ -37,28 +37,75 @@ jobs:
               return;
             }
 
-            if (!/#\d+/.test(title)) {
+            const BOT_MARKER = '<!-- pr-title-check-bot -->';
+
+            if (!/\B#\d+\b/.test(title)) {
               core.setFailed(
                 `PR title must reference an issue (e.g. "feat: add thing (#42)"). Got: "${title}"`
               );
 
-              await github.rest.issues.createComment({
+              const commentBody = [
+                '## \u26a0\ufe0f PR Title Check Failed',
+                '',
+                BOT_MARKER,
+                '',
+                'This PR\'s title does not include an **issue reference** (`#<number>` outside of version strings).',
+                '',
+                '**Expected format:** `type: description (#1234)`',
+                '',
+                'Please update the title to reference the relevant issue. If this PR doesn\'t need one, add the `skip-title-check` label.',
+                '',
+                `Current title: \`${title}\``,
+              ].join('\n');
+
+              // Deduplicate: find and update existing bot comment instead of posting a new one
+              const { data: comments } = await github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: pr.number,
-                body: [
-                  '## \u26a0\ufe0f PR Title Check Failed',
-                  '',
-                  'This PR\'s title does not include an **issue reference** (`#<number>`).',
-                  '',
-                  '**Expected format:** `type: description (#1234)`',
-                  '',
-                  'Please update the title to reference the relevant issue. If this PR doesn\'t need one, add the `skip-title-check` label.',
-                  '',
-                  `Current title: \`${title}\``,
-                ].join('\n'),
               });
+
+              const existing = comments.find(c =>
+                c.user.type === 'Bot' && c.body && c.body.includes(BOT_MARKER)
+              );
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body: commentBody,
+                });
+                core.info('Updated existing bot comment.');
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  body: commentBody,
+                });
+                core.info('Posted new bot comment.');
+              }
               return;
+            }
+
+            // Extract issue number and validate it exists
+            const match = title.match(/\B#(\d+)\b/);
+            if (match) {
+              const issueNumber = parseInt(match[1], 10);
+              try {
+                await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                });
+                core.info(`Referenced issue #${issueNumber} exists.`);
+              } catch (e) {
+                core.warning(
+                  `Referenced issue #${issueNumber} was not found. Please verify the issue number.`
+                );
+                // Don't fail the check for this — it may be a private/internal reference
+              }
             }
 
             core.info('PR title passes validation.');
