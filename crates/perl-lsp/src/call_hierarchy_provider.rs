@@ -27,6 +27,8 @@ pub struct CallHierarchyItem {
     pub selection_range: Range,
     /// Optional additional detail about the symbol
     pub detail: Option<String>,
+    /// Optional opaque data payload for round-tripping call hierarchy identity
+    pub data: Option<Value>,
 }
 
 /// Call Hierarchy Provider
@@ -126,6 +128,7 @@ impl CallHierarchyProvider {
                                     range,
                                     selection_range,
                                     detail,
+                                    data: None,
                                 });
                             }
                         } else {
@@ -146,6 +149,7 @@ impl CallHierarchyProvider {
                                 range,
                                 selection_range,
                                 detail,
+                                data: None,
                             });
                         }
                     }
@@ -159,6 +163,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        data: None,
                     });
                 }
                 NodeKind::FunctionCall { name, .. } => {
@@ -170,6 +175,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        data: None,
                     });
                 }
                 _ => {}
@@ -203,6 +209,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range,
                         detail: None,
+                        data: None,
                     };
 
                     // Search within this function
@@ -271,6 +278,7 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail: None,
+                    data: None,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -296,6 +304,7 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail,
+                    data: None,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -332,6 +341,7 @@ impl CallHierarchyProvider {
                 range,
                 selection_range,
                 detail,
+                data: None,
             })
         } else {
             None
@@ -628,6 +638,8 @@ impl CallHierarchyItem {
         if let Some(detail) = &self.detail {
             item["detail"] = json!(detail);
         }
+        item["data"] =
+            self.data.clone().unwrap_or_else(|| json!({ "uri": self.uri, "name": self.name }));
 
         item
     }
@@ -750,6 +762,7 @@ sub target_func {
                     end: Position { line: 10, character: 15 },
                 },
                 detail: None,
+                data: None,
             };
 
             let incoming = provider.incoming_calls(&ast, &target_item);
@@ -801,6 +814,7 @@ sub helper {
                     end: Position { line: 1, character: 8 },
                 },
                 detail: None,
+                data: None,
             };
 
             let outgoing = provider.outgoing_calls(&ast, &main_item);

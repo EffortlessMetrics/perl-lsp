@@ -4,9 +4,13 @@
 //! prepareCallHierarchy, callHierarchy/incomingCalls, and callHierarchy/outgoingCalls.
 
 use super::super::*;
+use crate::Parser;
 use crate::protocol::{req_position, req_uri};
+use crate::runtime::file_discovery::discover_perl_files;
 use perl_position_tracking::{WirePosition, WireRange};
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
+use url::Url;
 
 static SUB_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 static PACKAGE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
@@ -405,22 +409,13 @@ impl LspServer {
 
             let ch_item = self.json_to_call_hierarchy_item(item)?;
 
-            // Snapshot (doc_uri, text, ast) for all open documents so we can
-            // release the lock before the per-document provider work.
-            let documents = self.documents_guard();
-            let doc_snapshots: Vec<(String, String, std::sync::Arc<perl_parser::ast::Node>)> =
-                documents
-                    .iter()
-                    .filter_map(|(doc_uri, doc)| {
-                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
-                    })
-                    .collect();
-            drop(documents);
+            // Snapshot workspace documents (open docs plus unopened files on disk)
+            // so we can search across the workspace for call sites.
+            let doc_snapshots = self.collect_workspace_doc_snapshots();
 
             // Incoming call results keyed by (from_name, from_uri) to deduplicate
             // callers that appear in multiple scan passes.
-            let mut seen: std::collections::HashMap<(String, String), usize> =
-                std::collections::HashMap::new();
+            let mut seen: HashMap<(String, String), usize> = HashMap::new();
             let mut all_calls: Vec<crate::call_hierarchy_provider::CallHierarchyIncomingCall> =
                 Vec::new();
 
@@ -459,17 +454,12 @@ impl LspServer {
 
             eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
 
-            // Snapshot all open documents for cross-file callee resolution.
-            let documents = self.documents_guard();
-            let doc_snapshots: Vec<(String, String, std::sync::Arc<perl_parser::ast::Node>)> =
-                documents
-                    .iter()
-                    .filter_map(|(doc_uri, doc)| {
-                        doc.ast.as_ref().map(|ast| (doc_uri.clone(), doc.text.clone(), ast.clone()))
-                    })
-                    .collect();
+            // Snapshot workspace documents (open docs plus unopened files on disk)
+            // for cross-file callee resolution.
+            let doc_snapshots = self.collect_workspace_doc_snapshots();
 
             // Find outgoing calls within the target function's file.
+            let documents = self.documents_guard();
             let mut calls = if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let ch_item = self.json_to_call_hierarchy_item(item)?;
@@ -553,7 +543,55 @@ impl LspServer {
         };
 
         let detail = json["detail"].as_str().map(|s| s.to_string());
+        let data = json.get("data").cloned();
 
-        Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail })
+        Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail, data })
+    }
+
+    fn collect_workspace_doc_snapshots(
+        &self,
+    ) -> Vec<(String, String, std::sync::Arc<perl_parser::ast::Node>)> {
+        let mut doc_snapshots = Vec::new();
+        let mut seen_uris = HashSet::new();
+
+        {
+            let documents = self.documents_guard();
+            for (doc_uri, doc) in documents.iter() {
+                if let Some(ast) = &doc.ast {
+                    seen_uris.insert(doc_uri.clone());
+                    doc_snapshots.push((doc_uri.clone(), doc.text.clone(), ast.clone()));
+                }
+            }
+        }
+
+        for root_uri in self.workspace_roots() {
+            let Ok(root_path) = root_uri.to_file_path() else {
+                continue;
+            };
+
+            let discovery = discover_perl_files(&root_path);
+            for path in discovery.files {
+                let Ok(url) = Url::from_file_path(&path) else {
+                    continue;
+                };
+                let uri = url.to_string();
+                if seen_uris.contains(&uri) {
+                    continue;
+                }
+
+                let Ok(source) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                let mut parser = Parser::new(&source);
+                let Ok(ast) = parser.parse() else {
+                    continue;
+                };
+
+                seen_uris.insert(uri.clone());
+                doc_snapshots.push((uri, source, std::sync::Arc::new(ast)));
+            }
+        }
+
+        doc_snapshots
     }
 }

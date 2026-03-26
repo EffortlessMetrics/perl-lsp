@@ -1156,3 +1156,133 @@ process();
 
     Ok(())
 }
+
+/// Regression for #2878: incoming calls should discover callers in unopened workspace files.
+#[test]
+fn test_cross_file_incoming_calls_unopened_workspace_file() -> TestResult {
+    let (mut harness, workspace) = LspHarness::with_workspace(&[
+        (
+            "lib/Utils.pm",
+            r#"package Utils;
+
+sub format_string {
+    my $str = shift;
+    return uc($str);
+}
+
+1;
+"#,
+        ),
+        (
+            "bin/app.pl",
+            r#"use Utils;
+
+sub process {
+    return Utils::format_string("hello");
+}
+
+process();
+"#,
+        ),
+    ])?;
+
+    let utils_uri = workspace.uri("lib/Utils.pm");
+    let utils_text = std::fs::read_to_string(workspace.dir.path().join("lib/Utils.pm"))?;
+    harness.open(&utils_uri, &utils_text)?;
+    harness.barrier();
+
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": utils_uri },
+            "position": { "line": 2, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy did not return array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy returned no item for format_string");
+    let item = &items[0];
+
+    // Close the defining file: incoming call lookup must continue to work
+    // using workspace-file discovery, not only open-document state.
+    harness.close(&utils_uri)?;
+    harness.barrier();
+
+    let incoming_response =
+        harness.request("callHierarchy/incomingCalls", json!({ "item": item }))?;
+    let calls = incoming_response.as_array().ok_or("incomingCalls did not return array")?;
+    let caller_names: Vec<String> =
+        calls.iter().filter_map(|c| c["from"]["name"].as_str()).map(String::from).collect();
+
+    assert!(
+        caller_names.contains(&"process".to_string()),
+        "Expected unopened workspace caller process(), got {:?}",
+        caller_names
+    );
+
+    Ok(())
+}
+
+/// Regression for #2878: outgoing calls should resolve unopened workspace-file targets.
+#[test]
+fn test_cross_file_outgoing_calls_unopened_workspace_target() -> TestResult {
+    let (mut harness, workspace) = LspHarness::with_workspace(&[
+        (
+            "lib/Utils.pm",
+            r#"package Utils;
+
+sub format_string {
+    my $str = shift;
+    return uc($str);
+}
+
+1;
+"#,
+        ),
+        (
+            "bin/app.pl",
+            r#"use Utils;
+
+sub process {
+    return Utils::format_string("hello");
+}
+
+process();
+"#,
+        ),
+    ])?;
+
+    let app_uri = workspace.uri("bin/app.pl");
+    let app_text = std::fs::read_to_string(workspace.dir.path().join("bin/app.pl"))?;
+    harness.open(&app_uri, &app_text)?;
+    harness.barrier();
+
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": app_uri },
+            "position": { "line": 2, "character": 4 }
+        }),
+    )?;
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy returned non-array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array for process()");
+    let item = &items[0];
+
+    let outgoing_response =
+        harness.request("callHierarchy/outgoingCalls", json!({ "item": item }))?;
+    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+
+    let utils_uri = workspace.uri("lib/Utils.pm");
+    let resolved = calls.iter().any(|call| {
+        let name_matches = call["to"]["name"]
+            .as_str()
+            .map(|name| name == "format_string" || name.ends_with("::format_string"))
+            .unwrap_or(false);
+        let uri_matches =
+            call["to"]["uri"].as_str().map(|uri| uri == utils_uri.as_str()).unwrap_or(false);
+        name_matches && uri_matches
+    });
+
+    assert!(resolved, "Expected outgoing call target to resolve to unopened Utils.pm");
+    Ok(())
+}
