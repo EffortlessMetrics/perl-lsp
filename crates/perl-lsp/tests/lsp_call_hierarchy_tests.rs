@@ -1042,6 +1042,10 @@ process();
 
     let item = &items[0];
     assert_eq!(item["name"], "format_string", "Expected to prepare on format_string");
+    assert!(
+        item.get("data").is_some(),
+        "prepareCallHierarchy item should include data for request round-trips"
+    );
 
     // Request incoming calls — must find the caller in the OTHER file
     let incoming_response =
@@ -1051,6 +1055,10 @@ process();
 
     let caller_names: Vec<String> =
         calls.iter().filter_map(|c| c["from"]["name"].as_str()).map(String::from).collect();
+    assert!(
+        calls.iter().all(|c| c["from"].get("data").is_some()),
+        "incomingCalls items should preserve data payload for follow-up requests"
+    );
 
     assert!(
         caller_names.contains(&"process".to_string()),
@@ -1113,12 +1121,20 @@ process();
 
     let item = &items[0];
     assert_eq!(item["name"], "process", "Expected to prepare on process");
+    assert!(
+        item.get("data").is_some(),
+        "prepareCallHierarchy item should include data for request round-trips"
+    );
 
     // Request outgoing calls
     let outgoing_response =
         harness.request("callHierarchy/outgoingCalls", json!({ "item": item }))?;
 
     let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+    assert!(
+        calls.iter().all(|c| c["to"].get("data").is_some()),
+        "outgoingCalls items should preserve data payload for follow-up requests"
+    );
 
     // Must find format_string as an outgoing call
     let callee_names: Vec<String> =

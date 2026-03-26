@@ -27,6 +27,10 @@ pub struct CallHierarchyItem {
     pub selection_range: Range,
     /// Optional additional detail about the symbol
     pub detail: Option<String>,
+    /// Optional fully-qualified symbol name (e.g. Package::sub)
+    pub qualified_name: Option<String>,
+    /// Optional opaque data payload for LSP round-trips
+    pub data: Option<Value>,
 }
 
 /// Call Hierarchy Provider
@@ -126,6 +130,8 @@ impl CallHierarchyProvider {
                                     range,
                                     selection_range,
                                     detail,
+                                    qualified_name: None,
+                                    data: None,
                                 });
                             }
                         } else {
@@ -146,6 +152,8 @@ impl CallHierarchyProvider {
                                 range,
                                 selection_range,
                                 detail,
+                                qualified_name: None,
+                                data: None,
                             });
                         }
                     }
@@ -159,6 +167,8 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        qualified_name: None,
+                        data: None,
                     });
                 }
                 NodeKind::FunctionCall { name, .. } => {
@@ -170,6 +180,8 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        qualified_name: Some(name.clone()),
+                        data: None,
                     });
                 }
                 _ => {}
@@ -203,6 +215,8 @@ impl CallHierarchyProvider {
                         range,
                         selection_range,
                         detail: None,
+                        qualified_name: None,
+                        data: None,
                     };
 
                     // Search within this function
@@ -271,6 +285,8 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail: None,
+                    qualified_name: Some(name.clone()),
+                    data: None,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -296,6 +312,8 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail,
+                    qualified_name: None,
+                    data: None,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -332,6 +350,8 @@ impl CallHierarchyProvider {
                 range,
                 selection_range,
                 detail,
+                qualified_name: None,
+                data: None,
             })
         } else {
             None
@@ -628,6 +648,15 @@ impl CallHierarchyItem {
         if let Some(detail) = &self.detail {
             item["detail"] = json!(detail);
         }
+        let data = self.data.clone().unwrap_or_else(|| {
+            json!({
+                "uri": self.uri,
+                "name": self.name,
+                "qualified_name": self.qualified_name,
+                "range": self.range
+            })
+        });
+        item["data"] = data;
 
         item
     }
@@ -750,6 +779,8 @@ sub target_func {
                     end: Position { line: 10, character: 15 },
                 },
                 detail: None,
+                qualified_name: None,
+                data: None,
             };
 
             let incoming = provider.incoming_calls(&ast, &target_item);
@@ -801,6 +832,8 @@ sub helper {
                     end: Position { line: 1, character: 8 },
                 },
                 detail: None,
+                qualified_name: None,
+                data: None,
             };
 
             let outgoing = provider.outgoing_calls(&ast, &main_item);
@@ -812,5 +845,31 @@ sub helper {
             assert!(called_names.contains(&&"process_data".to_string()));
             assert!(called_names.contains(&&"method_call".to_string()));
         }
+    }
+
+    #[test]
+    fn test_to_json_includes_data_payload() {
+        let item = CallHierarchyItem {
+            name: "format_string".to_string(),
+            kind: "function".to_string(),
+            uri: "file:///lib/Utils.pm".to_string(),
+            range: Range {
+                start: Position { line: 1, character: 0 },
+                end: Position { line: 4, character: 1 },
+            },
+            selection_range: Range {
+                start: Position { line: 1, character: 4 },
+                end: Position { line: 1, character: 17 },
+            },
+            detail: None,
+            qualified_name: Some("Utils::format_string".to_string()),
+            data: None,
+        };
+
+        let json = item.to_json();
+        assert!(json.get("data").is_some(), "CallHierarchyItem JSON must include data");
+        assert_eq!(json["data"]["uri"], "file:///lib/Utils.pm");
+        assert_eq!(json["data"]["name"], "format_string");
+        assert_eq!(json["data"]["qualified_name"], "Utils::format_string");
     }
 }
