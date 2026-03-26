@@ -1,5 +1,14 @@
 /**
- * Contract tests for the four previously-unimplemented VSCode commands:
+ * Contract tests for the command-palette feature set:
+ *   - perl-lsp.checkSyntax
+ *   - perl-lsp.runCurrentTest
+ *   - perl-lsp.runAllTests
+ *   - perl-lsp.formatDocument
+ *   - perl-lsp.showIncPaths
+ *   - perl-lsp.openModule
+ *   - perl-lsp.showParserAst
+ *
+ * and the earlier four previously-unimplemented VSCode commands:
  *   - perl-lsp.extractVariable   (Shift+Alt+V)
  *   - perl-lsp.extractMethod     (Shift+Alt+M)
  *   - perl-lsp.showRefactoringOptions
@@ -19,6 +28,101 @@ const EXT_ROOT = path.resolve(__dirname, '..', '..');
 function readPackageJson(): any {
   return JSON.parse(fs.readFileSync(path.join(EXT_ROOT, 'package.json'), 'utf8'));
 }
+
+// ---------------------------------------------------------------------------
+// command palette Perl commands (issue #2058)
+// ---------------------------------------------------------------------------
+const NEW_COMMAND_IDS = [
+  'perl-lsp.checkSyntax',
+  'perl-lsp.runCurrentTest',
+  'perl-lsp.runAllTests',
+  'perl-lsp.formatDocument',
+  'perl-lsp.showIncPaths',
+  'perl-lsp.openModule',
+  'perl-lsp.showParserAst',
+];
+
+describe('perl-lsp command palette commands (issue #2058)', () => {
+  let pkg: any;
+  let commandIds: string[];
+  let paletteEntries: any[];
+
+  beforeAll(() => {
+    pkg = readPackageJson();
+    commandIds = pkg.contributes.commands.map((c: any) => c.command);
+    paletteEntries = pkg.contributes.menus?.commandPalette ?? [];
+  });
+
+  describe('commands', () => {
+    for (const id of NEW_COMMAND_IDS) {
+      test(`${id} is registered`, () => {
+        expect(commandIds).toContain(id);
+      });
+    }
+
+    test('new commands are all classified as Perl commands', () => {
+      for (const id of NEW_COMMAND_IDS) {
+        const cmd = pkg.contributes.commands.find((c: any) => c.command === id);
+        expect(cmd?.category).toBe('Perl');
+        expect(cmd?.title).toBeTruthy();
+      }
+    });
+  });
+
+  describe('command palette entries', () => {
+    for (const id of NEW_COMMAND_IDS) {
+      test(`${id} appears in command palette`, () => {
+        const entry = paletteEntries.find((e: any) => e.command === id);
+        expect(entry).toBeDefined();
+      });
+    }
+
+    test('checkSyntax is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.checkSyntax');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('runCurrentTest is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.runCurrentTest');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('runAllTests is guarded by workspaceFolderCount >= 1', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.runAllTests');
+      expect(entry?.when).toContain('workspaceFolderCount >= 1');
+    });
+
+    test('formatDocument is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.formatDocument');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('showIncPaths is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.showIncPaths');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('openModule is guarded by workspaceFolderCount >= 1', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.openModule');
+      expect(entry?.when).toContain('workspaceFolderCount >= 1');
+    });
+
+    test('showParserAst is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.showParserAst');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+  });
+
+  describe('activation events', () => {
+    test('activates on checkSyntax command', () => {
+      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.checkSyntax');
+    });
+
+    test('activates on runCurrentTest command', () => {
+      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.runCurrentTest');
+    });
+  });
+});
 
 // ---------------------------------------------------------------------------
 // extractVariable

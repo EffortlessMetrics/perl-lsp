@@ -208,6 +208,39 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
+        await runCheckSyntax();
+    });
+
+    const runCurrentTestCommand = vscode.commands.registerCommand('perl-lsp.runCurrentTest', async () => {
+        await runCurrentTestWithProve();
+    });
+
+    const runAllTestsCommand = vscode.commands.registerCommand('perl-lsp.runAllTests', async () => {
+        await runAllTestsWithProve();
+    });
+
+    const formatDocumentCommand = vscode.commands.registerCommand('perl-lsp.formatDocument', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('No active Perl file to format');
+            return;
+        }
+        await vscode.commands.executeCommand('editor.action.formatDocument');
+    });
+
+    const showIncPathsCommand = vscode.commands.registerCommand('perl-lsp.showIncPaths', async () => {
+        await showIncPaths();
+    });
+
+    const openModuleCommand = vscode.commands.registerCommand('perl-lsp.openModule', async () => {
+        await openPerlModule();
+    });
+
+    const showParserAstCommand = vscode.commands.registerCommand('perl-lsp.showParserAst', async () => {
+        await showParserAst();
+    });
+
     const whatsNewManager = new WhatsNewManager(context, outputChannel);
     const showWhatsNewCommand = vscode.commands.registerCommand('perl-lsp.showWhatsNew', async () => {
         await whatsNewManager.showWhatsNew();
@@ -477,6 +510,13 @@ export async function activate(context: vscode.ExtensionContext) {
         restartCommand,
         organizeImportsCommand,
         runTestsCommand,
+        checkSyntaxCommand,
+        runCurrentTestCommand,
+        runAllTestsCommand,
+        formatDocumentCommand,
+        showIncPathsCommand,
+        openModuleCommand,
+        showParserAstCommand,
         showVersionCommand,
         statusMenuCommand,
         reinstallCommand,
@@ -884,6 +924,188 @@ async function refreshTestAdapter(context: vscode.ExtensionContext) {
     testAdapter = new PerlTestAdapter();
     context.subscriptions.push(testAdapter);
     outputChannel.appendLine('Perl test integration enabled.');
+}
+
+async function runCheckSyntax(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('No active Perl file to check syntax');
+        return;
+    }
+
+    if (editor.document.isDirty) {
+        await editor.document.save();
+    }
+
+    const filePath = editor.document.uri.fsPath;
+    const config = vscode.workspace.getConfiguration('perl-lsp');
+    const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+    const workspaceRoot = vscode.workspace.getWorkspaceFolder(editor.document.uri)?.uri.fsPath;
+
+    const perlArgs: string[] = [];
+    for (const inc of includePaths) {
+        const resolved = workspaceRoot ? path.join(workspaceRoot, inc) : inc;
+        perlArgs.push('-I', resolved);
+    }
+    perlArgs.push('-c', filePath);
+
+    return new Promise(resolve => {
+        execFile('perl', perlArgs, { timeout: 10000 }, (error, stdout, stderr) => {
+            const output = (stdout + stderr).trim();
+            if (error) {
+                vscode.window.showErrorMessage(
+                    `Syntax error: ${output}`,
+                    'Show Output'
+                ).then(sel => {
+                    if (sel === 'Show Output') {
+                        outputChannel.appendLine(`[check-syntax] ${output}`);
+                        outputChannel.show();
+                    }
+                });
+            } else {
+                vscode.window.showInformationMessage(`Syntax OK: ${path.basename(filePath)}`);
+            }
+            resolve();
+        });
+    });
+}
+
+async function runCurrentTestWithProve(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('No active Perl file to run');
+        return;
+    }
+
+    if (editor.document.isDirty) {
+        await editor.document.save();
+    }
+
+    const filePath = editor.document.uri.fsPath;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+    const cwd = workspaceFolder?.uri.fsPath;
+
+    const terminal = getOrCreateTerminal('Perl Tests');
+    terminal.show(true);
+    const proveCmd = cwd
+        ? `cd ${JSON.stringify(cwd)} && prove -v ${JSON.stringify(filePath)}`
+        : `prove -v ${JSON.stringify(filePath)}`;
+    terminal.sendText(proveCmd);
+}
+
+async function runAllTestsWithProve(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return;
+    }
+
+    const cwd = workspaceFolders[0].uri.fsPath;
+    const terminal = getOrCreateTerminal('Perl Tests');
+    terminal.show(true);
+    terminal.sendText(`cd ${JSON.stringify(cwd)} && prove -r t/`);
+}
+
+async function showIncPaths(): Promise<void> {
+    return new Promise(resolve => {
+        execFile('perl', ['-e', 'print join("\\n", @INC)'], { timeout: 5000 }, (error, stdout) => {
+            if (error) {
+                vscode.window.showErrorMessage(`Failed to get @INC: ${error.message}`);
+                resolve();
+                return;
+            }
+
+            const lines = stdout.trim().split('\n').filter(l => l.length > 0);
+            const panel = vscode.window.createOutputChannel('Perl @INC');
+            panel.clear();
+            panel.appendLine('Perl @INC paths:');
+            panel.appendLine('');
+            for (const line of lines) {
+                panel.appendLine(`  ${line}`);
+            }
+            panel.show();
+            resolve();
+        });
+    });
+}
+
+async function openPerlModule(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return;
+    }
+
+    const pmFiles = await vscode.workspace.findFiles('**/*.pm', '**/node_modules/**', 500);
+    if (pmFiles.length === 0) {
+        vscode.window.showInformationMessage('No .pm module files found in workspace');
+        return;
+    }
+
+    const items = pmFiles.map(uri => {
+        const rel = vscode.workspace.asRelativePath(uri);
+        // Convert path to module name: lib/Foo/Bar.pm -> Foo::Bar
+        const moduleName = rel
+            .replace(/^(lib|local\/lib\/perl5)\//, '')
+            .replace(/\.pm$/, '')
+            .replace(/\//g, '::');
+        return {
+            label: moduleName,
+            description: rel,
+            uri
+        };
+    }).sort((a, b) => a.label.localeCompare(b.label));
+
+    const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Search Perl modules...',
+        matchOnDescription: true
+    });
+
+    if (selected) {
+        const doc = await vscode.workspace.openTextDocument(selected.uri);
+        await vscode.window.showTextDocument(doc);
+    }
+}
+
+async function showParserAst(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('No active Perl file to show AST');
+        return;
+    }
+
+    if (!client) {
+        vscode.window.showWarningMessage('Perl Language Server is not running');
+        return;
+    }
+
+    try {
+        const result = await client.sendRequest<string | null>(
+            'perl/showAst',
+            { uri: editor.document.uri.toString() }
+        );
+
+        if (!result) {
+            vscode.window.showInformationMessage('No AST available for this file');
+            return;
+        }
+
+        const panel = vscode.window.createOutputChannel('Perl Parser AST');
+        panel.clear();
+        panel.appendLine(`AST for: ${vscode.workspace.asRelativePath(editor.document.uri)}`);
+        panel.appendLine('');
+        panel.appendLine(result);
+        panel.show();
+    } catch {
+        vscode.window.showWarningMessage(
+            'Show Parser AST is not supported by the current perl-lsp version'
+        );
+    }
+}
+
+function getOrCreateTerminal(name: string): vscode.Terminal {
+    const existing = vscode.window.terminals.find(t => t.name === name);
+    return existing ?? vscode.window.createTerminal(name);
 }
 
 async function reinstallServerBinary(context: vscode.ExtensionContext) {
