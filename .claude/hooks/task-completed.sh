@@ -6,13 +6,10 @@
 # Read stdin once at the top -- stdin can only be consumed once, so capture before any subshells.
 # Hook tests may invoke this script without piped input; avoid blocking forever on an open stdin.
 INPUT='{}'
-if IFS= read -r -t 0 FIRST_LINE 2>/dev/null; then
-  REMAINDER="$(cat 2>/dev/null || true)"
-  if [[ -n "${REMAINDER}" ]]; then
-    INPUT="${FIRST_LINE}"$'\n'"${REMAINDER}"
-  else
-    INPUT="${FIRST_LINE}"
-  fi
+if read -t 0 2>/dev/null; then
+  # Input is available; consume it all at once.
+  INPUT="$(cat 2>/dev/null)" || INPUT='{}'
+  [[ -z "${INPUT}" ]] && INPUT='{}'
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"

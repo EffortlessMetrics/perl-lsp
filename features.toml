@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.0"
 lsp_version = "3.18"
-compliance_percent = 100  # 98/98 protocol features implemented, 54/54 advertised
+compliance_percent = 100  # 98/98 protocol features implemented, 53/53 advertised
 
 # Text Document Features
 
