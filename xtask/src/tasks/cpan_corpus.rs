@@ -174,14 +174,14 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         config.install_dir.display()
     );
 
-    fs::create_dir_all(&config.install_dir).context("Failed to create install directory")?;
+    let cpanm = resolve_cpanm_launcher(config)?;
+    reset_install_dir(&config.install_dir, &cpanm)?;
 
     let local_lib =
         config.install_dir.canonicalize().unwrap_or_else(|_| config.install_dir.clone());
     let normalized_distributions: Vec<String> =
         distributions.iter().map(|dist| normalize_distribution_for_cpanm(dist)).collect();
     let install_items = normalized_distributions.len();
-    let cpanm = resolve_cpanm_launcher(config)?;
     let cpanm_home = cpanm_home_path(&local_lib);
     fs::create_dir_all(&cpanm_home).context("Failed to create cpanm cache directory")?;
 
@@ -298,6 +298,47 @@ fn bootstrap_cpanm_path(install_dir: &Path) -> PathBuf {
 
 fn cpanm_home_path(install_dir: &Path) -> PathBuf {
     install_dir.join(".cpanm")
+}
+
+fn reset_install_dir(install_dir: &Path, launcher: &CpanmLauncher) -> Result<()> {
+    fs::create_dir_all(install_dir).context("Failed to create install directory")?;
+
+    let preserved_cpanm = match launcher {
+        CpanmLauncher::Bootstrapped(path) if path.exists() => Some(
+            fs::read(path)
+                .with_context(|| format!("Failed to read bootstrapped cpanm: {}", path.display()))?,
+        ),
+        _ => None,
+    };
+
+    for entry in fs::read_dir(install_dir)
+        .with_context(|| format!("Failed to read install directory: {}", install_dir.display()))?
+    {
+        let entry = entry.context("Failed to read install directory entry")?;
+        let path = entry.path();
+        if path.file_name().is_some_and(|name| name == ".cpanm") {
+            continue;
+        }
+
+        if path.is_dir() {
+            fs::remove_dir_all(&path)
+                .with_context(|| format!("Failed to clear {}", path.display()))?;
+        } else {
+            fs::remove_file(&path).with_context(|| format!("Failed to clear {}", path.display()))?;
+        }
+    }
+
+    if let Some(bytes) = preserved_cpanm {
+        let cpanm_path = bootstrap_cpanm_path(install_dir);
+        if let Some(parent) = cpanm_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to recreate {}", parent.display()))?;
+        }
+        fs::write(&cpanm_path, bytes)
+            .with_context(|| format!("Failed to restore {}", cpanm_path.display()))?;
+    }
+
+    Ok(())
 }
 
 fn bootstrap_cpanm_script(config: &CpanCorpusConfig) -> Result<PathBuf> {
@@ -566,16 +607,25 @@ fn path_to_module_name(file_path: &str, lib_root: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_nanos());
+        std::env::temp_dir().join(format!("perl-lsp-{name}-{}-{nanos}", std::process::id()))
+    }
 
     #[test]
-    fn test_read_dist_list_parsing() {
-        let dir = std::env::temp_dir().join("test_cpan_dist_list");
-        let _ = fs::create_dir_all(&dir);
+    fn test_read_dist_list_parsing() -> Result<()> {
+        let dir = unique_test_dir("cpan-dist-list");
+        fs::create_dir_all(&dir)?;
         let path = dir.join("dists.txt");
-        fs::write(&path, "# Header comment\n\nMoose\nDBI\n# Another comment\nTry-Tiny\n").ok();
-        let dists = read_dist_list(&path).unwrap_or_default();
+        fs::write(&path, "# Header comment\n\nMoose\nDBI\n# Another comment\nTry-Tiny\n")?;
+        let dists = read_dist_list(&path)?;
         assert_eq!(dists, vec!["Moose", "DBI", "Try-Tiny"]);
-        let _ = fs::remove_dir_all(&dir);
+        fs::remove_dir_all(&dir)?;
+        Ok(())
     }
 
     #[test]
@@ -640,5 +690,53 @@ mod tests {
 ! Failed to fetch distribution Foo\n\
 Some other line";
         assert_eq!(count_cpanm_failures(stderr), 2);
+    }
+
+    #[test]
+    fn test_reset_install_dir_preserves_cache_and_bootstrapped_cpanm() -> Result<()> {
+        let install_dir = unique_test_dir("cpan-reset-preserve");
+        let cache_dir = install_dir.join(".cpanm");
+        let cache_file = cache_dir.join("cache.txt");
+        let lib_file = install_dir.join("lib/perl5/Test.pm");
+        let man_file = install_dir.join("man/man3/Test.3pm");
+        let cpanm_path = bootstrap_cpanm_path(&install_dir);
+
+        fs::create_dir_all(cache_dir.clone())?;
+        fs::create_dir_all(lib_file.parent().unwrap_or(&install_dir))?;
+        fs::create_dir_all(man_file.parent().unwrap_or(&install_dir))?;
+        fs::create_dir_all(cpanm_path.parent().unwrap_or(&install_dir))?;
+        fs::write(&cache_file, "cache")?;
+        fs::write(&lib_file, "module")?;
+        fs::write(&man_file, "man")?;
+        fs::write(&cpanm_path, "#!/usr/bin/env perl\n")?;
+
+        reset_install_dir(&install_dir, &CpanmLauncher::Bootstrapped(cpanm_path.clone()))?;
+
+        assert!(cache_file.exists());
+        assert!(cpanm_path.exists());
+        assert!(!install_dir.join("lib").exists());
+        assert!(!install_dir.join("man").exists());
+
+        fs::remove_dir_all(&install_dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_reset_install_dir_removes_stale_bin_for_system_cpanm() -> Result<()> {
+        let install_dir = unique_test_dir("cpan-reset-system");
+        let stale_bin = install_dir.join("bin/old-tool");
+        let cache_dir = install_dir.join(".cpanm");
+
+        fs::create_dir_all(stale_bin.parent().unwrap_or(&install_dir))?;
+        fs::create_dir_all(&cache_dir)?;
+        fs::write(&stale_bin, "old")?;
+
+        reset_install_dir(&install_dir, &CpanmLauncher::System)?;
+
+        assert!(!install_dir.join("bin").exists());
+        assert!(cache_dir.exists());
+
+        fs::remove_dir_all(&install_dir)?;
+        Ok(())
     }
 }
