@@ -1156,3 +1156,81 @@ process();
 
     Ok(())
 }
+
+/// Ensures CallHierarchyItem.data is preserved in responses for follow-up requests.
+#[test]
+fn test_call_hierarchy_item_data_round_trip() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/Utils.pm",
+        r#"package Utils;
+
+sub format_string {
+    my $str = shift;
+    return uc($str);
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///bin/app.pl",
+        r#"use Utils;
+
+sub process {
+    my $result = Utils::format_string("hello");
+    return $result;
+}
+
+process();
+"#,
+    )?;
+
+    harness.barrier();
+
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": "file:///bin/app.pl" },
+            "position": { "line": 2, "character": 4 }
+        }),
+    )?;
+    let item = prepare_response
+        .as_array()
+        .and_then(|items| items.first())
+        .ok_or("prepareCallHierarchy returned no items for process")?;
+
+    assert_eq!(
+        item["data"]["uri"].as_str().unwrap_or(""),
+        "file:///bin/app.pl",
+        "prepareCallHierarchy item data should include URI"
+    );
+    assert_eq!(
+        item["data"]["name"].as_str().unwrap_or(""),
+        "process",
+        "prepareCallHierarchy item data should include symbol name"
+    );
+
+    let outgoing_response = harness.request("callHierarchy/outgoingCalls", json!({ "item": item }))?;
+    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+    let format_call = calls
+        .iter()
+        .find(|c| {
+            c["to"]["name"]
+                .as_str()
+                .map(|n| n == "format_string" || n.ends_with("::format_string"))
+                .unwrap_or(false)
+        })
+        .ok_or("format_string outgoing call not found")?;
+
+    assert_eq!(
+        format_call["to"]["data"]["uri"].as_str().unwrap_or(""),
+        "file:///lib/Utils.pm",
+        "outgoing callee should keep canonical URI in data"
+    );
+
+    Ok(())
+}

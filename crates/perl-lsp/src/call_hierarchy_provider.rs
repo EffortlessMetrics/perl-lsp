@@ -27,6 +27,8 @@ pub struct CallHierarchyItem {
     pub selection_range: Range,
     /// Optional additional detail about the symbol
     pub detail: Option<String>,
+    /// Optional fully-qualified name used for cross-file disambiguation
+    pub qualified_name: Option<String>,
 }
 
 /// Call Hierarchy Provider
@@ -78,7 +80,8 @@ impl CallHierarchyProvider {
         item: &CallHierarchyItem,
     ) -> Vec<CallHierarchyIncomingCall> {
         let mut calls = Vec::new();
-        self.find_incoming_calls(ast, &item.name, &mut calls, None);
+        let target_name = item.qualified_name.as_deref().unwrap_or(&item.name);
+        self.find_incoming_calls(ast, target_name, &mut calls, None);
         calls
     }
 
@@ -126,6 +129,7 @@ impl CallHierarchyProvider {
                                     range,
                                     selection_range,
                                     detail,
+                                    qualified_name: None,
                                 });
                             }
                         } else {
@@ -146,6 +150,7 @@ impl CallHierarchyProvider {
                                 range,
                                 selection_range,
                                 detail,
+                                qualified_name: None,
                             });
                         }
                     }
@@ -159,6 +164,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        qualified_name: None,
                     });
                 }
                 NodeKind::FunctionCall { name, .. } => {
@@ -170,6 +176,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range: range,
                         detail: None,
+                        qualified_name: Some(name.clone()),
                     });
                 }
                 _ => {}
@@ -203,6 +210,7 @@ impl CallHierarchyProvider {
                         range,
                         selection_range,
                         detail: None,
+                        qualified_name: None,
                     };
 
                     // Search within this function
@@ -214,7 +222,11 @@ impl CallHierarchyProvider {
             }
             NodeKind::FunctionCall { name, .. } => {
                 // Match exact name or package-qualified name (e.g. "Utils::format_string")
-                let matches = name == target_name || name.ends_with(&format!("::{}", target_name));
+                let matches = if target_name.contains("::") {
+                    name == target_name
+                } else {
+                    name == target_name || name.ends_with(&format!("::{}", target_name))
+                };
                 if matches {
                     if let Some(from) = current_function {
                         let ranges = vec![self.node_to_range(node)];
@@ -271,6 +283,7 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail: None,
+                    qualified_name: Some(name.clone()),
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -296,6 +309,7 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail,
+                    qualified_name: None,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
@@ -332,6 +346,7 @@ impl CallHierarchyProvider {
                 range,
                 selection_range,
                 detail,
+                qualified_name: None,
             })
         } else {
             None
@@ -628,6 +643,21 @@ impl CallHierarchyItem {
         if let Some(detail) = &self.detail {
             item["detail"] = json!(detail);
         }
+        item["data"] = json!({
+            "uri": self.uri,
+            "name": self.name,
+            "qualified_name": self.qualified_name,
+            "range": {
+                "start": {
+                    "line": self.range.start.line,
+                    "character": self.range.start.character
+                },
+                "end": {
+                    "line": self.range.end.line,
+                    "character": self.range.end.character
+                }
+            }
+        });
 
         item
     }
@@ -750,6 +780,7 @@ sub target_func {
                     end: Position { line: 10, character: 15 },
                 },
                 detail: None,
+                qualified_name: None,
             };
 
             let incoming = provider.incoming_calls(&ast, &target_item);
@@ -801,6 +832,7 @@ sub helper {
                     end: Position { line: 1, character: 8 },
                 },
                 detail: None,
+                qualified_name: None,
             };
 
             let outgoing = provider.outgoing_calls(&ast, &main_item);

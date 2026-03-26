@@ -399,7 +399,13 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             let item = &params["item"];
-            let target_name = item["name"].as_str().unwrap_or("");
+            let target_name = item
+                .get("data")
+                .and_then(|d| d.get("qualified_name"))
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .or_else(|| item["name"].as_str())
+                .unwrap_or("");
 
             eprintln!("Getting incoming calls for: {}", target_name);
 
@@ -553,7 +559,12 @@ impl LspServer {
         };
 
         let detail = json["detail"].as_str().map(|s| s.to_string());
+        let qualified_name = json
+            .get("data")
+            .and_then(|d| d.get("qualified_name"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
 
-        Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail })
+        Ok(CallHierarchyItem { name, kind, uri, range, selection_range, detail, qualified_name })
     }
 }
