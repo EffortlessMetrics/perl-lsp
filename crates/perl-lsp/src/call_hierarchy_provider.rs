@@ -53,7 +53,7 @@ impl CallHierarchyProvider {
         name.contains("::") || name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
     }
 
-    fn node_variable_name<'a>(node: &'a Node) -> Option<&'a str> {
+    fn node_variable_name(node: &Node) -> Option<&str> {
         if let NodeKind::Variable { name, .. } = &node.kind { Some(name.as_str()) } else { None }
     }
 
