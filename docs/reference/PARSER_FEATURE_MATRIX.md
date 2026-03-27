@@ -6,9 +6,9 @@
 
 | Field | Value |
 |-------|-------|
-| Generated | 2026-01-09 04:55 |
-| Commit | `3e0bd048` |
-| perl-parser | v0.8.8 |
+| Generated | 2026-03-26 23:31 |
+| Commit | `d7f7198e` |
+| perl-parser | vunknown |
 | Corpus | `test_corpus/` |
 | Command | `just parser-audit && just parser-matrix-update` |
 
@@ -16,12 +16,12 @@
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Parse Success Rate | 40% (4/10 files) | 100% | In Progress |
-| Parse Errors | 6 | 0 | Baseline Set |
+| Parse Success Rate | 100% (91/91) | 100% | Passing |
+| Parse Errors | 0 | 0 | Passing |
 | Timeouts | 0 | 0 | Passing |
 | Panics | 0 | 0 | Passing |
 | Test Corpus Inventory | 100% | 100% | Passing |
-| Baseline | 6 | 0 | Ratcheted |
+| Baseline | 0 | 0 | Ratcheted |
 
 *Test Corpus Inventory* measures whether the test corpus contains examples of each
 GA (generally available) feature defined in `features.toml`. It does NOT measure
@@ -33,83 +33,24 @@ Errors are categorized to help prioritize implementation work:
 
 | Category | Count | Priority | Description |
 |----------|-------|----------|-------------|
-| ModernFeature | 5 | P1 | class/try/catch/field/method keywords |
-| Subroutine | 1 | P2 | Signatures, prototypes |
 | ControlFlow | 0 | P2 | given/when/default |
 | Dereference | 0 | P2 | ->, postfix deref |
 | General | 0 | P3 | Uncategorized |
+| ModernFeature | 0 | P1 | class/try/catch/field/method keywords |
 | QuoteLike | 0 | P2 | q/qq/qw/qx/qr, heredocs, strings |
 | Regex | 0 | P2 | m//, s///, tr///, patterns |
+| Subroutine | 0 | P2 | Signatures, prototypes |
 
 ## Failing Files
 
-### `./test_corpus/legacy_syntax.pl`
-
-- **Category**: ModernFeature
-- **Location**: line 15:10
-- **Error**: expected `expression`, found `Comma`
-
-```perl
-open FILE, '<', 'input.txt';
-```
-
-### `./test_corpus/modern_perl_features.pl`
-
-- **Category**: ModernFeature
-- **Location**: line 98:16
-- **Error**: expected `RightParen`, found `Identifier`
-
-```perl
-if ($array_ref isa ARRAY) {
-```
-
-### `./test_corpus/packages_versions.pl`
-
-- **Category**: ModernFeature
-- **Location**: line 115:8
-- **Error**: expected `RightBrace`, found `Identifier`
-
-```perl
-    my $orig = shift;
-```
-
-### `./test_corpus/real_world/medium_module.pl`
-
-- **Category**: ModernFeature
-- **Location**: line 10:28
-- **Error**: expected `expression`, found `Or`
-
-```perl
-        precision => shift || 2,
-```
-
-### `./test_corpus/source_filters.pl`
-
-- **Category**: Subroutine
-- **Location**: line 9:31
-- **Error**: expected `RightBrace`, found `Semicolon`
-
-```perl
-    s/BANG!/return "excited"/g;
-```
-
-### `./test_corpus/xs_inline_ffi.pl`
-
-- **Category**: ModernFeature
-- **Location**: line 54:24
-- **Error**: expected `expression`, found `FatArrow`
-
-```perl
-use Inline C => Config =>
-```
-
+*No failing files* ✅
 
 ## Coverage Roadmap
 
 ### Phase 1: Stabilize Core (Current)
 - [x] Establish baseline ratchet (Issue #180)
 - [x] Add error categorization
-- [ ] Reduce parse errors to 0
+- [x] Reduce parse errors to 0
 
 ### Phase 2: Modern Perl Features
 - [ ] `class` keyword (Perl 5.38+, Corinna)

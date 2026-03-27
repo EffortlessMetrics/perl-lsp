@@ -340,7 +340,7 @@
           "markdownDescription": "Feature IDs to disable at server startup. Use canonical `lsp.*` IDs (e.g., `lsp.semantic_tokens`). Changes take effect after server restart."
         }
       }
-    ],
+    },
     "commands": [
       {
         "command": "perl-lsp.restart",
