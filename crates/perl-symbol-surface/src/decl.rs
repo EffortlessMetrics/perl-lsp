@@ -213,13 +213,8 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
             // The first arg is the constant name (or a hash-ref style with
             // multiple names — for MVP we take just the first string arg).
             if let Some(const_name) = args.first() {
-                // Skip if it looks like a hash-ref marker (`{`) or unary-plus
-                // hash-ref form (`+`), or is empty.  Both forms represent
-                // multi-constant hash syntax rather than a plain name.
-                if !const_name.is_empty()
-                    && !const_name.starts_with('{')
-                    && !const_name.starts_with('+')
-                {
+                // Skip if it looks like a reference marker or is empty.
+                if !const_name.is_empty() && !const_name.starts_with('{') {
                     let container = ctx.current_package.clone();
                     out.push(SymbolDecl {
                         kind: SymbolKind::Constant,
