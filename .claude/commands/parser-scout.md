@@ -39,4 +39,10 @@ Target: **$ARGUMENTS** (default: top 5 error buckets)
 
 ## Output
 
-Write findings as a GitHub issue via `gh issue create --label swarm-discovered` with the SLICE definition in the body.
+Use the **Full Scout Report** variant from `/scout-issue`. Include a SLICE definition subsection after Root Cause:
+
+- `error_bucket`: which category
+- `perl_construct`: the minimal triggering code
+- `root_cause_files`: parser source files involved
+- `files_touched`: files that would need changes
+- `estimated_complexity`: low/medium/high
