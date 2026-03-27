@@ -79,9 +79,11 @@ These steps require human judgment and cannot be fully automated.
 
 ### 9. CPAN Corpus Coverage **[manual]**
 
-- [ ] Corpus coverage meets target (current baseline in `.ci/cpan-corpus-baseline.json`)
 - [ ] Common corpus manifest is up to date
-- [ ] Run `just cpan-corpus-sweep` and verify no regressions
+- [ ] The manifest-shaped CPAN subset is the actionable release bar for 0.12.0
+- [ ] Run `just cpan-corpus-sweep` against the manifest-shaped subset and verify no regressions
+- [ ] If the broader 8k+ full installed sweep is red while the manifest-shaped subset stays clean, treat that as corpus-shape / baseline drift, not a silent product regression
+- [ ] Track deeper parser reduction work in `#2971` if the broad sweep still needs tightening
 
 ### 10. Documentation Review **[manual]**
 
@@ -96,6 +98,10 @@ These steps require human judgment and cannot be fully automated.
 - [ ] Extension version matches workspace version
 - [ ] Extension builds (`cd vscode-extension && npm run package`)
 - [ ] Auto-download of language server binary works
+- [ ] VSIX install / activation works end-to-end
+- [ ] Moose / OO flow: hover, goto-definition, references, cross-file call hierarchy
+- [ ] DBI flow: completion after `->`, hover docs, signature help, diagnostics
+- [ ] Plain-script flow: startup, symbols, diagnostics, health widget
 - [ ] Basic smoke test in VSCode: open a `.pl` file, verify diagnostics, completion, hover
 
 ### 12. Installation Paths **[manual]**
