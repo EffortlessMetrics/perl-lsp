@@ -22,22 +22,8 @@ use perl_builtins::builtin_signatures::create_builtin_signatures;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
 use perl_semantic_analyzer::declaration::get_node_children;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_json::json;
-
-/// Tooltip content for inlay hints (LSP 3.17).
-///
-/// Wraps either a plain string or markdown-formatted tooltip per the
-/// `InlayHintTooltip` LSP type definition.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum InlayHintTooltip {
-    /// Plain string tooltip
-    String(String),
-    /// Markdown-formatted tooltip
-    Markdown(String),
-}
 
 /// Inlay hint kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,8 +47,6 @@ pub struct InlayHint {
     pub padding_left: bool,
     /// Padding on the right
     pub padding_right: bool,
-    /// Optional tooltip (deferred to resolve)
-    pub tooltip: Option<InlayHintTooltip>,
 }
 
 /// Inlay hints provider.
@@ -103,7 +87,6 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(String::from);
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -113,8 +96,6 @@ impl InlayHintsProvider {
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
-                    tooltip,
-                    location: None,
                 })
             })
             .collect()
@@ -136,7 +117,6 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(String::from);
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -146,8 +126,6 @@ impl InlayHintsProvider {
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
-                    tooltip,
-                    location: None,
                 })
             })
             .collect()
@@ -261,27 +239,13 @@ pub fn parameter_hints(
                         }
                     }
 
-                    // Phase 1: embed function name and param index in data for
-                    // later label.location resolution via inlayHint/resolve.
-                    let mut hint = json!({
+                    out.push(json!({
                         "position": { "line": l, "character": c },
                         "label": format!("{}:", param_names[i]),
                         "kind": 2, // parameter
                         "paddingLeft": false,
-                        "paddingRight": true,
-                        "data": {
-                            "function": name.as_str(),
-                            "paramIndex": i,
-                        }
-                    });
-
-                    // Phase 3: embed perldoc summary for tooltip resolution.
-                    // The resolver will pick this up when the client requests it.
-                    if let Some(doc) = builtin_doc_summary(name.as_str(), &param_names[i], i) {
-                        hint["data"]["docSummary"] = json!(doc);
-                    }
-
-                    out.push(hint);
+                        "paddingRight": true
+                    }));
                 }
             }
         }
@@ -312,18 +276,16 @@ pub fn trivial_type_hints(
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         let type_hint = match &node.kind {
-            NodeKind::Number { .. } => Some(("Num", Some("Numeric literal"))),
-            NodeKind::String { .. } => Some(("Str", Some("String literal"))),
-            NodeKind::HashLiteral { .. } => Some(("Hash", Some("Hash reference"))),
-            NodeKind::ArrayLiteral { .. } => Some(("Array", Some("Array reference"))),
-            NodeKind::Regex { .. } => Some(("Regex", Some("Regular expression"))),
-            NodeKind::Subroutine { name: None, .. } => {
-                Some(("CodeRef", Some("Anonymous subroutine (code reference)")))
-            }
+            NodeKind::Number { .. } => Some("Num"),
+            NodeKind::String { .. } => Some("Str"),
+            NodeKind::HashLiteral { .. } => Some("Hash"),
+            NodeKind::ArrayLiteral { .. } => Some("Array"),
+            NodeKind::Regex { .. } => Some("Regex"),
+            NodeKind::Subroutine { name: None, .. } => Some("CodeRef"),
             _ => None,
         };
 
-        if let Some((hint, tooltip)) = type_hint {
+        if let Some(hint) = type_hint {
             let (l, c) = to_pos16(node.location.end);
 
             // Filter by range if specified
@@ -334,190 +296,17 @@ pub fn trivial_type_hints(
                 }
             }
 
-            let mut val = json!({
+            out.push(json!({
                 "position": {"line": l, "character": c},
                 "label": format!(": {}", hint),
                 "kind": 1, // type
                 "paddingLeft": true,
                 "paddingRight": false
-            });
-
-            // Phase 3: embed tooltip text for deferred resolution
-            if let Some(tt) = tooltip {
-                val["data"] = json!({ "tooltip": tt });
-            }
-
-            out.push(val);
+            }));
         }
         true
     });
     out
-}
-
-// ---------------------------------------------------------------------------
-// Phase 2: Semantic type inference
-// ---------------------------------------------------------------------------
-
-/// Infers a semantic type label for an expression node.
-///
-/// Goes beyond trivial literal detection by examining context:
-/// - Scalar variables assigned from known-return-type functions
-/// - Array/hash from builtins like `keys`, `values`, `split`
-/// - Blessed references from `new` / `bless` calls
-/// - Filehandle operations
-///
-/// Returns `None` when the type cannot be determined.
-pub fn infer_semantic_type(node: &Node) -> Option<String> {
-    match &node.kind {
-        NodeKind::FunctionCall { name, .. } => function_return_type(name),
-        NodeKind::MethodCall { method, .. } => method_return_type(method),
-        NodeKind::Variable { name, sigil } => {
-            // Infer from common naming conventions
-            match (sigil.as_str(), name.as_str()) {
-                ("$", _) if name.ends_with("_fh") || name.ends_with("_handle") => {
-                    Some("FileHandle".to_string())
-                }
-                ("$", _) if name.ends_with("_ref") => Some("Ref".to_string()),
-                ("@", _) if name.ends_with("_nums") => Some("@Nums".to_string()),
-                ("@", _) if name.ends_with("_strs") => Some("@Strs".to_string()),
-                ("@", _) if name.ends_with("_lines") => Some("@Lines".to_string()),
-                ("%", _) => Some("Hash".to_string()),
-                _ => None,
-            }
-        }
-        _ => None,
-    }
-}
-
-/// Return type for known builtin functions.
-fn function_return_type(name: &str) -> Option<String> {
-    match name {
-        "open" => Some("Bool|FileHandle".to_string()),
-        "split" => Some("@Str".to_string()),
-        "join" => Some("Str".to_string()),
-        "keys" | "values" | "each" => Some("List".to_string()),
-        "map" | "grep" => Some("@List".to_string()),
-        "sort" => Some("@Sorted".to_string()),
-        "reverse" => Some("@List|Str".to_string()),
-        "scalar" => Some("Scalar".to_string()),
-        "ref" => Some("Str|Undef".to_string()),
-        "bless" => Some("Object".to_string()),
-        "stat" | "lstat" => Some("@Stat".to_string()),
-        "localtime" | "gmtime" => Some("@Time|Str".to_string()),
-        "caller" => Some("@Caller|Hash".to_string()),
-        "wantarray" => Some("Bool|Undef".to_string()),
-        "defined" => Some("Bool".to_string()),
-        "length" | "index" | "rindex" | "substr" => Some("Int".to_string()),
-        "abs" | "int" | "sqrt" | "exp" | "log" | "cos" | "sin" => Some("Num".to_string()),
-        "chr" => Some("Str".to_string()),
-        "ord" => Some("Int".to_string()),
-        "uc" | "lc" | "ucfirst" | "lcfirst" => Some("Str".to_string()),
-        "pack" => Some("Str".to_string()),
-        "unpack" => Some("@Mixed".to_string()),
-        _ => None,
-    }
-}
-
-/// Return type for known method calls.
-fn method_return_type(method: &str) -> Option<String> {
-    match method {
-        "new" => Some("Object".to_string()),
-        "count" | "size" | "length" => Some("Int".to_string()),
-        "push" | "unshift" | "splice" => Some("Int".to_string()),
-        "pop" | "shift" => Some("Scalar".to_string()),
-        "keys" | "values" => Some("@List".to_string()),
-        "exists" | "defined" => Some("Bool".to_string()),
-        "delete" => Some("Scalar".to_string()),
-        "fetch" | "get" => Some("Scalar".to_string()),
-        "put" | "set" | "store" => Some("Undef".to_string()),
-        "find" | "search" => Some("@Results|Undef".to_string()),
-        "first" | "next" => Some("Scalar|Undef".to_string()),
-        "all" => Some("@All".to_string()),
-        "each" | "iterator" => Some("Iterator".to_string()),
-        "isa" => Some("Bool".to_string()),
-        "can" => Some("CodeRef|Undef".to_string()),
-        "clone" => Some("Object".to_string()),
-        "to_string" | "as_string" | "stringify" => Some("Str".to_string()),
-        "to_array" | "as_array" | "elements" => Some("@Array".to_string()),
-        "to_hash" | "as_hash" => Some("%Hash".to_string()),
-        _ => None,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Phase 3: Documentation integration
-// ---------------------------------------------------------------------------
-
-/// Returns a short perldoc-style summary for a builtin function parameter.
-///
-/// Used by the resolve handler to populate `tooltip` with documentation
-/// rather than just the parameter name.
-fn builtin_doc_summary(function: &str, param: &str, _param_index: usize) -> Option<String> {
-    let summary = match function {
-        "open" => match param {
-            "filehandle" => Some("Filehandle opened for reading/writing"),
-            "mode" | "expression" => Some("Open mode: <, >, >>, +<, +>, |, etc."),
-            "filename" => Some("Path to the file to open"),
-            _ => None,
-        },
-        "split" => match param {
-            "pattern" => Some("Regex pattern to split on (defaults to whitespace)"),
-            "expr" => Some("String or expression to split"),
-            "limit" => Some("Maximum number of fields to return"),
-            _ => None,
-        },
-        "substr" => match param {
-            "string" | "expr" => Some("The string to extract from"),
-            "offset" => Some("Character offset (negative counts from end)"),
-            "length" | "replacement" => Some("Length of substring or replacement string"),
-            _ => None,
-        },
-        "push" | "unshift" | "splice" => match param {
-            "array" | "expr" => Some("Target array to modify"),
-            "list" => Some("Elements to add"),
-            "offset" => Some("Starting position for splice"),
-            "length" => Some("Number of elements to remove"),
-            _ => None,
-        },
-        "map" | "grep" => match param {
-            "block" | "expr" => Some("Code block or expression applied to each element"),
-            "list" => Some("Input list"),
-            _ => None,
-        },
-        "sort" => match param {
-            "block" | "subname" => Some("Comparison function or subroutine name"),
-            "list" => Some("List to sort"),
-            _ => None,
-        },
-        "join" => match param {
-            "expr" => Some("Separator string inserted between elements"),
-            "list" => Some("List of values to join"),
-            _ => None,
-        },
-        "sprintf" | "printf" => match param {
-            "format" => Some("Format string with %d, %s, etc. placeholders"),
-            "list" => Some("Values to interpolate into the format string"),
-            _ => None,
-        },
-        "index" | "rindex" => match param {
-            "string" | "str" => Some("String to search within"),
-            "substring" | "substr" => Some("Substring to find"),
-            "position" => Some("Starting position for search"),
-            _ => None,
-        },
-        "pack" => match param {
-            "template" => Some("Pack template string (A, N, V, a, etc.)"),
-            "list" => Some("Values to pack"),
-            _ => None,
-        },
-        "unpack" => match param {
-            "template" => Some("Unpack template string"),
-            "expr" => Some("Packed data string to decode"),
-            _ => None,
-        },
-        _ => None,
-    };
-    summary.map(|s| format!("{}: {}", param, s))
 }
 
 fn walk_ast<F>(node: &Node, visitor: &mut F) -> bool
