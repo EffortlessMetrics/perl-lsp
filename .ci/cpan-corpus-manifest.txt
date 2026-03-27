@@ -8,7 +8,7 @@
 #
 # To check: just cpan-corpus-check
 #
-# Added by ratchet on 2026-03-17T22:04:21.629477146+00:00
+# Snapshot refreshed for the 0.12.0 launch-prep ratchet on 2026-03-27.
 Any::URI::Escape
 App::Cmd::ArgProcessor
 App::Cmd::Command
