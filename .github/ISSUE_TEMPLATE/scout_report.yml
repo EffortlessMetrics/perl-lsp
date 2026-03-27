@@ -189,6 +189,20 @@ body:
       required: true
 
   - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: "Optional — for security-scout findings and critical bugs"
+      options:
+        - "— not applicable —"
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: false
+
+  - type: dropdown
     id: category
     attributes:
       label: Category
