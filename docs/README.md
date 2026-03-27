@@ -56,6 +56,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 
 ## Explanation
 
+- [design/call_hierarchy_receiver_inference_plan.md](design/call_hierarchy_receiver_inference_plan.md)
 - [explanation/PURE_RUST_PARSER.md](explanation/PURE_RUST_PARSER.md)
 - [explanation/ERROR_HANDLING_STRATEGY.md](explanation/ERROR_HANDLING_STRATEGY.md)
 - [explanation/DEBT_TRACKING.md](explanation/DEBT_TRACKING.md)
