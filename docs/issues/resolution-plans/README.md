@@ -1,6 +1,6 @@
-# P0 Critical Issues Resolution Plans
+# Resolution Plans
 
-This directory contains resolution plans for the 3 P0 critical timeout/hang risk issues identified in the Perl LSP project.
+This directory contains targeted implementation plans for high-priority repository issues.
 
 ## Overview
 
@@ -32,6 +32,7 @@ flowchart LR
 | Ambiguous Slash Division vs Regex | ✅ COMPLETE | Low | [P0-ambiguous-slash-division-regex.md](./P0-ambiguous-slash-division-regex.md) |
 | Deep Nesting Stack Overflow | ⚠️ NEARLY COMPLETE | Medium | [P0-deep-nesting-stack-overflow.md](./P0-deep-nesting-stack-overflow.md) |
 | Catastrophic Regex Backtracking | ⚠️ PARTIAL | High | [P0-catastrophic-regex-backtracking.md](./P0-catastrophic-regex-backtracking.md) |
+| Call Hierarchy Receiver Inference | 📋 PLANNED | High | [P1-call-hierarchy-receiver-inference.md](./P1-call-hierarchy-receiver-inference.md) |
 
 ## Summary by Issue
 
