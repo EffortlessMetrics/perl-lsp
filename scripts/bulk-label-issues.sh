@@ -10,6 +10,25 @@ if [ -z "$REPO" ]; then
   echo "Usage: $0 <owner/repo>"
   exit 1
 fi
+if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+  echo "Invalid repo format: $REPO"
+  echo "Expected format: owner/repo"
+  exit 1
+fi
+
+encode_label() {
+  printf '%s' "$1" | jq -sR @uri
+}
+
+add_labels() {
+  local number="$1"
+  shift
+  [ "$#" -eq 0 ] && return 0
+
+  local payload
+  payload=$(printf '%s\n' "$@" | jq -R . | jq -s '{labels: .}')
+  api_call "repos/$REPO/issues/$number/labels" --input "$payload" --silent
+}
 
 api_call() {
   local url="$1"; shift
@@ -41,11 +60,14 @@ parse_date() {
   local d="$1"
   local ts
   ts=$(date -d "$d" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$d" +%s 2>/dev/null)
-  if [ -n "$ts" ] && [ "$ts" -gt 0 ] 2>/dev/null; then
-    echo "$ts"
-  else
-    echo ""
-  fi
+  case "$ts" in
+    ''|*[!0-9]*)
+      echo ""
+      ;;
+    *)
+      echo "$ts"
+      ;;
+  esac
 }
 
 echo "Backfilling triage labels for $REPO ..."
@@ -54,7 +76,7 @@ PAGE=1
 TOTAL=0
 
 while true; do
-  ISSUES=$(api_call "repos/$REPO/issues?state=open&per_page=100&page=$PAGE" --jq '.[].number') || break
+  ISSUES=$(api_call "repos/$REPO/issues?state=open&per_page=100&page=$PAGE" --jq '.[] | select(.pull_request == null) | .number') || break
   [ -z "$ISSUES" ] && break
 
   for number in $ISSUES; do
@@ -150,15 +172,14 @@ while true; do
 
     if [ ${#ADD_ARGS[@]} -gt 0 ]; then
       echo "#$number: + ${ADD_ARGS[*]}"
-      api_call "repos/$REPO/issues/$number/labels" \
-        -f labels="$(printf '%s,' "${ADD_ARGS[@]}")" --silent
+      add_labels "$number" "${ADD_ARGS[@]}"
       TOTAL=$((TOTAL + 1))
     fi
 
     if [ ${#REMOVE_ARGS[@]} -gt 0 ]; then
       echo "#$number: - ${REMOVE_ARGS[*]}"
       for lbl in "${REMOVE_ARGS[@]}"; do
-        api_call "repos/$REPO/issues/$number/labels/$lbl" \
+        api_call "repos/$REPO/issues/$number/labels/$(encode_label "$lbl")" \
           -X DELETE --silent
       done
     fi
