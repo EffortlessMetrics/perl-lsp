@@ -37,7 +37,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     init_logging(&args.log_level);
-    log_server_startup("perl-dap", env!("CARGO_PKG_VERSION"), args.transport.mode(), None);
+    log_server_startup("perl-dap", env!("CARGO_PKG_VERSION"), args.transport.mode(), None, None);
 
     let config = DapConfig {
         log_level: args.log_level,

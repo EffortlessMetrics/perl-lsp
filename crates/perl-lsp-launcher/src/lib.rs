@@ -14,6 +14,8 @@ use std::io::IsTerminal;
 use std::sync::{Once, OnceLock};
 
 use clap::{Args, Parser};
+pub mod timing;
+pub use timing::{StartupReport, StartupTimer};
 pub use perl_lsp_feature_governance::{
     FeatureProfile, catalog_advertised_feature_ids, compliance_percent_for_profile,
     to_json_for_profile, trackable_feature_count_for_grid,
@@ -121,11 +123,16 @@ pub fn init_logging(default_filter: &str) {
 }
 
 /// Emit a consistent startup log line for server binaries.
+///
+/// When a `startup_report` is provided, phase-level timing is logged at `debug`
+/// level and the total startup time at `info` level, enabling profiling without
+/// adding noise to normal output.
 pub fn log_server_startup(
     server_name: &str,
     version: &str,
     transport: TransportMode,
     feature_profile: Option<FeatureProfile>,
+    startup_report: Option<&StartupReport>,
 ) {
     tracing::info!(server = server_name, version, transport = transport.label(), "server starting");
 
@@ -141,6 +148,10 @@ pub fn log_server_startup(
             features = feature_count,
             "feature profile active"
         );
+    }
+
+    if let Some(report) = startup_report {
+        report.log();
     }
 }
 

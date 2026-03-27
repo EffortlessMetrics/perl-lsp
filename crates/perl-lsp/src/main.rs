@@ -12,7 +12,7 @@ use perl_lsp::LspServer;
 use perl_lsp_launcher::{
     LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
     init_logging, log_server_startup, logging_filter, parse_args, port_in_use_message,
-    shell_completion, should_enable_logging, startup_banner,
+    shell_completion, should_enable_logging, startup_banner, StartupTimer,
 };
 use std::env;
 use std::process;
@@ -306,6 +306,7 @@ fn categorize_error(msg: &str) -> String {
 }
 
 fn run_server(launch_config: LaunchConfig) {
+    let mut startup_timer = StartupTimer::new();
     let logging_enabled = should_enable_logging(launch_config.enable_logging);
     if logging_enabled {
         init_logging(&logging_filter(
@@ -318,8 +319,10 @@ fn run_server(launch_config: LaunchConfig) {
             env!("CARGO_PKG_VERSION"),
             launch_config.transport,
             Some(launch_config.feature_profile),
+            None, // startup report after construction
         );
     }
+    startup_timer.checkpoint("logging_init");
 
     // Unconditional process-start banner to stderr (suppressible via PERL_LSP_QUIET).
     // Fires before any LSP message so users know the binary launched.
@@ -342,12 +345,25 @@ fn run_server(launch_config: LaunchConfig) {
             };
 
             rt.block_on(async {
+                startup_timer.checkpoint("runtime_setup");
                 let server =
                     Arc::new(LspServer::new_with_feature_profile(launch_config.feature_profile));
+                startup_timer.checkpoint("server_construction");
 
                 // Spawn a blocking reader thread for stdin
                 let (tx, rx) = tokio::sync::mpsc::channel(64);
                 spawn_reader_thread(std::io::stdin(), tx);
+
+                if logging_enabled {
+                    let report = startup_timer.finish();
+                    log_server_startup(
+                        "perl-lsp",
+                        env!("CARGO_PKG_VERSION"),
+                        launch_config.transport,
+                        Some(launch_config.feature_profile),
+                        Some(&report),
+                    );
+                }
 
                 // Same async dispatch path as TCP
                 server.serve_async(rx).await;
@@ -422,13 +438,26 @@ fn run_server(launch_config: LaunchConfig) {
                                 ));
 
                                 // Create server, wrap in Arc for concurrent async dispatch
+                                let mut conn_timer = StartupTimer::new();
                                 let server = Arc::new(LspServer::with_output_and_feature_profile(
                                     output, profile,
                                 ));
+                                conn_timer.checkpoint("server_construction");
 
                                 // Spawn a blocking reader thread that feeds an async channel
                                 let (tx, rx) = tokio::sync::mpsc::channel(64);
                                 spawn_reader_thread(reader, tx);
+
+                                if logging_enabled {
+                                    let report = conn_timer.finish();
+                                    log_server_startup(
+                                        "perl-lsp",
+                                        env!("CARGO_PKG_VERSION"),
+                                        launch_config.transport,
+                                        Some(profile),
+                                        Some(&report),
+                                    );
+                                }
 
                                 // Run async serve loop with concurrent dispatch
                                 server.serve_async(rx).await;
