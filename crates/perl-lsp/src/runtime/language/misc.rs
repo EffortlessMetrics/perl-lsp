@@ -77,9 +77,7 @@ impl LspServer {
                     .map(|hint| {
                         let mut h = hint.clone();
                         if let Some(obj) = h.as_object_mut() {
-                            let data = obj
-                                .entry("data".to_string())
-                                .or_insert_with(|| json!({}));
+                            let data = obj.entry("data".to_string()).or_insert_with(|| json!({}));
                             if let Some(data_obj) = data.as_object_mut() {
                                 data_obj.insert("uri".to_string(), json!(uri));
                             }
@@ -133,9 +131,7 @@ impl LspServer {
                     .map(String::from)
                     .or_else(|| {
                         // Check for deferred tooltip embedded in data
-                        hint.pointer("/data/tooltip")
-                            .and_then(|v| v.as_str())
-                            .map(String::from)
+                        hint.pointer("/data/tooltip").and_then(|v| v.as_str()).map(String::from)
                     })
                     .unwrap_or_else(|| match kind {
                         1 => {
