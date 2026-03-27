@@ -11,7 +11,10 @@ import {
   buildLaunchJsonContent,
   hasLaunchJson,
   offerDebugConfigOnFirstPerlOpen,
+  parseDebugTestLaunchTarget,
   resetDebugConfigPromptFlag,
+  rewriteDebugTestLensCommand,
+  VSCODE_DEBUG_TEST_COMMAND,
 } from '../debugAdapter';
 
 // ---------------------------------------------------------------------------
@@ -216,6 +219,63 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     const result = factory.createDebugAdapterDescriptor({} as any, undefined) as any;
 
     expect(result.options.env.RUST_LOG).toBe('debug');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// debug test command wiring
+// ---------------------------------------------------------------------------
+describe('debug test command helpers', () => {
+  test('rewrites server debug-test code lenses to the VS Code command', () => {
+    const lens = {
+      command: {
+        title: 'Debug Test',
+        command: 'perl.debugTest',
+        arguments: ['file:///tmp/basic.t::test_basic'],
+      },
+    };
+
+    expect(rewriteDebugTestLensCommand(lens).command.command).toBe(VSCODE_DEBUG_TEST_COMMAND);
+  });
+
+  test('leaves unrelated code lenses unchanged', () => {
+    const lens = {
+      command: {
+        title: 'Run Test',
+        command: 'perl.runTest',
+      },
+    };
+
+    expect(rewriteDebugTestLensCommand(lens)).toEqual(lens);
+  });
+
+  test('parses a code-lens test id into a launch target', () => {
+    const fileUri = process.platform === 'win32' ? 'file:///C:/tmp/basic.t' : 'file:///tmp/basic.t';
+    const expectedProgram =
+      process.platform === 'win32' ? path.normalize('C:/tmp/basic.t') : '/tmp/basic.t';
+
+    expect(parseDebugTestLaunchTarget(`${fileUri}::test_basic`)).toEqual({
+      label: 'test_basic',
+      program: expectedProgram,
+      args: [],
+    });
+  });
+
+  test('parses a TestItem-like object into a launch target', () => {
+    expect(parseDebugTestLaunchTarget({
+      label: 'constructor',
+      uri: { fsPath: path.normalize('/workspace/t/basic.t') },
+      args: ['--verbose'],
+    })).toEqual({
+      label: 'constructor',
+      program: path.normalize('/workspace/t/basic.t'),
+      args: ['--verbose'],
+    });
+  });
+
+  test('returns undefined for an invalid debug target payload', () => {
+    expect(parseDebugTestLaunchTarget(null)).toBeUndefined();
+    expect(parseDebugTestLaunchTarget({ label: 'missing-uri' })).toBeUndefined();
   });
 });
 

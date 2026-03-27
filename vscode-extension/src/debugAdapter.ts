@@ -3,6 +3,15 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { BinaryDownloader } from './downloader';
 
+const SERVER_DEBUG_TEST_COMMAND = 'perl.debugTest';
+export const VSCODE_DEBUG_TEST_COMMAND = 'perl-lsp.debugTest';
+
+export interface DebugTestLaunchTarget {
+    label: string;
+    program: string;
+    args: string[];
+}
+
 // ---------------------------------------------------------------------------
 // Debug configuration wizard helpers (exported for unit testing)
 // ---------------------------------------------------------------------------
@@ -238,6 +247,102 @@ export function resetDebugConfigPromptFlag(): void {
     _debugConfigPromptShown = false;
 }
 
+export function rewriteDebugTestLensCommand<T extends { command?: { command?: string } }>(lens: T): T {
+    if (!lens.command || lens.command.command !== SERVER_DEBUG_TEST_COMMAND) {
+        return lens;
+    }
+
+    return {
+        ...lens,
+        command: {
+            ...lens.command,
+            command: VSCODE_DEBUG_TEST_COMMAND,
+        },
+    };
+}
+
+export function parseDebugTestLaunchTarget(test: unknown): DebugTestLaunchTarget | undefined {
+    if (typeof test === 'string') {
+        return parseDebugTestId(test);
+    }
+
+    if (!test || typeof test !== 'object') {
+        return undefined;
+    }
+
+    const candidate = test as {
+        id?: unknown;
+        label?: unknown;
+        uri?: { fsPath?: unknown };
+        args?: unknown;
+    };
+
+    if (typeof candidate.uri?.fsPath === 'string' && candidate.uri.fsPath.trim()) {
+        return {
+            label: typeof candidate.label === 'string' && candidate.label.trim()
+                ? candidate.label
+                : path.basename(candidate.uri.fsPath),
+            program: candidate.uri.fsPath,
+            args: normalizeDebugArgs(candidate.args),
+        };
+    }
+
+    if (typeof candidate.id === 'string') {
+        return parseDebugTestId(candidate.id);
+    }
+
+    return undefined;
+}
+
+function parseDebugTestId(testId: string): DebugTestLaunchTarget | undefined {
+    const trimmed = testId.trim();
+    if (!trimmed) {
+        return undefined;
+    }
+
+    const splitIndex = trimmed.lastIndexOf('::');
+    const fileOrUri = splitIndex >= 0 ? trimmed.slice(0, splitIndex) : trimmed;
+    const label = splitIndex >= 0 ? trimmed.slice(splitIndex + 2) : path.basename(fileOrUri);
+    const program = toFsPath(fileOrUri);
+
+    if (!program) {
+        return undefined;
+    }
+
+    return { label, program, args: [] };
+}
+
+function toFsPath(fileOrUri: string): string | undefined {
+    const trimmed = fileOrUri.trim();
+    if (!trimmed) {
+        return undefined;
+    }
+
+    if (!trimmed.startsWith('file:')) {
+        return trimmed;
+    }
+
+    try {
+        const url = new URL(trimmed);
+        const decodedPath = decodeURIComponent(url.pathname);
+        if (process.platform === 'win32') {
+            return decodedPath.replace(/^\/([A-Za-z]:)/, '$1').replace(/\//g, path.sep);
+        }
+        return decodedPath;
+    } catch {
+        const parsedUri = vscode.Uri.parse(trimmed);
+        return typeof parsedUri.fsPath === 'string' && parsedUri.fsPath.trim() ? parsedUri.fsPath : undefined;
+    }
+}
+
+function normalizeDebugArgs(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
 export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
     constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -435,17 +540,23 @@ export function activateDebugger(context: vscode.ExtensionContext) {
 
     // Register debug commands
     context.subscriptions.push(
-        vscode.commands.registerCommand('perl.debugTest', (test: any) => {
+        vscode.commands.registerCommand(VSCODE_DEBUG_TEST_COMMAND, (test: unknown) => {
+            const target = parseDebugTestLaunchTarget(test);
+            if (!target) {
+                void vscode.window.showErrorMessage('Unable to resolve the Perl test to debug.');
+                return undefined;
+            }
+
             const config: vscode.DebugConfiguration = {
                 type: 'perl',
-                name: `Debug ${test.label}`,
+                name: `Debug ${target.label}`,
                 request: 'launch',
-                program: test.uri.fsPath,
+                program: target.program,
                 stopOnEntry: false,
-                args: test.args || []
+                args: target.args
             };
 
-            vscode.debug.startDebugging(undefined, config);
+            return vscode.debug.startDebugging(undefined, config);
         })
     );
 

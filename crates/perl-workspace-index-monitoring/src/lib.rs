@@ -159,7 +159,7 @@ impl Default for IndexResourceLimits {
 /// Performance caps for workspace indexing operations.
 #[derive(Clone, Debug)]
 pub struct IndexPerformanceCaps {
-    /// Initial workspace scan budget in milliseconds (default: 100ms).
+    /// Initial workspace scan budget in milliseconds (default: 500ms).
     pub initial_scan_budget_ms: u64,
     /// Incremental update budget in milliseconds (default: 10ms).
     pub incremental_budget_ms: u64,
@@ -167,7 +167,7 @@ pub struct IndexPerformanceCaps {
 
 impl Default for IndexPerformanceCaps {
     fn default() -> Self {
-        Self { initial_scan_budget_ms: 100, incremental_budget_ms: 10 }
+        Self { initial_scan_budget_ms: 500, incremental_budget_ms: 10 }
     }
 }
 

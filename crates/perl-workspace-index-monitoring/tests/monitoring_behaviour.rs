@@ -109,7 +109,7 @@ fn test_resource_limits_defaults() {
 #[test]
 fn test_performance_caps_defaults() {
     let caps = IndexPerformanceCaps::default();
-    assert_eq!(caps.initial_scan_budget_ms, 100);
+    assert_eq!(caps.initial_scan_budget_ms, 500);
     assert_eq!(caps.incremental_budget_ms, 10);
 }
 

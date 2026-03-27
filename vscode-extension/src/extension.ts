@@ -10,7 +10,7 @@ import {
     Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger } from './debugAdapter';
+import { activateDebugger, rewriteDebugTestLensCommand } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
@@ -711,12 +711,12 @@ function createLanguageClient(serverPath: string): LanguageClient {
     const serverOptions: ServerOptions = {
         run: {
             command: serverPath,
-            args: getServerArgs(['--stdio']),
+            args: getLanguageServerLaunchArgs(false),
             transport: TransportKind.stdio
         },
         debug: {
             command: serverPath,
-            args: getServerArgs(['--stdio', '--log']),
+            args: getLanguageServerLaunchArgs(true),
             transport: TransportKind.stdio
         }
     };
@@ -735,6 +735,14 @@ function createLanguageClient(serverPath: string): LanguageClient {
         outputChannel,
         traceOutputChannel: outputChannel,
         middleware: {
+            provideCodeLenses: async (document, token, next) => {
+                const lenses = await next(document, token);
+                return lenses?.map(rewriteDebugTestLensCommand);
+            },
+            resolveCodeLens: async (codeLens, token, next) => {
+                const resolved = await next(codeLens, token);
+                return rewriteDebugTestLensCommand(resolved ?? codeLens);
+            },
             provideDocumentFormattingEdits: async (document, options, token, next) => {
                 try {
                     return await next(document, options, token);
@@ -867,6 +875,11 @@ function getServerArgs(baseArgs: string[]): string[] {
     }
 
     return [...baseArgs, `--feature-profile=${canonicalProfile}`];
+}
+
+export function getLanguageServerLaunchArgs(enableLogging: boolean): string[] {
+    const baseArgs = enableLogging ? ['--log'] : [];
+    return getServerArgs(baseArgs);
 }
 
 function normalizeFeatureProfile(rawProfile: string): string | null {

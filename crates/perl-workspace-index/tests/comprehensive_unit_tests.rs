@@ -1181,7 +1181,7 @@ fn test_index_coordinator_record_early_exit() {
 fn test_index_coordinator_performance_caps_default() {
     let coord = IndexCoordinator::new();
     let caps = coord.performance_caps();
-    assert_eq!(caps.initial_scan_budget_ms, 100);
+    assert_eq!(caps.initial_scan_budget_ms, 500);
     assert_eq!(caps.incremental_budget_ms, 10);
 }
 
