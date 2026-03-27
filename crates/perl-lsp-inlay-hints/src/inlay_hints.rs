@@ -313,16 +313,16 @@ pub fn trivial_type_hints(
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         let type_hint = match &node.kind {
-            NodeKind::Number { .. } => Some(("Num", Some("Numeric literal"))),
-            NodeKind::String { .. } => Some(("Str", Some("String literal"))),
-            NodeKind::HashLiteral { .. } => Some(("Hash", Some("Hash reference"))),
-            NodeKind::ArrayLiteral { .. } => Some(("Array", Some("Array reference"))),
-            NodeKind::Regex { .. } => Some(("Regex", Some("Regular expression"))),
+            NodeKind::Number { .. } => Some(("Num".to_string(), Some("Numeric literal"))),
+            NodeKind::String { .. } => Some(("Str".to_string(), Some("String literal"))),
+            NodeKind::HashLiteral { .. } => Some(("Hash".to_string(), Some("Hash reference"))),
+            NodeKind::ArrayLiteral { .. } => Some(("Array".to_string(), Some("Array reference"))),
+            NodeKind::Regex { .. } => Some(("Regex".to_string(), Some("Regular expression"))),
             NodeKind::Subroutine { name: None, .. } => {
-                Some(("CodeRef", Some("Anonymous subroutine (code reference)")))
+                Some(("CodeRef".to_string(), Some("Anonymous subroutine (code reference)")))
             }
             // Fall through to semantic type inference for non-literal nodes
-            _ => infer_semantic_type(node).map(|t| (t.as_str(), None)),
+            _ => infer_semantic_type(node).map(|t| (t, None)),
         };
 
         if let Some((hint, tooltip)) = type_hint {

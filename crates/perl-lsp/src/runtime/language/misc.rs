@@ -164,6 +164,7 @@ impl LspServer {
                             let func = hint
                                 .pointer("/data/functionName")
                                 .and_then(|v| v.as_str())
+                                .or_else(|| hint.pointer("/data/function").and_then(|v| v.as_str()))
                                 .unwrap_or("unknown");
                             format!("{}() — parameter: {}", func, param_name)
                         }
@@ -212,13 +213,21 @@ impl LspServer {
     fn resolve_hint_label_location(&self, hint: &Value) -> Option<Value> {
         let data = hint.get("data")?;
         let uri = data.get("uri").and_then(|u| u.as_str())?;
-        let function_name = data.get("functionName").and_then(|f| f.as_str())?;
+        let function_name = data
+            .get("functionName")
+            .and_then(|f| f.as_str())
+            .or_else(|| data.get("function").and_then(|f| f.as_str()))?;
+        let short_name = function_name.rsplit("::").next().unwrap_or(function_name);
 
         let documents = self.documents_guard();
         let doc = self.get_document(&documents, uri)?;
         let ast = doc.ast.as_ref()?;
 
-        let sub_node = Self::find_subroutine_node(ast, function_name)?;
+        let sub_node = Self::find_subroutine_node(ast, function_name).or_else(|| {
+            (short_name != function_name)
+                .then(|| Self::find_subroutine_node(ast, short_name))
+                .flatten()
+        })?;
         let (start_line, start_char) = self.offset_to_pos16(doc, sub_node.location.start);
         let (end_line, end_char) = self.offset_to_pos16(doc, sub_node.location.end);
 
@@ -233,13 +242,18 @@ impl LspServer {
 
     /// Walk the AST to find a top-level subroutine node with the given name.
     fn find_subroutine_node<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-        match &node.kind {
-            NodeKind::Subroutine { name: Some(sub_name), .. } if sub_name == name => Some(node),
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                statements.iter().find_map(|s| Self::find_subroutine_node(s, name))
-            }
-            _ => None,
+        if matches!(&node.kind, NodeKind::Subroutine { name: Some(sub_name), .. } if sub_name == name)
+        {
+            return Some(node);
         }
+
+        let mut found = None;
+        node.for_each_child(|child| {
+            if found.is_none() {
+                found = Self::find_subroutine_node(child, name);
+            }
+        });
+        found
     }
 
     /// Handle textDocument/documentLink request
