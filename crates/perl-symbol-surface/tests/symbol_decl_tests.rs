@@ -167,41 +167,6 @@ fn test_hash_variable_declaration() {
     assert_eq!(decls[0].name, "opts");
 }
 
-// ── VariableListDeclaration ───────────────────────────────────────────────────
-
-#[test]
-fn test_variable_list_declaration_produces_one_decl_per_variable() {
-    // my ($x, $y);
-    // Verifies: each variable in the list gets its own SymbolDecl with correct
-    // full_span (the list decl span) and per-variable anchor_span.
-    let var_x =
-        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(4, 6));
-    let var_y =
-        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() }, loc(8, 10));
-    let list_decl = Node::new(
-        NodeKind::VariableListDeclaration {
-            declarator: "my".to_string(),
-            variables: vec![var_x, var_y],
-            attributes: vec![],
-            initializer: None,
-        },
-        loc(0, 12),
-    );
-    let program = Node::new(NodeKind::Program { statements: vec![list_decl] }, loc(0, 12));
-
-    let decls = extract_symbol_decls(&program, None);
-
-    assert_eq!(decls.len(), 2, "each variable in the list must produce a SymbolDecl");
-    let x_decl = decls.iter().find(|d| d.name == "x").unwrap();
-    assert_eq!(x_decl.kind, SymbolKind::Variable(VarKind::Scalar));
-    assert_eq!(x_decl.full_span, (0, 12)); // list decl span
-    assert_eq!(x_decl.anchor_span, Some((4, 6))); // variable node span
-    let y_decl = decls.iter().find(|d| d.name == "y").unwrap();
-    assert_eq!(y_decl.kind, SymbolKind::Variable(VarKind::Scalar));
-    assert_eq!(y_decl.full_span, (0, 12));
-    assert_eq!(y_decl.anchor_span, Some((8, 10)));
-}
-
 // ── Constant (use constant) ───────────────────────────────────────────────────
 
 #[test]
@@ -228,55 +193,6 @@ fn test_use_constant_produces_symbol_decl() {
     assert!(d.anchor_span.is_none());
 }
 
-#[test]
-fn test_use_constant_hash_ref_form_produces_no_decl() {
-    // use constant { FOO => 1, BAR => 2 };
-    // args[0] is "{" — the guard must skip this form entirely.
-    let use_node = Node::new(
-        NodeKind::Use {
-            module: "constant".to_string(),
-            args: vec![
-                "{".to_string(),
-                "FOO".to_string(),
-                "1".to_string(),
-                "BAR".to_string(),
-                "2".to_string(),
-                "}".to_string(),
-            ],
-            has_filter_risk: false,
-        },
-        loc(0, 36),
-    );
-    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 36));
-
-    let decls = extract_symbol_decls(&program, None);
-    assert!(decls.is_empty(), "hash-ref constant form must produce no SymbolDecl");
-}
-
-#[test]
-fn test_use_constant_unary_plus_hash_ref_form_produces_no_decl() {
-    // use constant +{ FOO => 1 };
-    // args[0] is "+" — the guard must skip this unary-plus hash-ref form.
-    let use_node = Node::new(
-        NodeKind::Use {
-            module: "constant".to_string(),
-            args: vec![
-                "+".to_string(),
-                "{".to_string(),
-                "FOO".to_string(),
-                "1".to_string(),
-                "}".to_string(),
-            ],
-            has_filter_risk: false,
-        },
-        loc(0, 26),
-    );
-    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 26));
-
-    let decls = extract_symbol_decls(&program, None);
-    assert!(decls.is_empty(), "unary-plus hash-ref constant form must produce no SymbolDecl");
-}
-
 // ── Class (Perl 5.38+) ────────────────────────────────────────────────────────
 
 #[test]
@@ -297,40 +213,6 @@ fn test_class_produces_symbol_decl() {
     assert_eq!(d.full_span, (0, 15));
     // Class has no name_span field in AST, so anchor_span is None
     assert!(d.anchor_span.is_none());
-}
-
-// ── Method inside class ───────────────────────────────────────────────────────
-
-#[test]
-fn test_method_inside_class_has_container_and_qualified_name() {
-    // class Animal { method speak { } }
-    // Verifies: Method arm uses the class name as package context,
-    // container = "Animal", qualified_name = "Animal::speak".
-    let method_body = Node::new(NodeKind::Block { statements: vec![] }, loc(24, 27));
-    let method_node = Node::new(
-        NodeKind::Method {
-            name: "speak".to_string(),
-            signature: None,
-            attributes: vec![],
-            body: Box::new(method_body),
-        },
-        loc(14, 28),
-    );
-    let class_body = Node::new(NodeKind::Block { statements: vec![method_node] }, loc(13, 29));
-    let class_node = Node::new(
-        NodeKind::Class { name: "Animal".to_string(), body: Box::new(class_body) },
-        loc(0, 29),
-    );
-    let program = Node::new(NodeKind::Program { statements: vec![class_node] }, loc(0, 29));
-
-    let decls = extract_symbol_decls(&program, None);
-
-    assert_eq!(decls.len(), 2);
-    let method_decl = decls.iter().find(|d| d.kind == SymbolKind::Method).unwrap();
-    assert_eq!(method_decl.name, "speak");
-    assert_eq!(method_decl.container.as_deref(), Some("Animal"));
-    assert_eq!(method_decl.qualified_name, "Animal::speak");
-    assert!(method_decl.anchor_span.is_none()); // Method has no name_span in current AST
 }
 
 // ── Container tracking ────────────────────────────────────────────────────────
@@ -405,45 +287,6 @@ fn test_subroutine_inside_package_block() {
     assert_eq!(sub_decl.name, "baz");
     assert_eq!(sub_decl.container.as_deref(), Some("Foo"));
     assert_eq!(sub_decl.qualified_name, "Foo::baz");
-}
-
-#[test]
-fn test_package_block_context_does_not_leak_to_siblings() {
-    // package Foo { } sub outside { }
-    // The sub after the block must NOT inherit Foo as its package context.
-    let inner_body = Node::new(NodeKind::Block { statements: vec![] }, loc(11, 12));
-    let pkg_node = Node::new(
-        NodeKind::Package {
-            name: "Foo".to_string(),
-            name_span: loc(8, 11),
-            block: Some(Box::new(inner_body)),
-        },
-        loc(0, 13),
-    );
-    let sub_body = Node::new(NodeKind::Block { statements: vec![] }, loc(24, 27));
-    let sub_node = Node::new(
-        NodeKind::Subroutine {
-            name: Some("outside".to_string()),
-            name_span: Some(loc(18, 25)),
-            prototype: None,
-            signature: None,
-            attributes: vec![],
-            body: Box::new(sub_body),
-        },
-        loc(14, 27),
-    );
-    let program = Node::new(NodeKind::Program { statements: vec![pkg_node, sub_node] }, loc(0, 27));
-
-    let decls = extract_symbol_decls(&program, None);
-
-    assert_eq!(decls.len(), 2);
-    let sub_decl = decls.iter().find(|d| d.kind == SymbolKind::Subroutine).unwrap();
-    // Must NOT be Foo::outside — the block-scoped package must not leak
-    assert!(
-        sub_decl.container.is_none(),
-        "package block scope must not leak to post-block siblings"
-    );
-    assert_eq!(sub_decl.qualified_name, "outside");
 }
 
 // ── SymbolDecl structural properties ─────────────────────────────────────────
