@@ -2160,6 +2160,7 @@ dependencies = [
  "perl-position-tracking",
  "perl-semantic-analyzer",
  "perl-tdd-support",
+ "serde",
  "serde_json",
 ]
 

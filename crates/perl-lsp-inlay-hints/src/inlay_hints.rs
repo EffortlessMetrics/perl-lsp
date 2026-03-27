@@ -47,6 +47,19 @@ pub struct InlayHint {
     pub padding_left: bool,
     /// Padding on the right
     pub padding_right: bool,
+    /// Optional tooltip (deferred to resolve)
+    pub tooltip: Option<String>,
+    /// Optional source location for jump-to-definition from hint label
+    pub location: Option<HintLocation>,
+}
+
+/// Source location attached to a hint for label.location support (LSP 3.17).
+#[derive(Debug, Clone)]
+pub struct HintLocation {
+    /// Document URI
+    pub uri: String,
+    /// Byte range of the target symbol in the source document
+    pub range: (usize, usize),
 }
 
 /// Inlay hints provider.
@@ -87,6 +100,7 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
+                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| s.to_string());
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -96,6 +110,8 @@ impl InlayHintsProvider {
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
+                    tooltip,
+                    location: None,
                 })
             })
             .collect()
@@ -117,6 +133,7 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
+                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| s.to_string());
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -126,6 +143,8 @@ impl InlayHintsProvider {
                     kind,
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
+                    tooltip,
+                    location: None,
                 })
             })
             .collect()
@@ -239,13 +258,27 @@ pub fn parameter_hints(
                         }
                     }
 
-                    out.push(json!({
+                    // Phase 1: embed function name and param index in data for
+                    // later label.location resolution via inlayHint/resolve.
+                    let mut hint = json!({
                         "position": { "line": l, "character": c },
                         "label": format!("{}:", param_names[i]),
                         "kind": 2, // parameter
                         "paddingLeft": false,
-                        "paddingRight": true
-                    }));
+                        "paddingRight": true,
+                        "data": {
+                            "functionName": name.as_str(),
+                            "paramIndex": i,
+                        }
+                    });
+
+                    // Phase 3: embed perldoc summary for tooltip resolution.
+                    // The resolver will pick this up when the client requests it.
+                    if let Some(doc) = builtin_doc_summary(name.as_str(), &param_names[i], i) {
+                        hint["data"]["docSummary"] = json!(doc);
+                    }
+
+                    out.push(hint);
                 }
             }
         }
@@ -276,16 +309,19 @@ pub fn trivial_type_hints(
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         let type_hint = match &node.kind {
-            NodeKind::Number { .. } => Some("Num"),
-            NodeKind::String { .. } => Some("Str"),
-            NodeKind::HashLiteral { .. } => Some("Hash"),
-            NodeKind::ArrayLiteral { .. } => Some("Array"),
-            NodeKind::Regex { .. } => Some("Regex"),
-            NodeKind::Subroutine { name: None, .. } => Some("CodeRef"),
-            _ => None,
+            NodeKind::Number { .. } => Some(("Num".to_string(), Some("Numeric literal"))),
+            NodeKind::String { .. } => Some(("Str".to_string(), Some("String literal"))),
+            NodeKind::HashLiteral { .. } => Some(("Hash".to_string(), Some("Hash reference"))),
+            NodeKind::ArrayLiteral { .. } => Some(("Array".to_string(), Some("Array reference"))),
+            NodeKind::Regex { .. } => Some(("Regex".to_string(), Some("Regular expression"))),
+            NodeKind::Subroutine { name: None, .. } => {
+                Some(("CodeRef".to_string(), Some("Anonymous subroutine (code reference)")))
+            }
+            // Fall through to semantic type inference for non-literal nodes
+            _ => infer_semantic_type(node).map(|t| (t, None)),
         };
 
-        if let Some(hint) = type_hint {
+        if let Some((hint, tooltip)) = type_hint {
             let (l, c) = to_pos16(node.location.end);
 
             // Filter by range if specified
@@ -296,17 +332,140 @@ pub fn trivial_type_hints(
                 }
             }
 
-            out.push(json!({
+            let mut val = json!({
                 "position": {"line": l, "character": c},
                 "label": format!(": {}", hint),
                 "kind": 1, // type
                 "paddingLeft": true,
                 "paddingRight": false
-            }));
+            });
+
+            // Phase 3: embed tooltip text for deferred resolution
+            if let Some(tt) = tooltip {
+                val["data"] = json!({ "tooltip": tt });
+            }
+
+            out.push(val);
         }
         true
     });
     out
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Semantic type inference
+// ---------------------------------------------------------------------------
+
+/// Infers a semantic type label for an expression node.
+///
+/// Goes beyond trivial literal detection by examining context:
+/// - Scalar variables assigned from known-return-type functions
+/// - Array/hash from builtins like `keys`, `values`, `split`
+/// - Blessed references from `new` / `bless` calls
+/// - Filehandle operations
+///
+/// Returns `None` when the type cannot be determined.
+pub fn infer_semantic_type(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::FunctionCall { name, .. } => function_return_type(name),
+        NodeKind::MethodCall { method, .. } => method_return_type(method),
+        NodeKind::Variable { name, sigil } => {
+            // Infer from common naming conventions
+            match (sigil.as_str(), name.as_str()) {
+                ("$", _) if name.ends_with("_fh") || name.ends_with("_handle") => {
+                    Some("FileHandle".to_string())
+                }
+                ("$", _) if name.ends_with("_ref") => Some("Ref".to_string()),
+                ("@", _) if name.ends_with("_nums") => Some("@Nums".to_string()),
+                ("@", _) if name.ends_with("_strs") => Some("@Strs".to_string()),
+                ("@", _) if name.ends_with("_lines") => Some("@Lines".to_string()),
+                ("%", _) => Some("Hash".to_string()),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Return type for known builtin functions.
+fn function_return_type(name: &str) -> Option<String> {
+    match name {
+        "open" => Some("Bool|FileHandle".to_string()),
+        "split" => Some("@Str".to_string()),
+        "join" => Some("Str".to_string()),
+        "keys" | "values" | "each" => Some("List".to_string()),
+        "map" | "grep" => Some("@List".to_string()),
+        "sort" => Some("@Sorted".to_string()),
+        "reverse" => Some("@List|Str".to_string()),
+        "scalar" => Some("Scalar".to_string()),
+        "ref" => Some("Str|Undef".to_string()),
+        "bless" => Some("Object".to_string()),
+        "stat" | "lstat" => Some("@Stat".to_string()),
+        "localtime" | "gmtime" => Some("@Time|Str".to_string()),
+        "caller" => Some("@Caller|Hash".to_string()),
+        "wantarray" => Some("Bool|Undef".to_string()),
+        "defined" => Some("Bool".to_string()),
+        "length" | "index" | "rindex" | "substr" => Some("Int".to_string()),
+        "abs" | "int" | "sqrt" | "exp" | "log" | "cos" | "sin" => Some("Num".to_string()),
+        "chr" => Some("Str".to_string()),
+        "ord" => Some("Int".to_string()),
+        "uc" | "lc" | "ucfirst" | "lcfirst" => Some("Str".to_string()),
+        "pack" => Some("Str".to_string()),
+        "unpack" => Some("@Mixed".to_string()),
+        _ => None,
+    }
+}
+
+/// Return type for known method calls.
+fn method_return_type(method: &str) -> Option<String> {
+    match method {
+        "new" => Some("Object".to_string()),
+        "count" | "size" | "length" => Some("Int".to_string()),
+        "push" | "unshift" | "splice" => Some("Int".to_string()),
+        "pop" | "shift" => Some("Scalar".to_string()),
+        "keys" | "values" => Some("@List".to_string()),
+        "exists" | "defined" => Some("Bool".to_string()),
+        "delete" => Some("Scalar".to_string()),
+        "fetch" | "get" => Some("Scalar".to_string()),
+        "put" | "set" | "store" => Some("Undef".to_string()),
+        "find" | "search" => Some("@Results|Undef".to_string()),
+        "first" | "next" => Some("Scalar|Undef".to_string()),
+        "all" => Some("@All".to_string()),
+        "each" | "iterator" => Some("Iterator".to_string()),
+        "isa" => Some("Bool".to_string()),
+        "can" => Some("CodeRef|Undef".to_string()),
+        "clone" => Some("Object".to_string()),
+        "to_string" | "as_string" | "stringify" => Some("Str".to_string()),
+        "to_array" | "as_array" | "elements" => Some("@Array".to_string()),
+        "to_hash" | "as_hash" => Some("%Hash".to_string()),
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: Documentation integration
+// ---------------------------------------------------------------------------
+
+/// Returns a short perldoc-style summary for a builtin function parameter.
+///
+/// Looks up the builtin's documentation from `perl_builtins::builtin_signatures`
+/// rather than maintaining a hardcoded list. Falls back to `None` for unknown
+/// builtins or parameters.
+fn builtin_doc_summary(function: &str, param: &str, _param_index: usize) -> Option<String> {
+    let sigs = create_builtin_signatures();
+    let builtin = sigs.get(function)?;
+    // Use the first signature variant to extract param names and match
+    // against the requested parameter.
+    if let Some(first_sig) = builtin.signatures.first() {
+        let param_names = extract_param_names(first_sig);
+        if param_names.contains(&param.to_string()) {
+            // Return the builtin's documentation as the summary.
+            // The full doc covers the function; callers can truncate or
+            // format it as needed.
+            return Some(builtin.documentation.to_string());
+        }
+    }
+    None
 }
 
 fn walk_ast<F>(node: &Node, visitor: &mut F) -> bool

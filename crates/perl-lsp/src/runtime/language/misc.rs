@@ -34,6 +34,12 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         use crate::protocol::req_range;
+
+        // Return empty if client does not support inlay hints.
+        if !self.client_capabilities.lock().inlay_hint_support {
+            return Ok(Some(json!([])));
+        }
+
         let cap = inlay_hints_cap();
 
         if let Some(p) = params {
@@ -69,19 +75,18 @@ impl LspServer {
                     range,
                 ));
 
-                // Add data field to hints for later resolution
-                // This enables deferred tooltip computation
+                // Add URI to hint data for later resolution.
+                // Merge with any existing data (e.g. functionName/paramIndex from
+                // the hints provider) rather than overwriting it.
                 let enriched_hints: Vec<Value> = hints
                     .iter()
                     .map(|hint| {
                         let mut h = hint.clone();
                         if let Some(obj) = h.as_object_mut() {
-                            obj.insert(
-                                "data".to_string(),
-                                json!({
-                                    "uri": uri
-                                }),
-                            );
+                            let data = obj.entry("data".to_string()).or_insert_with(|| json!({}));
+                            if let Some(data_obj) = data.as_object_mut() {
+                                data_obj.insert("uri".to_string(), json!(uri));
+                            }
                         }
                         h
                     })
@@ -122,33 +127,49 @@ impl LspServer {
             let label = hint.get("label").and_then(|l| l.as_str()).unwrap_or("").to_string();
             let kind = hint.get("kind").and_then(|k| k.as_u64()).unwrap_or(0);
 
-            // Add tooltip if not already present
+            // Add tooltip if not already present.
+            // Prefer documentation summary from hint data (Phase 3);
+            // fall back to generic tooltip generation.
             if hint.get("tooltip").is_none() {
-                let tooltip = match kind {
-                    1 => {
-                        // Type hint
-                        if label.contains("Str") {
-                            "String value".to_string()
-                        } else if label.contains("Num") {
-                            "Numeric value".to_string()
-                        } else if label.contains("Array") || label.contains("ARRAY") {
-                            "Array reference".to_string()
-                        } else if label.contains("Hash") || label.contains("HASH") {
-                            "Hash reference".to_string()
-                        } else if label.contains("Regex") {
-                            "Regular expression".to_string()
-                        } else if label.contains("CodeRef") {
-                            "Code reference (anonymous subroutine)".to_string()
-                        } else {
-                            "Type annotation".to_string()
+                let tooltip = hint
+                    .pointer("/data/docSummary")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+                    .or_else(|| {
+                        // Check for deferred tooltip embedded in data
+                        hint.pointer("/data/tooltip").and_then(|v| v.as_str()).map(String::from)
+                    })
+                    .unwrap_or_else(|| match kind {
+                        1 => {
+                            // Type hint
+                            if label.contains("Str") {
+                                "String value".to_string()
+                            } else if label.contains("Num") {
+                                "Numeric value".to_string()
+                            } else if label.contains("Array") || label.contains("ARRAY") {
+                                "Array reference".to_string()
+                            } else if label.contains("Hash") || label.contains("HASH") {
+                                "Hash reference".to_string()
+                            } else if label.contains("Regex") {
+                                "Regular expression".to_string()
+                            } else if label.contains("CodeRef") {
+                                "Code reference (anonymous subroutine)".to_string()
+                            } else {
+                                "Type annotation".to_string()
+                            }
                         }
-                    }
-                    2 => {
-                        let param_name = label.trim_end_matches(':').trim();
-                        format!("Parameter: {}", param_name)
-                    }
-                    _ => "Inlay hint".to_string(),
-                };
+                        2 => {
+                            let param_name = label.trim_end_matches(':').trim();
+                            // Include the function name in the tooltip when available
+                            let func = hint
+                                .pointer("/data/functionName")
+                                .and_then(|v| v.as_str())
+                                .or_else(|| hint.pointer("/data/function").and_then(|v| v.as_str()))
+                                .unwrap_or("unknown");
+                            format!("{}() — parameter: {}", func, param_name)
+                        }
+                        _ => "Inlay hint".to_string(),
+                    });
                 if let Some(obj) = hint.as_object_mut() {
                     obj.insert("tooltip".to_string(), json!(tooltip));
                 }
@@ -192,13 +213,21 @@ impl LspServer {
     fn resolve_hint_label_location(&self, hint: &Value) -> Option<Value> {
         let data = hint.get("data")?;
         let uri = data.get("uri").and_then(|u| u.as_str())?;
-        let function_name = data.get("function").and_then(|f| f.as_str())?;
+        let function_name = data
+            .get("functionName")
+            .and_then(|f| f.as_str())
+            .or_else(|| data.get("function").and_then(|f| f.as_str()))?;
+        let short_name = function_name.rsplit("::").next().unwrap_or(function_name);
 
         let documents = self.documents_guard();
         let doc = self.get_document(&documents, uri)?;
         let ast = doc.ast.as_ref()?;
 
-        let sub_node = Self::find_subroutine_node(ast, function_name)?;
+        let sub_node = Self::find_subroutine_node(ast, function_name).or_else(|| {
+            (short_name != function_name)
+                .then(|| Self::find_subroutine_node(ast, short_name))
+                .flatten()
+        })?;
         let (start_line, start_char) = self.offset_to_pos16(doc, sub_node.location.start);
         let (end_line, end_char) = self.offset_to_pos16(doc, sub_node.location.end);
 
@@ -213,13 +242,18 @@ impl LspServer {
 
     /// Walk the AST to find a top-level subroutine node with the given name.
     fn find_subroutine_node<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-        match &node.kind {
-            NodeKind::Subroutine { name: Some(sub_name), .. } if sub_name == name => Some(node),
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                statements.iter().find_map(|s| Self::find_subroutine_node(s, name))
-            }
-            _ => None,
+        if matches!(&node.kind, NodeKind::Subroutine { name: Some(sub_name), .. } if sub_name == name)
+        {
+            return Some(node);
         }
+
+        let mut found = None;
+        node.for_each_child(|child| {
+            if found.is_none() {
+                found = Self::find_subroutine_node(child, name);
+            }
+        });
+        found
     }
 
     /// Handle textDocument/documentLink request
@@ -1550,7 +1584,7 @@ mod tests {
     /// handle_inlay_hint_resolve must include labelDetails in the response for
     /// a parameter hint (kind=2) that has no function data to resolve.
     ///
-    /// In this test the hint has no `data.function` so `resolve_hint_label_location`
+    /// In this test the hint has no `data.functionName` so `resolve_hint_label_location`
     /// returns None — but the important thing is that the code path is entered
     /// (i.e. no labelDetails are injected when there is nothing to look up, and
     /// no panic occurs).

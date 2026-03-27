@@ -111,6 +111,12 @@ impl LspServer {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
 
+                    // textDocument/inlayHint
+                    caps.inlay_hint_support = cap_val
+                        .pointer("/textDocument/inlayHint/staticRegistration")
+                        .or_else(|| cap_val.pointer("/textDocument/inlayHint"))
+                        .is_some();
+
                     // workspace/inlineValue/refresh
                     caps.inline_value_refresh_support = cap_val
                         .pointer("/workspace/inlineValue/refreshSupport")
