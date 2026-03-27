@@ -415,11 +415,8 @@ mod tests {
     fn all_feature_ids_have_match_arm() {
         let all_ids = BuildFlags::all().to_feature_ids();
         for id in &all_ids {
-            // Apply each ID to a fresh all-true set; if it's unknown it won't zero anything
             let mut before = BuildFlags::all();
             apply_disabled_feature_id(&mut before, id);
-            // After applying, the flags should differ from BuildFlags::all()
-            // (i.e. some field was zeroed — not treated as unknown)
             let still_all = before == BuildFlags::all();
             assert!(
                 !still_all,

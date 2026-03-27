@@ -28,7 +28,7 @@ fn test_disabled_features_removes_semantic_tokens_from_caps() -> TestResult {
     Ok(())
 }
 
-/// Unknown feature IDs must be silently ignored — the server must still initialize
+/// Unknown feature IDs must be silently ignored - the server must still initialize
 /// and must not accidentally disable valid features.
 #[test]
 fn test_disabled_features_unknown_id_is_tolerated() -> TestResult {
@@ -38,10 +38,14 @@ fn test_disabled_features_unknown_id_is_tolerated() -> TestResult {
         json!({ "disabledFeatures": ["lsp.does_not_exist", "semanticTokens"] }),
     )?;
     let caps = &result["capabilities"];
-    // "semanticTokens" (without lsp. prefix) is not a valid ID — semantic tokens must remain.
+    // "semanticTokens" (without lsp. prefix) is not a valid ID - semantic tokens must remain.
     assert!(
         caps.get("semanticTokensProvider").is_some(),
         "semanticTokensProvider must still be present when only unknown IDs are given"
+    );
+    assert!(
+        result["capabilities"].is_object(),
+        "Server must initialize successfully when unknown feature IDs are given"
     );
     Ok(())
 }
