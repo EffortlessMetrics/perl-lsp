@@ -734,7 +734,6 @@ function createLanguageClient(serverPath: string): LanguageClient {
         },
         outputChannel,
         traceOutputChannel: outputChannel,
-<<<<<<< HEAD
         middleware: {
             provideDocumentFormattingEdits: async (document, options, token, next) => {
                 try {
@@ -770,8 +769,6 @@ function createLanguageClient(serverPath: string): LanguageClient {
                 next(token, params);
             },
         },
-=======
->>>>>>> c8dfb28b (feat(lsp): per-feature user disable via initializationOptions.disabledFeatures (#2170))
         initializationOptions: {
             disabledFeatures,
         },
