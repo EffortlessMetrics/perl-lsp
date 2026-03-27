@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{route_index_access, IndexAccessMode};
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
