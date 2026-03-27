@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
@@ -56,6 +56,8 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
+                    let needle = token_under_cursor(&doc.text, line as usize, character as usize)
+                        .unwrap_or_default();
 
                     // Check index state and use appropriate search strategy
                     #[cfg(feature = "workspace")]
@@ -364,6 +366,18 @@ impl LspServer {
                             }
                             IndexAccessMode::Partial(reason) => {
                                 eprintln!("References: {}, using same-file fallback", reason);
+                                if !needle.is_empty() {
+                                    let open_doc_locations =
+                                        self.search_open_document_references(&needle, cap);
+                                    if !open_doc_locations.is_empty() {
+                                        eprintln!(
+                                            "References: returned {} open-document results (elapsed {:?})",
+                                            open_doc_locations.len(),
+                                            start.elapsed()
+                                        );
+                                        return Ok(Some(json!(open_doc_locations)));
+                                    }
+                                }
                                 // Fall through to same-file semantic analysis
                             }
                             IndexAccessMode::None => {
@@ -415,6 +429,66 @@ impl LspServer {
         }
 
         Ok(Some(json!([])))
+    }
+
+    /// Search open documents for references to a token using word-boundary matching.
+    #[cfg(feature = "workspace")]
+    fn search_open_document_references(&self, needle: &str, cap: usize) -> Vec<Value> {
+        if needle.is_empty() {
+            return Vec::new();
+        }
+
+        let needle_bytes = needle.as_bytes();
+        let mut out = Vec::new();
+
+        for (doc_uri, doc_text) in self.iter_open_buffers() {
+            if out.len() >= cap {
+                break;
+            }
+
+            for (line_num, line) in doc_text.lines().enumerate() {
+                let line_bytes = line.as_bytes();
+                let mut start = 0usize;
+                while let Some(idx) = line[start..].find(needle) {
+                    let byte_pos = start + idx;
+                    if is_word_boundary(line_bytes, byte_pos, needle_bytes.len()) {
+                        let start_utf16 = byte_to_utf16_col(line, byte_pos);
+                        let end_utf16 = byte_to_utf16_col(line, byte_pos + needle_bytes.len());
+                        out.push(json!({
+                            "uri": doc_uri,
+                            "range": {
+                                "start": {
+                                    "line": line_num,
+                                    "character": start_utf16,
+                                },
+                                "end": {
+                                    "line": line_num,
+                                    "character": end_utf16,
+                                },
+                            },
+                        }));
+                        if out.len() >= cap {
+                            break;
+                        }
+                    }
+                    start = byte_pos + needle_bytes.len();
+                }
+                if out.len() >= cap {
+                    break;
+                }
+            }
+        }
+
+        out.sort_by_key(|loc| {
+            (
+                loc["uri"].as_str().unwrap_or("").to_string(),
+                loc["range"]["start"]["line"].as_u64().unwrap_or(0),
+                loc["range"]["start"]["character"].as_u64().unwrap_or(0),
+            )
+        });
+        out.dedup();
+        out.truncate(cap);
+        out
     }
 
     /// Handle textDocument/documentHighlight request
