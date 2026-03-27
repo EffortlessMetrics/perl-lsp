@@ -100,10 +100,7 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v
-                    .get("tooltip")
-                    .and_then(|t| t.as_str())
-                    .map(|s| InlayHintTooltip::String(s.to_string()));
+                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| s.to_string());
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -114,6 +111,7 @@ impl InlayHintsProvider {
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
                     tooltip,
+                    location: None,
                 })
             })
             .collect()
@@ -135,10 +133,7 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v
-                    .get("tooltip")
-                    .and_then(|t| t.as_str())
-                    .map(|s| InlayHintTooltip::String(s.to_string()));
+                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| s.to_string());
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -149,6 +144,7 @@ impl InlayHintsProvider {
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
                     tooltip,
+                    location: None,
                 })
             })
             .collect()
