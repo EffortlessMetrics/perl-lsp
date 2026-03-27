@@ -54,11 +54,7 @@ impl CallHierarchyProvider {
     }
 
     fn node_variable_name<'a>(node: &'a Node) -> Option<&'a str> {
-        if let NodeKind::Variable { name, .. } = &node.kind {
-            Some(name.as_str())
-        } else {
-            None
-        }
+        if let NodeKind::Variable { name, .. } = &node.kind { Some(name.as_str()) } else { None }
     }
 
     fn current_package_for_function(
@@ -66,21 +62,24 @@ impl CallHierarchyProvider {
         func_node: &Node,
         item: &CallHierarchyItem,
     ) -> Option<String> {
-        item.package_name.clone().or_else(|| {
-            item.qualified_name.as_deref().and_then(|qualified| {
-                qualified.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
-            })
-        }).or_else(|| {
-            self.source.get(..func_node.location.start).and_then(|prefix| {
-                prefix.lines().rev().find_map(|line| {
-                    let line = line.trim();
-                    line.strip_prefix("package ")
-                        .map(|rest| rest.trim_end_matches(';').trim())
-                        .filter(|package_name| !package_name.is_empty())
-                        .map(|package_name| package_name.to_string())
+        item.package_name
+            .clone()
+            .or_else(|| {
+                item.qualified_name.as_deref().and_then(|qualified| {
+                    qualified.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
                 })
             })
-        })
+            .or_else(|| {
+                self.source.get(..func_node.location.start).and_then(|prefix| {
+                    prefix.lines().rev().find_map(|line| {
+                        let line = line.trim();
+                        line.strip_prefix("package ")
+                            .map(|rest| rest.trim_end_matches(';').trim())
+                            .filter(|package_name| !package_name.is_empty())
+                            .map(|package_name| package_name.to_string())
+                    })
+                })
+            })
     }
 
     fn infer_receiver_package(
@@ -426,10 +425,10 @@ impl CallHierarchyProvider {
                     None
                 };
 
-                let package_name = self.infer_receiver_package(object, current_package, receiver_packages);
-                let qualified_name = package_name
-                    .as_ref()
-                    .map(|package_name| format!("{package_name}::{method}"));
+                let package_name =
+                    self.infer_receiver_package(object, current_package, receiver_packages);
+                let qualified_name =
+                    package_name.as_ref().map(|package_name| format!("{package_name}::{method}"));
 
                 let item = CallHierarchyItem {
                     name: method.clone(),
