@@ -1113,8 +1113,142 @@ impl<'a> DeclarationProvider<'a> {
 /// }
 /// ```
 pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<SymbolKey> {
-    // For now, find the node at offset manually by walking the tree
-    let node = find_node_at_offset(ast, offset)?;
+    fn collect_node_path_at_offset<'a>(
+        node: &'a Node,
+        offset: usize,
+        path: &mut Vec<&'a Node>,
+    ) -> bool {
+        if offset < node.location.start || offset > node.location.end {
+            return false;
+        }
+
+        path.push(node);
+
+        for child in get_node_children(node) {
+            if collect_node_path_at_offset(child, offset, path) {
+                return true;
+            }
+        }
+
+        true
+    }
+
+    fn find_symbol_node_at_offset(ast: &Node, offset: usize) -> Option<&Node> {
+        let mut path = Vec::new();
+        if !collect_node_path_at_offset(ast, offset, &mut path) {
+            return None;
+        }
+
+        path.iter()
+            .rev()
+            .copied()
+            .find(|node| {
+                matches!(
+                    node.kind,
+                    NodeKind::Variable { .. }
+                        | NodeKind::FunctionCall { .. }
+                        | NodeKind::Subroutine { .. }
+                        | NodeKind::MethodCall { .. }
+                        | NodeKind::Use { .. }
+                )
+            })
+            .or_else(|| path.last().copied())
+    }
+
+    fn node_variable_name(node: &Node) -> Option<&str> {
+        if let NodeKind::Variable { name, .. } = &node.kind { Some(name.as_str()) } else { None }
+    }
+
+    fn looks_like_package_name(name: &str) -> bool {
+        name.contains("::") || name.chars().next().is_some_and(|ch| ch.is_ascii_uppercase())
+    }
+
+    fn infer_receiver_package(
+        object: &Node,
+        current_pkg: &str,
+        receiver_packages: &std::collections::HashMap<String, String>,
+    ) -> Option<String> {
+        if let NodeKind::Identifier { name } = &object.kind {
+            return Some(name.clone());
+        }
+
+        if let Some(name) = node_variable_name(object) {
+            if let Some(package_name) = receiver_packages.get(name) {
+                return Some(package_name.clone());
+            }
+
+            if matches!(name, "self" | "this" | "class") {
+                return Some(current_pkg.to_string());
+            }
+
+            if looks_like_package_name(name) {
+                return Some(name.to_string());
+            }
+        }
+
+        None
+    }
+
+    fn infer_constructor_package(
+        rhs: &Node,
+        current_pkg: &str,
+        receiver_packages: &std::collections::HashMap<String, String>,
+    ) -> Option<String> {
+        match &rhs.kind {
+            NodeKind::MethodCall { method, object, .. } if method == "new" => {
+                infer_receiver_package(object, current_pkg, receiver_packages)
+            }
+            NodeKind::FunctionCall { name, .. } => {
+                name.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
+            }
+            _ => None,
+        }
+    }
+
+    fn record_receiver_assignment(
+        node: &Node,
+        offset: usize,
+        current_pkg: &str,
+        receiver_packages: &mut std::collections::HashMap<String, String>,
+    ) {
+        if node.location.start > offset {
+            return;
+        }
+
+        if node.location.end <= offset {
+            match &node.kind {
+                NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                    if let (Some(variable_name), Some(initializer)) =
+                        (node_variable_name(variable), initializer.as_ref())
+                    {
+                        if let Some(package_name) =
+                            infer_constructor_package(initializer, current_pkg, receiver_packages)
+                        {
+                            receiver_packages.insert(variable_name.to_string(), package_name);
+                        }
+                    }
+                }
+                NodeKind::Assignment { lhs, rhs, .. } => {
+                    if let Some(variable_name) = node_variable_name(lhs) {
+                        if let Some(package_name) =
+                            infer_constructor_package(rhs, current_pkg, receiver_packages)
+                        {
+                            receiver_packages.insert(variable_name.to_string(), package_name);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for child in get_node_children(node) {
+            if child.location.start <= offset {
+                record_receiver_assignment(child, offset, current_pkg, receiver_packages);
+            }
+        }
+    }
+
+    let node = find_symbol_node_at_offset(ast, offset)?;
     match &node.kind {
         NodeKind::Variable { sigil, name } => {
             // Variable already has sigil separated
@@ -1143,19 +1277,10 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
         }
         NodeKind::MethodCall { object, method, .. } => {
-            // Resolve the package for the method call:
-            // - If object is an Identifier (e.g., Package->method), use it as the package
-            // - If object is a Variable named "self"/"this", use current_pkg
-            // - Otherwise, use current_pkg as best-effort fallback
-            let pkg = match &object.kind {
-                NodeKind::Identifier { name } => name.as_str(),
-                NodeKind::Variable { name, .. }
-                    if name == "self" || name == "this" || name == "class" =>
-                {
-                    current_pkg
-                }
-                _ => current_pkg,
-            };
+            let mut receiver_packages = std::collections::HashMap::new();
+            record_receiver_assignment(ast, offset, current_pkg, &mut receiver_packages);
+            let pkg = infer_receiver_package(object, current_pkg, &receiver_packages)
+                .unwrap_or_else(|| current_pkg.to_string());
             Some(SymbolKey {
                 pkg: pkg.into(),
                 name: method.clone().into(),

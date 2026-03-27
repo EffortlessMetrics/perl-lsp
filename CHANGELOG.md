@@ -12,9 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.12.0] - 2026-03-24
 
 This section covers 583 commits across ~90 PRs since the 0.12.0 finalization
-(2026-03-20), spanning Era 7 sessions 1-4. Key themes: parser corpus push toward
-100% CPAN, Moose/Moo class intelligence, diagnostic pipeline wiring, VS Code UX
-polish, performance hardening, and swarm infrastructure maturation.
+(2026-03-20), spanning Era 7 sessions 1-4. Key themes: parser corpus hardening
+against the strict-clean CPAN manifest snapshot that serves as the 0.12.0
+release bar, Moose/Moo class intelligence, diagnostic pipeline wiring, VS Code
+UX polish, performance hardening, and swarm infrastructure maturation.
 
 ### Added
 
@@ -225,6 +226,8 @@ polish, performance hardening, and swarm infrastructure maturation.
 - Pre-push hook updated to track test counts (#2128)
 
 #### CPAN Corpus
+- The 0.12.0 release bar is the ratcheted strict-clean CPAN manifest snapshot;
+  broader installed-corpus expansion remains follow-up work
 - Corpus baseline ratcheted from 85.7% toward 90%+ through multiple parser fix waves
 
 ### Performance

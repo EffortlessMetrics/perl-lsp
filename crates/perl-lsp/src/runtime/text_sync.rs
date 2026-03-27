@@ -686,12 +686,7 @@ impl LspServer {
                         if let Ok(url) = url::Url::parse(uri) {
                             let workspace_index = Arc::clone(coordinator.index());
                             let coordinator_clone = Arc::clone(coordinator);
-                            let doc_content = self
-                                .documents
-                                .lock()
-                                .get(uri)
-                                .map(|d| d.text.clone())
-                                .unwrap_or_default();
+                            let doc_content = text.clone();
                             let uri_owned = uri.to_string();
                             let task_counter = Arc::clone(&self.pending_index_task_count);
                             task_counter.fetch_add(1, Ordering::SeqCst);

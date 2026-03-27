@@ -2139,7 +2139,6 @@ impl WorkspaceIndex {
     /// ```
     pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
         let files_locked = self.files.read();
-        println!("find_refs DEBUG: index has {} files", files_locked.len());
         let mut all_refs = if let Some(sigil) = key.sigil {
             // It's a variable - search through all files for this variable name
             let var_name = format!("{}{}", sigil, key.name);

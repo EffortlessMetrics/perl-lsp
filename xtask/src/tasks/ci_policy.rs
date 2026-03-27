@@ -1,11 +1,14 @@
 use color_eyre::eyre::{Context, Result, bail};
 use regex::Regex;
-use std::process::Command;
+use std::fs;
+use std::path::Path;
+use walkdir::WalkDir;
 
 use crate::utils::project_root;
 
 const FROM_RAW_PATTERN: &str = r"\b([A-Za-z_][A-Za-z0-9_:]*::)?ExitStatus::from_raw\(";
 const ALLOWED_FROM_RAW_PATTERN: &str = r"::from_raw\(\s*raw[_ ]?exit\s*\(";
+const SEARCH_ROOTS: &[&str] = &["crates", "xtask", "examples", "tests"];
 
 fn source_fragment(line: &str) -> &str {
     line.splitn(3, ':').nth(2).unwrap_or(line)
@@ -49,40 +52,60 @@ fn is_disallowed_from_raw_line(line: &str, disallow_re: &Regex, allowed_re: &Reg
     !match_inside_double_quotes(fragment, mat.start())
 }
 
-pub fn check_from_raw() -> Result<()> {
-    let root = project_root()?;
+fn should_skip_dir(path: &Path) -> bool {
+    path.file_name().is_some_and(|name| matches!(name.to_str(), Some("target" | "generated")))
+}
 
-    let output = Command::new("git")
-        .current_dir(&root)
-        .args([
-            "grep",
-            "-nE",
-            FROM_RAW_PATTERN,
-            "--",
-            "crates/**/*.rs",
-            "xtask/**/*.rs",
-            "examples/**/*.rs",
-            "tests/**/*.rs",
-            ":!**/target/**",
-            ":!**/generated/**",
-        ])
-        .output()
-        .context("Failed to run git grep")?;
+fn collect_candidate_lines(root: &Path, disallow_re: &Regex) -> Result<Vec<String>> {
+    let mut candidates = Vec::new();
 
-    if let Some(code) = output.status.code() {
-        if code > 1 {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("git grep command failed with exit code {}: {}", code, stderr.trim(),);
+    for relative_root in SEARCH_ROOTS {
+        let search_root = root.join(relative_root);
+        if !search_root.exists() {
+            continue;
+        }
+
+        for entry in WalkDir::new(&search_root)
+            .into_iter()
+            .filter_entry(|entry| !(entry.file_type().is_dir() && should_skip_dir(entry.path())))
+        {
+            let entry =
+                entry.with_context(|| format!("failed to walk {}", search_root.display()))?;
+            if !entry.file_type().is_file()
+                || !entry.path().extension().is_some_and(|ext| ext == "rs")
+            {
+                continue;
+            }
+
+            let contents = fs::read_to_string(entry.path())
+                .with_context(|| format!("failed to read {}", entry.path().display()))?;
+            let relative_path = entry.path().strip_prefix(root).unwrap_or(entry.path());
+
+            for (line_number, line) in contents.lines().enumerate() {
+                if disallow_re.is_match(line) {
+                    candidates.push(format!(
+                        "{}:{}:{}",
+                        relative_path.display(),
+                        line_number + 1,
+                        line
+                    ));
+                }
+            }
         }
     }
 
-    let output_text =
-        String::from_utf8(output.stdout).context("git grep output was not valid UTF-8")?;
+    Ok(candidates)
+}
 
+pub fn check_from_raw() -> Result<()> {
+    let root = project_root()?;
     let disallow_re = Regex::new(FROM_RAW_PATTERN)?;
     let allowed_re = Regex::new(ALLOWED_FROM_RAW_PATTERN)?;
-    let violations: Vec<_> = output_text
-        .lines()
+    let candidates = collect_candidate_lines(&root, &disallow_re)?;
+
+    let violations: Vec<_> = candidates
+        .iter()
+        .map(String::as_str)
         .filter(|line| is_disallowed_from_raw_line(line, &disallow_re, &allowed_re))
         .collect();
 

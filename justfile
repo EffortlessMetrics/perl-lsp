@@ -112,7 +112,7 @@ nightly: merge-gate
 # Format check (fast fail)
 fmt-check:
     @echo "Checking code formatting..."
-    cargo fmt --all -- --check
+    cargo xtask fmt --check
     @echo "Format check passed"
 
 # Developer watch mode using bacon (optional local DX tool)
@@ -401,21 +401,11 @@ ci-full-msrv:
 # Check for nested Cargo.lock files (footgun prevention)
 ci-check-no-nested-lock:
     @echo "🔒 Checking for nested Cargo.lock files..."
-    @if find . -name 'Cargo.lock' -type f \
-        -not -path '*/target/*' \
-        -not -path '*/.runs/*' \
-        -not -path '*/archive/*' \
-        -not -path './fuzz/*' \
-        -not -path './tree-sitter-perl/*' \
-        2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
+    @if find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null | \
+        grep -v '^\./Cargo\.lock$' | grep -q .; then \
         echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
-        find . -name 'Cargo.lock' -type f \
-            -not -path '*/target/*' \
-            -not -path '*/.runs/*' \
-            -not -path '*/archive/*' \
-            -not -path './fuzz/*' \
-            -not -path './tree-sitter-perl/*' \
-            2>/dev/null | grep -v '^\./Cargo\.lock$'; \
+        find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null | \
+            grep -v '^\./Cargo\.lock$'; \
         exit 1; \
     fi
     @echo "✅ No nested lockfiles"
@@ -494,7 +484,7 @@ ci-local-full:
 # Format check (fast fail)
 ci-format:
     @echo "📝 Checking code formatting..."
-    cargo fmt --check --all
+    cargo xtask fmt --check
     @echo "✅ Format check passed"
 
 # Clippy lint (catches common issues, allow missing_docs during systematic resolution)
@@ -724,7 +714,7 @@ test:
 
 # Format code
 fmt:
-    cargo fmt --all
+    cargo xtask fmt
 
 # Clean build artifacts
 clean:

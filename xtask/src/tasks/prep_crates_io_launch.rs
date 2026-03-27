@@ -110,11 +110,15 @@ fn package_patch_args(metadata: &CargoMetadata) -> Vec<String> {
         args.push(format!(
             "--config=patch.crates-io.{}.path=\"{}\"",
             package.name,
-            rel_dir.display()
+            toml_safe_path(rel_dir)
         ));
     }
 
     args
+}
+
+fn toml_safe_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 fn is_publish_candidate(publish: &Option<JsonValue>) -> bool {
@@ -207,4 +211,15 @@ fn run_cargo_publish_dry_run(root: &Path, crate_name: &str, patch_args: &[String
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::toml_safe_path;
+    use std::path::Path;
+
+    #[test]
+    fn toml_safe_path_normalizes_backslashes() {
+        assert_eq!(toml_safe_path(Path::new(r"crates\perl-ast")), "crates/perl-ast");
+    }
 }

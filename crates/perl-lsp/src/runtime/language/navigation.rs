@@ -7,7 +7,7 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 use crate::util::token_under_cursor;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
@@ -141,16 +141,11 @@ fn is_core_perl_module(name: &str) -> bool {
 ///
 /// Returns the LSP location if found, or `None` to fall through to same-file resolution.
 #[cfg(feature = "workspace")]
-fn lookup_workspace_definition(
-    coordinator: Option<&std::sync::Arc<crate::workspace_index::IndexCoordinator>>,
+fn find_workspace_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
     pkg: &str,
     name: &str,
-) -> Option<Value> {
-    let access_mode = route_index_access(coordinator);
-    let IndexAccessMode::Full(coord) = access_mode else {
-        return None;
-    };
-
+) -> Option<crate::workspace_index::Location> {
     let key = crate::workspace_index::SymbolKey {
         pkg: pkg.to_string().into(),
         name: name.to_string().into(),
@@ -158,20 +153,132 @@ fn lookup_workspace_definition(
         kind: crate::workspace_index::SymKind::Sub,
     };
 
-    let workspace_index = coord.index();
+    workspace_index
+        .find_def(&key)
+        .or_else(|| workspace_index.find_definition(&format!("{pkg}::{name}")))
+}
 
-    // Try structured key lookup first
-    if let Some(def_location) = workspace_index.find_def(&key) {
-        if let Some(lsp_location) =
-            crate::workspace_index::lsp_adapter::to_lsp_location(&def_location)
-        {
-            return Some(json!([lsp_location]));
+#[cfg(feature = "workspace")]
+fn workspace_document_text(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    uri: &str,
+) -> Option<String> {
+    workspace_index.document_store().get_text(uri).or_else(|| {
+        crate::workspace_index::uri_to_fs_path(uri)
+            .and_then(|path| std::fs::read_to_string(path).ok())
+    })
+}
+
+#[cfg(feature = "workspace")]
+fn inherited_method_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    receiver_pkg: &str,
+    method_name: &str,
+) -> Option<crate::workspace_index::Location> {
+    let mut visited = HashSet::from([receiver_pkg.to_string()]);
+    let mut queue = VecDeque::new();
+    let mut related_package_cache: HashMap<String, Vec<String>> = HashMap::new();
+
+    let mut enqueue_related_packages =
+        |package_name: &str, queue: &mut VecDeque<String>, visited: &HashSet<String>| {
+            let related_packages = related_package_cache
+                .entry(package_name.to_string())
+                .or_insert_with(|| {
+                    let Some(package_location) = workspace_index.find_definition(package_name)
+                    else {
+                        return Vec::new();
+                    };
+                    let Some(text) =
+                        workspace_document_text(workspace_index, &package_location.uri)
+                    else {
+                        return Vec::new();
+                    };
+
+                    let mut parser = Parser::new(&text);
+                    let Ok(ast) = parser.parse() else {
+                        return Vec::new();
+                    };
+
+                    crate::semantic::SemanticAnalyzer::analyze_with_source(&ast, &text)
+                        .class_models
+                        .into_iter()
+                        .find(|model| model.name == package_name)
+                        .map(|model| model.parents.into_iter().chain(model.roles).collect())
+                        .unwrap_or_default()
+                })
+                .clone();
+
+            for related_package in related_packages {
+                if !visited.contains(&related_package) {
+                    queue.push_back(related_package);
+                }
+            }
+        };
+
+    enqueue_related_packages(receiver_pkg, &mut queue, &visited);
+
+    while let Some(package_name) = queue.pop_front() {
+        if !visited.insert(package_name.clone()) {
+            continue;
         }
+
+        if let Some(location) =
+            find_workspace_definition_location(workspace_index, &package_name, method_name)
+        {
+            tracing::debug!(
+                receiver_pkg,
+                package_name,
+                method_name,
+                "resolved inherited/role method definition"
+            );
+            return Some(location);
+        }
+
+        enqueue_related_packages(&package_name, &mut queue, &visited);
     }
 
-    // Fall back to string-based lookup
-    let symbol_name = format!("{}::{}", pkg, name);
-    if let Some(def_location) = workspace_index.find_definition(&symbol_name) {
+    None
+}
+
+#[cfg(feature = "workspace")]
+fn find_symbol_key_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    symbol_key: &crate::workspace_index::SymbolKey,
+) -> Option<crate::workspace_index::Location> {
+    if symbol_key.kind == crate::workspace_index::SymKind::Sub && symbol_key.sigil.is_none() {
+        find_workspace_definition_location(workspace_index, &symbol_key.pkg, &symbol_key.name)
+            .or_else(|| {
+                inherited_method_definition_location(
+                    workspace_index,
+                    &symbol_key.pkg,
+                    &symbol_key.name,
+                )
+            })
+    } else {
+        workspace_index.find_def(symbol_key).or_else(|| {
+            let symbol_name = if symbol_key.kind == crate::workspace_index::SymKind::Sub {
+                format!("{}::{}", symbol_key.pkg, symbol_key.name)
+            } else {
+                symbol_key.name.to_string()
+            };
+            workspace_index.find_definition(&symbol_name)
+        })
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn lookup_workspace_definition(
+    coordinator: Option<&std::sync::Arc<crate::workspace_index::IndexCoordinator>>,
+    pkg: &str,
+    name: &str,
+) -> Option<Value> {
+    let coord = coordinator?;
+
+    let workspace_index = coord.index();
+
+    if let Some(def_location) = find_workspace_definition_location(workspace_index, pkg, name)
+        .or_else(|| inherited_method_definition_location(workspace_index, pkg, name))
+    {
         if let Some(lsp_location) =
             crate::workspace_index::lsp_adapter::to_lsp_location(&def_location)
         {
@@ -546,8 +653,7 @@ impl LspServer {
                     // Try workspace index for cross-file definitions using routing policy
                     #[cfg(feature = "workspace")]
                     {
-                        let access_mode = route_index_access(self.coordinator());
-                        if let IndexAccessMode::Full(coordinator) = access_mode {
+                        if let Some(coordinator) = self.coordinator() {
                             let workspace_index = coordinator.index();
                             // Use symbol_at_cursor to get the symbol key
                             let current_package =
@@ -557,34 +663,11 @@ impl LspServer {
                             {
                                 tracing::debug!(symbol_key = ?symbol_key, "looking for definition");
 
-                                // Try to find definition using the symbol key
-                                if let Some(def_location) = workspace_index.find_def(&symbol_key) {
+                                if let Some(def_location) = find_symbol_key_definition_location(
+                                    workspace_index,
+                                    &symbol_key,
+                                ) {
                                     tracing::debug!(location = ?def_location, "found definition");
-                                    // Convert internal Location to LSP Location
-                                    if let Some(lsp_location) =
-                                        crate::workspace_index::lsp_adapter::to_lsp_location(
-                                            &def_location,
-                                        )
-                                    {
-                                        return Ok(Some(json!([lsp_location])));
-                                    }
-                                }
-
-                                // Also try with find_definition for backward compatibility
-                                let symbol_name =
-                                    if symbol_key.kind == crate::workspace_index::SymKind::Sub {
-                                        format!("{}::{}", symbol_key.pkg, symbol_key.name)
-                                    } else {
-                                        symbol_key.name.to_string()
-                                    };
-
-                                if let Some(def_location) =
-                                    workspace_index.find_definition(&symbol_name)
-                                {
-                                    tracing::debug!(
-                                        symbol_name,
-                                        "found definition via find_definition"
-                                    );
                                     // Convert internal Location to LSP Location
                                     if let Some(lsp_location) =
                                         crate::workspace_index::lsp_adapter::to_lsp_location(
@@ -596,7 +679,7 @@ impl LspServer {
                                 }
                             }
                         }
-                        // Partial/None: fall through to same-file semantic model
+                        // No coordinator: fall through to same-file semantic model
                     }
 
                     // Fall back to same-file definition

@@ -298,6 +298,445 @@ my $valid = Base->validate();
 }
 
 // ---------------------------------------------------------------------------
+// Test 4b: Cross-file $obj->method() infers receiver package from constructor
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_cross_file_constructor_assigned_method_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Dog.pm",
+        r#"package Dog;
+use Moose;
+extends 'Animal';
+
+sub fetch {
+    my ($self, $item) = @_;
+    return $self->name . q{ fetches } . ($item // q{ball});
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Animal.pm",
+        r#"package Animal;
+use Moose;
+
+has name => (is => 'ro', isa => 'Str', required => 1);
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let dog_uri = workspace.uri("lib/Dog.pm");
+    let dog_content = std::fs::read_to_string(workspace.dir.path().join("lib/Dog.pm"))
+        .map_err(|e| format!("failed to read Dog.pm: {e}"))?;
+    harness.open(&dog_uri, &dog_content)?;
+
+    let animal_uri = workspace.uri("lib/Animal.pm");
+    let animal_content = std::fs::read_to_string(workspace.dir.path().join("lib/Animal.pm"))
+        .map_err(|e| format!("failed to read Animal.pm: {e}"))?;
+    harness.open(&animal_uri, &animal_content)?;
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use Dog;
+
+my $dog = Dog->new(name => 'Rex');
+$dog->fetch('stick');
+"#,
+    )?;
+
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 7}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or_else(|| {
+        format!("Expected array result for constructor-assigned method goto-def, got: {result:?}")
+    })?;
+    assert!(
+        !locations.is_empty(),
+        "Expected constructor-assigned method goto-definition to return at least one location"
+    );
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(uri.contains("Dog.pm"), "Definition should point to Dog.pm, got: {uri}");
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_cross_file_constructor_assigned_bare_method_call_in_framework_workspace()
+-> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/MooAnimal.pm",
+        r#"package MooAnimal;
+use Moo;
+
+has name => (
+    is      => 'ro',
+    default => sub { 'animal' },
+);
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooPrintable.pm",
+        r#"package MooPrintable;
+use Moo::Role;
+
+sub print_info {
+    my ($self) = @_;
+    return $self->name;
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooDog.pm",
+        r#"package MooDog;
+use Moo;
+extends 'MooAnimal';
+with 'MooPrintable';
+
+sub fetch {
+    my ($self) = @_;
+    return $self->name . q{ fetched};
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooseAnimal.pm",
+        r#"package MooseAnimal;
+use Moose;
+
+has name => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => 'animal',
+);
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MoosePrintable.pm",
+        r#"package MoosePrintable;
+use Moose::Role;
+
+sub print_info {
+    my ($self) = @_;
+    return $self->name;
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooseCat.pm",
+        r#"package MooseCat;
+use Moose;
+extends 'MooseAnimal';
+with 'MoosePrintable';
+
+sub pounce {
+    my ($self) = @_;
+    return $self->name . q{ pounced};
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in [
+        "lib/MooAnimal.pm",
+        "lib/MooPrintable.pm",
+        "lib/MooDog.pm",
+        "lib/MooseAnimal.pm",
+        "lib/MoosePrintable.pm",
+        "lib/MooseCat.pm",
+    ] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use MooDog;
+use MooseCat;
+
+my $dog = MooDog->new(name => 'Rex');
+my $cat = MooseCat->new(name => 'Misty');
+$dog->fetch;
+$cat->pounce;
+"#,
+    )?;
+
+    harness.barrier();
+
+    let fetch_result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 9, "character": 6}
+        }),
+    )?;
+
+    let fetch_locations = fetch_result.as_array().ok_or_else(|| {
+        format!("Expected array result for bare Moo method goto-def, got: {fetch_result:?}")
+    })?;
+    assert!(
+        !fetch_locations.is_empty(),
+        "Expected bare Moo method goto-definition to return at least one location"
+    );
+
+    let fetch_uri = fetch_locations[0]["uri"].as_str().ok_or("Expected fetch URI")?;
+    assert!(
+        fetch_uri.contains("MooDog.pm"),
+        "Definition should point to MooDog.pm, got: {fetch_uri}"
+    );
+
+    let pounce_result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 10, "character": 6}
+        }),
+    )?;
+
+    let pounce_locations = pounce_result.as_array().ok_or_else(|| {
+        format!("Expected array result for bare Moose method goto-def, got: {pounce_result:?}")
+    })?;
+    assert!(
+        !pounce_locations.is_empty(),
+        "Expected bare Moose method goto-definition to return at least one location"
+    );
+
+    let pounce_uri = pounce_locations[0]["uri"].as_str().ok_or("Expected pounce URI")?;
+    assert!(
+        pounce_uri.contains("MooseCat.pm"),
+        "Definition should point to MooseCat.pm, got: {pounce_uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_cross_file_inherited_and_role_method_call_in_framework_workspace() -> TestResult
+{
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/MooAnimal.pm",
+        r#"package MooAnimal;
+use Moo;
+
+has name => (
+    is      => 'ro',
+    default => sub { 'animal' },
+);
+
+sub describe {
+    my ($self) = @_;
+    return $self->name . q{ described};
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooPrintable.pm",
+        r#"package MooPrintable;
+use Moo::Role;
+
+sub print_info {
+    my ($self) = @_;
+    return $self->name;
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooDog.pm",
+        r#"package MooDog;
+use Moo;
+extends 'MooAnimal';
+with 'MooPrintable';
+
+sub fetch {
+    my ($self) = @_;
+    return $self->name . q{ fetched};
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooseAnimal.pm",
+        r#"package MooseAnimal;
+use Moose;
+
+has name => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => 'animal',
+);
+
+sub describe {
+    my ($self) = @_;
+    return $self->name . q{ described};
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MoosePrintable.pm",
+        r#"package MoosePrintable;
+use Moose::Role;
+
+sub print_info {
+    my ($self) = @_;
+    return $self->name;
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/MooseCat.pm",
+        r#"package MooseCat;
+use Moose;
+extends 'MooseAnimal';
+with 'MoosePrintable';
+
+sub pounce {
+    my ($self) = @_;
+    return $self->name . q{ pounced};
+}
+
+__PACKAGE__->meta->make_immutable;
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in [
+        "lib/MooAnimal.pm",
+        "lib/MooPrintable.pm",
+        "lib/MooDog.pm",
+        "lib/MooseAnimal.pm",
+        "lib/MoosePrintable.pm",
+        "lib/MooseCat.pm",
+    ] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use MooDog;
+use MooseCat;
+
+my $dog = MooDog->new(name => 'Rex');
+my $cat = MooseCat->new(name => 'Misty');
+$dog->describe;
+$dog->print_info;
+$cat->describe;
+$cat->print_info;
+"#,
+    )?;
+
+    harness.barrier();
+
+    for (line, expected_uri_fragment, label) in [
+        (9_u64, "MooAnimal.pm", "Moo inherited method"),
+        (10_u64, "MooPrintable.pm", "Moo role method"),
+        (11_u64, "MooseAnimal.pm", "Moose inherited method"),
+        (12_u64, "MoosePrintable.pm", "Moose role method"),
+    ] {
+        let result = harness.request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": workspace.uri("main.pl")},
+                "position": {"line": line, "character": 6}
+            }),
+        )?;
+
+        let locations = result.as_array().ok_or_else(|| {
+            format!("Expected array result for {label} goto-def, got: {result:?}")
+        })?;
+        assert!(
+            !locations.is_empty(),
+            "Expected {label} goto-definition to return at least one location"
+        );
+
+        let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+        assert!(
+            uri.contains(expected_uri_fragment),
+            "{label} should point to {expected_uri_fragment}, got: {uri}"
+        );
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 5: symbol_at_cursor handles MethodCall nodes
 // ---------------------------------------------------------------------------
 
@@ -328,41 +767,69 @@ sub main_work {
     let mut parser = Parser::new(code);
     let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
 
-    // Find offset of "helper" in "$self->helper()"
     let method_call_offset =
         code.find("$self->helper()").ok_or("could not find $self->helper()")?;
-    let helper_offset = method_call_offset + "$self->".len(); // points to "helper"
-    eprintln!("method_call at offset {}, helper at offset {}", method_call_offset, helper_offset);
-    eprintln!("text around: {:?}", &code[method_call_offset..method_call_offset + 20]);
-
-    // Debug: find node at offset
-    let node = perl_parser::declaration::find_node_at_offset(&ast, helper_offset);
-    if let Some(n) = &node {
-        eprintln!(
-            "Node at offset {}: kind={:?}, range=[{}-{}]",
-            helper_offset,
-            n.kind.kind_name(),
-            n.location.start,
-            n.location.end
-        );
-    } else {
-        eprintln!("No node found at offset {}", helper_offset);
-    }
+    let helper_offset = method_call_offset + "$self->".len();
 
     let current_pkg = current_package_at(&ast, helper_offset);
     assert_eq!(current_pkg, "MyClass");
 
-    let symbol = symbol_at_cursor(&ast, helper_offset, current_pkg);
-    assert!(
-        symbol.is_some(),
-        "symbol_at_cursor should resolve MethodCall node (node kind: {:?})",
-        node.map(|n| n.kind.kind_name())
-    );
-
-    let sym = symbol.ok_or("expected Some(SymbolKey)")?;
+    let sym =
+        symbol_at_cursor(&ast, helper_offset, current_pkg).ok_or("expected Some(SymbolKey)")?;
     assert_eq!(sym.name.as_ref(), "helper", "method name should be 'helper'");
-    // For $self->helper(), the package should be the current package
     assert_eq!(sym.pkg.as_ref(), "MyClass", "package should be current package for $self");
+
+    Ok(())
+}
+
+#[test]
+fn symbol_at_cursor_resolves_constructor_assigned_method_call() -> TestResult {
+    use perl_parser::Parser;
+    use perl_parser::declaration::{current_package_at, symbol_at_cursor};
+
+    let code = r#"package main;
+use Dog;
+
+my $dog = Dog->new(name => 'Rex');
+$dog->fetch('stick');
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+
+    let fetch_offset = code.find("fetch").ok_or("could not find fetch")?;
+    let current_pkg = current_package_at(&ast, fetch_offset);
+    let symbol = symbol_at_cursor(&ast, fetch_offset, current_pkg)
+        .ok_or("expected symbol_at_cursor to resolve constructor-assigned method call")?;
+
+    assert_eq!(symbol.name.as_ref(), "fetch", "method name should be 'fetch'");
+    assert_eq!(symbol.pkg.as_ref(), "Dog", "package should be inferred from Dog->new()");
+
+    Ok(())
+}
+
+#[test]
+fn symbol_at_cursor_resolves_constructor_assigned_bare_method_call() -> TestResult {
+    use perl_parser::Parser;
+    use perl_parser::declaration::{current_package_at, symbol_at_cursor};
+
+    let code = r#"package main;
+use MooDog;
+
+my $dog = MooDog->new(name => 'Rex');
+$dog->fetch;
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+
+    let fetch_offset = code.find("fetch").ok_or("could not find fetch")?;
+    let current_pkg = current_package_at(&ast, fetch_offset);
+    let symbol = symbol_at_cursor(&ast, fetch_offset, current_pkg)
+        .ok_or("expected symbol_at_cursor to resolve bare constructor-assigned method call")?;
+
+    assert_eq!(symbol.name.as_ref(), "fetch", "method name should be 'fetch'");
+    assert_eq!(symbol.pkg.as_ref(), "MooDog", "package should be inferred from MooDog->new()");
 
     Ok(())
 }

@@ -168,7 +168,7 @@ impl LspServer {
                         IndexAccessMode::Full(coordinator) => {
                             // Full workspace rename available - use coordinator's index directly
                             let documents = self.documents_guard();
-                            if let Some(doc) = documents.get(uri) {
+                            if let Some(doc) = self.get_document(&documents, uri) {
                                 if let Some(ref ast) = doc.ast {
                                     let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
                                     let current_pkg =
@@ -196,7 +196,7 @@ impl LspServer {
 
                 // Same-file fallback for degraded/partial modes
                 let documents = self.documents_guard();
-                if let Some(doc) = documents.get(uri) {
+                if let Some(doc) = self.get_document(&documents, uri) {
                     if let Some(ref ast) = doc.ast {
                         let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
 

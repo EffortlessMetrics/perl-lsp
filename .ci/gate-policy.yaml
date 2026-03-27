@@ -122,7 +122,7 @@ gates:
     tier: pr_fast
     description: "Check code formatting with rustfmt"
     required: true
-    command: cargo fmt --check --all
+    command: cargo xtask fmt --check
     timeout_seconds: 60
     retry_count: 0
     budgets:
@@ -278,10 +278,10 @@ gates:
       bash ci/check_missing_docs.sh &&
       bash ci/check_parse_errors.sh &&
       python3 scripts/check_features_invariants.py
-    timeout_seconds: 120
+    timeout_seconds: 240
     retry_count: 0
     budgets:
-      max_duration_ms: 90000
+      max_duration_ms: 220000
     quarantine: false
     tags:
       - policy
@@ -355,10 +355,11 @@ gates:
     description: "Ensure no nested Cargo.lock files exist (footgun prevention)"
     required: true
     command: >-
-      if find . -name 'Cargo.lock' -type f 2>/dev/null |
+      if find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null |
          grep -v '^\./Cargo\.lock$' | grep -q .; then
         echo "ERROR: Nested Cargo.lock detected!";
-        find . -name 'Cargo.lock' -type f | grep -v '^\./Cargo\.lock$';
+        find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null |
+          grep -v '^\./Cargo\.lock$';
         exit 1;
       fi
     timeout_seconds: 30

@@ -312,22 +312,11 @@ impl ProductionIndexCoordinator {
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let start = self.slo_tracker.start_operation(OperationType::FileIndexing);
 
-        // Check cache first
-        let cache_key = uri.to_string();
-        if let Some(_cached) = self.cache.get_ast(&cache_key) {
-            // Cache hit - skip re-indexing
-            self.slo_tracker.record_operation_type(
-                OperationType::FileIndexing,
-                start,
-                OperationResult::Success,
-            );
-            return Ok(());
-        }
-
         // Index the file
         self.index.index_file(uri.clone(), text)?;
 
         // Cache the result
+        let cache_key = uri.to_string();
         let serialized = self.serialize_file_index(&uri)?;
         self.cache.insert_ast(cache_key, serialized);
 
@@ -586,6 +575,21 @@ mod tests {
 
         let def = coordinator.find_definition("hello");
         assert!(def.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn test_coordinator_reindexes_updated_file_contents() -> Result<(), String> {
+        let coordinator = ProductionIndexCoordinator::new();
+        coordinator.initialize()?;
+
+        let uri = Url::parse("file:///example.pl").map_err(|e| e.to_string())?;
+        coordinator.index_file(uri.clone(), "sub hello { return 1; }".to_string())?;
+        coordinator.index_file(uri, "sub goodbye { return 2; }".to_string())?;
+
+        assert!(coordinator.find_definition("hello").is_none());
+        assert!(coordinator.find_definition("goodbye").is_some());
+
         Ok(())
     }
 

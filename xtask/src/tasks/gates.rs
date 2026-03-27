@@ -755,8 +755,16 @@ fn run_single_gate(
         });
     }
 
+    if command == "cargo xtask fmt --check" {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || super::fmt::run(true));
+    }
+
+    if command == "cargo xtask fmt" {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || super::fmt::run(false));
+    }
+
     // Run the command
-    let result = cmd!("bash", "-c", command).stderr_to_stdout().stdout_capture().unchecked().run();
+    let result = cmd!("bash", "-lc", command).stderr_to_stdout().stdout_capture().unchecked().run();
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -828,6 +836,40 @@ fn run_single_gate(
     }
 }
 
+fn run_internal_xtask_gate(
+    gate: &GateDefinition,
+    log_path: &std::path::Path,
+    command: &str,
+    start: Instant,
+    f: impl FnOnce() -> Result<()>,
+) -> Result<GateResult> {
+    let result = f();
+    let duration_ms = start.elapsed().as_millis() as u64;
+
+    let (status, output_summary) = match result {
+        Ok(()) => ("pass".to_string(), "Executed internally via xtask task dispatch".to_string()),
+        Err(err) => ("fail".to_string(), format!("Internal xtask execution failed: {err:#}")),
+    };
+
+    if let Err(err) = fs::write(log_path, output_summary.as_bytes()) {
+        eprintln!("Warning: Failed to write log file: {}", err);
+    }
+
+    Ok(GateResult {
+        gate_name: gate.name.clone(),
+        tier: gate.tier.clone(),
+        status,
+        required: Some(gate.required),
+        duration_ms,
+        command: command.to_string(),
+        exit_code: None,
+        output_summary: Some(output_summary),
+        log_path: Some(format!("logs/{}.log", gate.name)),
+        metrics: None,
+        artifacts: if gate.artifacts.is_empty() { None } else { Some(gate.artifacts.clone()) },
+    })
+}
+
 /// Collect system metadata for the receipt
 fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
     // Git info
@@ -882,7 +924,7 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
     let os_version = { cmd!("uname", "-r").read().ok().map(|s| s.trim().to_string()) };
 
     #[cfg(not(target_os = "linux"))]
-    let os_version = None;
+    let os_version: Option<String> = None;
 
     let is_wsl = os_version
         .as_ref()

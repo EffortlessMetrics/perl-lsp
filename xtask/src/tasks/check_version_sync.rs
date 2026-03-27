@@ -9,7 +9,8 @@ use std::process::Command;
 
 pub fn run() -> Result<()> {
     let root = project_root()?;
-    let local_binary = root.join("target/debug/perl-ci-hygiene");
+    let local_binary =
+        root.join(format!("target/debug/perl-ci-hygiene{}", std::env::consts::EXE_SUFFIX));
     let mut command = if local_binary.exists() {
         let mut cmd = Command::new(local_binary);
         cmd.arg("check-version-sync");

@@ -190,7 +190,11 @@ impl<'a> Parser<'a> {
                             // The lexer produces Identifier("$#") for `$#` when no array
                             // name follows, so we handle it here before the method-call path.
                             if self.tokens.peek().is_ok_and(|t| t.text.as_ref() == "$#") {
-                                if self.tokens.peek_second().is_ok_and(|t| t.kind == TokenKind::Star) {
+                                if self
+                                    .tokens
+                                    .peek_second()
+                                    .is_ok_and(|t| t.kind == TokenKind::Star)
+                                {
                                     self.tokens.next()?; // consume $#
                                     self.tokens.next()?; // consume *
                                     let start = expr.location.start;
@@ -208,7 +212,7 @@ impl<'a> Parser<'a> {
                             }
 
                             // Method call
-                            let method = self.tokens.next()?.text.to_string();
+                            let method = self.consume_token()?.text.to_string();
 
                             let args = if self.peek_kind() == Some(TokenKind::LeftParen) {
                                 self.parse_args()?
@@ -237,10 +241,7 @@ impl<'a> Parser<'a> {
 
                             record_postfix_layer()?;
                             expr = Node::new(
-                                NodeKind::FunctionCall {
-                                    name: "->()".to_string(),
-                                    args: all_args,
-                                },
+                                NodeKind::FunctionCall { name: "->()".to_string(), args: all_args },
                                 SourceLocation { start, end },
                             );
                         }
@@ -324,13 +325,21 @@ impl<'a> Parser<'a> {
                             let name = name.clone();
                             let start = expr.location.start;
                             let mut args = vec![self.parse_ternary()?];
-                            while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                            while matches!(
+                                self.peek_kind(),
+                                Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                            ) {
                                 self.consume_token()?;
-                                if self.is_at_statement_end() { break; }
+                                if self.is_at_statement_end() {
+                                    break;
+                                }
                                 args.push(self.parse_ternary()?);
                             }
                             let end = args.last().map_or(expr.location.end, |a| a.location.end);
-                            expr = Node::new(NodeKind::FunctionCall { name, args }, SourceLocation { start, end });
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name, args },
+                                SourceLocation { start, end },
+                            );
                             continue;
                         }
                     }
@@ -412,7 +421,10 @@ impl<'a> Parser<'a> {
                                 args.push(self.parse_hash_or_block()?);
 
                                 // Parse remaining arguments separated by commas or fat arrows
-                                while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                while matches!(
+                                    self.peek_kind(),
+                                    Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                ) {
                                     self.consume_token()?; // consume comma or fat arrow
                                     if self.is_at_statement_end() {
                                         break;
@@ -429,13 +441,19 @@ impl<'a> Parser<'a> {
                                 // before the list: `grep { ... } @array`
                                 // First consume without a comma/fat arrow if present
                                 if !self.is_at_statement_end()
-                                    && !matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow))
+                                    && !matches!(
+                                        self.peek_kind(),
+                                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                    )
                                 {
                                     args.push(self.parse_ternary()?);
                                 }
 
                                 // Then consume any remaining comma/fat-arrow-separated arguments
-                                while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                while matches!(
+                                    self.peek_kind(),
+                                    Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                ) {
                                     self.consume_token()?; // consume comma or fat arrow
                                     if self.is_at_statement_end() {
                                         break;
@@ -453,7 +471,8 @@ impl<'a> Parser<'a> {
                                     name.as_str(),
                                     "print" | "say" | "printf" | "exec" | "system" | "send"
                                 );
-                                if is_fh_builtin && !self.is_at_statement_end()
+                                if is_fh_builtin
+                                    && !self.is_at_statement_end()
                                     && !matches!(
                                         self.peek_kind(),
                                         Some(TokenKind::Comma | TokenKind::FatArrow)
@@ -548,10 +567,7 @@ impl<'a> Parser<'a> {
                                 NodeKind::ArrayLiteral { elements: words },
                                 SourceLocation { start, end },
                             );
-                        } else if matches!(
-                            name.as_str(),
-                            "print" | "say" | "printf" | "send"
-                        ) {
+                        } else if matches!(name.as_str(), "print" | "say" | "printf" | "send") {
                             // `print( $fh EXPR )` — filehandle-style inside explicit parens.
                             // parse_args() treats every argument as comma-separated, so
                             // `print( $fh join(...) )` fails because $fh is parsed as the
@@ -599,8 +615,8 @@ impl<'a> Parser<'a> {
                                     || t.text.starts_with('$')
                                     || t.text.starts_with('%')
                             });
-                            let next_is_caller_level = name == "caller"
-                                && self.peek_kind() == Some(TokenKind::Number);
+                            let next_is_caller_level =
+                                name == "caller" && self.peek_kind() == Some(TokenKind::Number);
                             let args = if (next_is_sigil_arg || next_is_caller_level)
                                 && !self.is_at_statement_end()
                             {
@@ -657,11 +673,15 @@ impl<'a> Parser<'a> {
                             // Guard: NOT followed by => (would be a hash-key) and NOT at statement end.
                             let mut args = vec![self.parse_ternary()?];
                             // Collect additional comma-separated arguments
-                            while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow))
-                                && !self.is_at_statement_end()
+                            while matches!(
+                                self.peek_kind(),
+                                Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                            ) && !self.is_at_statement_end()
                             {
                                 self.consume_token()?; // consume , or =>
-                                if self.is_at_statement_end() { break; }
+                                if self.is_at_statement_end() {
+                                    break;
+                                }
                                 args.push(self.parse_ternary()?);
                             }
                             let start = expr.location.start;
@@ -684,8 +704,8 @@ impl<'a> Parser<'a> {
                             // For CORE::qualified names, use the bare name for downstream
                             // builtin classification so that e.g. `CORE::shift` is recognised
                             // as nullary and `CORE::grep { ... } @list` gets block handling.
-                            let bare_name = Self::core_qualified_builtin_name(name)
-                                .unwrap_or(name.as_str());
+                            let bare_name =
+                                Self::core_qualified_builtin_name(name).unwrap_or(name.as_str());
 
                             // Builtins always become function calls, even with no arguments
                             // This ensures they work correctly in expressions like "return $x or die"
@@ -696,16 +716,14 @@ impl<'a> Parser<'a> {
                             // Also applies to optional-arg builtins (defined, length, ord, etc.)
                             // that implicitly use $_ when no explicit argument is given, so that
                             // `defined && ...`, `length > 0`, `ord >= 32` parse correctly.
-                            let is_nullary_without_args =
-                                (Self::is_nullary_builtin(bare_name)
-                                    || Self::is_optional_arg_builtin(bare_name))
-                                    && self.peek_kind().is_some_and(Self::is_binary_operator);
+                            let is_nullary_without_args = (Self::is_nullary_builtin(bare_name)
+                                || Self::is_optional_arg_builtin(bare_name))
+                                && self.peek_kind().is_some_and(Self::is_binary_operator);
 
                             // When a builtin is followed by a comma, it should be treated
                             // as having no arguments.  The comma belongs to an enclosing
                             // list context (e.g. `grep defined, @list`).
-                            let is_comma_terminated =
-                                self.peek_kind() == Some(TokenKind::Comma);
+                            let is_comma_terminated = self.peek_kind() == Some(TokenKind::Comma);
 
                             // String comparison operators (eq, ne, lt, le, gt, ge) are
                             // tokenized as Identifiers. A builtin followed by one of these
@@ -759,7 +777,10 @@ impl<'a> Parser<'a> {
                                         )
                                     {
                                         // Skip comma or fat arrow if present
-                                        if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                        if matches!(
+                                            self.peek_kind(),
+                                            Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                        ) {
                                             self.consume_token()?;
                                         }
                                         // Check again after potential comma/fat arrow
@@ -826,8 +847,7 @@ impl<'a> Parser<'a> {
                                     && self.tokens.peek().ok().is_some_and(|t| {
                                         // Scalar-variable coderef: text starts with `$`
                                         // e.g. `sort $cmp @list`, `sort $keysort (keys %h)`
-                                        t.kind == TokenKind::Identifier
-                                            && t.text.starts_with('$')
+                                        t.kind == TokenKind::Identifier && t.text.starts_with('$')
                                     })
                                 {
                                     // sort $coderef LIST — `sort $cmp @list`, `sort $cmp (keys %h)`
@@ -864,15 +884,20 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_hash_or_block()?);
 
                                     // Parse remaining arguments separated by commas or fat arrows
-                                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    while matches!(
+                                        self.peek_kind(),
+                                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                    ) {
                                         self.consume_token()?; // consume comma or fat arrow
                                         if self.is_at_statement_end() {
                                             break;
                                         }
                                         args.push(self.parse_assignment()?);
                                     }
-                                } else if matches!(bare_name, "print" | "say" | "printf" | "exec" | "system" | "send")
-                                    && self.peek_kind() == Some(TokenKind::LeftBrace)
+                                } else if matches!(
+                                    bare_name,
+                                    "print" | "say" | "printf" | "exec" | "system" | "send"
+                                ) && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
                                     // print { $fh } ARGS — block-form filehandle in expr context
                                     // Parse the block as the filehandle, then the remaining args.
@@ -908,7 +933,10 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_ternary()?);
 
                                     // Parse remaining arguments separated by commas or fat arrows
-                                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    while matches!(
+                                        self.peek_kind(),
+                                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                    ) {
                                         self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;
@@ -1076,10 +1104,7 @@ impl<'a> Parser<'a> {
                     // Only treat as a bareword key if the NEXT token is `}` or `,`
                     // (meaning there is no delimiter to start a real quote expression).
                     if let Ok(second) = self.tokens.peek_second() {
-                        return matches!(
-                            second.kind,
-                            TokenKind::RightBrace | TokenKind::Comma
-                        );
+                        return matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma);
                     }
                 }
             }
