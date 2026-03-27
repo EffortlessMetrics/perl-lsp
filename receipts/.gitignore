@@ -1,0 +1,3 @@
+# Receipt files are ephemeral build artifacts — only track the directory marker
+*
+!.gitkeep
