@@ -100,7 +100,9 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(String::from);
+                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| {
+                    InlayHintTooltip::String(s.to_string())
+                });
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -111,7 +113,6 @@ impl InlayHintsProvider {
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
                     tooltip,
-                    location: None,
                 })
             })
             .collect()
@@ -133,7 +134,9 @@ impl InlayHintsProvider {
                     2 => InlayHintKind::Parameter,
                     _ => InlayHintKind::Type,
                 };
-                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(String::from);
+                let tooltip = v.get("tooltip").and_then(|t| t.as_str()).map(|s| {
+                    InlayHintTooltip::String(s.to_string())
+                });
                 Some(InlayHint {
                     position: Position::new(
                         pos["line"].as_u64()? as u32,
@@ -144,7 +147,6 @@ impl InlayHintsProvider {
                     padding_left: v["paddingLeft"].as_bool().unwrap_or(false),
                     padding_right: v["paddingRight"].as_bool().unwrap_or(false),
                     tooltip,
-                    location: None,
                 })
             })
             .collect()
@@ -267,7 +269,7 @@ pub fn parameter_hints(
                         "paddingLeft": false,
                         "paddingRight": true,
                         "data": {
-                            "function": name.as_str(),
+                            "functionName": name.as_str(),
                             "paramIndex": i,
                         }
                     });
@@ -317,7 +319,8 @@ pub fn trivial_type_hints(
             NodeKind::Subroutine { name: None, .. } => {
                 Some(("CodeRef", Some("Anonymous subroutine (code reference)")))
             }
-            _ => None,
+            // Fall through to semantic type inference for non-literal nodes
+            _ => infer_semantic_type(node).map(|t| (t.as_str(), None)),
         };
 
         if let Some((hint, tooltip)) = type_hint {
@@ -447,74 +450,24 @@ fn method_return_type(method: &str) -> Option<String> {
 
 /// Returns a short perldoc-style summary for a builtin function parameter.
 ///
-/// Used by the resolve handler to populate `tooltip` with documentation
-/// rather than just the parameter name.
+/// Looks up the builtin's documentation from `perl_builtins::builtin_signatures`
+/// rather than maintaining a hardcoded list. Falls back to `None` for unknown
+/// builtins or parameters.
 fn builtin_doc_summary(function: &str, param: &str, _param_index: usize) -> Option<String> {
-    let summary = match function {
-        "open" => match param {
-            "filehandle" => Some("Filehandle opened for reading/writing"),
-            "mode" | "expression" => Some("Open mode: <, >, >>, +<, +>, |, etc."),
-            "filename" => Some("Path to the file to open"),
-            _ => None,
-        },
-        "split" => match param {
-            "pattern" => Some("Regex pattern to split on (defaults to whitespace)"),
-            "expr" => Some("String or expression to split"),
-            "limit" => Some("Maximum number of fields to return"),
-            _ => None,
-        },
-        "substr" => match param {
-            "string" | "expr" => Some("The string to extract from"),
-            "offset" => Some("Character offset (negative counts from end)"),
-            "length" | "replacement" => Some("Length of substring or replacement string"),
-            _ => None,
-        },
-        "push" | "unshift" | "splice" => match param {
-            "array" | "expr" => Some("Target array to modify"),
-            "list" => Some("Elements to add"),
-            "offset" => Some("Starting position for splice"),
-            "length" => Some("Number of elements to remove"),
-            _ => None,
-        },
-        "map" | "grep" => match param {
-            "block" | "expr" => Some("Code block or expression applied to each element"),
-            "list" => Some("Input list"),
-            _ => None,
-        },
-        "sort" => match param {
-            "block" | "subname" => Some("Comparison function or subroutine name"),
-            "list" => Some("List to sort"),
-            _ => None,
-        },
-        "join" => match param {
-            "expr" => Some("Separator string inserted between elements"),
-            "list" => Some("List of values to join"),
-            _ => None,
-        },
-        "sprintf" | "printf" => match param {
-            "format" => Some("Format string with %d, %s, etc. placeholders"),
-            "list" => Some("Values to interpolate into the format string"),
-            _ => None,
-        },
-        "index" | "rindex" => match param {
-            "string" | "str" => Some("String to search within"),
-            "substring" | "substr" => Some("Substring to find"),
-            "position" => Some("Starting position for search"),
-            _ => None,
-        },
-        "pack" => match param {
-            "template" => Some("Pack template string (A, N, V, a, etc.)"),
-            "list" => Some("Values to pack"),
-            _ => None,
-        },
-        "unpack" => match param {
-            "template" => Some("Unpack template string"),
-            "expr" => Some("Packed data string to decode"),
-            _ => None,
-        },
-        _ => None,
-    };
-    summary.map(|s| format!("{}: {}", param, s))
+    let sigs = create_builtin_signatures();
+    let builtin = sigs.get(function)?;
+    // Use the first signature variant to extract param names and match
+    // against the requested parameter.
+    if let Some(first_sig) = builtin.signatures.first() {
+        let param_names = extract_param_names(first_sig);
+        if param_names.contains(&param.to_string()) {
+            // Return the builtin's documentation as the summary.
+            // The full doc covers the function; callers can truncate or
+            // format it as needed.
+            return Some(builtin.documentation.to_string());
+        }
+    }
+    None
 }
 
 fn walk_ast<F>(node: &Node, visitor: &mut F) -> bool

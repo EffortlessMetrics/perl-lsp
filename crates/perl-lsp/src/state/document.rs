@@ -277,6 +277,8 @@ pub struct ClientCapabilities {
     pub semantic_tokens_refresh_support: bool,
     /// Supports workspace/inlayHint/refresh request
     pub inlay_hint_refresh_support: bool,
+    /// Client declared textDocument/inlayHint capability
+    pub inlay_hint_support: bool,
     /// Supports workspace/inlineValue/refresh request
     pub inline_value_refresh_support: bool,
     /// Supports workspace/diagnostic/refresh request

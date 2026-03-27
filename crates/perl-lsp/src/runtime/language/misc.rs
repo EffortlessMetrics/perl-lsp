@@ -34,6 +34,12 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         use crate::protocol::req_range;
+
+        // Return empty if client does not support inlay hints.
+        if !self.client_capabilities.lock().inlay_hint_support {
+            return Ok(Some(json!([])));
+        }
+
         let cap = inlay_hints_cap();
 
         if let Some(p) = params {
@@ -70,7 +76,7 @@ impl LspServer {
                 ));
 
                 // Add URI to hint data for later resolution.
-                // Merge with any existing data (e.g. function/paramIndex from
+                // Merge with any existing data (e.g. functionName/paramIndex from
                 // the hints provider) rather than overwriting it.
                 let enriched_hints: Vec<Value> = hints
                     .iter()
@@ -156,7 +162,7 @@ impl LspServer {
                             let param_name = label.trim_end_matches(':').trim();
                             // Include the function name in the tooltip when available
                             let func = hint
-                                .pointer("/data/function")
+                                .pointer("/data/functionName")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("unknown");
                             format!("{}() — parameter: {}", func, param_name)
@@ -206,7 +212,7 @@ impl LspServer {
     fn resolve_hint_label_location(&self, hint: &Value) -> Option<Value> {
         let data = hint.get("data")?;
         let uri = data.get("uri").and_then(|u| u.as_str())?;
-        let function_name = data.get("function").and_then(|f| f.as_str())?;
+        let function_name = data.get("functionName").and_then(|f| f.as_str())?;
 
         let documents = self.documents_guard();
         let doc = self.get_document(&documents, uri)?;
@@ -1564,7 +1570,7 @@ mod tests {
     /// handle_inlay_hint_resolve must include labelDetails in the response for
     /// a parameter hint (kind=2) that has no function data to resolve.
     ///
-    /// In this test the hint has no `data.function` so `resolve_hint_label_location`
+    /// In this test the hint has no `data.functionName` so `resolve_hint_label_location`
     /// returns None — but the important thing is that the code path is entered
     /// (i.e. no labelDetails are injected when there is nothing to look up, and
     /// no panic occurs).
