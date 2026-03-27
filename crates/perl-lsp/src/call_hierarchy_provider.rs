@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use perl_parser::PositionMapper;
 use perl_parser::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition, WireRange};
@@ -45,6 +47,100 @@ impl CallHierarchyProvider {
         let snippet = self.source.get(node.location.start..node.location.end)?.trim();
         let callee = snippet.split('(').next()?.trim();
         callee.contains("::").then(|| callee.to_string())
+    }
+
+    fn looks_like_package_name(name: &str) -> bool {
+        name.contains("::") || name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+    }
+
+    fn node_variable_name<'a>(node: &'a Node) -> Option<&'a str> {
+        if let NodeKind::Variable { name, .. } = &node.kind {
+            Some(name.as_str())
+        } else {
+            None
+        }
+    }
+
+    fn current_package_for_function(
+        &self,
+        func_node: &Node,
+        item: &CallHierarchyItem,
+    ) -> Option<String> {
+        item.package_name.clone().or_else(|| {
+            item.qualified_name.as_deref().and_then(|qualified| {
+                qualified.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
+            })
+        }).or_else(|| {
+            self.source.get(..func_node.location.start).and_then(|prefix| {
+                prefix.lines().rev().find_map(|line| {
+                    let line = line.trim();
+                    line.strip_prefix("package ")
+                        .map(|rest| rest.trim_end_matches(';').trim())
+                        .filter(|package_name| !package_name.is_empty())
+                        .map(|package_name| package_name.to_string())
+                })
+            })
+        })
+    }
+
+    fn infer_receiver_package(
+        &self,
+        object: &Node,
+        current_package: Option<&str>,
+        receiver_packages: &HashMap<String, String>,
+    ) -> Option<String> {
+        if let Some(name) = Self::node_variable_name(object) {
+            if let Some(package_name) = receiver_packages.get(name) {
+                return Some(package_name.clone());
+            }
+
+            if matches!(name, "self" | "class") {
+                return current_package.map(|package_name| package_name.to_string());
+            }
+
+            if Self::looks_like_package_name(name) {
+                return Some(name.to_string());
+            }
+        }
+
+        None
+    }
+
+    fn infer_constructor_package(
+        &self,
+        rhs: &Node,
+        current_package: Option<&str>,
+        receiver_packages: &HashMap<String, String>,
+    ) -> Option<String> {
+        match &rhs.kind {
+            NodeKind::MethodCall { method, object, .. } if method == "new" => {
+                self.infer_receiver_package(object, current_package, receiver_packages)
+            }
+            NodeKind::FunctionCall { name, .. } => {
+                name.rsplit_once("::").map(|(package_name, _)| package_name.to_string())
+            }
+            _ => None,
+        }
+    }
+
+    fn record_receiver_assignment(
+        &self,
+        lhs: &Node,
+        rhs: &Node,
+        current_package: Option<&str>,
+        receiver_packages: &mut HashMap<String, String>,
+    ) {
+        if let Some(variable_name) = Self::node_variable_name(lhs) {
+            if let Some(package_name) =
+                self.infer_constructor_package(rhs, current_package, receiver_packages)
+            {
+                receiver_packages.insert(variable_name.to_string(), package_name);
+            }
+        }
+    }
+
+    fn outgoing_call_key(item: &CallHierarchyItem) -> &str {
+        item.qualified_name.as_deref().unwrap_or(item.name.as_str())
     }
 
     /// Create a new call hierarchy provider for a source file
@@ -101,8 +197,15 @@ impl CallHierarchyProvider {
         // Find the function node
         if let Some(func_node) = self.find_function_by_name(ast, &item.name) {
             let mut calls = Vec::new();
+            let current_package = self.current_package_for_function(func_node, item);
             if let NodeKind::Subroutine { body, .. } = &func_node.kind {
-                self.find_outgoing_calls(body, &mut calls);
+                let mut receiver_packages = HashMap::new();
+                self.find_outgoing_calls(
+                    body,
+                    &mut calls,
+                    current_package.as_deref(),
+                    &mut receiver_packages,
+                );
             }
             calls
         } else {
@@ -280,7 +383,13 @@ impl CallHierarchyProvider {
     }
 
     /// Find all function calls within a node
-    fn find_outgoing_calls(&self, node: &Node, calls: &mut Vec<CallHierarchyOutgoingCall>) {
+    fn find_outgoing_calls(
+        &self,
+        node: &Node,
+        calls: &mut Vec<CallHierarchyOutgoingCall>,
+        current_package: Option<&str>,
+        receiver_packages: &mut HashMap<String, String>,
+    ) {
         let uri = &self.uri;
         match &node.kind {
             NodeKind::FunctionCall { name, .. } => {
@@ -301,7 +410,10 @@ impl CallHierarchyProvider {
                 let ranges = vec![self.node_to_range(node)];
 
                 // Check if we already have a call to this function
-                if let Some(existing) = calls.iter_mut().find(|c| &c.to.name == name) {
+                let item_key = Self::outgoing_call_key(&item);
+                if let Some(existing) =
+                    calls.iter_mut().find(|c| Self::outgoing_call_key(&c.to) == item_key)
+                {
                     existing.from_ranges.extend(ranges);
                 } else {
                     calls.push(CallHierarchyOutgoingCall { to: item, from_ranges: ranges });
@@ -314,6 +426,11 @@ impl CallHierarchyProvider {
                     None
                 };
 
+                let package_name = self.infer_receiver_package(object, current_package, receiver_packages);
+                let qualified_name = package_name
+                    .as_ref()
+                    .map(|package_name| format!("{package_name}::{method}"));
+
                 let item = CallHierarchyItem {
                     name: method.clone(),
                     kind: "method".to_string(),
@@ -321,24 +438,40 @@ impl CallHierarchyProvider {
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail,
-                    package_name: None,
-                    qualified_name: None,
+                    package_name,
+                    qualified_name,
                 };
 
                 let ranges = vec![self.node_to_range(node)];
 
-                if let Some(existing) = calls.iter_mut().find(|c| &c.to.name == method) {
+                let item_key = Self::outgoing_call_key(&item);
+                if let Some(existing) =
+                    calls.iter_mut().find(|c| Self::outgoing_call_key(&c.to) == item_key)
+                {
                     existing.from_ranges.extend(ranges);
                 } else {
                     calls.push(CallHierarchyOutgoingCall { to: item, from_ranges: ranges });
                 }
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                if let Some(initializer) = initializer {
+                    self.record_receiver_assignment(
+                        variable,
+                        initializer,
+                        current_package,
+                        receiver_packages,
+                    );
+                }
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                self.record_receiver_assignment(lhs, rhs, current_package, receiver_packages);
             }
             _ => {}
         }
 
         // Visit children
         self.visit_children(node, |child| {
-            self.find_outgoing_calls(child, calls);
+            self.find_outgoing_calls(child, calls, current_package, receiver_packages);
             None::<()>
         });
     }

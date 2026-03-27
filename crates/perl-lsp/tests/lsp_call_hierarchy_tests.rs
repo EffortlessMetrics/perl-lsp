@@ -1229,6 +1229,71 @@ sub orchestrate {
     Ok(())
 }
 
+/// Tests receiver inference for OO-style method calls.
+/// When process() constructs a Repo object and later calls $repo->fetch(),
+/// outgoing call resolution should point fetch() at Repo.pm.
+#[test]
+fn test_cross_file_outgoing_calls_infer_receiver_package() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/Repo.pm",
+        r#"package Repo;
+
+sub new {
+    return bless {}, shift;
+}
+
+sub fetch {
+    return "value";
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///bin/app.pl",
+        r#"use Repo;
+
+sub process {
+    my $repo = Repo->new();
+    return $repo->fetch("x");
+}
+"#,
+    )?;
+
+    harness.barrier();
+
+    let prepare_response = harness.request(
+        "textDocument/prepareCallHierarchy",
+        json!({
+            "textDocument": { "uri": "file:///bin/app.pl" },
+            "position": { "line": 2, "character": 4 }
+        }),
+    )?;
+
+    let items = prepare_response.as_array().ok_or("prepareCallHierarchy returned non-array")?;
+    assert!(!items.is_empty(), "prepareCallHierarchy returned empty array for process");
+
+    let outgoing_response =
+        harness.request("callHierarchy/outgoingCalls", json!({ "item": &items[0] }))?;
+    let calls = outgoing_response.as_array().ok_or("outgoingCalls returned non-array")?;
+
+    let fetch_call = calls
+        .iter()
+        .find(|call| call["to"]["name"].as_str().map(|name| name == "fetch").unwrap_or(false))
+        .ok_or("expected outgoing fetch() call")?;
+
+    assert_eq!(
+        fetch_call["to"]["uri"], "file:///lib/Repo.pm",
+        "receiver inference should resolve $repo->fetch() to Repo.pm",
+    );
+
+    Ok(())
+}
+
 /// Tests fix for issue #2878: workspace-backed incoming calls should refresh after edits.
 #[test]
 fn test_cross_file_incoming_calls_refresh_after_change() -> TestResult {
