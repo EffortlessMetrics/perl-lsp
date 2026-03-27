@@ -26,6 +26,87 @@ if git diff --cached --name-only 2>/dev/null | grep -q '\.rs$' || \
   fi
 fi
 
+# ── Receipt gate: verify-build, clippy, test ──────────────────────────────
+# Receipt files are JSON blobs written by verify-build / clippy / test steps.
+#
+# Receipt format (path convention):
+#   receipts/verify-build.<commit-hash>
+#   receipts/clippy.<commit-hash>
+#   receipts/test.<commit-hash>
+#
+# Content (JSON):
+#   {"exit_code": 0, "timestamp": "<ISO 8601 UTC>", "duration_s": <float>}
+#
+# Staleness: receipts older than 1 hour are rejected (re-run verification).
+# This gate only fires when .rs files are in the current diff.
+
+RECEIPT_DIR="${REPO_ROOT}/receipts"
+COMMIT_HASH="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+MAX_AGE_SECONDS=3600  # 1 hour
+
+if git diff --cached --name-only 2>/dev/null | grep -q '\.rs$' || \
+   git diff --name-only HEAD~1 2>/dev/null | grep -q '\.rs$'; then
+
+  MISSING=()
+  STALE=()
+  FAILED=()
+
+  for CHECK in verify-build clippy test; do
+    RECEIPT="${RECEIPT_DIR}/${CHECK}.${COMMIT_HASH}"
+
+    if [[ ! -f "${RECEIPT}" ]]; then
+      MISSING+=("${CHECK}")
+      continue
+    fi
+
+    # Parse receipt fields
+    if command -v jq &>/dev/null; then
+      EXIT_CODE="$(jq -r '.exit_code // 1' "${RECEIPT}" 2>/dev/null)"
+      TS_STR="$(jq -r '.timestamp // empty' "${RECEIPT}" 2>/dev/null)"
+    else
+      # Fallback: just check file is non-empty
+      EXIT_CODE=0
+      TS_STR=""
+    fi
+
+    if [[ "${EXIT_CODE}" != "0" ]]; then
+      FAILED+=("${CHECK} (exit code ${EXIT_CODE})")
+    elif [[ -n "${TS_STR}" ]]; then
+      # Validate freshness
+      TS_EPOCH="$(date -d "${TS_STR}" -u +%s 2>/dev/null || echo 0)"
+      NOW_EPOCH="$(date -u +%s)"
+      AGE=$(( NOW_EPOCH - TS_EPOCH ))
+      if [[ "${AGE}" -gt "${MAX_AGE_SECONDS}" ]]; then
+        STALE+=("${CHECK} (${AGE}s old, max ${MAX_AGE_SECONDS}s)")
+      fi
+    fi
+  done
+
+  BLOCKED=0
+  if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo "Task completion blocked: missing receipts: ${MISSING[*]}"
+    BLOCKED=1
+  fi
+  if [[ ${#STALE[@]} -gt 0 ]]; then
+    echo "Task completion blocked: stale receipts: ${STALE[*]}"
+    BLOCKED=1
+  fi
+  if [[ ${#FAILED[@]} -gt 0 ]]; then
+    echo "Task completion blocked: failed receipts: ${FAILED[*]}"
+    BLOCKED=1
+  fi
+
+  if [[ "${BLOCKED}" -eq 1 ]]; then
+    echo ""
+    echo "Run verify-build, clippy, and test steps to generate fresh receipts at:"
+    echo "  receipts/{verify-build,clippy,test}.${COMMIT_HASH}"
+    echo ""
+    echo "Receipt format: {\"exit_code\": 0, \"timestamp\": \"<ISO 8601 UTC>\", \"duration_s\": <float>}"
+    echo "Receipts must be less than ${MAX_AGE_SECONDS}s old."
+    exit 2
+  fi
+fi
+
 # Check if test files were modified and CURRENT_STATUS.md needs updating
 if git diff --cached --name-only 2>/dev/null | grep -qE '^crates/.*/tests/.*\.rs$' || \
    git diff --name-only HEAD~1 2>/dev/null | grep -qE '^crates/.*/tests/.*\.rs$'; then
