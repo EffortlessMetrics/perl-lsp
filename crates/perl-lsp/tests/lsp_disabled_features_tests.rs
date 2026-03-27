@@ -89,7 +89,8 @@ fn test_disabled_features_non_array_value_ignored() -> TestResult {
 #[test]
 fn test_disabled_features_empty_array_is_noop() -> TestResult {
     let mut harness = LspHarness::new_raw();
-    let result = harness.initialize_with_init_options(Some(json!({})), json!({ "disabledFeatures": [] }))?;
+    let result =
+        harness.initialize_with_init_options(Some(json!({})), json!({ "disabledFeatures": [] }))?;
     let caps = &result["capabilities"];
     assert!(
         caps.get("semanticTokensProvider").is_some(),
