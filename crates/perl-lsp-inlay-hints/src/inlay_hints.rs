@@ -22,8 +22,22 @@ use perl_builtins::builtin_signatures::create_builtin_signatures;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
 use perl_semantic_analyzer::declaration::get_node_children;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_json::json;
+
+/// Tooltip content for inlay hints (LSP 3.17).
+///
+/// Wraps either a plain string or markdown-formatted tooltip per the
+/// `InlayHintTooltip` LSP type definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum InlayHintTooltip {
+    /// Plain string tooltip
+    String(String),
+    /// Markdown-formatted tooltip
+    Markdown(String),
+}
 
 /// Inlay hint kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,18 +62,7 @@ pub struct InlayHint {
     /// Padding on the right
     pub padding_right: bool,
     /// Optional tooltip (deferred to resolve)
-    pub tooltip: Option<String>,
-    /// Optional source location for jump-to-definition from hint label
-    pub location: Option<HintLocation>,
-}
-
-/// Source location attached to a hint for label.location support (LSP 3.17).
-#[derive(Debug, Clone)]
-pub struct HintLocation {
-    /// Document URI
-    pub uri: String,
-    /// Byte range of the target symbol in the source document
-    pub range: (usize, usize),
+    pub tooltip: Option<InlayHintTooltip>,
 }
 
 /// Inlay hints provider.
