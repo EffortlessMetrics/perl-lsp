@@ -21,21 +21,7 @@ You are empowered to fix problems you encounter, even outside your assigned slic
 - Broken imports caused by your changes
 
 **File an issue for everything else** (a fresh agent handles it):
-Don't try to branch-switch or stash in your worktree. Just create a GitHub issue with enough context that a fresh agent can pick it up without re-investigating:
-
-```bash
-gh issue create --title "<type>: <description>" --label "swarm-discovered" \
-  --body "Discovered by <agent-type> while working on <branch>.
-
-## Context
-<what you found, why it matters — enough that no one re-investigates>
-
-## Files
-<paths with line numbers>
-
-## Suggested Approach
-<if you have one>"
-```
+Don't try to branch-switch or stash in your worktree. Just create a GitHub issue with enough context that a fresh agent can pick it up without re-investigating. Use the **Discovery Issue (Lightweight)** variant from `/scout-issue`:
 
 Create issues for: security vulnerabilities, design flaws, missing features, recurring patterns needing architectural decisions.
 
@@ -280,27 +266,7 @@ gh pr merge <N> --squash --delete-branch   # Only if both above are green
 
 **Every scout MUST write findings as a GitHub issue.** Agent output is ephemeral; GitHub issues persist.
 
-Scouts file structured issues using `gh issue create`. Template:
-
-```bash
-gh issue create --title "<sector>: <finding>" --label "swarm-discovered" \
-  --body "$(cat <<'EOF'
-## Problem
-<what is wrong or missing — specific, not vague>
-
-## Options
-1. <option A> — trade-off: ...
-2. <option B> — trade-off: ...
-
-## Acceptance Criteria
-- [ ] <measurable condition>
-- [ ] <measurable condition>
-
-## Key Files
-- `<path>:<line>` — <why this file matters>
-EOF
-)"
-```
+Scouts file structured issues using the **Full Scout Report** variant from `/scout-issue`. Do NOT hand-roll `gh issue create` bodies.
 
 ### Scout sector discipline
 
@@ -341,7 +307,7 @@ Skills are the single source of truth for multi-step procedures. When an agent i
 | Format + clippy + test | `/verify` | Don't hand-roll `cargo fmt && cargo clippy && cargo test` |
 | Create PR | `/pr-create` | Don't hand-roll `gh pr create` with ad-hoc body |
 | Code review checklist | `/coding-standards` | Don't guess at project conventions |
-| Scout findings | `gh issue create --label swarm-discovered` | Don't skip the issue template |
+| Scout findings | `/scout-issue` (full or discovery variant) | Don't hand-roll `gh issue create` bodies |
 | Parser fix TDD | `/parser-fix` | Don't skip the red-green-refactor cycle |
 
 ### Why this matters
