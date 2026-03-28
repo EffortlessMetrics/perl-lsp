@@ -47,6 +47,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 - [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md)
 - [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md)
 - [reference/LSP_IMPLEMENTATION_GUIDE.md](reference/LSP_IMPLEMENTATION_GUIDE.md)
+- [reference/PROPERTY_TESTING.md](reference/PROPERTY_TESTING.md)
 - [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md)
 - [reference/STABILITY.md](reference/STABILITY.md)
 - [reference/CONFIG.md](reference/CONFIG.md)

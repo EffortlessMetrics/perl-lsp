@@ -2615,6 +2615,8 @@ version = "0.12.0"
 dependencies = [
  "lsp-types",
  "perl-tdd-support",
+ "perl-test-generators",
+ "proptest",
  "ropey",
  "serde",
  "serde_json",
@@ -2730,6 +2732,13 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "perl-test-generators"
+version = "0.12.0"
+dependencies = [
+ "proptest",
 ]
 
 [[package]]
