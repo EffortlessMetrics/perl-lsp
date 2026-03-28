@@ -47,3 +47,5 @@ step counts, and roles.
 
 Swarm state lives in GitHub (issues, PRs, labels) and `.ops-perl-lsp/swarm-metrics.jsonl`.
 Use `gh issue list`, `gh pr list`, and `/swarm-status` to query current state.
+Reusable worktree slots live in `.ops-perl-lsp/worktree-manager/state.json` and
+are managed through `/worktree-manager`.

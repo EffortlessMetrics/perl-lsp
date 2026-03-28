@@ -1773,12 +1773,14 @@ lsp-tier-c:
 clean-worktrees:
     #!/usr/bin/env bash
     set -euo pipefail
+    repo_name=$(basename "$PWD")
+    managed_root="$(dirname "$PWD")/${repo_name}-worktrees"
     echo "Pruning unreferenced worktrees..."
     git worktree prune
-    echo "Checking .claude/worktrees/ for stale entries..."
+    echo "Checking ${managed_root}/ for stale entries..."
     removed=0
     kept=0
-    for wt in .claude/worktrees/*/; do
+    for wt in "${managed_root}"/*/; do
         [ -d "$wt" ] || continue
         name=$(basename "$wt")
         # Check for uncommitted changes
@@ -1803,3 +1805,7 @@ clean-worktrees:
     done
     git worktree prune
     echo "Done: removed $removed, kept $kept"
+
+# Query, allocate, release, or clean up reusable worktree slots
+worktree-manager *ARGS:
+    python3 scripts/worktree-manager.py {{ARGS}}

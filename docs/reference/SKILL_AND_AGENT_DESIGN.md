@@ -95,6 +95,7 @@ Stable, reusable instructions belong in structural artifacts:
 - hooks: deterministic enforcement
 - templates: handoff/PR/report formats
 - coordinator prompts: role boundaries and operating loops
+- worktree-manager runtime: `.ops-perl-lsp/worktree-manager/state.json` for reusable slot lifecycle state
 
 Durable knowledge is pre-encoded so it is not restated in every spawn prompt.
 Stable swarm conclusions should also be recorded in the tracked findings ledger
@@ -139,8 +140,8 @@ Use a skill when:
 - supporting files or templates help keep the hot prompt small
 
 In this repo today, `/swarm`, `/swarm-protocol`, `/coding-standards`,
-`/swarm-priorities`, `/plan-fix`, `/parser-fix`, and `/verify-build` ship from
-`.claude/skills/`. Other slash entrypoints currently live under
+`/swarm-priorities`, `/plan-fix`, `/parser-fix`, `/verify-build`, and
+`/worktree-manager` ship from `.claude/skills/`. Other slash entrypoints currently live under
 `.claude/commands/`. They are interchangeable at the call site unless
 frontmatter or bundled resources intentionally change the behavior. The runtime
 docs should describe that surface accurately.
@@ -158,6 +159,7 @@ Typical slash entrypoints in this repo today:
 - `/parser-fix`
 - `/verify-build`
 - `/plan-fix`
+- `/worktree-manager`
 
 ### Skill Frontmatter Cheat Sheet
 
