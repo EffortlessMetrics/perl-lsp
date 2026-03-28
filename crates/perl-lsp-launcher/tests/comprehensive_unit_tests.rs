@@ -10,8 +10,43 @@ use perl_lsp_launcher::{
     to_json_for_profile,
 };
 use perl_tdd_support::must;
+use std::cell::Cell;
+use std::sync::{Mutex, OnceLock};
+
+static ENV_GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+thread_local! {
+    static ENV_LOCK_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+struct EnvGuard {
+    _lock: Option<std::sync::MutexGuard<'static, ()>>,
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        ENV_LOCK_DEPTH.with(|depth| {
+            let current = depth.get();
+            depth.set(current.saturating_sub(1));
+        });
+    }
+}
+
+fn acquire_env_guard() -> EnvGuard {
+    let lock = ENV_LOCK_DEPTH.with(|depth| {
+        let current = depth.get();
+        depth.set(current + 1);
+        if current == 0 {
+            Some(ENV_GUARD.get_or_init(|| Mutex::new(())).lock().unwrap())
+        } else {
+            None
+        }
+    });
+
+    EnvGuard { _lock: lock }
+}
 
 fn with_env_var<T>(key: &str, value: Option<&str>, f: impl FnOnce() -> T) -> T {
+    let _guard = acquire_env_guard();
     let previous = std::env::var_os(key);
     match value {
         Some(value) => unsafe { std::env::set_var(key, value) },
