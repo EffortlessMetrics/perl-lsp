@@ -1,6 +1,6 @@
 //! Generate Homebrew formula for release artifacts using SHA256SUMS.
 
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;

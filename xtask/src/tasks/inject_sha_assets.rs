@@ -1,7 +1,7 @@
 //! Generate Homebrew formula and VS Code asset metadata from cargo-dist checksums.
 
-use color_eyre::eyre::{eyre, Context, Result};
-use serde_json::{json, Map, Value};
+use color_eyre::eyre::{Context, Result, eyre};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
