@@ -3,7 +3,7 @@
 //! Delegates to `perl-ci-hygiene forbid-fatal-constructs`, preferring the
 //! locally built binary when available for speed.
 
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

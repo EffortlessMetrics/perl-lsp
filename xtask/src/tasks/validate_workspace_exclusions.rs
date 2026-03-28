@@ -1,7 +1,7 @@
 //! Validate workspace exclusion strategy invariants.
 
 use crate::utils::project_root;
-use color_eyre::eyre::{bail, eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, bail, eyre};
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashSet;
