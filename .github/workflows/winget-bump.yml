@@ -105,7 +105,6 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          path: distribution/winget
           branch: bump-perl-lsp-winget-${{ steps.tag.outputs.version }}
           title: "winget: perl-lsp ${{ steps.tag.outputs.version }}"
           body: |

@@ -47,9 +47,14 @@ if ($ScoopManifestPath) {
   Update-File -Path $ScoopManifestPath -Transform {
     param($content)
 
-    $content = $content -replace '"version": "__RELEASE_VERSION__"', ('"version": "' + $Version + '"')
-    $content = $content -replace 'https://github.com/EffortlessMetrics/perl-lsp/releases/download/v__RELEASE_VERSION__/perl-lsp-__RELEASE_VERSION__-x86_64-pc-windows-msvc.zip', $releaseZipUrl
-    $content = $content -replace '"hash": "__RELEASE_HASH__"', ('"hash": "' + $ReleaseSha256 + '"')
+    $content = [regex]::Replace($content, '"version":\s*"[^"]+"', ('"version": "' + $Version + '"'), 1)
+    $content = [regex]::Replace(
+      $content,
+      '"url":\s*"https://github\.com/EffortlessMetrics/perl-lsp/releases/download/v[^"]+/perl-lsp-[^"]+-x86_64-pc-windows-msvc\.zip"',
+      ('"url": "' + $releaseZipUrl + '"'),
+      1
+    )
+    $content = [regex]::Replace($content, '"hash":\s*"[^"]+"', ('"hash": "' + $ReleaseSha256 + '"'), 1)
 
     return $content
   }
@@ -59,7 +64,7 @@ if ($ChocolateyNuspecPath) {
   Update-File -Path $ChocolateyNuspecPath -Transform {
     param($content)
 
-    $content = $content -replace '<version>__RELEASE_VERSION__</version>', ('<version>' + $Version + '</version>')
+    $content = [regex]::Replace($content, '<version>[^<]+</version>', ('<version>' + $Version + '</version>'), 1)
 
     return $content
   }
@@ -69,7 +74,7 @@ if ($ChocolateyInstallPath) {
   Update-File -Path $ChocolateyInstallPath -Transform {
     param($content)
 
-    $content = $content -replace '__RELEASE_SHA256__', $ReleaseSha256
+    $content = [regex]::Replace($content, "checksum\s*=\s*'[^']+'", ("checksum      = '" + $ReleaseSha256 + "'"), 1)
 
     return $content
   }
@@ -79,9 +84,9 @@ if ($WingetManifestPath) {
   Update-File -Path $WingetManifestPath -Transform {
     param($content)
 
-    $content = $content -replace 'PackageVersion: __RELEASE_VERSION__', ('PackageVersion: ' + $Version)
-    $content = $content -replace 'InstallerUrl: __RELEASE_URL__', ('InstallerUrl: ' + $releaseZipUrl)
-    $content = $content -replace 'InstallerSha256: __RELEASE_SHA256__', ('InstallerSha256: ' + $ReleaseSha256)
+    $content = [regex]::Replace($content, 'PackageVersion:\s*\S+', ('PackageVersion: ' + $Version), 1)
+    $content = [regex]::Replace($content, 'InstallerUrl:\s*\S+', ('InstallerUrl: ' + $releaseZipUrl), 1)
+    $content = [regex]::Replace($content, 'InstallerSha256:\s*\S+', ('InstallerSha256: ' + $ReleaseSha256), 1)
 
     return $content
   }
