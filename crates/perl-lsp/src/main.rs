@@ -10,9 +10,9 @@
 #![deny(clippy::option_env_unwrap)]
 use perl_lsp::LspServer;
 use perl_lsp_launcher::{
-    LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
-    init_logging, log_server_startup, logging_filter, parse_args, port_in_use_message,
-    shell_completion, should_enable_logging, startup_banner, StartupTimer,
+    LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
+    format_info_output, help_text, init_logging, log_server_startup, logging_filter, parse_args,
+    port_in_use_message, shell_completion, should_enable_logging, startup_banner,
 };
 use std::env;
 use std::process;
@@ -314,13 +314,6 @@ fn run_server(launch_config: LaunchConfig) {
             "perl_lsp=info,perl_lsp_launcher=info,info",
             "warn",
         ));
-        log_server_startup(
-            "perl-lsp",
-            env!("CARGO_PKG_VERSION"),
-            launch_config.transport,
-            Some(launch_config.feature_profile),
-            None, // startup report after construction
-        );
     }
     startup_timer.checkpoint("logging_init");
 

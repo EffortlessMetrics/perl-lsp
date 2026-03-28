@@ -34,29 +34,19 @@ impl StartupTimer {
     /// Create a new timer that starts counting immediately.
     pub fn new() -> Self {
         let now = Instant::now();
-        Self {
-            phases: Vec::with_capacity(8),
-            start: now,
-            last: now,
-        }
+        Self { phases: Vec::with_capacity(8), start: now, last: now }
     }
 
     /// Record elapsed time since the last checkpoint (or start) as `name`.
     pub fn checkpoint(&mut self, name: &'static str) {
         let now = Instant::now();
-        self.phases.push(StartupPhase {
-            name,
-            duration: now - self.last,
-        });
+        self.phases.push(StartupPhase { name, duration: now - self.last });
         self.last = now;
     }
 
     /// Consume the timer and produce an immutable report.
     pub fn finish(self) -> StartupReport {
-        StartupReport {
-            total: self.start.elapsed(),
-            phases: self.phases,
-        }
+        StartupReport { total: self.start.elapsed(), phases: self.phases }
     }
 }
 
@@ -134,7 +124,7 @@ impl fmt::Display for StartupReport {
             } else {
                 0.0
             };
-            writeln!(f, "  {:30s}  {:>8.1} ms  ({:>5.1}%)", phase.name, ms, pct)?;
+            writeln!(f, "  {:<30}  {:>8.1} ms  ({:>5.1}%)", phase.name, ms, pct)?;
         }
         Ok(())
     }
