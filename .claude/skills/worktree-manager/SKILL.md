@@ -29,7 +29,8 @@ released for reuse, or cleaned up when stale.
 
 When a hook or wrapper knows the agent identity, pass it as
 `WORKTREE_MANAGER_OWNER` or `--owner` so the slot record carries a lead-readable
-owner label through `query --json` and the table view.
+owner label through `query --json` and the table view. If no owner is provided,
+the slot remains unowned rather than inheriting stale data from a prior task.
 ## Lifecycle
 
 ### Query
@@ -56,6 +57,9 @@ ready for handoff or cleanup.
 ```bash
 python3 scripts/worktree-manager.py release --slot issue-2157 --owner builder-2157
 ```
+
+Passing the same owner on release helps catch mismatched releases; once release
+completes, the slot becomes idle/retired and its current-owner field is cleared.
 
 ### Cleanup
 

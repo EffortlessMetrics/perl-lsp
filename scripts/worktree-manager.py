@@ -118,6 +118,15 @@ def resolve_owner(explicit: str | None) -> str | None:
     return owner_from_env()
 
 
+def set_owner(slot: dict[str, Any], owner: str | None, owner_source: str | None) -> None:
+    slot["owner"] = owner
+    slot["owner_set_at"] = utc_now() if owner else None
+    if owner and owner_source:
+        slot["owner_source"] = owner_source
+    else:
+        slot.pop("owner_source", None)
+
+
 def state_path_from_args(args: argparse.Namespace) -> Path:
     if args.state_file:
         return Path(args.state_file)
@@ -374,10 +383,7 @@ def allocate(args: argparse.Namespace, state: dict[str, Any], state_path: Path, 
     slot["status"] = "active"
     slot["reuse_count"] = int(slot.get("reuse_count", 0)) + 1
     slot["last_used_at"] = utc_now()
-    if owner:
-        slot["owner"] = owner
-        slot["owner_set_at"] = utc_now()
-        slot["owner_source"] = owner_source
+    set_owner(slot, owner, owner_source)
     save_state(state_path, state)
     print(f"allocated slot={args.slot} path={slot_rel} branch={args.branch} ref={base}")
 
@@ -397,12 +403,14 @@ def release(args: argparse.Namespace, state: dict[str, Any], state_path: Path) -
         return
 
     owner = resolve_owner(args.owner)
+    recorded_owner = normalize_owner(slot.get("owner"))
+    if owner and recorded_owner and owner != recorded_owner and not args.force:
+        raise RuntimeError(
+            f"slot {args.slot!r} is owned by {recorded_owner!r}; release as that owner or use --force"
+        )
     slot["status"] = "retired" if args.retire else "idle"
     slot["last_released_at"] = utc_now()
-    if owner:
-        slot["owner"] = owner
-        slot["owner_set_at"] = utc_now()
-        slot["owner_source"] = "flag" if normalize_owner(args.owner) else "env"
+    set_owner(slot, None, None)
     if args.note:
         slot.setdefault("notes", []).append(args.note)
     save_state(state_path, state)
