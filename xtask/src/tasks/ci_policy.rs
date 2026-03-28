@@ -1,4 +1,4 @@
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use regex::Regex;
 use std::fs;
 use std::path::Path;

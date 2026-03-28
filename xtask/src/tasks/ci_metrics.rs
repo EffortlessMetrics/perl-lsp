@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
 use std::collections::{BTreeMap, HashMap};
@@ -175,11 +175,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
 
             let elapsed_seconds = end.and_then(|end_ts| {
                 let elapsed = (end_ts - start).num_seconds();
-                if elapsed > 0 {
-                    u64::try_from(elapsed).ok()
-                } else {
-                    None
-                }
+                if elapsed > 0 { u64::try_from(elapsed).ok() } else { None }
             });
 
             let elapsed_seconds = elapsed_seconds.unwrap_or(0);
@@ -668,11 +664,7 @@ fn round_one_decimal(value: f64) -> f64 {
 }
 
 fn percent(part: u64, total: u64) -> f64 {
-    if total == 0 {
-        0.0
-    } else {
-        round_one_decimal((part as f64 * 100.0) / (total as f64))
-    }
+    if total == 0 { 0.0 } else { round_one_decimal((part as f64 * 100.0) / (total as f64)) }
 }
 
 fn percentile(values: &[u64], percentile: f64) -> u64 {
@@ -694,11 +686,7 @@ fn workflow_key(name: &str) -> String {
         }
     }
 
-    if key.is_empty() {
-        "workflow".to_string()
-    } else {
-        key
-    }
+    if key.is_empty() { "workflow".to_string() } else { key }
 }
 
 fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
