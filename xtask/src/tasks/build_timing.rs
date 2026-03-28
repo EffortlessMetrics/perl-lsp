@@ -367,10 +367,10 @@ fn detect_memory_gb() -> Value {
 
     command_output_parse_f64_or_unknown(&["sysctl", "-n", "hw.memsize"])
         .and_then(|value| {
-            if value.is_number() {
-                if let Some(raw) = value.as_f64() {
-                    return Some(Value::from((raw / 1024.0 / 1024.0 / 1024.0).round() as u64));
-                }
+            if value.is_number()
+                && let Some(raw) = value.as_f64()
+            {
+                return Some(Value::from((raw / 1024.0 / 1024.0 / 1024.0).round() as u64));
             }
             None
         })
