@@ -985,6 +985,10 @@ enum Commands {
         /// Maximum number of rows to show in each summary section.
         #[arg(long, default_value_t = 10)]
         limit: usize,
+
+        /// Output format for the swarm summary.
+        #[arg(long, value_enum, default_value = "human")]
+        format: swarm_summary::SwarmSummaryOutputFormat,
     },
 
     /// Populate mdBook source directory from `docs/`.
@@ -1415,8 +1419,8 @@ fn main() -> Result<()> {
         }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::WorktreeCleanup => worktrees::cleanup(),
-        Commands::SwarmSummary { ops_dir, since, limit } => {
-            swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit })
+        Commands::SwarmSummary { ops_dir, since, limit, format } => {
+            swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
         Commands::PopulateBook => populate_book::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),

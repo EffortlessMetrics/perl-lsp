@@ -28,7 +28,8 @@ gh issue list --label "needs-plan-review" --state open --json number --jq length
 gh pr list --label "merge-ready" --state open --json number --jq length
 
 echo "=== Metrics Dashboard (last 24h) ==="
-cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since 24h --limit 10
+cargo xtask swarm-summary .ops-perl-lsp --since 24h --limit 10
+cargo xtask swarm-summary .ops-perl-lsp --since 24h --limit 10 --format json
 ```
 
 ## Full View (`--full`)
@@ -36,7 +37,8 @@ cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since 24h --limit 10
 Also includes:
 ```bash
 echo "=== Metrics Dashboard (last 7d) ==="
-cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since 7d --limit 25
+cargo xtask swarm-summary .ops-perl-lsp --since 7d --limit 25
+cargo xtask swarm-summary .ops-perl-lsp --since 7d --limit 25 --format json
 
 echo "=== Recent Issues Filed ==="
 gh issue list --label "swarm-discovered" --state open --limit 20 --json number,title

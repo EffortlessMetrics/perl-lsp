@@ -26,7 +26,8 @@ echo "=== Agent Patches Pending ==="
 ls -la .ops/agent-patches/*.md 2>/dev/null
 
 echo "=== Metrics Dashboard ==="
-cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since "${SINCE}" --limit 20
+cargo xtask swarm-summary .ops-perl-lsp --since "${SINCE}" --limit 20
+cargo xtask swarm-summary .ops-perl-lsp --since "${SINCE}" --limit 20 --format json
 ```
 
 ## Report Format
@@ -50,6 +51,7 @@ Summarize as:
 - Entries in window: N
 - Top agent types: <from metrics>
 - Top session / worktree hotspots: <from metrics>
+- If you need a machine-readable handoff, capture the JSON mode output too.
 - Agent patches pending review: N
 
 ### Blockers
