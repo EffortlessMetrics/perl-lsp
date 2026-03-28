@@ -1,0 +1,14 @@
+package = "perl-lsp"
+display_name = "Perl Language Server"
+summary = "High-performance Perl Language Server with 100% syntax coverage"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+license = "MIT"
+maintainer = "EffortlessMetrics <git@effortlesssteven.com>"
+upstream_issue = "https://github.com/EffortlessMetrics/perl-lsp/issues/2095"
+
+# Release artifacts used as package inputs.
+linux_gnu_x86_64_asset = "perl-lsp-__RELEASE_VERSION__-x86_64-unknown-linux-gnu.tar.gz"
+linux_gnu_aarch64_asset = "perl-lsp-__RELEASE_VERSION__-aarch64-unknown-linux-gnu.tar.gz"
+
+# Package manager targets covered by this scaffold.
+targets = ["apt", "dnf", "pacman"]
