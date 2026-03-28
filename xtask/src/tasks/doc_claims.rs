@@ -1,7 +1,7 @@
 //! Validate known stale publication claims inside docs/articles.
 
 use crate::utils::project_root;
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use std::{fs, path::PathBuf};
 
 const ARTICLES_DIR: &str = "docs/articles";

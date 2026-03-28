@@ -3,7 +3,7 @@
 //! Mirrors `scripts/ci-audit-workflows.py` by checking workflow files for
 //! pull-request-triggered jobs that do not have explicit gating (`if:`).
 
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use serde_yaml_ng::Value;
 use std::fs;
 
