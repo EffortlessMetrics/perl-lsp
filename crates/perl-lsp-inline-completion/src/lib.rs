@@ -391,7 +391,11 @@ impl InlineCompletionProvider {
     }
 
     fn current_package(&self, lines: &[&str], line_index: usize) -> Option<String> {
-        lines.iter().take(line_index + 1).filter_map(|line| self.parse_package_name(line)).last()
+        lines
+            .iter()
+            .take(line_index + 1)
+            .filter_map(|line| self.parse_package_name(line))
+            .next_back()
     }
 
     fn previous_non_empty_line<'a>(
@@ -744,13 +748,14 @@ mod tests {
     }
 
     #[test]
-    fn test_prepare_context_collects_function_variables_and_imports() {
+    fn test_prepare_context_collects_function_variables_and_imports()
+    -> Result<(), Box<dyn std::error::Error>> {
         let provider = InlineCompletionProvider::new();
         let source = "use Test::More;\npackage Demo;\n\nsub helper {\n    my $result = 1;\n    my $status = $result;\n    \n}\n";
         let line = 6;
         let character = 4;
         let context =
-            provider.prepare_context(source, line, character).expect("expected prepared context");
+            provider.prepare_context(source, line, character).ok_or("expected prepared context")?;
 
         assert_eq!(context.current_function.as_deref(), Some("helper"));
         assert_eq!(context.current_package.as_deref(), Some("Demo"));
@@ -758,6 +763,7 @@ mod tests {
         assert!(context.imports.iter().any(|import_name| import_name == "Test::More"));
         assert!(context.variables.iter().any(|variable| variable == "$status"));
         assert!(context.variables.iter().any(|variable| variable == "$result"));
+        Ok(())
     }
 
     #[test]

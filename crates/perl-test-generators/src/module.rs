@@ -44,8 +44,9 @@ mod tests {
 
         #[test]
         fn module_path_starts_uppercase(path in module_path()) {
-            let first = path.chars().next().unwrap();
-            assert!(first.is_ascii_uppercase(), "first char not uppercase: {}", path);
+            prop_assert!(!path.is_empty(), "module path must not be empty");
+            let first = path.chars().next().unwrap_or_default();
+            prop_assert!(first.is_ascii_uppercase(), "first char not uppercase: {}", path);
         }
 
         #[test]

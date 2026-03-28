@@ -13,7 +13,17 @@ use proptest::prelude::*;
 pub fn unicode_string() -> impl Strategy<Value = String> {
     prop_oneof![
         // Pure ASCII
-        prop::string::string_regex("[a-zA-Z0-9 \\t]*").unwrap(),
+        prop::collection::vec(
+            prop_oneof![
+                prop::char::range('a', 'z'),
+                prop::char::range('A', 'Z'),
+                prop::char::range('0', '9'),
+                Just(' '),
+                Just('\t'),
+            ],
+            0..=50_usize,
+        )
+        .prop_map(|chars| chars.into_iter().collect()),
         // BMP with non-ASCII (Latin-1 supplement, CJK, etc.)
         prop::collection::vec(prop::char::range('\u{00C0}', '\u{FFFF}'), 0..=50_usize)
             .prop_map(|chars| chars.into_iter().collect()),
@@ -47,8 +57,10 @@ mod tests {
         fn unicode_string_is_valid_utf8(s in unicode_string()) {
             // If it compiled as String, it's valid UTF-8. Verify round-trip.
             let bytes = s.as_bytes();
-            let roundtrip = std::str::from_utf8(bytes).unwrap();
-            prop_assert_eq!(s.as_str(), roundtrip);
+            match std::str::from_utf8(bytes) {
+                Ok(roundtrip) => prop_assert_eq!(s.as_str(), roundtrip),
+                Err(err) => prop_assert!(false, "generated string was not valid UTF-8: {err}"),
+            }
         }
 
         #[test]
