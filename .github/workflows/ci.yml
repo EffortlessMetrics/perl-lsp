@@ -1,11 +1,15 @@
 name: CI
 
-# Main merge-blocking gate for all PRs
-# Runs comprehensive checks required before merge
-# Cost: ~$0.05 per PR
+# Tiered CI for perl-lsp (see tests/TAXONOMY.md)
+# - PR smoke: fast feedback on every push (~1-2 min)
+# - Merge gate: full validation on merge-ready label or merge (~5-10 min)
+# Cost: ~$0.03 per PR (smoke), ~$0.05 on merge gate
 
 on:
   pull_request:
+    branches: [ main, master ]
+    types: [opened, synchronize, reopened, labeled]
+  push:
     branches: [ main, master ]
   workflow_dispatch: {}
 
@@ -24,15 +28,16 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  ci-gate:
-    name: CI Gate (Merge-Blocking)
+  # ── PR Smoke: fast feedback for every PR (~1-2 min) ──────────────────
+  pr-smoke:
+    name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -58,7 +63,6 @@ jobs:
             exit 0
           fi
 
-      # Aggressive caching for dependencies and build artifacts
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -66,7 +70,45 @@ jobs:
           cache-all-crates: true
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
-      - name: Run ci-gate with receipts
+      - name: Run PR smoke checks
+        run: just pr-fast
+
+  # ── Merge Gate: full validation (label-gated or push to main) ────────
+  merge-gate:
+    name: CI Gate (Merge-Blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: pr-smoke
+    # Run on: merge-ready label, push to main/master, or workflow_dispatch
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'merge-ready'))
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          components: rustfmt, clippy
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run full ci-gate with receipts
         run: just gates
 
       - name: Upload gate receipt
