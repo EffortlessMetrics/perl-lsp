@@ -754,7 +754,8 @@ mod tests {
         let source = "use Test::More;\npackage Demo;\n\nsub helper {\n    my $result = 1;\n    my $status = $result;\n    \n}\n";
         let line = 6;
         let character = 4;
-        let context = provider.prepare_context(source, line, character).ok_or("expected prepared context")?;
+        let context =
+            provider.prepare_context(source, line, character).ok_or("expected prepared context")?;
 
         assert_eq!(context.current_function.as_deref(), Some("helper"));
         assert_eq!(context.current_package.as_deref(), Some("Demo"));
