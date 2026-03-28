@@ -144,10 +144,13 @@ impl LspHarness {
 
         // Use adaptive timeout for initialization based on environment
         let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+        let is_windows = cfg!(windows);
         let init_timeout = if is_ci {
             Duration::from_secs(5) // CI: longer initialization timeout
         } else if std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
             Duration::from_millis(800) // Performance tests: faster initialization
+        } else if is_windows {
+            Duration::from_secs(5) // Windows local runs need more room for process startup + discovery
         } else {
             Duration::from_secs(2) // Local: balanced timeout
         };
@@ -165,7 +168,7 @@ impl LspHarness {
             self.notify("initialized", json!({}));
 
             // Give server a moment to process the initialized notification
-            let settle_time = if is_ci {
+            let settle_time = if is_ci || is_windows {
                 Duration::from_millis(100) // CI: extra settling time
             } else {
                 Duration::from_millis(50) // Local: minimal settling time
@@ -212,7 +215,9 @@ impl LspHarness {
         self.next_request_id += 1;
 
         let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
-        let init_timeout = if is_ci { Duration::from_secs(5) } else { Duration::from_secs(2) };
+        let is_windows = cfg!(windows);
+        let init_timeout =
+            if is_ci || is_windows { Duration::from_secs(5) } else { Duration::from_secs(2) };
         let init_timeout = if Self::is_coverage_instrumented() {
             init_timeout.max(Duration::from_secs(6))
         } else {
@@ -223,8 +228,11 @@ impl LspHarness {
 
         if response.get("capabilities").is_some() {
             self.notify("initialized", json!({}));
-            let settle_time =
-                if is_ci { Duration::from_millis(100) } else { Duration::from_millis(50) };
+            let settle_time = if is_ci || is_windows {
+                Duration::from_millis(100)
+            } else {
+                Duration::from_millis(50)
+            };
             thread::sleep(settle_time);
         }
 
@@ -444,8 +452,11 @@ impl LspHarness {
         }
 
         // Adaptive parameters based on environment
+        let is_windows = cfg!(windows);
         let (max_attempts, initial_timeout, max_sleep) = if is_ci {
             (8, 300, 200) // CI: more attempts, longer timeouts
+        } else if is_windows {
+            (8, 300, 150) // Windows local runs are slower than Linux/macOS for temp workspace indexing
         } else if is_performance_test {
             (3, 100, 50) // Performance: fewer attempts, faster timeouts
         } else {
@@ -518,6 +529,12 @@ impl LspHarness {
 
     /// Alternative request method that accepts a full JSON-RPC request object (for schema tests)
     pub fn request_raw(&mut self, request: Value) -> Value {
+        let timeout = self.get_adaptive_timeout();
+        self.request_raw_with_timeout(request, timeout)
+    }
+
+    /// Alternative request method that accepts a full JSON-RPC request object with a custom timeout.
+    pub fn request_raw_with_timeout(&mut self, request: Value, timeout: Duration) -> Value {
         // Handle full JSON-RPC request object
         if request.is_object() && request.get("jsonrpc").is_some() {
             let mut req = request;
@@ -525,7 +542,7 @@ impl LspHarness {
             self.next_request_id += 1;
 
             // Use send_request_full_response to get the complete JSON-RPC response
-            self.send_request_full_response(req).unwrap_or_else(|e| {
+            self.send_request_with_timeout_full_response(req, timeout).unwrap_or_else(|e| {
                 json!({
                     "jsonrpc": "2.0",
                     "id": null,
@@ -1031,14 +1048,15 @@ impl LspHarness {
     pub fn barrier(&mut self) {
         // Send a dummy request that forces the server to process all pending work
         // We use workspace/symbol with empty query as it's lightweight
-        let _ = self.request_with_timeout(
-            "workspace/symbol",
-            json!({"query": "__barrier__"}),
-            Duration::from_millis(500),
-        );
+        let timeout =
+            if cfg!(windows) { Duration::from_millis(1500) } else { Duration::from_millis(500) };
+        let _ =
+            self.request_with_timeout("workspace/symbol", json!({"query": "__barrier__"}), timeout);
 
         // Drain any notifications that arrived
-        self.wait_for_idle(Duration::from_millis(100));
+        let idle_budget =
+            if cfg!(windows) { Duration::from_millis(200) } else { Duration::from_millis(100) };
+        self.wait_for_idle(idle_budget);
     }
 }
 
@@ -1064,6 +1082,7 @@ impl LspHarness {
 
         // Detect WSL environment (often has different performance characteristics)
         let is_wsl = std::env::var("WSL_DISTRO_NAME").is_ok() || std::env::var("WSLENV").is_ok();
+        let is_windows = cfg!(windows);
 
         // Base timeout calculation with thread contention
         let base_timeout = match thread_count {
@@ -1093,6 +1112,12 @@ impl LspHarness {
             Duration::from_millis((base_timeout.as_millis() as f64 * multiplier * 0.7) as u64)
         } else {
             Duration::from_millis((base_timeout.as_millis() as f64 * multiplier) as u64)
+        };
+
+        let final_timeout = if is_windows && !std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
+            final_timeout.max(Duration::from_millis(1200))
+        } else {
+            final_timeout
         };
 
         // Cap maximum timeout to prevent tests from hanging indefinitely

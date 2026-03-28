@@ -1201,14 +1201,17 @@ return$x*2}
     harness.open(&uri, unformatted)?;
 
     scenario.when("requesting document formatting");
-    let formatting_response = harness.request_raw(json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/formatting",
-        "params": {
-            "textDocument": { "uri": uri },
-            "options": { "tabSize": 4, "insertSpaces": true }
-        }
-    }));
+    let formatting_response = harness.request_raw_with_timeout(
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/formatting",
+            "params": {
+                "textDocument": { "uri": uri },
+                "options": { "tabSize": 4, "insertSpaces": true }
+            }
+        }),
+        Duration::from_secs(5),
+    );
 
     scenario.then("the response is structured edits or a graceful tooling error");
     if let Some(result) = formatting_response.get("result") {

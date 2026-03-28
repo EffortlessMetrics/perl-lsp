@@ -43,6 +43,11 @@ type ExecCheckFn = (
   args: string[],
 ) => Promise<{ stdout: string; stderr: string }>;
 
+interface ExecInvocation {
+  command: string;
+  args: string[];
+}
+
 // ---------------------------------------------------------------------------
 // OnboardingManager
 // ---------------------------------------------------------------------------
@@ -262,13 +267,129 @@ function defaultExecCheck(
   cmd: string,
   args: string[],
 ): Promise<{ stdout: string; stderr: string }> {
+  const initialInvocation = { command: cmd, args };
+  return runExecInvocation(initialInvocation).catch(async (err: unknown) => {
+    const fallbackInvocation = await resolveWindowsInvocationFallback(
+      initialInvocation,
+      err,
+    );
+    if (!fallbackInvocation) {
+      throw err;
+    }
+    return runExecInvocation(fallbackInvocation);
+  });
+}
+
+function runExecInvocation(
+  invocation: ExecInvocation,
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout: 5000 }, (err, stdout, stderr) => {
+    execFile(
+      invocation.command,
+      invocation.args,
+      { timeout: 5000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ stdout, stderr });
+        }
+      },
+    );
+  });
+}
+
+async function resolveWindowsInvocationFallback(
+  invocation: ExecInvocation,
+  err: unknown,
+): Promise<ExecInvocation | null> {
+  if (
+    process.platform !== 'win32' ||
+    !isSpawnNotFound(err) ||
+    invocation.command.includes('\\') ||
+    invocation.command.includes('/')
+  ) {
+    return null;
+  }
+
+  const candidate = await resolveWindowsCommandCandidate(invocation.command);
+  if (!candidate) {
+    return null;
+  }
+
+  return buildWindowsExecInvocation(candidate, invocation.args);
+}
+
+function isSpawnNotFound(err: unknown): boolean {
+  return Boolean(
+    err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code?: unknown }).code === 'ENOENT',
+  );
+}
+
+function resolveWindowsCommandCandidate(command: string): Promise<string | null> {
+  return new Promise(resolve => {
+    execFile('where.exe', [command], { timeout: 5000 }, (err, stdout) => {
       if (err) {
-        reject(err);
-      } else {
-        resolve({ stdout, stderr });
+        resolve(null);
+        return;
       }
+      resolve(selectWindowsCommandCandidate(stdout));
     });
   });
+}
+
+export function selectWindowsCommandCandidate(stdout: string): string | null {
+  const candidates = stdout
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates.reduce((best, candidate) => {
+    return windowsCommandPriority(candidate) > windowsCommandPriority(best)
+      ? candidate
+      : best;
+  });
+}
+
+function buildWindowsExecInvocation(command: string, args: string[]): ExecInvocation {
+  if (isWindowsBatchWrapper(command)) {
+    return {
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', command, ...args],
+    };
+  }
+
+  return { command, args };
+}
+
+function isWindowsBatchWrapper(command: string): boolean {
+  const lower = command.toLowerCase();
+  return lower.endsWith('.bat') || lower.endsWith('.cmd');
+}
+
+function windowsCommandPriority(command: string): number {
+  const lower = command.toLowerCase();
+  if (lower.endsWith('.exe')) {
+    return 5;
+  }
+  if (lower.endsWith('.com')) {
+    return 4;
+  }
+  if (lower.endsWith('.cmd')) {
+    return 3;
+  }
+  if (lower.endsWith('.bat')) {
+    return 2;
+  }
+  if (/\.[^\\/]+$/.test(lower)) {
+    return 1;
+  }
+  return 0;
 }

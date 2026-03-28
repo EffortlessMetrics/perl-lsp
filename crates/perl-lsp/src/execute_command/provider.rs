@@ -737,8 +737,15 @@ impl ExecuteCommandProvider {
     }
 
     pub(crate) fn command_exists(&self, command: &str) -> bool {
-        let mut cmd = Command::new("which");
-        cmd.arg(command);
+        let cmd = if cfg!(windows) {
+            let mut cmd = Command::new("where");
+            cmd.arg(command);
+            cmd
+        } else {
+            let mut cmd = Command::new("which");
+            cmd.arg(command);
+            cmd
+        };
         crate::util::run_command_with_timeout(cmd, 2)
             .map(|output| output.status.success())
             .unwrap_or(false)
@@ -747,8 +754,15 @@ impl ExecuteCommandProvider {
 
 /// Check whether a command exists in the current PATH.
 pub fn command_exists(command: &str) -> bool {
-    let mut cmd = std::process::Command::new(command);
-    cmd.arg("--version");
+    let cmd = if cfg!(windows) {
+        let mut cmd = std::process::Command::new("where");
+        cmd.arg(command);
+        cmd
+    } else {
+        let mut cmd = std::process::Command::new(command);
+        cmd.arg("--version");
+        cmd
+    };
     crate::util::run_command_with_timeout(cmd, 2)
         .map(|output| output.status.success())
         .unwrap_or(false)
