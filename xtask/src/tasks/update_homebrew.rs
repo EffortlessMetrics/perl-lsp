@@ -1,6 +1,6 @@
 //! Generate Homebrew formula for release artifacts using SHA256SUMS.
 
-use color_eyre::eyre::{Context, Result, eyre};
+use color_eyre::eyre::{eyre, Context, Result};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
@@ -245,11 +245,9 @@ fn artifact_filename(prefix: &str, version: &str, artifact: &str) -> String {
 }
 
 fn write_formula(path: &std::path::Path, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create directory for {}", path.display()))?;
-        }
+    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create directory for {}", path.display()))?;
     }
 
     fs::write(path, format!("{content}\n"))
