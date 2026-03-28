@@ -74,7 +74,7 @@ mod tests {
 
         #[test]
         fn identifier_is_ascii(id in identifier()) {
-            assert!(id.chars().all(|c| c.is_ascii()), "identifier must be ASCII: {}", id);
+            prop_assert!(id.is_ascii(), "identifier must be ASCII: {}", id);
         }
     }
 }
