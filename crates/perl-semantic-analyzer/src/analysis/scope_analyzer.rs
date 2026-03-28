@@ -310,6 +310,29 @@ fn split_variable_name(full_name: &str) -> (&str, &str) {
     ("", full_name)
 }
 
+fn is_interpolated_var_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+fn is_interpolated_var_continue(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b':'
+}
+
+fn has_escaped_interpolation_marker(bytes: &[u8], index: usize) -> bool {
+    if index == 0 {
+        return false;
+    }
+
+    let mut backslashes = 0usize;
+    let mut cursor = index;
+    while cursor > 0 && bytes[cursor - 1] == b'\\' {
+        backslashes += 1;
+        cursor -= 1;
+    }
+
+    backslashes % 2 == 1
+}
+
 enum ExtractedName<'a> {
     Parts(&'a str, &'a str),
     Full(String),
@@ -627,6 +650,21 @@ impl ScopeAnalyzer {
                     });
                 }
             }
+            NodeKind::String { value, interpolated } => {
+                if *interpolated
+                    || value.starts_with('"')
+                    || value.starts_with('`')
+                    || value.starts_with("qq")
+                    || value.starts_with("qx")
+                {
+                    self.mark_interpolated_variables_used(value, scope);
+                }
+            }
+            NodeKind::Heredoc { content, interpolated, .. } => {
+                if *interpolated {
+                    self.mark_interpolated_variables_used(content, scope);
+                }
+            }
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
@@ -910,6 +948,57 @@ impl ScopeAnalyzer {
                     self.mark_initialized(child, scope);
                 }
             }
+        }
+    }
+
+    fn mark_interpolated_variables_used(&self, content: &str, scope: &Rc<Scope>) {
+        let bytes = content.as_bytes();
+        let mut index = 0;
+
+        while index < bytes.len() {
+            let sigil = match bytes[index] {
+                b'$' => "$",
+                b'@' => "@",
+                _ => {
+                    index += 1;
+                    continue;
+                }
+            };
+
+            if has_escaped_interpolation_marker(bytes, index) {
+                index += 1;
+                continue;
+            }
+
+            if index + 1 >= bytes.len() {
+                break;
+            }
+
+            let (start, requires_closing_brace) =
+                if bytes[index + 1] == b'{' { (index + 2, true) } else { (index + 1, false) };
+
+            if start >= bytes.len() || !is_interpolated_var_start(bytes[start]) {
+                index += 1;
+                continue;
+            }
+
+            let mut end = start + 1;
+            while end < bytes.len() && is_interpolated_var_continue(bytes[end]) {
+                end += 1;
+            }
+
+            if requires_closing_brace && (end >= bytes.len() || bytes[end] != b'}') {
+                index += 1;
+                continue;
+            }
+
+            if let Some(name) = content.get(start..end) {
+                if !name.contains("::") {
+                    let _ = scope.use_variable_parts(sigil, name);
+                }
+            }
+
+            index = if requires_closing_brace { end + 1 } else { end };
         }
     }
 

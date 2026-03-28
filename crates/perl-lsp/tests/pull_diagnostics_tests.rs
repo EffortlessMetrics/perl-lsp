@@ -1,5 +1,8 @@
-use lsp_types::{DocumentDiagnosticReport, NumberOrString};
+use std::env;
+
+use lsp_types::{DocumentDiagnosticReport, NumberOrString, Uri};
 use perl_lsp::features::diagnostics::PullDiagnosticsProvider;
+use url::Url;
 
 /// Extract items from a full diagnostic report, returning an error if it is Unchanged.
 fn items_from_report(
@@ -75,6 +78,69 @@ fn pull_diagnostics_unused_variable_severity_is_warning() -> Result<(), Box<dyn 
     let severity = pl102.severity.ok_or("PL102 diagnostic must have a severity")?;
     if severity != lsp_types::DiagnosticSeverity::WARNING {
         return Err(format!("Expected WARNING severity for PL102, got {:?}", severity).into());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn pull_diagnostics_interpolated_variable_counts_as_used() -> Result<(), Box<dyn std::error::Error>>
+{
+    let provider = PullDiagnosticsProvider::new();
+    let uri = "file:///test_interpolated.pl".parse()?;
+    let content = "use strict;\nuse warnings;\nmy $msg = 'hello';\nprint \"$msg\\n\";\n";
+
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+
+    let msg_unused = items.iter().any(|d| has_code(d, "PL102") && d.message.contains("$msg"));
+    if msg_unused {
+        return Err(format!(
+            "Interpolated variable $msg must not be flagged unused.\nDiagnostics: {items:#?}"
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn pull_diagnostics_script_uri_suppresses_missing_package_warning()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = PullDiagnosticsProvider::new();
+    let uri: Uri = Url::from_file_path(env::temp_dir().join("Makefile.PL"))
+        .map_err(|_| "failed to build Makefile.PL test URI")?
+        .to_string()
+        .parse()?;
+    let content = "use strict;\nuse warnings;\nprint \"ok\\n\";\n";
+
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+
+    let has_pl200 = items.iter().any(|d| has_code(d, "PL200"));
+    if has_pl200 {
+        return Err(format!(
+            "Script URIs should not emit PL200 missing-package diagnostics.\nDiagnostics: {items:#?}"
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn pull_diagnostics_shebang_suppresses_missing_package_warning()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = PullDiagnosticsProvider::new();
+    let uri = "file:///smoke_script.txt".parse()?;
+    let content = "#!/usr/bin/env perl\nuse strict;\nuse warnings;\nprint \"ok\\n\";\n";
+
+    let items = items_from_report(provider.get_document_diagnostics(&uri, content, None))?;
+
+    let has_pl200 = items.iter().any(|d| has_code(d, "PL200"));
+    if has_pl200 {
+        return Err(format!(
+            "Shebang-based scripts should not emit PL200 missing-package diagnostics.\nDiagnostics: {items:#?}"
+        )
+        .into());
     }
 
     Ok(())

@@ -2,6 +2,8 @@
 //!
 //! This module provides the core diagnostic generation functionality.
 
+use std::path::Path;
+
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
@@ -55,6 +57,18 @@ impl DiagnosticsProvider {
         parse_errors: &[ParseError],
         source: &str,
         module_resolver: Option<&dyn Fn(&str) -> bool>,
+    ) -> Vec<Diagnostic> {
+        self.get_diagnostics_with_path(ast, parse_errors, source, module_resolver, None)
+    }
+
+    /// Generate diagnostics for the given AST with optional source-path context.
+    pub fn get_diagnostics_with_path(
+        &self,
+        ast: &std::sync::Arc<Node>,
+        parse_errors: &[ParseError],
+        source: &str,
+        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        source_path: Option<&Path>,
     ) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         let source_len = source.len();
@@ -124,7 +138,7 @@ impl DiagnosticsProvider {
         check_printf_format(ast, &mut diagnostics);
 
         // Package and subroutine diagnostics (PL200, PL201, PL300)
-        check_missing_package_declaration(ast, &mut diagnostics);
+        check_missing_package_declaration(ast, source, source_path, &mut diagnostics);
         check_duplicate_package(ast, &mut diagnostics);
         check_duplicate_subroutine(ast, &mut diagnostics);
 

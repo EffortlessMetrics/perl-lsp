@@ -2203,6 +2203,43 @@ struct IndexVisitor {
     current_package: Option<String>,
 }
 
+fn is_interpolated_var_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+fn is_interpolated_var_continue(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b':'
+}
+
+fn has_escaped_interpolation_marker(bytes: &[u8], index: usize) -> bool {
+    if index == 0 {
+        return false;
+    }
+
+    let mut backslashes = 0usize;
+    let mut cursor = index;
+    while cursor > 0 && bytes[cursor - 1] == b'\\' {
+        backslashes += 1;
+        cursor -= 1;
+    }
+
+    backslashes % 2 == 1
+}
+
+fn strip_matching_quote_delimiters(raw_content: &str) -> &str {
+    if raw_content.len() < 2 {
+        return raw_content;
+    }
+
+    let bytes = raw_content.as_bytes();
+    match (bytes.first(), bytes.last()) {
+        (Some(b'"'), Some(b'"')) | (Some(b'\''), Some(b'\'')) => {
+            &raw_content[1..raw_content.len() - 1]
+        }
+        _ => raw_content,
+    }
+}
+
 impl IndexVisitor {
     fn new(document: &mut Document, uri: String) -> Self {
         Self { document: document.clone(), uri, current_package: Some("main".to_string()) }
@@ -2210,6 +2247,66 @@ impl IndexVisitor {
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
         self.visit_node(node, file_index);
+    }
+
+    fn record_interpolated_variable_references(
+        &self,
+        raw_content: &str,
+        range: Range,
+        file_index: &mut FileIndex,
+    ) {
+        let content = strip_matching_quote_delimiters(raw_content);
+        let bytes = content.as_bytes();
+        let mut index = 0;
+
+        while index < bytes.len() {
+            if has_escaped_interpolation_marker(bytes, index) {
+                index += 1;
+                continue;
+            }
+
+            let sigil = match bytes[index] {
+                b'$' => "$",
+                b'@' => "@",
+                _ => {
+                    index += 1;
+                    continue;
+                }
+            };
+
+            if index + 1 >= bytes.len() {
+                break;
+            }
+
+            let (start, needs_closing_brace) =
+                if bytes[index + 1] == b'{' { (index + 2, true) } else { (index + 1, false) };
+
+            if start >= bytes.len() || !is_interpolated_var_start(bytes[start]) {
+                index += 1;
+                continue;
+            }
+
+            let mut end = start + 1;
+            while end < bytes.len() && is_interpolated_var_continue(bytes[end]) {
+                end += 1;
+            }
+
+            if needs_closing_brace && (end >= bytes.len() || bytes[end] != b'}') {
+                index += 1;
+                continue;
+            }
+
+            if let Some(name) = content.get(start..end) {
+                let var_name = format!("{sigil}{name}");
+                file_index.references.entry(var_name).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range,
+                    kind: ReferenceKind::Read,
+                });
+            }
+
+            index = if needs_closing_brace { end + 1 } else { end };
+        }
     }
 
     fn visit_node(&mut self, node: &Node, file_index: &mut FileIndex) {
@@ -2578,6 +2675,20 @@ impl IndexVisitor {
 
                 // Visit body
                 self.visit_node(body, file_index);
+            }
+
+            NodeKind::String { value, interpolated } => {
+                if *interpolated {
+                    let range = self.node_to_range(node);
+                    self.record_interpolated_variable_references(value, range, file_index);
+                }
+            }
+
+            NodeKind::Heredoc { content, interpolated, .. } => {
+                if *interpolated {
+                    let range = self.node_to_range(node);
+                    self.record_interpolated_variable_references(content, range, file_index);
+                }
             }
 
             // Handle special assignments (++ and --)
