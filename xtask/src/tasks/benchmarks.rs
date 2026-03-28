@@ -165,11 +165,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_no_regression.json"),
-        1.0,
-        None,
-        &["No performance alerts detected"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_no_regression.json"),
+            multiplier: 1.0,
+            format: None,
+            expected: &["No performance alerts detected"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -177,11 +179,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_warning.json"),
-        1.11,
-        None,
-        &["WARNING", "1"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_warning.json"),
+            multiplier: 1.11,
+            format: None,
+            expected: &["WARNING", "1"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -189,11 +193,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_regression.json"),
-        1.25,
-        None,
-        &["REGRESSION"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_regression.json"),
+            multiplier: 1.25,
+            format: None,
+            expected: &["REGRESSION"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -201,11 +207,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_critical.json"),
-        1.60,
-        None,
-        &["CRITICAL"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_critical.json"),
+            multiplier: 1.60,
+            format: None,
+            expected: &["CRITICAL"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -213,11 +221,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_markdown.json"),
-        1.25,
-        Some("markdown"),
-        &["## Performance Benchmark Results", "⚠️ Performance Regressions"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_markdown.json"),
+            multiplier: 1.25,
+            format: Some("markdown"),
+            expected: &["## Performance Benchmark Results", "⚠️ Performance Regressions"],
+            expect_success: true,
+        },
     )?;
     run_alert_check_case(
         &root,
@@ -232,15 +242,25 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_improvement.json"),
-        0.80,
-        None,
-        &["IMPROVED"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_improvement.json"),
+            multiplier: 0.80,
+            format: None,
+            expected: &["IMPROVED"],
+            expect_success: true,
+        },
     )?;
 
     println!("All benchmark alert-system checks passed");
     Ok(())
+}
+
+struct AlertCase<'a> {
+    current_path: PathBuf,
+    multiplier: f64,
+    format: Option<&'a str>,
+    expected: &'a [&'a str],
+    expect_success: bool,
 }
 
 fn run_alert_case(
@@ -249,25 +269,21 @@ fn run_alert_case(
     config_path: &Path,
     baseline_path: &Path,
     baseline: &Value,
-    current_path: PathBuf,
-    multiplier: f64,
-    format: Option<&str>,
-    expected: &[&str],
-    expect_success: bool,
+    case: AlertCase<'_>,
 ) -> Result<()> {
     let mut current = baseline.clone();
-    mutate_parse_simple_script(&mut current, multiplier)?;
-    fs::write(&current_path, serde_json::to_string_pretty(&current)?)
-        .with_context(|| format!("Failed to write {}", current_path.display()))?;
+    mutate_parse_simple_script(&mut current, case.multiplier)?;
+    fs::write(&case.current_path, serde_json::to_string_pretty(&current)?)
+        .with_context(|| format!("Failed to write {}", case.current_path.display()))?;
 
     let mut args = vec![
         alert_script.to_string_lossy().to_string(),
         baseline_path.to_string_lossy().to_string(),
-        current_path.to_string_lossy().to_string(),
+        case.current_path.to_string_lossy().to_string(),
         "--config".to_string(),
         config_path.to_string_lossy().to_string(),
     ];
-    if let Some(format) = format {
+    if let Some(format) = case.format {
         args.push("--format".to_string());
         args.push(format.to_string());
     }
@@ -279,11 +295,11 @@ fn run_alert_case(
         .context("Failed to execute alert.py")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    if expect_success != output.status.success() {
-        bail!("alert.py command status mismatch (expected success: {expect_success})");
+    if case.expect_success != output.status.success() {
+        bail!("alert.py command status mismatch (expected success: {})", case.expect_success);
     }
 
-    for fragment in expected {
+    for fragment in case.expected {
         if !stdout.contains(fragment) {
             bail!("Expected output to contain '{fragment}'");
         }
@@ -524,8 +540,7 @@ fn rust_version() -> Result<String> {
 fn load_json(path: &Path) -> Result<Value> {
     let content =
         fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(serde_json::from_str(&content)
-        .with_context(|| format!("Invalid JSON in {}", path.display()))?)
+    serde_json::from_str(&content).with_context(|| format!("Invalid JSON in {}", path.display()))
 }
 
 fn run_script(script: &Path, args: &[&str], label: &str) -> Result<()> {

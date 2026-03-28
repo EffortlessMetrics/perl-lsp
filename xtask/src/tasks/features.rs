@@ -41,13 +41,15 @@ fn check_invariants() -> Result<()> {
             violations.push(format!("DUPLICATE_ID: {:?} appears more than once", feature.id));
         }
 
-        if feature.advertised && feature.maturity == Maturity::Ga && feature.tests.is_empty() {
-            if feature.counts_in_coverage {
-                violations.push(format!(
-                    "UNTESTED_GA: {:?} is advertised+GA but has no tests. Either add tests or set counts_in_coverage=false (if it's protocol plumbing).",
-                    feature.id
-                ));
-            }
+        if feature.advertised
+            && feature.maturity == Maturity::Ga
+            && feature.tests.is_empty()
+            && feature.counts_in_coverage
+        {
+            violations.push(format!(
+                "UNTESTED_GA: {:?} is advertised+GA but has no tests. Either add tests or set counts_in_coverage=false (if it's protocol plumbing).",
+                feature.id
+            ));
         }
     }
 

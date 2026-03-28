@@ -10,8 +10,6 @@ use toml::Value;
 
 use super::corpus_audit::{AuditReport, FailingFile, ParseOutcomesSummary};
 
-const DEFAULT_REPORT_PATH: &str = "corpus_audit_report.json";
-const DEFAULT_OUTPUT_PATH: &str = "docs/reference/PARSER_FEATURE_MATRIX.md";
 const BASELINE_PATH: &str = "ci/parse_errors_baseline.txt";
 const UNKNOWN: &str = "unknown";
 
@@ -24,10 +22,6 @@ const CATEGORY_TAXONOMY: &[(&str, &str, &str)] = &[
     ("Subroutine", "P2", "Signatures, prototypes"),
     ("General", "P3", "Uncategorized"),
 ];
-
-pub fn run() -> Result<()> {
-    run_with_paths(PathBuf::from(DEFAULT_REPORT_PATH), PathBuf::from(DEFAULT_OUTPUT_PATH))
-}
 
 pub fn run_with_paths(report: PathBuf, output: PathBuf) -> Result<()> {
     let root = project_root()?;
@@ -105,12 +99,9 @@ fn success_rate(outcomes: &ParseOutcomesSummary) -> f64 {
 }
 
 fn format_location(file: &FailingFile) -> Option<String> {
-    file.line_number.map(|line_num| {
-        let location = match file.column {
-            Some(column) => format!("line {line_num}:{column}"),
-            None => format!("line {line_num}"),
-        };
-        location
+    file.line_number.map(|line_num| match file.column {
+        Some(column) => format!("line {line_num}:{column}"),
+        None => format!("line {line_num}"),
     })
 }
 

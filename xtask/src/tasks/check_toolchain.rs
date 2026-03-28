@@ -80,7 +80,7 @@ pub fn run(doctor: bool) -> Result<()> {
 
 fn parse_version_parts(version: &str) -> Vec<u32> {
     version
-        .split(|c| c == '.' || c == '-' || c == '+')
+        .split(['.', '-', '+'])
         .filter_map(|part| {
             part.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u32>().ok()
         })
