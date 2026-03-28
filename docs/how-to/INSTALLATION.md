@@ -54,13 +54,39 @@ Copy-Item perl-lsp\perl-lsp.exe "C:\Program Files\perl-lsp\"
 ### Windows Package Managers
 
 The release automation keeps the Windows package-manager metadata in sync with
-each GitHub release.
+each GitHub release, but only the repo-owned manifest refresh is automated.
+Upstream package submission and the final user-machine install checks remain
+manual.
 
 - Scoop: `scoop install perl-lsp`
 - Chocolatey: `choco install perl-lsp`
 - Winget: the repo tracks a local manifest in `distribution/winget/` and the
   release workflow refreshes it; upstream `winget-pkgs` submission is still a
   manual follow-up
+
+#### Verification Boundary
+
+Repo-local checks can verify that:
+
+- the release workflow publishes the Windows zip and consolidated `SHA256SUMS`
+- the Scoop and Chocolatey bump workflows download that release asset, compute
+  the checksum, and call `distribution/windows/update-manifests.ps1`
+- placeholder guards fail if `__RELEASE_VERSION__`, `__RELEASE_HASH__`, or
+  other release tokens remain in the manifests after the update step
+
+Still manual:
+
+- upstream PR acceptance or merge in the Scoop and Chocolatey package repos
+- running `scoop install perl-lsp` or `choco install perl-lsp` on a Windows
+  machine
+- confirming `perl-lsp --health` and PATH discovery after installation
+- checking that VS Code or another editor can find the installed binary
+
+To smoke the repo-side story locally, run:
+
+```powershell
+powershell -NoLogo -NoProfile -File scripts/check-windows-distribution.ps1
+```
 
 For the latest version number, always check [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 

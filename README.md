@@ -194,6 +194,21 @@ perl-lsp --health
 
 Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 
+### Windows package managers
+
+The release automation keeps the Windows package-manager manifests in sync with
+each release. If you are on Windows, these are the user-facing install paths:
+
+```powershell
+scoop install perl-lsp
+choco install perl-lsp
+```
+
+After installation, verify the binary with `perl-lsp --health`.
+The repo documents the automated vs manual verification boundary in
+[docs/how-to/INSTALLATION.md](docs/how-to/INSTALLATION.md) and
+[docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md).
+
 ### VS Code Extension
 
 Install from the VS Code Marketplace or:
