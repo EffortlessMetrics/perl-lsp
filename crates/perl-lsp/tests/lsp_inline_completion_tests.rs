@@ -219,3 +219,56 @@ fn test_inline_completion_multiline_doc_line1() -> Result<(), Box<dyn std::error
     );
     Ok(())
 }
+
+#[test]
+fn test_inline_completion_empty_file_returns_scaffold() -> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///empty.pl";
+    open_doc(&server, uri, "");
+
+    let result = inline_completion(&server, uri, 0, 0)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(!items.is_empty(), "expected scaffold suggestions for an empty file");
+    assert!(items.iter().any(|item| {
+        item["insertText"].as_str().map(|text| text.contains("use strict;")).unwrap_or(false)
+    }));
+    Ok(())
+}
+
+#[test]
+fn test_inline_completion_mid_code_uses_nearby_variable_context()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///context.pl";
+    let text = "use strict;\n\nsub helper {\n    my $result = compute();\n    \n}\n";
+    open_doc(&server, uri, text);
+
+    let result = inline_completion(&server, uri, 4, 4)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(!items.is_empty(), "expected contextual inline completions inside a sub");
+    assert!(items.iter().any(|item| {
+        item["insertText"].as_str().map(|text| text == "return $result;").unwrap_or(false)
+    }));
+    Ok(())
+}
+
+#[test]
+fn test_inline_completion_after_comment_keeps_contextual_suggestions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///comment-context.pl";
+    let text =
+        "use Test::More;\n\nsub helper {\n    my $result = 1;\n    # explain next step\n    \n}\n";
+    open_doc(&server, uri, text);
+
+    let result = inline_completion(&server, uri, 5, 4)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    assert!(!items.is_empty(), "expected inline completions on a blank line after a comment");
+    assert!(items.iter().any(|item| {
+        item["insertText"].as_str().map(|text| text == "return $result;").unwrap_or(false)
+    }));
+    Ok(())
+}
