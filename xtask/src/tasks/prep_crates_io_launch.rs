@@ -38,6 +38,7 @@ struct RootPublishMetadata {
 #[derive(Deserialize)]
 struct CargoMetadata {
     packages: Vec<MetadataPackage>,
+    target_directory: PathBuf,
 }
 
 #[derive(Deserialize)]
@@ -88,7 +89,7 @@ pub fn run(all: bool) -> Result<()> {
             metadata.packages.iter().find(|package| package.name == crate_name).ok_or_else(
                 || color_eyre::eyre::eyre!("missing cargo metadata for {crate_name}"),
             )?;
-        run_cargo_package_check(&root, package, &patch_args)?;
+        run_cargo_package_check(&root, &metadata.target_directory, package, &patch_args)?;
     }
 
     println!();
@@ -194,16 +195,21 @@ fn run_cargo_check(root: &Path, crate_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn crate_archive_path(root: &Path, package: &MetadataPackage) -> PathBuf {
-    root.join("target").join("package").join(format!("{}-{}.crate", package.name, package.version))
+fn package_output_dir(target_directory: &Path) -> PathBuf {
+    target_directory.join("package")
+}
+
+fn crate_archive_path(target_directory: &Path, package: &MetadataPackage) -> PathBuf {
+    package_output_dir(target_directory).join(format!("{}-{}.crate", package.name, package.version))
 }
 
 fn run_cargo_package_check(
     root: &Path,
+    target_directory: &Path,
     package: &MetadataPackage,
     patch_args: &[String],
 ) -> Result<()> {
-    let archive_path = crate_archive_path(root, package);
+    let archive_path = crate_archive_path(target_directory, package);
     if archive_path.exists() {
         fs::remove_file(&archive_path).with_context(|| {
             format!("failed to remove stale crate archive {}", archive_path.display())
@@ -233,7 +239,7 @@ fn run_cargo_package_check(
         }
     }
 
-    let unpack_dir = unpack_crate_archive(root, package)?;
+    let unpack_dir = unpack_crate_archive(target_directory, package)?;
     let packaged_manifest =
         unpack_dir.path().join(format!("{}-{}", package.name, package.version)).join("Cargo.toml");
 
@@ -262,15 +268,15 @@ fn run_cargo_package_check(
     Ok(())
 }
 
-fn unpack_crate_archive(root: &Path, package: &MetadataPackage) -> Result<TempDir> {
-    let archive_path = crate_archive_path(root, package);
+fn unpack_crate_archive(target_directory: &Path, package: &MetadataPackage) -> Result<TempDir> {
+    let archive_path = crate_archive_path(target_directory, package);
     if !archive_path.is_file() {
         bail!("crate archive missing for {}: {}", package.name, archive_path.display());
     }
 
     let unpack_dir = tempfile::Builder::new()
         .prefix(&format!("{}-{}-", package.name, package.version))
-        .tempdir_in(root.join("target").join("package"))
+        .tempdir_in(package_output_dir(target_directory))
         .context("failed to create temp directory for crate verification")?;
 
     let archive_file = File::open(&archive_path)
@@ -293,10 +299,11 @@ fn unpack_crate_archive(root: &Path, package: &MetadataPackage) -> Result<TempDi
 #[cfg(test)]
 mod tests {
     use super::{
-        CargoMetadata, MetadataPackage, crate_archive_path, package_patch_args, toml_safe_path,
+        CargoMetadata, MetadataPackage, crate_archive_path, package_output_dir, package_patch_args,
+        toml_safe_path,
     };
     use serde_json::Value as JsonValue;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn toml_safe_path_normalizes_backslashes() {
@@ -306,6 +313,7 @@ mod tests {
     #[test]
     fn package_patch_args_skips_current_crate() {
         let metadata = CargoMetadata {
+            target_directory: PathBuf::from("/workspace/target"),
             packages: vec![
                 MetadataPackage {
                     name: "perl-parser".to_string(),
@@ -334,7 +342,14 @@ mod tests {
     }
 
     #[test]
-    fn crate_archive_path_points_to_packaged_archive() {
+    fn package_output_dir_uses_cargo_target_directory() {
+        let path = package_output_dir(Path::new("/workspace/custom-target"));
+
+        assert_eq!(path, Path::new("/workspace/custom-target/package"));
+    }
+
+    #[test]
+    fn crate_archive_path_points_to_packaged_archive_in_target_directory() {
         let package = MetadataPackage {
             name: "perl-parser".to_string(),
             version: "0.12.0".to_string(),
@@ -342,8 +357,8 @@ mod tests {
             publish: Some(JsonValue::Bool(true)),
         };
 
-        let path = crate_archive_path(Path::new("/workspace"), &package);
+        let path = crate_archive_path(Path::new("/workspace/custom-target"), &package);
 
-        assert_eq!(path, Path::new("/workspace/target/package/perl-parser-0.12.0.crate"));
+        assert_eq!(path, Path::new("/workspace/custom-target/package/perl-parser-0.12.0.crate"));
     }
 }
