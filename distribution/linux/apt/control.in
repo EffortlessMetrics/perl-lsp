@@ -1,11 +1,11 @@
-Package: perl-lsp
+Package: __PACKAGE_NAME__
 Version: __RELEASE_VERSION__
 Section: devel
 Priority: optional
 Architecture: __DEB_ARCH__
-Maintainer: EffortlessMetrics <git@effortlesssteven.com>
-Homepage: https://github.com/EffortlessMetrics/perl-lsp
+Maintainer: __PACKAGE_MAINTAINER__
+Homepage: __PACKAGE_HOMEPAGE__
 Depends: libc6 (>= 2.31)
-Description: High-performance Perl Language Server with 100% syntax coverage
- perl-lsp is a native Perl language server written in Rust.
- This package installs the perl-lsp and perl-dap executables from the release artifact.
+Description: __PACKAGE_SUMMARY__
+ __PACKAGE_DESCRIPTION_LINE_1__
+ __PACKAGE_DESCRIPTION_LINE_2__

@@ -1,18 +1,18 @@
-Name:           perl-lsp
+Name:           __PACKAGE_NAME__
 Version:        __RELEASE_VERSION__
 Release:        1%{?dist}
-Summary:        High-performance Perl Language Server with 100% syntax coverage
-License:        MIT
-URL:            https://github.com/EffortlessMetrics/perl-lsp
+Summary:        __PACKAGE_SUMMARY__
+License:        __PACKAGE_LICENSE__
+URL:            __PACKAGE_HOMEPAGE__
 BuildArch:      __RPM_ARCH__
-Source0:        perl-lsp-__RELEASE_VERSION__-x86_64-unknown-linux-gnu.tar.gz
+Source0:        __SOURCE_TARBALL__
 
 %description
 perl-lsp is a native Perl language server written in Rust.
 This package installs the perl-lsp and perl-dap executables from the release artifact.
 
 %prep
-%autosetup -n perl-lsp-__RELEASE_VERSION__-x86_64-unknown-linux-gnu
+%autosetup -n __SOURCE_DIR__
 
 %build
 true
@@ -29,5 +29,5 @@ install -Dpm 0755 perl-dap %{buildroot}%{_bindir}/perl-dap
 %{_bindir}/perl-dap
 
 %changelog
-* Thu Jan 01 1970 EffortlessMetrics <git@effortlesssteven.com> - __RELEASE_VERSION__-1
+* Thu Jan 01 1970 __PACKAGE_MAINTAINER__ - __RELEASE_VERSION__-1
 - Initial packaging template
