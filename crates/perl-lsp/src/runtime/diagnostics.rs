@@ -10,10 +10,6 @@ use crate::features::diagnostics::{
 };
 use perl_diagnostics_codes::DiagnosticCode;
 
-fn source_path_from_uri(uri: &str) -> Option<std::path::PathBuf> {
-    url::Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
-}
-
 impl LspServer {
     /// Convert internal diagnostic tags to LSP tag values
     ///

@@ -318,6 +318,21 @@ fn is_interpolated_var_continue(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte == b':'
 }
 
+fn has_escaped_interpolation_marker(bytes: &[u8], index: usize) -> bool {
+    if index == 0 {
+        return false;
+    }
+
+    let mut backslashes = 0usize;
+    let mut cursor = index;
+    while cursor > 0 && bytes[cursor - 1] == b'\\' {
+        backslashes += 1;
+        cursor -= 1;
+    }
+
+    backslashes % 2 == 1
+}
+
 enum ExtractedName<'a> {
     Parts(&'a str, &'a str),
     Full(String),
@@ -944,14 +959,13 @@ impl ScopeAnalyzer {
             let sigil = match bytes[index] {
                 b'$' => "$",
                 b'@' => "@",
-                b'%' => "%",
                 _ => {
                     index += 1;
                     continue;
                 }
             };
 
-            if index > 0 && bytes[index - 1] == b'\\' {
+            if has_escaped_interpolation_marker(bytes, index) {
                 index += 1;
                 continue;
             }

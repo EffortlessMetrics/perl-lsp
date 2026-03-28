@@ -74,9 +74,11 @@ pub fn check_missing_package_declaration(
 fn should_skip_missing_package_declaration(source: &str, source_path: Option<&Path>) -> bool {
     if let Some(extension) =
         source_path.and_then(|path| path.extension()).and_then(|ext| ext.to_str())
-        && matches!(extension, "pl" | "t" | "cgi" | "psgi" | "plx")
     {
-        return true;
+        let extension = extension.to_ascii_lowercase();
+        if matches!(extension.as_str(), "pl" | "t" | "cgi" | "psgi" | "plx") {
+            return true;
+        }
     }
 
     source.trim_start().starts_with("#!")

@@ -14,10 +14,6 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 
-fn source_path_from_uri(uri: &str) -> Option<std::path::PathBuf> {
-    url::Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
-}
-
 impl LspServer {
     /// Handle textDocument/didOpen notification.
     ///

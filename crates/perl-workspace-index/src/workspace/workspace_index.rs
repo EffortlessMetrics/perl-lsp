@@ -2211,6 +2211,35 @@ fn is_interpolated_var_continue(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_' || byte == b':'
 }
 
+fn has_escaped_interpolation_marker(bytes: &[u8], index: usize) -> bool {
+    if index == 0 {
+        return false;
+    }
+
+    let mut backslashes = 0usize;
+    let mut cursor = index;
+    while cursor > 0 && bytes[cursor - 1] == b'\\' {
+        backslashes += 1;
+        cursor -= 1;
+    }
+
+    backslashes % 2 == 1
+}
+
+fn strip_matching_quote_delimiters(raw_content: &str) -> &str {
+    if raw_content.len() < 2 {
+        return raw_content;
+    }
+
+    let bytes = raw_content.as_bytes();
+    match (bytes.first(), bytes.last()) {
+        (Some(b'"'), Some(b'"')) | (Some(b'\''), Some(b'\'')) => {
+            &raw_content[1..raw_content.len() - 1]
+        }
+        _ => raw_content,
+    }
+}
+
 impl IndexVisitor {
     fn new(document: &mut Document, uri: String) -> Self {
         Self { document: document.clone(), uri, current_package: Some("main".to_string()) }
@@ -2226,19 +2255,19 @@ impl IndexVisitor {
         range: Range,
         file_index: &mut FileIndex,
     ) {
-        let content = if raw_content.len() >= 2 {
-            &raw_content[1..raw_content.len() - 1]
-        } else {
-            raw_content
-        };
+        let content = strip_matching_quote_delimiters(raw_content);
         let bytes = content.as_bytes();
         let mut index = 0;
 
         while index < bytes.len() {
+            if has_escaped_interpolation_marker(bytes, index) {
+                index += 1;
+                continue;
+            }
+
             let sigil = match bytes[index] {
                 b'$' => "$",
                 b'@' => "@",
-                b'%' => "%",
                 _ => {
                     index += 1;
                     continue;

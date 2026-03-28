@@ -113,6 +113,10 @@ use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 #[cfg(feature = "workspace")]
 use crate::fallback::text::extract_text_based_symbols;
 
+pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
+    Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
+}
+
 /// Lightweight view of a document for scan-heavy operations
 ///
 /// This struct provides the minimal data needed for workspace-wide scans
