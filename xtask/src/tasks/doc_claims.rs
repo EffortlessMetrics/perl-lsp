@@ -74,7 +74,7 @@ pub fn run() -> Result<()> {
     eprintln!("DOC CLAIM VIOLATIONS:");
     eprintln!("{}", "=".repeat(60));
     for (file, line_no, stale, replacement, description) in &hits {
-        let rel = file.strip_prefix(&root).map_or_else(|_| file.as_path(), |path| path);
+        let rel = file.strip_prefix(&root).unwrap_or(file.as_path());
         eprintln!("  {}:{}: {}", rel.display(), line_no, description);
         eprintln!("    found:    {:?}", stale);
         eprintln!("    expected: {:?}", replacement);

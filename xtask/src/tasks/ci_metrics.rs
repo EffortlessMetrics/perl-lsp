@@ -179,7 +179,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
             });
 
             let elapsed_seconds = elapsed_seconds.unwrap_or(0);
-            let elapsed_minutes = (elapsed_seconds + 59) / 60;
+            let elapsed_minutes = elapsed_seconds.div_ceil(60);
 
             let workflow_name = run
                 .get("name")
@@ -223,8 +223,7 @@ pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
         return Ok(());
     }
 
-    let mut sorted_workflows: Vec<(String, CostCounters)> =
-        workflow_stats.into_iter().map(|(name, counters)| (name, counters)).collect();
+    let mut sorted_workflows: Vec<(String, CostCounters)> = workflow_stats.into_iter().collect();
 
     sorted_workflows.sort_by(|(name_a, counters_a), (name_b, counters_b)| {
         let cost_a = counters_a.minutes as f64 * COST_PER_MINUTE;
@@ -450,7 +449,7 @@ pub fn run_ci_baseline(branch: String, days: u64, limit: usize, output_dir: Path
     fs::write(&md_path, markdown)
         .with_context(|| format!("failed to write {}", md_path.display()))?;
 
-    println!("");
+    println!();
     println!("======================================");
     println!("CI Baseline Summary");
     println!("======================================");
@@ -523,7 +522,7 @@ fn build_baseline_report(
 
         if duration_seconds > 0 {
             counters.durations.push(duration_seconds);
-            counters.billable_minutes += (duration_seconds + 59) / 60;
+            counters.billable_minutes += duration_seconds.div_ceil(60);
         }
     }
 
@@ -640,7 +639,7 @@ fn run_gh_command(root: &Path, action: &str, args: Vec<String>) -> Result<String
         bail!("gh command failed while {action}: {}", String::from_utf8_lossy(&output.stderr));
     }
 
-    Ok(String::from_utf8(output.stdout).context("gh output was not valid UTF-8")?)
+    String::from_utf8(output.stdout).context("gh output was not valid UTF-8")
 }
 
 fn read_timestamp(run: &Value, keys: &[&str]) -> Option<DateTime<Utc>> {

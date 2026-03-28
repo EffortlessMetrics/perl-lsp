@@ -4,14 +4,14 @@
 //! locally built binary when available for speed.
 
 use color_eyre::eyre::{Context, Result, bail};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::utils::project_root;
 
 const CI_HYGIENE_PACKAGE: &str = "perl-ci-hygiene";
 
-fn local_binary_path(root: &PathBuf) -> PathBuf {
+fn local_binary_path(root: &Path) -> PathBuf {
     let mut path = root.join("target").join("debug").join(CI_HYGIENE_PACKAGE);
     if cfg!(windows) {
         path.set_extension(std::env::consts::EXE_EXTENSION);

@@ -114,12 +114,13 @@ fn check_workspace_dependencies(root: &Path) -> Result<()> {
                     return None;
                 }
 
-                if name.as_str() == "tree-sitter-perl" {
-                    if value.as_table().and_then(|value| value.get("path")).and_then(Value::as_str)
-                        == Some("crates/tree-sitter-perl-rs")
-                    {
-                        return None;
-                    }
+                let is_tree_sitter_perl = name.as_str() == "tree-sitter-perl";
+                let uses_workspace_path =
+                    value.as_table().and_then(|value| value.get("path")).and_then(Value::as_str)
+                        == Some("crates/tree-sitter-perl-rs");
+
+                if is_tree_sitter_perl && uses_workspace_path {
+                    return None;
                 }
 
                 Some(name.as_str())
@@ -227,12 +228,16 @@ fn has_excluded_dependency_reference(
             continue;
         }
 
-        if pattern.is_match(trimmed) {
-            if let Some(capture) = pattern.captures(trimmed).and_then(|c| c.get(1)) {
-                if excluded.contains(capture.as_str()) {
-                    return true;
-                }
-            }
+        if !pattern.is_match(trimmed) {
+            continue;
+        }
+
+        let Some(capture) = pattern.captures(trimmed).and_then(|c| c.get(1)) else {
+            continue;
+        };
+
+        if excluded.contains(capture.as_str()) {
+            return true;
         }
     }
 
@@ -247,7 +252,7 @@ fn known_excluded_directories() -> impl Iterator<Item = &'static str> {
     REQUIRED_EXCLUDED_DIRECTORIES.iter().chain(OPTIONAL_EXCLUDED_DIRECTORIES.iter()).copied()
 }
 
-fn workspace_exclude_values<'a>(manifest: &'a Value) -> Result<Vec<&'a str>> {
+fn workspace_exclude_values(manifest: &Value) -> Result<Vec<&str>> {
     let exclude = manifest
         .get("workspace")
         .and_then(|workspace| workspace.get("exclude"))
