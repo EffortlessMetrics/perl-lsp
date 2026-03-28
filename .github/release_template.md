@@ -53,6 +53,14 @@ choco install perl-lsp
 scoop install perl-lsp
 ```
 
+#### Winget (Windows)
+```powershell
+winget install --manifest .\distribution\winget\perl-lsp.yaml
+```
+
+> Winget manifest updates are generated in-repo first. Submission to
+> `winget-pkgs` remains a separate manual step.
+
 ### Editor Setup
 
 #### VS Code

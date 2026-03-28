@@ -207,6 +207,7 @@ gh workflow run release-orchestration.yml \
 | `brew-bump.yml` | GitHub release published event | ~5–10 min | Updates Homebrew formula with new version and checksums |
 | `scoop-bump.yml` | GitHub release published event | ~3–5 min | Updates Scoop manifest |
 | `chocolatey-bump.yml` | GitHub release published event | ~3–5 min | Updates Chocolatey package |
+| `winget-bump.yml` | GitHub release published event | ~3–5 min | Refreshes the repo-local winget manifest |
 
 **Total expected wall time for a full release: ~50–90 minutes.**
 

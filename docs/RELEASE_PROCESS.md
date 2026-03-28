@@ -169,6 +169,7 @@ Monitor the following workflows:
 5. **Homebrew Auto-Bump** - Creates PR to Homebrew
 6. **Scoop Auto-Bump** - Creates PR to Scoop
 7. **Chocolatey Auto-Bump** - Creates PR to Chocolatey
+8. **Winget Manifest Refresh** - Refreshes the repo-local winget manifest
 
 ### Step 5: Verify Release
 
@@ -198,6 +199,7 @@ After all workflows complete, verify:
    - Monitor Homebrew PR status
    - Monitor Scoop PR status
    - Monitor Chocolatey PR status
+   - Review the winget manifest refresh PR and submit the upstream `winget-pkgs` PR manually
 
 ## Distribution Channels
 
@@ -260,6 +262,18 @@ Chocolatey package is automatically updated via PR to chocolatey-community/choco
 **Installation:**
 ```powershell
 choco install perl-lsp
+```
+
+### Winget
+
+Winget uses a repo-local manifest source under `distribution/winget/`.
+The release workflow refreshes that manifest from the same Windows release asset
+and checksum data used by Scoop and Chocolatey. Submitting the manifest to
+`winget-pkgs` remains a manual follow-up until that external approval flow is in scope.
+
+**Installation from a local manifest:**
+```powershell
+winget install --manifest .\distribution\winget\perl-lsp.yaml
 ```
 
 ### Docker
@@ -424,6 +438,11 @@ For a complete rollback:
 - Check chocolatey-bump.yml logs
 - Verify Windows binary is available
 - Check GitHub token permissions
+
+**Issue: Winget manifest not updated**
+- Check winget-bump.yml logs
+- Verify Windows binary is available
+- Confirm `distribution/winget/perl-lsp.yaml` still matches the release asset layout
 
 ## Release Checklist
 

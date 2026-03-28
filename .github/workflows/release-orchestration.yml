@@ -282,3 +282,4 @@ jobs:
           echo "- [Homebrew Bump](https://github.com/${{ github.repository }}/actions/workflows/brew-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
           echo "- [Scoop Bump](https://github.com/${{ github.repository }}/actions/workflows/scoop-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
           echo "- [Chocolatey Bump](https://github.com/${{ github.repository }}/actions/workflows/chocolatey-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Winget Manifest Refresh](https://github.com/${{ github.repository }}/actions/workflows/winget-bump.yml)" >> "$GITHUB_STEP_SUMMARY"

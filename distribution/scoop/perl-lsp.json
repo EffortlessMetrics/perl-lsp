@@ -18,8 +18,8 @@
       }
     },
     "hash": {
-      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/perl-lsp-$version-x86_64-pc-windows-msvc.zip.sha256",
-      "regex": "^([a-fA-F0-9]{64})"
+      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/SHA256SUMS",
+      "regex": "(?m)^([a-fA-F0-9]{64})\\s+perl-lsp-\\$version-x86_64-pc-windows-msvc\\.zip$"
     }
   },
   "notes": [
