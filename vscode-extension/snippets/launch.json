@@ -6,7 +6,7 @@
             "    \"type\": \"perl\",",
             "    \"request\": \"launch\",",
             "    \"name\": \"Perl: Launch Script\",",
-            "    \"program\": \"${workspaceFolder}/${1:script.pl}\",",
+            "    \"program\": \"\\${workspaceFolder}/${1:script.pl}\",",
             "    \"stopOnEntry\": true",
             "}"
         ],

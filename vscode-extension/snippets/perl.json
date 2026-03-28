@@ -329,63 +329,63 @@
     "Test Ok": {
         "prefix": ["tm-ok", "ok"],
         "body": [
-            "ok(${1:$got}, '${2:test description}');"
+            "ok(${1:\\$got}, '${2:test description}');"
         ],
         "description": "Simple boolean test (Test::More)"
     },
     "Test Is": {
         "prefix": ["tm-is", "is"],
         "body": [
-            "is(${1:$got}, ${2:$expected}, '${3:test description}');"
+            "is(${1:\\$got}, ${2:\\$expected}, '${3:test description}');"
         ],
         "description": "Test if two values are equal (Test::More)"
     },
     "Test Isnt": {
         "prefix": ["tm-isnt", "isnt"],
         "body": [
-            "isnt(${1:$got}, ${2:$expected}, '${3:test description}');"
+            "isnt(${1:\\$got}, ${2:\\$expected}, '${3:test description}');"
         ],
         "description": "Test if two values are not equal (Test::More)"
     },
     "Test Is Deeply": {
         "prefix": ["tm-is_deeply", "is_deeply"],
         "body": [
-            "is_deeply(${1:$got}, ${2:$expected}, '${3:test description}');"
+            "is_deeply(${1:\\$got}, ${2:\\$expected}, '${3:test description}');"
         ],
         "description": "Test if two data structures are identical (Test::More)"
     },
     "Test Like": {
         "prefix": ["tm-like", "like"],
         "body": [
-            "like(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
+            "like(${1:\\$got}, qr/${2:pattern}/, '${3:test description}');"
         ],
         "description": "Test if value matches regex (Test::More)"
     },
     "Test Unlike": {
         "prefix": ["tm-unlike", "unlike"],
         "body": [
-            "unlike(${1:$got}, qr/${2:pattern}/, '${3:test description}');"
+            "unlike(${1:\\$got}, qr/${2:pattern}/, '${3:test description}');"
         ],
         "description": "Test if value does not match regex (Test::More)"
     },
     "Test Cmp Ok": {
         "prefix": ["tm-cmp_ok", "cmp_ok"],
         "body": [
-            "cmp_ok(${1:$got}, '${2:op}', ${3:$expected}, '${4:test description}');"
+            "cmp_ok(${1:\\$got}, '${2:op}', ${3:\\$expected}, '${4:test description}');"
         ],
         "description": "Compare two arguments using an operator (Test::More)"
     },
     "Test Isa Ok": {
         "prefix": ["tm-isa_ok", "isa_ok"],
         "body": [
-            "isa_ok(${1:$obj}, '${2:Class::Name}', '${3:object name}');"
+            "isa_ok(${1:\\$obj}, '${2:Class::Name}', '${3:object name}');"
         ],
         "description": "Test if object is of a given class (Test::More)"
     },
     "Test Can Ok": {
         "prefix": ["tm-can_ok", "can_ok"],
         "body": [
-            "can_ok(${1:$obj}, qw(${2:methods}));"
+            "can_ok(${1:\\$obj}, qw(${2:methods}));"
         ],
         "description": "Test if object or class has methods (Test::More)"
     },
