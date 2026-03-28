@@ -276,6 +276,25 @@ and checksum data used by Scoop and Chocolatey. Submitting the manifest to
 winget install --manifest .\distribution\winget\perl-lsp.yaml
 ```
 
+### Windows Package-Manager Verification
+
+The repo-owned verification story is intentionally narrower than the user-facing
+install story:
+
+- Automated: the release workflow publishes the Windows zip and
+  `SHA256SUMS`; the Scoop and Chocolatey bump workflows download that asset,
+  recompute the checksum, and rewrite the repo-owned manifests through
+  `distribution/windows/update-manifests.ps1`.
+- Guard rails: both bump workflows fail if release placeholders remain in the
+  manifests after the update step.
+- Manual: upstream PR acceptance in the Scoop and Chocolatey package repos,
+  then a real Windows install check with `scoop install perl-lsp` or
+  `choco install perl-lsp`, followed by `perl-lsp --health` and editor/PATH
+  discovery.
+
+Run `powershell -NoLogo -NoProfile -File scripts/check-windows-distribution.ps1`
+to audit the repo-side claims above.
+
 ### Docker
 
 Multi-arch Docker images are published to:
