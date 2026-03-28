@@ -10,7 +10,7 @@
 #![warn(clippy::all)]
 
 use std::fmt;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), windows))]
 use std::path::Path;
 
 /// Output from a subprocess execution
