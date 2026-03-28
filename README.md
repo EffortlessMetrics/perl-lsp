@@ -96,13 +96,13 @@ The full feature catalog lives in [`features.toml`](features.toml). For live pro
 
 ### Demo Walkthroughs
 
-The launch demo assets are staged as storyboard SVGs in [`vscode-extension/media/walkthrough/`](vscode-extension/media/walkthrough/). The final GIF recording pass is still pending manual capture.
+The launch demo assets are staged as storyboard SVG previews in [`vscode-extension/media/walkthrough/`](vscode-extension/media/walkthrough/). They are planning aids, not final demos.
 
 - [Install → auto-download → health check](vscode-extension/media/walkthrough/install-health.svg)
 - [Go to definition + find references](vscode-extension/media/walkthrough/find-references.svg)
 - [Extract variable code action](vscode-extension/media/walkthrough/extract-variable.svg)
 
-When the screen recordings are ready, render them with [`scripts/marketing/render-walkthrough-gif.py`](scripts/marketing/render-walkthrough-gif.py).
+When the screen recordings are ready, render them with [`scripts/marketing/render-walkthrough-gif.py`](scripts/marketing/render-walkthrough-gif.py). Use `--max-bytes` so the final GIF stays readable and README-friendly.
 
 ## Comparison
 
