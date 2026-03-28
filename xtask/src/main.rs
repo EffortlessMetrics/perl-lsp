@@ -977,6 +977,14 @@ enum Commands {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
         #[arg(default_value = ".ops-perl-lsp")]
         ops_dir: PathBuf,
+
+        /// Summarize only entries at or after the given window, e.g. `24h`, `7d`, `30m`, or `all`.
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Maximum number of rows to show in each summary section.
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
     },
 
     /// Populate mdBook source directory from `docs/`.
@@ -1407,7 +1415,9 @@ fn main() -> Result<()> {
         }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::WorktreeCleanup => worktrees::cleanup(),
-        Commands::SwarmSummary { ops_dir } => swarm_summary::run(ops_dir),
+        Commands::SwarmSummary { ops_dir, since, limit } => {
+            swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit })
+        }
         Commands::PopulateBook => populate_book::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {

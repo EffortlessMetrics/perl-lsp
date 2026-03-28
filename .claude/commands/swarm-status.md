@@ -26,14 +26,17 @@ echo "=== Queue Depth ==="
 gh issue list --label "builder-ready" --state open --json number --jq length
 gh issue list --label "needs-plan-review" --state open --json number --jq length
 gh pr list --label "merge-ready" --state open --json number --jq length
+
+echo "=== Metrics Dashboard (last 24h) ==="
+cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since 24h --limit 10
 ```
 
 ## Full View (`--full`)
 
 Also includes:
 ```bash
-echo "=== Metrics (last 50 entries) ==="
-tail -50 .ops-perl-lsp/swarm-metrics.jsonl 2>/dev/null
+echo "=== Metrics Dashboard (last 7d) ==="
+cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since 7d --limit 25
 
 echo "=== Recent Issues Filed ==="
 gh issue list --label "swarm-discovered" --state open --limit 20 --json number,title

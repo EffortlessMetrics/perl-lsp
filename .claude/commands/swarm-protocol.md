@@ -90,6 +90,8 @@ After completing any task, append to `.ops-perl-lsp/swarm-metrics.jsonl`:
 ```
 
 Append-only. The lead/merger analyzes periodically for patterns.
+Use `cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since 24h --limit 10`
+for the daily status window and `--since 7d` for report rollups.
 
 ## 5. Agent Self-Improvement
 
