@@ -157,7 +157,8 @@ def main() -> int:
         if gifsicle is not None:
             optimized = temp_path / "optimized.gif"
             run([gifsicle, "-O3", str(output_gif), "-o", str(optimized)])
-            optimized.replace(output_gif)
+            shutil.copy2(optimized, output_gif)
+            optimized.unlink()
 
         output_size = output_gif.stat().st_size
         if args.max_bytes is not None and output_size > args.max_bytes:
