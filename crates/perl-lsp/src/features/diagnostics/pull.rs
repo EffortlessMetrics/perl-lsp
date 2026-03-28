@@ -116,8 +116,17 @@ impl PullDiagnosticsProvider {
                 let parse_errors: Vec<ParseError> = parser.errors().to_vec();
                 let ast = std::sync::Arc::new(ast);
                 let provider = DiagnosticsProvider::new(&ast, content.to_string());
+                let source_path = url::Url::parse(&uri.to_string())
+                    .ok()
+                    .and_then(|value| value.to_file_path().ok());
                 provider
-                    .get_diagnostics(&ast, &parse_errors, content, None)
+                    .get_diagnostics_with_path(
+                        &ast,
+                        &parse_errors,
+                        content,
+                        None,
+                        source_path.as_deref(),
+                    )
                     .into_iter()
                     .map(|d| self.to_lsp_diagnostic(uri, content, d))
                     .collect()
@@ -133,8 +142,16 @@ impl PullDiagnosticsProvider {
     ) -> Vec<LspDiagnostic> {
         if let Some(ast) = &doc_state.ast {
             let provider = DiagnosticsProvider::new(ast, doc_state.text.clone());
+            let source_path =
+                url::Url::parse(&uri.to_string()).ok().and_then(|value| value.to_file_path().ok());
             provider
-                .get_diagnostics(ast, &doc_state.parse_errors, &doc_state.text, None)
+                .get_diagnostics_with_path(
+                    ast,
+                    &doc_state.parse_errors,
+                    &doc_state.text,
+                    None,
+                    source_path.as_deref(),
+                )
                 .into_iter()
                 .map(|d| self.to_lsp_diagnostic(uri, &doc_state.text, d))
                 .collect()

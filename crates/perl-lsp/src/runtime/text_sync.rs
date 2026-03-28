@@ -14,6 +14,10 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 
+fn source_path_from_uri(uri: &str) -> Option<std::path::PathBuf> {
+    url::Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
+}
+
 impl LspServer {
     /// Handle textDocument/didOpen notification.
     ///
@@ -821,8 +825,14 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                    let diagnostics =
-                        provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, None);
+                    let source_path = source_path_from_uri(uri);
+                    let diagnostics = provider.get_diagnostics_with_path(
+                        ast,
+                        &doc.parse_errors,
+                        &doc.text,
+                        None,
+                        source_path.as_deref(),
+                    );
 
                     // Convert diagnostics
                     let lsp_diagnostics: Vec<Value> = diagnostics

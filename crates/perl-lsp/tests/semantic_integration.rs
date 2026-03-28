@@ -10,6 +10,8 @@ mod common;
 mod semantic_integration_tests {
     use crate::common::test_utils::TestServerBuilder;
     use serde_json::Value;
+    use tempfile::tempdir;
+    use url::Url;
 
     /// Extract hover content from an LSP hover response
     fn hover_content(resp: &Value) -> Option<String> {
@@ -207,6 +209,78 @@ print $value;
         });
 
         assert!(!has_unused_value, "should not have unused warning for used variable $value");
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostics_no_warning_for_interpolated_variable_use()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"my $who = "World";
+print "Hello, $who!\n";
+"#;
+
+        let dir = tempdir()?;
+        let path = dir.path().join("interpolated.pl");
+        std::fs::write(&path, code)?;
+        let uri = Url::from_file_path(&path).map_err(|_| "failed to build file URI")?.to_string();
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(&uri, code);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        let diag_response = server.get_diagnostics(&uri);
+        let empty_vec = vec![];
+        let items = diag_response
+            .get("result")
+            .and_then(|r| r.get("items"))
+            .and_then(|i| i.as_array())
+            .unwrap_or(&empty_vec);
+
+        let has_unused_who = items.iter().any(|d| {
+            d.get("message")
+                .and_then(|m| m.as_str())
+                .map(|s| s.contains("$who") && s.to_lowercase().contains("unused"))
+                .unwrap_or(false)
+        });
+
+        assert!(
+            !has_unused_who,
+            "interpolated variable usage should not be flagged unused: {items:#?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_diagnostics_skip_missing_package_for_script_files()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+print "ok\n";
+"#;
+
+        let dir = tempdir()?;
+        let path = dir.path().join("script.pl");
+        std::fs::write(&path, code)?;
+        let uri = Url::from_file_path(&path).map_err(|_| "failed to build file URI")?.to_string();
+
+        let server = TestServerBuilder::new().build();
+        server.open_document(&uri, code);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        let diag_response = server.get_diagnostics(&uri);
+        let empty_vec = vec![];
+        let items = diag_response
+            .get("result")
+            .and_then(|r| r.get("items"))
+            .and_then(|i| i.as_array())
+            .unwrap_or(&empty_vec);
+
+        let has_pl200 = items.iter().any(|d| {
+            d.get("code").and_then(|c| c.as_str()).map(|code| code == "PL200").unwrap_or(false)
+        });
+
+        assert!(!has_pl200, "script-style .pl files should not emit PL200: {items:#?}");
         Ok(())
     }
 

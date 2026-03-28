@@ -825,6 +825,21 @@ if ($flag) {
 }
 
 #[test]
+fn unused_variable_used_in_string_interpolation() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my $name = "World";
+print "Hello, $name!\n";
+"#;
+    let issues = scope_issues(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("name"))
+        .count();
+    assert_eq!(unused, 0, "$name used in interpolated string should not be unused");
+    Ok(())
+}
+
+#[test]
 fn unused_variable_multiple_in_same_scope() -> Result<(), Box<dyn std::error::Error>> {
     // All unused variables in the same scope should be reported.
     let code = r#"

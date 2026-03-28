@@ -23,6 +23,7 @@
 // body. The code is reserved for future use with a narrower trigger condition.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
@@ -38,11 +39,20 @@ use super::super::walker::walk_node;
 /// Only the `Program` node's direct children are examined. Package declarations
 /// inside `eval` blocks or other nested constructs are not counted — they do not
 /// establish the file's package namespace in the same way.
-pub fn check_missing_package_declaration(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+pub fn check_missing_package_declaration(
+    node: &Node,
+    source: &str,
+    source_path: Option<&Path>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let statements = match &node.kind {
         NodeKind::Program { statements } => statements,
         _ => return,
     };
+
+    if should_skip_missing_package_declaration(source, source_path) {
+        return;
+    }
 
     let has_package = statements.iter().any(|stmt| matches!(&stmt.kind, NodeKind::Package { .. }));
 
@@ -59,6 +69,17 @@ pub fn check_missing_package_declaration(node: &Node, diagnostics: &mut Vec<Diag
             suggestion: Some("Add 'package MyModule;' at the top of the file".to_string()),
         });
     }
+}
+
+fn should_skip_missing_package_declaration(source: &str, source_path: Option<&Path>) -> bool {
+    if let Some(extension) =
+        source_path.and_then(|path| path.extension()).and_then(|ext| ext.to_str())
+        && matches!(extension, "pl" | "t" | "cgi" | "psgi" | "plx")
+    {
+        return true;
+    }
+
+    source.trim_start().starts_with("#!")
 }
 
 /// Check for duplicate package declarations (PL201).

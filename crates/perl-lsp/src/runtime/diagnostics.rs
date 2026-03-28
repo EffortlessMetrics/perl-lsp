@@ -10,6 +10,10 @@ use crate::features::diagnostics::{
 };
 use perl_diagnostics_codes::DiagnosticCode;
 
+fn source_path_from_uri(uri: &str) -> Option<std::path::PathBuf> {
+    url::Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
+}
+
 impl LspServer {
     /// Convert internal diagnostic tags to LSP tag values
     ///
@@ -107,8 +111,14 @@ impl LspServer {
             // resolver is called with the documents lock *released* — no reentrant deadlock.
             let provider = DiagnosticsProvider::new(ast, text.clone());
             let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
-            let mut diagnostics =
-                provider.get_diagnostics(ast, &parse_errors, &text, Some(&resolver));
+            let source_path = source_path_from_uri(uri);
+            let mut diagnostics = provider.get_diagnostics_with_path(
+                ast,
+                &parse_errors,
+                &text,
+                Some(&resolver),
+                source_path.as_deref(),
+            );
 
             // Add Perl::Critic built-in analysis
             let built_in_analyzer = BuiltInAnalyzer::new();
@@ -269,11 +279,13 @@ impl LspServer {
                 if let Some(ast) = &doc.ast {
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
                     let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
-                    let mut diagnostics = provider.get_diagnostics(
+                    let source_path = source_path_from_uri(uri);
+                    let mut diagnostics = provider.get_diagnostics_with_path(
                         ast,
                         &doc.parse_errors,
                         &doc.text,
                         Some(&resolver),
+                        source_path.as_deref(),
                     );
 
                     // Add external perlcritic diagnostics (opt-in)
@@ -505,8 +517,14 @@ impl LspServer {
             if let Some(ast) = &doc.ast {
                 let provider = DiagnosticsProvider::new(ast, doc.text.clone());
                 let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
-                let mut diagnostics =
-                    provider.get_diagnostics(ast, &doc.parse_errors, &doc.text, Some(&resolver));
+                let source_path = source_path_from_uri(uri_str);
+                let mut diagnostics = provider.get_diagnostics_with_path(
+                    ast,
+                    &doc.parse_errors,
+                    &doc.text,
+                    Some(&resolver),
+                    source_path.as_deref(),
+                );
 
                 // Add external perlcritic diagnostics (opt-in)
                 self.collect_external_perlcritic_diagnostics(uri_str, &doc.text, &mut diagnostics);
