@@ -98,6 +98,26 @@ fn test_inline_completion_after_use() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
+fn test_inline_completion_after_use_preserves_priority_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server()?;
+    let uri = "file:///test.pl";
+    open_doc(&server, uri, "use ");
+    let result = inline_completion(&server, uri, 0, 4)?;
+    let items = result["items"].as_array().ok_or("items array")?;
+
+    let inserts: Vec<&str> = items
+        .iter()
+        .map(|item| item["insertText"].as_str().ok_or("insertText not a string"))
+        .collect::<Result<_, _>>()?;
+
+    assert_eq!(inserts.first().copied(), Some("strict;"));
+    assert_eq!(inserts.get(1).copied(), Some("warnings;"));
+    assert_eq!(inserts.get(2).copied(), Some("feature ':5.36';"));
+    Ok(())
+}
+
+#[test]
 fn test_inline_completion_shebang() -> Result<(), Box<dyn std::error::Error>> {
     let server = setup_server()?;
     let uri = "file:///test.pl";
