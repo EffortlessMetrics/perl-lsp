@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <text x="60" y="58" font-family="sans-serif" font-size="28" fill="#e2e8f0">Storyboard preview: go to definition + find references</text>
+  <text x="60" y="92" font-family="sans-serif" font-size="16" fill="#94a3b8">Manual recording still required. This file documents the intended shot order for the final GIF.</text>
+
+  <rect x="55" y="130" width="345" height="400" rx="18" fill="#1e293b" stroke="#334155"/>
+  <rect x="425" y="130" width="345" height="400" rx="18" fill="#1e293b" stroke="#334155"/>
+  <rect x="795" y="130" width="350" height="400" rx="18" fill="#1e293b" stroke="#334155"/>
+
+  <circle cx="100" cy="170" r="18" fill="#2563eb"/>
+  <text x="95" y="177" font-family="sans-serif" font-size="18" fill="#ffffff">1</text>
+  <text x="130" y="177" font-family="sans-serif" font-size="22" fill="#f8fafc">Ctrl+Click the symbol</text>
+  <rect x="80" y="215" width="295" height="225" rx="14" fill="#0f172a" stroke="#334155"/>
+  <text x="100" y="250" font-family="monospace" font-size="18" fill="#94a3b8">demo_workspace/main.pl</text>
+  <text x="100" y="288" font-family="monospace" font-size="20" fill="#cbd5e1">my $processed = Utils::</text>
+  <text x="100" y="318" font-family="monospace" font-size="20" fill="#38bdf8" text-decoration="underline">process_data</text>
+  <text x="285" y="318" font-family="monospace" font-size="20" fill="#cbd5e1">($data);</text>
+  <text x="100" y="356" font-family="sans-serif" font-size="15" fill="#94a3b8">Use the click to jump to the definition in the module.</text>
+
+  <polygon points="405,320 420,305 420,335" fill="#38bdf8"/>
+  <line x1="405" y1="320" x2="420" y2="320" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+
+  <circle cx="470" cy="170" r="18" fill="#2563eb"/>
+  <text x="465" y="177" font-family="sans-serif" font-size="18" fill="#ffffff">2</text>
+  <text x="500" y="177" font-family="sans-serif" font-size="22" fill="#f8fafc">Jumped to definition</text>
+  <rect x="445" y="215" width="295" height="225" rx="14" fill="#0f172a" stroke="#334155"/>
+  <text x="465" y="250" font-family="monospace" font-size="18" fill="#94a3b8">demo_workspace/lib/Utils.pm</text>
+  <text x="465" y="290" font-family="monospace" font-size="20" fill="#f472b6">sub</text>
+  <text x="505" y="290" font-family="monospace" font-size="20" fill="#fbbf24">process_data</text>
+  <text x="670" y="290" font-family="monospace" font-size="20" fill="#cbd5e1">{</text>
+  <text x="465" y="330" font-family="monospace" font-size="20" fill="#cbd5e1">    my ($data) = @_;</text>
+  <text x="465" y="360" font-family="monospace" font-size="20" fill="#cbd5e1">    ...</text>
+  <text x="465" y="397" font-family="sans-serif" font-size="15" fill="#94a3b8">The jump should feel instantaneous in the recording.</text>
+
+  <polygon points="775,320 790,305 790,335" fill="#38bdf8"/>
+  <line x1="775" y1="320" x2="790" y2="320" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+
+  <circle cx="850" cy="170" r="18" fill="#2563eb"/>
+  <text x="845" y="177" font-family="sans-serif" font-size="18" fill="#ffffff">3</text>
+  <text x="885" y="177" font-family="sans-serif" font-size="22" fill="#f8fafc">Find references panel</text>
+  <rect x="820" y="215" width="290" height="225" rx="14" fill="#0f172a" stroke="#334155"/>
+  <rect x="840" y="238" width="250" height="40" rx="8" fill="#111827" stroke="#334155"/>
+  <text x="860" y="264" font-family="sans-serif" font-size="16" fill="#cbd5e1">Find References: process_data</text>
+  <rect x="840" y="292" width="250" height="34" rx="8" fill="#1d4ed8"/>
+  <text x="860" y="315" font-family="sans-serif" font-size="16" fill="#eff6ff">main.pl:3  call site</text>
+  <rect x="840" y="334" width="250" height="34" rx="8" fill="#1d4ed8"/>
+  <text x="860" y="357" font-family="sans-serif" font-size="16" fill="#eff6ff">Utils.pm:8  definition</text>
+  <rect x="840" y="376" width="250" height="34" rx="8" fill="#1d4ed8"/>
+  <text x="860" y="399" font-family="sans-serif" font-size="16" fill="#eff6ff">main.pl:8  second usage</text>
+
+  <text x="60" y="590" font-family="sans-serif" font-size="16" fill="#94a3b8">Planned output: `find-references.gif`. Capture both the jump and the references list in one take.</text>
+  <text x="60" y="624" font-family="sans-serif" font-size="16" fill="#94a3b8">Source references: `demo_workspace/main.pl` and `demo_workspace/lib/Utils.pm`.</text>
+</svg>

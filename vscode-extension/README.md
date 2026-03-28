@@ -51,10 +51,17 @@ A fast, native Perl 5 language server with 30+ IDE features. Written in Rust for
 - **Run Tests** -- Run individual tests or entire files from the Testing panel (`Shift+Alt+T`)
 - **TAP Support** -- Native Test Anything Protocol result parsing
 
-<!-- Screenshots placeholder: add screenshots showing features in action -->
-<!-- ![Go to Definition](images/goto-definition.png) -->
-<!-- ![Diagnostics](images/diagnostics.png) -->
-<!-- ![Completions](images/completions.png) -->
+### Walkthrough Previews
+
+These storyboard SVGs document the launch demos from issue #2336. The final GIF recordings still need a manual capture pass.
+
+<p align="center">
+  <a href="media/walkthrough/install-health.svg"><img src="media/walkthrough/install-health.svg" alt="Install, auto-download, and health check storyboard" width="31%" /></a>
+  <a href="media/walkthrough/find-references.svg"><img src="media/walkthrough/find-references.svg" alt="Go to definition and find references storyboard" width="31%" /></a>
+  <a href="media/walkthrough/extract-variable.svg"><img src="media/walkthrough/extract-variable.svg" alt="Extract variable code action storyboard" width="31%" /></a>
+</p>
+
+See [media/walkthrough/README.md](media/walkthrough/README.md) for the capture plan and GIF render helper.
 
 ## Installation
 
