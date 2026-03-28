@@ -471,9 +471,9 @@ gates:
     description: "Code coverage collection and reporting"
     required: false
     command: >-
-      cargo install cargo-llvm-cov --locked 2>/dev/null || true;
-      cargo llvm-cov -p perl-parser --tests --lcov --output-path lcov.info;
-      cargo llvm-cov report -p perl-parser
+      rustup run nightly cargo install cargo-llvm-cov --locked 2>/dev/null || true;
+      rustup run nightly cargo llvm-cov -p perl-parser --lib --branch --lcov --output-path lcov.info;
+      bash ./scripts/check-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
     timeout_seconds: 900
     retry_count: 0
     budgets:

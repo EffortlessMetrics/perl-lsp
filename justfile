@@ -1151,11 +1151,11 @@ perf-baseline:
 # Generate local HTML coverage report
 coverage:
     @echo "📊 Generating coverage report..."
-    @if ! command -v cargo-llvm-cov >/dev/null 2>&1; then \
+    @if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then \
         echo "❌ cargo-llvm-cov not found. Installing..."; \
-        cargo install cargo-llvm-cov --locked; \
+        "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
-    @cargo llvm-cov --workspace --locked --exclude xtask --html --output-dir target/coverage \
+    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --html --output-dir target/coverage \
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
     @echo "✅ Coverage report: target/coverage/index.html"
     @echo "📈 Opening report in browser..."
@@ -1166,11 +1166,11 @@ coverage:
 # Generate coverage report (lcov format for CI)
 coverage-lcov:
     @echo "📊 Generating coverage (lcov format)..."
-    @if ! command -v cargo-llvm-cov >/dev/null 2>&1; then \
+    @if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then \
         echo "❌ cargo-llvm-cov not found. Installing..."; \
-        cargo install cargo-llvm-cov --locked; \
+        "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
-    @cargo llvm-cov --workspace --locked --exclude xtask --lcov --output-path lcov.info \
+    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --lcov --output-path lcov.info \
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
     @echo "✅ Coverage: lcov.info"
 
@@ -1178,12 +1178,23 @@ coverage-lcov:
 coverage-summary:
     @echo "📊 Coverage Summary"
     @echo "==================="
-    @if ! command -v cargo-llvm-cov >/dev/null 2>&1; then \
+    @if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then \
         echo "❌ cargo-llvm-cov not found. Installing..."; \
-        cargo install cargo-llvm-cov --locked; \
+        "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
     fi
-    @cargo llvm-cov --workspace --locked --exclude xtask \
+    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch \
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
+
+# Generate branch coverage and fail if it regresses against the baseline policy
+coverage-branch-gate:
+    @echo "📊 Generating branch coverage gate data..."
+    @if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then \
+        echo "❌ cargo-llvm-cov not found. Installing..."; \
+        "$HOME/.cargo/bin/rustup" run nightly cargo install cargo-llvm-cov --locked; \
+    fi
+    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch --lcov --output-path lcov.info \
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
+    @bash ./scripts/check-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
 
 # ============================================================================
 # Technical Debt Tracking (Issue #XXX)

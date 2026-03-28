@@ -44,6 +44,7 @@ These typically complete in **~810 minutes** with caching.
 To keep PRs fast by default, expensive jobs are gated behind labels. Apply these labels to your PR to opt in:
 
 - **`ci:coverage`**  Run code coverage analysis with `cargo-llvm-cov` (generates lcov reports)
+  - Uses the nightly branch-coverage lane and the `.ci/coverage-baseline.txt` ratchet
 - **`ci:bench`**  Run performance benchmarks (nightly toolchain, heavier runtime)
 - **`ci:mutation`**  Run mutation testing with `cargo-mutants` (long-running; informational only)
 - **`ci:strict`**  Enable stricter Clippy lints (`pedantic`, `nursery`, `cargo`)
