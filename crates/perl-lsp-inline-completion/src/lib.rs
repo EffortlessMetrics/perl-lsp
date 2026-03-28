@@ -7,6 +7,8 @@
 use perl_position_tracking::utf16_line_col_to_offset;
 use serde::{Deserialize, Serialize};
 
+const MAX_INLINE_COMPLETION_ITEMS: usize = 5;
+
 /// Prepared context for inline completion suggestions and future AI handoff.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +55,13 @@ pub struct InlineCompletionItem {
 pub struct InlineCompletionList {
     /// The inline completion items.
     pub items: Vec<InlineCompletionItem>,
+}
+
+#[derive(Debug)]
+struct RankedCompletionItem {
+    priority: u8,
+    order: usize,
+    item: InlineCompletionItem,
 }
 
 /// A provider for inline completions.
@@ -147,156 +156,206 @@ impl InlineCompletionProvider {
     ) -> Vec<InlineCompletionItem> {
         let prefix = context.prefix.as_str();
         let full_line = context.current_line.as_str();
-        let mut items = Vec::new();
+        let mut items = Vec::<RankedCompletionItem>::new();
+        let mut sequence = 0usize;
+
+        let mut push_item = |priority: u8, item: InlineCompletionItem| {
+            items.push(RankedCompletionItem { priority, order: sequence, item });
+            sequence += 1;
+        };
 
         // Rule 1: After `->` suggest `new()`
         if prefix.ends_with("->") {
-            items.push(InlineCompletionItem {
-                insert_text: "new()".into(),
-                filter_text: Some("new".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "new()".into(),
+                    filter_text: Some("new".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         // Rule 2: After `use ` suggest common pragmas
         if prefix.trim_end() == "use" || prefix.ends_with("use ") {
             // Suggest strict first as it's most common
-            items.push(InlineCompletionItem {
-                insert_text: "strict;".into(),
-                filter_text: Some("strict".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "strict;".into(),
+                    filter_text: Some("strict".into()),
+                    range: None,
+                    command: None,
+                },
+            );
 
-            items.push(InlineCompletionItem {
-                insert_text: "warnings;".into(),
-                filter_text: Some("warnings".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                1,
+                InlineCompletionItem {
+                    insert_text: "warnings;".into(),
+                    filter_text: Some("warnings".into()),
+                    range: None,
+                    command: None,
+                },
+            );
 
-            items.push(InlineCompletionItem {
-                insert_text: "feature ':5.36';".into(),
-                filter_text: Some("feature".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                2,
+                InlineCompletionItem {
+                    insert_text: "feature ':5.36';".into(),
+                    filter_text: Some("feature".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         // Rule 3: After `sub <name>` without `{`, suggest smart body based on name pattern
         if let Some(sub_name) = self.match_sub_declaration(prefix) {
             if !full_line.contains('{') {
                 let body = self.generate_smart_body(&sub_name);
-                items.push(InlineCompletionItem {
-                    insert_text: format!(" {{\n{}\n}}", body),
-                    filter_text: Some("{".into()),
-                    range: None,
-                    command: None,
-                });
+                push_item(
+                    0,
+                    InlineCompletionItem {
+                        insert_text: format!(" {{\n{}\n}}", body),
+                        filter_text: Some("{".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
             }
         }
 
         // Rule 4: After `my $` suggest common variable patterns
         if prefix.ends_with("my $") {
-            items.push(InlineCompletionItem {
-                insert_text: "self = shift;".into(),
-                filter_text: Some("self".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "self = shift;".into(),
+                    filter_text: Some("self".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         // Rule 5: After `package ` suggest common suffix patterns
         if prefix.ends_with("package ") {
-            items.push(InlineCompletionItem {
-                insert_text: "MyPackage;\n\nuse strict;\nuse warnings;".into(),
-                filter_text: Some("MyPackage".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "MyPackage;\n\nuse strict;\nuse warnings;".into(),
+                    filter_text: Some("MyPackage".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         // Rule 6: After `bless ` suggest common patterns
         if prefix.ends_with("bless ") {
-            items.push(InlineCompletionItem {
-                insert_text: "$self, $class;".into(),
-                filter_text: Some("$self".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "$self, $class;".into(),
+                    filter_text: Some("$self".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         // Rule 7: After `return ` in constructor context
         if prefix.ends_with("return ") {
             if let Some(variable) = self.preferred_return_variable(context) {
-                items.push(InlineCompletionItem {
-                    insert_text: format!("{variable};"),
-                    filter_text: Some(variable),
-                    range: None,
-                    command: None,
-                });
+                push_item(
+                    0,
+                    InlineCompletionItem {
+                        insert_text: format!("{variable};"),
+                        filter_text: Some(variable),
+                        range: None,
+                        command: None,
+                    },
+                );
             } else if self.is_in_constructor_context(context.current_function.as_deref(), prefix) {
-                items.push(InlineCompletionItem {
-                    insert_text: "$self;".into(),
-                    filter_text: Some("$self".into()),
-                    range: None,
-                    command: None,
-                });
+                push_item(
+                    1,
+                    InlineCompletionItem {
+                        insert_text: "$self;".into(),
+                        filter_text: Some("$self".into()),
+                        range: None,
+                        command: None,
+                    },
+                );
             }
         }
 
         // Rule 8: Complete common loops
         if prefix.ends_with("for ") {
-            items.push(InlineCompletionItem {
-                insert_text: "my $item (@items) {\n    \n}".into(),
-                filter_text: Some("my".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "my $item (@items) {\n    \n}".into(),
+                    filter_text: Some("my".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         if prefix.ends_with("foreach ") {
-            items.push(InlineCompletionItem {
-                insert_text: "my $item (@items) {\n    \n}".into(),
-                filter_text: Some("my".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "my $item (@items) {\n    \n}".into(),
+                    filter_text: Some("my".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         // Rule 9: Complete common test patterns
         if prefix.ends_with("ok(") {
-            items.push(InlineCompletionItem {
-                insert_text: "$result, 'test description');".into(),
-                filter_text: Some("$result".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "$result, 'test description');".into(),
+                    filter_text: Some("$result".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         if prefix.ends_with("is(") {
-            items.push(InlineCompletionItem {
-                insert_text: "$got, $expected, 'test description');".into(),
-                filter_text: Some("$got".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "$got, $expected, 'test description');".into(),
+                    filter_text: Some("$got".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
         // Rule 10: Complete shebang
         if prefix == "#!" || prefix == "#!/" {
-            items.push(InlineCompletionItem {
-                insert_text: "/usr/bin/env perl".into(),
-                filter_text: Some("perl".into()),
-                range: None,
-                command: None,
-            });
+            push_item(
+                0,
+                InlineCompletionItem {
+                    insert_text: "/usr/bin/env perl".into(),
+                    filter_text: Some("perl".into()),
+                    range: None,
+                    command: None,
+                },
+            );
         }
 
-        self.add_contextual_fallbacks(context, &mut items);
-        self.deduplicate_items(&mut items);
-        items
+        self.add_contextual_fallbacks(context, &mut items, &mut sequence);
+        self.normalize_items(items)
     }
 
     /// Check if we're after a sub declaration without body
@@ -534,7 +593,8 @@ impl InlineCompletionProvider {
     fn add_contextual_fallbacks(
         &self,
         context: &PreparedInlineCompletionContext,
-        items: &mut Vec<InlineCompletionItem>,
+        items: &mut Vec<RankedCompletionItem>,
+        sequence: &mut usize,
     ) {
         let prefix = context.prefix.trim();
         let comment_context = context
@@ -548,50 +608,97 @@ impl InlineCompletionProvider {
             && context.imports.is_empty()
             && context.variables.is_empty()
         {
-            items.push(InlineCompletionItem {
-                insert_text: "#!/usr/bin/env perl\nuse strict;\nuse warnings;\n\n".into(),
-                filter_text: Some("perl".into()),
-                range: None,
-                command: None,
+            items.push(RankedCompletionItem {
+                priority: 8,
+                order: *sequence,
+                item: InlineCompletionItem {
+                    insert_text: "#!/usr/bin/env perl\nuse strict;\nuse warnings;\n\n".into(),
+                    filter_text: Some("perl".into()),
+                    range: None,
+                    command: None,
+                },
             });
-            items.push(InlineCompletionItem {
-                insert_text: "use strict;\nuse warnings;\n\n".into(),
-                filter_text: Some("strict".into()),
-                range: None,
-                command: None,
+            *sequence += 1;
+            items.push(RankedCompletionItem {
+                priority: 9,
+                order: *sequence,
+                item: InlineCompletionItem {
+                    insert_text: "use strict;\nuse warnings;\n\n".into(),
+                    filter_text: Some("strict".into()),
+                    range: None,
+                    command: None,
+                },
             });
+            *sequence += 1;
         }
 
         if prefix.is_empty() {
             if let Some(variable) = self.preferred_return_variable(context) {
-                items.push(InlineCompletionItem {
-                    insert_text: format!("return {variable};"),
-                    filter_text: Some(variable),
-                    range: None,
-                    command: None,
+                items.push(RankedCompletionItem {
+                    priority: 0,
+                    order: *sequence,
+                    item: InlineCompletionItem {
+                        insert_text: format!("return {variable};"),
+                        filter_text: Some(variable),
+                        range: None,
+                        command: None,
+                    },
                 });
+                *sequence += 1;
             }
 
             if self.imports_include(context, "Test::More")
                 || self.imports_include(context, "Test2::V0")
             {
-                items.push(InlineCompletionItem {
-                    insert_text: "done_testing();".into(),
-                    filter_text: Some("done_testing".into()),
-                    range: None,
-                    command: None,
+                items.push(RankedCompletionItem {
+                    priority: 1,
+                    order: *sequence,
+                    item: InlineCompletionItem {
+                        insert_text: "done_testing();".into(),
+                        filter_text: Some("done_testing".into()),
+                        range: None,
+                        command: None,
+                    },
                 });
+                *sequence += 1;
             }
 
             if comment_context && let Some(variable) = self.preferred_assignment_variable(context) {
-                items.push(InlineCompletionItem {
-                    insert_text: format!("my {variable} = shift;"),
-                    filter_text: Some(variable),
-                    range: None,
-                    command: None,
+                items.push(RankedCompletionItem {
+                    priority: 2,
+                    order: *sequence,
+                    item: InlineCompletionItem {
+                        insert_text: format!("my {variable} = shift;"),
+                        filter_text: Some(variable),
+                        range: None,
+                        command: None,
+                    },
                 });
+                *sequence += 1;
             }
         }
+    }
+
+    fn normalize_items(&self, mut items: Vec<RankedCompletionItem>) -> Vec<InlineCompletionItem> {
+        items.sort_by(|left, right| {
+            left.priority.cmp(&right.priority).then_with(|| left.order.cmp(&right.order))
+        });
+
+        let mut deduped = Vec::new();
+        let mut seen = Vec::<String>::new();
+        for candidate in items.into_iter() {
+            if seen.iter().any(|existing| existing == &candidate.item.insert_text) {
+                continue;
+            }
+
+            seen.push(candidate.item.insert_text.clone());
+            deduped.push(candidate.item);
+            if deduped.len() >= MAX_INLINE_COMPLETION_ITEMS {
+                break;
+            }
+        }
+
+        deduped
     }
 
     fn preferred_return_variable(
@@ -619,17 +726,6 @@ impl InlineCompletionProvider {
 
     fn imports_include(&self, context: &PreparedInlineCompletionContext, expected: &str) -> bool {
         context.imports.iter().any(|import_name| import_name == expected)
-    }
-
-    fn deduplicate_items(&self, items: &mut Vec<InlineCompletionItem>) {
-        let mut seen = Vec::<String>::new();
-        items.retain(|item| {
-            if seen.iter().any(|existing| existing == &item.insert_text) {
-                return false;
-            }
-            seen.push(item.insert_text.clone());
-            true
-        });
     }
 
     fn push_unique(&self, values: &mut Vec<String>, value: String) {
@@ -794,5 +890,91 @@ mod tests {
         assert!(!completions.items.is_empty());
         assert!(completions.items.iter().any(|item| item.insert_text == "return $result;"));
         assert!(completions.items.iter().any(|item| item.insert_text == "done_testing();"));
+    }
+
+    #[test]
+    fn test_normalize_items_orders_deduplicates_and_limits() {
+        let provider = InlineCompletionProvider::new();
+        let items = vec![
+            RankedCompletionItem {
+                priority: 2,
+                order: 0,
+                item: InlineCompletionItem {
+                    insert_text: "late".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                priority: 0,
+                order: 1,
+                item: InlineCompletionItem {
+                    insert_text: "first".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                priority: 0,
+                order: 2,
+                item: InlineCompletionItem {
+                    insert_text: "first".into(),
+                    filter_text: Some("duplicate".into()),
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                priority: 1,
+                order: 3,
+                item: InlineCompletionItem {
+                    insert_text: "second".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                priority: 3,
+                order: 4,
+                item: InlineCompletionItem {
+                    insert_text: "third".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                priority: 4,
+                order: 5,
+                item: InlineCompletionItem {
+                    insert_text: "fourth".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+            RankedCompletionItem {
+                priority: 5,
+                order: 6,
+                item: InlineCompletionItem {
+                    insert_text: "fifth".into(),
+                    filter_text: None,
+                    range: None,
+                    command: None,
+                },
+            },
+        ];
+
+        let normalized = provider.normalize_items(items);
+
+        assert_eq!(normalized.len(), MAX_INLINE_COMPLETION_ITEMS);
+        assert_eq!(normalized[0].insert_text, "first");
+        assert_eq!(normalized[1].insert_text, "second");
+        assert_eq!(normalized[2].insert_text, "late");
+        assert_eq!(normalized[3].insert_text, "third");
+        assert_eq!(normalized[4].insert_text, "fourth");
     }
 }
