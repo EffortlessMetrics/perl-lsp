@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Context, ContextCompat, Result, bail};
+use color_eyre::eyre::{bail, Context, ContextCompat, Result};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::HashSet;
@@ -69,7 +69,7 @@ pub fn run_hook_registry_check() -> Result<()> {
     let mut failed = 0u32;
 
     for path in &commands {
-        let abs_path = root.join(&path);
+        let abs_path = root.join(path);
         if !abs_path.exists() {
             println!("::error::Registered hook script missing: {}", path);
             failed += 1;
@@ -125,7 +125,7 @@ pub fn run_hook_tests() -> Result<()> {
         &mut fail,
     );
 
-    let temp_root = PathBuf::from(std::env::temp_dir()).join(format!(
+    let temp_root = std::env::temp_dir().join(format!(
         "xtask-hook-tests-{}",
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
     ));
@@ -331,10 +331,12 @@ fn extract_hook_commands(document: &Value) -> Vec<String> {
 }
 
 fn collect_commands(document: &Value, out: &mut HashSet<String>) {
-    if let Some(command) = document.get("command").and_then(Value::as_str) {
-        if command.ends_with(".sh") {
-            out.insert(normalize_hook_path(command));
-        }
+    let Some(command) = document.get("command").and_then(Value::as_str) else {
+        return;
+    };
+
+    if command.ends_with(".sh") {
+        out.insert(normalize_hook_path(command));
     }
 
     if let Some(map) = document.get("hooks").and_then(Value::as_object) {
