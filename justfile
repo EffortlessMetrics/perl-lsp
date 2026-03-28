@@ -1803,3 +1803,7 @@ clean-worktrees:
     done
     git worktree prune
     echo "Done: removed $removed, kept $kept"
+
+# Query, allocate, release, or clean up reusable worktree slots
+worktree-manager *ARGS:
+    python3 scripts/worktree-manager.py {{ARGS}}
