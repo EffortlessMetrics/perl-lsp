@@ -222,7 +222,7 @@ fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<Stri
             return ("cmd.exe".to_string(), shell_args);
         }
 
-        return (resolved_program, args.iter().map(|arg| (*arg).to_string()).collect());
+        (resolved_program, args.iter().map(|arg| (*arg).to_string()).collect())
     }
 
     #[cfg(not(windows))]
