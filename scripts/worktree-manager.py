@@ -18,6 +18,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STATE_FILE = REPO_ROOT / ".ops-perl-lsp" / "worktree-manager" / "state.json"
 DEFAULT_MANAGED_ROOT = REPO_ROOT.parent / f"{REPO_ROOT.name}-worktrees"
 DEFAULT_BRANCH_BASES = ("origin/master", "master", "origin/main", "main")
+OWNER_ENV_VARS = (
+    "WORKTREE_MANAGER_OWNER",
+    "CLAUDE_SUBAGENT_NAME",
+    "CLAUDE_AGENT_NAME",
+    "CLAUDE_TEAMMATE_NAME",
+    "AGENT_NAME",
+    "SUBAGENT_NAME",
+)
 
 
 def utc_now() -> str:
@@ -86,6 +94,37 @@ def default_state() -> dict[str, Any]:
         "updated_at": None,
         "slots": [],
     }
+
+
+def normalize_owner(value: str | None) -> str | None:
+    if value is None:
+        return None
+    owner = value.strip()
+    return owner or None
+
+
+def owner_from_env() -> str | None:
+    for key in OWNER_ENV_VARS:
+        owner = normalize_owner(os.environ.get(key))
+        if owner:
+            return owner
+    return None
+
+
+def resolve_owner(explicit: str | None) -> str | None:
+    owner = normalize_owner(explicit)
+    if owner:
+        return owner
+    return owner_from_env()
+
+
+def set_owner(slot: dict[str, Any], owner: str | None, owner_source: str | None) -> None:
+    slot["owner"] = owner
+    slot["owner_set_at"] = utc_now() if owner else None
+    if owner and owner_source:
+        slot["owner_source"] = owner_source
+    else:
+        slot.pop("owner_source", None)
 
 
 def state_path_from_args(args: argparse.Namespace) -> Path:
@@ -214,6 +253,8 @@ def sync_state(state: dict[str, Any], managed_root: Path) -> None:
                 "slot_id": slot_id,
                 "path": render_state_path(path),
                 "branch": branch,
+                "owner": None,
+                "owner_set_at": None,
                 "status": "active" if branch != "HEAD" else "detached",
                 "reuse_count": 0,
                 "last_used_at": utc_now(),
@@ -225,6 +266,8 @@ def sync_state(state: dict[str, Any], managed_root: Path) -> None:
         else:
             slot["path"] = render_state_path(path)
             slot["branch"] = branch
+            slot.setdefault("owner", None)
+            slot.setdefault("owner_set_at", None)
             if path.exists():
                 if worktree_dirty(path):
                     slot["status"] = "dirty"
@@ -266,12 +309,14 @@ def print_query(state: dict[str, Any]) -> None:
         print("No managed worktree slots recorded.")
         return
 
-    print(f"{'SLOT':20} {'STATUS':15} {'BRANCH':28} {'REUSE':5} PATH")
-    print(f"{'-' * 20} {'-' * 15} {'-' * 28} {'-' * 5} {'-' * 30}")
+    print(f"{'SLOT':20} {'STATUS':15} {'OWNER':20} {'BRANCH':28} {'REUSE':5} PATH")
+    print(f"{'-' * 20} {'-' * 15} {'-' * 20} {'-' * 28} {'-' * 5} {'-' * 30}")
     for slot in sorted(slots, key=lambda item: item.get("slot_id", "")):
+        owner = normalize_owner(slot.get("owner")) or "(unowned)"
         print(
             f"{slot.get('slot_id', '')[:20]:20} "
             f"{printable_status(slot)[:15]:15} "
+            f"{owner[:20]:20} "
             f"{normalize_branch(slot.get('branch', 'HEAD'))[:28]:28} "
             f"{str(slot.get('reuse_count', 0))[:5]:5} "
             f"{slot.get('path', '')}"
@@ -296,12 +341,16 @@ def allocate(args: argparse.Namespace, state: dict[str, Any], state_path: Path, 
     slot = slots.get(args.slot)
     slot_path = managed_root / args.slot
     slot_rel = render_state_path(slot_path)
+    owner = resolve_owner(args.owner)
+    owner_source = "flag" if normalize_owner(args.owner) else "env" if owner else None
 
     if slot is None:
         slot = {
             "slot_id": args.slot,
             "path": slot_rel,
             "branch": normalize_branch(args.branch),
+            "owner": owner,
+            "owner_set_at": utc_now() if owner else None,
             "status": "idle",
             "reuse_count": 0,
             "last_used_at": None,
@@ -334,6 +383,7 @@ def allocate(args: argparse.Namespace, state: dict[str, Any], state_path: Path, 
     slot["status"] = "active"
     slot["reuse_count"] = int(slot.get("reuse_count", 0)) + 1
     slot["last_used_at"] = utc_now()
+    set_owner(slot, owner, owner_source)
     save_state(state_path, state)
     print(f"allocated slot={args.slot} path={slot_rel} branch={args.branch} ref={base}")
 
@@ -352,8 +402,15 @@ def release(args: argparse.Namespace, state: dict[str, Any], state_path: Path) -
         print(f"would release slot={args.slot} path={slot.get('path', '')}")
         return
 
+    owner = resolve_owner(args.owner)
+    recorded_owner = normalize_owner(slot.get("owner"))
+    if owner and recorded_owner and owner != recorded_owner and not args.force:
+        raise RuntimeError(
+            f"slot {args.slot!r} is owned by {recorded_owner!r}; release as that owner or use --force"
+        )
     slot["status"] = "retired" if args.retire else "idle"
     slot["last_released_at"] = utc_now()
+    set_owner(slot, None, None)
     if args.note:
         slot.setdefault("notes", []).append(args.note)
     save_state(state_path, state)
@@ -440,11 +497,19 @@ def build_parser() -> argparse.ArgumentParser:
     allocate_cmd.add_argument("--slot", required=True, help="Named slot to allocate")
     allocate_cmd.add_argument("--branch", required=True, help="Branch to check out")
     allocate_cmd.add_argument("--ref", help="Base ref to check out from")
+    allocate_cmd.add_argument(
+        "--owner",
+        help="Owner label for the slot (defaults to WORKTREE_MANAGER_OWNER / CLAUDE_* env)",
+    )
     allocate_cmd.add_argument("--dry-run", action="store_true", help="Show the action without mutating anything")
     allocate_cmd.add_argument("--force", action="store_true", help="Reallocate even if the slot is active")
 
     release_cmd = sub.add_parser("release", help="Mark a slot reusable", parents=[common])
     release_cmd.add_argument("--slot", required=True, help="Named slot to release")
+    release_cmd.add_argument(
+        "--owner",
+        help="Owner label to record on release (defaults to WORKTREE_MANAGER_OWNER / CLAUDE_* env)",
+    )
     release_cmd.add_argument("--note", help="Optional note to append to the slot history")
     release_cmd.add_argument("--retire", action="store_true", help="Retire the slot instead of leaving it idle")
     release_cmd.add_argument("--dry-run", action="store_true", help="Show the action without mutating anything")

@@ -26,6 +26,11 @@ released for reuse, or cleaned up when stale.
 - Release marks a slot reusable; it does not delete the worktree.
 - Cleanup prunes stale or retired slots after the state has been synced.
 - Do not mutate the runtime state by hand unless the manager is broken.
+
+When a hook or wrapper knows the agent identity, pass it as
+`WORKTREE_MANAGER_OWNER` or `--owner` so the slot record carries a lead-readable
+owner label through `query --json` and the table view. If no owner is provided,
+the slot remains unowned rather than inheriting stale data from a prior task.
 ## Lifecycle
 
 ### Query
@@ -41,7 +46,7 @@ python3 scripts/worktree-manager.py query
 Reserve a slot for a new task. Prefer reusing an idle slot when one exists.
 
 ```bash
-python3 scripts/worktree-manager.py allocate --slot issue-2157 --branch issue/2157
+python3 scripts/worktree-manager.py allocate --slot issue-2157 --branch issue/2157 --owner builder-2157
 ```
 
 ### Release
@@ -50,8 +55,11 @@ Mark a completed slot as reusable once the worktree is clean and the work is
 ready for handoff or cleanup.
 
 ```bash
-python3 scripts/worktree-manager.py release --slot issue-2157
+python3 scripts/worktree-manager.py release --slot issue-2157 --owner builder-2157
 ```
+
+Passing the same owner on release helps catch mismatched releases; once release
+completes, the slot becomes idle/retired and its current-owner field is cleared.
 
 ### Cleanup
 
