@@ -1,7 +1,7 @@
 //! Validate known stale publication claims inside docs/articles.
 
 use crate::utils::project_root;
-use color_eyre::eyre::{Context, Result, bail};
+use color_eyre::eyre::{bail, Context, Result};
 use std::{fs, path::PathBuf};
 
 const ARTICLES_DIR: &str = "docs/articles";
@@ -74,7 +74,7 @@ pub fn run() -> Result<()> {
     eprintln!("DOC CLAIM VIOLATIONS:");
     eprintln!("{}", "=".repeat(60));
     for (file, line_no, stale, replacement, description) in &hits {
-        let rel = file.strip_prefix(&root).map_or_else(|_| file.as_path(), |path| path);
+        let rel = file.strip_prefix(&root).unwrap_or(file.as_path());
         eprintln!("  {}:{}: {}", rel.display(), line_no, description);
         eprintln!("    found:    {:?}", stale);
         eprintln!("    expected: {:?}", replacement);
