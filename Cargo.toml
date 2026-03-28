@@ -26,6 +26,7 @@ members = [
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
     "crates/perl-test-must",
+    "crates/perl-test-generators",
     "crates/perl-lsp-providers",
     "crates/perl-lsp-rename",
     "crates/perl-lsp-protocol",
