@@ -107,7 +107,10 @@ After completing any task, append to `.ops/swarm-metrics.jsonl`:
 {"ts":"<ISO-8601>","agent":"<name>","type":"<build|review|fix|merge|improve|scout>","branch":"<branch>","outcome":"<green|red|blocked|merged>","duration_hint":"<fast|medium|slow>","side_prs":<N>,"issues_created":<N>,"notes":"<one line>"}
 ```
 
-Append-only. The lead/ops lane analyzes periodically for patterns.
+Append-only. The lead/ops analyzes periodically for patterns.
+Use cargo xtask swarm-summary .ops-perl-lsp --since 24h --limit 10
+for the daily status window and --since 7d for report rollups.
+Add `--format json` when a downstream script or agent needs machine-readable output.
 
 ## 5. Agent Self-Improvement
 

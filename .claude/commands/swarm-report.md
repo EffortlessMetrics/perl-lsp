@@ -51,7 +51,6 @@ Summarize as:
 - Entries in window: N
 - Top agent types: <from metrics>
 - Top session / worktree hotspots: <from metrics>
-- If you need a machine-readable handoff, capture the JSON mode output too.
 - Agent patches pending review: N
 
 ### Blockers
