@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Context, Result, bail};
+use color_eyre::eyre::{bail, Context, Result};
 use regex::Regex;
 use std::fs;
 use std::path::Path;
@@ -72,7 +72,7 @@ fn collect_candidate_lines(root: &Path, disallow_re: &Regex) -> Result<Vec<Strin
             let entry =
                 entry.with_context(|| format!("failed to walk {}", search_root.display()))?;
             if !entry.file_type().is_file()
-                || !entry.path().extension().is_some_and(|ext| ext == "rs")
+                || entry.path().extension().is_none_or(|ext| ext != "rs")
             {
                 continue;
             }

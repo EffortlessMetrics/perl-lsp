@@ -3,7 +3,7 @@
 //! Mirrors `scripts/ci-audit-workflows.py` by checking workflow files for
 //! pull-request-triggered jobs that do not have explicit gating (`if:`).
 
-use color_eyre::eyre::{Context, Result, eyre};
+use color_eyre::eyre::{eyre, Context, Result};
 use serde_yaml_ng::Value;
 use std::fs;
 
@@ -55,27 +55,24 @@ pub fn run() -> Result<()> {
             continue;
         }
 
-        let jobs = workflow.get("jobs");
-        if let Some(jobs) = jobs {
-            if let Some(jobs) = jobs.as_mapping() {
-                for (job_name, job_cfg) in jobs {
-                    let Some(name) = job_name.as_str() else {
-                        continue;
-                    };
+        if let Some(jobs) = workflow.get("jobs").and_then(Value::as_mapping) {
+            for (job_name, job_cfg) in jobs {
+                let Some(name) = job_name.as_str() else {
+                    continue;
+                };
 
-                    if ALLOWED_UNGATED_JOBS.contains(&name) {
-                        continue;
-                    }
+                if ALLOWED_UNGATED_JOBS.contains(&name) {
+                    continue;
+                }
 
-                    let Some(job_cfg) = job_cfg.as_mapping() else {
-                        continue;
-                    };
+                let Some(job_cfg) = job_cfg.as_mapping() else {
+                    continue;
+                };
 
-                    if !job_cfg.contains_key(&Value::String("if".to_string())) {
-                        violations.push(format!(
-                            "{workflow_name}:{name} - runs on PRs without if: condition"
-                        ));
-                    }
+                if !job_cfg.contains_key(Value::String("if".to_string())) {
+                    violations.push(format!(
+                        "{workflow_name}:{name} - runs on PRs without if: condition"
+                    ));
                 }
             }
         }
@@ -110,7 +107,7 @@ fn has_pr_trigger(workflow: &Value) -> bool {
         Value::Sequence(values) => {
             values.iter().any(|value| value.as_str() == Some("pull_request"))
         }
-        Value::Mapping(values) => values.contains_key(&Value::String("pull_request".to_string())),
+        Value::Mapping(values) => values.contains_key(Value::String("pull_request".to_string())),
         Value::String(value) => value == "pull_request",
         _ => false,
     }
