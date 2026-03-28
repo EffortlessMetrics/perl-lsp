@@ -21,23 +21,23 @@ fn local_binary_path(root: &Path) -> PathBuf {
 
 pub fn run(args: Vec<String>) -> Result<()> {
     let root = project_root()?;
-    let status = {
-        let local_binary = local_binary_path(&root);
-        if local_binary.exists() {
-            Command::new(local_binary)
-                .arg("forbid-fatal-constructs")
-                .args(&args)
-                .status()
-                .context("Failed to execute local perl-ci-hygiene binary")?
-        } else {
-            Command::new("cargo")
-                .current_dir(root)
-                .args(["run", "--quiet", "-p", CI_HYGIENE_PACKAGE, "--", "forbid-fatal-constructs"])
-                .args(args)
-                .status()
-                .context("Failed to run perl-ci-hygiene via cargo")?
-        }
-    };
+    let local_binary = local_binary_path(&root);
+
+    let build_status = Command::new("cargo")
+        .current_dir(&root)
+        .args(["build", "--quiet", "-p", CI_HYGIENE_PACKAGE])
+        .status()
+        .context("Failed to build perl-ci-hygiene before running forbid-fatal-constructs")?;
+
+    if !build_status.success() {
+        bail!("Failed to build perl-ci-hygiene before forbid-fatal-constructs");
+    }
+
+    let status = Command::new(local_binary)
+        .arg("forbid-fatal-constructs")
+        .args(&args)
+        .status()
+        .context("Failed to execute local perl-ci-hygiene binary")?;
 
     if !status.success() {
         bail!("forbid-fatal-constructs failed (exit code: {status})");

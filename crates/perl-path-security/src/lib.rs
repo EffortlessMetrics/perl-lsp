@@ -7,6 +7,22 @@ use std::path::{Component, Path, PathBuf};
 
 use perl_path_normalize::{NormalizePathError, normalize_path_within_workspace};
 
+fn normalize_filesystem_path(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path_str) = path.to_str() {
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+                return PathBuf::from(format!(r"\\{}", stripped));
+            }
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                return PathBuf::from(stripped);
+            }
+        }
+    }
+
+    path
+}
+
 /// Path validation errors for workspace-bound operations.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum WorkspacePathError {
@@ -37,12 +53,13 @@ pub fn validate_workspace_path(
         return Err(WorkspacePathError::InvalidPathCharacters);
     }
 
-    let workspace_canonical = workspace_root.canonicalize().map_err(|error| {
-        WorkspacePathError::PathOutsideWorkspace(format!(
-            "Workspace root not accessible: {} ({error})",
-            workspace_root.display()
-        ))
-    })?;
+    let workspace_canonical =
+        normalize_filesystem_path(workspace_root.canonicalize().map_err(|error| {
+            WorkspacePathError::PathOutsideWorkspace(format!(
+                "Workspace root not accessible: {} ({error})",
+                workspace_root.display()
+            ))
+        })?);
 
     // Join relative paths with workspace; keep absolute paths untouched.
     let resolved = if path.is_absolute() { path.to_path_buf() } else { workspace_root.join(path) };
@@ -50,6 +67,7 @@ pub fn validate_workspace_path(
     // Existing paths are canonicalized directly. Non-existing paths are normalized by
     // processing components while preventing escape beyond workspace depth.
     let final_path = if let Ok(canonical) = resolved.canonicalize() {
+        let canonical = normalize_filesystem_path(canonical);
         if !canonical.starts_with(&workspace_canonical) {
             return Err(WorkspacePathError::PathOutsideWorkspace(format!(
                 "Path resolves outside workspace: {} (workspace: {})",
@@ -210,7 +228,7 @@ pub fn build_completion_path(dir_part: &str, filename: &str, is_dir: bool) -> St
 mod tests {
     use super::{
         WorkspacePathError, build_completion_path, is_hidden_or_forbidden_entry_name,
-        is_safe_completion_filename, sanitize_completion_path_input,
+        is_safe_completion_filename, normalize_filesystem_path, sanitize_completion_path_input,
         split_completion_path_components, validate_workspace_path,
     };
     use std::path::PathBuf;
@@ -223,7 +241,8 @@ mod tests {
         let workspace = temp_dir.path();
 
         let validated = validate_workspace_path(&PathBuf::from("src/main.pl"), workspace)?;
-        assert!(validated.starts_with(workspace.canonicalize()?));
+        let canonical_workspace = normalize_filesystem_path(workspace.canonicalize()?);
+        assert!(validated.starts_with(&canonical_workspace));
         assert!(validated.to_string_lossy().contains("src"));
         assert!(validated.to_string_lossy().contains("main.pl"));
 
@@ -717,7 +736,7 @@ mod tests {
         // Must either reject traversal or resolve safely inside workspace.
         // Traversal errors or outside-workspace errors are both acceptable.
         if let Ok(resolved) = &result {
-            let canonical_ws = workspace.canonicalize()?;
+            let canonical_ws = normalize_filesystem_path(workspace.canonicalize()?);
             assert!(resolved.starts_with(&canonical_ws), "Long path must resolve inside workspace");
         }
         Ok(())
@@ -768,7 +787,7 @@ mod tests {
         );
         // Should succeed (normalizes inside workspace) or fail gracefully.
         if let Ok(resolved) = &result {
-            let canonical_ws = workspace.canonicalize()?;
+            let canonical_ws = normalize_filesystem_path(workspace.canonicalize()?);
             assert!(resolved.starts_with(&canonical_ws));
         }
         Ok(())
@@ -1053,5 +1072,12 @@ mod tests {
 
         let result = resolve_completion_base_directory("definitely_not_a_real_dir_xyz123");
         assert!(result.is_none());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_normalize_filesystem_path_strips_verbatim_prefix() {
+        let normalized = normalize_filesystem_path(PathBuf::from(r"\\?\C:\workspace\lib\Foo.pm"));
+        assert_eq!(normalized, PathBuf::from(r"C:\workspace\lib\Foo.pm"));
     }
 }

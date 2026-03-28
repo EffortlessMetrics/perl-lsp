@@ -2856,6 +2856,7 @@ version = "0.12.0"
 name = "perl-uri"
 version = "0.12.0"
 dependencies = [
+ "percent-encoding",
  "perl-tdd-support",
  "perl-uri-classify",
  "tempfile",

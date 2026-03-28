@@ -21,8 +21,9 @@
 
 | Metric | Value | Source |
 | --- | --- | --- |
-| **Current release line** | `v0.12.0` public alpha | [`Cargo.toml`](../../Cargo.toml) |
-| **Active milestone** | `v0.12.0` public-alpha hardening sprint | [status/index.md](status/index.md) |
+| **Workspace version line** | `v0.12.0` | [`Cargo.toml`](../../Cargo.toml) |
+| **Latest published release** | `v0.11.0`, verified 2026-03-28 | GitHub Releases and crates.io |
+| **Active milestone** | `v0.12.0` initial public alpha release prep | [status/index.md](status/index.md) |
 | **Merge gate** | `nix develop -c just ci-gate` | [protocols/verification.md](protocols/verification.md) |
 | **LSP Coverage** | See [status/lsp.md](status/lsp.md) | Generated per-merge |
 | **Test counts** | See [status/tests.md](status/tests.md) | Generated per-merge |

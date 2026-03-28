@@ -214,12 +214,16 @@ fn resolve_findbin_in_string(s: &str) -> (String, bool) {
 
 fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String> {
     if let Ok(rel) = path.strip_prefix(workspace_root) {
-        let s = rel.to_string_lossy().to_string();
+        let s = normalize_relative_path_string(rel.to_string_lossy().as_ref());
         if s.is_empty() { Some(".".to_string()) } else { Some(s) }
     } else {
-        let s = path.to_string_lossy().to_string();
+        let s = normalize_relative_path_string(path.to_string_lossy().as_ref());
         Some(s)
     }
+}
+
+fn normalize_relative_path_string(path: &str) -> String {
+    path.replace('\\', "/")
 }
 
 #[cfg(test)]
@@ -394,17 +398,27 @@ mod tests {
     }
 
     #[test]
-    fn resolve_absolute_path_inside_workspace() {
-        let paths = vec![UseLibPath { path: "/project/lib".into(), from_findbin: false }];
-        let resolved = resolve_use_lib_paths(&paths, Path::new("/project"), None);
+    fn resolve_absolute_path_inside_workspace() -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let inside = workspace.path().join("lib");
+        let paths =
+            vec![UseLibPath { path: inside.to_string_lossy().to_string(), from_findbin: false }];
+        let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
         assert_eq!(resolved, vec!["lib"]);
+        Ok(())
     }
 
     #[test]
-    fn resolve_absolute_path_outside_workspace_ignored() {
-        let paths = vec![UseLibPath { path: "/other/lib".into(), from_findbin: false }];
-        let resolved = resolve_use_lib_paths(&paths, Path::new("/project"), None);
+    fn resolve_absolute_path_outside_workspace_ignored() -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let outside = tempfile::tempdir()?;
+        let paths = vec![UseLibPath {
+            path: outside.path().join("lib").to_string_lossy().to_string(),
+            from_findbin: false,
+        }];
+        let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
         assert!(resolved.is_empty());
+        Ok(())
     }
 
     #[test]

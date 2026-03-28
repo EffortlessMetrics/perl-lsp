@@ -20,7 +20,8 @@
 
 ---
 
-> **Public Alpha (v0.12.0)** -- perl-lsp is production-ready for daily use and actively improving.
+> **Initial Public Alpha (`main` preparing v0.12.0)** -- perl-lsp is production-ready for daily use and actively improving.
+> The workspace version is already `v0.12.0`, but the latest published release remains `v0.11.0` until the `v0.12.0` tag is cut.
 > Install in minutes, get completions and navigation immediately.
 > [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) or [join the conversation](https://github.com/EffortlessMetrics/perl-lsp/discussions).
 
@@ -53,6 +54,10 @@ The extension auto-downloads the server binary for your platform.
 cargo install perl-lsp
 perl-lsp --health
 ```
+
+That installs the latest published release from crates.io. For the current `main`
+branch during `v0.12.0` initial-public-alpha prep, use the source install below or
+download the matching artifact once the release is tagged.
 
 Or download a pre-built binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 

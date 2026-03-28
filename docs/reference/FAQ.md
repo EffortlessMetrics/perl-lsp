@@ -159,4 +159,8 @@ Yes. perl-lsp is dual-licensed under [MIT](../../LICENSE-MIT) and [Apache-2.0](.
 
 ### What is the release cadence?
 
-perl-lsp is in active development. Releases are made when meaningful milestones are reached (e.g. corpus coverage improvements, new LSP features). The current release is v0.12.0 (public alpha).
+perl-lsp is in active development. Releases are cut when meaningful milestones
+are ready, such as parser coverage gains, new LSP features, or release-surface
+hardening. The workspace version on `main` can move ahead of the latest
+published release during release prep, so check GitHub Releases or crates.io
+for the currently shipped version.

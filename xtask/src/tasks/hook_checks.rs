@@ -282,7 +282,7 @@ fn run_script(
     ops_dir: Option<&Path>,
     current_dir: Option<&Path>,
 ) -> Result<std::process::Output> {
-    let mut command = Command::new("bash");
+    let mut command = Command::new(bash_executable());
     command.arg(path);
     if let Some(dir) = ops_dir {
         command.env("OPS_DIR", dir);
@@ -306,6 +306,36 @@ fn run_script(
 
     let output = child.wait_with_output().context("Failed to read script output")?;
     Ok(output)
+}
+
+fn bash_executable() -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path) = git_bash_executable() {
+            return path;
+        }
+
+        let default = PathBuf::from(r"C:\Program Files\Git\bin\bash.exe");
+        if default.exists() {
+            return default;
+        }
+    }
+
+    PathBuf::from("bash")
+}
+
+#[cfg(windows)]
+fn git_bash_executable() -> Option<PathBuf> {
+    let output = Command::new("where.exe").arg("git.exe").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let git_exe = stdout.lines().find(|line| !line.trim().is_empty())?.trim();
+    let git_root = PathBuf::from(git_exe).parent()?.parent()?.to_path_buf();
+    let bash = git_root.join("bin").join("bash.exe");
+    bash.exists().then_some(bash)
 }
 
 fn create_non_rust_test_repo(path: &Path) -> Result<()> {

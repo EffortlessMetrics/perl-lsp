@@ -72,6 +72,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use url::Url;
@@ -1503,11 +1504,18 @@ impl WorkspaceIndex {
     /// # }
     /// ```
     pub fn index_file_str(&self, uri: &str, text: &str) -> Result<(), String> {
-        // Try parsing as URI first
-        let url = url::Url::parse(uri).or_else(|_| {
-            // If not a valid URI, try as file path
-            url::Url::from_file_path(uri).map_err(|_| format!("Invalid URI or file path: {}", uri))
-        })?;
+        let path = Path::new(uri);
+        let url = if path.is_absolute() {
+            url::Url::from_file_path(path)
+                .map_err(|_| format!("Invalid URI or file path: {}", uri))?
+        } else {
+            // Raw absolute Windows paths like C:\foo can parse as a bogus URI
+            // (`c:` scheme). Prefer URL parsing only for non-path inputs.
+            url::Url::parse(uri).or_else(|_| {
+                url::Url::from_file_path(path)
+                    .map_err(|_| format!("Invalid URI or file path: {}", uri))
+            })?
+        };
         self.index_file(url, text.to_string())
     }
 
@@ -3131,6 +3139,14 @@ use Data::Dumper;
 
                 // The path component should decode correctly
                 if let Some(roundtrip_path) = uri_to_fs_path(&converted_uri) {
+                    #[cfg(windows)]
+                    if let Ok(rootless) = path.strip_prefix(std::path::Path::new(r"\")) {
+                        assert!(roundtrip_path.ends_with(rootless));
+                    } else {
+                        assert_eq!(path, roundtrip_path);
+                    }
+
+                    #[cfg(not(windows))]
                     assert_eq!(path, roundtrip_path);
                 }
             }

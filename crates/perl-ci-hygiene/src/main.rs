@@ -3187,10 +3187,8 @@ fn cmd_forbid_fatal_constructs(repo_root: &Path, verbose: bool) -> Result<i32> {
         println!();
     }
 
-    let exit_violations: Vec<String> = exits
-        .into_iter()
-        .filter(|hit| !hit.contains("/bin/") && !hit.contains("/lifecycle.rs:"))
-        .collect();
+    let exit_violations: Vec<String> =
+        exits.into_iter().filter(|hit| !is_allowlisted_exit_hit(hit)).collect();
 
     if !exit_violations.is_empty() {
         println!("{RED}ERROR: std::process::exit() found outside allowlist{NC}");
@@ -3228,9 +3226,7 @@ fn cmd_forbid_fatal_constructs(repo_root: &Path, verbose: bool) -> Result<i32> {
 
 fn is_fatal_excluded(path: &Path, repo_root: &Path) -> Result<bool> {
     let rel = path.strip_prefix(repo_root).unwrap_or(path).to_path_buf();
-    let mut rel_string = String::new();
-    rel_string.push('/');
-    rel_string.push_str(&rel.display().to_string());
+    let rel_string = format!("/{}", normalize_path_for_match(&rel.display().to_string()));
 
     if rel_string.contains("/tests/") {
         return Ok(true);
@@ -3267,6 +3263,15 @@ fn is_fatal_excluded(path: &Path, repo_root: &Path) -> Result<bool> {
         || path_has_component(path, "benches")
         || path_has_component(path, "build.rs")
         || path_has_component(path, "examples"))
+}
+
+fn normalize_path_for_match(value: &str) -> String {
+    value.replace('\\', "/")
+}
+
+fn is_allowlisted_exit_hit(hit: &str) -> bool {
+    let normalized = normalize_path_for_match(hit);
+    normalized.contains("/bin/") || normalized.contains("/lifecycle.rs:")
 }
 
 fn cmd_ignored_test_count(repo_root: &Path, update: bool, check: bool) -> Result<i32> {
@@ -3870,5 +3875,26 @@ mod tests {
         assert_eq!(format_delta(5, 5), "0");
         assert_eq!(format_delta(7, 5), format!("{RED}+2{NC}"));
         assert_eq!(format_delta(4, 7), format!("{GREEN}-3{NC}"));
+    }
+
+    #[test]
+    fn normalize_path_for_match_converts_backslashes() {
+        assert_eq!(
+            normalize_path_for_match(r"crates\perl-ci-hygiene\src\main.rs"),
+            "crates/perl-ci-hygiene/src/main.rs"
+        );
+    }
+
+    #[test]
+    fn allowlisted_exit_hit_matches_windows_and_unix_paths() {
+        assert!(is_allowlisted_exit_hit(
+            r"crates\perl-parser\src\bin\perl-parse.rs:127:std::process::exit(0);"
+        ));
+        assert!(is_allowlisted_exit_hit(
+            "crates/perl-lsp/src/runtime/dispatch/lifecycle.rs:29:std::process::exit(exit_code);"
+        ));
+        assert!(!is_allowlisted_exit_hit(
+            r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#
+        ));
     }
 }
