@@ -330,7 +330,9 @@ mod tests {
 
     #[test]
     fn parses_since_window() -> Result<()> {
-        let cutoff = parse_since_spec(Some("24h"))?.expect("expected cutoff");
+        let Some(cutoff) = parse_since_spec(Some("24h"))? else {
+            return Err(std::io::Error::other("expected cutoff").into());
+        };
         assert!(cutoff < Utc::now());
         Ok(())
     }
@@ -389,11 +391,15 @@ mod tests {
     #[test]
     fn cli_json_mode_emits_machine_readable_summary() -> Result<()> {
         let ops_dir = sample_ops_dir()?;
+        let ops_dir_path = ops_dir
+            .path()
+            .to_str()
+            .ok_or_else(|| std::io::Error::other("ops dir path was not UTF-8"))?;
 
         let output = Command::new(cargo_bin("xtask"))
             .args([
                 "swarm-summary",
-                ops_dir.path().to_str().expect("ops dir path"),
+                ops_dir_path,
                 "--since",
                 "all",
                 "--limit",
