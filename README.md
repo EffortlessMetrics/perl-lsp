@@ -209,6 +209,11 @@ The repo documents the automated vs manual verification boundary in
 [docs/how-to/INSTALLATION.md](docs/how-to/INSTALLATION.md) and
 [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md).
 
+### Linux package-manager scaffold
+
+Repo-owned packaging templates for `apt`, `dnf`, and `pacman` live under [`distribution/linux/`](distribution/linux/).
+They are intentionally kept as templates only in this slice, so downstream release automation can render them without depending on external distro approvals.
+
 ### VS Code Extension
 
 Install from the VS Code Marketplace or:

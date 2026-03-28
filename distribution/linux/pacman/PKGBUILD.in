@@ -1,0 +1,19 @@
+pkgname=perl-lsp
+pkgver=__RELEASE_VERSION__
+pkgrel=1
+pkgdesc="High-performance Perl Language Server with 100% syntax coverage"
+arch=('__PACMAN_ARCH__')
+url='https://github.com/EffortlessMetrics/perl-lsp'
+license=('MIT')
+depends=('glibc')
+source=("perl-lsp-__RELEASE_VERSION__-x86_64-unknown-linux-gnu.tar.gz")
+sha256sums=('__DOWNLOAD_SHA256__')
+
+package() {
+  cd "$srcdir/perl-lsp-__RELEASE_VERSION__-x86_64-unknown-linux-gnu"
+  install -Dm755 perl-lsp "$pkgdir/usr/bin/perl-lsp"
+  install -Dm755 perl-dap "$pkgdir/usr/bin/perl-dap"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 LICENSE-MIT "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MIT"
+  install -Dm644 LICENSE-APACHE "$pkgdir/usr/share/licenses/$pkgname/LICENSE-APACHE"
+}

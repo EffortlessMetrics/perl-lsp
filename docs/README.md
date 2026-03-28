@@ -40,6 +40,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 - [how-to/SEMVER_WORKFLOW.md](how-to/SEMVER_WORKFLOW.md)
 - [how-to/COVERAGE.md](how-to/COVERAGE.md)
 - [how-to/DEAD_CODE_DETECTION.md](how-to/DEAD_CODE_DETECTION.md)
+- [../distribution/linux/README.md](../distribution/linux/README.md)
 
 ## Reference
 
@@ -100,6 +101,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 | [ci/](ci/) | CI-specific docs |
 | [design/](design/) | Design notes |
 | [EDITORS/](EDITORS/) | Editor-specific setup |
+| [../distribution/](../distribution/) | Package and release templates |
 | [forensics/](forensics/) | PR archaeology |
 | [issues/](issues/) | Gap tracking and investigations |
 | [semantic/](semantic/) | Semantic validation |
