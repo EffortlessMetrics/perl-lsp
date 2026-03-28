@@ -451,7 +451,7 @@ fn mock_runtime_boxed_trait_object() -> Result<(), Box<dyn std::error::Error>> {
 
 // ──────────────────────────── OsSubprocessRuntime ────────────────────────
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
 mod os_runtime_tests {
     use super::*;
     use perl_subprocess_runtime::OsSubprocessRuntime;

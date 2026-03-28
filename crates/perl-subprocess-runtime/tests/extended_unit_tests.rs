@@ -498,7 +498,7 @@ fn mock_runtime_clear_then_reassert() -> Result<(), Box<dyn std::error::Error>> 
 
 // ──────────────────────────── OsSubprocessRuntime Extensions ──────────────
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
 mod os_runtime_extended {
     use super::*;
     use perl_subprocess_runtime::OsSubprocessRuntime;
@@ -935,7 +935,7 @@ fn command_invocation_all_fields_accessible() -> Result<(), Box<dyn std::error::
 
 // ──────────────────────────── OsSubprocessRuntime: Timeout ─────────────────
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
 #[test]
 fn os_runtime_timeout_fires_for_slow_command() -> Result<(), Box<dyn std::error::Error>> {
     use perl_subprocess_runtime::OsSubprocessRuntime;
@@ -954,7 +954,7 @@ fn os_runtime_timeout_fires_for_slow_command() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
 #[test]
 fn os_runtime_with_timeout_succeeds_for_fast_command() -> Result<(), Box<dyn std::error::Error>> {
     use perl_subprocess_runtime::OsSubprocessRuntime;
@@ -965,7 +965,7 @@ fn os_runtime_with_timeout_succeeds_for_fast_command() -> Result<(), Box<dyn std
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
 #[test]
 fn os_runtime_no_timeout_still_works() -> Result<(), Box<dyn std::error::Error>> {
     use perl_subprocess_runtime::OsSubprocessRuntime;
@@ -975,7 +975,7 @@ fn os_runtime_no_timeout_still_works() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
 #[test]
 #[should_panic(expected = "timeout_secs must be greater than zero")]
 fn os_runtime_with_timeout_zero_panics() {
@@ -985,7 +985,7 @@ fn os_runtime_with_timeout_zero_panics() {
     let _ = OsSubprocessRuntime::with_timeout(0);
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
 #[test]
 fn os_runtime_completion_before_deadline_always_succeeds() -> Result<(), Box<dyn std::error::Error>>
 {

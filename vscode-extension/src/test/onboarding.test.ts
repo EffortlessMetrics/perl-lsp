@@ -17,6 +17,7 @@ import {
   OnboardingManager,
   HealthCheckResult,
   HealthCheckStatus,
+  selectWindowsCommandCandidate,
 } from '../onboarding';
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,24 @@ describe('OnboardingManager.checkPerltidyInstalled', () => {
     const result = await mgr.checkPerltidyInstalled();
     expect(result.ok).toBe(false);
     expect(result.status).toBe(HealthCheckStatus.Warning);
+  });
+});
+
+describe('selectWindowsCommandCandidate', () => {
+  test('prefers executable or wrapper paths over extensionless shims', () => {
+    const selected = selectWindowsCommandCandidate(
+      [
+        'C:\\Strawberry\\perl\\bin\\perltidy',
+        'C:\\Strawberry\\perl\\bin\\perltidy.bat',
+        'C:\\tools\\perltidy.exe',
+      ].join('\r\n'),
+    );
+
+    expect(selected).toBe('C:\\tools\\perltidy.exe');
+  });
+
+  test('returns null for empty where output', () => {
+    expect(selectWindowsCommandCandidate(' \r\n \r\n')).toBeNull();
   });
 });
 

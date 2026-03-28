@@ -10,6 +10,8 @@
 #![warn(clippy::all)]
 
 use std::fmt;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
 /// Output from a subprocess execution
 #[derive(Debug, Clone)]
@@ -128,8 +130,9 @@ impl SubprocessRuntime for OsSubprocessRuntime {
         use std::io::Write;
         use std::process::{Command, Stdio};
 
-        let mut cmd = Command::new(program);
-        cmd.args(args);
+        let (resolved_program, resolved_args) = resolve_command_invocation(program, args);
+        let mut cmd = Command::new(&resolved_program);
+        cmd.args(resolved_args.iter().map(String::as_str));
 
         if stdin.is_some() {
             cmd.stdin(Stdio::piped());
@@ -204,6 +207,83 @@ impl SubprocessRuntime for OsSubprocessRuntime {
             }
         }
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<String>) {
+    #[cfg(windows)]
+    {
+        let resolved_program =
+            resolve_windows_program(program).unwrap_or_else(|| program.to_string());
+
+        if windows_requires_cmd_shell(&resolved_program) {
+            let mut shell_args = vec!["/C".to_string(), resolved_program];
+            shell_args.extend(args.iter().map(|arg| (*arg).to_string()));
+            return ("cmd.exe".to_string(), shell_args);
+        }
+
+        (resolved_program, args.iter().map(|arg| (*arg).to_string()).collect())
+    }
+
+    #[cfg(not(windows))]
+    {
+        (program.to_string(), args.iter().map(|arg| (*arg).to_string()).collect())
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+fn resolve_windows_program(program: &str) -> Option<String> {
+    let program_path = Path::new(program);
+    let has_separator = program.contains('\\') || program.contains('/');
+    let has_extension = program_path.extension().is_some();
+
+    if has_separator || has_extension {
+        return Some(program.to_string());
+    }
+
+    let output = std::process::Command::new("where")
+        .arg(program)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8(output.stdout)
+        .ok()?
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .max_by_key(|candidate| windows_program_priority(candidate))
+        .map(String::from)
+}
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+fn windows_program_priority(candidate: &str) -> u8 {
+    match Path::new(candidate)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+    {
+        Some(ext) if ext == "exe" => 5,
+        Some(ext) if ext == "com" => 4,
+        Some(ext) if ext == "cmd" => 3,
+        Some(ext) if ext == "bat" => 2,
+        Some(_) => 1,
+        None => 0,
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+fn windows_requires_cmd_shell(program: &str) -> bool {
+    Path::new(program)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("bat") || ext.eq_ignore_ascii_case("cmd"))
+        .unwrap_or(false)
 }
 
 /// Mock subprocess runtime for testing.
@@ -375,6 +455,9 @@ mod tests {
     #[test]
     fn test_os_runtime_echo() {
         let runtime = OsSubprocessRuntime::new();
+        #[cfg(windows)]
+        let result = runtime.run_command("cmd.exe", &["/C", "echo", "hello"], None);
+        #[cfg(not(windows))]
         let result = runtime.run_command("echo", &["hello"], None);
 
         assert!(result.is_ok());
@@ -391,5 +474,50 @@ mod tests {
         let result = runtime.run_command("nonexistent_program_xyz", &[], None);
 
         assert!(result.is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_resolve_command_invocation_uses_cmd_for_batch_wrappers() {
+        let (program, args) =
+            resolve_command_invocation(r"C:\Strawberry\perl\bin\perltidy.bat", &["-st", "-se"]);
+
+        assert_eq!(program, "cmd.exe");
+        assert_eq!(
+            args,
+            vec![
+                "/C".to_string(),
+                r"C:\Strawberry\perl\bin\perltidy.bat".to_string(),
+                "-st".to_string(),
+                "-se".to_string(),
+            ]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_resolve_command_invocation_preserves_executable_paths() {
+        let (program, args) =
+            resolve_command_invocation(r"C:\tools\perlcritic.exe", &["--version"]);
+
+        assert_eq!(program, r"C:\tools\perlcritic.exe");
+        assert_eq!(args, vec!["--version".to_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_program_priority_prefers_real_wrappers_over_extensionless_shims() {
+        let mut candidates = vec![
+            r"C:\Strawberry\perl\bin\perltidy".to_string(),
+            r"C:\Strawberry\perl\bin\perltidy.bat".to_string(),
+            r"C:\tools\perltidy.exe".to_string(),
+        ];
+        candidates.sort_by_key(|candidate| windows_program_priority(candidate));
+
+        assert_eq!(candidates.last().map(String::as_str), Some(r"C:\tools\perltidy.exe"));
+        assert!(
+            windows_program_priority(r"C:\Strawberry\perl\bin\perltidy.bat")
+                > windows_program_priority(r"C:\Strawberry\perl\bin\perltidy")
+        );
     }
 }
