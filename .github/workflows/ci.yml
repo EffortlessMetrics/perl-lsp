@@ -50,9 +50,6 @@ jobs:
         with:
           tool: just
 
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
-
       - name: Auto-fix formatting
         run: |
           cargo fmt --all
@@ -74,7 +71,10 @@ jobs:
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
       - name: Run PR smoke checks
-        run: just pr-fast
+        run: |
+          just fmt-check
+          just clippy-core
+          just test-core
 
   # ── Merge Gate: full validation (label-gated or push to main) ────────
   merge-gate:
@@ -103,9 +103,6 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: just
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
