@@ -45,5 +45,7 @@ python3 scripts/worktree-manager.py cleanup
 ## Notes
 
 - The manager stores runtime state in `.ops-perl-lsp/worktree-manager/`.
+- Managed worktrees live outside the tracked repo by default, in a sibling
+  `<repo-name>-worktrees/` directory.
 - Use named slots so reuse stays predictable across sessions.
 - `cleanup-completed-worktrees.sh` remains the lower-level prune helper.

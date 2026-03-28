@@ -12,7 +12,8 @@ script.
 
 - Policy surface: this skill and `/worktree-manager`
 - Mutable runtime state: `.ops-perl-lsp/worktree-manager/state.json`
-- Physical worktrees: `.claude/worktrees/<slot>/`
+- Physical worktrees: sibling managed root outside the tracked repo,
+  defaulting to `<repo-parent>/<repo-name>-worktrees/<slot>/`
 - Low-level cleanup: `scripts/cleanup-completed-worktrees.sh`
 
 The manager tracks slots, not just paths. A slot can be queried, allocated,

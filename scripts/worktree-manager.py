@@ -16,7 +16,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STATE_FILE = REPO_ROOT / ".ops-perl-lsp" / "worktree-manager" / "state.json"
-DEFAULT_MANAGED_ROOT = REPO_ROOT / ".claude" / "worktrees"
+DEFAULT_MANAGED_ROOT = REPO_ROOT.parent / f"{REPO_ROOT.name}-worktrees"
 DEFAULT_BRANCH_BASES = ("origin/master", "master", "origin/main", "main")
 
 
