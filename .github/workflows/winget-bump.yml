@@ -1,7 +1,7 @@
-name: Chocolatey Auto-Bump
+name: Winget Manifest Refresh
 
-# Update Chocolatey package on release
-# Cost: ~$0.02 per bump
+# Update the repo-local winget manifest on release
+# Cost: negligible
 
 on:
   release:
@@ -9,15 +9,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to bump (e.g., v0.10.0)'
+        description: 'Release tag to refresh (e.g., v0.10.0)'
         required: false
 
 concurrency:
-  group: chocolatey-bump-${{ github.ref }}
+  group: winget-bump-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   bump:
@@ -66,7 +67,7 @@ jobs:
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
           $version = "${{ steps.tag.outputs.version }}"
-          $assetDir = Join-Path $env:RUNNER_TEMP 'choco-assets'
+          $assetDir = Join-Path $env:RUNNER_TEMP 'winget-assets'
 
           New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
           Write-Host "Downloading perl-lsp-$version-x86_64-pc-windows-msvc.zip..."
@@ -81,51 +82,45 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.tag.outputs.version }}"
-          $assetDir = Join-Path $env:RUNNER_TEMP 'choco-assets'
+          $assetDir = Join-Path $env:RUNNER_TEMP 'winget-assets'
           $assetPath = Join-Path $assetDir "perl-lsp-$version-x86_64-pc-windows-msvc.zip"
 
           $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $assetPath).Hash.ToLowerInvariant()
           "sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "SHA256: $sha"
 
-      - name: Update Chocolatey package
+      - name: Update winget manifest
         shell: pwsh
         run: |
           ./distribution/windows/update-manifests.ps1 `
             -Version "${{ steps.tag.outputs.version }}" `
             -ReleaseSha256 "${{ steps.checksum.outputs.sha256 }}" `
-            -ChocolateyNuspecPath 'distribution/chocolatey/perl-lsp.nuspec' `
-            -ChocolateyInstallPath 'distribution/chocolatey/tools/chocolateyinstall.ps1'
+            -WingetManifestPath 'distribution/winget/perl-lsp.yaml'
 
-          if (Select-String -Path 'distribution/chocolatey/perl-lsp.nuspec', 'distribution/chocolatey/tools/chocolateyinstall.ps1' -Pattern '__RELEASE_VERSION__|__RELEASE_SHA256__' -Quiet) {
-            throw 'Chocolatey files still contain unreplaced placeholders after update.'
+          if (Select-String -Path 'distribution/winget/perl-lsp.yaml' -Pattern '__RELEASE_VERSION__|__RELEASE_URL__|__RELEASE_SHA256__' -Quiet) {
+            throw 'Winget manifest still contains unreplaced placeholders after update.'
           }
 
-      - name: Create PR to Chocolatey
+      - name: Create PR
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          path: distribution/chocolatey
-          branch: bump-perl-lsp-${{ steps.tag.outputs.version }}
-          title: "perl-lsp ${{ steps.tag.outputs.version }}"
+          branch: bump-perl-lsp-winget-${{ steps.tag.outputs.version }}
+          title: "winget: perl-lsp ${{ steps.tag.outputs.version }}"
           body: |
-            Bump perl-lsp to version ${{ steps.tag.outputs.version }}
+            Refresh the repo-local winget manifest for perl-lsp ${{ steps.tag.outputs.version }}.
 
-            Created by automated workflow from [EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
-
-            ### Changes
-            - Updated version to ${{ steps.tag.outputs.version }}
-            - Updated SHA256 checksum
-          commit-message: "perl-lsp ${{ steps.tag.outputs.version }}"
+            This keeps the Windows package metadata in sync with the release artifacts.
+            The upstream winget-pkgs submission remains a follow-up manual step.
+          commit-message: "winget: perl-lsp ${{ steps.tag.outputs.version }}"
           labels: automated-pr
-          repository: chocolatey-community/chocolatey-coreteampackages
           signoff: false
 
       - name: Summary
         shell: pwsh
         run: |
-          Add-Content $env:GITHUB_STEP_SUMMARY "## Chocolatey Bump Complete :rocket:"
+          Add-Content $env:GITHUB_STEP_SUMMARY "## Winget Manifest Refresh Complete :rocket:"
           Add-Content $env:GITHUB_STEP_SUMMARY ""
           Add-Content $env:GITHUB_STEP_SUMMARY "- **Version**: ${{ steps.tag.outputs.version }}"
           Add-Content $env:GITHUB_STEP_SUMMARY "- **SHA256**: ${{ steps.checksum.outputs.sha256 }}"
-          Add-Content $env:GITHUB_STEP_SUMMARY "- **PR**: Created to chocolatey-community/chocolatey-coreteampackages"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **PR**: Created in the current repository"

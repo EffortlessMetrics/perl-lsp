@@ -51,6 +51,17 @@ Expand-Archive perl-lsp.zip -DestinationPath perl-lsp
 Copy-Item perl-lsp\perl-lsp.exe "C:\Program Files\perl-lsp\"
 ```
 
+### Windows Package Managers
+
+The release automation keeps the Windows package-manager metadata in sync with
+each GitHub release.
+
+- Scoop: `scoop install perl-lsp`
+- Chocolatey: `choco install perl-lsp`
+- Winget: the repo tracks a local manifest in `distribution/winget/` and the
+  release workflow refreshes it; upstream `winget-pkgs` submission is still a
+  manual follow-up
+
 For the latest version number, always check [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 
 ### Build from Source
