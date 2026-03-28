@@ -94,6 +94,16 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 
 The full feature catalog lives in [`features.toml`](features.toml). For live project metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
+### Demo Walkthroughs
+
+The launch demo assets are staged as storyboard SVGs in [`vscode-extension/media/walkthrough/`](vscode-extension/media/walkthrough/). The final GIF recording pass is still pending manual capture.
+
+- [Install → auto-download → health check](vscode-extension/media/walkthrough/install-health.svg)
+- [Go to definition + find references](vscode-extension/media/walkthrough/find-references.svg)
+- [Extract variable code action](vscode-extension/media/walkthrough/extract-variable.svg)
+
+When the screen recordings are ready, render them with [`scripts/marketing/render-walkthrough-gif.py`](scripts/marketing/render-walkthrough-gif.py).
+
 ## Comparison
 
 | | perl-lsp | PerlNavigator | Perl::LanguageServer |
