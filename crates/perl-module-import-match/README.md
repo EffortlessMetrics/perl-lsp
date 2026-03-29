@@ -1,13 +1,31 @@
 # perl-module-import-match
 
-Import-line module match predicates for deterministic rename workflows.
+Deterministic predicates for deciding whether an import line references a module.
 
-## Scope
+## When to use this crate
 
-- Determine whether a single source line should be rewritten for a target module rename
-- Reuse import-head classification from `perl-module-import`
-- Reuse boundary-aware token matching from `perl-module-boundary`
+Use `perl-module-import-match` when you need a yes/no decision for whether a
+single source line should be rewritten during a module rename. It combines
+import-head parsing with boundary-safe token matching so rename workflows avoid
+partial false positives.
 
-## API
+## Quick example
 
-- `line_references_module_import(line, module_name)`
+```rust
+use perl_module_import_match::line_references_module_import;
+
+assert!(line_references_module_import("use Foo::Bar;", "Foo::Bar"));
+assert!(!line_references_module_import("use Foo::Barista;", "Foo::Bar"));
+```
+
+## Public API
+
+- `line_references_module_import`
+
+## Workspace role
+
+Predicate crate used by module rename and token-rewrite workflows.
+
+## License
+
+MIT OR Apache-2.0

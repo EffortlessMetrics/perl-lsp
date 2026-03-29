@@ -1,15 +1,34 @@
 # perl-module-token
 
-Boundary-safe Perl module token replacement and variant helpers.
+Boundary-safe Perl module token replacement helpers.
 
-## Scope
+## When to use this crate
 
-- Generate canonical + legacy module-name rename variant pairs
-- Delegate standalone token boundary matching to `perl-module-boundary`
-- Replace standalone module tokens using boundary-safe ranges
+Use `perl-module-token` when you need to detect or rewrite standalone module
+tokens without matching partial names. It is a small orchestration layer over
+the naming and boundary crates.
 
-## API
+## Quick example
 
-- `module_variant_pairs(old_module, new_module)`
-- `contains_module_token(line, module_name)`
-- `replace_module_token(line, from, to)`
+```rust
+use perl_module_token::{contains_module_token, replace_module_token};
+
+assert!(contains_module_token("use Foo::Bar;", "Foo::Bar"));
+let (updated, changed) = replace_module_token("use Foo::Bar;", "Foo::Bar", "New::Path");
+assert!(changed);
+assert!(updated.contains("New::Path"));
+```
+
+## Public API
+
+- `module_variant_pairs`
+- `contains_module_token`
+- `replace_module_token`
+
+## Workspace role
+
+Token rewrite helper used by module rename and matching workflows.
+
+## License
+
+MIT OR Apache-2.0

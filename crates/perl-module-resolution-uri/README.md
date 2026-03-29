@@ -1,17 +1,14 @@
 # perl-module-resolution-uri
 
-Perl module URI resolution microcrate.
+Deterministic Perl module-to-URI resolution with workspace-safe search order.
 
-This crate provides deterministic, timeout-aware module resolution for Perl module
-names to `file://` URIs. It owns the search policy used by workspace-aware tools
-when resolving imports and dependencies:
+## When to use this crate
 
-- Open document URI precedence
-- Workspace folder + include path search with traversal protection
-- Optional system `@INC` fallback
-- Timeout budget enforcement
+Use `perl-module-resolution-uri` when you need to resolve a Perl module name
+to a `file://` URI with a deterministic precedence order and a timeout budget.
+It is the URI-facing sibling of `perl-module-resolution-path`.
 
-## Example
+## Quick example
 
 ```rust
 use perl_module_resolution_uri::{resolve_module_uri, ModuleUriResolution};
@@ -29,3 +26,16 @@ let result = resolve_module_uri(
 
 assert!(matches!(result, ModuleUriResolution::NotFound | ModuleUriResolution::Resolved(_)));
 ```
+
+## Public API
+
+- `resolve_module_uri`
+- `ModuleUriResolution`
+
+## Workspace role
+
+URI-resolution helper for workspace-aware tools and editor integrations.
+
+## License
+
+MIT OR Apache-2.0
