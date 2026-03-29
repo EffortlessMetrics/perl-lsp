@@ -1,17 +1,34 @@
 # perl-module-rename
 
-Deterministic module-import line edit planning for file rename workflows.
+Deterministic import-line rename planning for Perl module refactors.
 
-## Scope
+## When to use this crate
 
-- Detect rename-impacted Perl module import lines (`use`, `require`, `use parent`, `use base`)
-- Plan line-based edits for old module to new module transitions
-- Support canonical (`Foo::Bar`) and legacy (`Foo'Bar`) package separators
-- Delegate import-line match policy to `perl-module-import-match`
-- Delegate token variant/boundary logic to `perl-module-token`
+Use `perl-module-rename` when you need to rewrite module references during a
+rename workflow. It plans the line edits for import statements, `use parent`,
+`use base`, and related module-name prefixes while preserving canonical and
+legacy separator forms.
 
-## API
+## Quick example
 
-- `plan_module_rename_edits(source, old_module, new_module)`
-- `apply_module_rename_edits(source, edits)`
+```rust,ignore
+use perl_module_rename::{apply_module_rename_edits, plan_module_rename_edits};
+
+let edits = plan_module_rename_edits("use Foo::Bar;\n", "Foo::Bar", "New::Path");
+let rewritten = apply_module_rename_edits("use Foo::Bar;\n", &edits);
+assert!(rewritten.contains("New::Path"));
+```
+
+## Public API
+
+- `plan_module_rename_edits`
+- `apply_module_rename_edits`
 - `ModuleLineEdit`
+
+## Workspace role
+
+Workspace rename helper used by module-path and import matching crates.
+
+## License
+
+MIT OR Apache-2.0

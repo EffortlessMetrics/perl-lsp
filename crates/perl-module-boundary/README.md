@@ -1,15 +1,36 @@
 # perl-module-boundary
 
-Standalone Perl module-token boundary matching for single-line scanners.
+Standalone boundary checks for Perl module tokens on a single source line.
 
-## Scope
+## When to use this crate
 
-- Match standalone module tokens without partial-name false positives
-- Return byte ranges for each standalone match in a source line
-- Preserve canonical (`::`) and legacy (`'`) separator boundary rules
+Use `perl-module-boundary` when you need to find whole module names in a line
+without matching partial identifiers. It is the low-level guard used by import
+matching and rename workflows.
 
-## API
+## Quick example
 
-- `contains_standalone_module_token(line, module_name)`
-- `find_standalone_module_token_ranges(line, module_name)`
+```rust
+use perl_module_boundary::{contains_standalone_module_token, find_standalone_module_token_ranges};
+
+assert!(contains_standalone_module_token("use Foo::Bar;", "Foo::Bar"));
+assert!(!contains_standalone_module_token("use Foo::Barista;", "Foo::Bar"));
+assert_eq!(
+    find_standalone_module_token_ranges("use Foo::Bar;", "Foo::Bar").collect::<Vec<_>>().len(),
+    1,
+);
+```
+
+## Public API
+
+- `contains_standalone_module_token`
+- `find_standalone_module_token_ranges`
 - `ModuleTokenRange`
+
+## Workspace role
+
+Small utility crate used by the module-import and module-rename families.
+
+## License
+
+MIT OR Apache-2.0
