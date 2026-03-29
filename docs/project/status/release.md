@@ -7,12 +7,17 @@
 
 **Latest published release**: `v0.11.0`
 **Release target**: `v0.12.0` initial public alpha
-**Ship readiness**: Initial-public-alpha final prep in progress — do not tag until release receipts are green
+**Ship readiness**: Initial-public-alpha release prep is green on `master`; remaining work is release-day orchestration and publication
 
 ## Active Blockers
 
 - Release-truth drift must stay closed: repo docs can say `v0.12.0` for `main`, but published-install guidance must stay tied to the latest tagged release until `v0.12.0` ships
-- Final release receipts still need a green `just release-check`, `just version-check`, and `just status-check` run
+
+## Final Release Receipts (2026-03-29)
+
+- `just release-check` passed on merged `master`
+- `just status-check` passed after regenerating computed status docs
+- `CHANGELOG.md` already contains a dated `## [0.12.0] - 2026-03-24` section and keeps `## [Unreleased]`
 
 ## Component Summary
 
@@ -54,4 +59,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-03-28*
+*Last Updated: 2026-03-29*
