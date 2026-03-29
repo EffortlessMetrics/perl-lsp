@@ -106,9 +106,11 @@ bash scripts/install-githooks.sh
 ### 5. Open a Pull Request
 
 1. Push your branch and open a PR
-2. Describe your changes and link related issues (e.g., "Fixes #123")
-3. All PRs run format checks, clippy, and tests automatically in CI
-4. Merge with a conventional, descriptive squash commit
+2. Give the PR a CI-safe title in the form `type(scope): summary (#1234)` so
+   the title check passes on the first run
+3. Describe your changes and link related issues in the PR body
+4. All PRs run format checks, clippy, and tests automatically in CI
+5. Merge with a conventional, descriptive squash commit
 
 Once checks are green and reviews are complete, use an explicit conventional commit
 subject when squashing so history is release-friendly and changelog-friendly.
@@ -129,7 +131,17 @@ Conventional subject format:
 - include `!` for breaking changes, e.g. `feat!: ...`
 
 Do not rely on PR title defaults (often noisy, e.g. `(...#NNNN)`), because they
-break commit consistency for changelog generation.
+break commit consistency for changelog generation and can fail `validate-title`.
+
+Example PR title:
+
+```text
+docs(parser): rewrite the upgrade guide (#3052)
+```
+
+If you are driving the work from an agent or a worktree, keep the branch scoped
+to one concern and open the PR from that isolated worktree instead of editing
+the main checkout.
 
 #### CI Labels and Gates
 

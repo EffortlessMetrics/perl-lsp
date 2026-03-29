@@ -3,8 +3,8 @@
 > Status: archived portable bundle.
 >
 > For `perl-lsp`, the canonical swarm runtime lives in the tracked `.claude/`
-> directory plus [SWARM_DESIGN.md](../../SWARM_DESIGN.md) and
-> [SKILL_AND_AGENT_DESIGN.md](../../../reference/SKILL_AND_AGENT_DESIGN.md).
+> directory plus [SWARM_DESIGN.md](../SWARM_DESIGN.md) and
+> [SKILL_AND_AGENT_DESIGN.md](../../reference/SKILL_AND_AGENT_DESIGN.md).
 > This directory is kept as a historical/exportable bundle for the older
 > wave-based workflow, not as the primary source of truth for the repo.
 
@@ -65,11 +65,16 @@ Orchestrator (main thread)
    Implementation agents just write code. PR agents validate, branch, commit,
    push, and create the pull request.
 
-5. **Wave pattern** -- Work is organized in waves by category (fixes, tests,
+5. **PR titles must satisfy CI** -- Use the repo pattern
+   `type(scope): summary (#1234)` before opening the PR so the title check does
+   not fail on the first run. The issue reference belongs in the title, not
+   only in the body.
+
+6. **Wave pattern** -- Work is organized in waves by category (fixes, tests,
    docs, cleanup). This lets the orchestrator merge one category before
    starting the next, reducing conflict probability.
 
-6. **Quality ratcheting** -- After merges, baselines are updated so metrics
+7. **Quality ratcheting** -- After merges, baselines are updated so metrics
    can only improve. Test counts, lint warnings, coverage -- once they get
    better, they stay better.
 
@@ -102,6 +107,8 @@ For `perl-lsp` itself, do not bootstrap from this bundle; use the tracked repo
 2. Customize the placeholders (`$TEST_CMD`, `$LINT_CMD`, etc.) in the copied
    slash commands
 3. Start Claude Code and use `/wave` to launch your first swarm
+4. Keep agent-written changes in isolated worktrees and create one focused PR
+   per worktree
 
 ## Language support
 

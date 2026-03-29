@@ -1,32 +1,36 @@
 # perl-lsp-launcher
 
-Microcrate for Perl LSP startup parsing and launch configuration.
+Command-line launch parsing and startup reporting for `perl-lsp`.
 
-## When to use this crate
+Use this crate when you need to turn CLI flags into a launch plan, startup
+banner, or feature-profile summary without pulling the server runtime into the
+caller.
 
-Use `perl-lsp-launcher` when you need the startup and launch-contract layer for
-the Perl language server.
+## Where it fits
 
-It is the right crate for:
+This is the boundary between shell entry points and the long-lived LSP server.
+It owns startup configuration, transport selection, logging setup, and
+human-readable launch output.
 
-- parsing `perl-lsp` CLI flags and transport options
-- selecting feature profiles consistently across binaries and tooling
-- emitting startup timing and launch metadata
-- sharing the same launch contract with tests and editor integrations
+## Key entry points
 
-## Public surface
+- `TransportArgs` and `LspArgs` - typed CLI input
+- `TransportMode`, `LaunchAction`, `LaunchConfig`, `LaunchPlan`
+- `parse_args(args)` - convert raw argv into a launch plan
+- `help_text()` and `shell_completion(shell)` - CLI help and completion text
+- `startup_banner(...)` and `log_server_startup(...)` - startup output helpers
 
-- Parse CLI arguments for the `perl-lsp` binary.
-- Normalize feature profile selection.
-- Provide transport mode and startup metadata as a typed API.
-- Expose BDD-grid-compatible feature catalog output for a selected profile.
+## Example
 
-This crate intentionally keeps startup concerns separate from `perl-lsp` runtime logic
-so editors and tooling can share the same contract without duplicating parsing rules.
+```rust
+use perl_lsp_launcher::{TransportMode, parse_args};
 
-## Main types
+let plan = parse_args(["perl-lsp", "--stdio"])?;
+assert_eq!(plan.config.transport.mode(), TransportMode::Stdio);
+```
 
-- `LspArgs`: CLI argument parser for the binary entry point
-- `TransportArgs` and `TransportMode`: stdio/socket transport selection
-- `FeatureProfile`: selected capability profile
-- `StartupTimer` and `StartupReport`: startup instrumentation
+## Typical use
+
+Use `perl-lsp-launcher` when you are wiring the binary entry point, generating
+shell completions, or testing startup behavior. If you only need the long-lived
+server logic, use `perl-lsp` instead.

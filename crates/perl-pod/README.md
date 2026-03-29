@@ -1,42 +1,44 @@
 # perl-pod
 
-[![Crates.io](https://img.shields.io/crates/v/perl-pod.svg)](https://crates.io/crates/perl-pod)
-[![Documentation](https://docs.rs/perl-pod/badge.svg)](https://docs.rs/perl-pod)
+POD extractor for Perl `.pm` files.
 
-POD extraction utilities for Perl modules.
+Use this crate when you need structured documentation text for hover cards,
+module docs, or other editor surfaces without pulling in the full parser or LSP
+stack.
 
-## When to use this crate
+## Where it fits
 
-Use `perl-pod` when you need lightweight access to POD sections from a Perl
-source file, especially for hover text, module summaries, or local
-documentation indexing.
+`perl-pod` sits at the documentation edge of the workspace. It reads POD blocks
+from source text or files and returns a small data model that downstream crates
+can render or attach to diagnostics.
 
-It extracts a focused structured view:
+## Key entry points
 
-- module name and short description
-- synopsis text
-- description text
-- `=head2` method sections
+- `PodDoc` - extracted `NAME`, `SYNOPSIS`, `DESCRIPTION`, and method docs
+- `extract_pod(source)` - parse POD from a Perl source string
+- `extract_pod_from_file(path)` - read a file and extract its POD
 
-## Quick example
+## Example
 
 ```rust
-use perl_pod::extract_pod;
+use perl_pod::{PodDoc, extract_pod};
 
-let doc = extract_pod(
-    "=head1 NAME\nMy::Module - Example module\n\n=head1 SYNOPSIS\nuse My::Module;\n=cut\n",
+let doc: PodDoc = extract_pod(
+    r#"
+=head1 NAME
+My::Module - example module
+
+=head1 SYNOPSIS
+use My::Module;
+=cut
+"#,
 );
 
-assert!(doc.name.is_some());
-assert!(doc.synopsis.is_some());
+assert_eq!(doc.name.as_deref(), Some("My::Module - example module"));
 ```
 
-## Public API
+## Typical use
 
-- `extract_pod`: extract POD from a source string
-- `extract_pod_from_file`: read a file and extract POD
-- `PodDoc`: structured extracted documentation
-
-## License
-
-MIT OR Apache-2.0
+Use `perl-pod` when a caller already has Perl source and only needs the
+documentation sections. If you need syntax analysis or symbol resolution first,
+parse with `perl-parser` and then layer POD extraction on top.
