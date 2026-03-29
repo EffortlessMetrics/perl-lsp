@@ -1,6 +1,8 @@
 # Editor Setup Guide
 
-This guide provides copy/paste ready configurations for setting up the Perl LSP server with popular editors.
+This guide provides copy/paste-ready editor configurations once `perl-lsp` is
+already installed and working on your PATH. If you still need to install or
+verify the binary, start with [INSTALLATION.md](INSTALLATION.md).
 
 ## Table of Contents
 

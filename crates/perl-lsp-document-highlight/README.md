@@ -1,33 +1,35 @@
 # perl-lsp-document-highlight
 
-Symbol occurrence highlighting for Perl source files.
+[![Crates.io](https://img.shields.io/crates/v/perl-lsp-document-highlight.svg)](https://crates.io/crates/perl-lsp-document-highlight)
+[![Documentation](https://docs.rs/perl-lsp-document-highlight/badge.svg)](https://docs.rs/perl-lsp-document-highlight)
 
-## Problem it solves
+Symbol-occurrence highlighting for Perl editors and language servers.
 
-When the cursor lands on a variable, function, or method, editors expect all
-matching occurrences in the current document to light up immediately. This
-crate finds those occurrences and classifies them as read or write access where
-possible.
+## When to use this crate
 
-## Public API
+Use `perl-lsp-document-highlight` when you need
+`textDocument/documentHighlight` behavior for Perl source. Given a parsed AST,
+source text, and cursor offset, it returns the matching symbol occurrences in
+the current file and distinguishes read vs write access where possible.
 
-- `DocumentHighlightProvider` performs the highlight lookup.
-- `DocumentHighlight` describes each highlighted range.
-- `DocumentHighlightKind` distinguishes text, read, and write occurrences.
+This crate is intended for Rust-based LSP integrations, especially the
+`perl-lsp` workspace.
 
-## Example
+## Quick example
 
 ```rust,ignore
 use perl_lsp_document_highlight::DocumentHighlightProvider;
 
 let provider = DocumentHighlightProvider::new();
-let highlights = provider.find_highlights(&ast, source, byte_offset);
+let highlights = provider.find_highlights(&ast, source, cursor_byte_offset);
+assert!(!highlights.is_empty());
 ```
 
-## Workspace role
+## Public API
 
-`perl-lsp` uses this crate to implement `textDocument/documentHighlight`
-without duplicating symbol-matching logic in the main server crate.
+- `DocumentHighlightProvider`: main entry point
+- `DocumentHighlight`: returned range plus highlight kind
+- `DocumentHighlightKind`: `Text`, `Read`, or `Write`
 
 ## License
 

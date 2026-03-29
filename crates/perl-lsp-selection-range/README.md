@@ -1,38 +1,34 @@
 # perl-lsp-selection-range
 
-Smart selection-range expansion for Perl source text.
+[![Crates.io](https://img.shields.io/crates/v/perl-lsp-selection-range.svg)](https://crates.io/crates/perl-lsp-selection-range)
+[![Documentation](https://docs.rs/perl-lsp-selection-range/badge.svg)](https://docs.rs/perl-lsp-selection-range)
 
-## Problem it solves
+Smart selection expansion for Perl editors and language servers.
 
-Editors can grow the current selection from a word to larger syntactic units,
-but they need language-specific rules to do it well. This crate expands Perl
-selections through strings, hash subscripts, statements, blocks, subroutines,
-and whole-file scopes.
+## When to use this crate
 
-## Public API
+Use `perl-lsp-selection-range` when you want
+`textDocument/selectionRange` behavior for Perl source. It expands a cursor or
+selection outward through useful syntax boundaries such as:
 
-- `selection_ranges` returns LSP `SelectionRange` chains for one or more
-  cursor positions.
+- string content -> full string -> expression
+- hash key -> subscript -> full access expression
+- identifier -> statement -> block -> enclosing function
 
-## Expansion model
+## Quick example
 
-- string content -> quoted string -> containing expression
-- hash key -> `{key}` -> full access expression
-- identifier -> trimmed line -> statement -> block -> subroutine -> file
-
-## Example
-
-```rust,ignore
+```rust
 use lsp_types::Position;
 use perl_lsp_selection_range::selection_ranges;
 
-let ranges = selection_ranges(source, &[Position::new(3, 12)]);
+let source = "my $value = foo($bar);\n";
+let ranges = selection_ranges(source, &[Position::new(0, 4)]);
+assert_eq!(ranges.len(), 1);
 ```
 
-## Workspace role
+## Public API
 
-`perl-lsp` uses this crate to implement `textDocument/selectionRange` without
-embedding byte/UTF-16 mapping and span-expansion rules in the server runtime.
+- `selection_ranges`: returns nested LSP `SelectionRange` trees for positions
 
 ## License
 

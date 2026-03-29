@@ -3,12 +3,31 @@
 [![Crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
 [![Documentation](https://docs.rs/perl-lsp/badge.svg)](https://docs.rs/perl-lsp)
 
-Standalone **Language Server Protocol (LSP) server for Perl**, providing IDE features such as diagnostics, completion, navigation, formatting, rename, semantic tokens, code actions, and inlay hints. Communicates over stdio or TCP and integrates with any LSP-compatible editor.
+Standalone Language Server Protocol server for Perl.
+
+## When to use this crate
+
+Use `perl-lsp` when you want to run or embed the actual Perl language server:
+
+- run the `perl-lsp` binary behind an editor such as VS Code, Neovim, Emacs, or Helix
+- expose Perl LSP features over stdio or TCP
+- embed the server entry point from Rust instead of shelling out to a binary
+
+If you only need a parser, tokenizer, or a single feature provider, prefer the
+smaller workspace crates such as `perl-parser`, `perl-lexer`, or the
+`perl-lsp-*` provider crates.
 
 ## Installation
 
 ```bash
 cargo install perl-lsp
+```
+
+## Quick start
+
+```bash
+perl-lsp --stdio
+perl-lsp --health
 ```
 
 ## Usage
@@ -20,13 +39,17 @@ perl-lsp --health         # health check
 perl-lsp --version        # version info
 ```
 
-## Public API
+## Embedding from Rust
 
 The `perl_lsp` library re-exports `LspServer`, `JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`, and a convenience `run_stdio()` entry point for embedding.
 
-## Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace
+## Workspace role
 
-Tier 6 executable crate. Delegates parsing to `perl-parser` and dispatches LSP features through dedicated provider crates (`perl-lsp-completion`, `perl-lsp-navigation`, `perl-lsp-diagnostics`, etc.).
+This is the executable entry point in the
+[`perl-lsp`](https://github.com/EffortlessMetrics/perl-lsp) workspace. It
+delegates parsing to `perl-parser` and dispatches feature work through focused
+provider crates such as `perl-lsp-completion`, `perl-lsp-navigation`, and
+`perl-lsp-diagnostics`.
 
 ## License
 

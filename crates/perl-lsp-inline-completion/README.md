@@ -1,41 +1,32 @@
 # perl-lsp-inline-completion
 
-Deterministic inline completion for Perl LSP clients.
+[![Crates.io](https://img.shields.io/crates/v/perl-lsp-inline-completion.svg)](https://crates.io/crates/perl-lsp-inline-completion)
+[![Documentation](https://docs.rs/perl-lsp-inline-completion/badge.svg)](https://docs.rs/perl-lsp-inline-completion)
 
-## Problem it solves
+Deterministic inline-completion support for Perl editors and language servers.
 
-Inline completions need fast, predictable suggestions that can be shown as
-ghost text while the user types. This crate prepares local editing context and
-returns deterministic completions based on syntax and nearby code, without any
-AI dependency.
+## When to use this crate
 
-## Public API
+Use `perl-lsp-inline-completion` when you want ghost-text suggestions driven by
+local code context instead of a remote model. The provider extracts nearby
+variables, imports, package context, and simple syntactic cues to produce
+predictable inline completions.
 
-- `InlineCompletionProvider` prepares context and returns suggestions.
-- `PreparedInlineCompletionContext` captures the visible local context.
-- `InlineCompletionItem` and `InlineCompletionList` mirror the LSP preview
-  payload shape.
-
-## Example
+## Quick example
 
 ```rust,ignore
 use perl_lsp_inline_completion::InlineCompletionProvider;
 
 let provider = InlineCompletionProvider::new();
-let completions = provider.get_inline_completions(source, line, character);
+let list = provider.get_inline_completions("my $name = 'A';\nprint $na", 1, 9);
+assert!(!list.items.is_empty());
 ```
 
-## What it suggests
+## Public API
 
-- `new()` after `->`
-- common pragmas after `use `
-- body scaffolds for new subroutines
-- nearby variables and imports when the local context supports them
-
-## Workspace role
-
-`perl-lsp` uses this crate to implement preview inline completion behavior while
-keeping the ranking and context logic isolated and testable.
+- `InlineCompletionProvider`: main provider
+- `PreparedInlineCompletionContext`: extracted local code context
+- `InlineCompletionItem` and `InlineCompletionList`: LSP 3.18 preview types
 
 ## License
 

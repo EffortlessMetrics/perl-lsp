@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "SRP microcrate for Perl LSP document highlight (symbol occurrence highlighting)"
+readme = "README.md"
 documentation = "https://docs.rs/perl-lsp-document-highlight"
 keywords = ["perl", "lsp", "document-highlight", "ide", "language-server"]
 categories = ["development-tools", "text-editors"]
@@ -15,6 +16,7 @@ include = [
   "src/**",
   "tests/**",
   "Cargo.toml",
+  "README.md",
   "LICENSE*"
 ]
 

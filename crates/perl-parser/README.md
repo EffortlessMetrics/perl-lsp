@@ -2,9 +2,19 @@
 [![Crates.io](https://img.shields.io/crates/v/perl-parser.svg)](https://crates.io/crates/perl-parser)
 [![Documentation](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
 
-Central hub crate for the Perl parser ecosystem. Provides a native recursive-descent
-parser (v3) with Tree-sitter-compatible AST output, semantic analysis, workspace
-indexing, refactoring, and LSP provider re-exports.
+Native Perl parser and parser-hub crate for the `perl-lsp` workspace.
+
+## When to use this crate
+
+Use `perl-parser` when you want one entry point that combines parsing with the
+rest of the Perl analysis stack:
+
+- parse Perl source into an AST
+- plug into semantic analysis and workspace indexing
+- access LSP-facing provider crates from one crate family
+
+If you only need tokenization or the lower-level parser engine, prefer
+`perl-lexer` or `perl-parser-core`.
 
 ## Usage
 
@@ -32,7 +42,12 @@ in S-expression, JSON, or debug format.
 | `tdd` | `perl-tdd-support` | Test generation and TDD workflow |
 | `completion`, `diagnostics`, `rename`, ... | `perl-lsp-*` | LSP feature providers |
 
-Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+## Workspace role
+
+`perl-parser` is the broadest library entry point in the
+[`perl-lsp`](https://github.com/EffortlessMetrics/perl-lsp) workspace. It is a
+good choice for downstream tools that want parser access plus room to grow into
+semantic or editor features later.
 
 ## License
 

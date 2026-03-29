@@ -2,9 +2,18 @@
 [![Crates.io](https://img.shields.io/crates/v/perl-dap.svg)](https://crates.io/crates/perl-dap)
 [![Documentation](https://docs.rs/perl-dap/badge.svg)](https://docs.rs/perl-dap)
 
-Debug Adapter Protocol (DAP) server for Perl, enabling debugging in VS Code, Neovim, Emacs, and other DAP-compatible editors.
+Debug Adapter Protocol server for Perl.
 
-Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+## When to use this crate
+
+Use `perl-dap` when you want Perl debugging from a DAP-capable editor or tool:
+
+- run the native adapter against `perl -d`
+- expose debugging over stdio or TCP
+- bridge to `Perl::LanguageServer` during migration or compatibility work
+
+This is the runtime-facing debugger crate in the
+[`perl-lsp`](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Features
 
@@ -25,7 +34,7 @@ perl-dap --socket --port 13603  # Native adapter on TCP
 perl-dap --bridge           # Bridge mode (requires Perl::LanguageServer)
 ```
 
-## Bridge Adapter
+## Bridge adapter
 
 `BridgeAdapter` proxies DAP messages to an existing `Perl::LanguageServer` installation:
 

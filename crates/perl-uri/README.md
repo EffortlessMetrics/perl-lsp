@@ -1,8 +1,17 @@
 # perl-uri
 
-URI-to-filesystem-path conversion and normalization utilities for the Perl LSP ecosystem.
+URI and filesystem-path conversion utilities for Perl editor tooling.
 
-Part of the [`tree-sitter-perl-rs`](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+## When to use this crate
+
+Use `perl-uri` when you need a small utility crate for:
+
+- converting between `file://` URIs and local filesystem paths
+- normalizing Windows and Unix file references into stable URI keys
+- handling raw absolute paths that may arrive from editors or test harnesses
+
+It is useful outside the full `perl-lsp` runtime when you only need file-URI
+logic.
 
 ## Public API
 
@@ -26,7 +35,7 @@ let uri  = fs_path_to_uri("/tmp/test.pl").unwrap();   // "file:///tmp/test.pl"
 let key  = uri_key("file:///C:/Users/test.pl");        // "file:///c:/Users/test.pl"
 ```
 
-## Platform Support
+## Platform support
 
 `uri_to_fs_path`, `fs_path_to_uri`, and `normalize_uri` require filesystem access and are
 not available on `wasm32` targets. The remaining helpers work on all platforms.

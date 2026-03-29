@@ -1,40 +1,34 @@
 # perl-lsp-color-provider
 
-Document-color detection and presentation helpers for `perl-lsp`.
+[![Crates.io](https://img.shields.io/crates/v/perl-lsp-color-provider.svg)](https://crates.io/crates/perl-lsp-color-provider)
+[![Documentation](https://docs.rs/perl-lsp-color-provider/badge.svg)](https://docs.rs/perl-lsp-color-provider)
 
-## Problem it solves
+Document-color detection and presentation helpers for Perl source code.
 
-Editors that support `textDocument/documentColor` need a provider that can find
-color literals in Perl source and turn them into LSP color payloads. This crate
-detects common Perl-facing color forms and returns editor-friendly ranges and
-presentations.
+## When to use this crate
+
+Use `perl-lsp-color-provider` when you want `textDocument/documentColor` or
+`textDocument/colorPresentation` support for Perl code. It recognizes:
+
+- hex colors such as `#ff00aa`
+- ANSI escape sequences
+- named CSS colors in quoted strings
+- `Term::ANSIColor` calls
+
+## Quick example
+
+```rust
+use perl_lsp_color_provider::detect_colors;
+
+let colors = detect_colors(r#"my $accent = "#ff00aa";"#);
+assert_eq!(colors.len(), 1);
+```
 
 ## Public API
 
-- `detect_colors` scans source text for supported color literals.
-- `ColorInformation` carries the detected range plus normalized RGBA values.
-- `Color` stores the color itself.
-- `color_to_presentations` produces replacement variants such as hex strings.
-
-## Supported inputs
-
-- Hex colors such as `#RGB`, `#RRGGBB`, and `#RRGGBBAA`
-- ANSI escape sequences like `\e[31m`
-- Named CSS colors inside quoted strings
-- `Term::ANSIColor` calls such as `color("red")`
-
-## Example
-
-```rust,ignore
-use perl_lsp_color_provider::detect_colors;
-
-let colors = detect_colors(r#"print "#ff8800";"#);
-```
-
-## Workspace role
-
-`perl-lsp` uses this crate for document color discovery and color presentation
-responses without mixing color parsing logic into the server runtime.
+- `detect_colors`: scans Perl source for color literals
+- `color_to_presentations`: returns editor-facing replacement formats
+- `ColorInformation` and `Color`: simple range and RGBA value types
 
 ## License
 

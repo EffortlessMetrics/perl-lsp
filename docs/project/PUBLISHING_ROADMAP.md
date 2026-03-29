@@ -1,7 +1,7 @@
 # Publishing Roadmap
 
 > Machine-executable release guide. Every step is a command or a binary pass/fail check.
-> Covers: v0.13.0 (next release) and any subsequent minor release.
+> Covers the current release target and subsequent minor releases.
 > Authoritative release mechanics: `RELEASE.md`. Authoritative feature catalog: `features.toml`.
 > Replace `NEW_VERSION` and `PREV_VERSION` throughout with actual semver strings (e.g., `0.13.0`, `0.12.0`).
 

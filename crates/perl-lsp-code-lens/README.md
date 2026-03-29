@@ -1,35 +1,36 @@
 # perl-lsp-code-lens
 
-Inline code-lens extraction for Perl files in `perl-lsp`.
+[![Crates.io](https://img.shields.io/crates/v/perl-lsp-code-lens.svg)](https://crates.io/crates/perl-lsp-code-lens)
+[![Documentation](https://docs.rs/perl-lsp-code-lens/badge.svg)](https://docs.rs/perl-lsp-code-lens)
 
-## Problem it solves
+Inline code-lens generation for Perl editors and language servers.
 
-LSP clients can show clickable actions above code, but they need a provider that
-knows where those actions belong. This crate finds Perl-specific code-lens
-targets such as test subroutines, subtests, shebang scripts, packages, and
-reference-countable declarations.
+## When to use this crate
+
+Use `perl-lsp-code-lens` when you want Perl-aware inline actions such as:
+
+- run-test lenses for `.t` files and test subroutines
+- reference-count lenses for packages and subroutines
+- run-script lenses for executable Perl files with a shebang
+
+This crate is primarily intended for the `perl-lsp` workspace and other Rust
+language-server integrations. It is not a standalone editor plugin.
+
+## Quick example
+
+```rust
+use perl_lsp_code_lens::{get_shebang_lens, is_test_file};
+
+assert!(is_test_file("t/basic.t"));
+assert!(get_shebang_lens("#!/usr/bin/env perl\nprint \"ok\\n\";\n").is_some());
+```
 
 ## Public API
 
-- `CodeLensProvider` extracts lenses from a parsed Perl AST.
-- `resolve_code_lens` fills in reference-count titles after lookup.
-- `get_shebang_lens` creates a run-script lens for executable Perl files.
-- `is_test_file` detects `.t` files for test-specific actions.
-
-## Example
-
-```rust,ignore
-use perl_lsp_code_lens::CodeLensProvider;
-
-let lenses = CodeLensProvider::new(source.to_string())
-    .with_file_path("t/basic.t".to_string())
-    .extract(&ast);
-```
-
-## Workspace role
-
-`perl-lsp` uses this crate to power `textDocument/codeLens` and related resolve
-flows without keeping test-lens logic in the main server crate.
+- `CodeLensProvider`: extracts lenses from a Perl AST
+- `resolve_code_lens`: fills in deferred reference-count data
+- `get_shebang_lens`: detects executable-script lenses from source text
+- `is_test_file`: detects Perl test-file naming
 
 ## License
 

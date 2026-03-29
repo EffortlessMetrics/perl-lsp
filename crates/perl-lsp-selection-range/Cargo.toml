@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "SRP microcrate for Perl LSP smart selection range expansion"
+readme = "README.md"
 documentation = "https://docs.rs/perl-lsp-selection-range"
 keywords = ["perl", "lsp", "selection-range", "ide", "language-server"]
 categories = ["development-tools", "text-editors"]

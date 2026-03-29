@@ -1,35 +1,33 @@
 # perl-symbol-surface
 
-Stable symbol projections derived from the Perl AST.
+[![Crates.io](https://img.shields.io/crates/v/perl-symbol-surface.svg)](https://crates.io/crates/perl-symbol-surface)
+[![Documentation](https://docs.rs/perl-symbol-surface/badge.svg)](https://docs.rs/perl-symbol-surface)
 
-## Problem it solves
+Stable symbol-bearing projections derived from the Perl AST.
 
-Many higher-level IDE features need the same answer: which declarations in this
-AST correspond to user-visible symbols? This crate provides a stable projection
-layer so navigation, rename, indexing, and semantic analysis do not each need
-to re-implement raw AST pattern matching.
+## When to use this crate
 
-## Public API
+Use `perl-symbol-surface` when you want a reusable symbol view over Perl AST
+nodes without reimplementing tree walking in each feature crate. It sits
+between raw syntax (`perl-ast`) and IDE features such as navigation, rename,
+workspace symbols, and call hierarchy.
 
-- `extract_symbol_decls` walks the tree and returns declaration projections.
-- `SymbolDecl` stores symbol kind, name, qualification, and spans.
+This crate is useful when you need declaration extraction but do not want to
+depend on the larger parser/runtime stack.
 
-## Example
+## Quick example
 
 ```rust,ignore
 use perl_symbol_surface::extract_symbol_decls;
 
 let decls = extract_symbol_decls(&ast, Some("My::Package"));
-for decl in decls {
-    println!("{}", decl.qualified_name);
-}
+assert!(!decls.is_empty());
 ```
 
-## Workspace role
+## Public API
 
-This crate sits between syntax (`perl-ast`) and IDE consumers such as
-`perl-semantic-analyzer`, `perl-workspace-index`, navigation, rename, and
-workspace-symbol features.
+- `extract_symbol_decls`: single-pass declaration extraction
+- `SymbolDecl`: stable declaration view with spans and qualified names
 
 ## License
 
