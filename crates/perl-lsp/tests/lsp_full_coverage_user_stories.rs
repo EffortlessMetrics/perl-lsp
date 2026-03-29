@@ -218,12 +218,19 @@ impl TestContext {
         result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
     }
 
-    fn get_code_actions(&mut self, uri: &str, start_line: u32, end_line: u32) -> Vec<Value> {
+    fn get_code_actions_for_range(
+        &mut self,
+        uri: &str,
+        start_line: u32,
+        start_character: u32,
+        end_line: u32,
+        end_character: u32,
+    ) -> Vec<Value> {
         let params = json!({
             "textDocument": { "uri": uri },
             "range": {
-                "start": { "line": start_line, "character": 0 },
-                "end": { "line": end_line, "character": 0 }
+                "start": { "line": start_line, "character": start_character },
+                "end": { "line": end_line, "character": end_character }
             },
             "context": {
                 "diagnostics": []
@@ -232,6 +239,10 @@ impl TestContext {
 
         let result = self.send_request("textDocument/codeAction", Some(params));
         result.as_ref().and_then(|r| r.as_array()).cloned().unwrap_or_default()
+    }
+
+    fn get_code_actions(&mut self, uri: &str, start_line: u32, end_line: u32) -> Vec<Value> {
+        self.get_code_actions_for_range(uri, start_line, 0, end_line, 0)
     }
 
     fn rename(&mut self, uri: &str, line: u32, character: u32, new_name: &str) -> Option<Value> {
@@ -337,17 +348,16 @@ print "Fibonacci(10) = $result\n";
     let refs = ctx.get_references("file:///workspace/debug_test.pl", 4, 4, true);
     assert!(!refs.is_empty(), "Should find function references ({})", ctx.story_context());
 
-    // Get code actions for adding debug statements
-    let actions = ctx.get_code_actions("file:///workspace/debug_test.pl", 10, 14);
-    // Should offer debug-related actions
+    // Request code actions for the "$a + $b" expression inside the loop.
+    let actions = ctx.get_code_actions_for_range("file:///workspace/debug_test.pl", 11, 19, 11, 26);
     assert!(
         actions.iter().any(|a| {
             a.get("title")
                 .and_then(|t| t.as_str())
-                .map(|s| s.contains("Add") || s.contains("Extract"))
+                .map(|s| s.contains("Extract") && s.contains("variable"))
                 .unwrap_or(false)
         }),
-        "Expected debug-oriented code actions ({})",
+        "Expected extract-variable code action for the selected expression ({})",
         ctx.story_context()
     );
 }

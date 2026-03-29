@@ -59,11 +59,13 @@ fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
 /// code will NOT be executed.
 #[test]
 fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let temp_dir = TempDir::new()?;
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
 
     // Create a minimal test file with a marker subroutine
-    let test_file = "/tmp/security_test_sub.pl";
-    std::fs::write(test_file, "sub safe_sub { print 'SAFE_SUB_EXECUTED'; }").ok();
+    let test_file = temp_dir.path().join("security_test_sub.pl");
+    std::fs::write(&test_file, "sub safe_sub { print 'SAFE_SUB_EXECUTED'; }")?;
 
     // This payload would execute code if string interpolation was used.
     // With the fix (using @ARGV), it's treated as a literal subroutine name.
@@ -71,11 +73,11 @@ fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
 
     let result = provider.execute_command(
         "perl.runTestSub",
-        vec![Value::String(test_file.to_string()), Value::String(malicious_sub_name.to_string())],
+        vec![
+            Value::String(test_file.to_string_lossy().to_string()),
+            Value::String(malicious_sub_name.to_string()),
+        ],
     );
-
-    // Clean up
-    std::fs::remove_file(test_file).ok();
 
     assert!(result.is_ok(), "Command should not fail to spawn");
     let val = result?;
@@ -226,10 +228,15 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
 fn test_empty_workspace_roots_enforces_cwd_boundary() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
     // Provider has empty workspace_roots by default, which now falls back to CWD.
-    // /etc/passwd is guaranteed to be outside CWD for any normal project directory.
+    // Use a real file in a temp directory so the path exists but is still outside the repo CWD.
+    let temp_dir = TempDir::new()?;
+    let outside_file = temp_dir.path().join("outside_cwd.pl");
+    fs::write(&outside_file, "print 'outside cwd';")?;
 
-    let result =
-        provider.execute_command("perl.runCritic", vec![Value::String("/etc/passwd".to_string())]);
+    let result = provider.execute_command(
+        "perl.runCritic",
+        vec![Value::String(outside_file.to_string_lossy().to_string())],
+    );
 
     assert!(result.is_err(), "Should reject paths outside CWD when workspace_roots is empty");
     Ok(())

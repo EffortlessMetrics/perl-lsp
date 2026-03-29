@@ -427,6 +427,18 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    fn echo_command(message: &str) -> (&'static str, Vec<String>) {
+        #[cfg(windows)]
+        {
+            ("cmd", vec!["/C".to_string(), "echo".to_string(), message.to_string()])
+        }
+
+        #[cfg(not(windows))]
+        {
+            ("echo", vec![message.to_string()])
+        }
+    }
+
     // --- Bug A: path escaping tests ---
 
     #[test]
@@ -501,7 +513,9 @@ mod tests {
         let config = SandboxConfig { enabled: false, ..Default::default() };
         let sandbox = must(Sandbox::new(config));
 
-        let result = must(sandbox.execute("echo", &["hello"]));
+        let (command, args) = echo_command("hello");
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        let result = must(sandbox.execute(command, &arg_refs));
         assert!(result.success);
         assert_eq!(must(result.stdout_str()).trim(), "hello");
     }
@@ -510,7 +524,9 @@ mod tests {
     fn test_safe_executor() {
         use perl_tdd_support::must;
         let executor = SafeExecutor::new();
-        let result = must(executor.execute("echo", &["test"]));
+        let (command, args) = echo_command("test");
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        let result = must(executor.execute(command, &arg_refs));
         assert!(result.success);
         assert_eq!(must(result.stdout_str()).trim(), "test");
     }

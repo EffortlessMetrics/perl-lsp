@@ -87,6 +87,52 @@ pub fn read_response_timeout(server: &LspServer, dur: Duration) -> Option<Value>
     server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur).ok()
 }
 
+/// Try to receive a JSON-RPC response within `dur`, buffering notifications and
+/// unrelated traffic for later reads.
+pub fn read_response_only_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
+    // Scan buffered traffic first.
+    {
+        let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+        let len = pending.len();
+        for _ in 0..len {
+            if let Some(msg) = pending.pop_front() {
+                if msg.get("id").is_some() {
+                    return Some(msg);
+                }
+                if pending.len() >= PENDING_CAP {
+                    pending.pop_front();
+                }
+                pending.push_back(msg);
+            }
+        }
+    }
+
+    let deadline = Instant::now() + dur;
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            return None;
+        }
+        let recv_result = {
+            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
+            rx.recv_timeout(deadline - now)
+        };
+        match recv_result {
+            Ok(msg) => {
+                if msg.get("id").is_some() {
+                    return Some(msg);
+                }
+                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+                if pending.len() >= PENDING_CAP {
+                    pending.pop_front();
+                }
+                pending.push_back(msg);
+            }
+            Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => return None,
+        }
+    }
+}
+
 /// Try to receive a notification (message without id) within `dur`. Returns None on timeout or if a response is received.
 pub fn read_notification_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
     match server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur) {

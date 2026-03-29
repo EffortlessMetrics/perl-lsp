@@ -732,7 +732,7 @@ mod module_hover_tests {
 
         assert!(content.contains("My::Module"), "hover should show module name, got: {content}");
         assert!(
-            content.contains("Resolved"),
+            content.contains("Module.pm") && content.contains("Go to module"),
             "hover should show resolved path for found module, got: {content}"
         );
         Ok(())

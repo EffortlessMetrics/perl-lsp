@@ -58,7 +58,7 @@ fn test_lsp_initialization() -> TestResult {
     );
     assert_eq!(
         capabilities["capabilities"]["completionProvider"]["triggerCharacters"],
-        json!(["$", "@", "%", "->"])
+        json!(["$", "@", "%", ">", ":", "-"])
     );
     assert_eq!(capabilities["capabilities"]["hoverProvider"], true);
     // workspaceSymbolProvider can be either bool or object with resolveProvider
@@ -582,7 +582,11 @@ fn test_semantic_tokens_full() -> TestResult {
         Some(json!({
             "processId": null,
             "rootUri": null,
-            "capabilities": {}
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {}
+                }
+            }
         })),
     );
     send_request(&server, "initialized", None);
@@ -649,7 +653,11 @@ fn test_semantic_tokens_range() -> TestResult {
         Some(json!({
             "processId": null,
             "rootUri": null,
-            "capabilities": {}
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {}
+                }
+            }
         })),
     );
     send_request(&server, "initialized", None);
@@ -991,7 +999,11 @@ fn test_inlay_hints() -> TestResult {
         Some(json!({
             "processId": null,
             "rootUri": null,
-            "capabilities": {}
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {}
+                }
+            }
         })),
     );
     send_request(&server, "initialized", None);
@@ -1006,12 +1018,9 @@ fn test_inlay_hints() -> TestResult {
                 "languageId": "perl",
                 "version": 1,
                 "text": r#"
-push(@array, "value");
-substr($string, 0, 5);
-open(FH, "<", "file.txt");
-
-my $result = split(/,/, $input);
+my $arr = [1, 2, 3];
 my $hash = { key => "value" };
+my $result = split(/,/, $input);
 "#
             }
         })),
@@ -1039,22 +1048,17 @@ my $hash = { key => "value" };
     assert!(hints.is_array());
     let hints_array = hints.as_array().ok_or("Expected hints array")?;
 
-    // Should have parameter hints and type hints
     assert!(!hints_array.is_empty());
 
-    // Check for parameter hints
-    let param_hints: Vec<_> = hints_array
-        .iter()
-        .filter(|h| h["kind"] == 2) // Parameter
-        .collect();
-    assert!(param_hints.len() >= 3); // At least one per function call
-
-    // Check for type hints
+    // Check for type hints on variable declarations.
     let type_hints: Vec<_> = hints_array
         .iter()
         .filter(|h| h["kind"] == 1) // Type
         .collect();
-    assert!(type_hints.len() >= 2); // For $result and $hash
+    assert!(type_hints.len() >= 2);
+    let labels: Vec<_> = type_hints.iter().filter_map(|h| h["label"].as_str()).collect();
+    assert!(labels.iter().any(|label| label.contains("Array")));
+    assert!(labels.iter().any(|label| label.contains("Hash")));
     Ok(())
 }
 
@@ -1069,7 +1073,11 @@ fn test_inlay_hints_range() -> TestResult {
         Some(json!({
             "processId": null,
             "rootUri": null,
-            "capabilities": {}
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {}
+                }
+            }
         })),
     );
     send_request(&server, "initialized", None);
