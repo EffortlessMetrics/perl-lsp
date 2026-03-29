@@ -32,8 +32,10 @@
 //! # fn main() {}
 //! ```
 
-use percent_encoding::percent_decode_str;
 use url::Url;
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+use percent_encoding::percent_decode_str;
 
 /// Convert a `file://` URI to a filesystem path.
 ///
