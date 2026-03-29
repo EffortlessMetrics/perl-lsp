@@ -1,30 +1,41 @@
 # perl-lsp-rename
 
-LSP rename provider for Perl symbol refactoring.
+Rename provider for Perl refactoring.
 
-## Features
+## When to use this crate
 
-- **Prepare rename**: validates that a symbol at a given position is renameable
-- **Rename execution**: generates text edits for all occurrences (definitions + references)
-- **Name validation**: rejects empty names, keywords, invalid identifiers, and naming conflicts
-- **Sigil handling**: preserves Perl sigils (`$`, `@`, `%`, `&`) during variable renames
-- **Special variable protection**: prevents renaming of built-in variables and functions
-- **Optional text search**: can also rename occurrences in comments and strings
+Use `perl-lsp-rename` when you want rename and prepare-rename behavior for Perl
+symbols without depending on the full server runtime.
+
+It is the right crate for:
+
+- validating whether a symbol can be renamed
+- generating coordinated rename edits
+- preserving sigils and Perl naming rules during refactors
 
 ## Public API
 
-| Type | Purpose |
-|------|---------|
-| `RenameProvider` | Main entry point: `prepare_rename()` and `rename()` |
-| `RenameOptions` | Controls validation, comment/string renaming |
-| `RenameResult` | Contains edits, validity flag, and optional error |
-| `TextEdit` | A single location + replacement text |
+- `RenameProvider`: main entry point for `prepare_rename()` and `rename()`.
+- `RenameOptions`: controls validation and comment/string renaming.
+- `RenameResult`: contains edits, validity state, and error information.
+- `TextEdit`: a single location plus replacement text.
 
-## Workspace Role
+## Example
 
-Internal feature crate in the `tree-sitter-perl-rs` workspace, consumed by
-`perl-lsp` to handle `textDocument/rename` and `textDocument/prepareRename` requests.
-Depends on `perl-parser-core` for AST types and `perl-semantic-analyzer` for symbol tables.
+```rust,ignore
+use perl_lsp_rename::RenameProvider;
+
+let provider = RenameProvider::new(&ast, source.to_string());
+let prep = provider.prepare_rename(position)?;
+let result = provider.rename(position, "new_name", &options);
+assert!(prep.is_some());
+assert!(result.valid);
+```
+
+## Workspace role
+
+Internal feature crate consumed by `perl-lsp` for rename request handling.
+It is mostly a workspace building block rather than a standalone end-user crate.
 
 ## License
 
