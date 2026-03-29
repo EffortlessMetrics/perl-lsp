@@ -1,8 +1,18 @@
-# Commands Reference (*Diataxis: Reference* - Complete command specifications)
+# Commands Reference
 
-*This reference provides all available commands for building, testing, and using the tree-sitter-perl ecosystem.*
+This reference lists the commands contributors actually use. The standard flow is:
 
-## Installation Commands (*Diataxis: How-to Guide* - Step-by-step installation)
+```bash
+just devex
+just pr-fast
+nix develop -c just ci-gate
+just ci-full
+just status-update
+just status-check
+just release-check
+```
+
+## Installation Commands
 
 ### LSP Server
 ```bash
@@ -39,17 +49,17 @@ perl-dap --stdio  # Standard DAP transport
 ## Developer Workflow
 
 ```bash
-# Quick local environment diagnostics
+# Check the local environment
 just devex          # Alias: just doctor
 
-# Fast validation before a larger test run
+# Fast validation while iterating
 just pr-fast
 
-# Canonical local gate
+# Canonical pre-push gate
 nix develop -c just ci-gate
 ```
 
-## Build Commands (*Diataxis: How-to Guide* - Development builds)
+## Build Commands
 
 ### Published Crates
 ```bash
@@ -563,7 +573,7 @@ python3 scripts/generate_comparison.py \
   --output comparison.json \
   --report comparison_report.md
 
-# Custom performance gates (5% parse time, 20% memory defaults)
+# Custom performance gates
 python3 scripts/generate_comparison.py \
   --parse-threshold 3.0 \
   --memory-threshold 15.0 \
