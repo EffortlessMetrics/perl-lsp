@@ -28,6 +28,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 
 - Users: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
 - Editor setup: [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
+- Upgrade existing installs: [how-to/UPGRADING.md](how-to/UPGRADING.md)
 - Contributors: [../CONTRIBUTING.md](../CONTRIBUTING.md)
 - Current project posture: [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md)
 - Active milestone: [project/ROADMAP.md](project/ROADMAP.md)
@@ -44,6 +45,7 @@ Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md]
 ## How-To Guides
 
 - [how-to/INSTALLATION.md](how-to/INSTALLATION.md)
+- [how-to/UPGRADING.md](how-to/UPGRADING.md)
 - [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
 - [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md)
 - [how-to/DEPENDENCY_MANAGEMENT.md](how-to/DEPENDENCY_MANAGEMENT.md)
