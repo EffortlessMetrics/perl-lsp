@@ -1,9 +1,8 @@
 # Publishing Roadmap
 
-> Machine-executable release guide. Every step is a command or a binary pass/fail check.
-> Covers: v0.13.0 (next release) and any subsequent minor release.
-> Authoritative release mechanics: `RELEASE.md`. Authoritative feature catalog: `features.toml`.
-> Replace `NEW_VERSION` and `PREV_VERSION` throughout with actual semver strings (e.g., `0.13.0`, `0.12.0`).
+> Machine-executable release-day playbook. Every step is a command or a binary pass/fail check.
+> Use with `RELEASE.md` for release mechanics and `RELEASE_CHECKLIST.md` for the preflight gate.
+> Replace `NEW_VERSION` and `PREV_VERSION` throughout with the actual semver strings for the cut.
 
 ---
 
@@ -13,8 +12,8 @@
 
 ```bash
 export CARGO_TARGET_DIR="/tmp/release-preflight-target"
-export NEW_VERSION="0.13.0"
-export PREV_VERSION="0.12.0"
+export NEW_VERSION="NEW_VERSION"
+export PREV_VERSION="PREV_VERSION"
 ```
 
 ### 1.2 Verify all version strings agree
@@ -47,7 +46,7 @@ gh workflow run version-bump.yml --field version=NEW_VERSION
 
 ```bash
 grep "## \[${NEW_VERSION}\]" CHANGELOG.md
-# Must match: ## [0.13.0] - YYYY-MM-DD
+# Must match: ## [NEW_VERSION] - YYYY-MM-DD
 ```
 
 Fail if missing. To promote [Unreleased] to a dated release:
@@ -62,7 +61,7 @@ git commit -m "chore: finalize CHANGELOG for v${NEW_VERSION}"
 CHANGELOG section structure (required):
 
 ```markdown
-## [0.13.0] - 2026-MM-DD
+## [NEW_VERSION] - YYYY-MM-DD
 
 ### Added
 - ...
@@ -328,7 +327,7 @@ git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
 git push origin "v${NEW_VERSION}"
 ```
 
-Tag must be: `v` + semver. Examples: `v0.13.0`, `v0.13.1`. Never: `0.13.0`, `release-0.13.0`.
+Tag must be: `v` + semver. Examples: `vNEW_VERSION`, `vNEXT_PATCH_VERSION`. Never: `NEW_VERSION`, `release-NEW_VERSION`.
 
 ### 3.3 GitHub release
 
@@ -461,7 +460,7 @@ gh workflow run version-bump.yml \
   --field bump_type=minor
 # OR:
 gh workflow run version-bump.yml \
-  --field version=0.14.0
+  --field version=NEW_VERSION
 
 # Merge the resulting version-bump PR.
 ```
@@ -534,10 +533,10 @@ Triage SLA:
 |----------|---------------|
 | Crash or hang | Same day — file P0 issue, assign to next build cycle |
 | Parse error on valid Perl | 48 hours — file issue, label `parser-corpus` |
-| Feature gap | 1 week — triage to v0.13.x milestone |
+| Feature gap | 1 week — triage to the next release milestone |
 | Enhancement | Triage to roadmap, no SLA |
 
-### 4.4 v0.13.0 issue triage (Week 1 — after release)
+### 4.4 Current release issue triage (Week 1 — after release)
 
 ```bash
 # List all open issues
@@ -546,10 +545,10 @@ gh issue list --state open --limit 200
 # Label new issues from post-release feedback
 # Use these labels: bug, parser-corpus, lsp-feature, enhancement, good-first-issue
 gh issue edit ISSUE_NUMBER --add-label "parser-corpus"
-gh issue edit ISSUE_NUMBER --milestone "v0.13.0"
+gh issue edit ISSUE_NUMBER --milestone "NEW_VERSION"
 ```
 
-Milestone priorities for v0.13.0 (from ROADMAP.md):
+Milestone priorities for NEW_VERSION (from ROADMAP.md):
 
 1. Diagnostic hardening: `strict`, `warnings`, dead-code signals
 2. CPAN corpus clean-parse rate to 95%+
