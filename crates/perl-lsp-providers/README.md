@@ -1,46 +1,37 @@
 # perl-lsp-providers
 
-LSP provider aggregation and tooling integrations for Perl.
+Umbrella re-export crate for the Perl LSP provider stack. Use it when you want
+one dependency surface for completion, diagnostics, navigation, rename, code
+actions, formatting, and IDE compatibility shims.
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace (Tier 4).
+## Use this crate when
 
-## When to use this crate
+Use `perl-lsp-providers` if your application wants the whole provider surface
+in one place. If you only need one feature family, depend on the dedicated
+crate instead so the boundary stays explicit.
 
-Use `perl-lsp-providers` when you want one dependency that re-exports the main
-Perl LSP feature crates behind a unified surface. It is a good fit for internal
-workspace consumers and external Rust tools that want completion, diagnostics,
-rename, formatting, and similar providers without wiring each microcrate
-manually.
+## Key exports
 
-If you want the runnable server, use `perl-lsp`. If you want just one feature,
-prefer the narrower `perl-lsp-*` crate for that area.
+- `completion`, `diagnostics`, `navigation`, `rename`, `code_actions` - primary
+  provider families
+- `formatting`, `semantic_tokens`, `inlay_hints`, `folding` - additional LSP
+  feature surfaces
+- `tooling` - perltidy / perlcritic integrations
+- `ide` - LSP and DAP compatibility shims
+- `Node`, `NodeKind`, `SourceLocation`, `Parser`, `ast`, `position` - parser
+  core re-exports for convenience
 
-## Overview
+## Example
 
-This crate is the central aggregation point for all LSP feature providers in the Perl LSP ecosystem. It re-exports individual microcrates (completion, diagnostics, formatting, navigation, rename, semantic tokens, inlay hints, code actions) through a unified API and provides IDE integration shims and backward-compatible legacy import paths.
+```rust,ignore
+use perl_lsp_providers::{completion::CompletionProvider, diagnostics::DiagnosticsProvider};
 
-## Public API
+let completion = CompletionProvider::new(&ast);
+let diagnostics = DiagnosticsProvider::new();
+```
 
-Top-level re-export modules (preferred for new code):
+## Stack role
 
-- `completion` -- from `perl-lsp-completion`
-- `diagnostics` -- from `perl-lsp-diagnostics`
-- `formatting` -- from `perl-lsp-formatting`
-- `navigation` -- from `perl-lsp-navigation`
-- `rename` -- from `perl-lsp-rename`
-- `semantic_tokens` -- from `perl-lsp-semantic-tokens`
-- `inlay_hints` -- from `perl-lsp-inlay-hints`
-- `code_actions` -- from `perl-lsp-code-actions`
-- `folding` -- from `perl-lsp-folding`
-- `tooling` -- from `perl-lsp-tooling` (perltidy, perlcritic)
-- `ide` -- LSP/DAP runtime compatibility shims
-
-Core parser types (`Node`, `NodeKind`, `SourceLocation`, `Parser`, `ast`, `position`) are re-exported from `perl-parser-core`.
-
-## Features
-
-- `lsp-compat` (default) -- enables LSP protocol type compatibility via `lsp-types`
-
-## License
-
-Licensed under either of [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0) or [MIT license](http://opensource.org/licenses/MIT) at your option.
+This crate is the convenience integration layer for the workspace. It keeps the
+individual feature crates available under one root without hiding their real
+boundaries.

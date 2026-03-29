@@ -1,34 +1,30 @@
 # perl-lsp-workspace-symbols
 
-Single-responsibility microcrate for Perl LSP `workspace/symbol` indexing and search.
+Workspace symbol indexing and search for Perl. This crate answers "what symbols
+exist across the workspace, and where are they?"
 
-## When to use this crate
+## Use this crate when
 
-Use `perl-lsp-workspace-symbols` when you want a focused implementation of
-LSP `workspace/symbol` for Perl without pulling in the full server runtime.
+Use `perl-lsp-workspace-symbols` if you need the search/indexing layer itself.
+Use `perl-lsp-navigation` when you want workspace symbols together with type
+definition, document links, and references.
 
-It handles:
+## Key exports
 
-- indexing symbols from parsed Perl files
-- searching workspace symbols by query
-- shaping results into LSP-friendly workspace symbol payloads
+- `WorkspaceSymbolsProvider` - indexes documents and performs ranked search
+- `WorkspaceSymbol` - search result payload with location, kind, and container
 
-## Quick example
+## Example
 
 ```rust,ignore
 use perl_lsp_workspace_symbols::WorkspaceSymbolsProvider;
 
 let mut provider = WorkspaceSymbolsProvider::new();
-provider.index_document("file:///test.pl", &ast, source);
-let results = provider.search("hello", &source_map);
-assert!(!results.is_empty());
+provider.index_document("file:///lib/Foo.pm", &ast, source);
+let symbols = provider.search("logger", &source_map);
 ```
 
-## Public API
+## Stack role
 
-- `WorkspaceSymbolsProvider`: index and query entry point
-- `WorkspaceSymbol`: workspace-symbol result type
-
-## License
-
-MIT OR Apache-2.0
+This crate is the symbol index used by the navigation layer in `perl-lsp`.
+It is focused on ranked symbol lookup, not on editor protocol wiring.

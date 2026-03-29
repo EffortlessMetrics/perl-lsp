@@ -1,39 +1,35 @@
 # perl-lsp-completion
 
-Context-aware completion engine for Perl source.
+Perl-aware completion engine for `textDocument/completion`. It turns an AST,
+the current cursor location, and optional workspace context into ranked
+completion items for variables, functions, keywords, packages, methods, file
+paths, and test helpers.
 
-## When to use this crate
+## Use this crate when
 
-Use `perl-lsp-completion` when you want Perl-aware `textDocument/completion`
-behavior without embedding the full language server runtime.
+Use `perl-lsp-completion` if you need the completion logic itself. Use
+`perl-lsp-completion-item` if you only need the item types and deterministic
+sorting, and use `perl-lsp-providers` when you want the umbrella re-export
+surface for the whole provider stack.
 
-It is the right crate when you need:
+## Key exports
 
-- ranked completion results at a source offset
-- completion logic that understands Perl sigils, packages, methods, and files
-- workspace-aware or AST-aware completion providers in Rust
-
-## Public API
-
-- `CompletionProvider`: builds a symbol table from an AST and optional workspace index, then generates ranked completion items at a given byte offset.
-- `CompletionContext`: request-scoped context for trigger character, scope, and prefix handling.
-- `CompletionItem` and `CompletionItemKind`: completion payloads with insert text, sort priority, and text-edit range.
+- `CompletionProvider` - builds completion results from AST and optional index
+- `CompletionContext` - request-scoped state such as prefix and trigger
+- `CompletionItem` / `CompletionItemKind` - normalized completion payloads
+- `get_dbi_method_documentation` and `get_test_more_documentation` - Perl-aware
+  documentation helpers for completion hints
 
 ## Example
 
 ```rust,ignore
 use perl_lsp_completion::CompletionProvider;
 
-let provider = CompletionProvider::new(&ast, Some(&workspace_index))?;
-let completions = provider.get_completions(source, position)?;
-assert!(!completions.is_empty());
+let provider = CompletionProvider::new_with_index(&ast, None);
+let items = provider.get_completions(source, byte_offset);
 ```
 
-## Workspace role
+## Stack role
 
-Internal feature crate consumed by `perl-lsp` for completion handling. It is
-mostly a workspace building block rather than a standalone end-user crate.
-
-## License
-
-MIT OR Apache-2.0
+This is the feature crate that backs `perl-lsp` completion handling. It sits
+above parsing and workspace indexing, and below the editor-facing LSP runtime.

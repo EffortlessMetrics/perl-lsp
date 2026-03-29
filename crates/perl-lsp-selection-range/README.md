@@ -1,35 +1,27 @@
 # perl-lsp-selection-range
 
-[![Crates.io](https://img.shields.io/crates/v/perl-lsp-selection-range.svg)](https://crates.io/crates/perl-lsp-selection-range)
-[![Documentation](https://docs.rs/perl-lsp-selection-range/badge.svg)](https://docs.rs/perl-lsp-selection-range)
+Smart selection-range expansion for Perl source. It returns the nested regions
+an editor should select as the user expands the current selection.
 
-Smart selection expansion for Perl editors and language servers.
+## Use this crate when
 
-## When to use this crate
+Use `perl-lsp-selection-range` if you need the selection-range algorithm itself.
+It is a narrow helper crate, not the umbrella provider surface.
 
-Use `perl-lsp-selection-range` when you want
-`textDocument/selectionRange` behavior for Perl source. It expands a cursor or
-selection outward through useful syntax boundaries such as:
+## Key exports
 
-- string content -> full string -> expression
-- hash key -> subscript -> full access expression
-- identifier -> statement -> block -> enclosing function
+- `selection_ranges` - compute nested selection ranges for one or more cursors
 
-## Quick example
+## Example
 
-```rust
+```rust,ignore
 use lsp_types::Position;
 use perl_lsp_selection_range::selection_ranges;
 
-let source = "my $value = foo($bar);\n";
-let ranges = selection_ranges(source, &[Position::new(0, 4)]);
-assert_eq!(ranges.len(), 1);
+let ranges = selection_ranges(source, &[Position::new(3, 8)]);
 ```
 
-## Public API
+## Stack role
 
-- `selection_ranges`: returns nested LSP `SelectionRange` trees for positions
-
-## License
-
-MIT OR Apache-2.0
+`perl-lsp` uses this crate for `textDocument/selectionRange`. It turns parsed
+Perl structure into progressively larger editor selections.

@@ -1,37 +1,33 @@
 # perl-lsp-code-lens
 
-[![Crates.io](https://img.shields.io/crates/v/perl-lsp-code-lens.svg)](https://crates.io/crates/perl-lsp-code-lens)
-[![Documentation](https://docs.rs/perl-lsp-code-lens/badge.svg)](https://docs.rs/perl-lsp-code-lens)
+Perl code lens provider for inline actions above code. It is responsible for
+test-run lenses, reference-count lenses, and script-level actions such as
+running a shebang file.
 
-Inline code-lens generation for Perl editors and language servers.
+## Use this crate when
 
-## When to use this crate
+Use `perl-lsp-code-lens` if you need the code-lens logic itself. It is the
+layer between parsed Perl code and the editor commands that sit above it.
 
-Use `perl-lsp-code-lens` when you want Perl-aware inline actions such as:
+## Key exports
 
-- run-test lenses for `.t` files and test subroutines
-- reference-count lenses for packages and subroutines
-- run-script lenses for executable Perl files with a shebang
+- `CodeLensProvider` - extracts lenses from an AST and optional file path
+- `CodeLens` / `Command` - serialized lens payloads
+- `resolve_code_lens` - turns reference-count data into a runnable command
+- `get_shebang_lens` - adds a top-of-file "Run Script" action
+- `is_test_file` - `.t` file detection for test-specific lenses
 
-This crate is primarily intended for the `perl-lsp` workspace and other Rust
-language-server integrations. It is not a standalone editor plugin.
+## Example
 
-## Quick example
+```rust,ignore
+use perl_lsp_code_lens::CodeLensProvider;
 
-```rust
-use perl_lsp_code_lens::{get_shebang_lens, is_test_file};
-
-assert!(is_test_file("t/basic.t"));
-assert!(get_shebang_lens("#!/usr/bin/env perl\nprint \"ok\\n\";\n").is_some());
+let provider = CodeLensProvider::new(source.to_string())
+    .with_file_path("t/basic.t".to_string());
+let lenses = provider.extract(&ast);
 ```
 
-## Public API
+## Stack role
 
-- `CodeLensProvider`: extracts lenses from a Perl AST
-- `resolve_code_lens`: fills in deferred reference-count data
-- `get_shebang_lens`: detects executable-script lenses from source text
-- `is_test_file`: detects Perl test-file naming
-
-## License
-
-MIT OR Apache-2.0
+`perl-lsp` uses this crate to surface inline run and reference actions in the
+editor. It sits on top of parser output and file context.

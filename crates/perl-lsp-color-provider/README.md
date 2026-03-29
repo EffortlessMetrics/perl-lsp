@@ -1,35 +1,29 @@
 # perl-lsp-color-provider
 
-[![Crates.io](https://img.shields.io/crates/v/perl-lsp-color-provider.svg)](https://crates.io/crates/perl-lsp-color-provider)
-[![Documentation](https://docs.rs/perl-lsp-color-provider/badge.svg)](https://docs.rs/perl-lsp-color-provider)
+Perl color detection and presentation provider. It finds color values in source
+text and turns them into LSP color information and presentation variants.
 
-Document-color detection and presentation helpers for Perl source code.
+## Use this crate when
 
-## When to use this crate
+Use `perl-lsp-color-provider` if you need document-color behavior for Perl
+strings, hex values, ANSI colors, or named CSS colors. It is the feature layer
+that sits beneath the editor-facing protocol implementation.
 
-Use `perl-lsp-color-provider` when you want `textDocument/documentColor` or
-`textDocument/colorPresentation` support for Perl code. It recognizes:
+## Key exports
 
-- hex colors such as `#ff00aa`
-- ANSI escape sequences
-- named CSS colors in quoted strings
-- `Term::ANSIColor` calls
+- `ColorInformation` / `Color` - detected color ranges and parsed color values
+- `detect_colors` - scan source text for supported color forms
+- `color_to_presentations` - build alternative color presentations for the UI
 
-## Quick example
+## Example
 
-```rust
+```rust,ignore
 use perl_lsp_color_provider::detect_colors;
 
-let colors = detect_colors(r#"my $accent = "#ff00aa";"#);
-assert_eq!(colors.len(), 1);
+let colors = detect_colors("my $red = '#ff0000';");
 ```
 
-## Public API
+## Stack role
 
-- `detect_colors`: scans Perl source for color literals
-- `color_to_presentations`: returns editor-facing replacement formats
-- `ColorInformation` and `Color`: simple range and RGBA value types
-
-## License
-
-MIT OR Apache-2.0
+`perl-lsp` uses this crate for `textDocument/documentColor` and related editor
+features. It is intentionally small and focused on color extraction only.
