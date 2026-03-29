@@ -1,39 +1,38 @@
 # perl-lsp-diagnostics
 
-Diagnostics and linting provider for Perl source.
+Perl diagnostics engine for editor-facing parse errors, lint checks, semantic
+warnings, and dead-code reporting. This crate turns parser and analysis results
+into `publishDiagnostics`-style output.
 
-## When to use this crate
+## Use this crate when
 
-Use `perl-lsp-diagnostics` when you want editor-facing diagnostics for Perl
-source without embedding the full `perl-lsp` runtime.
+Use `perl-lsp-diagnostics` if you need the diagnostic logic itself. If you only
+need the shared diagnostic types, depend on the re-exported types rather than
+rebuilding the provider stack. If you want the umbrella API, use
+`perl-lsp-providers`.
 
-It combines parse errors, semantic analysis, lint checks, and dead-code signals
-into one provider surface suitable for `textDocument/publishDiagnostics` or
-pull-diagnostics style flows.
+## Key exports
 
-## Public API
-
-- `DiagnosticsProvider`: core provider that builds diagnostics from AST and parse errors.
-- `Diagnostic`, `DiagnosticSeverity`, `DiagnosticTag`, `RelatedInformation`: diagnostic payload types.
-- `common_mistakes`, `deprecated`, `strict_warnings`, `unused_imports`: lint families re-exported for direct use.
-- `detect_dead_code`: workspace-wide dead code detection when not targeting WASM.
+- `DiagnosticsProvider` - assembles diagnostics from AST, source, and optional
+  workspace context
+- `Diagnostic`, `DiagnosticSeverity`, `DiagnosticTag`, `RelatedInformation` -
+  shared diagnostic types
+- `common_mistakes`, `deprecated`, `missing_module`, `package_subroutine`,
+  `security`, `strict_warnings`, `unused_imports`, `version_compat` - lint
+  families re-exported for targeted checks
+- `detect_dead_code` - workspace-wide dead-code detection outside WASM builds
 
 ## Example
 
 ```rust,ignore
 use perl_lsp_diagnostics::DiagnosticsProvider;
 
-let provider = DiagnosticsProvider::new(&ast, source.to_string());
-let diagnostics = provider.get_diagnostics(&workspace_index);
-assert!(!diagnostics.is_empty());
+let provider = DiagnosticsProvider::new();
+let diagnostics = provider.generate_diagnostics(&ast, source, Some(&workspace_index))?;
 ```
 
-## Workspace role
+## Stack role
 
-Internal feature crate consumed by `perl-lsp` to publish diagnostics to
-editors. It is mostly a workspace building block rather than a standalone
-end-user crate.
-
-## License
-
-MIT OR Apache-2.0
+This crate sits between parsing and the editor runtime. It consumes ASTs,
+scope analysis, and workspace data, then emits the diagnostics that `perl-lsp`
+publishes to clients.

@@ -1,60 +1,56 @@
 # perl-lsp-completion-item
 
-Standalone SRP microcrate for completion item domain types and stable deduplicating sort behavior.
+Shared completion-item types and deterministic sorting for the Perl LSP stack.
+Use this crate when you need a stable completion payload model without the full
+completion engine.
 
-## When to use this crate
+## Use this crate when
 
-Use `perl-lsp-completion-item` when you need deterministic completion-item
-ordering and deduplication without depending on a full completion provider.
+Use `perl-lsp-completion-item` for data-model work, tests, or adapters that need
+the same item semantics as the completion provider. Use
+`perl-lsp-completion` when you want the actual suggestion engine.
 
-It is useful for:
+## Key exports
 
-- provider crates that generate completion candidates
-- tests that need stable sort behavior
-- adapters that turn completion results into protocol payloads later
+- `CompletionItem` - normalized completion payload
+- `CompletionItemKind` - completion classification
+- `deduplicate_and_sort` - stable ordering and duplicate suppression
 
-## Quick example
+## Example
 
-```rust
+```rust,ignore
 use perl_lsp_completion_item::{CompletionItem, CompletionItemKind, deduplicate_and_sort};
 
 let items = vec![
     CompletionItem {
-        label: "print".into(),
+        label: "print".to_string(),
         kind: CompletionItemKind::Function,
         detail: None,
         documentation: None,
         insert_text: None,
-        sort_text: Some("020".into()),
+        sort_text: None,
         filter_text: None,
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
     },
     CompletionItem {
-        label: "print".into(),
-        kind: CompletionItemKind::Keyword,
+        label: "printf".to_string(),
+        kind: CompletionItemKind::Function,
         detail: None,
         documentation: None,
         insert_text: None,
-        sort_text: Some("100".into()),
+        sort_text: None,
         filter_text: None,
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
     },
 ];
-
 let sorted = deduplicate_and_sort(items);
-assert_eq!(sorted.len(), 1);
 ```
 
-## Public API
+## Stack role
 
-- `CompletionItemKind`: crate-local completion taxonomy
-- `CompletionItem`: stable completion domain type
-- `deduplicate_and_sort`: deterministic deduplication and ordering policy
-
-## License
-
-MIT OR Apache-2.0
+This crate sits at the boundary between provider logic and editor payloads. It
+keeps the completion result shape consistent across the wider provider stack.

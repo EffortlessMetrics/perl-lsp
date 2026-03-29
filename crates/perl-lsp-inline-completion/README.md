@@ -1,33 +1,32 @@
 # perl-lsp-inline-completion
 
-[![Crates.io](https://img.shields.io/crates/v/perl-lsp-inline-completion.svg)](https://crates.io/crates/perl-lsp-inline-completion)
-[![Documentation](https://docs.rs/perl-lsp-inline-completion/badge.svg)](https://docs.rs/perl-lsp-inline-completion)
+Perl inline-completion provider for ghost-text style suggestions. It prepares
+request context from the current buffer and returns inline completions for the
+editor to render.
 
-Deterministic inline-completion support for Perl editors and language servers.
+## Use this crate when
 
-## When to use this crate
+Use `perl-lsp-inline-completion` if you need inline suggestions, not the normal
+completion-list UI. It is adjacent to `perl-lsp-completion`, but optimized for
+single-line, in-buffer suggestions.
 
-Use `perl-lsp-inline-completion` when you want ghost-text suggestions driven by
-local code context instead of a remote model. The provider extracts nearby
-variables, imports, package context, and simple syntactic cues to produce
-predictable inline completions.
+## Key exports
 
-## Quick example
+- `InlineCompletionProvider` - computes inline completions from buffer state
+- `PreparedInlineCompletionContext` - parsed context for a cursor location
+- `InlineCompletionItem` / `InlineCompletionList` - inline completion payloads
+
+## Example
 
 ```rust,ignore
 use perl_lsp_inline_completion::InlineCompletionProvider;
 
 let provider = InlineCompletionProvider::new();
-let list = provider.get_inline_completions("my $name = 'A';\nprint $na", 1, 9);
-assert!(!list.items.is_empty());
+let completions = provider.get_inline_completions("sub hello", 0, 9);
 ```
 
-## Public API
+## Stack role
 
-- `InlineCompletionProvider`: main provider
-- `PreparedInlineCompletionContext`: extracted local code context
-- `InlineCompletionItem` and `InlineCompletionList`: LSP 3.18 preview types
-
-## License
-
-MIT OR Apache-2.0
+`perl-lsp` uses this crate for inline completion requests. It sits on top of
+the same Perl-aware parsing and context analysis as the standard completion
+engine.
