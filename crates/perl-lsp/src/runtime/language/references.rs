@@ -75,11 +75,11 @@ impl LspServer {
                                     eprintln!("Looking for references of {:?}", symbol_key);
 
                                     // Try to find references using the symbol key
-                                    let mut all_refs = index.find_refs(&symbol_key);
+                                    let mut all_refs = index.find_refs(symbol_key);
 
                                     // Add the definition if includeDeclaration is true
                                     if include_declaration {
-                                        if let Some(def) = index.find_def(&symbol_key) {
+                                        if let Some(def) = index.find_def(symbol_key) {
                                             all_refs.push(def);
                                         }
                                     }
