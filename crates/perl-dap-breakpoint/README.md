@@ -1,8 +1,30 @@
 # perl-dap-breakpoint
 
-AST-based breakpoint validation for the Perl Debug Adapter Protocol (DAP).
+[![Crates.io](https://img.shields.io/crates/v/perl-dap-breakpoint.svg)](https://crates.io/crates/perl-dap-breakpoint)
+[![Documentation](https://docs.rs/perl-dap-breakpoint/badge.svg)](https://docs.rs/perl-dap-breakpoint)
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+AST-based breakpoint validation for Perl DAP.
+
+## When to use this crate
+
+Use `perl-dap-breakpoint` when you need to decide whether a debugger breakpoint
+can be placed on a Perl source line.
+
+It solves three related problems:
+
+- detect executable lines versus comments, blanks, and heredoc interiors
+- suggest the nearest valid line when the requested line is invalid
+- explain why a breakpoint was rejected or moved
+
+## Quick example
+
+```rust,ignore
+use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
+
+let validator = AstBreakpointValidator::new("# comment\nmy $x = 1;\n")?;
+let result = validator.validate(0);
+assert!(!result.verified);
+```
 
 ## Features
 
@@ -21,6 +43,12 @@ Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 | `BreakpointError` | enum | `ParseError(String)`, `LineOutOfRange(i64, usize)` |
 | `find_nearest_valid_line` | fn | Searches forward, backward, or both for the nearest executable line |
 | `suggestion::SearchDirection` | enum | `Forward`, `Backward`, `Both` |
+
+## Workspace role
+
+This is a support crate in the `perl-dap` family. It is useful on its own for
+debugger-side validation, but it is primarily consumed by the runtime and test
+layers that need breakpoint eligibility checks.
 
 ## License
 

@@ -12,6 +12,7 @@ documentation = "https://docs.rs/perl-dap-breakpoint"
 readme = "README.md"
 keywords = ["perl", "dap", "debug", "breakpoint", "validation"]
 categories = ["development-tools::debugging", "development-tools"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 # Perl parser for AST-based validation
