@@ -2,6 +2,18 @@
 
 Semantic analysis, symbol extraction, and type inference for Perl source code. Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
+## When to use this crate
+
+Use `perl-semantic-analyzer` when parsing alone is not enough and you need
+symbol- or scope-aware understanding of Perl code.
+
+Typical use cases:
+
+- extracting definitions and references from an AST
+- computing semantic tokens or scope diagnostics
+- inferring types or detecting dead code
+- preparing symbol data for navigation, rename, or workspace indexing
+
 ## Features
 
 - **Symbol extraction** -- `SymbolExtractor` builds a `SymbolTable` of definitions, references, and scopes from a parsed AST.
@@ -25,6 +37,12 @@ let mut parser = Parser::new("sub hello { my $x = 1; }");
 let ast = parser.parse()?;
 let table = SymbolExtractor::new().extract(&ast);
 ```
+
+## Workspace role
+
+`perl-semantic-analyzer` sits between parsing and editor/runtime features. It
+is the crate to reach for when you need semantic meaning rather than just
+syntactic structure.
 
 ## License
 
