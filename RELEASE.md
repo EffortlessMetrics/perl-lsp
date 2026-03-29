@@ -1,7 +1,9 @@
 # Release Guide
 
-This document covers the end-to-end process for releasing a new version of `perl-lsp`.
-For the release preflight checklist, see [docs/project/RELEASE_CHECKLIST.md](docs/project/RELEASE_CHECKLIST.md).
+This is the operational release runbook for `perl-lsp`.
+Use it with [docs/project/RELEASE_CHECKLIST.md](docs/project/RELEASE_CHECKLIST.md)
+for the preflight gate and [docs/project/PUBLISHING_ROADMAP.md](docs/project/PUBLISHING_ROADMAP.md)
+for the release-day sequence and post-release verification.
 
 ## Table of Contents
 
@@ -15,6 +17,8 @@ For the release preflight checklist, see [docs/project/RELEASE_CHECKLIST.md](doc
 ---
 
 ## Prerequisites Checklist
+
+Use this section to confirm the release inputs are ready before dispatching the workflow.
 
 ### Required Secrets
 
@@ -53,7 +57,7 @@ grep '## \[' CHANGELOG.md | head -5
 
 ### CI Green on master
 
-The release workflow validates this automatically, but verify locally first:
+Verify the latest `master` run is green before dispatching the release workflow:
 
 ```bash
 # Check current CI state for the HEAD commit on master
@@ -374,13 +378,13 @@ If `release-orchestration.yml` fails after the tag is created but before all dow
 After a release ships, trigger the version bump workflow to prepare the next development cycle:
 
 ```bash
-# Bump to next minor version (e.g., 0.12.0 -> 0.13.0)
+# Bump to the next minor version.
 gh workflow run version-bump.yml \
   --field bump_type=minor
 
 # Or specify an exact version
 gh workflow run version-bump.yml \
-  --field version=0.13.0
+  --field version=NEW_VERSION
 ```
 
-This creates a `release/v0.13.0` branch with updated `Cargo.toml` and `CHANGELOG.md`, then opens a PR for review.
+This creates a `release/vNEW_VERSION` branch with updated `Cargo.toml` and `CHANGELOG.md`, then opens a PR for review.
