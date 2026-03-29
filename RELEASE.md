@@ -1,7 +1,9 @@
 # Release Guide
 
 This document covers the end-to-end process for releasing a new version of `perl-lsp`.
-For the release preflight checklist, see [docs/project/RELEASE_CHECKLIST.md](docs/project/RELEASE_CHECKLIST.md).
+Use it together with [docs/project/RELEASE_CHECKLIST.md](docs/project/RELEASE_CHECKLIST.md)
+for the release-status checklist and [docs/project/PUBLISHING_ROADMAP.md](docs/project/PUBLISHING_ROADMAP.md)
+for the reusable preflight command flow.
 
 ## Table of Contents
 

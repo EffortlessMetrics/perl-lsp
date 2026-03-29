@@ -1,6 +1,11 @@
 # Release Checklist
 
-This checklist is for the current release run. The end-to-end release mechanics live in [RELEASE.md](../../RELEASE.md); crates publishing details live in [PUBLISHING.md](../PUBLISHING.md); changelog generation lives in [CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md).
+This checklist is for the current release run. Use it with
+[RELEASE.md](../../RELEASE.md) for the operator sequence and
+[PUBLISHING_ROADMAP.md](../PUBLISHING_ROADMAP.md) for the machine-executable
+preflight flow. Crates publishing details live in
+[PUBLISHING.md](../PUBLISHING.md); changelog generation lives in
+[CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md).
 
 Use `NEW_VERSION` as the target semver string for the release you are preparing.
 
