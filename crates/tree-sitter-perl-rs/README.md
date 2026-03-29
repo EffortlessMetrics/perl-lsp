@@ -4,6 +4,17 @@ Internal pure-Rust Perl parser and validation harness for the
 [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 workspace. **Not published to crates.io.**
 
+## When to use this crate
+
+Use `tree-sitter-perl` when you need the experimental pure-Rust parser and
+comparison harness that sit alongside the main Perl LSP parser stack.
+
+It is useful for:
+
+- benchmarking parser behavior against the native parser implementation
+- running pure-Rust parser comparisons and edge-case experiments
+- exercising tree-sitter-compatible parser output during development
+
 ## Purpose
 
 Provides a Pest-based Perl 5 parser that emits tree-sitter-compatible
@@ -28,6 +39,12 @@ cargo test  -p tree-sitter-perl                           # test
 cargo run   -p tree-sitter-perl --bin ts_test_parsers --features pure-rust  # parser comparison
 cargo run   -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust  # benchmarks
 ```
+
+## Workspace role
+
+This is an internal development crate, not a published library. Keep using the
+main [`perl-parser`](../perl-parser/README.md) crate for the production parser
+path.
 
 ## License
 
