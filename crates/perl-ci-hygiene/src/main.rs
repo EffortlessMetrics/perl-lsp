@@ -1802,11 +1802,29 @@ fn cmd_generate_badges(repo_root: &Path) -> Result<i32> {
 }
 
 fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
-    let hook_path = repo_root.join(".git").join("hooks").join("pre-push");
-    if let Some(parent) = hook_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let hook = r#"#!/usr/bin/env bash
+    let hooks_dir = repo_root.join(".git").join("hooks");
+    fs::create_dir_all(&hooks_dir)?;
+
+    let pre_commit_hook = r#"#!/usr/bin/env bash
+set -euo pipefail
+
+GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
+GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
+
+if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ]; then
+    echo "❌ Refusing commit with placeholder git identity"
+    echo "   user.name:  $GIT_USER_NAME"
+    echo "   user.email: $GIT_USER_EMAIL"
+    echo ""
+    echo "   Fix this repo-local override first:"
+    echo "   git config --local --unset-all user.name"
+    echo "   git config --local --unset-all user.email"
+    exit 1
+fi
+"#;
+    write_git_hook(&hooks_dir.join("pre-commit"), pre_commit_hook)?;
+
+    let pre_push_hook = r#"#!/usr/bin/env bash
 set -euo pipefail
 
 echo "🚪 Running local gate before push: nix develop -c just ci-gate"
@@ -1856,17 +1874,24 @@ else
     exit 0
 fi
 "#;
-    fs::write(&hook_path, format!("{hook}\n"))
+    write_git_hook(&hooks_dir.join("pre-push"), pre_push_hook)?;
+
+    println!("✅ Installed pre-commit and pre-push hooks");
+    println!("   The pre-commit hook blocks known placeholder git identities");
+    println!("   The pre-push hook runs 'nix develop -c just ci-gate' before each push");
+    println!("   Skip with: git commit --no-verify / git push --no-verify");
+    Ok(0)
+}
+
+fn write_git_hook(hook_path: &Path, hook: &str) -> Result<()> {
+    fs::write(hook_path, format!("{hook}\n"))
         .with_context(|| format!("writing {:?}", hook_path))?;
     #[cfg(unix)]
     {
-        fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755))
+        fs::set_permissions(hook_path, fs::Permissions::from_mode(0o755))
             .with_context(|| format!("setting executable bit for {:?}", hook_path))?;
     }
-    println!("✅ Installed pre-push hook");
-    println!("   The hook runs 'nix develop -c just ci-gate' before each push");
-    println!("   Skip with: git push --no-verify");
-    Ok(0)
+    Ok(())
 }
 
 fn read_required_usize(path: &Path) -> Result<usize> {
