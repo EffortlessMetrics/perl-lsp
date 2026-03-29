@@ -15,7 +15,7 @@
 //!
 //! ```bash
 //! # Install from source
-//! cargo install --path crates/perl-lsp
+//! cargo install --path crates/perllsp
 //!
 //! # Run in stdio mode (default)
 //! perl-lsp --stdio
@@ -234,13 +234,13 @@
 //!
 //! ```bash
 //! # Run all LSP runtime tests
-//! cargo test -p perl-lsp
+//! cargo test -p perl-lsp-rs
 //!
 //! # Run with adaptive threading for resource-constrained environments
-//! RUST_TEST_THREADS=2 cargo test -p perl-lsp
+//! RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 //!
 //! # Test specific feature
-//! cargo test -p perl-lsp completion
+//! cargo test -p perl-lsp-rs completion
 //! ```
 //!
 //! # Logging and Diagnostics
@@ -323,6 +323,7 @@
 
 // Module declarations - migrated from perl-parser
 pub mod cancellation;
+pub mod cli;
 pub mod convert;
 pub mod diagnostics_catalog;
 pub mod dispatch;
@@ -340,6 +341,7 @@ pub mod transport;
 pub mod util;
 
 // Re-exports for key types
+pub use cli::run_cli;
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 pub use server::LspServer;
 

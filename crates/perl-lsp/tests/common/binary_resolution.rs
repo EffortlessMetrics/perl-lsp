@@ -2,7 +2,7 @@
 //!
 //! Resolution order (fixed for test reliability):
 //! 1. PERL_LSP_BIN env var (explicit override)
-//! 2. Compile-time CARGO_BIN_EXE (guaranteed correct during `cargo test -p perl-lsp`)
+//! 2. Compile-time CARGO_BIN_EXE (guaranteed correct during `cargo test -p perl-lsp-rs`)
 //! 3. Runtime CARGO_BIN_EXE_* (fallback for edge cases)
 //! 4. Workspace target directory binaries (DEBUG first, then release)
 //! 5. PATH lookup
@@ -17,14 +17,14 @@ pub(crate) const CARGO_BIN_EXE: Option<&str> = option_env!("CARGO_BIN_EXE_perl-l
 pub(crate) fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // Resolution order (fixed for test reliability):
     // 1. PERL_LSP_BIN env var (explicit override, useful for custom target dirs)
-    // 2. Compile-time CARGO_BIN_EXE (guaranteed correct during `cargo test -p perl-lsp`)
+    // 2. Compile-time CARGO_BIN_EXE (guaranteed correct during `cargo test -p perl-lsp-rs`)
     // 3. Runtime CARGO_BIN_EXE_* (fallback for edge cases)
     // 4. Workspace target directory binaries (DEBUG first, then release)
     // 5. PATH lookup
     // 6. cargo run fallback (slow but always works)
     //
     // IMPORTANT: Debug binary is checked BEFORE release to avoid stale release binaries
-    // causing test failures. When you run `cargo test -p perl-lsp`, cargo builds debug.
+    // causing test failures. When you run `cargo test -p perl-lsp-rs`, cargo builds debug.
     let mut v: Vec<Command> = Vec::new();
 
     // 1. Explicit override via PERL_LSP_BIN
@@ -91,7 +91,7 @@ pub(crate) fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // This is SLOW because it may need to compile, but always works
     {
         let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
+        c.args(["run", "-q", "-p", "perl-lsp-rs", "--", "--stdio"]);
         v.push(c);
     }
 

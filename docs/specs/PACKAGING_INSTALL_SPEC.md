@@ -26,7 +26,7 @@ Complete setup instructions for each major editor.
 
 ```bash
 # Install the language server
-cargo install perl-lsp
+cargo install perllsp
 
 # Or download pre-built binary
 curl -fsSL https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-$(uname -s)-$(uname -m) -o ~/.local/bin/perl-lsp

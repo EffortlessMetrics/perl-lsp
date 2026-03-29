@@ -167,7 +167,7 @@ Not verified on master branch. The ERA_TIMELINE.md records a peak of 192 commits
 | Metric | Verified Value | Source |
 |--------|---------------|--------|
 | VSCode extension | Built, not yet published | `vscode-extension/` |
-| Installation method | `cargo install perl-lsp` | Cargo.toml |
+| Installation method | `cargo install perllsp` | Cargo.toml |
 | Homebrew formula | Planned for 0.12.0 | Release plan |
 | Current release line | v0.11.0 | `CURRENT_STATUS.md` |
 | Target release | v0.12.0 public alpha | Project plan |

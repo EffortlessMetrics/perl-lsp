@@ -89,7 +89,7 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
 
                 // We use cargo run to ensure it builds if needed
                 let mut cmd = Command::new("cargo");
-                cmd.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"])
+                cmd.args(["run", "-q", "-p", "perl-lsp-rs", "--", "--stdio"])
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::inherit()); // Let stderr go to console for logs

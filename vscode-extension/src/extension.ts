@@ -654,13 +654,13 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         healthWidget?.onStateChange(ClientState.Stopped);
         const choice = await vscode.window.showErrorMessage(
             'Perl Language Server (perl-lsp) not found.',
-            'Install (cargo install perl-lsp)',
+            'Install (cargo install perllsp)',
             'Open Settings'
         );
 
-        if (choice === 'Install (cargo install perl-lsp)') {
+        if (choice === 'Install (cargo install perllsp)') {
             void vscode.window.showInformationMessage(
-                'Run in your terminal: cargo install perl-lsp\nThen reload VS Code.'
+                'Run in your terminal: cargo install perllsp\nThen reload VS Code.'
             );
         } else if (choice === 'Open Settings') {
             void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');

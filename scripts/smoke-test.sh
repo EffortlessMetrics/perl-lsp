@@ -49,7 +49,7 @@ if [[ "$SKIP_BUILD" == true ]]; then
   [[ -x "$BIN" ]] || fail "binary not found at $BIN — run without --no-build first"
 else
   step "building perl-lsp --release"
-  cargo build -p perl-lsp --release --quiet \
+  cargo build -p perl-lsp-rs --release --quiet \
     || fail "cargo build failed"
   pass "build"
 fi

@@ -29,7 +29,7 @@ use crate::utils::project_root;
 // =============================================================================
 
 /// Core crates whose release-mode lib tests are exercised.
-const CORE_CRATES: &[&str] = &["perl-parser", "perl-lsp", "perl-dap"];
+const CORE_CRATES: &[&str] = &["perl-parser", "perl-lsp-rs", "perl-dap"];
 
 // =============================================================================
 // Public API
@@ -172,7 +172,7 @@ fn run_workspace_smoke_test(
         None => {
             // Try building first
             spinner.set_message("Building perl-lsp (release)...");
-            let build_result = cmd("cargo", &["build", "-p", "perl-lsp", "--release"])
+            let build_result = cmd("cargo", &["build", "-p", "perl-lsp-rs", "--release"])
                 .stderr_to_stdout()
                 .unchecked()
                 .run();

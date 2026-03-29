@@ -59,7 +59,7 @@ members = [
 2. **CI Stability**: Consistent build behavior across Windows, macOS, Linux
 3. **Production Focus**: Testing only published crate surface area
 4. **Dependency Safety**: Avoid system-specific build failures
-5. **Clean Installation**: Users can `cargo install perl-lsp` without prerequisites
+5. **Clean Installation**: Users can `cargo install perllsp` without prerequisites
 
 ## Consequences
 

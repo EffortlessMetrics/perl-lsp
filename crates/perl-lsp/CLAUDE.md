@@ -5,7 +5,7 @@ LSP server binary and integration tests.
 ## Test Threading
 ALWAYS use threading constraints:
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 ## After Async Migration
@@ -15,6 +15,6 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 ## Verify
 ```bash
 cargo fmt --all
-cargo clippy -p perl-lsp --tests
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+cargo clippy -p perl-lsp-rs --tests
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```

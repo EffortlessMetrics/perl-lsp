@@ -351,7 +351,7 @@ Current: 86.8% (3,782/4,355 clean). Target: 90% (3,920 files = 138 more to fix).
 ### Phase 3: v0.12.0 Release (after merge drain)
 
 Version bump and CHANGELOG already merged. Remaining steps:
-1. `cargo publish -p perl-lsp` (+ dependencies in topo order)
+1. `cargo publish -p perl-lsp-rs` (+ dependencies in topo order)
 2. `gh release create v0.12.0 --title "v0.12.0 Public Alpha"`
 3. Enable GitHub Discussions (issue #2169)
 4. Post to Perl Weekly (editors@perlweekly.com)

@@ -77,7 +77,7 @@ Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accura
 
 ```bash
 nix develop -c just ci-gate           # Canonical local gate (REQUIRED before push)
-cargo build -p perl-lsp --release     # Build LSP server
+cargo build -p perl-lsp-rs --release     # Build LSP server
 cargo test --workspace --lib          # Run all tests
 ```
 
@@ -110,13 +110,13 @@ Families: `perl-module-*` (module resolution), `perl-lsp-*` (LSP providers), `pe
 ### Build & Test
 
 ```bash
-cargo build -p perl-lsp --release     # LSP server
+cargo build -p perl-lsp-rs --release     # LSP server
 cargo build -p perl-parser --release  # Parser library
 cargo test                            # All tests
 cargo test -p perl-parser             # Parser tests
-cargo test -p perl-lsp                # LSP tests
+cargo test -p perl-lsp-rs                # LSP tests
 cargo test -p perl-parser -- test_name --exact  # Exact test in crate
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2  # LSP threading
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2  # LSP threading
 just ci-lsp-def                       # Semantic definition tests
 ```
 

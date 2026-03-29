@@ -7,12 +7,12 @@
 
 **Latest published release**: `v0.11.0`
 **Release target**: `v0.12.0` initial public alpha
-**Ship readiness**: GitHub release and editor-managed install surfaces are green on `master`; public `cargo install perl-lsp` guidance stays off until the crate namespace aligns with this release line
+**Ship readiness**: GitHub release and editor-managed install surfaces are green on `master`; public `cargo install perllsp` guidance stays off until `v0.12.0` is actually published to crates.io
 
 ## Active Blockers
 
 - Release-truth drift must stay closed: repo docs can say `v0.12.0` for `main`, but published-install guidance must stay tied to the latest tagged GitHub release until `v0.12.0` ships
-- Do not present `cargo install perl-lsp` as a shipped public install path until the crates.io package namespace matches this project’s release line
+- Do not present `cargo install perllsp` as a shipped public install path until `v0.12.0` is live on crates.io
 
 ## Final Release Receipts (2026-03-29)
 

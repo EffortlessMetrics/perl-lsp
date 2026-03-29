@@ -140,8 +140,9 @@ for pkg in meta["packages"]:
 
 ```bash
 cargo publish --dry-run -p perl-parser
-cargo publish --dry-run -p perl-lsp
-# Both must succeed.
+cargo publish --dry-run -p perl-lsp-rs
+cargo publish --dry-run -p perllsp
+# All three must succeed.
 ```
 
 ### 1.10 Check GitHub secrets exist
@@ -165,7 +166,7 @@ gh run list --branch master --limit 3
 Run these tests manually against the release binary before tagging. Build the binary first:
 
 ```bash
-cargo build -p perl-lsp --release
+cargo build -p perllsp --release
 BINARY="./target/release/perl-lsp"
 $BINARY --version    # Must print: perl-lsp NEW_VERSION
 $BINARY --health     # Must print healthy status for all subsystems
@@ -374,8 +375,10 @@ Publish order is in `Cargo.toml` under `[workspace.metadata.publish].allow`. Do 
 Verify after publish:
 
 ```bash
-cargo search perl-lsp --limit 1
-# Expected: perl-lsp = "NEW_VERSION"
+cargo search perl-lsp-rs --limit 1
+# Expected: perl-lsp-rs = "NEW_VERSION"
+cargo search perllsp --limit 1
+# Expected: perllsp = "NEW_VERSION"
 ```
 
 ### 3.5 VSCode extension publishing (automated via workflow)
@@ -478,7 +481,7 @@ This opens a PR that bumps `Cargo.toml`, `vscode-extension/package.json`, `featu
 gh release view "v${NEW_VERSION}"
 
 # crates.io
-cargo search perl-lsp --limit 1
+cargo search perllsp --limit 1
 
 # Docker Hub
 docker pull effortlessmetrics/perl-lsp:${NEW_VERSION}
@@ -501,7 +504,7 @@ gh run list --workflow=brew-bump.yml --limit 3
 
 ```bash
 # From crates.io
-cargo install perl-lsp --version ${NEW_VERSION}
+cargo install perllsp --version ${NEW_VERSION}
 perl-lsp --version    # Must print: perl-lsp NEW_VERSION
 perl-lsp --health     # Must show healthy
 
@@ -523,7 +526,7 @@ gh issue list --state open --label "P0" --limit 10
 gh issue list --state open --label "crash" --limit 10
 
 # Download count (crates.io)
-curl -s https://crates.io/api/v1/crates/perl-lsp | python3 -c \
+curl -s https://crates.io/api/v1/crates/perllsp | python3 -c \
   'import json,sys; d=json.load(sys.stdin)["crate"]; print(f"downloads: {d[\"downloads\"]}, recent: {d[\"recent_downloads\"]}")'
 ```
 
@@ -577,7 +580,7 @@ git commit -m "chore: ratchet corpus post-v${NEW_VERSION} fixes"
 
 | Metric | Target | Check |
 |--------|--------|-------|
-| crates.io downloads | 100+ | `cargo search perl-lsp` |
+| crates.io downloads | 100+ | `cargo search perllsp` |
 | VSCode installs | 200+ | Marketplace dashboard |
 | GitHub stars | 50+ | GitHub repo page |
 | Crash reports | 0 critical | `gh issue list --label crash` |
@@ -598,7 +601,7 @@ git tag -d "v${NEW_VERSION}"
 git push origin ":refs/tags/v${NEW_VERSION}"
 
 # Yank a specific crate from crates.io (irreversible — cannot delete, only yank)
-cargo yank --version ${NEW_VERSION} perl-lsp
+cargo yank --version ${NEW_VERSION} perllsp
 
 # Yank all published crates at once
 VERSION=${NEW_VERSION}

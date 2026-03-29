@@ -11,7 +11,7 @@ use common::{
 
 /// Comprehensive protocol violation tests
 /// Tests all possible ways the LSP protocol can be violated
-// Run with: cargo test -p perl-lsp --features strict-jsonrpc
+// Run with: cargo test -p perl-lsp-rs --features strict-jsonrpc
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_missing_jsonrpc_version() {

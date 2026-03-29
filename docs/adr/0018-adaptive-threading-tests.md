@@ -92,7 +92,7 @@ impl TestEnvironment {
 ```yaml
 # GitHub Actions with adaptive threading
 - name: Run LSP tests with adaptive threading
-  run: RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+  run: RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 ## Consequences
@@ -123,13 +123,13 @@ impl TestEnvironment {
 
 ```bash
 # Default (adaptive)
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 
 # CI recommended configuration
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Single-threaded debugging
-RUST_TEST_THREADS=1 cargo test -p perl-lsp
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs
 ```
 
 ### Custom Timeout Profiles

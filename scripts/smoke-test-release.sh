@@ -46,7 +46,7 @@ if [[ "${XTASK_SMOKE_TEST_RELEASE:-0}" == "1" ]]; then
   printf 'Smoke testing release %s\n' "$RELEASE_VERSION"
   printf 'Temporary install root: %s\n\n' "$INSTALL_ROOT"
 
-  cargo install perl-lsp --version "$RELEASE_VERSION" --locked --root "$INSTALL_ROOT"
+  cargo install perllsp --version "$RELEASE_VERSION" --locked --root "$INSTALL_ROOT"
   cargo install perl-dap --version "$RELEASE_VERSION" --locked --root "$INSTALL_ROOT"
 
   LSP_VERSION="$(perl-lsp --version | head -n 1)"
@@ -63,7 +63,7 @@ if [[ "${XTASK_SMOKE_TEST_RELEASE:-0}" == "1" ]]; then
   printf '  perl-dap: %s\n\n' "$DAP_VERSION"
 
   printf 'Sparse index checks:\n'
-  cargo search perl-lsp --limit 1
+  cargo search perllsp --limit 1
   cargo search perl-dap --limit 1
   cargo search perl-parser --limit 1
 

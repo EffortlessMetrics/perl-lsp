@@ -20,7 +20,7 @@ First, ensure the perl-lsp binary is built:
 ```bash
 # From the project root
 cd ..
-cargo build -p perl-lsp --release
+cargo build -p perl-lsp-rs --release
 ```
 
 ### 2. Build and Validate the Extension

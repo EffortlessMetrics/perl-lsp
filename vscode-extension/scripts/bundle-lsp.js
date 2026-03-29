@@ -38,7 +38,7 @@ if (!platform) {
 try {
     // Build the binary
     console.log('Building perl-lsp binary...');
-    const buildCmd = `cargo build -p perl-lsp --release`;
+    const buildCmd = `cargo build -p perl-lsp-rs --release`;
     execSync(buildCmd, { 
         cwd: projectRoot,
         stdio: 'inherit'

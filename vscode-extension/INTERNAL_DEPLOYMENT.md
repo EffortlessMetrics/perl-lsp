@@ -19,7 +19,7 @@ The simplest approach for internal deployment.
 1. **Install perl-lsp binary** on each developer machine:
    ```bash
    # Build from source
-   cargo build -p perl-lsp --release
+   cargo build -p perl-lsp-rs --release
 
    # Copy to standard location
    sudo cp target/release/perl-lsp /usr/local/bin/
@@ -115,13 +115,13 @@ Package the binary directly with the extension.
 1. **Build binaries** for target platforms:
    ```bash
    # Linux
-   cargo build -p perl-lsp --release --target x86_64-unknown-linux-gnu
+   cargo build -p perl-lsp-rs --release --target x86_64-unknown-linux-gnu
 
    # macOS
-   cargo build -p perl-lsp --release --target x86_64-apple-darwin
+   cargo build -p perl-lsp-rs --release --target x86_64-apple-darwin
 
    # Windows
-   cargo build -p perl-lsp --release --target x86_64-pc-windows-msvc
+   cargo build -p perl-lsp-rs --release --target x86_64-pc-windows-msvc
    ```
 
 2. **Create binary directory structure**:
@@ -187,15 +187,15 @@ Copy the provided `.vscode/settings.json` to your project root and customize:
 ### Build Commands
 ```bash
 # Quick build for testing
-cargo build -p perl-lsp
+cargo build -p perl-lsp-rs
 
 # Optimized release build
-cargo build -p perl-lsp --release
+cargo build -p perl-lsp-rs --release
 
 # Cross-platform builds (with targets installed)
-cargo build -p perl-lsp --release --target x86_64-unknown-linux-gnu
-cargo build -p perl-lsp --release --target x86_64-apple-darwin
-cargo build -p perl-lsp --release --target x86_64-pc-windows-msvc
+cargo build -p perl-lsp-rs --release --target x86_64-unknown-linux-gnu
+cargo build -p perl-lsp-rs --release --target x86_64-apple-darwin
+cargo build -p perl-lsp-rs --release --target x86_64-pc-windows-msvc
 
 # Install targets if needed
 rustup target add x86_64-unknown-linux-gnu

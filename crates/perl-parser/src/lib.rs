@@ -229,7 +229,7 @@
 //! cargo build -p perl-lsp --release
 //!
 //! # Install globally
-//! cargo install --path crates/perl-lsp
+//! cargo install --path crates/perllsp
 //!
 //! # Run LSP server
 //! perl-lsp --stdio

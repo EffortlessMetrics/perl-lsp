@@ -188,7 +188,7 @@ Tests spawn LSP server instances without using the global mutex serialization, l
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_symbols_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_symbols_test -- --test-threads=2
 ```
 
 **Related Documentation**
@@ -209,7 +209,7 @@ Flakiness inherited from running alongside other LSP tests that spawn servers.
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_links_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_links_test -- --test-threads=2
 ```
 
 **Related Documentation**
@@ -231,7 +231,7 @@ Complex Unicode processing with UTF-16 position conversion adds overhead, especi
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_encoding_edge_cases -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- --test-threads=2
 ```
 
 **Adaptive Timeout**
@@ -265,7 +265,7 @@ Shared cancellation state accessed by multiple threads with timing-dependent ass
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_infrastructure_tests -- --test-threads=1
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_infrastructure_tests -- --test-threads=1
 ```
 
 **Related Documentation**
@@ -288,7 +288,7 @@ LSP server initialization is asynchronous; tests may send requests before server
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_parser_integration_tests -- --test-threads=1
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_parser_integration_tests -- --test-threads=1
 ```
 
 **Related Documentation**
@@ -449,7 +449,7 @@ cpanm Perl::LanguageServer
 LSP tests require thread-constrained execution:
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 **Mitigation**

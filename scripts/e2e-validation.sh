@@ -50,7 +50,7 @@ fi
 
 # Test LSP functionality
 print_status "INFO" "Testing LSP functionality..."
-if cargo test -p perl-lsp --lib --release --timeout $TEST_TIMEOUT 2>/dev/null; then
+if cargo test -p perl-lsp-rs --lib --release --timeout $TEST_TIMEOUT 2>/dev/null; then
     print_status "OK" "LSP tests passed"
 else
     print_status "ERROR" "LSP tests failed"
@@ -74,7 +74,7 @@ print_status "INFO" "Running integration tests..."
 
 # Test LSP integration
 print_status "INFO" "Testing LSP integration..."
-if cargo test -p perl-lsp --test '*' --release --timeout $TEST_TIMEOUT 2>/dev/null; then
+if cargo test -p perl-lsp-rs --test '*' --release --timeout $TEST_TIMEOUT 2>/dev/null; then
     print_status "OK" "LSP integration tests passed"
 else
     print_status "WARN" "Some LSP integration tests failed"

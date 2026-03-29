@@ -183,7 +183,7 @@ After all workflows complete, verify:
 2. **crates.io**
    - Verify all crates are published
    - Check that versions match release version
-   - Test `cargo install perl-lsp`
+   - Test `cargo install perllsp`
 
 3. **VSCode Extension**
    - Check VSCode Marketplace for new version
@@ -211,7 +211,7 @@ The exact crate list and count are printed in the `Compute publish order` step o
 
 **Installation:**
 ```bash
-cargo install perl-lsp
+cargo install perllsp
 ```
 
 ### GitHub Releases
@@ -491,7 +491,7 @@ For a complete rollback:
 ### Post-Release
 
 - [ ] Download and test binaries
-- [ ] Test `cargo install perl-lsp`
+- [ ] Test `cargo install perllsp`
 - [ ] Test VSCode extension
 - [ ] Test Docker images
 - [ ] Monitor package manager PRs
@@ -516,7 +516,7 @@ For a complete rollback:
 
 ```bash
 # Using cargo
-cargo install perl-lsp
+cargo install perllsp
 
 # Using Homebrew (macOS/Linux)
 brew install perl-lsp

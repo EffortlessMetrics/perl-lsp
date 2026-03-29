@@ -126,12 +126,12 @@ brew install perl-lsp
 ### Build from Source
 ```bash
 # Install the perl-lsp binary from crates.io
-cargo install perl-lsp
+cargo install perllsp
 
 # Or, build from this repository
 git clone https://github.com/EffortlessMetrics/perl-lsp
 cd perl-lsp
-cargo build --release -p perl-lsp
+cargo build --release -p perllsp
 # The binary will be in target/release/perl-lsp
 ```
 

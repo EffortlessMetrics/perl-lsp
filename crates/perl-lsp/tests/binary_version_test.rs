@@ -11,7 +11,7 @@
 //! - Old perl-lsp installed in PATH
 //! - PERL_LSP_BIN pointing to wrong binary
 //!
-//! Fix: Run `cargo build -p perl-lsp` or just `cargo test -p perl-lsp`
+//! Fix: Run `cargo build -p perl-lsp-rs` or just `cargo test -p perl-lsp-rs`
 
 mod common;
 
@@ -63,8 +63,8 @@ fn lsp_server_version_matches_crate_version() {
         ║ You are running tests against a stale or incorrect perl-lsp binary ║\n\
         ║                                                                    ║\n\
         ║ FIX: Run one of these commands:                                    ║\n\
-        ║   cargo build -p perl-lsp       # Rebuild the binary               ║\n\
-        ║   cargo test -p perl-lsp        # Rebuild and test                 ║\n\
+        ║   cargo build -p perl-lsp-rs       # Rebuild the binary               ║\n\
+        ║   cargo test -p perl-lsp-rs        # Rebuild and test                 ║\n\
         ║                                                                    ║\n\
         ║ If using PERL_LSP_BIN, verify it points to the correct binary.     ║\n\
         ╚════════════════════════════════════════════════════════════════════╝\n",

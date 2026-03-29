@@ -13,15 +13,15 @@ Get perl-lsp up and running in 5 minutes!
 ### From crates.io (Recommended)
 
 ```bash
-cargo install perl-lsp
+cargo install perllsp
 ```
 
 ### From Source
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd tree-sitter-perl
-cargo build --release -p perl-lsp
+cd perl-lsp
+cargo build --release -p perllsp
 ```
 
 The binary will be at `target/release/perl-lsp`.
@@ -88,14 +88,14 @@ cargo build --workspace
 cargo test
 
 # Build LSP server only
-cargo build -p perl-lsp --release
+cargo build -p perllsp --release
 
 # Build parser library
 cargo build -p perl-parser --release
 
 # Run specific tests
 cargo test -p perl-parser
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 ```
 
 ## Troubleshooting

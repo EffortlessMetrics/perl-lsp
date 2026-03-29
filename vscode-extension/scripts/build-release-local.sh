@@ -44,7 +44,7 @@ echo "📦 Building for ${TARGET}"
 
 # Build the binary
 echo "🔨 Building perl-lsp..."
-cargo build --release -p perl-lsp
+cargo build --release -p perl-lsp-rs
 
 # Create package
 PKG_NAME="${NAME}-${VERSION}-${TARGET}"

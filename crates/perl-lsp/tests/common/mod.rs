@@ -183,8 +183,8 @@ pub fn start_lsp_server() -> LspServer {
             eprintln!("║ Last error: {:?}", last_err);
             eprintln!("╠════════════════════════════════════════════════════════════════════╣");
             eprintln!("║ HINTS:                                                             ║");
-            eprintln!("║  • Run: cargo build -p perl-lsp   (builds debug binary)            ║");
-            eprintln!("║  • Or:  cargo test -p perl-lsp    (builds + tests automatically)   ║");
+            eprintln!("║  • Run: cargo build -p perl-lsp-rs   (builds debug binary)            ║");
+            eprintln!("║  • Or:  cargo test -p perl-lsp-rs    (builds + tests automatically)   ║");
             eprintln!("║  • Set PERL_LSP_BIN=/path/to/perl-lsp for custom binary            ║");
             eprintln!("╚════════════════════════════════════════════════════════════════════╝");
             must(Err::<std::process::Child, _>(format!(

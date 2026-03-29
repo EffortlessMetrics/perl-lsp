@@ -42,7 +42,7 @@ The comprehensive LSP crate separation in v0.8.8 represents a major architectura
 cargo install perl-parser --features lsp
 
 # New approach (recommended)
-cargo install perl-lsp
+cargo install perllsp
 ```
 
 **For Library Consumers**:

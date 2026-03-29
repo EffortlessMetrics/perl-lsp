@@ -52,7 +52,7 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo install --path crates/perl-lsp
+cargo install --path crates/perllsp
 ```
 
 ## Verify Installation
@@ -376,7 +376,7 @@ The editor must be able to find and launch the `perl-lsp` binary. Symptoms inclu
 If you are building perl-lsp from source and encounter intermittent test failures (particularly in LSP integration tests), constrain the thread count:
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 The LSP integration tests start real server instances that compete for ports and file handles. Limiting parallelism eliminates the race conditions. See [TROUBLESHOOTING.md](../how-to/TROUBLESHOOTING.md) for more details on test threading.

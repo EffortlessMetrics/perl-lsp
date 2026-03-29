@@ -200,7 +200,7 @@ The system uses intelligent confidence scoring for delimiter detection:
    workspace-level guidance in [../../README.md](../../README.md). For local
    source testing:
    ```bash
-   cargo install --path crates/perl-lsp
+   cargo install --path crates/perllsp
    ```
 
 2. **Configure your editor** to use the enhanced diagnostics:

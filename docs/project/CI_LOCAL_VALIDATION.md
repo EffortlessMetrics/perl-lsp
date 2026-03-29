@@ -155,7 +155,7 @@ sudo pacman -S openssl pkg-config
 just ci-test-lsp
 
 # If running manually:
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### Issue: `error: could not find Cargo.toml`
@@ -193,10 +193,10 @@ LSP tests use **adaptive threading** to prevent resource exhaustion:
 
 ```bash
 # Standard threading (may fail on CI runners)
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 
 # Adaptive threading (recommended)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 **Environment variables:**

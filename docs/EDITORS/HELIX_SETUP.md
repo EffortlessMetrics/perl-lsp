@@ -39,7 +39,7 @@ Choose one of the following methods:
 #### Option 1: Install from crates.io (Recommended)
 
 ```bash
-cargo install perl-lsp
+cargo install perllsp
 ```
 
 #### Option 2: Download Pre-built Binary
@@ -63,7 +63,7 @@ sudo mv perl-lsp /usr/local/bin/
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo install --path crates/perl-lsp
+cargo install perllsp
 ```
 
 ### Verify Installation

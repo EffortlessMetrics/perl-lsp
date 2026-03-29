@@ -31,7 +31,7 @@ Perl editor support too often starts with "make Perl itself work first, then add
 | Troubleshoot a broken setup | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
 | See what is true right now | [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) |
 | See the current release plan | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |
-| Use the Rust crates directly | [`crates/perl-lsp`](crates/perl-lsp/), [`crates/perl-parser`](crates/perl-parser/), [`crates/perl-dap`](crates/perl-dap/) |
+| Use the Rust crates directly | [`crates/perllsp`](crates/perllsp/), [`crates/perl-parser`](crates/perl-parser/), [`crates/perl-dap`](crates/perl-dap/) |
 
 ## Why Teams Pick It
 
@@ -70,7 +70,7 @@ perl-lsp --health
 If you are testing the workspace locally before a tagged release, install from source instead:
 
 ```bash
-cargo install --path crates/perl-lsp
+cargo install --path crates/perllsp
 ```
 
 ### Windows package managers
@@ -143,7 +143,8 @@ Use [docs/reference/CONFIG.md](docs/reference/CONFIG.md) for the full reference 
 
 | Crate | Use it when you need... |
 | --- | --- |
-| [`crates/perl-lsp`](crates/perl-lsp/) | the actual language server binary or embedding entry point |
+| [`crates/perllsp`](crates/perllsp/) | the public Cargo package for installing the `perl-lsp` binary |
+| [`crates/perl-lsp`](crates/perl-lsp/) | the internal implementation crate behind the `perl-lsp` binary |
 | [`crates/perl-dap`](crates/perl-dap/) | the native debug adapter runtime |
 | [`crates/perl-parser`](crates/perl-parser/) | one facade for parsing, semantic analysis, and workspace tooling |
 | [`crates/perl-lexer`](crates/perl-lexer/) | tokenization and lexical state handling |

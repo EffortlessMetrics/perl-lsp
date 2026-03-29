@@ -31,7 +31,7 @@ cargo install --locked perl-dap
 If you install from a local checkout, rebuild from the release line you want to run.
 
 ```bash
-cargo install --locked --path crates/perl-lsp --force
+cargo install --locked --path crates/perllsp --force
 cargo install --locked --path crates/perl-dap --force
 ```
 

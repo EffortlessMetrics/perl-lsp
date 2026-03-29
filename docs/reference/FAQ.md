@@ -9,7 +9,7 @@
 - **Installer script (Linux/macOS, best-effort)**:
   `curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash`
 - **From source**:
-  `cargo install --path crates/perl-lsp`
+  `cargo install --path crates/perllsp`
 
 ### Does perl-lsp require Perl to be installed?
 
