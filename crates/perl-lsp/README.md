@@ -1,8 +1,5 @@
 # perl-lsp
 
-[![Crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
-[![Documentation](https://docs.rs/perl-lsp/badge.svg)](https://docs.rs/perl-lsp)
-
 Use this crate when you need the actual Perl language server entry point, not
 just parser or provider pieces.
 
@@ -21,8 +18,12 @@ smaller workspace crates such as `perl-parser`, `perl-lexer`, or the
 ## Installation
 
 ```bash
-cargo install perl-lsp
+cargo install --path crates/perl-lsp
 ```
+
+For the current public install paths, use the workspace-level guidance in the
+project README:
+<https://github.com/EffortlessMetrics/perl-lsp/blob/master/README.md>
 
 ## Quick start
 

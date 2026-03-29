@@ -27,13 +27,19 @@ A **language server** is a program that runs alongside your editor and gives it 
 
 Choose one method:
 
-### Option 1: Install from crates.io (Recommended)
+### Option 1: VS Code extension (Recommended for VS Code users)
 
 ```bash
-cargo install perl-lsp
+code --install-extension EffortlessMetrics.perl-lsp-rs
 ```
 
-### Option 2: Install Script (Linux/macOS)
+The extension downloads the matching server binary for your platform.
+
+### Option 2: GitHub release binary (Recommended for other editors)
+
+Download the latest archive from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and place `perl-lsp` on your `PATH`.
+
+### Option 3: Install Script (Linux/macOS)
 
 Use the installer script (best-effort / non-canonical):
 
@@ -41,7 +47,7 @@ Use the installer script (best-effort / non-canonical):
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
-### Option 3: Build from Source
+### Option 4: Build from Source
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git

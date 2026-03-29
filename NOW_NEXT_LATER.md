@@ -1,11 +1,9 @@
 # NOW / NEXT / LATER
 
-> Last Updated: 2026-03-29
-> Workspace version line: `v0.12.0`
-> Latest published GitHub release: `v0.11.0` (verified 2026-03-29)
-> Active milestone: `v0.12.0` initial public alpha cut
-
-This file is the short planning snapshot. The detailed roadmap is [docs/project/ROADMAP.md](docs/project/ROADMAP.md). The evidence-backed status view is [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
+This file is the short planning snapshot for sequencing work. Use
+[docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the canonical milestone
+plan and [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for
+evidence-backed status and release facts.
 
 ## NOW
 
@@ -28,6 +26,7 @@ This file is the short planning snapshot. The detailed roadmap is [docs/project/
 
 ## Working Rules
 
+- Last updated: `2026-03-29`
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.
