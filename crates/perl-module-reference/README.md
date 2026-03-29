@@ -1,35 +1,32 @@
 # perl-module-reference
 
-Cursor-aware module-reference extraction for Perl `use` and `require` lines.
+Find module references under a cursor in Perl source.
 
-## When to use this crate
+This crate is the cursor-aware layer above token parsing. It identifies the
+module name under the cursor inside `use`/`require` statements and can also
+look inside `use parent`/`use base` argument lists.
 
-Use `perl-module-reference` when you need to answer “what module is under the
-cursor?” for import lines. It returns the module token, its range, and the
-reference kind so navigation and rename code can make the right decision.
+## Pipeline
 
-## Quick example
+- `perl-module-token-parser` finds the token span.
+- `perl-module-reference` decides whether the cursor is on a `use`, `require`,
+  `parent`, or `base` reference.
+- `perl-module-rename` uses this information to plan edits.
 
-```rust
-use perl_module_reference::extract_module_reference;
+## Key API
 
-assert_eq!(extract_module_reference("use Foo::Bar;", 4), Some("Foo::Bar".to_string()));
-assert_eq!(extract_module_reference("require Foo::Bar;", 8), Some("Foo::Bar".to_string()));
-```
-
-## Public API
-
+- `ModuleReferenceKind`
+- `ModuleReference`
 - `find_module_reference`
 - `find_module_reference_extended`
 - `extract_module_reference`
 - `extract_module_reference_extended`
-- `ModuleReference`
-- `ModuleReferenceKind`
 
-## Workspace role
+## Example
 
-Shared lookup crate used by navigation and rename workflows.
+```rust
+use perl_module_reference::extract_module_reference;
 
-## License
-
-MIT OR Apache-2.0
+let reference = extract_module_reference("use Foo::Bar;", 9);
+assert_eq!(reference, Some("Foo::Bar".to_string()));
+```

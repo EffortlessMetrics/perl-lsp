@@ -1,42 +1,35 @@
 # perl-dap-platform
 
-[![Crates.io](https://img.shields.io/crates/v/perl-dap-platform.svg)](https://crates.io/crates/perl-dap-platform)
-[![Documentation](https://docs.rs/perl-dap-platform/badge.svg)](https://docs.rs/perl-dap-platform)
+Cross-platform helpers for finding Perl and shaping the debugger launch
+environment.
 
-Cross-platform runtime helpers for Perl DAP process setup.
+This crate sits below the debugger runtime and above shell quoting. It handles
+the OS-specific parts of launch setup: finding the Perl executable, normalizing
+filesystem paths, and building `PERL5LIB`-style environment maps.
 
-## When to use this crate
+## Boundaries
 
-Use `perl-dap-platform` when you need the platform-specific pieces of Perl DAP
-launch/attach setup without pulling in the whole debugger runtime.
+- Use `perl-dap-shell` when you need shell-safe argument formatting.
+- Use `perl-dap-platform` when you need to resolve the executable or normalize
+  OS paths.
+- Use `perl-dap` when you want the server to actually launch and manage a
+  debug session.
 
-It covers three common problems:
+## Key API
 
-- finding the `perl` executable on `PATH`
-- normalizing platform-specific file paths for debugging
-- building the environment map used to launch Perl with `PERL5LIB`
+- `resolve_perl_path`
+- `normalize_path`
+- `setup_environment`
 
-## Quick example
+## Example
 
 ```rust
 use perl_dap_platform::{normalize_path, setup_environment};
 use std::path::PathBuf;
 
-let env = setup_environment(&[PathBuf::from("lib"), PathBuf::from("local/lib/perl5")]);
-assert!(env.contains_key("PERL5LIB"));
+let normalized = normalize_path(&PathBuf::from("/mnt/c/work/script.pl"));
+let env = setup_environment(&[PathBuf::from("/workspace/lib")]);
 
-let normalized = normalize_path(std::path::Path::new("/mnt/c/work/script.pl"));
-assert!(!normalized.as_os_str().is_empty());
+assert!(normalized.to_string_lossy().len() > 0);
+assert_eq!(env.get("PERL5LIB").map(String::as_str), Some("/workspace/lib"));
 ```
-
-## Public API
-
-- `resolve_perl_path`: locate `perl` on the current `PATH`
-- `normalize_path`: normalize Windows, WSL, and Unix path shapes
-- `setup_environment`: construct debugger launch environment variables
-
-## Workspace role
-
-This is a small utility crate inside the `perl-dap` family. It is useful on its
-own for tooling that needs Perl path handling, but it is primarily a support
-crate for the debugger runtime.

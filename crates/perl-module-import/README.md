@@ -1,36 +1,36 @@
 # perl-module-import
 
-Single-line `use` and `require` parsing for Perl import workflows.
+Parse the leading shape of `use` and `require` lines.
 
-## When to use this crate
+This crate turns a single source line into a structured import head with stable
+byte offsets and dispatch semantics. Use it when you need to know what the
+statement is before you decide how to rewrite or inspect it.
 
-Use `perl-module-import` when you need to classify an import line before a
-rename, navigation, or refactoring pass. It parses the first token after
-`use`/`require`, records the byte range, and distinguishes `use parent` and
-`use base`.
+## Pipeline
 
-## Quick example
+- `perl-module-token-core` handles token spans.
+- `perl-module-import` classifies the leading statement and token.
+- `perl-module-import-match` gives you a boolean line check when you do not
+  need the full parse.
+- `perl-module-reference` and `perl-module-rename` use the parse result to find
+  or rewrite imports.
+
+## Key API
+
+- `LoadTiming`
+- `ImportBehavior`
+- `DispatchSemantics`
+- `RequireForm`
+- `ModuleImportKind`
+- `ModuleImportHead`
+- `parse_module_import_head`
+
+## Example
 
 ```rust
-use perl_module_import::{parse_module_import_head, ModuleImportKind};
+use perl_module_import::{ModuleImportKind, parse_module_import_head};
 
-let head = parse_module_import_head("use parent 'Foo::Bar';").unwrap();
-assert_eq!(head.kind, ModuleImportKind::UseParent);
-assert_eq!(head.token, "parent");
+let head = parse_module_import_head("use parent 'Foo::Bar';");
+assert!(matches!(head.as_ref().map(|h| h.kind), Some(ModuleImportKind::UseParent)));
+assert_eq!(head.as_ref().map(|h| h.token), Some("parent"));
 ```
-
-## Public API
-
-- `parse_module_import_head`
-- `ModuleImportHead`
-- `ModuleImportKind`
-- `RequireForm`
-- `DispatchSemantics`
-
-## Workspace role
-
-Parsing utility used by the module-reference and module-rename families.
-
-## License
-
-MIT OR Apache-2.0

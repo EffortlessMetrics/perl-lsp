@@ -1,33 +1,30 @@
 # perl-module-name
 
-Canonical and legacy Perl module-name separator helpers.
+Normalize Perl module names without touching paths or files.
 
-## When to use this crate
+This crate is the naming primitive in the module pipeline. It handles
+separator normalization and rename-friendly variants, but it does not resolve
+filesystem locations or parse whole statements.
 
-Use `perl-module-name` when you need to normalize or project Perl package
-separators. It is the shared naming layer for module-path, token, and rename
-workflows.
+## Pipeline
 
-## Quick example
+- `perl-module-token-core` and `perl-module-boundary` isolate module-shaped
+  tokens.
+- `perl-module-name` normalizes those tokens to canonical `::` form.
+- `perl-module-path`, `perl-module-reference`, and `perl-module-rename`
+  consume the normalized names.
 
-```rust
-use perl_module_name::{legacy_package_separator, module_variant_pairs, normalize_package_separator};
-
-assert_eq!(normalize_package_separator("Foo'Bar"), "Foo::Bar");
-assert_eq!(legacy_package_separator("Foo::Bar"), "Foo'Bar");
-assert_eq!(module_variant_pairs("Foo::Bar", "New::Path").len(), 2);
-```
-
-## Public API
+## Key API
 
 - `normalize_package_separator`
 - `legacy_package_separator`
 - `module_variant_pairs`
 
-## Workspace role
+## Example
 
-Shared naming utility used by module resolution and rename crates.
+```rust
+use perl_module_name::{legacy_package_separator, normalize_package_separator};
 
-## License
-
-MIT OR Apache-2.0
+assert_eq!(normalize_package_separator("Foo'Bar"), "Foo::Bar");
+assert_eq!(legacy_package_separator("Foo::Bar"), "Foo'Bar");
+```
