@@ -14,10 +14,20 @@ This directory is the main documentation home for the repository. Treat it as a 
 
 Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), treat it as suspect until reverified.
 
+## I Want To...
+
+- Install perl-lsp: [how-to/INSTALLATION.md](how-to/INSTALLATION.md)
+- Configure my editor: [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
+- Fix an install or editor problem: [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md)
+- Get the first working tour: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
+- Understand the current release posture: [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md)
+
 ## Start Here
 
+- Install perl-lsp: [how-to/INSTALLATION.md](how-to/INSTALLATION.md)
+- Configure your editor: [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
+- Fix setup issues: [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md)
 - Users: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
-- Editor setup: [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
 - Contributors: [../CONTRIBUTING.md](../CONTRIBUTING.md)
 - Current project posture: [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md)
 - Active milestone: [project/ROADMAP.md](project/ROADMAP.md)
