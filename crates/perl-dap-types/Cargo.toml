@@ -8,6 +8,7 @@ description = "Shared DAP model types for perl-dap session handling"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/perl-dap-types"
 readme = "README.md"
 keywords = ["perl", "dap", "debug", "types"]
 categories = ["development-tools::debugging"]
