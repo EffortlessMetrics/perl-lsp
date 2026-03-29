@@ -612,6 +612,29 @@ mod tests {
     }
 
     #[test]
+    fn test_coordinator_reuses_identical_file_contents_without_dropping_symbols()
+    -> Result<(), String> {
+        let coordinator = ProductionIndexCoordinator::new();
+        coordinator.initialize()?;
+
+        let uri = Url::parse("file:///example.pl").map_err(|e| e.to_string())?;
+        let code = "sub hello { return 1; }";
+
+        coordinator.index_file(uri.clone(), code.to_string())?;
+        coordinator.index_file(uri, code.to_string())?;
+
+        assert!(coordinator.find_definition("hello").is_some());
+        assert_eq!(coordinator.index().file_count(), 1);
+
+        let stats = coordinator.statistics();
+        let ast_stats =
+            stats.cache_stats.get("ast").ok_or_else(|| "missing ast cache stats".to_string())?;
+        assert!(ast_stats.hits > 0);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_coordinator_statistics() {
         let coordinator = ProductionIndexCoordinator::new();
         let stats = coordinator.statistics();
