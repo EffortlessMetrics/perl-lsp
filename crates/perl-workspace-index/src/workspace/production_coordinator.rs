@@ -319,9 +319,9 @@ impl ProductionIndexCoordinator {
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let start = self.slo_tracker.start_operation(OperationType::FileIndexing);
         let cache_key = uri.to_string();
-        let serialized = Self::serialize_file_index(&text);
+        let content_fingerprint = Self::fingerprint_file_content(&text);
 
-        if self.cache.peek_ast(&cache_key).as_deref() == Some(serialized.as_slice()) {
+        if self.cache.peek_ast(&cache_key).as_deref() == Some(content_fingerprint.as_slice()) {
             let _ = self.cache.get_ast(&cache_key);
             self.slo_tracker.record_operation_type(
                 OperationType::FileIndexing,
@@ -335,7 +335,7 @@ impl ProductionIndexCoordinator {
         self.index.index_file(uri, text)?;
 
         // Cache the content fingerprint for repeated identical indexing.
-        self.cache.insert_ast(cache_key, serialized);
+        self.cache.insert_ast(cache_key, content_fingerprint);
 
         // Update state if needed
         if matches!(self.state(), IndexState::Ready { .. }) {
@@ -524,8 +524,8 @@ impl ProductionIndexCoordinator {
             .into()
     }
 
-    /// Serialize file content for caching.
-    fn serialize_file_index(text: &str) -> Vec<u8> {
+    /// Create a content fingerprint for caching.
+    fn fingerprint_file_content(text: &str) -> Vec<u8> {
         let mut hasher = DefaultHasher::new();
         text.hash(&mut hasher);
         hasher.finish().to_le_bytes().to_vec()
