@@ -1,51 +1,37 @@
 # tree-sitter-perl
 
-Internal pure-Rust Perl parser and validation harness for the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
-workspace. **Not published to crates.io.**
+Pure-Rust Perl parser and comparison harness for the workspace.
 
-## When to use this crate
+This crate is not published to crates.io. Use it for parser work, regression
+checks, and benchmark comparisons against the native parser stack.
 
-Use `tree-sitter-perl` when you need the experimental pure-Rust parser and
-comparison harness that sit alongside the main Perl LSP parser stack.
+## Where it fits
 
-It is useful for:
+`tree-sitter-perl` is the validation and parser-compatibility crate. The
+`pure-rust` path emits tree-sitter-compatible ASTs, while the comparison tools
+let us measure behavior against the rest of the workspace.
 
-- benchmarking parser behavior against the native parser implementation
-- running pure-Rust parser comparisons and edge-case experiments
-- exercising tree-sitter-compatible parser output during development
+## Key entry points
 
-## Purpose
+- `PureRustPerlParser`, `PerlParser`, `AstNode`
+- `EnhancedPerlParser`, `FullPerlParser`, `EnhancedFullPerlParser`
+- `ComparisonHarness`
+- `language()`, `parse()`, `parse_with_tree()`
 
-Provides a Pest-based Perl 5 parser that emits tree-sitter-compatible
-S-expressions, plus a comparison harness for benchmarking against the
-native v3 recursive-descent parser (`perl-parser`).
+## Example
 
-## Public API (feature-gated)
+```rust
+use tree_sitter_perl::parse;
 
-| Export | Feature | Description |
-|--------|---------|-------------|
-| `PureRustPerlParser` | `pure-rust` | Main Pest-based parser |
-| `PerlParser`, `AstNode` | `pure-rust` | Grammar rule parser and AST nodes |
-| `EnhancedPerlParser`, `FullPerlParser` | `pure-rust` | Advanced parser variants |
-| `ComparisonHarness` | `pure-rust` / `test-utils` | C-vs-Rust parser comparison runner |
-| `language()`, `parse()` | `c-parser` | Tree-sitter C FFI (benchmarking only) |
+let tree = parse("my $x = 1;")?;
+assert!(tree.root_node().child_count() > 0);
+```
 
 ## Commands
 
 ```bash
-cargo build -p tree-sitter-perl                           # build
-cargo test  -p tree-sitter-perl                           # test
-cargo run   -p tree-sitter-perl --bin ts_test_parsers --features pure-rust  # parser comparison
-cargo run   -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust  # benchmarks
+cargo build -p tree-sitter-perl
+cargo test -p tree-sitter-perl
+cargo run -p tree-sitter-perl --bin ts_test_parsers --features pure-rust
+cargo run -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust
 ```
-
-## Workspace role
-
-This is an internal development crate, not a published library. Keep using the
-main [`perl-parser`](../perl-parser/README.md) crate for the production parser
-path.
-
-## License
-
-MIT OR Apache-2.0

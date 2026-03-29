@@ -65,6 +65,13 @@ just status-check
 
 Run `just status-update` and `just status-check` when you change capability docs, generated status sections, or other docs that depend on computed project metrics.
 
+## PR Hygiene
+
+- Use isolated worktrees and focused branches for agent-driven PR work.
+- Give PRs a CI-compliant title before opening them: `type(scope): summary (#1234)`.
+- The `validate-title` check rejects titles that do not include an issue reference.
+- Put the issue reference in the PR title, not just in the body.
+
 ## Documentation Discipline
 
 - [`docs/project/CURRENT_STATUS.md`](docs/project/CURRENT_STATUS.md) is the evidence document.

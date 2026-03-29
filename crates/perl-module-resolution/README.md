@@ -1,35 +1,28 @@
 # perl-module-resolution
 
-Deterministic, secure Perl module resolution helpers for workspace-aware tools.
+Module-name resolution for workspace-aware Perl tooling.
 
-## When to use this crate
+Use this crate when you need to turn `Foo::Bar` into a filesystem path or
+`file://` URI while respecting workspace roots, open documents, and include
+paths.
 
-Use `perl-module-resolution` when you need to turn Perl module names into
-filesystem or URI targets in a workspace-aware tool.
+## Where it fits
 
-It is the right crate for:
+This crate sits above the low-level path and URI helpers and below editor
+providers. It combines the `perl-module-resolution-path` and
+`perl-module-resolution-uri` layers so callers can resolve modules without
+re-implementing workspace lookup rules.
 
-- `Foo::Bar` to path/URI resolution
-- `use lib`-aware include-path discovery
-- resolution that respects workspace folders, open documents, and optional system `@INC`
-- a separate path-validation boundary for secure tooling
+## Key entry points
 
-## Public surface
+- `resolve_module_path(root, module_name, include_paths)` - filesystem lookup
+- `resolve_module_uri(...)` - workspace-aware URI resolution
+- `ModuleUriResolution` - result type for URI lookups
+- `use_lib` - helpers for `use lib` and `FindBin` include-path discovery
 
-- Resolve module names (for example, `Foo::Bar`) to filesystem paths
-- Resolve module names to `file://` URIs across open documents, workspace folders, and optional system `@INC`
-- Enforce workspace path validation to prevent traversal via include paths (via
-  `perl-module-resolution-path`)
-- Apply timeout-aware resolution for responsive editor workflows
+## Typical use
 
-## API
-
-- `resolve_module_path(root, module_name, include_paths)`
-- `resolve_module_uri(module_name, open_document_uris, workspace_folders, include_paths, use_system_inc, system_inc, timeout)`
-- `ModuleUriResolution`
-
-## Workspace role
-
-This crate is a workspace utility used by editor and language-server features.
-It is useful when you need module lookup behavior without reimplementing path
-rules in each consumer.
+Use `perl-module-resolution` when you already know the module name and need to
+find the right file or URI for navigation, completion, or hover features. If
+you only need path safety or URI normalization, use the lower-level crates
+directly.

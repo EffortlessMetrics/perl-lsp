@@ -1,32 +1,27 @@
 # perl-path-security
 
-Workspace-bound path validation utilities for the Perl LSP/DAP ecosystem.
+Workspace path validation for editor-facing file operations.
 
-## When to use this crate
+Use this crate when user input needs to become a filesystem path but must stay
+inside the active workspace.
 
-Use `perl-path-security` when you need to validate a user-supplied path before
-touching the filesystem.
+## Where it fits
 
-It focuses on the common security boundary problems:
+This is a guardrail crate at the protocol edge. It sits between LSP/DAP request
+handling and any filesystem access, and it is also used by path-based completion
+helpers.
 
-- rejecting parent-directory traversal
-- keeping paths inside a workspace root
-- rejecting null-byte and control-character injection
-- normalizing safe completion inputs for downstream completion or file-finding code
+## Key entry points
 
-## Public surface
+- `validate_workspace_path(path, workspace_root)` - normalize and bound-check a path
+- `WorkspacePathError` - traversal, outside-workspace, and invalid-character errors
+- `sanitize_completion_path_input(path)` - reject traversal before path completion
+- `split_completion_path_components(path)` - split a safe completion path
+- `resolve_completion_base_directory(dir_part)` - locate the directory side of a completion path
+- `is_safe_completion_filename(filename)` - reject reserved, malformed, or unsafe names
 
-- Validates user-supplied paths stay inside a workspace root
-- Prevents parent-directory traversal (e.g. `../../`)
-- Rejects null-byte/control-character path injection
-- Normalizes safe relative paths for downstream operations
+## Typical use
 
-## API
-
-- `validate_workspace_path(path, workspace_root)`
-- `WorkspacePathError`
-
-## Workspace role
-
-This is a small security boundary crate used by `perl-lsp`, `perl-dap`, and
-other workspace tools that accept paths from editors or test harnesses.
+Use `perl-path-security` before any file open, rename, or completion operation
+that starts from user input. If the caller already has a trusted absolute path,
+this crate is not the right layer for filesystem discovery.

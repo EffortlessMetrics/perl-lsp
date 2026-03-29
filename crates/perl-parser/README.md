@@ -1,55 +1,39 @@
 # perl-parser
-[![Crates.io](https://img.shields.io/crates/v/perl-parser.svg)](https://crates.io/crates/perl-parser)
-[![Documentation](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
 
-Native Perl parser and parser-hub crate for the `perl-lsp` workspace.
+High-level facade for the Perl parsing stack.
 
-## When to use this crate
+Use this crate when you want one entry point for parsing, semantic analysis,
+workspace indexing, refactoring, and the LSP provider re-exports that sit on
+top of them. If you only need the parser engine, use `perl-parser-core`
+directly.
 
-Use `perl-parser` when you want one entry point that combines parsing with the
-rest of the Perl analysis stack:
+## Where it fits
 
-- parse Perl source into an AST
-- plug into semantic analysis and workspace indexing
-- access LSP-facing provider crates from one crate family
+`perl-parser` is the top of the parsing stack. It re-exports the lower-level
+parser, analysis, workspace, and refactoring crates so downstream code can
+depend on one crate instead of the whole family.
 
-If you only need tokenization or the lower-level parser engine, prefer
-`perl-lexer` or `perl-parser-core`.
+## Main entry points
 
-## Usage
+- `Parser` plus `ast`, `position`, `error`, and `ParseResult`
+- `analysis::*` from `perl-semantic-analyzer`
+- `workspace::*` from `perl-workspace-index`
+- `refactor::*` from `perl-refactoring`
+- `completion`, `diagnostics`, `rename`, and other LSP provider re-exports
+- `perl-parse` when the `cli` feature is enabled
+
+## Example
 
 ```rust
 use perl_parser::Parser;
 
 let mut parser = Parser::new("my $x = 42;");
 let ast = parser.parse()?;
-println!("{}", ast.to_sexp());
+assert!(!ast.to_sexp().is_empty());
 ```
 
-## Included binary
+## Typical use
 
-`perl-parse` (requires the `cli` feature) parses Perl files and prints the AST
-in S-expression, JSON, or debug format.
-
-## Key re-exports
-
-| Module | Source crate | Purpose |
-|--------|-------------|---------|
-| `engine` | `perl-parser-core` | Recursive-descent parser, AST, error recovery |
-| `analysis` | `perl-semantic-analyzer` | Scope analysis, type inference, symbol tables |
-| `workspace` | `perl-workspace-index` | Cross-file symbol indexing and document store |
-| `refactor` | `perl-refactoring` | Import optimizer, modernization, refactoring engine |
-| `tdd` | `perl-tdd-support` | Test generation and TDD workflow |
-| `completion`, `diagnostics`, `rename`, ... | `perl-lsp-*` | LSP feature providers |
-
-## Workspace role
-
-`perl-parser` is the broadest library entry point in the
-[`perl-lsp`](https://github.com/EffortlessMetrics/perl-lsp) workspace. It is a
-good choice for downstream tools that want parser access plus room to grow into
-semantic or editor features later.
-
-## License
-
-Licensed under either of [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
-or [MIT license](http://opensource.org/licenses/MIT) at your option.
+Use `perl-parser` when you are building editor tooling, code transforms, or
+tests that need both parsing and the higher-level analysis layers. If you only
+need a small slice of the stack, depend on the lower-level crate directly.
