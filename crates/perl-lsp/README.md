@@ -3,11 +3,12 @@
 [![Crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
 [![Documentation](https://docs.rs/perl-lsp/badge.svg)](https://docs.rs/perl-lsp)
 
-Standalone Language Server Protocol server for Perl.
+Use this crate when you need the actual Perl language server entry point, not
+just parser or provider pieces.
 
 ## When to use this crate
 
-Use `perl-lsp` when you want to run or embed the actual Perl language server:
+Use `perl-lsp` when you want to run or embed the real language server:
 
 - run the `perl-lsp` binary behind an editor such as VS Code, Neovim, Emacs, or Helix
 - expose Perl LSP features over stdio or TCP

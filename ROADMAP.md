@@ -6,32 +6,33 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.12.0` (`Cargo.toml` `workspace.package.version`)
-- Latest published release: `v0.11.0` (GitHub Releases / crates.io, verified 2026-03-28)
-- Active milestone: `v0.12.0` initial public alpha release prep
-- Current priorities: parser-quality ratchets, semantic-framework coverage, DAP/LSP hardening, and documentation alignment
+- Workspace version line: `v0.12.0`
+- Latest published GitHub release: `v0.11.0` (verified 2026-03-29)
+- Active milestone: `v0.12.0` initial public alpha cut
+- Canonical plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
+- Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
 
 ## Now
 
-- Raise the CPAN baseline and keep parser boundedness receipts green
-- Land semantic framework work for Moo, Moose, `use parent` / `use base`, and export-list-aware resolution
-- Keep release and validation flows stable while initial public alpha prep lands
-- Align top-level documentation so README, roadmap, status, and release guidance stop contradicting each other about `main` versus the latest published artifacts
+- Keep release validation green while `v0.12.0` moves from version line to shipped release
+- Raise parser and corpus confidence without hiding regressions behind broader receipts
+- Finish framework-aware semantic work for real-world Perl projects
+- Keep README, docs, changelog, and release guidance aligned so users do not have to infer the release state
 
 ## Next
 
-- Diagnostic hardening around `strict`, `warnings`, dead-code signals, and safe analysis
-- Refactoring reliability and debugger hardening beyond the current preview posture
-- Distribution and release-surface cleanup after the `v0.12.0` initial public alpha cut
+- Harden diagnostics, refactoring, and debugger behavior after the alpha cut
+- Follow through on distribution and packaging cleanup once the release line is live
+- Keep shrinking the gap between crate-level docs, editor docs, and release operations
 
 ## Later
 
 - `v0.15.0` stability contract for APIs and advertised wire behavior
-- Platform certification and broader distribution packaging
-- Performance, security, and API-stability hardening on the path to `v1.0.0`
+- Broader packaging and platform certification
+- Performance, security, and compatibility hardening on the path to `v1.0.0`
 
 ## Update Rules
 
 - Update [docs/project/ROADMAP.md](docs/project/ROADMAP.md) when milestone framing changes.
 - Update [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) with `just status-update` and `just status-check` when generated metrics move.
-- Keep this file short. If it starts carrying detailed receipts or large milestone tables again, move that detail back to the canonical project docs.
+- Keep this file short. Detailed receipts, milestone criteria, and subsystem metrics belong in the canonical project docs.

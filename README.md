@@ -5,48 +5,61 @@
 <h1 align="center">perl-lsp</h1>
 
 <p align="center">
-  A fast, native <strong>Perl language server</strong> written in Rust — bringing modern IDE features to Perl 5.
+  Native Perl 5 language tooling in Rust: editor support, parser infrastructure, and debugging without a Perl runtime dependency for IDE features.
 </p>
 
 <p align="center">
   <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://crates.io/crates/perl-lsp"><img src="https://img.shields.io/crates/v/perl-lsp.svg" alt="crates.io" /></a>
   <a href="https://docs.rs/perl-lsp"><img src="https://docs.rs/perl-lsp/badge.svg" alt="docs.rs" /></a>
-  <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp"><img src="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg" alt="codecov" /></a>
+  <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg" alt="codecov" /></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.92%2B-orange.svg" alt="Rust" /></a>
-  <a href="https://crates.io/crates/perl-lsp"><img src="https://img.shields.io/crates/d/perl-lsp.svg" alt="Downloads" /></a>
 </p>
 
 ---
 
-> **Initial Public Alpha (`main` preparing v0.12.0)** -- perl-lsp is production-ready for daily use and actively improving.
-> The workspace version is already `v0.12.0`, but the latest published release remains `v0.11.0` until the `v0.12.0` tag is cut.
-> Install in minutes, get completions and navigation immediately.
-> [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) or [join the conversation](https://github.com/EffortlessMetrics/perl-lsp/discussions).
+> Release status: `main` is preparing `v0.12.0`. The latest published GitHub release is `v0.11.0` (verified 2026-03-29).
 
-**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with broad LSP and DAP coverage, validated against real-world CPAN modules. Works on Windows, macOS, and Linux out of the box.
+Perl editor support too often starts with "make Perl itself work first, then add the editor layer later." `perl-lsp` flips that around. Install one native binary and get completions, diagnostics, navigation, formatting, and debugging for Perl 5 on Windows, macOS, and Linux.
 
-## Why perl-lsp?
+## Start Here
 
-- **No Perl runtime required** -- a single native binary; no dependency on a working Perl installation for IDE features.
-- **Fast** -- sub-millisecond incremental parsing, under 50ms LSP response times.
-- **Comprehensive** -- completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging in one native toolchain.
-- **Perl-aware hover** -- hover over special variables such as `$_`, `@ARGV`, `%ENV`, and `$/` to get built-in documentation inline without leaving your editor.
-- **Broad syntax coverage** -- parses Perl 5.8 through 5.40 including heredocs, regex, quoting constructs, formats, and OO frameworks.
-- **CPAN-validated** -- continuously tested against top CPAN distributions with a ratchet-only-forward CI gate that never allows regressions.
+| If you want to... | Start here |
+| --- | --- |
+| Get IDE support quickly | [Quick Start](#quick-start) |
+| Set up a specific editor | [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md) |
+| Upgrade an existing install | [docs/how-to/UPGRADING.md](docs/how-to/UPGRADING.md) |
+| Troubleshoot a broken setup | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
+| See what is true right now | [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) |
+| See the current release plan | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |
+| Use the Rust crates directly | [`crates/perl-lsp`](crates/perl-lsp/), [`crates/perl-parser`](crates/perl-parser/), [`crates/perl-dap`](crates/perl-dap/) |
+
+## Why Teams Pick It
+
+- Native editor tooling: no Perl runtime dependency just to get LSP or DAP features into your editor.
+- One workspace, multiple entry points: install the binaries or depend on the parser, semantic, workspace, and protocol crates directly.
+- Real Perl coverage: parser and runtime changes are validated against curated corpus and release receipts, not only toy examples.
+- Windows included: install, path handling, packaging, and shell interactions are part of the release surface rather than an afterthought.
+
+## What You Get
+
+| Surface | What it covers |
+| --- | --- |
+| Language server | Diagnostics, completion, hover, navigation, rename, formatting, semantic tokens, code actions, code lens, workspace symbols |
+| Debug adapter | Breakpoints, stepping, stack frames, variables, evaluate support, and editor-driven DAP flows |
+| Parser stack | Native recursive-descent parser, lexer, semantic analysis, workspace indexing, and refactoring helpers |
+| Rust crates | Focused crates for parser, URI/path handling, LSP/DAP protocol layers, workspace indexing, and feature providers |
 
 ## Quick Start
 
-### VS Code (recommended)
-
-Install the extension and open a Perl file -- completions, diagnostics, hover, and navigation work immediately:
+### VS Code
 
 ```bash
 code --install-extension effortlessmetrics.perl-lsp-rs
 ```
 
-The extension auto-downloads the server binary for your platform.
+The VS Code extension auto-downloads the matching server binary for your platform.
 
 ### Binary install
 
@@ -55,13 +68,18 @@ cargo install perl-lsp
 perl-lsp --health
 ```
 
-That installs the latest published release from crates.io. For the current `main`
-branch during `v0.12.0` initial-public-alpha prep, use the source install below or
-download the matching artifact once the release is tagged.
+You can also download prebuilt binaries from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 
-Or download a pre-built binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
+### Windows package managers
 
-### Neovim
+```powershell
+scoop install perl-lsp
+choco install perl-lsp
+```
+
+### Other editors
+
+Neovim:
 
 ```lua
 require('lspconfig').perl_ls.setup {
@@ -69,102 +87,43 @@ require('lspconfig').perl_ls.setup {
 }
 ```
 
-### Emacs (eglot)
+Emacs (`eglot`):
 
 ```elisp
 (add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
 ```
 
-### Other editors
+Generic LSP client:
 
-Any editor with LSP support works. Point it at `perl-lsp --stdio` as the language server command.
+```text
+perl-lsp --stdio
+```
 
-For a full walkthrough with troubleshooting tips, see the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)**.
-
-## Features
-
-| What you see | What it does |
-|-------------|-------------|
-| **Diagnostics** | Real-time parse error detection as you type |
-| **Completions** | Builtins, workspace symbols, modules, and keywords |
-| **Go to definition** | Cross-file navigation for subs, methods, and modules |
-| **Hover** | Function signatures, documentation, module info, and **built-in special variable docs** (hover over `$_`, `@ARGV`, `%ENV`, etc. for instant reference) |
-| **Find references** | Locate all usages of a symbol across your workspace |
-| **Rename** | Scoped refactoring across files |
-| **Formatting** | Perl::Tidy integration |
-| **Code actions** | Organize imports, modernize syntax, quick fixes |
-| **Semantic highlighting** | Context-aware syntax coloring |
-| **Debugging** | Built-in DAP: breakpoints, stepping, variables, watch — [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) |
-| **And more** | Inlay hints, code lens, call hierarchy, folding, color decorators |
-
-The full feature catalog lives in [`features.toml`](features.toml). For live project metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
-
-### Demo Walkthroughs
-
-The launch demo assets are staged as storyboard SVG previews in [`vscode-extension/media/walkthrough/`](vscode-extension/media/walkthrough/). They are planning aids, not final demos.
-
-- [Install → auto-download → health check](vscode-extension/media/walkthrough/install-health.svg)
-- [Go to definition + find references](vscode-extension/media/walkthrough/find-references.svg)
-- [Extract variable code action](vscode-extension/media/walkthrough/extract-variable.svg)
-
-When the screen recordings are ready, render them with [`scripts/marketing/render-walkthrough-gif.py`](scripts/marketing/render-walkthrough-gif.py). Use `--max-bytes` so the final GIF stays readable and README-friendly.
-
-## Comparison
-
-| | perl-lsp | PerlNavigator | Perl::LanguageServer |
-|---|----------|--------------|---------------------|
-| **Language** | Rust (native binary) | Perl | Perl |
-| **Requires Perl runtime** | No | Yes | Yes |
-| **Windows support** | Native | Via Perl | Limited |
-| **Incremental parsing** | Yes (sub-ms) | N/A | N/A |
-| **Debug adapter** | Built-in (DAP) | No | Built-in |
-| **CPAN corpus validation** | CI-gated, ratchet-forward | N/A | N/A |
-| **Install** | Single binary | CPAN + Perl | CPAN + Perl |
+For a full setup path, use [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md).
 
 ## Configuration
 
-perl-lsp is configured through your editor's LSP settings (via `didChangeConfiguration`). All settings are optional -- defaults work out of the box.
+The defaults are meant to be usable without project-specific setup. When you do need configuration, you can use editor LSP settings or a repo-level `.perl-lsp.toml`.
+
+Editor settings example:
 
 ```jsonc
-// VS Code settings.json example
 {
   "perl-lsp.inlayHints": {
     "enabled": true,
     "parameterHints": true,
-    "typeHints": true,
-    "maxLength": 30
+    "typeHints": true
   },
   "perl-lsp.workspace": {
     "includePaths": ["lib", ".", "local/lib/perl5"],
     "useSystemInc": false
-  },
-  "perl-lsp.testRunner": {
-    "enabled": true,
-    "command": "perl",
-    "timeout": 60000
   }
 }
 ```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `inlayHints.enabled` | `true` | Toggle inlay hints globally |
-| `inlayHints.parameterHints` | `true` | Show parameter name hints at call sites |
-| `inlayHints.typeHints` | `true` | Show inferred type hints for variables |
-| `workspace.includePaths` | `["lib", ".", "local/lib/perl5"]` | Module resolution search paths |
-| `workspace.useSystemInc` | `false` | Include system `@INC` paths |
-| `testRunner.command` | `"perl"` | Command for integrated test runner (`perl`, `prove`) |
-| `testRunner.timeout` | `60000` | Test execution timeout (ms) |
-
-For Neovim and other editors, pass these as the LSP `settings` table under the `perl-lsp` key.
-
-### Project Configuration File
-
-For team-wide defaults, add a `.perl-lsp.toml` to your repository root. It is editor-agnostic and committed to version control:
+Project config example:
 
 ```toml
-# .perl-lsp.toml — shared project defaults for perl-lsp
-
 [perl]
 include_paths = ["lib", "local/lib/perl5"]
 
@@ -175,132 +134,48 @@ perlcritic = false
 inlay_hints = true
 ```
 
-Settings from `.perl-lsp.toml` are the lowest-priority layer. Editor settings (`initializationOptions` / `didChangeConfiguration`) always override them. See [CONFIG.md](docs/reference/CONFIG.md) for the full reference including precedence rules.
+Use [docs/reference/CONFIG.md](docs/reference/CONFIG.md) for the full reference and precedence rules.
 
-## Install
+## Workspace Entry Points
 
-### From crates.io
+| Crate | Use it when you need... |
+| --- | --- |
+| [`crates/perl-lsp`](crates/perl-lsp/) | the actual language server binary or embedding entry point |
+| [`crates/perl-dap`](crates/perl-dap/) | the native debug adapter runtime |
+| [`crates/perl-parser`](crates/perl-parser/) | one facade for parsing, semantic analysis, and workspace tooling |
+| [`crates/perl-lexer`](crates/perl-lexer/) | tokenization and lexical state handling |
+| [`crates/perl-semantic-analyzer`](crates/perl-semantic-analyzer/) | symbol, scope, and type analysis over parsed trees |
+| [`crates/perl-workspace-index`](crates/perl-workspace-index/) | document storage, indexing, and cross-file lookups |
 
-```bash
-cargo install perl-lsp
-perl-lsp --health
-```
+Published crates are documented on docs.rs. Internal and supporting docs start at [docs/README.md](docs/README.md).
 
-### From source
+## Docs By Job
 
-```bash
-git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd perl-lsp
-cargo install --path crates/perl-lsp
-perl-lsp --health
-```
-
-### Pre-built binaries
-
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
-
-### Windows package managers
-
-The release automation keeps the Windows package-manager manifests in sync with
-each release. If you are on Windows, these are the user-facing install paths:
-
-```powershell
-scoop install perl-lsp
-choco install perl-lsp
-```
-
-After installation, verify the binary with `perl-lsp --health`.
-The repo documents the automated vs manual verification boundary in
-[docs/how-to/INSTALLATION.md](docs/how-to/INSTALLATION.md) and
-[docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md).
-
-### Linux package-manager scaffold
-
-Repo-owned packaging templates for `apt`, `dnf`, and `pacman` live under [`distribution/linux/`](distribution/linux/).
-They are intentionally kept as templates only in this slice, so downstream release automation can render them without depending on external distro approvals.
-To render them for a specific release, use [`scripts/render-linux-packages.py`](scripts/render-linux-packages.py) with the values from [`distribution/linux/package-metadata.toml`](distribution/linux/package-metadata.toml).
-
-### VS Code Extension
-
-Install from the VS Code Marketplace or:
-
-```bash
-code --install-extension effortlessmetrics.perl-lsp-rs
-```
-
-You can set `perl-lsp.serverPath` to use a specific binary, or disable `perl-lsp.autoDownload` for airgapped environments.
-
-## Parser
-
-The v3 parser is a native recursive-descent implementation covering broad Perl 5 syntax
-(5.8 through 5.40), including heredocs, regex, quoting constructs, and formats. It is
-tested continuously against real-world Perl code:
-
-- **Corpus test suite** -- 600+ test sections plus 70+ standalone `.pl` fixtures.
-- **CPAN corpus** -- benchmarked against the top 1000 CPAN distributions with a ratchet-only-forward CI gate.
-- **Common-files gate** -- a curated set of core modules that must parse with zero errors on every PR.
-
-Current parse rates and the edge-case roadmap are tracked in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) and [PARSER_EDGE_CASE_ROADMAP.md](docs/project/PARSER_EDGE_CASE_ROADMAP.md).
-
-## Architecture
-
-The workspace is organized as many focused Rust crates, each with a single responsibility. The main entry points:
-
-| Crate | Purpose |
-|-------|---------|
-| [`perl-lsp`](crates/perl-lsp/) | LSP server binary |
-| [`perl-dap`](crates/perl-dap/) | Debug Adapter Protocol server |
-| [`perl-parser`](crates/perl-parser/) | Native recursive-descent Perl parser |
-| [`perl-lexer`](crates/perl-lexer/) | Context-aware tokenizer |
-| [`perl-semantic-analyzer`](crates/perl-semantic-analyzer/) | Semantic analysis and resolution |
-
-Published crates are available on [crates.io](https://crates.io/crates/perl-lsp): `perl-lsp`, `perl-dap`, `perl-parser`, `perl-lexer`, and `perl-corpus`.
-
-For design details, see the [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md), [Crate Architecture Guide](docs/reference/CRATE_ARCHITECTURE_GUIDE.md), and [Architecture Decision Records](docs/adr/README.md).
+- New user: [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md)
+- Installation and editor setup: [docs/how-to/INSTALLATION.md](docs/how-to/INSTALLATION.md), [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md)
+- Upgrade and troubleshooting: [docs/how-to/UPGRADING.md](docs/how-to/UPGRADING.md), [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md)
+- Commands and configuration: [docs/reference/COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md), [docs/reference/CONFIG.md](docs/reference/CONFIG.md)
+- Project truth and planning: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
+- Full docs map: [docs/INDEX.md](docs/INDEX.md)
 
 ## Contributing
 
 ```bash
-cargo build --workspace            # Build everything
-cargo test --workspace --lib       # Run all tests
-cargo clippy --workspace --lib     # Lint
-cargo fmt --all                    # Format
-nix develop -c just ci-gate        # Full local gate (required before push)
+cargo build --workspace
+cargo test --workspace --lib
+cargo fmt --all
+nix develop -c just ci-gate
 ```
 
-Quick iteration: `just pr-fast`. Environment check: `just devex` or `just doctor`.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines,
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards,
-and [SUPPORT.md](SUPPORT.md) for how to get help.
+Use [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow and [docs/reference/COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) for the broader command surface.
 
 ## Security
 
-Release artifacts include SBOM generation (SPDX and CycloneDX) and SLSA Level 2
-provenance attestations. Production code enforces zero `unsafe`, zero `unwrap`/`expect`,
-and zero `panic!`-family macros via CI ratchets.
-
-See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details.
-
-## Documentation
-
-| Resource | Description |
-|----------|-------------|
-| **[Getting Started](docs/tutorials/GETTING_STARTED.md)** | Installation, editor setup, and first-run walkthrough |
-| [Full Documentation Index](docs/INDEX.md) | Complete guide to all project documentation |
-| [Current Status](docs/project/CURRENT_STATUS.md) | Live project metrics |
-| [Roadmap](docs/project/ROADMAP.md) | Version milestones and planning |
-| [Troubleshooting](docs/how-to/TROUBLESHOOTING.md) | Common issues and solutions |
-| [features.toml](features.toml) | Canonical LSP feature catalog |
-| [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
-| [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
-| [Contributing](CONTRIBUTING.md) | Development guidelines and workflow |
-| [Changelog](CHANGELOG.md) | Release history and notable changes |
-| **[Report an Issue](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)** | Bug reports, feature requests, parser issues |
+Release artifacts include SBOM generation and provenance attestations. Production code is kept under the workspace ratchets for `unsafe`, `unwrap` / `expect`, and panic-family macros. See [docs/reference/SUPPLY_CHAIN_SECURITY.md](docs/reference/SUPPLY_CHAIN_SECURITY.md).
 
 ## History
 
-This project began as a fork of [tree-sitter-perl](https://github.com/tree-sitter-perl/tree-sitter-perl) in July 2025. It has since been rewritten as a native Rust recursive-descent parser and grown into a full-featured LSP/DAP toolkit.
+This project started from the `tree-sitter-perl` line and grew into a native Rust Perl tooling workspace with its own parser, LSP, DAP, and release stack.
 
 ## License
 
