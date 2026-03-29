@@ -2,6 +2,17 @@
 
 LSP rename provider for Perl symbol refactoring.
 
+## When to use this crate
+
+Use `perl-lsp-rename` when you want rename and prepare-rename behavior for Perl
+symbols without taking a dependency on the full server runtime.
+
+It is the right crate for:
+
+- validating whether a symbol can be renamed
+- generating coordinated rename edits
+- preserving sigils and Perl naming rules during refactors
+
 ## Features
 
 - **Prepare rename**: validates that a symbol at a given position is renameable
@@ -20,7 +31,7 @@ LSP rename provider for Perl symbol refactoring.
 | `RenameResult` | Contains edits, validity flag, and optional error |
 | `TextEdit` | A single location + replacement text |
 
-## Workspace Role
+## Workspace role
 
 Internal feature crate in the `tree-sitter-perl-rs` workspace, consumed by
 `perl-lsp` to handle `textDocument/rename` and `textDocument/prepareRename` requests.

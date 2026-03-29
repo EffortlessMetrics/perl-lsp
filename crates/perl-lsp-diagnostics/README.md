@@ -3,6 +3,15 @@
 LSP diagnostics provider for Perl. Generates editor-visible diagnostics from
 parse errors, scope analysis, lint checks, and workspace-wide dead code detection.
 
+## When to use this crate
+
+Use `perl-lsp-diagnostics` when you want editor-facing diagnostics for Perl
+source without embedding the full `perl-lsp` runtime.
+
+It combines parse errors, semantic analysis, lint checks, and dead-code signals
+into one provider surface suitable for `textDocument/publishDiagnostics` or
+pull-diagnostics style flows.
+
 ## Features
 
 - **Parse error diagnostics** -- converts parser errors into positioned diagnostics
@@ -23,10 +32,11 @@ parse errors, scope analysis, lint checks, and workspace-wide dead code detectio
 | `strict_warnings::check_strict_warnings` | Missing pragma advisories |
 | `detect_dead_code` | Workspace-wide dead code detection (non-WASM) |
 
-## Workspace Role
+## Workspace role
 
 Internal feature crate consumed by `perl-lsp` to publish diagnostics to editors.
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
+workspace.
 
 ## License
 
