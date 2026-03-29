@@ -2,6 +2,18 @@
 
 This guide gets you from zero to a working Perl language server in your editor.
 
+## First Success
+
+The fastest validation path is:
+
+1. Install `perl-lsp`
+2. Run `perl-lsp --health`
+3. Open a Perl file in your editor
+4. Confirm you get diagnostics and hover text
+
+If those four steps work, your install is good and the rest of this guide is
+just editor-specific setup and feature discovery.
+
 ## What is a Language Server?
 
 A **language server** is a program that runs alongside your editor and gives it deep understanding of your code. Instead of each editor re-implementing features like "go to definition" or "show all references," the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) defines a standard way for any editor to talk to a language-specific backend. perl-lsp is that backend for Perl 5: it parses your code, builds an index of symbols, and responds to editor requests over JSON-RPC -- so you get IDE-grade navigation, completion, diagnostics, and refactoring in VS Code, Neovim, Emacs, Helix, or any other LSP-capable editor. No Perl runtime is required; the server is a single native binary.
@@ -211,7 +223,7 @@ perl-lsp provides:
 |---------|--------------|
 | **Diagnostics** | Real-time syntax error detection |
 | **Completion** | Variables, functions, keywords, file paths |
-| **Hover** | Documentation for 150+ Perl built-ins |
+| **Hover** | Documentation for Perl built-ins, keywords, and special variables |
 | **Definition** | Jump to where symbols are defined |
 | **References** | Find all uses of a symbol |
 | **Rename** | Safely rename variables across files |

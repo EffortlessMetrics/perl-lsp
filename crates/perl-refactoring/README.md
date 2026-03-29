@@ -3,6 +3,16 @@
 Refactoring and modernization utilities for Perl code, part of the
 [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
+## When to use this crate
+
+Use `perl-refactoring` when you want source-edit generation rather than just
+analysis. It is the right crate for:
+
+- import cleanup and reordering
+- modernization suggestions and transforms
+- cross-file rename workflows
+- higher-level workspace refactoring coordination
+
 ## Features
 
 - **Import Optimization** -- detect unused/duplicate imports, generate optimized `use` statements (`ImportOptimizer`)

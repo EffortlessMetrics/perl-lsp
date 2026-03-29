@@ -4,6 +4,17 @@ LSP provider aggregation and tooling integrations for Perl.
 
 Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace (Tier 4).
 
+## When to use this crate
+
+Use `perl-lsp-providers` when you want one dependency that re-exports the main
+Perl LSP feature crates behind a unified surface. It is a good fit for internal
+workspace consumers and external Rust tools that want completion, diagnostics,
+rename, formatting, and similar providers without wiring each microcrate
+manually.
+
+If you want the runnable server, use `perl-lsp`. If you want just one feature,
+prefer the narrower `perl-lsp-*` crate for that area.
+
 ## Overview
 
 This crate is the central aggregation point for all LSP feature providers in the Perl LSP ecosystem. It re-exports individual microcrates (completion, diagnostics, formatting, navigation, rename, semantic tokens, inlay hints, code actions) through a unified API and provides IDE integration shims and backward-compatible legacy import paths.

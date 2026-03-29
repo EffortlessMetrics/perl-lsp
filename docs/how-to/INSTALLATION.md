@@ -59,8 +59,7 @@ Copy-Item perl-lsp\perl-lsp.exe "C:\Program Files\perl-lsp\"
 
 The release automation keeps the Windows package-manager metadata in sync with
 each GitHub release, but only the repo-owned manifest refresh is automated.
-Upstream package submission and the final user-machine install checks remain
-manual.
+For end users, the important install commands are:
 
 - Scoop: `scoop install perl-lsp`
 - Chocolatey: `choco install perl-lsp`
@@ -68,7 +67,13 @@ manual.
   release workflow refreshes it; upstream `winget-pkgs` submission is still a
   manual follow-up
 
-#### Verification Boundary
+## Maintainer-Only Distribution Notes
+
+The remainder of this section is for release maintainers rather than end users.
+Upstream package submission and the final user-machine install checks still
+have manual steps.
+
+### Verification Boundary
 
 Repo-local checks can verify that:
 
@@ -172,6 +177,11 @@ Configure your editor to use the command:
 ```
 perl-lsp --stdio
 ```
+
+## Advanced Integration Notes
+
+These are integration entry points for downstream tool authors, not required
+for a normal editor install.
 
 ### API Access Patterns
 

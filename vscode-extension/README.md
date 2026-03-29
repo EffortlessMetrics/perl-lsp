@@ -5,7 +5,7 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 
-A fast, native Perl 5 language server with 30+ IDE features. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
+A fast, native Perl 5 language server extension. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
 > **0.12.0 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
 
@@ -53,7 +53,8 @@ A fast, native Perl 5 language server with 30+ IDE features. Written in Rust for
 
 ### Walkthrough Previews
 
-These storyboard SVGs are capture plans for the launch demos from issue #2336. They are not the final GIFs; the shipped assets come from recorded editor sessions rendered through the helper script.
+These storyboard SVGs are preview assets for the walkthrough flow. They are not
+the final recorded GIFs.
 
 - [Install, auto-download, and health check storyboard](media/walkthrough/install-health.svg)
 - [Go to definition and find references storyboard](media/walkthrough/find-references.svg)
@@ -151,7 +152,7 @@ For environments without internet access, set `perl-lsp.downloadBaseUrl` to an i
 - Postfix dereferencing (`$ref->@*`)
 - Smart match operator (`~~`)
 - Indirect object syntax
-- 150+ built-in function signatures with parameter documentation
+- Built-in function signatures with parameter documentation
 
 ## Commands
 

@@ -25,14 +25,14 @@
 > Install in minutes, get completions and navigation immediately.
 > [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) or [join the conversation](https://github.com/EffortlessMetrics/perl-lsp/discussions).
 
-**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with 98 LSP features, validated against thousands of real-world CPAN modules. Works on Windows, Mac, and Linux out of the box.
+**The only Perl language server that doesn't require Perl to work.** A zero-dependency Rust binary with broad LSP and DAP coverage, validated against real-world CPAN modules. Works on Windows, macOS, and Linux out of the box.
 
 ## Why perl-lsp?
 
 - **No Perl runtime required** -- a single native binary; no dependency on a working Perl installation for IDE features.
 - **Fast** -- sub-millisecond incremental parsing, under 50ms LSP response times.
-- **Comprehensive** -- 98 LSP/DAP features including completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging.
-- **Perl-aware hover** -- hover over any special variable (`$_`, `@ARGV`, `%ENV`, `$/`, and 60+ more) to get full built-in documentation inline, without leaving your editor.
+- **Comprehensive** -- completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic highlighting, code actions, and debugging in one native toolchain.
+- **Perl-aware hover** -- hover over special variables such as `$_`, `@ARGV`, `%ENV`, and `$/` to get built-in documentation inline without leaving your editor.
 - **Broad syntax coverage** -- parses Perl 5.8 through 5.40 including heredocs, regex, quoting constructs, formats, and OO frameworks.
 - **CPAN-validated** -- continuously tested against top CPAN distributions with a ratchet-only-forward CI gate that never allows regressions.
 
@@ -86,7 +86,7 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 | What you see | What it does |
 |-------------|-------------|
 | **Diagnostics** | Real-time parse error detection as you type |
-| **Completions** | 150+ builtins, workspace symbols, modules, and keywords |
+| **Completions** | Builtins, workspace symbols, modules, and keywords |
 | **Go to definition** | Cross-file navigation for subs, methods, and modules |
 | **Hover** | Function signatures, documentation, module info, and **built-in special variable docs** (hover over `$_`, `@ARGV`, `%ENV`, etc. for instant reference) |
 | **Find references** | Locate all usages of a symbol across your workspace |
@@ -95,7 +95,7 @@ For a full walkthrough with troubleshooting tips, see the **[Getting Started gui
 | **Code actions** | Organize imports, modernize syntax, quick fixes |
 | **Semantic highlighting** | Context-aware syntax coloring |
 | **Debugging** | Built-in DAP: breakpoints, stepping, variables, watch — [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) |
-| **And 85+ more...** | Inlay hints, code lens, call hierarchy, folding, color decorators |
+| **And more** | Inlay hints, code lens, call hierarchy, folding, color decorators |
 
 The full feature catalog lives in [`features.toml`](features.toml). For live project metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
@@ -244,7 +244,7 @@ Current parse rates and the edge-case roadmap are tracked in [CURRENT_STATUS.md]
 
 ## Architecture
 
-The workspace is organized as 130+ focused Rust crates, each with a single responsibility. The main entry points:
+The workspace is organized as many focused Rust crates, each with a single responsibility. The main entry points:
 
 | Crate | Purpose |
 |-------|---------|
