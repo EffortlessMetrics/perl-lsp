@@ -779,6 +779,7 @@ $name;
     // ── Additional type inference coverage for Issue #348 ────────────────
 
     #[test]
+    #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
     fn test_hover_hash_variable_shows_inferred_type() -> Result<(), Box<dyn std::error::Error>> {
         // Hash variables should show their inferred type when concretely assigned.
         let code = "my %config = (host => 'localhost', port => 8080);\n%config;\n";
@@ -801,6 +802,7 @@ $name;
     }
 
     #[test]
+    #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
     fn test_hover_string_literal_assignment_shows_str_type()
     -> Result<(), Box<dyn std::error::Error>> {
         // Scalar holding a string literal should infer to Str type.

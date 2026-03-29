@@ -214,6 +214,16 @@ fn windows_rooted_file_uri_to_path(_url: &Url) -> Option<std::path::PathBuf> {
 /// On `wasm32`, only URI parsing is performed without filesystem operations.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn normalize_uri(uri: &str) -> String {
+    let path = std::path::Path::new(uri);
+
+    // Raw absolute filesystem paths should normalize to file:// URIs before
+    // URL parsing, especially on Windows where `C:\foo` can parse as `c:`.
+    if path.is_absolute()
+        && let Ok(uri_string) = fs_path_to_uri(path)
+    {
+        return uri_string;
+    }
+
     // Try to parse as URL first
     if let Ok(url) = Url::parse(uri) {
         // Already a valid URI, return as-is
@@ -221,8 +231,6 @@ pub fn normalize_uri(uri: &str) -> String {
     }
 
     // If not a valid URI, try to treat as a file path
-    let path = std::path::Path::new(uri);
-
     // Try to convert path to URI using our helper function
     if let Ok(uri_string) = fs_path_to_uri(path) {
         return uri_string;
@@ -344,6 +352,15 @@ mod tests {
         fn test_normalize_uri_special() {
             let uri = normalize_uri("untitled:Untitled-1");
             assert_eq!(uri, "untitled:Untitled-1");
+        }
+
+        #[test]
+        fn test_normalize_uri_absolute_path() {
+            let path = std::env::temp_dir().join("normalize-uri-absolute.pl");
+            let raw_path = path.to_string_lossy();
+            let expected = must(fs_path_to_uri(&path));
+
+            assert_eq!(normalize_uri(raw_path.as_ref()), expected);
         }
 
         #[test]

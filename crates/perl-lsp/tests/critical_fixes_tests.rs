@@ -1,16 +1,23 @@
 use perl_parser::workspace_index::{LspWorkspaceSymbol, WorkspaceIndex};
 use serde_json::Value;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use url::Url;
+
+fn synthetic_absolute_path(name: &str) -> PathBuf {
+    std::env::temp_dir().join("perl-lsp-critical-fixes").join(name)
+}
 
 #[test]
 fn test_document_store_close_uses_normalized_uri() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index a file with a non-normalized URI (missing file://)
-    let uri = "/home/user/test.pl";
+    let path = synthetic_absolute_path("document-store-close.pl");
+    let uri = path.to_string_lossy().into_owned();
     let text = "sub test_func { my $x = 42; }";
-    let url = Url::from_file_path(uri).map_err(|_| "Failed to create URL from file path")?;
+    let url = Url::from_file_path(&path)
+        .map_err(|_| format!("Failed to create URL from {}", path.display()))?;
     index.index_file(url, text.to_string())?;
 
     // The file should be indexed (accessible with both normalized and non-normalized)
@@ -18,20 +25,22 @@ fn test_document_store_close_uses_normalized_uri() -> Result<(), Box<dyn std::er
     assert_eq!(symbols.len(), 1);
 
     // Remove the file with the original URI (should work due to normalization)
-    index.remove_file(uri);
+    index.remove_file(&uri);
 
     // The file should be completely removed
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 0);
 
     // Re-index with file:// prefix
-    let normalized_uri = "file:///home/user/test.pl";
-    index.index_file(Url::parse(normalized_uri)?, text.to_string())?;
+    let normalized_uri = Url::from_file_path(&path)
+        .map_err(|_| format!("Failed to create URL from {}", path.display()))?
+        .to_string();
+    index.index_file(Url::parse(&normalized_uri)?, text.to_string())?;
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 1);
 
     // Remove with non-normalized URI should still work
-    index.remove_file(uri);
+    index.remove_file(&uri);
     let symbols = index.find_symbols("test_func");
     assert_eq!(symbols.len(), 0);
 
@@ -160,33 +169,41 @@ fn test_workspace_symbol_deduplication() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn test_uri_normalization_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
+    let absolute_path = synthetic_absolute_path("uri-normalization-consistency.pl");
+    let absolute_path_uri = Url::from_file_path(&absolute_path)
+        .map_err(|_| format!("Failed to create URL from {}", absolute_path.display()))?
+        .to_string();
+    let file_scheme_path = synthetic_absolute_path("uri-normalization-file-scheme.pl");
+    let file_scheme_uri = Url::from_file_path(&file_scheme_path)
+        .map_err(|_| format!("Failed to create URL from {}", file_scheme_path.display()))?
+        .to_string();
 
     // Test various URI formats
     let test_cases = vec![
-        ("/absolute/path/test.pl", "file:///absolute/path/test.pl"),
-        ("file:///with/scheme/test.pl", "file:///with/scheme/test.pl"),
-        ("untitled:Untitled-1", "untitled:Untitled-1"), // Special VSCode scheme
+        (absolute_path.to_string_lossy().into_owned(), absolute_path_uri),
+        (file_scheme_uri.clone(), file_scheme_uri),
+        ("untitled:Untitled-1".to_string(), "untitled:Untitled-1".to_string()), // Special VSCode scheme
     ];
 
-    for (input_uri, _expected_pattern) in test_cases {
-        let text = format!("sub test_{} {{ }}", input_uri.len());
+    for (idx, (input_uri, _expected_pattern)) in test_cases.into_iter().enumerate() {
+        let func_name = format!("test_case_{idx}");
+        let text = format!("sub {func_name} {{ }}");
 
         // Index with various formats
         let url = if input_uri.starts_with("file://") || input_uri.starts_with("untitled:") {
-            Url::parse(input_uri)?
+            Url::parse(&input_uri)?
         } else {
-            Url::from_file_path(input_uri)
+            Url::from_file_path(&input_uri)
                 .map_err(|_| format!("Failed to create URL from file path: {}", input_uri))?
         };
         index.index_file(url, text.clone())?;
 
         // Should be able to find the symbol
-        let func_name = format!("test_{}", input_uri.len());
         let symbols = index.find_symbols(&func_name);
         assert!(!symbols.is_empty(), "Failed to find symbol indexed with URI: {}", input_uri);
 
         // Remove and verify it's gone
-        index.remove_file(input_uri);
+        index.remove_file(&input_uri);
         let symbols = index.find_symbols(&func_name);
         assert!(symbols.is_empty(), "Failed to remove file with URI: {}", input_uri);
     }

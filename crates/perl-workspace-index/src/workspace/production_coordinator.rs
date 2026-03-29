@@ -45,6 +45,8 @@ use super::state_machine::{IndexState, IndexStateMachine, InvalidationReason, Tr
 use super::workspace_index::{IndexResourceLimits, WorkspaceIndex};
 use crate::position::{Position, Range};
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use url::Url;
 
@@ -93,6 +95,11 @@ impl WorkspaceCacheManager {
     /// Get AST node from cache.
     pub fn get_ast(&self, key: &str) -> Option<Vec<u8>> {
         self.ast_cache.get(&key.to_string())
+    }
+
+    /// Peek AST node from cache without changing hit/miss counters.
+    pub fn peek_ast(&self, key: &str) -> Option<Vec<u8>> {
+        self.ast_cache.peek(&key.to_string())
     }
 
     /// Insert AST node into cache.
@@ -311,13 +318,23 @@ impl ProductionIndexCoordinator {
     /// `Ok(())` if indexing succeeded, otherwise an error.
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let start = self.slo_tracker.start_operation(OperationType::FileIndexing);
+        let cache_key = uri.to_string();
+        let serialized = Self::serialize_file_index(&text);
+
+        if self.cache.peek_ast(&cache_key).as_deref() == Some(serialized.as_slice()) {
+            let _ = self.cache.get_ast(&cache_key);
+            self.slo_tracker.record_operation_type(
+                OperationType::FileIndexing,
+                start,
+                OperationResult::Success,
+            );
+            return Ok(());
+        }
 
         // Index the file
-        self.index.index_file(uri.clone(), text)?;
+        self.index.index_file(uri, text)?;
 
-        // Cache the result
-        let cache_key = uri.to_string();
-        let serialized = self.serialize_file_index(&uri)?;
+        // Cache the content fingerprint for repeated identical indexing.
         self.cache.insert_ast(cache_key, serialized);
 
         // Update state if needed
@@ -507,10 +524,11 @@ impl ProductionIndexCoordinator {
             .into()
     }
 
-    /// Serialize file index for caching.
-    fn serialize_file_index(&self, _uri: &Url) -> Result<Vec<u8>, String> {
-        // Placeholder - in production, serialize the actual file index
-        Ok(Vec::new())
+    /// Serialize file content for caching.
+    fn serialize_file_index(text: &str) -> Vec<u8> {
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        hasher.finish().to_le_bytes().to_vec()
     }
 }
 

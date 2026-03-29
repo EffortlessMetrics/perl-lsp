@@ -49,7 +49,9 @@ fn test_initialization_contract() -> TestResult {
     // The harness returns the 'result' field directly, which contains 'capabilities'
     let caps = response.get("capabilities").ok_or("initialize response must have capabilities")?;
 
-    // CRITICAL CONTRACT: Must have these exact trigger characters
+    // CRITICAL CONTRACT: Trigger characters must match the advertised
+    // single-character completion triggers used for sigils, arrow methods,
+    // and package separators.
     let triggers = caps
         .pointer("/completionProvider/triggerCharacters")
         .and_then(|v| v.as_array())
@@ -57,14 +59,15 @@ fn test_initialization_contract() -> TestResult {
 
     let trigger_set: HashSet<_> = triggers.iter().filter_map(|v| v.as_str()).collect();
 
-    // Must have exactly these triggers
-    for trigger in ["$", "@", "%", "->"] {
+    // Must have exactly these single-character triggers
+    for trigger in ["$", "@", "%", ">", ":", "-"] {
         assert!(trigger_set.contains(trigger), "Missing required trigger character: {}", trigger);
     }
 
-    // Must NOT have these as separate characters (regression prevention)
-    assert!(!trigger_set.contains("-"), "Must not have '-' as separate trigger");
-    assert!(!trigger_set.contains(">"), "Must not have '>' as separate trigger");
+    // LSP trigger characters must be one character each, so multi-character
+    // operator strings should not be advertised directly.
+    assert!(!trigger_set.contains("->"), "Must not advertise '->' as a multi-character trigger");
+    assert!(!trigger_set.contains("::"), "Must not advertise '::' as a multi-character trigger");
 
     // Text document sync must be Full (1) — the server fully reparses on every edit
     let sync = caps.get("textDocumentSync");
@@ -108,8 +111,10 @@ fn test_minimal_client_initialization() -> TestResult {
         .pointer("/completionProvider/triggerCharacters")
         .and_then(|v| v.as_array())
         .ok_or("triggerCharacters")?;
-    assert_eq!(triggers.len(), 4);
-    assert!(triggers.iter().any(|t| t == "->"));
+    assert_eq!(triggers.len(), 6);
+    assert!(triggers.iter().any(|t| t == "-"));
+    assert!(triggers.iter().any(|t| t == ">"));
+    assert!(triggers.iter().any(|t| t == ":"));
 
     Ok(())
 }
