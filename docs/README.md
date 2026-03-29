@@ -1,7 +1,8 @@
 # perl-lsp Documentation
 
-Use this directory as the docs front door. It is organized by task, not by the
-project's internal crate layout.
+Use this directory as the short docs front door. It tells you where to go next
+without making you learn the workspace layout first. For the full Diataxis-style
+map of the docs tree, use [INDEX.md](INDEX.md).
 
 ## Canonical Sources
 
@@ -15,29 +16,25 @@ project's internal crate layout.
 
 Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), treat it as stale until reverified.
 
-## I Need To...
+## Common Routes
 
-- install or upgrade perl-lsp: [how-to/INSTALLATION.md](how-to/INSTALLATION.md)
-- configure an editor: [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
-- fix a broken setup: [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md)
-- upgrade an existing install: [how-to/UPGRADING.md](how-to/UPGRADING.md)
-- understand what is shipped now: [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md)
-- see the current release plan: [project/ROADMAP.md](project/ROADMAP.md)
-- work on the codebase: [../CONTRIBUTING.md](../CONTRIBUTING.md)
+| If you need to... | Read this |
+| --- | --- |
+| get working fast | [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md) |
+| install or upgrade | [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/UPGRADING.md](how-to/UPGRADING.md) |
+| configure an editor | [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md) |
+| troubleshoot a broken setup | [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md) |
+| see what is true now | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) |
+| see the current release plan | [project/ROADMAP.md](project/ROADMAP.md) |
+| work on the codebase | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
+| browse the full docs map | [INDEX.md](INDEX.md) |
 
-## Start Here
+## Docs by Type
 
-- New users: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
-- Existing installs: [how-to/UPGRADING.md](how-to/UPGRADING.md)
-- Editor setup: [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
-- Contributors: [../CONTRIBUTING.md](../CONTRIBUTING.md)
-
-## Docs by Job
-
-- Tutorials: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
+- Tutorial: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
 - How-to: [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md), [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md), [how-to/UPGRADING.md](how-to/UPGRADING.md)
 - Reference: [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md), [reference/CONFIG.md](reference/CONFIG.md), [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md)
-- Project: [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), [project/ROADMAP.md](project/ROADMAP.md), [project/CI.md](project/CI.md)
+- Explanation and project docs: [INDEX.md](INDEX.md), [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), [project/ROADMAP.md](project/ROADMAP.md), [project/CI.md](project/CI.md)
 
 ## Maintenance
 

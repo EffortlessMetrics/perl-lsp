@@ -1,24 +1,24 @@
 # NOW / NEXT / LATER
 
-> Last Updated: 2026-03-28
+> Last Updated: 2026-03-29
 > Workspace version line: `v0.12.0`
-> Latest published release: `v0.11.0` (verified 2026-03-28)
-> Active milestone: `v0.12.0` initial public alpha release prep
+> Latest published GitHub release: `v0.11.0` (verified 2026-03-29)
+> Active milestone: `v0.12.0` initial public alpha cut
 
 This file is the short planning snapshot. The detailed roadmap is [docs/project/ROADMAP.md](docs/project/ROADMAP.md). The evidence-backed status view is [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
 ## NOW
 
-- Parser hardening: raise the CPAN baseline, keep boundedness receipts green, and land Wave 2-4 parser fixes
-- Semantic framework coverage: Moo, Moose, Class::Accessor, `use parent` / `use base`, and export-list-aware resolution
-- Release and tooling hygiene: keep `nix develop -c just ci-gate` green while initial public alpha prep lands
-- Documentation alignment: keep README, roadmap, status, and install guidance consistent about workspace version versus latest published release
+- Release execution: keep `nix develop -c just ci-gate` and release receipts green while `v0.12.0` moves from version line to shipped release
+- Parser hardening: keep corpus ratchets honest and finish the highest-value edge-case fixes
+- Semantic coverage: land the framework-aware resolution work that blocks real project navigation
+- Docs alignment: keep README, roadmap, changelog, status, and install guidance consistent about what is already published versus what is still on `main`
 
 ## NEXT
 
 - Diagnostic hardening around `strict`, `warnings`, safe static analysis, and dead-code signals
-- Refactoring and debugger reliability beyond the current preview posture
-- Broader release-surface cleanup after the `v0.12.0` initial public alpha cut
+- Refactoring and debugger reliability beyond the current alpha posture
+- Post-release cleanup for package-manager, docs, and distribution surfaces
 
 ## LATER
 

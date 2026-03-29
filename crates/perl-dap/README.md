@@ -1,10 +1,11 @@
 # perl-dap
 
-Native Debug Adapter Protocol server for Perl.
+Use this crate when you need a native Debug Adapter Protocol server for Perl,
+not just debugger helper components.
 
 `perl-dap` is the runtime layer of the debugger stack. It speaks DAP over stdio
-or TCP, dispatches requests, validates breakpoints, and renders values. Use it
-when you want to debug Perl from a DAP-capable editor or tool.
+or TCP, dispatches requests, validates breakpoints, and renders values for
+DAP-capable editors and tools.
 
 ## Boundaries
 

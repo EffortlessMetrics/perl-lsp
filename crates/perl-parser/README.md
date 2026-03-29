@@ -1,17 +1,16 @@
 # perl-parser
 
-High-level facade for the Perl parsing stack.
+Use this crate when you want one dependency for parsing Perl plus the higher
+layers that usually come next: semantic analysis, workspace indexing,
+refactoring, and the LSP-oriented provider re-exports.
 
-Use this crate when you want one entry point for parsing, semantic analysis,
-workspace indexing, refactoring, and the LSP provider re-exports that sit on
-top of them. If you only need the parser engine, use `perl-parser-core`
-directly.
+If you only need the parser engine itself, use `perl-parser-core` directly.
 
 ## Where it fits
 
-`perl-parser` is the top of the parsing stack. It re-exports the lower-level
-parser, analysis, workspace, and refactoring crates so downstream code can
-depend on one crate instead of the whole family.
+`perl-parser` is the top of the parsing stack. It lets downstream tools depend
+on one crate instead of wiring the parser, analysis, workspace, and refactoring
+families together by hand.
 
 ## Main entry points
 
@@ -35,5 +34,5 @@ assert!(!ast.to_sexp().is_empty());
 ## Typical use
 
 Use `perl-parser` when you are building editor tooling, code transforms, or
-tests that need both parsing and the higher-level analysis layers. If you only
-need a small slice of the stack, depend on the lower-level crate directly.
+tests that need both parsing and the layers above parsing. If you only need a
+small slice of the stack, depend on the narrower crate directly.
