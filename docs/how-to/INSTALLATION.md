@@ -1,6 +1,10 @@
 # Installation Guide
 
-Perl Language Server (perl-lsp) is a high-performance Language Server Protocol implementation for Perl 5. The current release is [v0.12.0](https://github.com/EffortlessMetrics/perl-lsp/releases/latest) (public alpha).
+Perl Language Server (perl-lsp) is a high-performance Language Server Protocol
+implementation for Perl 5. The repository currently tracks the `v0.12.0`
+release target, while crates.io and GitHub Releases provide the latest
+published version. Always check the releases page before copying a version
+number from `main`.
 
 ## Install from crates.io
 
@@ -35,7 +39,7 @@ Binaries are provided for the following platforms:
 #### Linux / macOS (general)
 ```bash
 # Replace VERSION and ARCH with values from the releases page
-# e.g. VERSION=0.12.0 ARCH=x86_64-unknown-linux-gnu
+# e.g. VERSION=<published-version> ARCH=x86_64-unknown-linux-gnu
 wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${VERSION}/perl-lsp-${VERSION}-${ARCH}.tar.gz
 tar xzf perl-lsp-${VERSION}-${ARCH}.tar.gz
 sudo cp perl-lsp-${VERSION}-${ARCH}/perl-lsp /usr/local/bin/
@@ -44,8 +48,8 @@ chmod +x /usr/local/bin/perl-lsp
 
 #### Windows x86_64
 ```powershell
-# Replace VERSION with the version from the releases page (e.g. 0.12.0)
-$VERSION = "0.12.0"
+# Replace VERSION with the version from the releases page
+$VERSION = "<published-version>"
 Invoke-WebRequest "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$VERSION/perl-lsp-$VERSION-x86_64-pc-windows-msvc.zip" -OutFile perl-lsp.zip
 Expand-Archive perl-lsp.zip -DestinationPath perl-lsp
 Copy-Item perl-lsp\perl-lsp.exe "C:\Program Files\perl-lsp\"

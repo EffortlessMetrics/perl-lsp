@@ -116,7 +116,17 @@ pub fn run_hook_tests() -> Result<()> {
     let mut pass = 0u32;
     let mut fail = 0u32;
 
-    let task_completed_no_payload = run_script(task_completed.as_path(), None, None)?;
+    let temp_root = std::env::temp_dir().join(format!(
+        "xtask-hook-tests-{}",
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+    ));
+    fs::create_dir_all(&temp_root).context("Failed to create temporary ops directory")?;
+
+    let task_repo = temp_root.join("task-completed-repo");
+    create_non_rust_test_repo(&task_repo)?;
+
+    let task_completed_no_payload =
+        run_script(task_completed.as_path(), None, None, Some(task_repo.as_path()))?;
     assert_exit_code(
         0,
         "task-completed passes with no staged .rs files",
@@ -125,17 +135,12 @@ pub fn run_hook_tests() -> Result<()> {
         &mut fail,
     );
 
-    let temp_root = std::env::temp_dir().join(format!(
-        "xtask-hook-tests-{}",
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
-    ));
-    fs::create_dir_all(&temp_root).context("Failed to create temporary ops directory")?;
-
     let sample_payload =
         r#"{"subagent_name":"test-agent","subagent_type":"builder","session_id":"abc123"}"#;
     let temp_ops = temp_root.join("subagent-stop");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
-    let subagent_out = run_script(&subagent_stop, Some(sample_payload), Some(temp_ops.as_path()))?;
+    let subagent_out =
+        run_script(&subagent_stop, Some(sample_payload), Some(temp_ops.as_path()), None)?;
     assert_exit_code(
         0,
         "subagent-stop exits 0 with payload",
@@ -164,8 +169,12 @@ pub fn run_hook_tests() -> Result<()> {
     let temp_ops = temp_root.join("task-completed-write");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
     let sample_payload_tc = r#"{"session_id":"abc123","cwd":"/repo/worktrees/agent-xyz"}"#;
-    let task_completed_with_payload =
-        run_script(&task_completed, Some(sample_payload_tc), Some(temp_ops.as_path()))?;
+    let task_completed_with_payload = run_script(
+        &task_completed,
+        Some(sample_payload_tc),
+        Some(temp_ops.as_path()),
+        Some(task_repo.as_path()),
+    )?;
     assert_exit_code(
         0,
         "task-completed exits 0 with metrics payload",
@@ -192,10 +201,15 @@ pub fn run_hook_tests() -> Result<()> {
 
     let temp_ops = temp_root.join("task-completed-empty");
     fs::create_dir_all(&temp_ops).context("Failed to create temporary OPS_DIR")?;
-    let _ = run_script(&task_completed, Some("{}"), Some(temp_ops.as_path()))?;
+    let _ = run_script(
+        &task_completed,
+        Some("{}"),
+        Some(temp_ops.as_path()),
+        Some(task_repo.as_path()),
+    )?;
 
     let safe_payload = r#"{"tool_input":{"command":"git status"}}"#;
-    let pre_tool_safe = run_script(&pre_tool_use, Some(safe_payload), None)?;
+    let pre_tool_safe = run_script(&pre_tool_use, Some(safe_payload), None, None)?;
     assert_exit_code(
         0,
         "pre-tool-use allows safe commands",
@@ -205,7 +219,7 @@ pub fn run_hook_tests() -> Result<()> {
     );
 
     let forced_payload = r#"{"tool_input":{"command":"git push --force"}}"#;
-    let pre_tool_forced = run_script(&pre_tool_use, Some(forced_payload), None)?;
+    let pre_tool_forced = run_script(&pre_tool_use, Some(forced_payload), None, None)?;
     assert_exit_code(
         2,
         "pre-tool-use blocks git push --force",
@@ -215,7 +229,7 @@ pub fn run_hook_tests() -> Result<()> {
     );
 
     let reset_payload = r#"{"tool_input":{"command":"git reset --hard"}}"#;
-    let pre_tool_reset = run_script(&pre_tool_use, Some(reset_payload), None)?;
+    let pre_tool_reset = run_script(&pre_tool_use, Some(reset_payload), None, None)?;
     assert_exit_code(
         2,
         "pre-tool-use blocks git reset --hard",
@@ -225,7 +239,7 @@ pub fn run_hook_tests() -> Result<()> {
     );
 
     let empty_payload = r#"{"tool_input":{}}"#;
-    let pre_tool_empty = run_script(&pre_tool_use, Some(empty_payload), None)?;
+    let pre_tool_empty = run_script(&pre_tool_use, Some(empty_payload), None, None)?;
     assert_exit_code(
         0,
         "pre-tool-use allows empty command",
@@ -239,7 +253,7 @@ pub fn run_hook_tests() -> Result<()> {
     let payload_with_cwd =
         r#"{"subagent_type":"builder","cwd":"/repo/worktrees/agent-abc","session_id":"sess1"}"#;
     let subagent_out =
-        run_script(&subagent_stop, Some(payload_with_cwd), Some(temp_ops.as_path()))?;
+        run_script(&subagent_stop, Some(payload_with_cwd), Some(temp_ops.as_path()), None)?;
     assert_exit_code(
         0,
         "subagent-stop exits 0 with cwd payload",
@@ -266,11 +280,15 @@ fn run_script(
     path: &Path,
     input: Option<&str>,
     ops_dir: Option<&Path>,
+    current_dir: Option<&Path>,
 ) -> Result<std::process::Output> {
-    let mut command = Command::new("bash");
+    let mut command = Command::new(bash_executable());
     command.arg(path);
     if let Some(dir) = ops_dir {
         command.env("OPS_DIR", dir);
+    }
+    if let Some(dir) = current_dir {
+        command.current_dir(dir);
     }
 
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -288,6 +306,70 @@ fn run_script(
 
     let output = child.wait_with_output().context("Failed to read script output")?;
     Ok(output)
+}
+
+fn bash_executable() -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path) = git_bash_executable() {
+            return path;
+        }
+
+        let default = PathBuf::from(r"C:\Program Files\Git\bin\bash.exe");
+        if default.exists() {
+            return default;
+        }
+    }
+
+    PathBuf::from("bash")
+}
+
+#[cfg(windows)]
+fn git_bash_executable() -> Option<PathBuf> {
+    let output = Command::new("where.exe").arg("git.exe").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let git_exe = stdout.lines().find(|line| !line.trim().is_empty())?.trim();
+    let git_root = PathBuf::from(git_exe).parent()?.parent()?.to_path_buf();
+    let bash = git_root.join("bin").join("bash.exe");
+    bash.exists().then_some(bash)
+}
+
+fn create_non_rust_test_repo(path: &Path) -> Result<()> {
+    fs::create_dir_all(path)
+        .with_context(|| format!("Failed to create temp repo {}", path.display()))?;
+    fs::write(path.join("README.md"), "# hook test repo\n")
+        .with_context(|| format!("Failed to seed temp repo {}", path.display()))?;
+
+    run_git(path, &["init"])?;
+    run_git(path, &["config", "user.name", "xtask hook tests"])?;
+    run_git(path, &["config", "user.email", "xtask@example.invalid"])?;
+    run_git(path, &["add", "README.md"])?;
+    run_git(path, &["commit", "-m", "seed temp repo"])?;
+
+    Ok(())
+}
+
+fn run_git(repo: &Path, args: &[&str]) -> Result<()> {
+    let output = Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .output()
+        .with_context(|| format!("Failed to run git {:?} in {}", args, repo.display()))?;
+
+    if !output.status.success() {
+        bail!(
+            "git {:?} failed in {}: {}",
+            args,
+            repo.display(),
+            String::from_utf8_lossy(&output.stderr).trim_end()
+        );
+    }
+
+    Ok(())
 }
 
 fn is_executable(path: &Path) -> Result<bool> {

@@ -2,11 +2,15 @@
 
 > Canonical planning document.
 > Evidence and computed metrics belong in [CURRENT_STATUS.md](CURRENT_STATUS.md).
-> Current release line is taken from [`../../Cargo.toml`](../../Cargo.toml); current capability truth is taken from [`../../features.toml`](../../features.toml).
+> Current workspace version is taken from [`../../Cargo.toml`](../../Cargo.toml);
+> published release state must be verified against GitHub Releases or crates.io;
+> current capability truth is taken from [`../../features.toml`](../../features.toml).
 
 ## Current Framing
 
-- Current release line: `v0.12.0` public alpha
+- Workspace version line: `v0.12.0`
+- Latest published release: `v0.11.0` (verified 2026-03-28)
+- Active release target: `v0.12.0` initial public alpha cut
 - Canonical local receipt: `nix develop -c just ci-gate`
 
 ## How To Read This File
@@ -15,20 +19,24 @@
 - This roadmap tells you what we are trying to land next.
 - [../../ROADMAP.md](../../ROADMAP.md) and [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) are summaries, not the canonical plan.
 
-## Current Release Line: v0.12.0 Public Alpha
+## Current Release Target: v0.12.0 Initial Public Alpha Prep
 
-The current shipped line is still public alpha. The repo is usable today, but APIs, protocol details, and packaging can still change between minor releases.
+`main` is already version-bumped to `v0.12.0`, but the latest published release
+is still `v0.11.0` until the final tag and publish flow complete. This roadmap
+tracks the work needed to turn that version bump into the initial public alpha
+release without documentation or packaging drift.
 
-Recent shipped work in the `v0.10.x` to `v0.11.x` alpha line:
+Recent shipped work in the published `v0.10.x` to `v0.11.x` line:
 
 - Initial public-alpha packaging and marketplace preparation
 - Release orchestration and topological publish validation
 - Continued parser, workspace, and LSP microcrate extraction
 - Security hardening, validation receipts, and docs restructuring
 
-## Active Milestone: v0.12.0 Public-Alpha Hardening Sprint
+## Active Milestone: v0.12.0 Initial Public Alpha Release Prep
 
-This milestone is about making the current alpha line more credible on real-world Perl without pretending the stability contract already exists.
+This milestone is about finishing the remaining hardening work, keeping the
+receipts green, and cutting `v0.12.0` as the initial public alpha release.
 
 ### Main tracks
 
@@ -36,7 +44,7 @@ This milestone is about making the current alpha line more credible on real-worl
 - **Parser robustness**: land Wave 2-4 parser fixes, keep edge-case and hang-risk suites bounded
 - **Semantic framework coverage**: Moo, Moose, Class::Accessor, `use parent` / `use base`, and export-list-aware resolution
 - **Editor and debugger hardening**: keep LSP and DAP flows solid while parser work lands
-- **Documentation and release alignment**: make top-level docs, status, roadmap, and release posture stop contradicting each other
+- **Documentation and release alignment**: keep top-level docs, status, release notes, and packaging guidance aligned with the pre-tag `v0.12.0` state
 
 ### Exit criteria
 
@@ -49,7 +57,7 @@ This milestone is about making the current alpha line more credible on real-worl
 - [ ] Moo/Moose/Class::Accessor coverage reaches the maintained test targets
 - [ ] Cross-file inheritance resolution via `use parent` / `use base` lands
 - [ ] Exporter/Sub::Exporter-style export-list parsing improves semantic resolution
-- [ ] `nix develop -c just ci-gate` stays green through the hardening push
+- [ ] `nix develop -c just ci-gate` stays green through initial public alpha release prep
 
 ### Supporting docs
 
@@ -63,7 +71,7 @@ This milestone is about making the current alpha line more credible on real-worl
 
 - Raise CPAN clean-parse coverage while keeping ratchets honest
 - Finish semantic framework work needed for real-world Perl projects
-- Keep the release surface and docs aligned with the current alpha line
+- Keep the release surface and docs aligned with the split between workspace version and latest published release
 
 ### Next
 
@@ -81,7 +89,7 @@ This milestone is about making the current alpha line more credible on real-worl
 
 ### v0.12.0
 
-Public-alpha hardening sprint across parser quality, semantic framework coverage, docs alignment, and release receipts.
+Initial public alpha release across parser quality, semantic framework coverage, docs alignment, and release receipts.
 
 ### v0.13.0
 
@@ -124,9 +132,10 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 
 | Topic | Source |
 | --- | --- |
-| Current release line | [`../../Cargo.toml`](../../Cargo.toml) |
+| Workspace version line | [`../../Cargo.toml`](../../Cargo.toml) |
+| Latest published release | GitHub Releases / crates.io |
 | Capability catalog | [`../../features.toml`](../../features.toml) |
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-03-19 -->
+<!-- Last Updated: 2026-03-28 -->

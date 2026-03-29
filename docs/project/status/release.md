@@ -5,12 +5,14 @@
 
 ## Current Release Call
 
-**Release line**: `v0.12.0` public alpha
-**Ship readiness**: Hardening sprint in progress — not ready to ship as stable
+**Latest published release**: `v0.11.0`
+**Release target**: `v0.12.0` initial public alpha
+**Ship readiness**: Initial-public-alpha final prep in progress — do not tag until release receipts are green
 
 ## Active Blockers
 
-None blocking the alpha release. Parser coverage hardening is ongoing.
+- Release-truth drift must stay closed: repo docs can say `v0.12.0` for `main`, but published-install guidance must stay tied to the latest tagged release until `v0.12.0` ships
+- Final release receipts still need a green `just release-check`, `just version-check`, and `just status-check` run
 
 ## Component Summary
 
@@ -52,4 +54,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-03-22*
+*Last Updated: 2026-03-28*

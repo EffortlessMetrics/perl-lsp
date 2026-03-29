@@ -6,22 +6,23 @@
 
 ## Current Framing
 
-- Current release line: `v0.11.0` public alpha (`Cargo.toml` `workspace.package.version`)
-- Active milestone: `v0.12.0` public-alpha hardening sprint
+- Workspace version line: `v0.12.0` (`Cargo.toml` `workspace.package.version`)
+- Latest published release: `v0.11.0` (GitHub Releases / crates.io, verified 2026-03-28)
+- Active milestone: `v0.12.0` initial public alpha release prep
 - Current priorities: parser-quality ratchets, semantic-framework coverage, DAP/LSP hardening, and documentation alignment
 
 ## Now
 
 - Raise the CPAN baseline and keep parser boundedness receipts green
 - Land semantic framework work for Moo, Moose, `use parent` / `use base`, and export-list-aware resolution
-- Keep release and validation flows stable while the hardening work lands
-- Align top-level documentation so README, roadmap, status, and agent guidance stop contradicting each other
+- Keep release and validation flows stable while initial public alpha prep lands
+- Align top-level documentation so README, roadmap, status, and release guidance stop contradicting each other about `main` versus the latest published artifacts
 
 ## Next
 
 - Diagnostic hardening around `strict`, `warnings`, dead-code signals, and safe analysis
 - Refactoring reliability and debugger hardening beyond the current preview posture
-- Distribution and release-surface cleanup after the public-alpha hardening sprint
+- Distribution and release-surface cleanup after the `v0.12.0` initial public alpha cut
 
 ## Later
 

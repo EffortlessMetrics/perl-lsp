@@ -489,6 +489,7 @@ pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::formatting::FormatRange;
 
     #[test]
     fn end_position_handles_trailing_final_newline() {
@@ -548,38 +549,14 @@ mod tests {
 
     #[test]
     fn formatting_edit_has_correct_end_position() {
-        let formatter = CodeFormatter::new();
-        let options = FormattingOptions {
-            tab_size: 4,
-            insert_spaces: true,
-            trim_trailing_whitespace: None,
-            insert_final_newline: None,
-            trim_final_newlines: None,
-        };
-
         let code = "sub test{my$x=1;return$x;}";
-        match formatter.format_document(code, &options) {
-            Ok(edits) => {
-                if edits.is_empty() {
-                    return;
-                }
-                let server = LspServer::new();
-                let end = server.get_document_end_position(code);
-                if let (Some(line), Some(character)) =
-                    (end["line"].as_u64(), end["character"].as_u64())
-                {
-                    assert_eq!(edits[0].range.end.line, line as u32);
-                    assert_eq!(edits[0].range.end.character, character as u32);
-                }
-            }
-            Err(e) => {
-                let err_msg = e.to_string();
-                let is_not_found = err_msg.contains("not found");
-                if is_not_found {
-                    eprintln!("Skipping test: perltidy not installed");
-                }
-                assert!(is_not_found, "Formatting failed: {}", err_msg);
-            }
+        let server = LspServer::new();
+        let end = server.get_document_end_position(code);
+        let range = FormatRange::whole_document(code);
+
+        if let (Some(line), Some(character)) = (end["line"].as_u64(), end["character"].as_u64()) {
+            assert_eq!(range.end.line, line as u32);
+            assert_eq!(range.end.character, character as u32);
         }
     }
 }

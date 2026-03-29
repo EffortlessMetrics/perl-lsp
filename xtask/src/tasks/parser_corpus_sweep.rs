@@ -348,8 +348,7 @@ pub fn resolve_manifest_modules(
                 continue;
             }
             if let Some((_module_file, path)) = line.split_once('=') {
-                let p = PathBuf::from(path);
-                if p.exists() {
+                if let Some(p) = resolve_manifest_module_path(path) {
                     resolved.push(p);
                 }
             }
@@ -376,6 +375,86 @@ pub fn resolve_manifest_modules(
 fn resolve_module_in_roots(module: &str, roots: &[PathBuf]) -> Option<PathBuf> {
     let relative = PathBuf::from(format!("{}.pm", module.replace("::", "/")));
     roots.iter().map(|root| root.join(&relative)).find(|candidate| candidate.exists())
+}
+
+fn resolve_manifest_module_path(path: &str) -> Option<PathBuf> {
+    resolve_manifest_module_path_impl(path, windows_manifest_module_path)
+}
+
+fn resolve_manifest_module_path_impl<F>(path: &str, windows_converter: F) -> Option<PathBuf>
+where
+    F: Fn(&str) -> Option<PathBuf>,
+{
+    let path = path.trim();
+    if path.is_empty() {
+        return None;
+    }
+
+    let direct = PathBuf::from(path);
+    if direct.exists() {
+        return Some(direct);
+    }
+
+    #[cfg(windows)]
+    {
+        if let Some(converted) = windows_converter(path) {
+            if converted.exists() {
+                return Some(converted);
+            }
+        }
+    }
+
+    None
+}
+
+fn windows_manifest_module_path(path: &str) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        if !path.starts_with('/') {
+            return None;
+        }
+
+        if let Some(converted) = run_cygpath(Path::new("cygpath"), path) {
+            return Some(converted);
+        }
+
+        if let Some(cygpath_exe) = git_cygpath_executable() {
+            return run_cygpath(cygpath_exe.as_path(), path);
+        }
+    }
+
+    let _ = path;
+    None
+}
+
+#[cfg(windows)]
+fn run_cygpath(program: &Path, path: &str) -> Option<PathBuf> {
+    let output = std::process::Command::new(program).args(["-w", path]).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let converted = stdout.trim();
+    if converted.is_empty() {
+        return None;
+    }
+
+    Some(PathBuf::from(converted))
+}
+
+#[cfg(windows)]
+fn git_cygpath_executable() -> Option<PathBuf> {
+    let output = std::process::Command::new("where.exe").arg("git.exe").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let git_exe = stdout.lines().find(|line| !line.trim().is_empty())?.trim();
+    let git_root = PathBuf::from(git_exe).parent()?.parent()?.to_path_buf();
+    let cygpath = git_root.join("usr").join("bin").join("cygpath.exe");
+    cygpath.exists().then_some(cygpath)
 }
 
 /// Enforce strict zero-error policy for common corpus.
@@ -1243,6 +1322,52 @@ mod tests {
         fs::write(&manifest, "# Only comments\n\n# Nothing here\n").expect("write manifest");
         let modules = parse_manifest(&manifest).expect("parse manifest");
         assert!(modules.is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_resolve_manifest_module_path_uses_existing_direct_path() {
+        let dir = std::env::temp_dir().join("test_resolve_manifest_direct_path");
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("Config.pm");
+        fs::write(&file, "package Config; 1;\n").expect("write module");
+
+        let resolved = resolve_manifest_module_path_impl(file.to_string_lossy().as_ref(), |_| None)
+            .expect("should resolve direct path");
+        assert_eq!(resolved, file);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_resolve_manifest_module_path_uses_windows_converter_result() {
+        let dir = std::env::temp_dir().join("test_resolve_manifest_windows_converter");
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("Config.pm");
+        fs::write(&file, "package Config; 1;\n").expect("write module");
+
+        let resolved =
+            resolve_manifest_module_path_impl("/usr/lib/perl5/core_perl/Config.pm", |_| {
+                Some(file.clone())
+            })
+            .expect("should resolve converted path");
+        assert_eq!(resolved, file);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_resolve_manifest_module_path_rejects_missing_paths() {
+        let dir = std::env::temp_dir().join("test_resolve_manifest_missing_path");
+        let _ = fs::create_dir_all(&dir);
+        let missing = dir.join("Missing.pm");
+
+        let resolved =
+            resolve_manifest_module_path_impl("/usr/lib/perl5/core_perl/Missing.pm", |_| {
+                Some(missing.clone())
+            });
+        assert!(resolved.is_none(), "missing paths should not resolve");
+
         let _ = fs::remove_dir_all(&dir);
     }
 

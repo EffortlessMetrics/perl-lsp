@@ -55,11 +55,9 @@ A fast, native Perl 5 language server with 30+ IDE features. Written in Rust for
 
 These storyboard SVGs are capture plans for the launch demos from issue #2336. They are not the final GIFs; the shipped assets come from recorded editor sessions rendered through the helper script.
 
-<p align="center">
-  <a href="media/walkthrough/install-health.svg"><img src="media/walkthrough/install-health.svg" alt="Install, auto-download, and health check storyboard" width="31%" /></a>
-  <a href="media/walkthrough/find-references.svg"><img src="media/walkthrough/find-references.svg" alt="Go to definition and find references storyboard" width="31%" /></a>
-  <a href="media/walkthrough/extract-variable.svg"><img src="media/walkthrough/extract-variable.svg" alt="Extract variable code action storyboard" width="31%" /></a>
-</p>
+- [Install, auto-download, and health check storyboard](media/walkthrough/install-health.svg)
+- [Go to definition and find references storyboard](media/walkthrough/find-references.svg)
+- [Extract variable code action storyboard](media/walkthrough/extract-variable.svg)
 
 See [media/walkthrough/README.md](media/walkthrough/README.md) for the capture plan, recommended render inputs, and GIF size checks.
 

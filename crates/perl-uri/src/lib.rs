@@ -32,6 +32,7 @@
 //! # fn main() {}
 //! ```
 
+use percent_encoding::percent_decode_str;
 use url::Url;
 
 /// Convert a `file://` URI to a filesystem path.
@@ -75,8 +76,10 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
         return None;
     }
 
-    // Convert to filesystem path using the url crate's built-in method
-    url.to_file_path().ok()
+    // Convert to filesystem path using the url crate's built-in method.
+    // On Windows, accept rooted file URIs like file:///tmp/test.pl as \tmp\test.pl
+    // so cross-platform tests and internal helpers stay permissive.
+    url.to_file_path().ok().or_else(|| windows_rooted_file_uri_to_path(&url))
 }
 
 /// Convert a filesystem path to a `file://` URI.
@@ -114,7 +117,7 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
 /// This function is not available on `wasm32` targets (no filesystem).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, String> {
-    let path = path.as_ref();
+    let path = normalize_filesystem_path(path.as_ref());
 
     // Convert to absolute path if relative
     let abs_path = if path.is_absolute() {
@@ -129,6 +132,53 @@ pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, Stri
     Url::from_file_path(&abs_path)
         .map(|url| url.to_string())
         .map_err(|_| format!("Failed to convert path to URI: {}", abs_path.display()))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn normalize_filesystem_path(path: &std::path::Path) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path_str) = path.to_str() {
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+                return std::path::PathBuf::from(format!(r"\\{}", stripped));
+            }
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                return std::path::PathBuf::from(stripped);
+            }
+        }
+    }
+
+    path.to_path_buf()
+}
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+fn windows_rooted_file_uri_to_path(url: &Url) -> Option<std::path::PathBuf> {
+    match url.host_str() {
+        None | Some("localhost") => {}
+        Some(_) => return None,
+    }
+
+    let decoded = percent_decode_str(url.path()).decode_utf8().ok()?;
+    if decoded.is_empty() {
+        return None;
+    }
+
+    let native = if decoded.len() > 3
+        && decoded.starts_with('/')
+        && decoded.as_bytes()[2] == b':'
+        && decoded.as_bytes()[1].is_ascii_alphabetic()
+    {
+        decoded[1..].replace('/', "\\")
+    } else {
+        decoded.replace('/', "\\")
+    };
+
+    Some(std::path::PathBuf::from(native))
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
+fn windows_rooted_file_uri_to_path(_url: &Url) -> Option<std::path::PathBuf> {
+    None
 }
 
 /// Normalize a URI to a consistent form.

@@ -76,23 +76,45 @@ impl ExecuteCommandProvider {
     pub(crate) fn run_tests(&self, file_path: &Path) -> Result<Value, String> {
         let file_path_str = file_path.to_string_lossy();
         let is_test_file = self.is_test_file(&file_path_str);
-        let (command_name, cmd) = if is_test_file && self.command_exists("prove") {
-            ("prove", {
-                let mut cmd = Command::new("prove");
-                cmd.arg("-v").arg("--").arg(file_path.as_os_str());
-                cmd
-            })
-        } else {
-            ("perl", {
-                let mut cmd = Command::new("perl");
-                cmd.arg("--").arg(file_path.as_os_str());
-                cmd
-            })
-        };
+        if is_test_file && self.command_exists("prove") {
+            let mut prove_cmd = Command::new("prove");
+            prove_cmd.arg("-v").arg("--").arg(file_path.as_os_str());
+            match crate::util::run_command_with_timeout(prove_cmd, 30) {
+                Ok(result) => {
+                    return Ok(
+                        self.format_command_result(result, Some(("command", "prove".into())))
+                    );
+                }
+                Err(error) => {
+                    let mut perl_cmd = Command::new("perl");
+                    perl_cmd.arg("--").arg(file_path.as_os_str());
+                    match crate::util::run_command_with_timeout(perl_cmd, 30) {
+                        Ok(result) => {
+                            return Ok(self
+                                .format_command_result(result, Some(("command", "perl".into()))));
+                        }
+                        Err(fallback_error) => {
+                            return Ok(self.format_command_launch_failure(
+                                "prove",
+                                format!(
+                                    "Failed to run prove: {error}; perl fallback also failed: {fallback_error}"
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
 
-        let result = crate::util::run_command_with_timeout(cmd, 30)
-            .map_err(|e| format!("Failed to run {}: {}", command_name, e))?;
-        Ok(self.format_command_result(result, Some(("command", command_name.into()))))
+        let mut perl_cmd = Command::new("perl");
+        perl_cmd.arg("--").arg(file_path.as_os_str());
+        match crate::util::run_command_with_timeout(perl_cmd, 30) {
+            Ok(result) => Ok(self.format_command_result(result, Some(("command", "perl".into())))),
+            Err(error) => {
+                Ok(self
+                    .format_command_launch_failure("perl", format!("Failed to run perl: {error}")))
+            }
+        }
     }
 
     pub(crate) fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
@@ -109,19 +131,27 @@ impl ExecuteCommandProvider {
 
         let mut perl_cmd = Command::new("perl");
         perl_cmd.arg("-e").arg(perl_code).arg("--").arg(file_path.as_os_str()).arg(sub_name);
-        let result = crate::util::run_command_with_timeout(perl_cmd, 30)
-            .map_err(|e| format!("Failed to run test subroutine: {}", e))?;
-
-        Ok(self.format_command_result(result, Some(("subroutine", sub_name.into()))))
+        match crate::util::run_command_with_timeout(perl_cmd, 30) {
+            Ok(result) => {
+                Ok(self.format_command_result(result, Some(("subroutine", sub_name.into()))))
+            }
+            Err(error) => Ok(self.format_command_launch_failure(
+                "perl",
+                format!("Failed to run test subroutine: {error}"),
+            )),
+        }
     }
 
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
         let mut perl_cmd = Command::new("perl");
         perl_cmd.arg("--").arg(file_path.as_os_str());
-        let result = crate::util::run_command_with_timeout(perl_cmd, 30)
-            .map_err(|e| format!("Failed to run file: {}", e))?;
-
-        Ok(self.format_command_result(result, None))
+        match crate::util::run_command_with_timeout(perl_cmd, 30) {
+            Ok(result) => Ok(self.format_command_result(result, None)),
+            Err(error) => {
+                Ok(self
+                    .format_command_launch_failure("perl", format!("Failed to run file: {error}")))
+            }
+        }
     }
 
     fn debug_tests(&self, file_path: &Path) -> Result<Value, String> {
@@ -604,6 +634,15 @@ impl ExecuteCommandProvider {
         response
     }
 
+    fn format_command_launch_failure(&self, command: &str, error: String) -> Value {
+        json!({
+            "success": false,
+            "output": String::new(),
+            "error": error,
+            "command": command
+        })
+    }
+
     fn resolve_path_from_args(&self, arguments: &[Value]) -> Result<PathBuf, String> {
         let raw_path = arguments
             .first()
@@ -619,12 +658,17 @@ impl ExecuteCommandProvider {
             ));
         }
 
-        let normalized_path = raw_path.strip_prefix("file://").unwrap_or(raw_path);
+        let path = if raw_path.starts_with("file://") {
+            crate::workspace_index::uri_to_fs_path(raw_path)
+                .ok_or_else(|| format!("Failed to parse file URI: {raw_path}"))?
+        } else {
+            PathBuf::from(raw_path)
+        };
+        let normalized_path = path.to_string_lossy();
         if normalized_path.contains("..") {
             return Err("Path traversal attempt detected: path contains '..' component".to_string());
         }
 
-        let path = Path::new(normalized_path);
         let canonical_path = path
             .canonicalize()
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
