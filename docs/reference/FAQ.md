@@ -5,7 +5,6 @@
 ### How do I install perl-lsp?
 
 - **VS Code (recommended)**: install the [Perl LSP extension](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) — it downloads the server binary automatically.
-- **crates.io**: `cargo install perl-lsp`
 - **Pre-built binary**: download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 - **Installer script (Linux/macOS, best-effort)**:
   `curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash`
@@ -162,5 +161,5 @@ Yes. perl-lsp is dual-licensed under [MIT](../../LICENSE-MIT) and [Apache-2.0](.
 perl-lsp is in active development. Releases are cut when meaningful milestones
 are ready, such as parser coverage gains, new LSP features, or release-surface
 hardening. The workspace version on `main` can move ahead of the latest
-published release during release prep, so check GitHub Releases or crates.io
-for the currently shipped version.
+published release during release prep, so check GitHub Releases for the
+currently shipped public release.

@@ -16,7 +16,13 @@ just release-check
 
 ### LSP Server
 ```bash
-# Quick install (Linux/macOS)
+# VS Code extension
+code --install-extension EffortlessMetrics.perl-lsp-rs
+
+# GitHub release binary
+# Download from https://github.com/EffortlessMetrics/perl-lsp/releases
+
+# Best-effort install script (Linux/macOS)
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # Homebrew (macOS)
@@ -26,7 +32,7 @@ brew install perl-lsp
 # Build from source
 cargo build -p perl-lsp --release
 
-# Install globally
+# Install locally from this repo
 cargo install --path crates/perl-lsp
 
 # Run the LSP server
@@ -61,10 +67,12 @@ nix develop -c just ci-gate
 
 ## Build Commands
 
-### Published Crates
+### Published Crates and Local Binaries
 ```bash
-# Install from crates.io
-cargo install perl-lsp                     # LSP server
+# Install the LSP server from this checkout
+cargo install --path crates/perl-lsp       # LSP server
+
+# Add published library crates
 cargo add perl-parser                      # As library dependency
 cargo add perl-corpus --dev                # For testing
 

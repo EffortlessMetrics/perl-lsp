@@ -4,13 +4,14 @@
 > The canonical planning document is [docs/project/ROADMAP.md](docs/project/ROADMAP.md).
 > Evidence and current receipts live in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
-## Current Framing
+Use this file to see what the project is trying to land next. Use the canonical
+project docs when you need exact release facts, receipts, or milestone detail.
 
-- Workspace version line: `v0.12.0`
-- Latest published GitHub release: `v0.11.0` (verified 2026-03-29)
-- Active milestone: `v0.12.0` initial public alpha cut
-- Canonical plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
+## State References
+
+- Active milestone plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
+- Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
 ## Now
 

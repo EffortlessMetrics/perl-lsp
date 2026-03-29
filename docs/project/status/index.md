@@ -5,7 +5,7 @@
 
 ## What's True Right Now
 
-- **Release posture**: the workspace/release target is `v0.12.0`, the latest published release is `v0.11.0` as verified on 2026-03-28, and the active milestone is `v0.12.0` initial public alpha release prep
+- **Release posture**: the workspace/release target is `v0.12.0`, the latest published GitHub release is `v0.11.0` as verified on 2026-03-29, and the active milestone is `v0.12.0` initial public alpha release prep
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; 98 features all at GA maturity — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `bash scripts/ignored-test-count.sh` is the tracked-test-debt source
@@ -66,5 +66,5 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-03-28 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
+*Last Updated: 2026-03-29 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
 *Canonical docs: [ROADMAP.md](../ROADMAP.md), [../../features.toml](../../features.toml)*

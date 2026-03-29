@@ -10,16 +10,14 @@
 
 <p align="center">
   <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://crates.io/crates/perl-lsp"><img src="https://img.shields.io/crates/v/perl-lsp.svg" alt="crates.io" /></a>
-  <a href="https://docs.rs/perl-lsp"><img src="https://docs.rs/perl-lsp/badge.svg" alt="docs.rs" /></a>
+  <a href="https://github.com/EffortlessMetrics/perl-lsp/releases"><img src="https://img.shields.io/github/v/release/EffortlessMetrics/perl-lsp?display_name=tag" alt="GitHub release" /></a>
+  <a href="docs/README.md"><img src="https://img.shields.io/badge/docs-project%20docs-blue.svg" alt="Project docs" /></a>
   <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg" alt="codecov" /></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.92%2B-orange.svg" alt="Rust" /></a>
 </p>
 
 ---
-
-> Release status: `main` is preparing `v0.12.0`. The latest published GitHub release is `v0.11.0` (verified 2026-03-29).
 
 Perl editor support too often starts with "make Perl itself work first, then add the editor layer later." `perl-lsp` flips that around. Install one native binary and get completions, diagnostics, navigation, formatting, and debugging for Perl 5 on Windows, macOS, and Linux.
 
@@ -61,14 +59,19 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 
 The VS Code extension auto-downloads the matching server binary for your platform.
 
-### Binary install
+### GitHub release binary
+
+Download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, and then verify it:
 
 ```bash
-cargo install perl-lsp
 perl-lsp --health
 ```
 
-You can also download prebuilt binaries from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
+If you are testing the workspace locally before a tagged release, install from source instead:
+
+```bash
+cargo install --path crates/perl-lsp
+```
 
 ### Windows package managers
 
@@ -147,7 +150,7 @@ Use [docs/reference/CONFIG.md](docs/reference/CONFIG.md) for the full reference 
 | [`crates/perl-semantic-analyzer`](crates/perl-semantic-analyzer/) | symbol, scope, and type analysis over parsed trees |
 | [`crates/perl-workspace-index`](crates/perl-workspace-index/) | document storage, indexing, and cross-file lookups |
 
-Published crates are documented on docs.rs. Internal and supporting docs start at [docs/README.md](docs/README.md).
+Published library crates are documented on docs.rs. Internal and supporting docs start at [docs/README.md](docs/README.md).
 
 ## Docs By Job
 
@@ -157,6 +160,7 @@ Published crates are documented on docs.rs. Internal and supporting docs start a
 - Commands and configuration: [docs/reference/COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md), [docs/reference/CONFIG.md](docs/reference/CONFIG.md)
 - Project truth and planning: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
 - Full docs map: [docs/INDEX.md](docs/INDEX.md)
+- Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
 ## Contributing
 

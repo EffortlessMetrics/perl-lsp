@@ -3,13 +3,13 @@
 > Canonical planning document.
 > Evidence and computed metrics belong in [CURRENT_STATUS.md](CURRENT_STATUS.md).
 > Current workspace version is taken from [`../../Cargo.toml`](../../Cargo.toml);
-> published release state must be verified against GitHub Releases or crates.io;
+> published release state must be verified against GitHub Releases;
 > current capability truth is taken from [`../../features.toml`](../../features.toml).
 
 ## Current Framing
 
 - Workspace version line: `v0.12.0`
-- Latest published release: `v0.11.0` (verified 2026-03-28)
+- Latest published release: `v0.11.0` (verified 2026-03-29)
 - Active release target: `v0.12.0` initial public alpha cut
 - Canonical local receipt: `nix develop -c just ci-gate`
 
@@ -133,7 +133,7 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Topic | Source |
 | --- | --- |
 | Workspace version line | [`../../Cargo.toml`](../../Cargo.toml) |
-| Latest published release | GitHub Releases / crates.io |
+| Latest published release | GitHub Releases |
 | Capability catalog | [`../../features.toml`](../../features.toml) |
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |

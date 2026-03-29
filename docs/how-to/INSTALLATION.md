@@ -9,15 +9,11 @@ expected, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Fastest Path
 
-```bash
-cargo install perl-lsp
-```
+Use one of the public install paths that matches how you work:
 
-If you already have perl-lsp installed and want the current published build:
-
-```bash
-cargo install perl-lsp --force
-```
+- VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching server binary.
+- Other editors: download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and put it on your `PATH`.
+- Local testing or pre-release validation: install from this repo with `cargo install --path crates/perl-lsp`.
 
 Verify the install before wiring it into an editor:
 
