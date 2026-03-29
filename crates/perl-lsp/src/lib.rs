@@ -409,10 +409,6 @@ pub(crate) mod lsp_document_link {
     pub use crate::features::lsp_document_link::*;
 }
 
-pub(crate) mod selection_range {
-    pub use crate::features::selection_range::*;
-}
-
 pub(crate) mod linked_editing {
     pub use crate::features::linked_editing::*;
 }

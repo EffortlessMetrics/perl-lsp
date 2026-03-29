@@ -18,7 +18,7 @@ sub test($x, $y, $x) {
 
     // Should have one error for duplicate parameter
     let duplicate_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("duplicate-parameter")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL106")).collect();
 
     assert_eq!(duplicate_errors.len(), 1);
     assert!(duplicate_errors[0].message.contains("Duplicate parameter"));
@@ -43,10 +43,8 @@ sub increment($count) {
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
     // Should have one warning for parameter shadowing
-    let shadow_warnings: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.as_deref() == Some("parameter-shadows-global"))
-        .collect();
+    let shadow_warnings: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL107")).collect();
 
     assert_eq!(shadow_warnings.len(), 1);
     assert!(shadow_warnings[0].message.contains("shadows"));
@@ -70,7 +68,7 @@ sub helper($x, $y, $z) {
 
     // Should have one warning for unused parameter
     let unused_warnings: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("unused-parameter")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL108")).collect();
 
     assert_eq!(unused_warnings.len(), 1);
     assert!(unused_warnings[0].message.contains("never used"));
@@ -149,7 +147,7 @@ sub callback($event, $_unused_data) {
     // Should not flag parameters starting with underscore as unused
     let unused_warnings: Vec<_> = diagnostics
         .iter()
-        .filter(|d| d.code.as_deref() == Some("unused-parameter"))
+        .filter(|d| d.code.as_deref() == Some("PL108"))
         .filter(|d| d.message.contains("$_unused_data"))
         .collect();
 
@@ -173,7 +171,7 @@ sub complex($a, $b, $a, $c, $b) {
 
     // Should have errors for both duplicate parameters
     let duplicate_errors: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("duplicate-parameter")).collect();
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL106")).collect();
 
     assert_eq!(duplicate_errors.len(), 2, "Should detect both duplicate parameters");
     Ok(())

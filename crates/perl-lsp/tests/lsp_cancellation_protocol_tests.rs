@@ -338,7 +338,7 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
     );
 
     // Verify server remains stable and doesn't crash
-    let health_check = read_response_timeout(&fixture.server, Duration::from_millis(200));
+    let health_check = read_response_only_timeout(&fixture.server, Duration::from_millis(200));
     assert!(health_check.is_none(), "$/cancelRequest notification should not produce response");
     assert!(
         fixture.server.is_alive(),
@@ -356,7 +356,7 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
     );
 
     // Should handle gracefully without response
-    let response = read_response_timeout(&fixture.server, Duration::from_millis(200));
+    let response = read_response_only_timeout(&fixture.server, Duration::from_millis(200));
     assert!(response.is_none(), "Non-existent request cancellation should not produce response");
 
     // Test 3: JSON-RPC structure validation

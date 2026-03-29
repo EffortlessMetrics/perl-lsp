@@ -327,15 +327,19 @@ fn test_uri_normalization() -> Result<(), Box<dyn std::error::Error>> {
     let test_code = "sub test { }";
 
     // Test various URI formats
-    let test_cases = vec![
+    let mut test_cases = vec![
         ("file:///home/user/test.pl", "file:///home/user/test.pl"),
-        ("/home/user/test.pl", "file:///home/user/test.pl"),
         ("file:///home/user/test.pl/", "file:///home/user/test.pl/"), // URL crate handles this
         ("untitled:1", "untitled:1"),
     ];
 
+    #[cfg(windows)]
+    test_cases.push((r"C:\Users\tester\test.pl", "file:///C:/Users/tester/test.pl"));
+
+    #[cfg(not(windows))]
+    test_cases.push(("/home/user/test.pl", "file:///home/user/test.pl"));
+
     for (input, _expected) in test_cases {
-        // Just ensure indexing doesn't panic with various URI formats
         let url = if input.starts_with("file://") || input.starts_with("untitled:") {
             Url::parse(input).ok()
         } else {

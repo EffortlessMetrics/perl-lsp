@@ -23,6 +23,18 @@ fn path_to_uri(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         .to_string())
 }
 
+fn uri_matches(expected: &str, actual: &str) -> bool {
+    if expected == actual {
+        return true;
+    }
+
+    if cfg!(windows) {
+        return expected.eq_ignore_ascii_case(actual);
+    }
+
+    false
+}
+
 mod test_fixtures {
     pub const MAIN_FILE: &str = r#"#!/usr/bin/env perl
 use strict;
@@ -124,9 +136,11 @@ fn test_cross_file_definition() -> TestResult {
 
         // Verify it points to the module file
         let first_location = &locations[0];
-        assert_eq!(
-            first_location["uri"].as_str(),
-            Some(workspace.uri("lib/My/Module.pm").as_str()),
+        assert!(
+            first_location["uri"].as_str().is_some_and(|actual| uri_matches(
+                workspace.uri("lib/My/Module.pm").as_str(),
+                actual
+            )),
             "Should navigate to module file"
         );
     }
@@ -168,9 +182,11 @@ fn test_cross_file_references() -> TestResult {
         assert!(references.len() >= 2, "Should find declaration and usage");
 
         // Check for reference in script.pl
-        let has_script_ref = references
-            .iter()
-            .any(|r| r["uri"].as_str() == Some(workspace.uri("script.pl").as_str()));
+        let has_script_ref = references.iter().any(|r| {
+            r["uri"]
+                .as_str()
+                .is_some_and(|actual| uri_matches(workspace.uri("script.pl").as_str(), actual))
+        });
         assert!(has_script_ref, "Should find reference in script.pl");
     }
     Ok(())
@@ -197,9 +213,11 @@ fn test_workspace_symbol_search() -> TestResult {
 
         // Verify it's in the module file
         let process_symbol = process_symbol.ok_or("Should find process method")?;
-        assert_eq!(
-            process_symbol["location"]["uri"].as_str(),
-            Some(workspace.uri("lib/My/Module.pm").as_str()),
+        assert!(
+            process_symbol["location"]["uri"].as_str().is_some_and(|actual| uri_matches(
+                workspace.uri("lib/My/Module.pm").as_str(),
+                actual
+            )),
             "Process method should be in Module.pm"
         );
     }
@@ -590,9 +608,8 @@ use My::Module;
         return Ok(());
     }
     assert!(!locations.is_empty(), "should return at least one location");
-    assert_eq!(
-        locations[0]["uri"].as_str(),
-        Some(module_uri.as_str()),
+    assert!(
+        locations[0]["uri"].as_str().is_some_and(|actual| uri_matches(module_uri.as_str(), actual)),
         "definition should jump to module file"
     );
     Ok(())

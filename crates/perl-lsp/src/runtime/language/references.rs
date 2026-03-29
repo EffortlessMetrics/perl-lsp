@@ -59,6 +59,10 @@ impl LspServer {
                     let needle = token_under_cursor(&doc.text, line as usize, character as usize)
                         .unwrap_or_default();
 
+                    let current_package = crate::declaration::current_package_at(ast, offset);
+                    let symbol_key =
+                        crate::declaration::symbol_at_cursor(ast, offset, current_package);
+
                     // Check index state and use appropriate search strategy
                     #[cfg(feature = "workspace")]
                     {
@@ -67,14 +71,7 @@ impl LspServer {
                         match access_mode {
                             IndexAccessMode::Full(coordinator) => {
                                 let index = coordinator.index();
-                                // Use symbol_at_cursor to get the symbol key
-                                let current_package =
-                                    crate::declaration::current_package_at(ast, offset);
-                                if let Some(symbol_key) = crate::declaration::symbol_at_cursor(
-                                    ast,
-                                    offset,
-                                    current_package,
-                                ) {
+                                if let Some(symbol_key) = symbol_key.as_ref() {
                                     eprintln!("Looking for references of {:?}", symbol_key);
 
                                     // Try to find references using the symbol key
@@ -365,6 +362,38 @@ impl LspServer {
                                 }
                             }
                             IndexAccessMode::Partial(reason) => {
+                                eprintln!(
+                                    "References: {}, attempting partial workspace lookup",
+                                    reason
+                                );
+                                if let (Some(coordinator), Some(symbol_key)) =
+                                    (self.coordinator(), symbol_key.as_ref())
+                                {
+                                    let index = coordinator.index();
+                                    let mut partial_refs = index.find_refs(symbol_key);
+
+                                    if include_declaration
+                                        && let Some(def) = index.find_def(symbol_key)
+                                    {
+                                        partial_refs.push(def);
+                                    }
+
+                                    if !partial_refs.is_empty() {
+                                        let lsp_locations =
+                                            crate::workspace_index::lsp_adapter::to_lsp_locations(
+                                                partial_refs.into_iter().take(cap),
+                                            );
+                                        if !lsp_locations.is_empty() {
+                                            eprintln!(
+                                                "References: returned {} partial-index results (elapsed {:?})",
+                                                lsp_locations.len(),
+                                                start.elapsed()
+                                            );
+                                            return Ok(Some(json!(lsp_locations)));
+                                        }
+                                    }
+                                }
+
                                 eprintln!("References: {}, using same-file fallback", reason);
                                 if !needle.is_empty() {
                                     let open_doc_locations =
