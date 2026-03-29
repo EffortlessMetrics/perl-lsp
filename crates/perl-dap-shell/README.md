@@ -1,40 +1,32 @@
 # perl-dap-shell
 
-[![Crates.io](https://img.shields.io/crates/v/perl-dap-shell.svg)](https://crates.io/crates/perl-dap-shell)
-[![Documentation](https://docs.rs/perl-dap-shell/badge.svg)](https://docs.rs/perl-dap-shell)
+Shell-facing helpers for launching Perl debugging sessions.
 
-Shell-oriented launch helpers for Perl DAP.
+This crate is the quoting-and-env layer. It takes launch intent and turns it
+into command arguments and environment variables that are safe to hand to a
+shell or launcher.
 
-## When to use this crate
+## Boundaries
 
-Use `perl-dap-shell` when you need to prepare command-line arguments or launch
-environment state for the DAP process layer.
+- `perl-dap-platform` finds Perl and normalizes paths.
+- `perl-dap-shell` formats shell arguments and launch environment values.
+- `perl-dap` consumes both when starting a debug session.
 
-It is useful when you want to:
+## Key API
 
-- format shell arguments safely for launch paths
-- keep shell-specific quoting separate from path normalization
-- build the process inputs consumed by `perl-dap`
+- `format_command_args`
+- `setup_environment`
 
-## Quick example
+## Example
 
 ```rust
 use perl_dap_shell::{format_command_args, setup_environment};
 use std::path::PathBuf;
 
-let args = format_command_args(&["file with spaces.pl".into()]);
-assert_eq!(args.len(), 1);
+let formatted = format_command_args(&["arg with space".to_string()]);
+let env = setup_environment(&[PathBuf::from("/workspace/lib")]);
 
-let env = setup_environment(&[PathBuf::from("lib")]);
-assert!(env.contains_key("PERL5LIB"));
+assert_eq!(formatted.len(), 1);
+assert!(formatted[0].contains("arg with space"));
+assert_eq!(env.get("PERL5LIB").map(String::as_str), Some("/workspace/lib"));
 ```
-
-## Public API
-
-- `format_command_args`: shell-quote launch arguments where needed
-- `setup_environment`: re-exported platform helper for `PERL5LIB`
-
-## Workspace role
-
-This crate keeps shell-specific concerns out of `perl-dap-platform`. Use it for
-launch-path assembly; use the platform crate for path discovery and normalization.

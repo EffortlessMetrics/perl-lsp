@@ -1,37 +1,32 @@
 # perl-module-token-core
 
-Shared low-level parsing and boundary primitives for Perl module tokens.
+Low-level module token span parsing and boundary predicates.
 
-## When to use this crate
+This crate is the lexical foundation for the module pipeline. It knows how to
+scan a token span, recognize canonical and legacy separators, and check whether
+the token stands alone on a line.
 
-Use `perl-module-token-core` when you need the grammar-level mechanics for
-module token parsing or boundary checking. It is the lowest layer in the
-module-name family and is intended to be reused by higher-level crates.
+## Pipeline
 
-## Quick example
+- `perl-module-token-core` parses spans.
+- `perl-module-boundary` filters standalone matches.
+- `perl-module-token` uses the result for replacement.
+- `perl-module-import`, `perl-module-reference`, and `perl-module-rename`
+  consume it higher up the stack.
+
+## Key API
+
+- `ModuleTokenSpan`
+- `parse_module_token`
+- `has_standalone_module_token_boundaries`
+- `is_module_token_char`
+- `is_module_identifier_char`
+
+## Example
 
 ```rust
-use perl_module_token_core::{has_standalone_module_token_boundaries, parse_module_token};
+use perl_module_token_core::{ModuleTokenSpan, has_standalone_module_token_boundaries, parse_module_token};
 
-assert_eq!(
-    parse_module_token("use Foo::Bar;", 4),
-    Some(perl_module_token_core::ModuleTokenSpan { start: 4, end: 12 }),
-);
+assert_eq!(parse_module_token("use Foo::Bar;", 4), Some(ModuleTokenSpan { start: 4, end: 12 }));
 assert!(has_standalone_module_token_boundaries("use Foo::Bar;", 4, 12));
 ```
-
-## Public API
-
-- `parse_module_token`
-- `ModuleTokenSpan`
-- `has_standalone_module_token_boundaries`
-- `is_module_identifier_char`
-- `is_module_token_char`
-
-## Workspace role
-
-Foundational parser utility used by the module boundary and rename stack.
-
-## License
-
-MIT OR Apache-2.0

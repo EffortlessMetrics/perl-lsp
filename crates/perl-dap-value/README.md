@@ -1,39 +1,32 @@
 # perl-dap-value
 
-[![Crates.io](https://img.shields.io/crates/v/perl-dap-value.svg)](https://crates.io/crates/perl-dap-value)
-[![Documentation](https://docs.rs/perl-dap-value/badge.svg)](https://docs.rs/perl-dap-value)
+Shared Perl value model for debugger rendering.
 
-Shared Perl runtime value model for debugger and renderer crates.
+This crate models the values that show up in the variables pane: scalars,
+arrays, hashes, refs, objects, tied values, truncation, and inspection errors.
+It is the value layer under the DAP transport types.
 
-## When to use this crate
+## Boundaries
 
-Use `perl-dap-value` when you need to represent Perl runtime values in a form
-that can be serialized across the debugger stack.
+- Use `perl-dap-types` for stack frames, sources, and variables.
+- Use `perl-dap-value` when you need to describe what a variable actually
+  contains.
+- Use `perl-dap` when you need to serialize that model into DAP responses.
 
-It is the right crate for:
+## Key type
 
-- debugger variable inspection payloads
-- renderer or formatter code that needs a stable value enum
-- tests or adapters that need to compare Perl values structurally
+- `PerlValue`
 
-## Quick example
+## Example
 
 ```rust
 use perl_dap_value::PerlValue;
 
-let value = PerlValue::object("My::Class", PerlValue::scalar("hello"));
-assert_eq!(value.type_name(), "OBJECT");
+let value = PerlValue::object(
+    "My::Class",
+    PerlValue::array(vec![PerlValue::scalar("alpha"), PerlValue::Integer(42)]),
+);
+
 assert!(value.is_expandable());
+assert_eq!(value.type_name(), "OBJECT");
 ```
-
-## Public API
-
-- `PerlValue`: shared enum for `undef`, scalar, array, hash, reference, object, and error shapes
-- `PerlValue::type_name`: returns the debugger-facing type label
-- `PerlValue::child_count`: reports child counts for expandable values
-
-## Workspace role
-
-This is a small shared model crate for the DAP stack. It is usable on its own,
-but its main job is to keep debugger value shapes consistent across parser,
-transport, and renderer code.

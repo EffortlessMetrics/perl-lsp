@@ -1,32 +1,27 @@
 # perl-module-token-parser
 
-Single-line Perl module-token parsing for import and reference workflows.
+Cursor-aware module token parsing for import and reference workflows.
 
-## When to use this crate
+This crate is the bridge between raw text and token spans. It identifies the
+module token under a cursor so the higher-level import, reference, and rename
+crates can stay boundary-aware without reimplementing token scanning.
 
-Use `perl-module-token-parser` when you need to parse a module token from a
-cursor offset and feed that span into import, reference, or rename logic.
+## Pipeline
 
-## Quick example
+- `perl-module-token-core` scans spans.
+- `perl-module-token-parser` exposes the cursor-facing parser.
+- `perl-module-reference` and `perl-module-rename` use the span to find or
+  rewrite module names.
+
+## Key API
+
+- `ModuleTokenSpan`
+- `parse_module_token`
+
+## Example
 
 ```rust
-use perl_module_token_parser::parse_module_token;
+use perl_module_token_parser::{ModuleTokenSpan, parse_module_token};
 
-assert_eq!(
-    parse_module_token("use Foo::Bar;", 4),
-    Some(perl_module_token_parser::ModuleTokenSpan { start: 4, end: 12 }),
-);
+assert_eq!(parse_module_token("use Foo::Bar;", 4), Some(ModuleTokenSpan { start: 4, end: 12 }));
 ```
-
-## Public API
-
-- `parse_module_token`
-- `ModuleTokenSpan`
-
-## Workspace role
-
-Parsing helper used by import/reference/token rewriting crates.
-
-## License
-
-MIT OR Apache-2.0

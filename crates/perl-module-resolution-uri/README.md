@@ -1,17 +1,28 @@
 # perl-module-resolution-uri
 
-Deterministic Perl module-to-URI resolution with workspace-safe search order.
+Resolve a Perl module name to a `file://` URI.
 
-## When to use this crate
+This crate is the URI-facing leg of module resolution. It keeps the search
+order deterministic, respects a timeout budget, and returns a compact outcome
+enum instead of throwing resolution policy into caller code.
 
-Use `perl-module-resolution-uri` when you need to resolve a Perl module name
-to a `file://` URI with a deterministic precedence order and a timeout budget.
-It is the URI-facing sibling of `perl-module-resolution-path`.
+## Pipeline
 
-## Quick example
+- `perl-module-resolution-path` resolves to filesystem paths.
+- `perl-module-resolution-uri` resolves to file URIs and tracks `NotFound` vs
+  `TimedOut`.
+- Higher-level workspace tools can pick the variant that fits their editor or
+  transport layer.
 
-```rust
-use perl_module_resolution_uri::{resolve_module_uri, ModuleUriResolution};
+## Key API
+
+- `ModuleUriResolution`
+- `resolve_module_uri`
+
+## Example
+
+```rust,ignore
+use perl_module_resolution_uri::{ModuleUriResolution, resolve_module_uri};
 use std::time::Duration;
 
 let result = resolve_module_uri(
@@ -24,18 +35,8 @@ let result = resolve_module_uri(
     Duration::from_millis(100),
 );
 
-assert!(matches!(result, ModuleUriResolution::NotFound | ModuleUriResolution::Resolved(_)));
+match result {
+    ModuleUriResolution::Resolved(uri) => assert!(uri.starts_with("file://")),
+    ModuleUriResolution::NotFound | ModuleUriResolution::TimedOut => {}
+}
 ```
-
-## Public API
-
-- `resolve_module_uri`
-- `ModuleUriResolution`
-
-## Workspace role
-
-URI-resolution helper for workspace-aware tools and editor integrations.
-
-## License
-
-MIT OR Apache-2.0
