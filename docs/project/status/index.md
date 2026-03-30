@@ -5,7 +5,7 @@
 
 ## What's True Right Now
 
-- **Release posture**: the workspace/release target is `v0.12.0`, the latest published GitHub release is `v0.11.0` as verified on 2026-03-29, and the active milestone is `v0.12.0` initial public alpha release prep
+- **Release posture**: the latest published GitHub release is `v0.12.0` as verified on 2026-03-30, the workspace version line is `v0.12.1`, and the active milestone is `v0.12.1` fix-forward release prep
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; 98 features all at GA maturity — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `bash scripts/ignored-test-count.sh` is the tracked-test-debt source
@@ -26,13 +26,11 @@
 
 ## What's Next
 
-**Now (active milestone: v0.12.0 initial public alpha release prep)**
-- Raise the CPAN top-1000 full-corpus baseline from `85.4%` (`3717/4355`) to `90%+` clean parses while keeping the strict known-clean manifest at `100%`
-- Close repo-corpus coverage gaps (`63/68` NodeKinds currently covered) and retire the remaining parser audit `P2` hang-risk candidate
-- Land Moo/Moose/Class::Accessor, `use parent`/`use base`, and export-list disambiguation work needed for public-alpha expectations
-- Raise workspace production-code coverage from the new baseline of `44.7%` lines / `46.9%` functions / `42.6%` regions
-- Burn down the residual coverage-gate blockers in `perl-parser` control-flow tests and `tree-sitter-perl-rs` parser/heredoc/glob suites
-- Keep README, roadmap, status, and release guidance aligned with the split between workspace version and published release
+**Now (active milestone: v0.12.1 fix-forward release prep)**
+- Keep `nix develop -c just ci-gate` and the release receipts green while `v0.12.1` closes the launch regressions found after the `v0.12.0` tag
+- Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line and the `perl-lsp-rs` VS Code package
+- Keep public Cargo install guidance tied to what crates.io actually serves, not just the workspace version line
+- Resume parser, corpus, and semantic hardening immediately after the fix-forward release cut
 
 **Next (v0.12.x hardening)**
 - Ratchet system-corpus and CPAN baselines as parser coverage improves
@@ -66,5 +64,5 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-03-29 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
+*Last Updated: 2026-03-30 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
 *Canonical docs: [ROADMAP.md](../ROADMAP.md), [../../features.toml](../../features.toml)*

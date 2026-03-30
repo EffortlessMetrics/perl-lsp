@@ -7,7 +7,8 @@ evidence-backed status and release facts.
 
 ## NOW
 
-- Release execution: keep `nix develop -c just ci-gate` and release receipts green while `v0.12.0` moves from version line to shipped release
+- Release execution: keep `nix develop -c just ci-gate` and release receipts green while `v0.12.1` closes the launch regressions found after `v0.12.0`
+- Packaging truth: keep `perllsp` and `perl-lsp-rs` aligned across Cargo, docs, release assets, and operator runbooks
 - Parser hardening: keep corpus ratchets honest and finish the highest-value edge-case fixes
 - Semantic coverage: land the framework-aware resolution work that blocks real project navigation
 - Docs alignment: keep README, roadmap, changelog, status, and install guidance consistent about what is already published versus what is still on `main`
@@ -26,7 +27,7 @@ evidence-backed status and release facts.
 
 ## Working Rules
 
-- Last updated: `2026-03-29`
+- Last updated: `2026-03-30`
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.

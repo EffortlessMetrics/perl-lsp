@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No unreleased changes have been recorded yet.
 
+## [0.12.1] - 2026-03-30
+
+`v0.12.1` is the fix-forward cut after the initial public alpha release. It does
+not reopen the wider alpha scope; it closes the release-surface regressions that
+slipped into the first `v0.12.0` tag and keeps the install and publish story
+aligned.
+
+### Fixed
+
+- restored the top-level README and release-facing docs so the source snapshot
+  no longer presents hook-test fixture content as the project front page
+- hardened hook-test fixture setup so temporary repos must live outside the real
+  checkout and seed commits no longer write placeholder git identities into repo
+  config
+- fixed local git-hook installation for worktrees and added pre-commit blocking
+  for the known placeholder identities used by release and hook tests
+
+### Changed
+
+- workspace, feature-catalog, VS Code extension, and operator release surfaces
+  now target `0.12.1`
+- status and roadmap docs now treat `v0.12.0` as the latest published GitHub
+  release and `v0.12.1` as the active fix-forward cut
+
 ## [0.12.0] - 2026-03-24
 
 `v0.12.0` is the initial public alpha for the native Rust Perl 5 toolchain. The

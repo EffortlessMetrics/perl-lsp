@@ -2,6 +2,15 @@
 
 All notable changes to the Perl Language Server extension will be documented in this file.
 
+## [0.12.1] - 2026-03-30
+
+### Fixed
+- **Release Surface Recovery**: Restored the top-level source snapshot and release-facing docs after the launch regressions that slipped into the first `0.12.0` tag.
+- **Hook Hygiene**: Hardened hook-test fixture isolation and worktree hook installation so placeholder identities do not leak into normal local commit flows.
+
+### Changed
+- **Version Bump**: 0.12.1 fix-forward release aligned with the workspace and shipped `perllsp` asset line.
+
 ## [0.12.0] - 2026-03-19
 
 ### Changed

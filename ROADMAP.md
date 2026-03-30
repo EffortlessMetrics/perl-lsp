@@ -15,7 +15,8 @@ project docs when you need exact release facts, receipts, or milestone detail.
 
 ## Now
 
-- Keep release validation green while `v0.12.0` moves from version line to shipped release
+- Keep release validation green while `v0.12.1` closes the launch regressions discovered after `v0.12.0`
+- Keep install guidance and package naming aligned with the actual `perllsp` / `perl-lsp-rs` surfaces
 - Raise parser and corpus confidence without hiding regressions behind broader receipts
 - Finish framework-aware semantic work for real-world Perl projects
 - Keep README, docs, changelog, and release guidance aligned so users do not have to infer the release state

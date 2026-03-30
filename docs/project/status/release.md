@@ -5,20 +5,20 @@
 
 ## Current Release Call
 
-**Latest published release**: `v0.11.0`
-**Release target**: `v0.12.0` initial public alpha
-**Ship readiness**: GitHub release and editor-managed install surfaces are green on `master`; public `cargo install perllsp` guidance stays off until `v0.12.0` is actually published to crates.io
+**Latest published release**: `v0.12.0`
+**Release target**: `v0.12.1` fix-forward cut
+**Ship readiness**: `master` carries the README and hook cleanup needed for a clean `v0.12.1` cut; install guidance must still stay tied to the actual GitHub release and crates.io state rather than the workspace version alone
 
 ## Active Blockers
 
-- Release-truth drift must stay closed: repo docs can say `v0.12.0` for `main`, but published-install guidance must stay tied to the latest tagged GitHub release until `v0.12.0` ships
-- Do not present `cargo install perllsp` as a shipped public install path until `v0.12.0` is live on crates.io
+- Release-truth drift must stay closed: repo docs and runbooks must match the actual `perllsp` / `perl-lsp-rs` shipped surfaces, not stale pre-rename examples
+- Public install guidance must stay tied to the crates.io truth at release time, not just the local workspace version line
 
-## Final Release Receipts (2026-03-29)
+## Fix-Forward Receipts (2026-03-30)
 
-- `just release-check` passed on merged `master`
-- `just status-check` passed after regenerating computed status docs
-- `CHANGELOG.md` already contains a dated `## [0.12.0] - 2026-03-24` section and keeps `## [Unreleased]`
+- `v0.12.0` is live on GitHub Releases as of 2026-03-30
+- the README and hook-fixture regressions from the first `v0.12.0` tag were fixed on `master`
+- this branch bumps the operator and version-sync surfaces to `v0.12.1`
 
 ## Component Summary
 
@@ -60,4 +60,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-03-29*
+*Last Updated: 2026-03-30*
