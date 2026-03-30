@@ -36,7 +36,7 @@ optional = true
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }
 perl-test-generators = { path = "../perl-test-generators" }
-proptest = "1.6"
+proptest = "1.11"
 
 [lints]
 workspace = true
