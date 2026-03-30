@@ -99,7 +99,9 @@ Branch coverage uses the checked-in policy file instead of Codecov status thresh
 
 - `.ci/coverage-baseline.txt` stores the current branch-coverage baseline and regression budget
 - `scripts/check-coverage-baseline.sh` compares the generated `lcov.info` against that baseline
+- `scripts/update-coverage-baseline.sh` refreshes the checked-in baseline after an intentional improvement
 - `target_branch_coverage` documents the intended longer-term 80% floor
+- `.ci/README-coverage.md` is the terse operator note for the gate and baseline workflow
 
 ## Exclusions
 
