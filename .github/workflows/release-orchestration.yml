@@ -163,7 +163,7 @@ jobs:
           CHANGELOG_SECTION="$(mktemp)"
           awk -v ver="${VERSION}" '
             $0 ~ "^## \\[" ver "\\]" { in_section=1; next }
-            in_section && /^## \\[/ { exit }
+            in_section && /^## \[/ { exit }
             in_section { print }
           ' CHANGELOG.md > "$CHANGELOG_SECTION"
 
