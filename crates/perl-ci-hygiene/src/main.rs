@@ -1802,7 +1802,7 @@ fn cmd_generate_badges(repo_root: &Path) -> Result<i32> {
 }
 
 fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
-    let hooks_dir = repo_root.join(".git").join("hooks");
+    let hooks_dir = resolve_git_hooks_dir(repo_root)?;
     fs::create_dir_all(&hooks_dir)?;
 
     let pre_commit_hook = r#"#!/usr/bin/env bash
@@ -1811,7 +1811,10 @@ set -euo pipefail
 GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
 GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
 
-if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ]; then
+if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
+   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
+   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
+   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ]; then
     echo "❌ Refusing commit with placeholder git identity"
     echo "   user.name:  $GIT_USER_NAME"
     echo "   user.email: $GIT_USER_EMAIL"
@@ -1881,6 +1884,29 @@ fi
     println!("   The pre-push hook runs 'nix develop -c just ci-gate' before each push");
     println!("   Skip with: git commit --no-verify / git push --no-verify");
     Ok(0)
+}
+
+fn resolve_git_hooks_dir(repo_root: &Path) -> Result<PathBuf> {
+    let output = Command::new("git")
+        .current_dir(repo_root)
+        .args(["rev-parse", "--git-path", "hooks"])
+        .output()
+        .with_context(|| format!("resolving git hooks dir from {}", repo_root.display()))?;
+
+    if !output.status.success() {
+        return Err(color_eyre::eyre::eyre!(
+            "git rev-parse --git-path hooks failed in {}: {}",
+            repo_root.display(),
+            String::from_utf8_lossy(&output.stderr).trim_end()
+        ));
+    }
+
+    let hooks_path = String::from_utf8(output.stdout)
+        .context("git rev-parse --git-path hooks emitted non-UTF8 output")?;
+    let hooks_path = hooks_path.trim();
+    let hooks_dir = PathBuf::from(hooks_path);
+
+    Ok(if hooks_dir.is_absolute() { hooks_dir } else { repo_root.join(hooks_dir) })
 }
 
 fn write_git_hook(hook_path: &Path, hook: &str) -> Result<()> {
