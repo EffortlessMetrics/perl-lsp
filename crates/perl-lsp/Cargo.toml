@@ -99,7 +99,7 @@ regex = "1.12.2"
 md5 = "0.8.0"
 parking_lot = "0.12.5"
 walkdir = "2.5.0"
-uuid = { version = "1.21.0", features = ["v4"] }
+uuid = { version = "1.23.0", features = ["v4"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
