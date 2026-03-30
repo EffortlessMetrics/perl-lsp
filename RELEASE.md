@@ -127,7 +127,7 @@ git tag | grep 'v0\.12\.0'
 
 ```bash
 grep '^version' Cargo.toml | head -1
-# Expected output: version = "0.12.0"
+# Expected output: version = "0.12.1"
 ```
 
 ### 7. All publishable crate versions match
@@ -139,7 +139,7 @@ meta = json.load(sys.stdin)
 ws = set(meta["workspace_members"])
 for pkg in meta["packages"]:
     if pkg["id"] in ws:
-        if pkg["version"] != "0.12.0":
+        if pkg["version"] != "0.12.1":
             print(f"MISMATCH: {pkg[\"name\"]}@{pkg[\"version\"]}")
 '
 # Should print nothing
@@ -155,7 +155,7 @@ The release is triggered via a single manual workflow dispatch. The orchestratio
 
 ```bash
 gh workflow run release-orchestration.yml \
-  --field version=0.12.0 \
+  --field version=0.12.1 \
   --field prerelease=false \
   --field skip_crates=false \
   --field skip_extension=false \
@@ -168,7 +168,7 @@ gh workflow run release-orchestration.yml \
 2. Select **Release Orchestration** from the left sidebar.
 3. Click **Run workflow**.
 4. Fill in the fields:
-   - **Release version**: `0.12.0` (no `v` prefix)
+   - **Release version**: `0.12.1` (no `v` prefix)
    - **Mark as prerelease**: unchecked for stable releases
    - **Skip crates.io publishing**: leave unchecked
    - **Skip VSCode extension publishing**: leave unchecked
@@ -179,7 +179,7 @@ gh workflow run release-orchestration.yml \
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `version` | Release version without `v` prefix, e.g. `0.12.0` | required |
+| `version` | Release version without `v` prefix, e.g. `0.12.1` | required |
 | `prerelease` | Mark the GitHub release as a prerelease | `false` |
 | `skip_crates` | Skip crates.io publish (for re-runs after partial failure) | `false` |
 | `skip_extension` | Skip VS Code Marketplace publish | `false` |
@@ -192,7 +192,7 @@ If the release orchestration fails mid-way (e.g., crates.io succeeds but Docker 
 ```bash
 # Re-run only Docker (crates and extension already published)
 gh workflow run release-orchestration.yml \
-  --field version=0.12.0 \
+  --field version=0.12.1 \
   --field skip_crates=true \
   --field skip_extension=true \
   --field skip_docker=false
@@ -227,35 +227,35 @@ After all workflows complete, verify that each distribution channel received the
 ### 1. GitHub Release
 
 ```bash
-gh release view v0.12.0
+gh release view v0.12.1
 # Should show assets including:
-# - perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz
-# - perllsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
-# - perllsp-0.12.0-x86_64-unknown-linux-musl.tar.gz
-# - perllsp-0.12.0-aarch64-unknown-linux-musl.tar.gz
-# - perllsp-0.12.0-x86_64-apple-darwin.tar.gz
-# - perllsp-0.12.0-aarch64-apple-darwin.tar.gz
-# - perllsp-0.12.0-x86_64-pc-windows-msvc.zip
+# - perllsp-0.12.1-x86_64-unknown-linux-gnu.tar.gz
+# - perllsp-0.12.1-aarch64-unknown-linux-gnu.tar.gz
+# - perllsp-0.12.1-x86_64-unknown-linux-musl.tar.gz
+# - perllsp-0.12.1-aarch64-unknown-linux-musl.tar.gz
+# - perllsp-0.12.1-x86_64-apple-darwin.tar.gz
+# - perllsp-0.12.1-aarch64-apple-darwin.tar.gz
+# - perllsp-0.12.1-x86_64-pc-windows-msvc.zip
 # - SHA256SUMS
 # - sbom-spdx.json
-# - perl-lsp-rs-0.12.0.vsix
+# - perl-lsp-rs-0.12.1.vsix
 ```
 
 ### 2. crates.io
 
 ```bash
 cargo search perllsp --limit 1
-# Expected: perllsp = "0.12.0"
+# Expected: perllsp = "0.12.1"
 
 cargo search perl-lsp-rs --limit 1
-# Expected: perl-lsp-rs = "0.12.0"
+# Expected: perl-lsp-rs = "0.12.1"
 ```
 
 ### 3. VS Code Marketplace
 
 Visit: https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs
 
-Check that the version shown is `0.12.0`.
+Check that the version shown is `0.12.1`.
 
 ### 4. Open VSX Registry
 
@@ -264,20 +264,20 @@ Visit: https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs
 ### 5. Docker images
 
 ```bash
-docker pull effortlessmetrics/perl-lsp:0.12.0
-docker run --rm effortlessmetrics/perl-lsp:0.12.0 perllsp --version
-# Expected: perllsp 0.12.0
+docker pull effortlessmetrics/perl-lsp:0.12.1
+docker run --rm effortlessmetrics/perl-lsp:0.12.1 perllsp --version
+# Expected: perllsp 0.12.1
 ```
 
 ```bash
-docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.0
+docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.1
 ```
 
 ### 6. Verify binary checksum
 
 ```bash
 # Download the Linux binary and verify its SHA256 matches the release
-gh release download v0.12.0 --pattern 'perllsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS
+gh release download v0.12.1 --pattern 'perllsp-0.12.1-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing
 ```
 
@@ -293,11 +293,11 @@ After the release merges, the corpus metrics auto-regenerate. No manual step is 
 
 ```bash
 # Delete the release (keeps the tag)
-gh release delete v0.12.0 --yes
+gh release delete v0.12.1 --yes
 
 # Delete the tag if needed
-git push origin :refs/tags/v0.12.0
-git tag -d v0.12.0
+git push origin :refs/tags/v0.12.1
+git tag -d v0.12.1
 ```
 
 ### crates.io (irreversible — yank, do not delete)
@@ -306,10 +306,13 @@ Once published to crates.io, a crate version cannot be deleted. Use `cargo yank`
 
 ```bash
 # Yank a specific crate version
-cargo yank --version 0.12.0 <crate-name>
+cargo yank --version 0.12.1 <crate-name>
 
-# Example: yank perl-lsp
-cargo yank --version 0.12.0 perl-lsp
+# Example: yank the public facade crate
+cargo yank --version 0.12.1 perllsp
+
+# Example: yank the implementation crate
+cargo yank --version 0.12.1 perl-lsp-rs
 ```
 
 The crates are published in topological order. If the workflow fails mid-way, earlier crates in the publish order are already live. Yank each published crate individually. The publish order is computed by `publish-crates.yml` from `cargo metadata`; run this to see the order:
@@ -326,8 +329,8 @@ print("\n".join(allow))
 To yank all at once after a botched release:
 
 ```bash
-# Replace 0.12.0 with the bad version
-VERSION=0.12.0
+# Replace 0.12.1 with the bad version
+VERSION=0.12.1
 cargo metadata --format-version=1 --no-deps | python3 -c '
 import json, sys
 meta = json.load(sys.stdin)
@@ -351,7 +354,7 @@ Same as VS Code Marketplace — publish a patch release to supersede.
 ```bash
 # Delete a specific tag via Docker Hub API (requires login)
 curl -X DELETE \
-  "https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/0.12.0/" \
+  "https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/0.12.1/" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -370,7 +373,7 @@ If `release-orchestration.yml` fails after the tag is created but before all dow
 3. If the tag was pushed but the GitHub release was not created, run `release.yml` directly:
    ```bash
    gh workflow run release.yml \
-     --field tag=v0.12.0 \
+     --field tag=v0.12.1 \
      --field prerelease=false
    ```
 

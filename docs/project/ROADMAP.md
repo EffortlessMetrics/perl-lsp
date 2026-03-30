@@ -8,9 +8,9 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.12.0`
-- Latest published release: `v0.11.0` (verified 2026-03-29)
-- Active release target: `v0.12.0` initial public alpha cut
+- Workspace version line: `v0.12.1`
+- Latest published release: `v0.12.0` (verified 2026-03-30)
+- Active release target: `v0.12.1` fix-forward cut
 - Canonical local receipt: `nix develop -c just ci-gate`
 
 ## How To Read This File
@@ -19,45 +19,47 @@
 - This roadmap tells you what we are trying to land next.
 - [../../ROADMAP.md](../../ROADMAP.md) and [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) are summaries, not the canonical plan.
 
-## Current Release Target: v0.12.0 Initial Public Alpha Prep
+## Current Release Target: v0.12.1 Fix-Forward Prep
 
-`main` is already version-bumped to `v0.12.0`, but the latest published release
-is still `v0.11.0` until the final tag and publish flow complete. This roadmap
-tracks the work needed to turn that version bump into the initial public alpha
-release without documentation or packaging drift.
+`main` is now version-bumped to `v0.12.1`. The latest published GitHub release
+is `v0.12.0`, verified on 2026-03-30. This roadmap tracks the narrow
+fix-forward cut needed after the initial public alpha release so the repo front
+door, hook hygiene, and operator surfaces stay aligned with the shipped
+artifact line.
 
-Recent shipped work in the published `v0.10.x` to `v0.11.x` line:
+Recent shipped work in the published `v0.12.0` line:
 
-- Initial public-alpha packaging and marketplace preparation
-- Release orchestration and topological publish validation
-- Continued parser, workspace, and LSP microcrate extraction
-- Security hardening, validation receipts, and docs restructuring
+- Initial public alpha GitHub release with native `perllsp` assets and VSIX
+- Package rename split across `perllsp` and `perl-lsp-rs`
+- Release orchestration, topological publish validation, and launch-day docs cleanup
+- Continued parser, workspace, and LSP microcrate extraction and hardening
 
-## Active Milestone: v0.12.0 Initial Public Alpha Release Prep
+## Active Milestone: v0.12.1 Fix-Forward Release Prep
 
-This milestone is about finishing the remaining hardening work, keeping the
-receipts green, and cutting `v0.12.0` as the initial public alpha release.
+This milestone is about closing the launch regressions that surfaced right after
+`v0.12.0`, keeping the receipts green, and cutting `v0.12.1` without reopening
+the broader alpha scope.
 
 ### Main tracks
 
-- **Corpus and ratchets**: commit and ratchet the CPAN baseline, keep system/common corpus receipts green
-- **Parser robustness**: land Wave 2-4 parser fixes, keep edge-case and hang-risk suites bounded
-- **Semantic framework coverage**: Moo, Moose, Class::Accessor, `use parent` / `use base`, and export-list-aware resolution
-- **Editor and debugger hardening**: keep LSP and DAP flows solid while parser work lands
-- **Documentation and release alignment**: keep top-level docs, status, release notes, and packaging guidance aligned with the pre-tag `v0.12.0` state
+- **Release surface repair**: keep the README, release notes, install guidance,
+  and asset examples aligned with the actual `perllsp` / `perl-lsp-rs` shipped
+  surfaces
+- **Hook hygiene**: keep hook-test fixtures isolated from the real checkout and
+  block placeholder identities before they can leak into local commit metadata
+- **Packaging follow-through**: keep Cargo, VS Code, docs, and operator runbooks
+  aligned around `v0.12.1` while `v0.12.0` remains the latest published GitHub release
+- **Post-launch stability**: keep `nix develop -c just ci-gate` and the release
+  receipts green while the fix-forward cut is prepared
 
 ### Exit criteria
 
-- [ ] `.ci/cpan-corpus-baseline.json` is committed and ratcheted
-- [ ] CPAN top-1000 clean parse rate reaches `90%+`
-- [ ] Internal edge-case, parser-stress, and hang-risk suites stay green
-- [ ] No hang, crash, or stack-overflow regressions appear in corpus sweeps
-- [ ] Common corpus remains strict zero-error and only grows
-- [ ] CPAN known-clean manifest grows without regressions once seeded
-- [ ] Moo/Moose/Class::Accessor coverage reaches the maintained test targets
-- [ ] Cross-file inheritance resolution via `use parent` / `use base` lands
-- [ ] Exporter/Sub::Exporter-style export-list parsing improves semantic resolution
-- [ ] `nix develop -c just ci-gate` stays green through initial public alpha release prep
+- [ ] `Cargo.toml`, `features.toml`, and `vscode-extension/package.json` all report `0.12.1`
+- [ ] `CHANGELOG.md` contains a dated `## [0.12.1]` entry and leaves `[Unreleased]` empty
+- [ ] The top-level README and release docs no longer drift from the shipped `perllsp` asset line
+- [ ] Hook-test fixtures cannot mutate repo-local git identity or front-door files in the real checkout
+- [ ] `nix develop -c just ci-gate` stays green through the `v0.12.1` fix-forward prep
+- [ ] The `v0.12.1` release flow completes without tag, package-name, or install-surface drift
 
 ### Supporting docs
 
@@ -69,9 +71,9 @@ receipts green, and cutting `v0.12.0` as the initial public alpha release.
 
 ### Now
 
-- Raise CPAN clean-parse coverage while keeping ratchets honest
-- Finish semantic framework work needed for real-world Perl projects
-- Keep the release surface and docs aligned with the split between workspace version and latest published release
+- Close the launch regressions discovered after the `v0.12.0` tag without reopening the wider alpha scope
+- Keep package names, install guidance, and operator docs aligned with `perllsp` and `perl-lsp-rs`
+- Finish the `v0.12.1` fix-forward cut with clean release receipts and no more front-door drift
 
 ### Next
 
@@ -90,6 +92,11 @@ receipts green, and cutting `v0.12.0` as the initial public alpha release.
 ### v0.12.0
 
 Initial public alpha release across parser quality, semantic framework coverage, docs alignment, and release receipts.
+
+### v0.12.1
+
+Fix-forward release to close launch regressions in README, hook-fixture isolation,
+git-hook installation, and release-surface alignment after the initial public alpha cut.
 
 ### v0.13.0
 

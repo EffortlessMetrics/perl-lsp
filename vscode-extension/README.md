@@ -7,7 +7,7 @@
 
 A fast, native Perl 5 language server extension. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
-> **0.12.0 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
+> **0.12.1 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
 
 ## Features
 
@@ -109,7 +109,7 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.autoDownload` | `true` | Automatically download `perllsp` if not found locally |
 | `perl-lsp.serverPath` | `""` | Absolute path to a `perllsp` binary (overrides auto-download) |
 | `perl-lsp.channel` | `"latest"` | Release channel: `latest`, `stable`, or `tag` |
-| `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.0`) when channel is `tag` |
+| `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
 | `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
 | `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting |
 | `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`) |
