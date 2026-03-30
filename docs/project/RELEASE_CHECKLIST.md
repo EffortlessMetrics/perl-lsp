@@ -55,7 +55,7 @@ for crate_name in allow:
 - [ ] `cargo search perllsp --limit 1` resolves `perllsp = "NEW_VERSION"`.
 - [ ] The VS Code Marketplace and Open VSX listings show `NEW_VERSION`.
 - [ ] `docker pull effortlessmetrics/perl-lsp:NEW_VERSION` and `docker pull ghcr.io/effortlessmetrics/perl-lsp:NEW_VERSION` succeed.
-- [ ] `cargo install perllsp` installs the new release and `perl-lsp --version` prints `NEW_VERSION`.
+- [ ] `cargo install perllsp` installs the new release and `perllsp --version` prints `NEW_VERSION`.
 - [ ] The smoke tests in [RELEASE.md](../../RELEASE.md) pass for the current release artifacts.
 - [ ] Any evidence-backed status docs are updated with `just status-update` and validated with `just status-check`.
 

@@ -18,13 +18,13 @@
 //! cargo install --path crates/perllsp
 //!
 //! # Run in stdio mode (default)
-//! perl-lsp --stdio
+//! perllsp --stdio
 //!
 //! # Check health status
-//! perl-lsp --health
+//! perllsp --health
 //!
 //! # Show version information
-//! perl-lsp --version
+//! perllsp --version
 //! ```
 //!
 //! ## Programmatic Usage
@@ -132,7 +132,7 @@
 //! Standard input/output transport for editor integration:
 //!
 //! ```bash
-//! perl-lsp --stdio
+//! perllsp --stdio
 //! ```
 //!
 //! Editors configure this mode in their LSP client settings:
@@ -141,7 +141,7 @@
 //!
 //! ```json
 //! {
-//!   "perl.lsp.command": "perl-lsp",
+//!   "perl.lsp.command": "perllsp",
 //!   "perl.lsp.args": ["--stdio"]
 //! }
 //! ```
@@ -150,7 +150,7 @@
 //!
 //! ```lua
 //! require'lspconfig'.perl.setup{
-//!   cmd = { "perl-lsp", "--stdio" }
+//!   cmd = { "perllsp", "--stdio" }
 //! }
 //! ```
 //!
@@ -159,7 +159,7 @@
 //! TCP socket transport for remote or debugging scenarios:
 //!
 //! ```bash
-//! perl-lsp --socket --port 9257
+//! perllsp --socket --port 9257
 //! ```
 //!
 //! Connect via TCP socket from any LSP client supporting network transport.
@@ -248,7 +248,7 @@
 //! Enable logging for debugging:
 //!
 //! ```bash
-//! perl-lsp --stdio --log
+//! perllsp --stdio --log
 //! ```
 //!
 //! Logs are written to stderr, separate from LSP protocol communication on stdout/stdin.

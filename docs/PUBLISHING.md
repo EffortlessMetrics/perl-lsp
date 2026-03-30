@@ -68,7 +68,7 @@ After publish completes:
 
 - Confirm `Release` and `Publish to crates.io` workflows completed successfully.
 - Spot-check package index visibility with `cargo search` for critical crates (`perllsp`, `perl-lsp-rs`, `perl-parser`, `perl-dap`).
-- Validate `cargo install perllsp` succeeds and executes `perl-lsp --version`.
+- Validate `cargo install perllsp` succeeds and executes `perllsp --version`.
 
 ## Pre-Publish Checklist
 

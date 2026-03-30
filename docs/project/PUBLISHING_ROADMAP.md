@@ -167,8 +167,8 @@ Run these tests manually against the release binary before tagging. Build the bi
 
 ```bash
 cargo build -p perllsp --release
-BINARY="./target/release/perl-lsp"
-$BINARY --version    # Must print: perl-lsp NEW_VERSION
+BINARY="./target/release/perllsp"
+$BINARY --version    # Must print: perllsp NEW_VERSION
 $BINARY --health     # Must print healthy status for all subsystems
 ```
 
@@ -341,13 +341,13 @@ gh release view "v${NEW_VERSION}"
 Release must include:
 
 ```
-perl-lsp-NEW_VERSION-x86_64-unknown-linux-gnu.tar.gz
-perl-lsp-NEW_VERSION-aarch64-unknown-linux-gnu.tar.gz
-perl-lsp-NEW_VERSION-x86_64-unknown-linux-musl.tar.gz
-perl-lsp-NEW_VERSION-aarch64-unknown-linux-musl.tar.gz
-perl-lsp-NEW_VERSION-x86_64-apple-darwin.tar.gz
-perl-lsp-NEW_VERSION-aarch64-apple-darwin.tar.gz
-perl-lsp-NEW_VERSION-x86_64-pc-windows-msvc.zip
+perllsp-NEW_VERSION-x86_64-unknown-linux-gnu.tar.gz
+perllsp-NEW_VERSION-aarch64-unknown-linux-gnu.tar.gz
+perllsp-NEW_VERSION-x86_64-unknown-linux-musl.tar.gz
+perllsp-NEW_VERSION-aarch64-unknown-linux-musl.tar.gz
+perllsp-NEW_VERSION-x86_64-apple-darwin.tar.gz
+perllsp-NEW_VERSION-aarch64-apple-darwin.tar.gz
+perllsp-NEW_VERSION-x86_64-pc-windows-msvc.zip
 SHA256SUMS
 sbom-spdx.json
 perl-lsp-rs-NEW_VERSION.vsix
@@ -357,7 +357,7 @@ Verify binary checksum:
 
 ```bash
 gh release download "v${NEW_VERSION}" \
-  --pattern "perl-lsp-${NEW_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+  --pattern "perllsp-${NEW_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
   --pattern SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing
 ```
@@ -485,7 +485,7 @@ cargo search perllsp --limit 1
 
 # Docker Hub
 docker pull effortlessmetrics/perl-lsp:${NEW_VERSION}
-docker run --rm effortlessmetrics/perl-lsp:${NEW_VERSION} perl-lsp --version
+docker run --rm effortlessmetrics/perl-lsp:${NEW_VERSION} perllsp --version
 
 # GHCR
 docker pull ghcr.io/effortlessmetrics/perl-lsp:${NEW_VERSION}
@@ -505,12 +505,12 @@ gh run list --workflow=brew-bump.yml --limit 3
 ```bash
 # From crates.io
 cargo install perllsp --version ${NEW_VERSION}
-perl-lsp --version    # Must print: perl-lsp NEW_VERSION
-perl-lsp --health     # Must show healthy
+perllsp --version     # Must print: perllsp NEW_VERSION
+perllsp --health      # Must show healthy
 
 # From install script
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
-perl-lsp --version
+perllsp --version
 ```
 
 ### 4.3 Monitoring plan (Week 1)

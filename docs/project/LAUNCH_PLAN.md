@@ -10,7 +10,7 @@
 
 - [ ] Tag `v0.12.0` on master after all exit criteria pass
 - [ ] `cargo publish` the published crate set in topological order:
-  `perl-token`, `perl-ast`, `perl-lexer`, `perl-parser`, `perl-corpus`, `perl-dap`, `perl-lsp`
+  `perl-token`, `perl-ast`, `perl-lexer`, `perl-parser`, `perl-corpus`, `perl-dap`, `perl-lsp-rs`, `perllsp`
 - [ ] GitHub Release with release notes, CHANGELOG excerpt, and binary artifacts
 
 ### Binary Artifacts
@@ -289,7 +289,7 @@ The reliability story. How perl-lsp enforces zero panics in production.
 - [ ] Version bumped to 0.12.0 in workspace Cargo.toml
 - [ ] CHANGELOG.md finalized
 - [ ] README.md updated with 0.12.0 content
-- [ ] `perl-lsp --health` works on all three platforms
+- [ ] `perllsp --health` works on all three platforms
 - [ ] VSCode extension tested on fresh install
 
 ### Content Blockers

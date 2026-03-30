@@ -23,7 +23,7 @@ nix develop          # Recommended: reproducible environment
 ### Build and Test
 
 ```bash
-cargo build -p perl-lsp --release     # Build the LSP server
+cargo build -p perllsp --release      # Build the public LSP binary
 cargo test --workspace --lib          # Run all library tests
 ```
 

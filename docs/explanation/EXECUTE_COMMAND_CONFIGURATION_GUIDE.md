@@ -205,7 +205,7 @@ env PATH="$PATH" which perlcritic
 2. **Check LSP server environment**:
 ```bash
 # Start LSP server with environment logging
-env PATH="$PATH" perl-lsp --stdio --log
+env PATH="$PATH" perllsp --stdio --log
 
 # Test command detection logic
 cargo test -p perl-parser --test execute_command_tests -- test_command_exists_behavior
@@ -284,7 +284,7 @@ cargo test -p perl-parser --test execute_command_tests -- test_format_violation_
 cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_capabilities
 
 # Manual LSP protocol test
-echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
 ```
 
 2. **Test JSON-RPC protocol directly**:
@@ -297,7 +297,7 @@ Content-Length: 140
 EOF
 
 # Test with LSP server
-perl-lsp --stdio < /tmp/test_request.json
+perllsp --stdio < /tmp/test_request.json
 ```
 
 3. **Check editor-specific integration**:
@@ -384,7 +384,7 @@ RUN apt-get update && apt-get install -y perlcritic perl
 COPY . /workspace
 WORKDIR /workspace
 RUN cargo build --release -p perl-lsp-rs
-CMD ["./target/release/perl-lsp", "--stdio"]
+CMD ["./target/release/perllsp", "--stdio"]
 ```
 
 2. **GitHub Actions integration**:

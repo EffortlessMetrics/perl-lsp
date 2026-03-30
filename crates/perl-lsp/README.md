@@ -7,7 +7,7 @@ public `perllsp` Cargo entry.
 
 Use `perl-lsp-rs` when you want to work on or embed the real language server implementation:
 
-- run the `perl-lsp` binary behind an editor such as VS Code, Neovim, Emacs, or Helix
+- run the `perllsp` binary behind an editor such as VS Code, Neovim, Emacs, or Helix
 - expose Perl LSP features over stdio or TCP
 - embed the server entry point from Rust instead of shelling out to a binary
 
@@ -33,17 +33,17 @@ commands such as `cargo build -p perl-lsp-rs` or `cargo test -p perl-lsp-rs`.
 ## Quick start
 
 ```bash
-perl-lsp --stdio
-perl-lsp --health
+perllsp --stdio
+perllsp --health
 ```
 
 ## Usage
 
 ```bash
-perl-lsp --stdio          # stdio mode (default, for editor integration)
-perl-lsp --socket --port 9257  # TCP socket mode
-perl-lsp --health         # health check
-perl-lsp --version        # version info
+perllsp --stdio           # stdio mode (default, for editor integration)
+perllsp --socket --port 9257   # TCP socket mode
+perllsp --health          # health check
+perllsp --version         # version info
 ```
 
 ## Embedding from Rust

@@ -231,9 +231,9 @@ Binaries are published for all platforms:
 **Installation:**
 ```bash
 # Download and extract
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v<0.x.y>/perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v<0.x.y>/perllsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
+tar xzf perllsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
+sudo cp perllsp-<0.x.y>-x86_64-unknown-linux-gnu/perllsp /usr/local/bin/
 ```
 
 ### Homebrew
@@ -289,7 +289,7 @@ install story:
   manifests after the update step.
 - Manual: upstream PR acceptance in the Scoop and Chocolatey package repos,
   then a real Windows install check with `scoop install perl-lsp` or
-  `choco install perl-lsp`, followed by `perl-lsp --health` and editor/PATH
+  `choco install perl-lsp`, followed by `perllsp --health` and editor/PATH
   discovery.
 
 Run `powershell -NoLogo -NoProfile -File scripts/check-windows-distribution.ps1`
