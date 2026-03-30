@@ -6,8 +6,8 @@ This guide gets you from zero to a working Perl language server in your editor.
 
 The fastest validation path is:
 
-1. Install `perl-lsp`
-2. Run `perl-lsp --health`
+1. Install `perllsp`
+2. Run `perllsp --health`
 3. Open a Perl file in your editor
 4. Confirm you get diagnostics and hover text
 
@@ -59,17 +59,17 @@ cargo install --path crates/perllsp
 
 ```bash
 # Check binary is available
-perl-lsp --version
+perllsp --version
 
 # Quick health check
-perl-lsp --health
+perllsp --health
 # Should output: ok <installed-version>
 
 # Optional: show feature/profile information
-perl-lsp --info
+perllsp --info
 
 # Optional: validate a Perl file from the CLI
-perl-lsp --check script.pl
+perllsp --check script.pl
 ```
 
 If `--version` and `--health` work but your editor still cannot connect, jump to [Troubleshooting](../how-to/TROUBLESHOOTING.md).
@@ -336,7 +336,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 source ~/.bashrc   # or: source ~/.zshrc
 ```
 
-After reloading, `perl-lsp --version` should print the version number.
+After reloading, `perllsp --version` should print the version number.
 
 ### Extension / editor not connecting to the server
 
@@ -351,7 +351,7 @@ The editor must be able to find and launch the `perl-lsp` binary. Symptoms inclu
 
 3. **Test JSON-RPC communication** manually:
    ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
    ```
    You should see a JSON response. If you see an error, the binary itself has a problem -- try reinstalling.
 
@@ -385,10 +385,10 @@ The LSP integration tests start real server instances that compete for ports and
 
 ```bash
 # Quick health check
-perl-lsp --health
+perllsp --health
 
 # Run with debug logging to see what's happening
-RUST_LOG=perl_lsp=debug perl-lsp --stdio 2>debug.log
+RUST_LOG=perl_lsp=debug perllsp --stdio 2>debug.log
 ```
 
 ### No Diagnostics Appearing

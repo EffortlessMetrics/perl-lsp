@@ -36,8 +36,8 @@ cargo build -p perllsp --release
 cargo install --path crates/perllsp
 
 # Run the LSP server
-perl-lsp --stdio  # For editor integration
-perl-lsp --stdio --log  # With debug logging
+perllsp --stdio  # For editor integration
+perllsp --stdio --log  # With debug logging
 ```
 
 ### DAP Server (Debug Adapter)
@@ -252,16 +252,16 @@ cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test test_e2e_document_fo
 cargo test -p perl-lsp-rs --test lsp_perltidy_test test_formatting_provider_capability
 
 # Test LSP server manually
-echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
 
 # Run with incremental parsing enabled
-PERL_LSP_INCREMENTAL=1 perl-lsp --stdio
+PERL_LSP_INCREMENTAL=1 perllsp --stdio
 
 # Test incremental parsing with LSP protocol
-PERL_LSP_INCREMENTAL=1 perl-lsp --stdio < test_requests.jsonrpc
+PERL_LSP_INCREMENTAL=1 perllsp --stdio < test_requests.jsonrpc
 
 # Run with a test file
-perl-lsp --stdio < test_requests.jsonrpc
+perllsp --stdio < test_requests.jsonrpc
 ```
 
 ### LSP Testing Environment Variables (*Diataxis: Reference* - Configuration options)

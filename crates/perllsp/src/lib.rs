@@ -1,4 +1,4 @@
-//! Public Cargo facade for the `perl-lsp` language server.
+//! Public Cargo facade for the `perllsp` language server.
 //!
 //! Install the server with:
 //!
@@ -6,7 +6,7 @@
 //! cargo install perllsp
 //! ```
 //!
-//! That installs the `perl-lsp` binary while delegating the implementation to
+//! That installs the `perllsp` binary while delegating the implementation to
 //! the `perl-lsp-rs` crate.
 
 #![deny(unsafe_code)]

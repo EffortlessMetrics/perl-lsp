@@ -87,10 +87,10 @@ cargo install perllsp
 
 ```bash
 # Check version
-perl-lsp --version
+perllsp --version
 
 # Quick health check
-perl-lsp --health
+perllsp --health
 # Should output: ok 0.10.0
 ```
 
@@ -451,7 +451,7 @@ To customize keybindings, edit `Preferences: Key Bindings`:
 
 4. **Test server manually**:
    ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
    ```
 
 ### No Diagnostics

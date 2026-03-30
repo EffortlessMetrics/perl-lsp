@@ -30,8 +30,8 @@ cargo install perl-dap
 ## Checks
 
 ```bash
-perl-lsp --version
-perl-lsp --capabilities
+perllsp --version
+perllsp --capabilities
 nix develop -c just health
 ```
 

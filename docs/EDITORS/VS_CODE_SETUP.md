@@ -72,10 +72,10 @@ cargo install perllsp
 
 ```bash
 # Check version
-perl-lsp --version
+perllsp --version
 
 # Quick health check
-perl-lsp --health
+perllsp --health
 ```
 
 ---
@@ -391,7 +391,7 @@ Example:
 
 5. **Test server manually**:
    ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
    ```
 
 ### No Diagnostics

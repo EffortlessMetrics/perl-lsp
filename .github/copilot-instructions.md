@@ -13,8 +13,8 @@ This file provides guidance to GitHub Copilot when working with code in this rep
 nix develop -c just ci-gate
 
 # Build and run LSP server
-cargo build -p perl-lsp-rs --release
-./target/release/perl-lsp --stdio
+cargo build -p perllsp --release
+./target/release/perllsp --stdio
 
 # Run all tests
 cargo test --workspace --lib
@@ -53,9 +53,9 @@ The workspace contains 80+ crates organized in tiers. Key crates:
 ### Build
 
 ```bash
-cargo build -p perl-lsp-rs --release     # LSP server
+cargo build -p perllsp --release      # LSP server
 cargo build -p perl-parser --release  # Parser library
-cargo install --path crates/perl-lsp  # Install from source
+cargo install --path crates/perllsp   # Install from source
 ```
 
 ### Test

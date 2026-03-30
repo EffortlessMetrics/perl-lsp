@@ -30,15 +30,15 @@ class PerlLsp < Formula
     # If the release packaging layout changes, update this extraction logic with a follow-up.
     extracted_dir = Dir.glob("perl-lsp-*").find { |dir| Dir.exist?(dir) }
     if extracted_dir
-      bin.install "#{extracted_dir}/perl-lsp"
+      bin.install "#{extracted_dir}/perllsp"
       bin.install "#{extracted_dir}/perl-dap" if File.exist?("#{extracted_dir}/perl-dap")
     else
-      bin.install "perl-lsp"
+      bin.install "perllsp"
       bin.install "perl-dap" if File.exist?("perl-dap")
     end
   end
 
   test do
-    assert_match(/perl-lsp|Perl LSP/, shell_output("#{bin}/perl-lsp --version"))
+    assert_match(/perllsp|Perl LSP/, shell_output("#{bin}/perllsp --version"))
   end
 end

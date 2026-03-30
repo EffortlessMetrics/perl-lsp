@@ -23,10 +23,10 @@ interface Release {
 }
 
 /**
- * Parse the local version string from `perl-lsp --version` stdout.
+ * Parse the local version string from `perllsp --version` stdout.
  *
  * The binary prints three lines; only the first is needed:
- *   perl-lsp 0.12.0
+ *   perllsp 0.12.0
  *   Git tag: v0.12.0
  *   Perl Language Server using perl-parser v3
  *
@@ -34,7 +34,7 @@ interface Release {
  */
 export function parseLocalVersion(versionOutput: string): string | null {
     const firstLine = versionOutput.split('\n')[0].trim();
-    const match = /^perl-lsp\s+(\S+)/.exec(firstLine);
+    const match = /^(?:perllsp|perl-lsp)\s+(\S+)/.exec(firstLine);
     return match ? match[1] : null;
 }
 
@@ -56,7 +56,7 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
 export class BinaryDownloader {
     private static readonly REPO_OWNER = 'EffortlessMetrics';
     private static readonly REPO_NAME = 'perl-lsp';
-    private static readonly BINARY_NAME = 'perl-lsp';
+    private static readonly BINARY_NAME = 'perllsp';
     
     constructor(
         private readonly context: vscode.ExtensionContext,
@@ -155,6 +155,9 @@ export class BinaryDownloader {
             // Try multiple naming patterns for our release format
             const ext = process.platform === 'win32' ? '.zip' : '.tar.gz';
             const possibleNames = [
+                `perllsp-${release.tag_name}-${target}${ext}`,
+                `perllsp-v${release.tag_name.replace('v', '')}-${target}${ext}`,
+                `perllsp-${target}${ext}`,
                 `perl-lsp-${release.tag_name}-${target}${ext}`,
                 `perl-lsp-v${release.tag_name.replace('v', '')}-${target}${ext}`,
                 `perl-lsp-${target}${ext}`
@@ -258,8 +261,11 @@ export class BinaryDownloader {
                 }
                 
                 // Find the binary
-                const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
-                const extractedBinary = this.findBinary(extractDir, binaryName);
+                const binaryNames = process.platform === 'win32'
+                    ? ['perllsp.exe', 'perl-lsp.exe']
+                    : ['perllsp', 'perl-lsp'];
+                const extractedBinary =
+                    binaryNames.map(name => this.findBinary(extractDir, name)).find(Boolean) ?? null;
                 
                 if (!extractedBinary) {
                     throw new Error('Binary not found in archive');
@@ -376,10 +382,14 @@ export class BinaryDownloader {
         
         // Try multiple naming patterns that might be used internally
         const possibleFilenames = [
+            `perllsp-${version}-${target}${ext}`,
+            `perllsp-v${version.replace('v', '')}-${target}${ext}`,
+            `perllsp-${target}${ext}`,
+            `perllsp${ext}`,
             `perl-lsp-${version}-${target}${ext}`,
             `perl-lsp-v${version.replace('v', '')}-${target}${ext}`,
             `perl-lsp-${target}${ext}`,
-            `perl-lsp${ext}` // Simplest case for internal hosting
+            `perl-lsp${ext}`
         ];
         
         // Create synthetic release with all possible asset URLs
@@ -569,7 +579,7 @@ export class BinaryDownloader {
     private getLocalBinaryPath(): string {
         const platform = process.platform;
         const arch = process.arch;
-        const binaryName = platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
+        const binaryName = platform === 'win32' ? 'perllsp.exe' : 'perllsp';
         
         return path.join(
             this.context.globalStorageUri.fsPath,
@@ -661,7 +671,7 @@ export class BinaryDownloader {
             }
 
             const choice = await vscode.window.showInformationMessage(
-                `perl-lsp ${remoteVersion} is available (installed: ${localVersion})`,
+                `perllsp ${remoteVersion} is available (installed: ${localVersion})`,
                 'Update',
                 'Dismiss',
                 "Don't ask again"

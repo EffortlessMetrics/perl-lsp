@@ -126,7 +126,7 @@ print_status "INFO" "Testing LSP with large workspace..."
 cd "$LARGE_WORKSPACE_DIR"
 
 # Start LSP server in background
-timeout 60 cargo run --bin perl-lsp -- --stdio < /dev/null > /dev/null 2>&1 &
+timeout 60 cargo run -p perllsp --bin perllsp -- --stdio < /dev/null > /dev/null 2>&1 &
 LSP_PID=$!
 sleep 2
 

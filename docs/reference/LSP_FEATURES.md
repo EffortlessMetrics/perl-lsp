@@ -592,7 +592,7 @@ With lsp-mode or eglot:
 which perl-lsp
 
 # Test standalone
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
 ```
 
 **Slow performance:**
@@ -602,7 +602,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --s
 - Check for recursive includes
 
 **Missing features:**
-- Ensure latest version: `perl-lsp --version`
+- Ensure latest version: `perllsp --version`
 - Check editor LSP client capabilities
 - Verify configuration is loaded
 
@@ -612,10 +612,10 @@ Enable debug logging for troubleshooting:
 
 ```bash
 # Command line
-perl-lsp --stdio --log-level=debug --log-file=perl-lsp.log
+perllsp --stdio --log-level=debug --log-file=perl-lsp.log
 
 # Environment variable
-RUST_LOG=debug perl-lsp --stdio
+RUST_LOG=debug perllsp --stdio
 ```
 
 ## Contributing

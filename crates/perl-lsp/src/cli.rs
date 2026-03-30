@@ -5,10 +5,11 @@
 use crate::LspServer;
 use perl_lsp_launcher::{
     LaunchAction, LaunchConfig, StartupTimer, TransportMode, format_health_output,
-    format_info_output, help_text, init_logging, log_server_startup, logging_filter, parse_args,
-    port_in_use_message, shell_completion, should_enable_logging, startup_banner,
+    format_info_output, format_startup_banner, help_text, init_logging, log_server_startup,
+    logging_filter, parse_args, port_in_use_message, shell_completion, should_enable_logging,
 };
 use std::env;
+use std::path::Path;
 use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -21,18 +22,21 @@ where
     I: IntoIterator,
     I::Item: Into<std::ffi::OsString> + Clone,
 {
-    let launch_plan = match parse_args(args) {
+    let collected_args: Vec<std::ffi::OsString> = args.into_iter().map(Into::into).collect();
+    let command_name = invocation_name(&collected_args);
+
+    let launch_plan = match parse_args(collected_args) {
         Ok(plan) => plan,
         Err(error) => {
             eprintln!("{error}");
-            eprintln!("{}", help_text());
+            eprintln!("{}", render_help_text(&command_name));
             return 1;
         }
     };
 
     match launch_plan.action {
         LaunchAction::Run => {
-            run_server(launch_plan.config);
+            run_server(&command_name, launch_plan.config);
             0
         }
         LaunchAction::Health => {
@@ -57,11 +61,11 @@ where
             );
             0
         }
-        LaunchAction::Check => run_check(&launch_plan.files),
+        LaunchAction::Check => run_check(&command_name, &launch_plan.files),
         LaunchAction::CheckProject { ref dir } => run_check_project(dir),
         LaunchAction::Completion { ref shell } => {
             if let Some(script) = shell_completion(shell) {
-                print!("{script}");
+                print!("{}", render_shell_completion(script, &command_name));
                 0
             } else {
                 eprintln!("Unknown shell: {shell}. Supported: bash, zsh, fish, powershell");
@@ -69,7 +73,7 @@ where
             }
         }
         LaunchAction::Version => {
-            print_version();
+            print_version(&command_name);
             0
         }
         LaunchAction::FeaturesJson => {
@@ -77,10 +81,28 @@ where
             0
         }
         LaunchAction::Help => {
-            println!("{}", help_text());
+            println!("{}", render_help_text(&command_name));
             0
         }
     }
+}
+
+fn invocation_name(args: &[std::ffi::OsString]) -> String {
+    args.first()
+        .and_then(|arg| Path::new(arg).file_stem())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("perllsp")
+        .to_string()
+}
+
+fn render_help_text(command_name: &str) -> String {
+    help_text().replace("perl-lsp", command_name)
+}
+
+fn render_shell_completion(script: &str, command_name: &str) -> String {
+    let function_name = command_name.replace('-', "_");
+    script.replace("_perl_lsp", &format!("_{function_name}")).replace("perl-lsp", command_name)
 }
 
 /// Spawn a blocking reader thread that reads LSP messages from `reader` and
@@ -114,9 +136,9 @@ fn spawn_reader_thread<R: std::io::Read + Send + 'static>(
     });
 }
 
-fn run_check(files: &[String]) -> i32 {
+fn run_check(command_name: &str, files: &[String]) -> i32 {
     if files.is_empty() {
-        eprintln!("Usage: perl-lsp --check <file.pl> [file2.pm ...]");
+        eprintln!("Usage: {command_name} --check <file.pl> [file2.pm ...]");
         eprintln!("No files specified.");
         return 1;
     }
@@ -292,7 +314,8 @@ fn categorize_error(msg: &str) -> String {
     }
 }
 
-fn run_server(launch_config: LaunchConfig) {
+fn run_server(command_name: &str, launch_config: LaunchConfig) {
+    let command_name = command_name.to_string();
     let mut startup_timer = StartupTimer::new();
     let logging_enabled = should_enable_logging(launch_config.enable_logging);
     if logging_enabled {
@@ -304,11 +327,17 @@ fn run_server(launch_config: LaunchConfig) {
     }
     startup_timer.checkpoint("logging_init");
 
-    startup_banner(
-        env!("CARGO_PKG_VERSION"),
-        launch_config.feature_profile,
-        launch_config.transport,
-    );
+    if std::env::var("PERL_LSP_QUIET").is_err() {
+        eprintln!(
+            "{}",
+            format_startup_banner(
+                env!("CARGO_PKG_VERSION"),
+                launch_config.feature_profile,
+                launch_config.transport.is_socket(),
+            )
+            .replace("perl-lsp", &command_name)
+        );
+    }
 
     match launch_config.transport {
         TransportMode::Stdio => {
@@ -332,7 +361,7 @@ fn run_server(launch_config: LaunchConfig) {
                 if logging_enabled {
                     let report = startup_timer.finish();
                     log_server_startup(
-                        "perl-lsp",
+                        &command_name,
                         env!("CARGO_PKG_VERSION"),
                         launch_config.transport,
                         Some(launch_config.feature_profile),
@@ -359,7 +388,10 @@ fn run_server(launch_config: LaunchConfig) {
                     Ok(l) => l,
                     Err(e) => {
                         if e.kind() == std::io::ErrorKind::AddrInUse {
-                            eprintln!("{}", port_in_use_message(port));
+                            eprintln!(
+                                "{}",
+                                port_in_use_message(port).replace("perl-lsp", &command_name)
+                            );
                         } else {
                             eprintln!("Failed to bind to {addr}: {e}");
                         }
@@ -374,15 +406,16 @@ fn run_server(launch_config: LaunchConfig) {
                     }
                 };
                 if logging_enabled {
-                    tracing::info!(address = %local_addr, "perl-lsp listening");
+                    tracing::info!(server = %command_name, address = %local_addr, "server listening");
                 }
 
                 loop {
                     match listener.accept().await {
                         Ok((stream, peer_addr)) => {
                             if logging_enabled {
-                                tracing::info!(peer = %peer_addr, "perl-lsp accepted connection");
+                                tracing::info!(server = %command_name, peer = %peer_addr, "accepted connection");
                             }
+                            let command_name = command_name.clone();
                             tokio::spawn(async move {
                                 let std_stream = match stream.into_std() {
                                     Ok(std_stream) => std_stream,
@@ -429,7 +462,7 @@ fn run_server(launch_config: LaunchConfig) {
                                 if logging_enabled {
                                     let report = conn_timer.finish();
                                     log_server_startup(
-                                        "perl-lsp",
+                                        &command_name,
                                         env!("CARGO_PKG_VERSION"),
                                         launch_config.transport,
                                         Some(profile),
@@ -441,7 +474,7 @@ fn run_server(launch_config: LaunchConfig) {
                             });
                         }
                         Err(e) => {
-                            tracing::error!(error = %e, "perl-lsp socket accept error");
+                            tracing::error!(server = %command_name, error = %e, "socket accept error");
                             sleep(Duration::from_millis(100)).await;
                         }
                     }
@@ -451,8 +484,8 @@ fn run_server(launch_config: LaunchConfig) {
     }
 }
 
-fn print_version() {
-    println!("perl-lsp {}", env!("CARGO_PKG_VERSION"));
+fn print_version(command_name: &str) {
+    println!("{command_name} {}", env!("CARGO_PKG_VERSION"));
     println!("Git tag: {}", env!("GIT_TAG"));
     println!("Perl Language Server using perl-parser v3");
 }

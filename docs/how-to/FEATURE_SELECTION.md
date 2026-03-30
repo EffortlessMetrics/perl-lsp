@@ -90,16 +90,16 @@ Pass `--feature-profile <token>` when starting the server:
 
 ```bash
 # Start with the production profile (default)
-perl-lsp --stdio
+perllsp --stdio
 
 # Explicitly select production
-perl-lsp --stdio --feature-profile production
+perllsp --stdio --feature-profile production
 
 # Use the conservative ga-lock profile
-perl-lsp --stdio --feature-profile ga-lock
+perllsp --stdio --feature-profile ga-lock
 
 # Enable all features (test/snapshot mode)
-perl-lsp --stdio --feature-profile all
+perllsp --stdio --feature-profile all
 ```
 
 Token normalization rules:
@@ -128,7 +128,7 @@ Or pass it as a server argument in your editor's LSP configuration. For VS Code 
 
 ```json
 {
-  "perl-lsp.serverPath": "/usr/local/bin/perl-lsp",
+  "perl-lsp.serverPath": "/usr/local/bin/perllsp",
   "perl-lsp.serverArgs": ["--feature-profile", "ga-lock"]
 }
 ```
@@ -137,7 +137,7 @@ Or pass it as a server argument in your editor's LSP configuration. For VS Code 
 
 ```lua
 require('lspconfig').perl_lsp.setup({
-  cmd = { 'perl-lsp', '--stdio', '--feature-profile', 'production' },
+  cmd = { 'perllsp', '--stdio', '--feature-profile', 'production' },
 })
 ```
 
@@ -151,7 +151,7 @@ name = "perl"
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio", "--feature-profile", "production"]
 ```
 
@@ -159,7 +159,7 @@ args = ["--stdio", "--feature-profile", "production"]
 
 ```elisp
 (add-to-list 'eglot-server-programs
-  '((perl-mode cperl-mode) . ("perl-lsp" "--stdio" "--feature-profile" "production")))
+  '((perl-mode cperl-mode) . ("perllsp" "--stdio" "--feature-profile" "production")))
 ```
 
 ---
@@ -197,7 +197,7 @@ perltidy --version
 Use the `--info` flag to inspect the server's compiled configuration and feature profile:
 
 ```bash
-perl-lsp --info
+perllsp --info
 ```
 
 This prints the version, active profile, and the number of advertised features.
@@ -205,7 +205,7 @@ This prints the version, active profile, and the number of advertised features.
 To see the full feature catalog as JSON for a given profile:
 
 ```bash
-perl-lsp --features-json --feature-profile production
+perllsp --features-json --feature-profile production
 ```
 
 The JSON output includes:
@@ -227,10 +227,10 @@ To check compliance from the command line:
 
 ```bash
 # View all profiles
-perl-lsp --features-json --feature-profile all
+perllsp --features-json --feature-profile all
 
 # Quick health check (prints version and ok/error)
-perl-lsp --health
+perllsp --health
 ```
 
 The `features.toml` file is the canonical definition. The Rust code in `perl-lsp-feature-contracts` generates type-safe bindings from it at compile time.

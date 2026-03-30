@@ -1,6 +1,6 @@
 # perllsp
 
-`perllsp` is the Cargo package for the `perl-lsp` language server.
+`perllsp` is the Cargo package for the `perllsp` language server command.
 
 If you want the Perl language server binary, this is the package to install:
 
@@ -8,7 +8,7 @@ If you want the Perl language server binary, this is the package to install:
 cargo install perllsp
 ```
 
-That installs the `perl-lsp` binary.
+That installs the `perllsp` binary.
 
 ## Why this crate exists
 
@@ -19,9 +19,9 @@ simple while delegating the actual server implementation to `perl-lsp-rs`.
 ## Quick start
 
 ```bash
-perl-lsp --version
-perl-lsp --health
-perl-lsp --stdio
+perllsp --version
+perllsp --health
+perllsp --stdio
 ```
 
 ## Library facade

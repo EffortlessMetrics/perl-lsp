@@ -1325,7 +1325,8 @@ semver-check-all:
     @just semver-check-package perl-parser
     @just semver-check-package perl-lexer
     @just semver-check-package perl-parser-core
-    @just semver-check-package perl-lsp
+    @just semver-check-package perl-lsp-rs
+    @just semver-check-package perllsp
 
 # Generate breaking changes report
 semver-report:
@@ -1625,8 +1626,8 @@ gate-list:
 # Release build (locked, optimized)
 release-build:
     @echo "Building release binary..."
-    cargo build -p perl-lsp-rs --release --locked
-    @echo "Release build complete: target/release/perl-lsp"
+    cargo build -p perllsp --release --locked
+    @echo "Release build complete: target/release/perllsp"
 
 # Version sync check (Slice B: single source of version truth)
 version-check:

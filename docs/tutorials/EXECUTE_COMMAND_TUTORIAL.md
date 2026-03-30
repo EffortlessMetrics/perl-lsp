@@ -348,7 +348,7 @@ cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_ac3_advanced_ref
 cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_capabilities
 
 # Check LSP server logs for capability advertisement
-perl-lsp --stdio --log
+perllsp --stdio --log
 ```
 
 ### Issue: Analysis Takes Too Long

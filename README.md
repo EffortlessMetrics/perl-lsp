@@ -19,7 +19,7 @@
 
 ---
 
-Perl editor support too often starts with "make Perl itself work first, then add the editor layer later." `perl-lsp` flips that around. Install one native binary and get completions, diagnostics, navigation, formatting, and debugging for Perl 5 on Windows, macOS, and Linux.
+Perl editor support too often starts with "make Perl itself work first, then add the editor layer later." `perl-lsp` flips that around. Install one native binary, `perllsp`, and get completions, diagnostics, navigation, formatting, and debugging for Perl 5 on Windows, macOS, and Linux.
 
 ## Start Here
 
@@ -57,14 +57,14 @@ Perl editor support too often starts with "make Perl itself work first, then add
 code --install-extension effortlessmetrics.perl-lsp-rs
 ```
 
-The VS Code extension auto-downloads the matching server binary for your platform.
+The VS Code extension auto-downloads the matching `perllsp` binary for your platform.
 
 ### GitHub release binary
 
 Download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, and then verify it:
 
 ```bash
-perl-lsp --health
+perllsp --health
 ```
 
 If you are testing the workspace locally before a tagged release, install from source instead:
@@ -73,12 +73,7 @@ If you are testing the workspace locally before a tagged release, install from s
 cargo install --path crates/perllsp
 ```
 
-### Windows package managers
-
-```powershell
-scoop install perl-lsp
-choco install perl-lsp
-```
+Do not use `cargo install perl-lsp` on crates.io. That package name is owned by another project.
 
 ### Other editors
 
@@ -86,20 +81,20 @@ Neovim:
 
 ```lua
 require('lspconfig').perl_ls.setup {
-  cmd = { "perl-lsp", "--stdio" },
+  cmd = { "perllsp", "--stdio" },
 }
 ```
 
 Emacs (`eglot`):
 
 ```elisp
-(add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
+(add-to-list 'eglot-server-programs '(perl-mode "perllsp" "--stdio"))
 ```
 
 Generic LSP client:
 
 ```text
-perl-lsp --stdio
+perllsp --stdio
 ```
 
 For a full setup path, use [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md).
@@ -143,8 +138,8 @@ Use [docs/reference/CONFIG.md](docs/reference/CONFIG.md) for the full reference 
 
 | Crate | Use it when you need... |
 | --- | --- |
-| [`crates/perllsp`](crates/perllsp/) | the public Cargo package for installing the `perl-lsp` binary |
-| [`crates/perl-lsp`](crates/perl-lsp/) | the internal implementation crate behind the `perl-lsp` binary |
+| [`crates/perllsp`](crates/perllsp/) | the public Cargo package for installing the `perllsp` binary |
+| [`crates/perl-lsp`](crates/perl-lsp/) | the internal implementation crate behind the `perllsp` binary |
 | [`crates/perl-dap`](crates/perl-dap/) | the native debug adapter runtime |
 | [`crates/perl-parser`](crates/perl-parser/) | one facade for parsing, semantic analysis, and workspace tooling |
 | [`crates/perl-lexer`](crates/perl-lexer/) | tokenization and lexical state handling |

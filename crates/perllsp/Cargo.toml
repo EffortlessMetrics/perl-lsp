@@ -24,7 +24,7 @@ name = "perllsp"
 path = "src/lib.rs"
 
 [[bin]]
-name = "perl-lsp"
+name = "perllsp"
 path = "src/main.rs"
 
 [dependencies]
@@ -34,6 +34,6 @@ perl-lsp-rs = { workspace = true }
 workspace = true
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"
+pkg-url = "{ repo }/releases/download/v{ version }/perllsp-{ version }-{ target }{ archive-suffix }"
 bin-dir = "{ bin }{ binary-ext }"
 pkg-fmt = "tgz"

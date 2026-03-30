@@ -1176,7 +1176,7 @@ cargo test -p perl-parser lsp_your_feature_tests
 # Test external dependency robustness
 cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test test_e2e_document_formatting  # Passes with or without perltidy
 cargo test -p perl-lsp-rs --test lsp_perltidy_test                                         # Tests capability advertising
-echo '{"jsonrpc":"2.0","method":"your_method",...}' | perl-lsp --stdio
+echo '{"jsonrpc":"2.0","method":"your_method",...}' | perllsp --stdio
 
 # Run comprehensive E2E tests (100% passing as of v0.8.6)
 cargo test -p perl-parser lsp_comprehensive_e2e_test
@@ -1658,11 +1658,11 @@ This section provides comprehensive guidance for diagnosing and resolving issues
    ```bash
    # Force fallbacks for comprehensive testing
    export LSP_TEST_FALLBACKS=1
-   perl-lsp --stdio
+   perllsp --stdio
    
    # Force fallbacks in production (debugging)
    export LSP_FORCE_FALLBACKS=1
-   perl-lsp --stdio
+   perllsp --stdio
    ```
 
 2. **Configuration-Based Activation**
@@ -1678,7 +1678,7 @@ This section provides comprehensive guidance for diagnosing and resolving issues
 
 ```bash
 # Enable detailed logging to see when fallbacks activate
-perl-lsp --stdio --log-level debug 2>lsp-debug.log
+perllsp --stdio --log-level debug 2>lsp-debug.log
 
 # Monitor fallback activation in real-time
 tail -f lsp-debug.log | grep -E "(fallback|Primary.*failed)"
@@ -1761,7 +1761,7 @@ fn validate_fallback_accuracy() {
 echo "sub test_function { return 42; }" | grep -E "sub\s+([A-Za-z_][A-Za-z0-9_]*)"
 
 # Verify fallback symbol extraction
-LSP_TEST_FALLBACKS=1 perl-lsp --stdio < test_request.json
+LSP_TEST_FALLBACKS=1 perllsp --stdio < test_request.json
 ```
 
 **Resolution**:

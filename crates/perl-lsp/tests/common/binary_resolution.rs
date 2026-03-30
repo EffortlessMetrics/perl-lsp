@@ -1,4 +1,4 @@
-//! Binary resolution logic for finding the perl-lsp executable.
+//! Binary resolution logic for finding the Perl LSP executable.
 //!
 //! Resolution order (fixed for test reliability):
 //! 1. PERL_LSP_BIN env var (explicit override)
@@ -43,6 +43,11 @@ pub(crate) fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     }
 
     // 3. Runtime CARGO_BIN_EXE_* (fallback, in case compile-time wasn't set)
+    if let Ok(p) = std::env::var("CARGO_BIN_EXE_perllsp") {
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
+    }
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
         let mut c = Command::new(p);
         c.arg("--stdio");
@@ -64,23 +69,41 @@ pub(crate) fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
             crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
 
         // Try DEBUG binary first (this is what `cargo test` builds by default)
-        let debug_binary = workspace_root.join("target/debug/perl-lsp");
+        let debug_binary = workspace_root.join("target/debug/perllsp");
         if debug_binary.exists() {
             let mut c = Command::new(&debug_binary);
             c.arg("--stdio");
             v.push(c);
         }
 
-        // Then try release binary (only if debug doesn't exist)
-        let release_binary = workspace_root.join("target/release/perl-lsp");
+        let debug_compat_binary = workspace_root.join("target/debug/perl-lsp");
+        if debug_compat_binary.exists() {
+            let mut c = Command::new(&debug_compat_binary);
+            c.arg("--stdio");
+            v.push(c);
+        }
+
+        let release_binary = workspace_root.join("target/release/perllsp");
         if release_binary.exists() {
             let mut c = Command::new(&release_binary);
             c.arg("--stdio");
             v.push(c);
         }
+
+        let release_compat_binary = workspace_root.join("target/release/perl-lsp");
+        if release_compat_binary.exists() {
+            let mut c = Command::new(&release_compat_binary);
+            c.arg("--stdio");
+            v.push(c);
+        }
     }
 
-    // 5. Try perl-lsp from PATH
+    // 5. Try the public command from PATH, then the compatibility alias
+    {
+        let mut c = Command::new("perllsp");
+        c.arg("--stdio");
+        v.push(c);
+    }
     {
         let mut c = Command::new("perl-lsp");
         c.arg("--stdio");
@@ -89,6 +112,12 @@ pub(crate) fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
 
     // 6. Fallback: use cargo run with debug profile (matches what tests build)
     // This is SLOW because it may need to compile, but always works
+    {
+        let mut c = Command::new("cargo");
+        c.args(["run", "-q", "-p", "perllsp", "--", "--stdio"]);
+        v.push(c);
+    }
+
     {
         let mut c = Command::new("cargo");
         c.args(["run", "-q", "-p", "perl-lsp-rs", "--", "--stdio"]);

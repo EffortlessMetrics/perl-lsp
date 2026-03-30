@@ -61,7 +61,7 @@ Yes. The parser targets Perl 5.8 as the minimum and handles most idioms from tha
 
 ### Which editors work with perl-lsp?
 
-Any editor with LSP client support works. Point it at `perl-lsp --stdio`:
+Any editor with LSP client support works. Point it at `perllsp --stdio`:
 
 - **VS Code** — native extension with auto-download, UI settings, and DAP debugging
 - **Neovim** — via `nvim-lspconfig` (`perl_ls` server)
@@ -74,7 +74,7 @@ See [EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md) for editor-specific configurati
 
 ### Can I use it without VS Code?
 
-Yes. The VS Code extension is the easiest path, but `perl-lsp --stdio` is a plain LSP server that works with any compliant client. The extension is a convenience layer on top of the same binary.
+Yes. The VS Code extension is the easiest path, but `perllsp --stdio` is a plain LSP server that works with any compliant client. The extension is a convenience layer on top of the same binary.
 
 ### Does it support debugging (DAP)?
 
