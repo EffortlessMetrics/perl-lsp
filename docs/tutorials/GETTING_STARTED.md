@@ -1,4 +1,4 @@
-# Getting Started with perl-lsp
+# Getting Started with perllsp
 
 This guide gets you from zero to a working Perl language server in your editor.
 
@@ -16,7 +16,7 @@ just editor-specific setup and feature discovery.
 
 ## What is a Language Server?
 
-A **language server** is a program that runs alongside your editor and gives it deep understanding of your code. Instead of each editor re-implementing features like "go to definition" or "show all references," the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) defines a standard way for any editor to talk to a language-specific backend. perl-lsp is that backend for Perl 5: it parses your code, builds an index of symbols, and responds to editor requests over JSON-RPC -- so you get IDE-grade navigation, completion, diagnostics, and refactoring in VS Code, Neovim, Emacs, Helix, or any other LSP-capable editor. No Perl runtime is required; the server is a single native binary.
+A **language server** is a program that runs alongside your editor and gives it deep understanding of your code. Instead of each editor re-implementing features like "go to definition" or "show all references," the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) defines a standard way for any editor to talk to a language-specific backend. `perllsp` is the native Perl 5 language server CLI from the perl-lsp project: it parses your code, builds an index of symbols, and responds to editor requests over JSON-RPC -- so you get IDE-grade navigation, completion, diagnostics, and refactoring in VS Code, Neovim, Emacs, Helix, or any other LSP-capable editor. No Perl runtime is required; the server is a single native binary.
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ The extension downloads the matching server binary for your platform.
 
 ### Option 2: GitHub release binary (Recommended for other editors)
 
-Download the latest archive from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and place `perl-lsp` on your `PATH`.
+Download the latest archive from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and place `perllsp` on your `PATH`.
 
 ### Option 3: Install Script (Linux/macOS)
 
@@ -93,11 +93,11 @@ Add to your `init.lua`:
 local lspconfig = require('lspconfig')
 local configs = require('lspconfig.configs')
 
--- Register perl-lsp with nvim-lspconfig
+-- Register the Perl LSP server with nvim-lspconfig
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = { 'perl-lsp', '--stdio' },
+      cmd = { 'perllsp', '--stdio' },
       filetypes = { 'perl' },
       root_dir = lspconfig.util.root_pattern('.git', 'Makefile.PL', 'cpanfile', 'dist.ini'),
       single_file_support = true,
@@ -133,7 +133,7 @@ lspconfig.perl_lsp.setup({
 
 ```elisp
 (add-to-list 'eglot-server-programs
-             '((cperl-mode perl-mode) . ("perl-lsp" "--stdio")))
+             '((cperl-mode perl-mode) . ("perllsp" "--stdio")))
 ```
 
 Then run `M-x eglot` in a Perl buffer.
@@ -145,10 +145,10 @@ Add to `~/.config/helix/languages.toml`:
 ```toml
 [[language]]
 name = "perl"
-language-servers = ["perl-lsp"]
+language-servers = ["perllsp"]
 
-[language-server.perl-lsp]
-command = "perl-lsp"
+[language-server.perllsp]
+command = "perllsp"
 args = ["--stdio"]
 ```
 
@@ -223,7 +223,7 @@ When the server detects a fixable issue, a **lightbulb icon** appears in the gut
 
 ## What You Get
 
-perl-lsp provides:
+perllsp provides:
 
 | Feature | What It Does |
 |---------|--------------|
@@ -239,7 +239,7 @@ perl-lsp provides:
 
 ## Project Configuration
 
-perl-lsp supports two ways to configure your project: a **project configuration file** for team-wide defaults, and **LSP settings** for personal or editor-specific overrides.
+perllsp supports two ways to configure your project: a **project configuration file** for team-wide defaults, and **LSP settings** for personal or editor-specific overrides.
 
 ### Project Configuration File (.perl-lsp.toml)
 
@@ -323,11 +323,11 @@ Quick fixes for the most common first-run problems. For the full guide, see [TRO
 
 ### "Binary not found" after install
 
-`cargo install` places the binary in `~/.cargo/bin/`. If your shell cannot find `perl-lsp`, that directory is not on your `PATH`.
+`cargo install` places the binary in `~/.cargo/bin/`. If your shell cannot find `perllsp`, that directory is not on your `PATH`.
 
 ```bash
 # Check whether the binary exists
-ls ~/.cargo/bin/perl-lsp
+ls ~/.cargo/bin/perllsp
 
 # Add Cargo's bin directory to your PATH (add to ~/.bashrc, ~/.zshrc, or equivalent)
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -340,9 +340,9 @@ After reloading, `perllsp --version` should print the version number.
 
 ### Extension / editor not connecting to the server
 
-The editor must be able to find and launch the `perl-lsp` binary. Symptoms include "server failed to start" messages or LSP features simply not appearing.
+The editor must be able to find and launch the `perllsp` binary. Symptoms include "server failed to start" messages or LSP features simply not appearing.
 
-1. **Verify the binary path** -- run `which perl-lsp` in the same shell your editor uses. Some editors (VS Code, for instance) may not inherit your shell's `PATH` when launched from a desktop shortcut. Try launching the editor from the terminal (`code .`) so it inherits your environment.
+1. **Verify the binary path** -- run `which perllsp` in the same shell your editor uses. Some editors (VS Code, for instance) may not inherit your shell's `PATH` when launched from a desktop shortcut. Try launching the editor from the terminal (`code .`) so it inherits your environment.
 
 2. **Check editor logs** -- every LSP client has a log output:
    - VS Code: View > Output > select "Perl Language Server"

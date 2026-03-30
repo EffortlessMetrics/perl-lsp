@@ -20,7 +20,7 @@ for normal editor use.
 
 #### Native editor path
 
-- `perl-lsp` and `perl-dap` are now treated as first-class native binaries for editor integration and debugging.
+- `perllsp` and `perl-dap` are now treated as first-class native binaries for editor integration and debugging.
 - VS Code, manual binary install, and release surfaces were tightened for first-run setup, health checks, and issue reporting.
 - `.perl-lsp.toml` gives teams a shared, editor-agnostic project configuration layer.
 

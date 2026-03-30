@@ -196,7 +196,7 @@ The system uses intelligent confidence scoring for delimiter detection:
 
 ### For LSP Server Users
 
-1. **Install the enhanced perl-lsp server**. For published installs, use the
+1. **Install the enhanced perllsp server**. For published installs, use the
    workspace-level guidance in [../../README.md](../../README.md). For local
    source testing:
    ```bash
