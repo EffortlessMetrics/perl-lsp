@@ -27,7 +27,7 @@ perl-parser-core = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-symbol-types = { workspace = true }
 regex = "1.12.2"
-rustc-hash = "2.1.1"
+rustc-hash = "2.1.2"
 tracing = "0.1"
 
 [dev-dependencies]
