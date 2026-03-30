@@ -21,7 +21,7 @@ path = "target/nextest/ci/junit.xml"
 
 [[profile.ci.overrides]]
 # LSP integration tests may need more time in CI
-filter = 'package(perl-lsp)'
+filter = 'package(perl-lsp-rs)'
 slow-timeout = { period = "120s", terminate-after = 3 }
 threads-required = 2
 

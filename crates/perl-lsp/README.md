@@ -1,13 +1,13 @@
-# perl-lsp
+# perl-lsp-rs
 
-Use this crate when you need the actual Perl language server entry point, not
-just parser or provider pieces.
+Use this crate when you need the internal implementation package behind the
+public `perllsp` Cargo entry.
 
 ## When to use this crate
 
-Use `perl-lsp` when you want to run or embed the real language server:
+Use `perl-lsp-rs` when you want to work on or embed the real language server implementation:
 
-- run the `perl-lsp` binary behind an editor such as VS Code, Neovim, Emacs, or Helix
+- run the `perllsp` binary behind an editor such as VS Code, Neovim, Emacs, or Helix
 - expose Perl LSP features over stdio or TCP
 - embed the server entry point from Rust instead of shelling out to a binary
 
@@ -15,30 +15,35 @@ If you only need a parser, tokenizer, or a single feature provider, prefer the
 smaller workspace crates such as `perl-parser`, `perl-lexer`, or the
 `perl-lsp-*` provider crates.
 
-## Installation
+## Public install path
 
 ```bash
-cargo install --path crates/perl-lsp
+cargo install perllsp
 ```
 
-For the current public install paths, use the workspace-level guidance in the
-project README:
-<https://github.com/EffortlessMetrics/perl-lsp/blob/master/README.md>
+For a workspace-local install from this repository, use:
+
+```bash
+cargo install --path crates/perllsp
+```
+
+If you are hacking on the implementation package itself, use workspace package
+commands such as `cargo build -p perl-lsp-rs` or `cargo test -p perl-lsp-rs`.
 
 ## Quick start
 
 ```bash
-perl-lsp --stdio
-perl-lsp --health
+perllsp --stdio
+perllsp --health
 ```
 
 ## Usage
 
 ```bash
-perl-lsp --stdio          # stdio mode (default, for editor integration)
-perl-lsp --socket --port 9257  # TCP socket mode
-perl-lsp --health         # health check
-perl-lsp --version        # version info
+perllsp --stdio           # stdio mode (default, for editor integration)
+perllsp --socket --port 9257   # TCP socket mode
+perllsp --health          # health check
+perllsp --version         # version info
 ```
 
 ## Embedding from Rust
@@ -47,7 +52,7 @@ The `perl_lsp` library re-exports `LspServer`, `JsonRpcRequest`, `JsonRpcRespons
 
 ## Workspace role
 
-This is the executable entry point in the
+This is the internal executable implementation in the
 [`perl-lsp`](https://github.com/EffortlessMetrics/perl-lsp) workspace. It
 delegates parsing to `perl-parser` and dispatches feature work through focused
 provider crates such as `perl-lsp-completion`, `perl-lsp-navigation`, and

@@ -76,7 +76,7 @@ body:
       description: |
         Paste any relevant LSP log output.
         - **VS Code**: run the `Perl: Show Output Channel` command (Ctrl+Shift+P → "Perl: Show Output Channel") and paste the contents.
-        - **Other editors**: start the server with `perl-lsp --stdio 2>lsp.log` and paste `lsp.log`.
+        - **Other editors**: start the server with `perllsp --stdio 2>lsp.log` and paste `lsp.log`.
       render: text
 
   - type: input
@@ -84,7 +84,7 @@ body:
     attributes:
       label: perl-lsp Version
       description: |
-        Run `perl-lsp --version` in your terminal, or in VS Code run the `Perl: Show Server Version` command (Ctrl+Shift+P → "Perl: Show Server Version").
+        Run `perllsp --version` in your terminal, or in VS Code run the `Perl: Show Server Version` command (Ctrl+Shift+P → "Perl: Show Server Version").
       placeholder: "0.12.0"
     validations:
       required: true

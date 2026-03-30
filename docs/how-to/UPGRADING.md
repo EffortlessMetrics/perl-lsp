@@ -13,7 +13,7 @@ The live release truth is:
 
 | Situation | Read this | What to do |
 | --- | --- | --- |
-| You installed the binary with Cargo | [Installation Guide](INSTALLATION.md) | Reinstall the current release with `cargo install --locked perl-lsp` |
+| You installed the binary with Cargo | [Installation Guide](INSTALLATION.md) | Reinstall the current release with `cargo install --locked perllsp` |
 | You launch through an editor | [Editor Setup](EDITOR_SETUP.md) | Update the server path, then restart the editor |
 | You use a project config file | [Configuration Reference](../reference/CONFIG.md) | Reopen the workspace so new settings are picked up |
 | You build against the crates | [Changelog](../../CHANGELOG.md) | Bump related crate versions together and rerun tests |
@@ -24,18 +24,18 @@ The live release truth is:
 If you want the current published binary, reinstall it rather than trying to patch an old checkout in place.
 
 ```bash
-cargo install --locked perl-lsp
+cargo install --locked perllsp
 cargo install --locked perl-dap
 ```
 
 If you install from a local checkout, rebuild from the release line you want to run.
 
 ```bash
-cargo install --locked --path crates/perl-lsp --force
+cargo install --locked --path crates/perllsp --force
 cargo install --locked --path crates/perl-dap --force
 ```
 
-If you use Homebrew, Scoop, Chocolatey, Winget, or another package manager, update through that manager first and then confirm `perl-lsp --version` reports the expected build.
+If you use another package manager or a manual binary install, update that path first and then confirm `perllsp --version` reports the expected build.
 
 ## 2. Refresh editor wiring
 
@@ -71,8 +71,8 @@ For release planning and current posture, use:
 After upgrading, confirm the binary and the editor are using the expected build.
 
 ```bash
-perl-lsp --version
-perl-lsp --health
+perllsp --version
+perllsp --health
 ```
 
 Then open a small Perl file and confirm:
@@ -86,7 +86,7 @@ Then open a small Perl file and confirm:
 
 Check these first:
 
-- `perl-lsp --version` shows the version you expected
+- `perllsp --version` shows the version you expected
 - your editor points at the same binary you just installed
 - PATH does not still prefer an older install
 - workspace config changes were saved and the project was reopened

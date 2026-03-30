@@ -29,7 +29,7 @@ use crate::utils::project_root;
 // =============================================================================
 
 /// Core crates whose release-mode lib tests are exercised.
-const CORE_CRATES: &[&str] = &["perl-parser", "perl-lsp", "perl-dap"];
+const CORE_CRATES: &[&str] = &["perl-parser", "perl-lsp-rs", "perl-dap"];
 
 // =============================================================================
 // Public API
@@ -172,23 +172,23 @@ fn run_workspace_smoke_test(
         None => {
             // Try building first
             spinner.set_message("Building perl-lsp (release)...");
-            let build_result = cmd("cargo", &["build", "-p", "perl-lsp", "--release"])
+            let build_result = cmd("cargo", &["build", "-p", "perl-lsp-rs", "--release"])
                 .stderr_to_stdout()
                 .unchecked()
                 .run();
             match build_result {
                 Ok(output) if output.status.success() => {
-                    let bin = project_root.join("target/release/perl-lsp");
+                    let bin = project_root.join("target/release/perllsp");
                     if bin.exists() {
                         run_lsp_smoke(&bin, tmp_path)?
                     } else {
-                        (false, Some("perl-lsp binary not found after build".to_string()))
+                        (false, Some("perllsp binary not found after build".to_string()))
                     }
                 }
                 Ok(output) => (
                     false,
                     Some(format!(
-                        "Failed to build perl-lsp: {}",
+                        "Failed to build perllsp: {}",
                         String::from_utf8_lossy(&output.stdout)
                     )),
                 ),
@@ -328,13 +328,13 @@ fn write_report(results: &[StepOutcome], total: Duration, path: &std::path::Path
     Ok(())
 }
 
-/// Locate an existing `perl-lsp` binary (release preferred).
+/// Locate an existing `perllsp` binary (release preferred).
 fn find_lsp_binary(project_root: &std::path::Path) -> Option<PathBuf> {
-    let release = project_root.join("target/release/perl-lsp");
+    let release = project_root.join("target/release/perllsp");
     if release.exists() {
         return Some(release);
     }
-    let debug = project_root.join("target/debug/perl-lsp");
+    let debug = project_root.join("target/debug/perllsp");
     if debug.exists() {
         return Some(debug);
     }

@@ -1,6 +1,6 @@
 # Installation Guide
 
-Use this page when you need to install perl-lsp, upgrade an existing install,
+Use this page when you need to install `perllsp`, upgrade an existing install,
 or verify that the binary works on your machine.
 
 If you only need editor integration after installation, jump to
@@ -11,16 +11,18 @@ expected, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 Use one of the public install paths that matches how you work:
 
-- VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching server binary.
+- VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching `perllsp` binary.
 - Other editors: download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and put it on your `PATH`.
-- Local testing or pre-release validation: install from this repo with `cargo install --path crates/perl-lsp`.
+- Local testing or pre-release validation: install from this repo with `cargo install --path crates/perllsp`.
+
+Do not use `cargo install perl-lsp` on crates.io. That package name is owned by another project, so the supported Cargo package is `perllsp`.
 
 Verify the install before wiring it into an editor:
 
 ```bash
-perl-lsp --version
-perl-lsp --health
-perl-lsp --info
+perllsp --version
+perllsp --health
+perllsp --info
 ```
 
 ## Install From Source
@@ -31,13 +33,13 @@ before publishing:
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo build --release --bin perl-lsp -p perl-lsp
+cargo build --release --bin perllsp -p perllsp
 ```
 
 If you want the binary installed into Cargo's bin directory instead:
 
 ```bash
-cargo install --path crates/perl-lsp
+cargo install perllsp
 ```
 
 ## Prebuilt Releases
@@ -53,29 +55,18 @@ Check the latest release page before copying a version number.
 | macOS Apple Silicon | `aarch64-apple-darwin` |
 | Windows x86_64 | `x86_64-pc-windows-msvc` |
 
-## Windows Package Managers
-
-For Windows users, the release workflow also keeps the repo-owned package
-manager manifests in sync with GitHub Releases.
-
-- Scoop: `scoop install perl-lsp`
-- Chocolatey: `choco install perl-lsp`
-- Winget: the repo tracks a local manifest in `distribution/winget/`
-
-Upstream package submission is still a separate manual step.
-
 ## After Installation
 
-Once perl-lsp is installed, add it to your editor with the command:
+Once `perllsp` is installed, add it to your editor with the command:
 
 ```bash
-perl-lsp --stdio
+perllsp --stdio
 ```
 
 Then confirm the install from a shell before debugging editor integration:
 
 ```bash
-perl-lsp --health
+perllsp --health
 ```
 
 ## Release Maintainers

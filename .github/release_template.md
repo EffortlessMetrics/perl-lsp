@@ -9,7 +9,7 @@ Released {{RELEASE_DATE}}
 ## Install or upgrade
 
 ```bash
-cargo install perl-lsp
+cargo install perllsp
 cargo install perl-dap
 ```
 
@@ -30,8 +30,8 @@ cargo install perl-dap
 ## Checks
 
 ```bash
-perl-lsp --version
-perl-lsp --capabilities
+perllsp --version
+perllsp --capabilities
 nix develop -c just health
 ```
 

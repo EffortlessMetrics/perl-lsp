@@ -27,13 +27,13 @@
 //!
 //! ```bash
 //! # Run the smoke tests (recommended: single-threaded for clean output)
-//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1
+//! cargo test -p perl-lsp-rs --test lsp_smoke -- --test-threads=1
 //!
 //! # Check if tests pass (exit code 0 = success)
-//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1; echo "Exit: $?"
+//! cargo test -p perl-lsp-rs --test lsp_smoke -- --test-threads=1; echo "Exit: $?"
 //!
 //! # Run with verbose output (note: server notifications may mix with test output)
-//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1 --nocapture
+//! cargo test -p perl-lsp-rs --test lsp_smoke -- --test-threads=1 --nocapture
 //! ```
 //!
 //! ## CI Integration
@@ -49,7 +49,7 @@
 //!
 //! Example CI check:
 //! ```bash
-//! cargo test -p perl-lsp --test lsp_smoke -- --test-threads=1 || exit 1
+//! cargo test -p perl-lsp-rs --test lsp_smoke -- --test-threads=1 || exit 1
 //! ```
 
 use perl_lsp::{JsonRpcRequest, LspServer};

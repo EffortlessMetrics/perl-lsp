@@ -218,7 +218,7 @@ LSP tests require thread-constrained execution to avoid flakiness:
 
 ```bash
 # Required for LSP tests
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### Impact
@@ -234,7 +234,7 @@ Use the justfile targets which handle threading:
 just ci-lsp-def
 
 # Or use nextest with proper config
-cargo nextest run -p perl-lsp
+cargo nextest run -p perl-lsp-rs
 ```
 
 #### Proposed Solutions
@@ -774,7 +774,7 @@ just ci-gate                          # Full gate (~3-5 min)
 just ci-lsp-def                       # LSP semantic tests
 
 # Testing
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 cargo nextest run                     # Fast test runner
 
 # Quality

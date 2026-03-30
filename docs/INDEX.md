@@ -94,11 +94,11 @@ Long-form historical writing plus the supporting research notes that fed it.
 These commands are especially useful when validating an installation or triaging an environment issue:
 
 ```bash
-perl-lsp --version
-perl-lsp --health
-perl-lsp --info
-perl-lsp --check path/to/file.pl
-perl-lsp --completion bash
+perllsp --version
+perllsp --health
+perllsp --info
+perllsp --check path/to/file.pl
+perllsp --completion bash
 ```
 
 For the complete option list and behavior, see the [Commands Reference](reference/COMMANDS_REFERENCE.md).

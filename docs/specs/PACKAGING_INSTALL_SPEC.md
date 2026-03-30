@@ -26,11 +26,11 @@ Complete setup instructions for each major editor.
 
 ```bash
 # Install the language server
-cargo install perl-lsp
+cargo install perllsp
 
 # Or download pre-built binary
-curl -fsSL https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-$(uname -s)-$(uname -m) -o ~/.local/bin/perl-lsp
-chmod +x ~/.local/bin/perl-lsp
+curl -fsSL https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perllsp-$(uname -s)-$(uname -m) -o ~/.local/bin/perllsp
+chmod +x ~/.local/bin/perllsp
 ```
 
 ### Configuration
@@ -40,7 +40,7 @@ Create `.vscode/settings.json`:
 ```json
 {
   "perl.languageServer.enable": true,
-  "perl.languageServer.path": "perl-lsp",
+  "perl.languageServer.path": "perllsp",
   "perl.languageServer.args": ["--stdio"],
 
   // Optional: Enable workspace indexing for cross-file features
@@ -61,7 +61,7 @@ If using a generic LSP client extension:
 ```json
 {
   "languageServerExample.trace.server": "verbose",
-  "languageServerExample.serverPath": "perl-lsp",
+  "languageServerExample.serverPath": "perllsp",
   "languageServerExample.serverArgs": ["--stdio"],
   "languageServerExample.fileAssociations": ["*.pl", "*.pm", "*.t"]
 }
@@ -83,7 +83,7 @@ local configs = require('lspconfig.configs')
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = { 'perl-lsp', '--stdio' },
+      cmd = { 'perllsp', '--stdio' },
       filetypes = { 'perl' },
       root_dir = lspconfig.util.root_pattern('.git', 'Makefile.PL', 'cpanfile'),
       settings = {
@@ -151,7 +151,7 @@ return {
 
   (lsp-register-client
    (make-lsp-client
-    :new-connection (lsp-stdio-connection '("perl-lsp" "--stdio"))
+    :new-connection (lsp-stdio-connection '("perllsp" "--stdio"))
     :major-modes '(perl-mode cperl-mode)
     :server-id 'perl-lsp
     :priority 1)))
@@ -161,7 +161,7 @@ return {
 
 ```elisp
 (add-to-list 'eglot-server-programs
-             '((perl-mode cperl-mode) . ("perl-lsp" "--stdio")))
+             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 
 (add-hook 'perl-mode-hook 'eglot-ensure)
 (add-hook 'cperl-mode-hook 'eglot-ensure)
@@ -179,7 +179,7 @@ name = "perl"
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 ```
 
@@ -197,7 +197,7 @@ args = ["--stdio"]
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
+      "command": ["perllsp", "--stdio"],
       "selector": "source.perl",
       "initializationOptions": {
         "includePaths": ["lib", "local/lib/perl5"]
@@ -303,8 +303,8 @@ Note: Configuration is nested under `perl.inlayHints.*` and `perl.workspace.*` s
 **Symptoms**: Editor shows "Language server not found" or similar
 
 **Solutions**:
-1. Verify `perl-lsp` is in your PATH: `which perl-lsp`
-2. Try running directly: `perl-lsp --version`
+1. Verify `perllsp` is in your PATH: `which perllsp`
+2. Try running directly: `perllsp --version`
 3. Check editor logs for error messages
 4. On Windows, ensure `.exe` extension if needed
 
@@ -314,9 +314,9 @@ Note: Configuration is nested under `perl.inlayHints.*` and `perl.workspace.*` s
 
 **Solutions**:
 1. Verify file is recognized as Perl (check syntax highlighting)
-2. Check server is running: look for `perl-lsp` process
+2. Check server is running: look for `perllsp` process
 3. Try hover on a known symbol first
-4. Check server logs: `PERL_LSP_LOG=debug perl-lsp --stdio`
+4. Check server logs: `PERL_LSP_LOG=debug perllsp --stdio`
 
 ### Missing Cross-File Features
 

@@ -141,13 +141,13 @@ jobs:
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
             BUILD_CMD="cross"
           fi
-          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
+          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perllsp --bin perllsp
           $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perl-dap --bin perl-dap
 
       - name: Package binaries
         shell: bash
         run: |
-          NAME="perl-lsp"
+          NAME="perllsp"
           TARGET="${{ matrix.target }}"
           VERSION="${{ needs.release-metadata.outputs.version }}"
 
@@ -249,7 +249,7 @@ jobs:
           ### Install or upgrade
 
           ```bash
-          cargo install perl-lsp
+          cargo install perllsp
           cargo install perl-dap
           ```
 

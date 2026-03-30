@@ -1,15 +1,15 @@
 # Troubleshooting Guide
 
-Use this page when perl-lsp is installed but something still does not work:
+Use this page when `perllsp` is installed but something still does not work:
 the binary is not found, the server does not start, diagnostics are missing, or
 the editor feels slow.
 
 ## Start With The Basics
 
 ```bash
-perl-lsp --version
-perl-lsp --health
-perl-lsp --info
+perllsp --version
+perllsp --health
+perllsp --info
 ```
 
 If those fail, fix the binary installation and `PATH` first. If they pass, the
@@ -20,13 +20,13 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 1. Run the server in the foreground:
 
    ```bash
-   perl-lsp --stdio
+   perllsp --stdio
    ```
 
 2. Turn on logging and read stderr:
 
    ```bash
-   RUST_LOG=perl_lsp=debug perl-lsp --stdio
+   RUST_LOG=perl_lsp=debug perllsp --stdio
    ```
 
 3. Check the editor's LSP log panel or buffer.
@@ -35,13 +35,13 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 - Confirm the file type is Perl.
 - Confirm the workspace root is the repository root, not a parent directory.
-- Confirm the editor command really starts `perl-lsp --stdio`.
+- Confirm the editor command really starts `perllsp --stdio`.
 
 If the editor is using a helper extension or plugin, check its own logs too.
 
 ## Diagnostics Or Completions Are Missing
 
-- Re-check the install with `perl-lsp --health`.
+- Re-check the install with `perllsp --health`.
 - Make sure the file is inside the indexed workspace.
 - Restart the editor after changing language-server settings.
 - If the project is large, try a smaller workspace root first.
@@ -75,8 +75,8 @@ If you are debugging with `perl-dap`, check the DAP guide:
 
 Report an issue when you can include:
 
-- `perl-lsp --version`
-- `perl-lsp --health`
+- `perllsp --version`
+- `perllsp --health`
 - the editor name and version
 - the workspace layout
 - the smallest code sample that reproduces the problem

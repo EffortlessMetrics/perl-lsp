@@ -74,7 +74,7 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 codium --install-extension EffortlessMetrics.perl-lsp-rs
 ```
 
-The extension automatically downloads the correct `perl-lsp` binary for your platform on first activation:
+The extension automatically downloads the correct `perllsp` binary for your platform on first activation:
 
 | Platform | Architectures |
 |----------|--------------|
@@ -95,10 +95,10 @@ brew install perl-lsp
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # From source
-cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
+cargo install --git https://github.com/EffortlessMetrics/perl-lsp --package perllsp
 ```
 
-Then point the extension to your binary via `perl-lsp.serverPath`.
+Then point the extension to your `perllsp` binary via `perl-lsp.serverPath`.
 
 ## Configuration
 
@@ -106,8 +106,8 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `perl-lsp.autoDownload` | `true` | Automatically download `perl-lsp` if not found locally |
-| `perl-lsp.serverPath` | `""` | Absolute path to a `perl-lsp` binary (overrides auto-download) |
+| `perl-lsp.autoDownload` | `true` | Automatically download `perllsp` if not found locally |
+| `perl-lsp.serverPath` | `""` | Absolute path to a `perllsp` binary (overrides auto-download) |
 | `perl-lsp.channel` | `"latest"` | Release channel: `latest`, `stable`, or `tag` |
 | `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.0`) when channel is `tag` |
 | `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
@@ -161,7 +161,7 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 | Command | Description |
 |---------|-------------|
 | **Perl: Restart Language Server** | Restart the language server |
-| **Perl: Show Server Version** | Display installed perl-lsp version |
+| **Perl: Show Server Version** | Display installed perllsp version |
 | **Perl: Reinstall Server Binary** | Re-download the managed binary |
 | **Perl: Organize Use Statements** | Sort and clean `use` statements |
 | **Perl: Run Tests in Current File** | Run tests in the active `.t` or `.pl` file |
@@ -170,7 +170,7 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 
 ## Compatibility
 
-The `perl-lsp` binary works with any editor that supports the Language Server Protocol:
+The `perllsp` binary works with any editor that supports the Language Server Protocol:
 
 | Editor | How to connect |
 |--------|---------------|
@@ -178,8 +178,8 @@ The `perl-lsp` binary works with any editor that supports the Language Server Pr
 | **Cursor** | This extension |
 | **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
 | **Emacs** | `lsp-mode` or `eglot` |
-| **Helix** | `languages.toml` with `perl-lsp --stdio` |
-| **Sublime Text** | LSP package with `perl-lsp --stdio` |
+| **Helix** | `languages.toml` with `perllsp --stdio` |
+| **Sublime Text** | LSP package with `perllsp --stdio` |
 | **GitHub Codespaces** | This extension |
 | **Gitpod** | This extension |
 
@@ -187,7 +187,7 @@ The `perl-lsp` binary works with any editor that supports the Language Server Pr
 
 **Server not starting?**
 1. Open the output channel: Command Palette > "Perl: Show Output Channel"
-2. Check that `perl-lsp` is available: Command Palette > "Perl: Show Server Version"
+2. Check that `perllsp` is available: Command Palette > "Perl: Show Server Version"
 3. If auto-download failed, check your network/proxy settings or install manually
 
 **Formatting not working?**

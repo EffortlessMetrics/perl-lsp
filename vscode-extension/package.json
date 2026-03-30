@@ -209,13 +209,13 @@
             "default": "",
             "scope": "machine",
             "order": 10,
-            "markdownDescription": "Absolute path to the `perl-lsp` binary. Leave empty to auto-download a release build."
+            "markdownDescription": "Absolute path to the `perllsp` binary. Leave empty to auto-download a release build."
           },
           "perl-lsp.autoDownload": {
             "type": "boolean",
             "default": true,
             "order": 20,
-            "markdownDescription": "Automatically download the `perl-lsp` binary if it is not found locally. Disable this for internal deployments that set `serverPath`."
+            "markdownDescription": "Automatically download the `perllsp` binary if it is not found locally. Disable this for internal deployments that set `serverPath`."
           },
           "perl-lsp.includePaths": {
             "type": "array",
@@ -268,7 +268,7 @@
             "type": "boolean",
             "default": true,
             "order": 40,
-            "markdownDescription": "Enable refactoring-related code actions when supported by the connected `perl-lsp` server."
+            "markdownDescription": "Enable refactoring-related code actions when supported by the connected `perllsp` server."
           },
           "perl-lsp.enableTestIntegration": {
             "type": "boolean",
@@ -314,7 +314,7 @@
             "default": "",
             "scope": "machine",
             "order": 30,
-            "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS, bypassing GitHub releases. Example: `https://internal.example.com/perl-lsp/`."
+            "markdownDescription": "Internal base URL hosting perllsp archives and SHA256SUMS, bypassing GitHub releases. Example: `https://internal.example.com/perllsp/`."
           },
           "perl-lsp.featureProfile": {
             "type": "string",

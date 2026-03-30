@@ -133,11 +133,11 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
   end
 
   def install
-    bin.install "perl-lsp"
+    bin.install "perllsp"
   end
 
   test do
-    assert_match "perl-lsp", shell_output("#{{bin}}/perl-lsp --version")
+    assert_match "perllsp", shell_output("#{{bin}}/perllsp --version")
   end
 end
 "##,

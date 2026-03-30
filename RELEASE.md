@@ -230,12 +230,12 @@ After all workflows complete, verify that each distribution channel received the
 gh release view v0.12.0
 # Should show assets including:
 # - perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz
-# - perl-lsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
-# - perl-lsp-0.12.0-x86_64-unknown-linux-musl.tar.gz
-# - perl-lsp-0.12.0-aarch64-unknown-linux-musl.tar.gz
-# - perl-lsp-0.12.0-x86_64-apple-darwin.tar.gz
-# - perl-lsp-0.12.0-aarch64-apple-darwin.tar.gz
-# - perl-lsp-0.12.0-x86_64-pc-windows-msvc.zip
+# - perllsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
+# - perllsp-0.12.0-x86_64-unknown-linux-musl.tar.gz
+# - perllsp-0.12.0-aarch64-unknown-linux-musl.tar.gz
+# - perllsp-0.12.0-x86_64-apple-darwin.tar.gz
+# - perllsp-0.12.0-aarch64-apple-darwin.tar.gz
+# - perllsp-0.12.0-x86_64-pc-windows-msvc.zip
 # - SHA256SUMS
 # - sbom-spdx.json
 # - perl-lsp-rs-0.12.0.vsix
@@ -244,8 +244,11 @@ gh release view v0.12.0
 ### 2. crates.io
 
 ```bash
-cargo search perl-lsp --limit 1
-# Expected: perl-lsp = "0.12.0"
+cargo search perllsp --limit 1
+# Expected: perllsp = "0.12.0"
+
+cargo search perl-lsp-rs --limit 1
+# Expected: perl-lsp-rs = "0.12.0"
 ```
 
 ### 3. VS Code Marketplace
@@ -262,8 +265,8 @@ Visit: https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs
 
 ```bash
 docker pull effortlessmetrics/perl-lsp:0.12.0
-docker run --rm effortlessmetrics/perl-lsp:0.12.0 perl-lsp --version
-# Expected: perl-lsp 0.12.0
+docker run --rm effortlessmetrics/perl-lsp:0.12.0 perllsp --version
+# Expected: perllsp 0.12.0
 ```
 
 ```bash
@@ -274,7 +277,7 @@ docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.0
 
 ```bash
 # Download the Linux binary and verify its SHA256 matches the release
-gh release download v0.12.0 --pattern 'perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS
+gh release download v0.12.0 --pattern 'perllsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing
 ```
 

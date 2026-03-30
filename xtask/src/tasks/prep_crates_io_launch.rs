@@ -13,7 +13,7 @@ use tempfile::TempDir;
 use crate::utils::project_root;
 
 const CORE_LAUNCH_CRATES: &[&str] =
-    &["perl-parser", "perl-lexer", "perl-lsp", "perl-dap", "perl-corpus"];
+    &["perl-parser", "perl-lexer", "perl-lsp-rs", "perllsp", "perl-dap", "perl-corpus"];
 
 #[derive(Deserialize)]
 struct RootCargoManifest {

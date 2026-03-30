@@ -15,7 +15,7 @@ id = 'smoke'
 # Deep tier: integration tests with fixtures, edge cases
 # Covers LSP integration, DAP, semantic analysis
 # Excludes smoke-tier packages to avoid overlap
-filter = 'package(perl-lsp) | package(perl-dap)'
+filter = 'package(perl-lsp-rs) | package(perl-dap)'
 id = 'deep'
 
 [[partition]]

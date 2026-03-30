@@ -110,6 +110,7 @@ members = [
     "crates/perl-workspace-discovery",
     "crates/perl-corpus",
     "crates/perl-lsp",
+    "crates/perllsp",
     "crates/perl-dap",
     "crates/perl-dead-code",
     "crates/perl-dap-breakpoint",
@@ -289,7 +290,8 @@ allow = [
     "perl-diagnostics-codes",
 
     # Tier 7 — Top-level application
-    "perl-lsp",
+    "perl-lsp-rs",
+    "perllsp",
 ]
 
 # Workspace-level package metadata
@@ -437,6 +439,7 @@ perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.12.0", d
 
 # Tier 5: Application crates
 perl-parser = { path = "crates/perl-parser", version = "0.12.0" }
+perl-lsp-rs = { path = "crates/perl-lsp", version = "0.12.0" }
 
 # Legacy/Compatibility crates
 perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.0" }

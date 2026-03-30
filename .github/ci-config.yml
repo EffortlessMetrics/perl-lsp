@@ -217,7 +217,7 @@ nextest-partitions:
     target-duration: "<30s total"
     ci-trigger: "every PR"
   deep:
-    filter: "package(perl-lsp) | package(perl-dap)"
+    filter: "package(perl-lsp-rs) | package(perl-dap)"
     target-duration: "<5 min total"
     ci-trigger: "merge gate + nightly"
   slow:

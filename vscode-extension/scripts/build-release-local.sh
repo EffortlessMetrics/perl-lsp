@@ -6,7 +6,7 @@ set -euo pipefail
 
 VERSION="${1:-v0.8.3-rc1}"
 RELEASE_DIR="releases/${VERSION}"
-NAME="perl-lsp"
+NAME="perllsp"
 
 echo "🚀 Building internal release ${VERSION}"
 
@@ -43,8 +43,8 @@ esac
 echo "📦 Building for ${TARGET}"
 
 # Build the binary
-echo "🔨 Building perl-lsp..."
-cargo build --release -p perl-lsp
+echo "🔨 Building perllsp..."
+cargo build --release -p perllsp
 
 # Create package
 PKG_NAME="${NAME}-${VERSION}-${TARGET}"
@@ -78,6 +78,6 @@ cd - > /dev/null
 
 echo ""
 echo "🎯 Next steps:"
-echo "1. Test: tar -xzf ${RELEASE_DIR}/${PKG_NAME}.tar.gz -C /tmp && /tmp/${PKG_NAME}/perl-lsp --version"
-echo "2. Install: sudo cp target/release/perl-lsp /usr/local/bin/"
+echo "1. Test: tar -xzf ${RELEASE_DIR}/${PKG_NAME}.tar.gz -C /tmp && /tmp/${PKG_NAME}/perllsp --version"
+echo "2. Install: sudo cp target/release/perllsp /usr/local/bin/"
 echo "3. Share: Copy ${RELEASE_DIR}/${PKG_NAME}.tar.gz to internal distribution"
