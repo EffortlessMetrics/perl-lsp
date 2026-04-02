@@ -898,6 +898,103 @@ fn bench_incremental_update_at_scale(c: &mut Criterion) {
     });
 }
 
+/// Generate a dense Perl module with ~100 symbols for CPAN-scale 500K-symbol testing.
+///
+/// Each module defines `new` + 96 numbered methods + 3 accessors = ~100 symbols.
+/// At 5K files this yields ~500K total symbols, matching the acceptance criterion.
+fn generate_dense_module(index: usize) -> String {
+    let mut src = format!(
+        "package Gen::Dense{idx};\nuse strict;\nour $VERSION = '1.00';\n\nsub new {{ bless {{}}, shift }}\n",
+        idx = index
+    );
+    for j in 0..96 {
+        src.push_str(&format!("sub method_{idx}_{j} {{ return {j}; }}\n", idx = index, j = j));
+    }
+    src.push_str(&format!(
+        "sub get_{idx} {{ return {idx}; }}\nsub set_{idx} {{ my ($self, $v) = @_; }}\nsub reset_{idx} {{ }}\n1;\n",
+        idx = index
+    ));
+    src
+}
+
+/// Benchmark batch indexing 10K sparse files (~5 symbols each = ~50K total symbols).
+///
+/// Validates: index 10K files in <30s (serial parse-bound).
+/// Acceptance criterion: startup time at true CPAN scale.
+fn bench_batch_index_10k_files_sparse(c: &mut Criterion) {
+    c.bench_function("batch index 10K sparse files (50K symbols)", |b| {
+        b.iter_batched(
+            || {
+                (0..10_000)
+                    .map(|i| {
+                        let uri = must(Url::parse(&format!("file:///lib/Gen/Sparse{}.pm", i)));
+                        (uri, generate_module(i))
+                    })
+                    .collect::<Vec<_>>()
+            },
+            |files| {
+                let index = WorkspaceIndex::new();
+                let errors = index.index_files_batch(files);
+                black_box(errors);
+                black_box(&index);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+/// Benchmark batch indexing 5K dense files (~100 symbols each = ~500K total symbols).
+///
+/// Validates: index 5K dense files in <30s.
+/// Acceptance criterion: throughput at 500K-symbol scale.
+fn bench_batch_index_5k_files_dense(c: &mut Criterion) {
+    c.bench_function("batch index 5K dense files (500K symbols)", |b| {
+        b.iter_batched(
+            || {
+                (0..5_000)
+                    .map(|i| {
+                        let uri = must(Url::parse(&format!("file:///lib/Gen/Dense{}.pm", i)));
+                        (uri, generate_dense_module(i))
+                    })
+                    .collect::<Vec<_>>()
+            },
+            |files| {
+                let index = WorkspaceIndex::new();
+                let errors = index.index_files_batch(files);
+                black_box(errors);
+                black_box(&index);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+/// Benchmark symbol lookup at 500K-symbol scale.
+///
+/// Validates: query latency <50ms at 500K symbols.
+/// Acceptance criterion: find_definition response time stays O(1) regardless of corpus size.
+fn bench_symbol_lookup_at_500k_scale(c: &mut Criterion) {
+    let index = WorkspaceIndex::new();
+    let files: Vec<(Url, String)> = (0..5_000)
+        .map(|i| {
+            let uri = must(Url::parse(&format!("file:///lib/Gen/Dense{}.pm", i)));
+            (uri, generate_dense_module(i))
+        })
+        .collect();
+    let _errors = index.index_files_batch(files);
+
+    c.bench_function("symbol lookup at 500K-symbol scale", |b| {
+        b.iter(|| {
+            let d1 = index.find_definition("Gen::Dense0::method_0_0");
+            let d2 = index.find_definition("Gen::Dense2500::method_2500_50");
+            let d3 = index.find_definition("Gen::Dense4999::method_4999_95");
+            black_box(d1);
+            black_box(d2);
+            black_box(d3);
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_initial_index_small_workspace,
