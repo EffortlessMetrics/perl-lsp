@@ -1686,4 +1686,138 @@ mod tests {
 
         Ok(())
     }
+
+    // =========================================================================
+    // Error-path tests — closes #3039
+    //
+    // These tests verify that each handler correctly propagates INVALID_PARAMS
+    // errors when required LSP parameters are missing.  They use Result<()>
+    // returns and explicit Err-branch assertions rather than #[should_panic].
+    // =========================================================================
+
+    /// handle_did_close with no textDocument.uri must return INVALID_PARAMS.
+    #[test]
+    fn handle_did_close_missing_uri_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.handle_did_close(Some(json!({ "textDocument": {} })));
+        assert!(result.is_err(), "handle_did_close must error on missing URI");
+        if let Err(err) = result {
+            assert_eq!(
+                err.code,
+                crate::protocol::INVALID_PARAMS,
+                "error code must be INVALID_PARAMS; got {}",
+                err.code
+            );
+            assert!(
+                err.message.contains("textDocument.uri"),
+                "error message must name the missing field; got: {}",
+                err.message
+            );
+        }
+    }
+
+    /// handle_did_close with None params must succeed silently (no-op).
+    #[test]
+    fn handle_did_close_none_params_is_ok() {
+        let server = LspServer::new();
+        let result = server.handle_did_close(None);
+        assert!(result.is_ok(), "handle_did_close with None params must not error");
+    }
+
+    /// handle_did_close for a non-existent URI must succeed silently.
+    #[test]
+    fn handle_did_close_unknown_uri_is_ok() {
+        let server = LspServer::new();
+        let result = server.handle_did_close(Some(
+            json!({ "textDocument": { "uri": "file:///never_opened.pl" } }),
+        ));
+        assert!(result.is_ok(), "closing a document that was never opened must not error");
+    }
+
+    /// handle_did_save with no textDocument.uri must return INVALID_PARAMS.
+    #[test]
+    fn handle_did_save_missing_uri_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.handle_did_save(Some(json!({ "textDocument": {} })));
+        assert!(result.is_err(), "handle_did_save must error on missing URI");
+        if let Err(err) = result {
+            assert_eq!(
+                err.code,
+                crate::protocol::INVALID_PARAMS,
+                "error code must be INVALID_PARAMS; got {}",
+                err.code
+            );
+        }
+    }
+
+    /// handle_did_save with None params must succeed silently (no-op).
+    #[test]
+    fn handle_did_save_none_params_is_ok() {
+        let server = LspServer::new();
+        let result = server.handle_did_save(None);
+        assert!(result.is_ok(), "handle_did_save with None params must not error");
+    }
+
+    /// did_open with a missing textDocument.text field must return INVALID_PARAMS.
+    #[test]
+    fn did_open_missing_text_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.did_open(json!({
+            "textDocument": {
+                "uri": "file:///missing_text.pl",
+                "languageId": "perl",
+                "version": 1
+            }
+        }));
+        assert!(result.is_err(), "did_open must error when textDocument.text is absent");
+        if let Err(err) = result {
+            assert_eq!(
+                err.code,
+                crate::protocol::INVALID_PARAMS,
+                "error code must be INVALID_PARAMS; got {}",
+                err.code
+            );
+        }
+    }
+
+    /// did_open with a missing textDocument.uri field must return INVALID_PARAMS.
+    #[test]
+    fn did_open_missing_uri_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.did_open(json!({
+            "textDocument": {
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n"
+            }
+        }));
+        assert!(result.is_err(), "did_open must error when textDocument.uri is absent");
+        if let Err(err) = result {
+            assert_eq!(
+                err.code,
+                crate::protocol::INVALID_PARAMS,
+                "error code must be INVALID_PARAMS; got {}",
+                err.code
+            );
+        }
+    }
+
+    /// handle_did_change with missing URI must return INVALID_PARAMS.
+    #[test]
+    fn handle_did_change_missing_uri_returns_invalid_params() {
+        let server = LspServer::new();
+        let result = server.handle_did_change(Some(json!({
+            "textDocument": {},
+            "contentChanges": []
+        })));
+        assert!(result.is_err(), "handle_did_change with missing URI must error");
+        if let Err(err) = result {
+            assert_eq!(
+                err.code,
+                crate::protocol::INVALID_PARAMS,
+                "error code must be INVALID_PARAMS; got {}",
+                err.code
+            );
+        }
+    }
 }
