@@ -6,7 +6,9 @@
 use perl_dap::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;
+use std::net::TcpListener;
 use std::sync::mpsc::channel;
+use std::thread;
 use tempfile::tempdir;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -412,5 +414,123 @@ fn test_dap_stack_trace_zero_levels_returns_remaining_frames() -> TestResult {
         _ => return Err("Expected stackTrace response".into()),
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_attach_tcp_succeeds_with_mock_listener() -> TestResult {
+    // Bind an ephemeral port so connect() succeeds
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    thread::spawn(move || {
+        // Accept one connection and drop it, simulating a waiting debugger
+        let _ = listener.accept();
+    });
+
+    let mut adapter = DebugAdapter::new();
+    let (tx, _rx) = channel();
+    adapter.set_event_sender(tx);
+
+    let args = json!({ "host": "127.0.0.1", "port": port });
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "TCP attach to mock listener should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => return Err("Expected Response".into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn test_attach_double_attach_replaces_session() -> TestResult {
+    // First attach — binds a listener, succeeds
+    let listener1 = TcpListener::bind("127.0.0.1:0")?;
+    let port1 = listener1.local_addr()?.port();
+    thread::spawn(move || {
+        let _ = listener1.accept();
+    });
+
+    let mut adapter = DebugAdapter::new();
+    let (tx, _rx) = channel();
+    adapter.set_event_sender(tx);
+
+    let args1 = json!({ "host": "127.0.0.1", "port": port1 });
+    let response1 = adapter.handle_request(1, "attach", Some(args1));
+    match response1 {
+        DapMessage::Response { success, .. } => {
+            assert!(success, "First attach should succeed");
+        }
+        _ => return Err("Expected Response for first attach".into()),
+    }
+
+    // Second attach — a fresh listener on a new port, should succeed and replace previous session
+    let listener2 = TcpListener::bind("127.0.0.1:0")?;
+    let port2 = listener2.local_addr()?.port();
+    thread::spawn(move || {
+        let _ = listener2.accept();
+    });
+
+    let args2 = json!({ "host": "127.0.0.1", "port": port2 });
+    let response2 = adapter.handle_request(2, "attach", Some(args2));
+    match response2 {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "Double-attach should succeed (previous session replaced)");
+            assert_eq!(command, "attach");
+        }
+        _ => return Err("Expected Response for second attach".into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn test_attach_process_id_zero_is_rejected() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    let (tx, _rx) = channel();
+    adapter.set_event_sender(tx);
+
+    let args = json!({ "processId": 0 });
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "processId: 0 should be rejected");
+            assert_eq!(command, "attach");
+            let msg = message.ok_or("Expected error message")?;
+            assert!(
+                msg.contains("Invalid process ID") || msg.contains("processId"),
+                "Error should reference processId: {}",
+                msg
+            );
+        }
+        _ => return Err("Expected Response".into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn test_attach_port_out_of_range_is_rejected() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    let (tx, _rx) = channel();
+    adapter.set_event_sender(tx);
+
+    let args = json!({ "host": "127.0.0.1", "port": 99999 });
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "port 99999 should be rejected as out of range");
+            assert_eq!(command, "attach");
+            let msg = message.ok_or("Expected error message")?;
+            assert!(
+                msg.contains("port") || msg.contains("Port") || msg.contains("99999"),
+                "Error should reference the port: {}",
+                msg
+            );
+        }
+        _ => return Err("Expected Response".into()),
+    }
     Ok(())
 }

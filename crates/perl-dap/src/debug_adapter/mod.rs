@@ -1075,7 +1075,7 @@ mod tests {
 
         match response {
             DapMessage::Response { success, command, message, .. } => {
-                assert!(!success); // Not yet implemented, but validates correctly
+                assert!(!success); // No listener on localhost:13603 — connection refused
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
                 let msg = message.ok_or("Expected message")?;
