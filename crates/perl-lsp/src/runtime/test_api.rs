@@ -213,4 +213,70 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_text_document_content(params)
     }
+
+    /// Test-only entrypoint for `textDocument/diagnostic` (pull diagnostics).
+    ///
+    /// Exercises the pull-diagnostics handler without needing an external transport.
+    /// Returns the full diagnostics result object or `None`.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri`.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or the handler fails.
+    pub fn test_handle_document_diagnostic(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_document_diagnostic(params)
+    }
+
+    /// Install a mock subprocess runtime for the `CriticAnalyzer`.
+    ///
+    /// When set, the lazy-init path in `collect_external_perlcritic_diagnostics`
+    /// constructs a `CriticAnalyzer` using this runtime instead of the OS runtime.
+    /// This allows tests to exercise the full pipeline — including config-driven
+    /// profile discovery — without spawning a real `perlcritic` process.
+    ///
+    /// Call [`Self::test_bypass_perlcritic_command_check`] alongside this to
+    /// skip the `command_exists` guard.
+    ///
+    /// Resets the cached analyzer to `None` so the next diagnostic cycle
+    /// rebuilds it with the injected runtime.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn test_install_mock_critic_runtime(
+        &self,
+        runtime: std::sync::Arc<dyn perl_subprocess_runtime::SubprocessRuntime>,
+    ) {
+        *self.critic_runtime_override.lock() = Some(runtime);
+        // Reset any cached analyzer so it is rebuilt with the new runtime.
+        *self.critic_analyzer.lock() = None;
+    }
+
+    /// Skip the `command_exists("perlcritic")` guard in
+    /// `collect_external_perlcritic_diagnostics` for the lifetime of this server.
+    ///
+    /// This lets tests exercise the full diagnostic pipeline with a mock runtime
+    /// without needing perlcritic installed on the test machine.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn test_bypass_perlcritic_command_check(&self) {
+        self.skip_perlcritic_command_check.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Set the server root path (used for `.perlcriticrc` walk-up discovery).
+    pub fn test_set_root_path(&self, path: std::path::PathBuf) {
+        *self.root_path.lock() = Some(path);
+    }
+
+    /// Configure perlcritic settings directly for test purposes.
+    ///
+    /// Avoids direct access to `self.config` (which is `pub(crate)`) from
+    /// integration tests.  Equivalent to mutating `config.perlcritic_enabled`,
+    /// `config.perlcritic_severity`, and `config.perlcritic_profile` directly.
+    pub fn test_configure_perlcritic(&self, enabled: bool, severity: u8, profile: Option<String>) {
+        let mut cfg = self.config.lock();
+        cfg.perlcritic_enabled = enabled;
+        cfg.perlcritic_severity = severity;
+        cfg.perlcritic_profile = profile;
+    }
 }

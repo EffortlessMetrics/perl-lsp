@@ -749,6 +749,12 @@ impl LspServer {
     /// 1-5 scale to LSP severity levels (Brutal/Cruel -> Error, Harsh ->
     /// Warning, Stern/Gentle -> Information).
     ///
+    /// The `CriticAnalyzer` is reused across calls via `self.critic_analyzer`
+    /// so that the per-file violation cache survives between `didChange` events.
+    /// `invalidate_cache` is called from the `didChange` handler, and the
+    /// analyzer is reset to `None` from `didChangeConfiguration` whenever any
+    /// critic-related setting changes.
+    ///
     /// Silently skips if perlcritic is not installed or the URI is not a file.
     /// The `doc_text` parameter is used to convert perlcritic's line/column
     /// positions into byte offsets for the internal diagnostic range.
@@ -774,28 +780,80 @@ impl LspServer {
             None => return,
         };
 
-        // Silently skip if perlcritic is not installed
-        if !crate::execute_command::command_exists("perlcritic") {
+        // Silently skip if perlcritic is not installed.
+        // The `skip_perlcritic_command_check` flag is always `false` in production
+        // and is only set to `true` through the test helper
+        // `LspServer::test_bypass_perlcritic_command_check`, enabling mock-runtime
+        // injection without a real `perlcritic` binary.
+        let skip_check =
+            self.skip_perlcritic_command_check.load(std::sync::atomic::Ordering::Relaxed);
+        if !skip_check && !crate::execute_command::command_exists("perlcritic") {
             return;
         }
 
-        // Auto-discover .perlcriticrc in the file's directory if no profile is configured
-        let resolved_profile = profile.or_else(|| {
-            file_path.parent().and_then(|dir| {
-                let candidate = dir.join(".perlcriticrc");
-                if candidate.exists() { candidate.to_str().map(|s| s.to_string()) } else { None }
-            })
-        });
+        // Lazy-init the shared CriticAnalyzer.  If the profile or severity
+        // changed, `didChangeConfiguration` has already reset the field to
+        // `None`, so we rebuild here with the current config.
+        //
+        // The `.perlcriticrc` walk-up is intentionally placed inside the
+        // `is_none()` branch so that filesystem stat calls are skipped on
+        // every subsequent diagnostic cycle once the analyzer is warm.
+        {
+            let mut guard = self.critic_analyzer.lock();
+            if guard.is_none() {
+                // Walk up the directory tree from the file's parent to the
+                // workspace root looking for `.perlcriticrc`.  Ensures that a
+                // repo-root config is found even when the file lives in a
+                // sub-directory.  Only runs when the analyzer needs (re-)init.
+                let resolved_profile = profile.or_else(|| {
+                    let workspace_root = self.root_path.lock().clone();
+                    let mut dir = file_path.parent().map(|p| p.to_path_buf());
+                    while let Some(current) = dir {
+                        let candidate = current.join(".perlcriticrc");
+                        if candidate.exists() {
+                            return candidate.to_str().map(|s| s.to_string());
+                        }
+                        // Stop at the workspace root or the filesystem root.
+                        if workspace_root.as_deref() == Some(current.as_path())
+                            || current.parent().is_none()
+                        {
+                            break;
+                        }
+                        dir = current.parent().map(|p| p.to_path_buf());
+                    }
+                    None
+                });
+                let critic_config = crate::perl_critic::CriticConfig {
+                    severity,
+                    profile: resolved_profile,
+                    ..crate::perl_critic::CriticConfig::default()
+                };
+                // Use the injected test runtime when present; otherwise fall back
+                // to the OS subprocess runtime.
+                let analyzer = {
+                    let rt_guard = self.critic_runtime_override.lock();
+                    if let Some(ref rt) = *rt_guard {
+                        crate::perl_critic::CriticAnalyzer::new(
+                            critic_config,
+                            std::sync::Arc::clone(rt),
+                        )
+                    } else {
+                        crate::perl_critic::CriticAnalyzer::with_os_runtime(critic_config)
+                    }
+                };
+                *guard = Some(analyzer);
+            }
+        }
 
-        let critic_config = crate::perl_critic::CriticConfig {
-            severity,
-            profile: resolved_profile,
-            ..crate::perl_critic::CriticConfig::default()
+        // Borrow the shared analyzer to run the analysis.  The lock is held
+        // only for the duration of the `analyze_file` call.
+        let result = {
+            let mut guard = self.critic_analyzer.lock();
+            guard.as_mut().map(|a| a.analyze_file(&file_path))
         };
-        let mut analyzer = crate::perl_critic::CriticAnalyzer::with_os_runtime(critic_config);
 
-        match analyzer.analyze_file(&file_path) {
-            Ok(violations) => {
+        match result {
+            Some(Ok(violations)) => {
                 for v in violations {
                     // Map Perl::Critic severity (1-5) to LSP DiagnosticSeverity:
                     // Brutal(1)/Cruel(2) -> Error, Harsh(3) -> Warning,
@@ -829,9 +887,10 @@ impl LspServer {
                     });
                 }
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 eprintln!("perlcritic failed for {}: {}", uri, e);
             }
+            None => {}
         }
     }
 

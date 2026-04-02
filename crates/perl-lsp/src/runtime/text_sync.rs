@@ -381,6 +381,19 @@ impl LspServer {
                     cache.retain(|(cached_uri, _), _| cached_uri != &normalized_uri);
                 }
 
+                // Invalidate the perlcritic violation cache for this file so that
+                // the next diagnostic cycle re-runs perlcritic on the new content.
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let file_path = url::Url::parse(uri).ok().and_then(|u| u.to_file_path().ok());
+                    if let Some(path) = file_path {
+                        let path_str = path.to_string_lossy().to_string();
+                        if let Some(ref mut analyzer) = *self.critic_analyzer.lock() {
+                            analyzer.invalidate_cache(&path_str);
+                        }
+                    }
+                }
+
                 let mut doc_state = documents
                     .get(&normalized_uri)
                     .or_else(|| documents.get(uri))

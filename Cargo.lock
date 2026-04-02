@@ -2282,6 +2282,7 @@ dependencies = [
  "perl-position-tracking",
  "perl-qualified-name",
  "perl-source-file",
+ "perl-subprocess-runtime",
  "perl-symbol-cursor",
  "perl-tdd-support",
  "perl-workspace-discovery",
