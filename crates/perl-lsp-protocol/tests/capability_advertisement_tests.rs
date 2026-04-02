@@ -276,14 +276,15 @@ fn semantic_tokens_legend_has_token_types() -> Result<(), Box<dyn std::error::Er
         .pointer("/semanticTokensProvider/legend/tokenTypes")
         .and_then(|v| v.as_array())
         .ok_or("missing legend.tokenTypes")?;
-    // 20 standard LSP types + sql_string = 21 total.
+    // 20 standard LSP types + sql_string + sql_heredoc_keyword + json_heredoc_key = 23 total.
     // This count assertion catches legend desynchronization (issue #2103) at the
     // advertisement layer — if a type is added to the internal legend but not
     // advertised (or vice versa), this fails immediately.
     assert_eq!(
         types.len(),
-        21,
-        "expected 21 token types (20 standard + sql_string); got {:?}",
+        23,
+        "expected 23 token types (20 standard + sql_string + sql_heredoc_keyword + json_heredoc_key); \
+         got {:?}",
         types
     );
     let type_strs: Vec<&str> = types.iter().filter_map(|t| t.as_str()).collect();
@@ -299,6 +300,15 @@ fn semantic_tokens_legend_has_token_types() -> Result<(), Box<dyn std::error::Er
     assert!(
         type_strs.contains(&"sql_string"),
         "should include 'sql_string' token type (DBI/SQL context, issue #2337)"
+    );
+    // Heredoc injection types added in issue #2059.
+    assert!(
+        type_strs.contains(&"sql_heredoc_keyword"),
+        "should include 'sql_heredoc_keyword' token type (heredoc SQL injection, issue #2059)"
+    );
+    assert!(
+        type_strs.contains(&"json_heredoc_key"),
+        "should include 'json_heredoc_key' token type (heredoc JSON injection, issue #2059)"
     );
     Ok(())
 }
