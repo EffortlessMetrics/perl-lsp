@@ -26,6 +26,19 @@ YELLOW = '\033[1;33m'
 BLUE = '\033[0;34m'
 NC = '\033[0m'
 
+CATEGORY_ALIASES = {
+    "workspace_index": "index",
+}
+
+UNIT_MULTIPLIERS = {
+    "ns": 1,
+    "us": 1_000,
+    "µs": 1_000,
+    "μs": 1_000,
+    "ms": 1_000_000,
+    "s": 1_000_000_000,
+}
+
 
 def load_config(config_path: Path) -> dict:
     """Load threshold configuration."""
@@ -37,6 +50,25 @@ def load_json(path: Path) -> dict:
     """Load JSON file."""
     with open(path) as f:
         return json.load(f)
+
+
+def normalize_category_name(name: str) -> str:
+    """Normalize category names across legacy and current benchmark payloads."""
+    return CATEGORY_ALIASES.get(name, name)
+
+
+def convert_to_ns(value: Any, unit: str) -> Optional[int]:
+    """Convert a numeric benchmark value in the given unit to nanoseconds."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    multiplier = UNIT_MULTIPLIERS.get(unit)
+    if multiplier is None:
+        return None
+
+    return int(round(numeric * multiplier))
 
 
 def get_threshold_for_benchmark(config: dict, category: str, bench_name: str) -> dict:
@@ -107,14 +139,23 @@ def format_duration(ns: int) -> str:
 def extract_mean_ns(bench_data: dict) -> Optional[int]:
     """Extract mean nanoseconds from benchmark data."""
     if "mean_ns" in bench_data:
-        return int(bench_data["mean_ns"])
+        return convert_to_ns(bench_data["mean_ns"], "ns")
+    for key, unit in (("mean_us", "us"), ("mean_ms", "ms"), ("mean_s", "s")):
+        if key in bench_data:
+            return convert_to_ns(bench_data[key], unit)
     if "mean" in bench_data:
         mean = bench_data["mean"]
         if isinstance(mean, dict):
             if "nanoseconds" in mean:
-                return int(mean["nanoseconds"])
+                return convert_to_ns(mean["nanoseconds"], "ns")
+            if "microseconds" in mean:
+                return convert_to_ns(mean["microseconds"], "us")
+            if "milliseconds" in mean:
+                return convert_to_ns(mean["milliseconds"], "ms")
+            if "seconds" in mean:
+                return convert_to_ns(mean["seconds"], "s")
             if "point_estimate" in mean:
-                return int(mean["point_estimate"])
+                return convert_to_ns(mean["point_estimate"], "ns")
     return None
 
 
@@ -122,27 +163,34 @@ def extract_benchmarks(data: dict) -> Dict[str, Dict[str, Any]]:
     """Extract benchmark data from results."""
     results = {}
 
+    def looks_like_benchmark(payload: Any) -> bool:
+        return isinstance(payload, dict) and any(
+            key in payload
+            for key in ("mean", "mean_ns", "mean_us", "mean_ms", "mean_s")
+        )
+
     if "results" in data:
         for category, benchmarks in data["results"].items():
             if isinstance(benchmarks, dict):
-                results[category] = {}
+                normalized_category = normalize_category_name(category)
+                category_results = results.setdefault(normalized_category, {})
                 for name, values in benchmarks.items():
                     if name.startswith("_"):
                         continue
                     if isinstance(values, dict):
-                        results[category][name] = values
+                        category_results[name] = values
 
     elif "benchmarks" in data:
         benchmarks = data["benchmarks"]
         for key, value in benchmarks.items():
             if isinstance(value, dict):
-                if any(isinstance(v, dict) and ("mean" in v or "mean_ns" in v)
-                       for v in value.values()):
-                    results[key] = {}
+                if any(looks_like_benchmark(v) for v in value.values()):
+                    normalized_category = normalize_category_name(key)
+                    category_results = results.setdefault(normalized_category, {})
                     for name, bench_data in value.items():
-                        if isinstance(bench_data, dict) and ("mean" in bench_data or "mean_ns" in bench_data):
-                            results[key][name] = bench_data
-                elif "mean" in value or "mean_ns" in value:
+                        if looks_like_benchmark(bench_data):
+                            category_results[name] = bench_data
+                elif looks_like_benchmark(value):
                     if "other" not in results:
                         results["other"] = {}
                     results["other"][key] = value

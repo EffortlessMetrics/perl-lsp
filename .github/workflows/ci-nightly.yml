@@ -7,7 +7,8 @@ name: CI (Nightly)
 on:
   pull_request:
     branches: [ main, master ]
-    types: [labeled]
+    # Keep label-gated jobs alive after the label is applied.
+    types: [opened, synchronize, reopened, labeled]
   schedule:
     # Run nightly at 3am UTC
     - cron: '0 3 * * *'
