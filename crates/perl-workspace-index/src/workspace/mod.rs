@@ -2,6 +2,8 @@
 
 pub mod cache;
 pub mod document_store;
+#[cfg(feature = "memory-profiling")]
+pub mod memory;
 pub mod monitoring;
 pub mod production_coordinator;
 pub mod slo;

@@ -45,11 +45,17 @@ perl-tdd-support = { workspace = true }
 default = []
 workspace = []
 lsp-compat = ["lsp-types"]
+memory-profiling = []
 
 [[bench]]
 name = "workspace_index_benchmark"
 harness = false
 required-features = ["workspace"]
+
+[[bin]]
+name = "workspace_memory_profile"
+path = "src/bin/workspace_memory_profile.rs"
+required-features = ["memory-profiling"]
 
 [lints]
 workspace = true

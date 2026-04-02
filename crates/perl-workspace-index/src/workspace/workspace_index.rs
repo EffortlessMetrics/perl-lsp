@@ -1818,6 +1818,81 @@ impl WorkspaceIndex {
         files.values().map(|file_index| file_index.symbols.len()).sum()
     }
 
+    /// Capture a point-in-time memory estimate of the index.
+    ///
+    /// Acquires read locks on all index components and walks their contents
+    /// to estimate heap usage. Intended for offline profiling; do not call
+    /// on the LSP hot path.
+    ///
+    /// Only available when the `memory-profiling` feature is enabled.
+    #[cfg(feature = "memory-profiling")]
+    pub fn memory_snapshot(&self) -> crate::workspace::memory::MemorySnapshot {
+        use std::mem::size_of;
+
+        let files_guard = self.files.read();
+        let symbols_guard = self.symbols.read();
+        let global_refs_guard = self.global_references.read();
+
+        // --- files map ---
+        let mut files_bytes: usize = 0;
+        let mut total_symbol_count: usize = 0;
+        for (uri_key, fi) in files_guard.iter() {
+            // key string
+            files_bytes += uri_key.len();
+            // per-symbol entries
+            for sym in &fi.symbols {
+                files_bytes += sym.name.len()
+                    + sym.uri.len()
+                    + sym.qualified_name.as_deref().map_or(0, str::len)
+                    + sym.documentation.as_deref().map_or(0, str::len)
+                    + sym.container_name.as_deref().map_or(0, str::len)
+                    // stack portion: kind + range + has_body + option discriminants
+                    + size_of::<WorkspaceSymbol>();
+            }
+            total_symbol_count += fi.symbols.len();
+            // per-reference entries
+            for (ref_name, refs) in &fi.references {
+                files_bytes += ref_name.len();
+                for r in refs {
+                    files_bytes += r.uri.len() + size_of::<SymbolReference>();
+                }
+            }
+            // dependencies
+            for dep in &fi.dependencies {
+                files_bytes += dep.len();
+            }
+            // content hash (u64) + vec/hashset capacity overhead (rough)
+            files_bytes += size_of::<u64>();
+        }
+
+        // --- global symbols map ---
+        let mut symbols_bytes: usize = 0;
+        for (qname, uri) in symbols_guard.iter() {
+            symbols_bytes += qname.len() + uri.len();
+        }
+
+        // --- global references map ---
+        let mut global_refs_bytes: usize = 0;
+        for (sym_name, locs) in global_refs_guard.iter() {
+            global_refs_bytes += sym_name.len();
+            for loc in locs {
+                global_refs_bytes += loc.uri.len() + size_of::<Location>();
+            }
+        }
+
+        // --- document store ---
+        let document_store_bytes = self.document_store.total_text_bytes();
+
+        crate::workspace::memory::MemorySnapshot {
+            file_count: files_guard.len(),
+            symbol_count: total_symbol_count,
+            files_bytes,
+            symbols_bytes,
+            global_refs_bytes,
+            document_store_bytes,
+        }
+    }
+
     /// Check if the workspace index has symbols (soft readiness check)
     ///
     /// Returns true if the index contains any symbols, indicating that

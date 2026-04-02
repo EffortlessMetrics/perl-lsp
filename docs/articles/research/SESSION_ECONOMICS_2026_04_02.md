@@ -1,32 +1,46 @@
 # Session Economics: 2026-04-02 Release Cleanup & Multi-Release Build-Out
 
 **Session Date**: 2026-04-02
-**Duration**: ~5 hours (single session, ongoing)
 **Model**: Claude Opus 4.6 (1M context)
 **Operator**: Steven Zimmerman (orchestrator)
-**Session type**: Normal Claude Code run — not a special swarm event. Agent calls were natural parallelism for a release cleanup task that grew organically into multi-release build-out. This is roughly what a typical productive session looks like.
+**Session type**: Normal Claude Code run — not a special swarm event. Agent calls were natural parallelism for a release cleanup task that grew organically into multi-release build-out.
 
 ---
 
-## Resource Consumption
+## Budget
 
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **Session budget used** | 38% of 20x max | Single 5-hour session |
-| **Weekly budget used** | 9% of weekly allocation | 1 session of ~40 possible |
+| Checkpoint | Session % | Weekly % | Notes |
+|-----------|-----------|----------|-------|
+| Session start | 0% | ~34% | Prior week's usage |
+| Phase 1 end | ~38% | ~38% | Ad-hoc: release cleanup → roadmap → builders |
+| Phase 2 end | ~56% | ~40% | Transitional: learned verify-before-build, economics docs |
+| Phase 3 end | ~75% | ~42% | Pipeline: proper gates, full review passes |
+| Session 2 start | 0% (reset) | 42% | Fresh 5-hour window |
+
+### How the session evolved
+
+**Phase 1 (~34% → 38% weekly, ~4% consumed):** Ad-hoc. Started with release cleanup (delete branches, close stale issue, fix git config). Grew into "let's build out the roadmap" and then "let's launch builders." Merged PRs on smoke-green without waiting for full CI gate. Discovered the merged-red problem, the triage false positive on #3020, and the worktree file leak pattern. Most PRs merged and issues closed happened here — high throughput, lower quality gates.
+
+**Phase 2 (~38% → 40% weekly, ~2% consumed):** Transitional. Applied lessons from phase 1: started verifying issue state before spawning builders, added the "already-done" check to every builder prompt, launched triage agents to clean the issue backlog. Still merging fast but with two-pass review on feature PRs. The economics documentation and multi-stage PR creation (4 PRs for this doc alone) consumed meaningful context during this phase.
+
+**Phase 3 (~40% → 42% weekly, ~2% consumed):** Close to pipeline. Proper verify-before-build on every agent, full review passes, issue triage running in parallel, learned rules applied consistently. Much closer to the structured swarm pipeline (scout→plan-review→build→review→merge). Fewer wasted agents, higher per-PR confidence.
+
+**Budget distribution insight:** Phase 1 consumed ~half the session's weekly budget (4 of 8 points) and produced the bulk of the output. Phases 2 and 3 together consumed the other half (2 points each) but ran at higher quality. The economics documentation itself was a significant context consumer in phase 2. This document went through 4 PRs (#3098 initial, #3099 closed/conflict, #3101 quality assessment, #3107 session split) because it was being written and revised as the session progressed.
 
 ---
 
-## Verified Output (from `gh` queries)
+## Combined Output (session 1 + session 2 ongoing)
 
 | Metric | Count | Verification |
 |--------|-------|-------------|
-| **PRs merged** | 22 | `gh pr list --state merged --search "merged:2026-04-02"` |
-| **PRs in review** | 2 (#3092, #3097) | `gh pr list --state open` |
-| **Issues closed** | 9 | `gh issue list --state closed --search "closed:2026-04-02"` |
-| **Issues created** | 4 (#3081, #3089, #3093, #3094) | `gh issue list --state all --search "created:2026-04-02"` |
-| **Remote branches deleted** | 11 | Manual count from `git push --delete` output |
-| **Dependabot PRs merged** | 8 of 8 | Includes 1 that needed `workflow` scope fix |
+| **PRs merged** | 34 | `gh pr list --state merged --search "merged:2026-04-02"` |
+| **Issues closed** | 50 | `gh issue list --state closed --search "closed:2026-04-02"` |
+| **Issues: start → now** | 68 → 23 (66% reduction) | |
+| **Issues created** | 4 (#3081, #3089, #3093, #3094) | |
+| **Already-implemented discoveries** | 23 | |
+| **Remote branches deleted** | 11 | |
+| **Dependabot PRs merged** | 8 of 8 | |
+| **Bugs caught pre-merge** | 4 + 1 perf fix by deep review | |
 
 ### PR Breakdown by Type
 
