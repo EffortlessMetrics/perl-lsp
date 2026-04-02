@@ -199,5 +199,5 @@ required-features = ["pure-rust"]
 
 
 [build-dependencies]
-cc = { version = "1.2.56", optional = true }
+cc = { version = "1.2.58", optional = true }
 bindgen = { version = "0.72.1", optional = true } 
