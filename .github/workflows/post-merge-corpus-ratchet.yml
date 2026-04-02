@@ -1,0 +1,85 @@
+name: Post-Merge Corpus Ratchet
+
+# Automatically runs cpan-corpus-ratchet after merges that touch parser crates.
+# This prevents the stale-baseline problem: parser fixes sit unratcheted, making
+# it look like the corpus clean rate has not improved.
+#
+# Triggers only when pushes to master touch:
+#   - crates/perl-parser/
+#   - crates/perl-parser-core/
+#   - crates/perl-parser-pest/
+#   - The justfile (ratchet recipe changes)
+#   - .ci/cpan-corpus-baseline.json (baseline file itself)
+#
+# See issue #2026 (automate corpus ratchet after parser fix merges).
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'crates/perl-parser/**'
+      - 'crates/perl-parser-core/**'
+      - 'crates/perl-parser-pest/**'
+      - 'justfile'
+      - '.ci/cpan-corpus-baseline.json'
+
+# Only one ratchet at a time; cancel stale runs if a new parser merge lands.
+concurrency:
+  group: post-merge-corpus-ratchet-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  corpus-ratchet:
+    name: Ratchet CPAN corpus baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch full history so git can commit cleanly.
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: post-merge-corpus-ratchet-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Run corpus ratchet
+        run: just cpan-corpus-ratchet
+
+      - name: Commit updated baseline if changed
+        # TODO(#follow-up): Switch to creating a PR instead of direct push once a
+        # bot token or GitHub App is configured that can bypass branch protection.
+        # For now, the push is best-effort (git push || echo warning) so CI stays green
+        # even when branch protection blocks the direct-to-master push. The warning
+        # annotation remains visible in the Actions UI so the failure is not silent.
+        run: |
+          CHANGED_FILES=$(git diff --name-only -- .ci/cpan-corpus-baseline.json)
+
+          if [ -n "$CHANGED_FILES" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .ci/cpan-corpus-baseline.json
+            git commit -m "chore(ci): ratchet CPAN corpus baseline post-merge [skip ci]"
+            git push || echo "::warning::Direct push to master blocked by branch protection rules -- corpus baseline not auto-updated. Run 'just cpan-corpus-ratchet' locally and push. See TODO above for proper fix."
+            echo "::notice::Attempted to push updated corpus baseline."
+          else
+            echo "::notice::Corpus baseline already up to date -- no new clean modules found."
+          fi
