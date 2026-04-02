@@ -13,24 +13,29 @@ project docs when you need exact release facts, receipts, or milestone detail.
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
 - Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
-## Now
+## Now (v0.12.2 — stability hardening)
 
-- Keep release validation green while `v0.12.1` closes the launch regressions discovered after `v0.12.0`
-- Keep install guidance and package naming aligned with the actual `perllsp` / `perl-lsp-rs` surfaces
-- Raise parser and corpus confidence without hiding regressions behind broader receipts
-- Finish framework-aware semantic work for real-world Perl projects
-- Keep README, docs, changelog, and release guidance aligned so users do not have to infer the release state
+- Merge CI improvement PRs (#3078–#3080) and Dependabot batch (#3064–#3071)
+- Fix pre-push hook branch-deletion regression (#3081)
+- Scout top 3 uninvestigated parser blockers and raise CPAN clean rate toward 80%
+- Close error-handling hygiene batch and test gap issues
 
-## Next
+## Next (v0.12.3 — diagnostic & refactoring hardening)
 
-- Harden diagnostics, refactoring, and debugger behavior after the alpha cut
-- Follow through on distribution and packaging cleanup once the release line is live
-- Keep shrinking the gap between crate-level docs, editor docs, and release operations
+- Dead code highlighting, perlcritic integration, `strict`/`warnings` diagnostics
+- Workspace-scoped rename, extract variable/subroutine, subroutine inlining
+- Moose/Moo framework support (method modifiers, role composition)
+- DAP Phase 3 test suite and cross-platform signal handling
 
-## Later
+## Then
 
-- `v0.15.0` stability contract for APIs and advertised wire behavior
-- Broader packaging and platform certification
+- `v0.12.4`: parser corpus confidence (≥85% CPAN clean) and performance profiling
+- `v0.12.5`: distribution and packaging (Docker, Nix, Homebrew, Windows/Linux package managers)
+
+## Later (v0.13.0 — public alpha announcement)
+
+- 0.12.x builds confidence; 0.13.0 is the initial public alpha announcement
+- Seamless install story across all distribution channels
 - Performance, security, and compatibility hardening on the path to `v1.0.0`
 
 ## Update Rules
