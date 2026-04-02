@@ -208,6 +208,33 @@ tests = ["tests/pull_diagnostics_tests.rs"]
 description = "Pull model diagnostics"
 
 [[feature]]
+id = "lsp.diagnostic.missing_strict"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["crates/perl-lsp-diagnostics/tests/strict_warnings_tests.rs"]
+description = "Missing 'use strict' pragma diagnostic (PL100) — warns when .pm/.pl files lack strict enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
+
+[[feature]]
+id = "lsp.diagnostic.missing_warnings"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["crates/perl-lsp-diagnostics/tests/strict_warnings_tests.rs"]
+description = "Missing 'use warnings' pragma diagnostic (PL101) — warns when .pm/.pl files lack warnings enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
+
+[[feature]]
+id = "lsp.diagnostic.unreachable_code"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["crates/perl-lsp-diagnostics/tests/unreachable_code_tests.rs"]
+description = "Unreachable code highlighting (PL406) with DiagnosticTag::Unnecessary — detects code after return/die/exit/croak statements"
+
+[[feature]]
 id = "lsp.diagnostic.unused_variable"
 spec = "perl-lsp"
 area = "text_document"
