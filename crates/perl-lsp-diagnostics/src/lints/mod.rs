@@ -85,6 +85,12 @@
 //! | `dead-code-constant` | Hint | Constant with no references |
 //! | `dead-code-package` | Hint | Package with no references |
 //!
+//! ## Unreachable code (`unreachable_code.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL406` | Hint | Statement cannot be reached due to preceding unconditional exit |
+//!
 //! # Severity Levels
 //!
 //! Each lint produces diagnostics with appropriate severity:
@@ -112,6 +118,8 @@ pub mod package_subroutine;
 pub mod printf_format;
 pub mod security;
 pub mod strict_warnings;
+/// Unreachable code detection (PL406)
+pub mod unreachable_code;
 /// Unused import detection
 pub mod unused_imports;
 /// Perl version compatibility warnings (PL900)

@@ -20,6 +20,7 @@ use crate::lints::package_subroutine::{
 use crate::lints::printf_format::check_printf_format;
 use crate::lints::security::check_security;
 use crate::lints::strict_warnings::check_strict_warnings;
+use crate::lints::unreachable_code::check_unreachable_code;
 use crate::lints::unused_imports::check_unused_imports;
 use crate::lints::version_compat::check_version_compat;
 use crate::scope::scope_issues_to_diagnostics;
@@ -150,6 +151,9 @@ impl DiagnosticsProvider {
 
         // Version compatibility lint (PL900)
         check_version_compat(ast, &mut diagnostics);
+
+        // Unreachable code detection (PL406)
+        check_unreachable_code(ast, &mut diagnostics);
 
         // Missing module lint (PL701) — only when a resolver is provided
         if let Some(resolver) = module_resolver {
