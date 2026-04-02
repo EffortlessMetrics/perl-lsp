@@ -51,7 +51,7 @@ impl<'source> SimpleParser<'source> {
         let _start = self.current_pos;
 
         match self.lexer.peek() {
-            Some(Token::My) | Some(Token::Our) | Some(Token::Local) => {
+            Some(Token::My) | Some(Token::Our) | Some(Token::Local) | Some(Token::State) => {
                 self.parse_variable_declaration()
             }
             Some(Token::If) => self.parse_if_statement(),
@@ -73,13 +73,14 @@ impl<'source> SimpleParser<'source> {
             Token::My => "my",
             Token::Our => "our",
             Token::Local => "local",
+            Token::State => "state",
             unexpected => {
                 // Error: Unexpected token in variable declaration context
-                // Expected one of: my, our, local (Note: 'state' keyword not supported in this parser)
+                // Expected one of: my, our, local, state
                 // This error occurs when the parser encounters an invalid token after parsing
                 // statement-level context that requires a variable declaration keyword.
                 return Err(format!(
-                    "Expected variable declaration keyword (my/our/local), found {:?} at position {}",
+                    "Expected variable declaration keyword (my/our/local/state), found {:?} at position {}",
                     unexpected, self.current_pos
                 ));
             }
@@ -405,6 +406,46 @@ mod tests {
     }
 
     #[test]
+    fn test_state_declaration() {
+        let input = "state $count = 0;";
+        use perl_tdd_support::must;
+        let mut parser = SimpleParser::new(input);
+        let ast = must(parser.parse());
+
+        assert_eq!(ast.node_type, "program");
+        assert_eq!(ast.children.len(), 1);
+        assert_eq!(ast.children[0].node_type, "state_declaration");
+    }
+
+    #[test]
+    fn test_state_declaration_no_initializer() {
+        let input = "state $count;";
+        use perl_tdd_support::must;
+        let mut parser = SimpleParser::new(input);
+        let ast = must(parser.parse());
+
+        assert_eq!(ast.node_type, "program");
+        assert_eq!(ast.children.len(), 1);
+        assert_eq!(ast.children[0].node_type, "state_declaration");
+        assert_eq!(ast.children[0].children.len(), 1); // only the variable, no initializer
+    }
+
+    #[test]
+    fn test_state_declaration_in_subroutine() {
+        let input = "sub counter { state $count = 0; return $count; }";
+        use perl_tdd_support::must;
+        let mut parser = SimpleParser::new(input);
+        let ast = must(parser.parse());
+
+        assert_eq!(ast.node_type, "program");
+        assert_eq!(ast.children.len(), 1);
+        assert_eq!(ast.children[0].node_type, "subroutine");
+        let body = &ast.children[0].children[0];
+        assert_eq!(body.node_type, "block");
+        assert_eq!(body.children[0].node_type, "state_declaration");
+    }
+
+    #[test]
     fn parse_variable_declaration_returns_error_for_unexpected_token() {
         // Call parse_variable_declaration directly with a non-keyword token
         // to exercise the error path at the match arm
@@ -415,7 +456,10 @@ mod tests {
         let error = result.unwrap_err();
         assert!(error.contains("Expected"), "Error must mention expectation: {}", error);
         assert!(
-            error.contains("my") && error.contains("our") && error.contains("local"),
+            error.contains("my")
+                && error.contains("our")
+                && error.contains("local")
+                && error.contains("state"),
             "Error must list valid keywords: {}",
             error
         );
