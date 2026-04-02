@@ -80,6 +80,9 @@ impl LspServer {
                 .and_then(|u| url::Url::parse(u).ok())
                 .and_then(|u| u.to_file_path().ok())
                 .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+            if file_dir.is_none() && doc_uri.is_some() {
+                tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
+            }
             prepend_use_lib_paths(&mut include_paths, text, &root, file_dir.as_deref());
         }
 
@@ -144,11 +147,20 @@ impl LspServer {
                 .first()
                 .and_then(|u| url::Url::parse(u).ok())
                 .and_then(|u| u.to_file_path().ok());
+            if root_opt.is_none() && !workspace_folders.is_empty() {
+                tracing::trace!(
+                    "Module URI resolution failed for workspace folder: {:?}",
+                    workspace_folders.first()
+                );
+            }
             if let Some(root) = root_opt {
                 let file_dir = doc_uri
                     .and_then(|u| url::Url::parse(u).ok())
                     .and_then(|u| u.to_file_path().ok())
                     .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+                if file_dir.is_none() && doc_uri.is_some() {
+                    tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
+                }
                 prepend_use_lib_paths(&mut include_paths, text, &root, file_dir.as_deref());
             }
         }
@@ -176,7 +188,7 @@ impl LspServer {
         ) {
             ModuleUriResolution::Resolved(uri) => Some(uri),
             ModuleUriResolution::TimedOut => {
-                eprintln!("Module resolution timeout for: {}", module_name);
+                tracing::warn!("Module resolution timeout for: {}", module_name);
                 None
             }
             ModuleUriResolution::NotFound => None,
