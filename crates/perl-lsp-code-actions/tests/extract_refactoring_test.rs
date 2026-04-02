@@ -201,3 +201,188 @@ fn extract_subroutine_not_offered_on_if_body() {
         spurious.iter().map(|a| &a.title).collect::<Vec<_>>()
     );
 }
+
+// Issue #3031: Extract variable — binary arithmetic expression
+// Selects "$a * $b" and extracts it into a new variable declaration.
+#[test]
+fn extract_variable_from_arithmetic_expression() {
+    let source = "my $a = 5;\nmy $b = 3;\nmy $total = $a * $b;\n";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    // "$a * $b" starts where the last "$a" appears; ends at the last ";"
+    let rhs_start = source.rfind("$a").unwrap_or(0);
+    let rhs_end = source.rfind(';').unwrap_or(source.len());
+
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (rhs_start, rhs_end));
+
+    let extract_actions: Vec<_> = actions
+        .iter()
+        .filter(|a| {
+            matches!(a.kind, CodeActionKind::RefactorExtract) && a.title.contains("variable")
+        })
+        .collect();
+
+    assert!(
+        !extract_actions.is_empty(),
+        "Expected extract-variable action for arithmetic expression, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+
+    let action = &extract_actions[0];
+    assert_eq!(
+        action.edit.changes.len(),
+        2,
+        "Expected exactly 2 edits (declaration + replacement)"
+    );
+
+    let decl = &action.edit.changes[0];
+    assert!(
+        decl.new_text.starts_with("my $"),
+        "Declaration should start with 'my $', got: {}",
+        decl.new_text
+    );
+    assert!(
+        decl.new_text.contains("$a") || decl.new_text.contains("$b"),
+        "Declaration should contain extracted expression variables, got: {}",
+        decl.new_text
+    );
+    assert!(
+        decl.new_text.ends_with(";\n"),
+        "Declaration should end with semicolon+newline, got: {}",
+        decl.new_text
+    );
+
+    let replace = &action.edit.changes[1];
+    assert!(
+        replace.new_text.starts_with('$'),
+        "Replacement should be a variable reference, got: {}",
+        replace.new_text
+    );
+    assert_eq!(
+        replace.location.start, rhs_start,
+        "Replacement start should match expression start"
+    );
+    assert_eq!(replace.location.end, rhs_end, "Replacement end should match expression end");
+}
+
+// Issue #3031: Extract variable title must contain "variable" for LSP client matching.
+#[test]
+fn extract_variable_action_title_contains_variable_keyword() {
+    let source = "my $x = length($str) + 1;";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 24));
+
+    let extract_action = must_some(actions.iter().find(|a| {
+        matches!(a.kind, CodeActionKind::RefactorExtract) && a.title.contains("variable")
+    }));
+
+    assert!(
+        extract_action.title.contains("Extract"),
+        "Title must contain 'Extract': {}",
+        extract_action.title
+    );
+    assert!(
+        extract_action.title.contains("variable"),
+        "Title must contain 'variable': {}",
+        extract_action.title
+    );
+}
+
+// Issue #3031: Extract subroutine — detect return values.
+// A variable declared inside the block that appears as a bare expression in the
+// last statement should be detected as a return value.
+#[test]
+fn extract_subroutine_detects_return_values() {
+    let source = "{\n    my $result = $x * 2;\n    $result\n}\n";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+
+    let extract = must_some(actions.iter().find(|a| {
+        matches!(a.kind, CodeActionKind::RefactorExtract)
+            && (a.title.contains("subroutine") || a.title.contains("Extract to"))
+    }));
+
+    assert!(extract.edit.changes.len() >= 2, "Expected at least 2 edits");
+
+    // The call replacement should capture the return value
+    let call_edit = &extract.edit.changes[1];
+    assert!(
+        call_edit.new_text.contains("result") || call_edit.new_text.contains('='),
+        "Call site should capture return value, got: {}",
+        call_edit.new_text
+    );
+}
+
+// Issue #3031: Extract subroutine sub body must contain the original code verbatim.
+#[test]
+fn extract_subroutine_body_contains_original_code() {
+    let source = "{\n    my $x = 1;\n    print $x;\n}\n";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+
+    let extract = must_some(actions.iter().find(|a| {
+        matches!(a.kind, CodeActionKind::RefactorExtract)
+            && (a.title.contains("subroutine") || a.title.contains("Extract to"))
+    }));
+
+    let sub_edit = &extract.edit.changes[0];
+    assert!(
+        sub_edit.new_text.contains("sub "),
+        "Sub edit should contain 'sub' keyword, got: {}",
+        sub_edit.new_text
+    );
+    assert!(
+        sub_edit.new_text.contains("my $x = 1"),
+        "Sub body should contain 'my $x = 1', got: {}",
+        sub_edit.new_text
+    );
+    assert!(
+        sub_edit.new_text.contains("print $x"),
+        "Sub body should contain 'print $x', got: {}",
+        sub_edit.new_text
+    );
+}
+
+// Issue #3031: Extract subroutine — spec example (process_order).
+// Inner block extracted to its own subroutine.
+#[test]
+fn extract_subroutine_spec_example_inner_block() {
+    let source = "sub process_order {\n    my $order = shift;\n    {\n        my $validated = validate_order($order);\n        my $total = calculate_total($order);\n    }\n    return 1;\n}\n";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let block_start = source.find("    {\n").unwrap_or(0);
+    let block_end = source.find("    return 1").unwrap_or(source.len());
+
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (block_start, block_end));
+
+    let action = must_some(actions.iter().find(|a| {
+        matches!(a.kind, CodeActionKind::RefactorExtract)
+            && (a.title.contains("subroutine") || a.title.contains("Extract to"))
+    }));
+    let sub_edit = &action.edit.changes[0];
+    assert!(
+        sub_edit.new_text.contains("sub "),
+        "Should insert sub definition, got: {}",
+        sub_edit.new_text
+    );
+
+    let call_edit = &action.edit.changes[1];
+    assert!(
+        call_edit.new_text.contains('(') && call_edit.new_text.contains(')'),
+        "Replacement should be a function call, got: {}",
+        call_edit.new_text
+    );
+}
