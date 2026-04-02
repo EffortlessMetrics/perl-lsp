@@ -20,7 +20,7 @@
 # =============================================================================
 
 schema_version: 1
-last_verified: "2026-03-21"
+last_verified: "2026-04-02"
 
 budgets:
   max_active_blockers: 50  # advisory only — no gate enforcement today
@@ -37,10 +37,10 @@ parser_blockers:
   - id: "unexpected_token_in_expr"
     category: "expression"
     affected_files: 206
-    root_cause: "Broad catch-all expression token error — multiple sub-causes undiagnosed"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 1: largest bucket (206 files). No issue filed. Highest-priority scout target."
+    root_cause: "4 sub-patterns: prototypes, complex expressions, chained method calls, ternary in list context"
+    status: "fixed"
+    issue: "#2731"
+    note: "Fixed via PRs #2767, #2897. 57 tests in fix_unexpected_token_in_expr_2731.rs. Counts stale — run corpus ratchet."
 
   - id: "unexpected_rbrace_expr"
     category: "expression"
@@ -53,10 +53,10 @@ parser_blockers:
   - id: "unclosed_paren"
     category: "expression"
     affected_files: 99
-    root_cause: "Unmatched open parenthesis — multiple sub-causes"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 1: 99 files. No issue filed."
+    root_cause: "5 sub-patterns: complex call args, nested ternary, chained method calls, qw in parens, heredoc in parens"
+    status: "fixed"
+    issue: "#2750"
+    note: "Fixed via PRs #2769, #2892. 17 tests in fix_unclosed_paren_*.rs. Counts stale — run corpus ratchet."
 
   - id: "unexpected_comma_expr"
     category: "expression"
@@ -69,10 +69,10 @@ parser_blockers:
   - id: "unexpected_rparen_expr"
     category: "expression"
     affected_files: 84
-    root_cause: "Unexpected right paren in expression context"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 1: 84 files. No issue filed."
+    root_cause: "4 sub-patterns: complex list context, nested function calls, regex in call args, ternary expressions"
+    status: "fixed"
+    issue: "#2751"
+    note: "Fixed via PR #2787. 55 tests in fix_unexpected_rparen_expr.rs. Counts stale — run corpus ratchet."
 
   - id: "unclosed_paren_identifier"
     category: "identifier"
