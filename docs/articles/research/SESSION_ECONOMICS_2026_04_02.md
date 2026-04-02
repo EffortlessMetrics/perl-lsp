@@ -43,11 +43,13 @@ The full first session used 75% of a single 5-hour session window and brought th
 
 ### How the session evolved
 
-**Phase 1 (~0-38% session, ~0-9% weekly):** Ad-hoc. Started with release cleanup (delete branches, close stale issue, fix git config). Grew into "let's build out the roadmap" and then "let's launch builders." Merged PRs on smoke-green without waiting for full CI gate. Discovered the merged-red problem, the triage false positive on #3020, and the worktree file leak pattern. Economics analysis began here — documenting what was happening as it happened.
+**Phase 1 (~34% → 38% weekly, ~4% consumed):** Ad-hoc. Started with release cleanup (delete branches, close stale issue, fix git config). Grew into "let's build out the roadmap" and then "let's launch builders." Merged PRs on smoke-green without waiting for full CI gate. Most PRs merged and issues closed happened here — high throughput, lower quality gates.
 
-**Phase 2 (~38-60% session, ~9-40% weekly):** Transitional. Applied lessons from phase 1: started verifying issue state before spawning builders, added the "already-done" check to every builder prompt, launched triage agents to clean the issue backlog. Still merging fast but with two-pass review on feature PRs. The economics documentation thread itself consumed context during this phase.
+**Phase 2 (~38% → 40% weekly, ~2% consumed):** Transitional. Applied lessons from phase 1: started verifying issue state before spawning builders, added the "already-done" check to every builder prompt, launched triage agents to clean the issue backlog. Still merging fast but with two-pass review on feature PRs. The economics documentation and multi-stage PR creation (4 PRs for this doc alone) consumed meaningful context during this phase.
 
-**Phase 3 (~60-75% session, ~40-42% weekly):** Close to pipeline. Proper verify-before-build on every agent, full review passes, issue triage running in parallel, learned rules applied consistently. Much closer to the structured swarm pipeline (scout→plan-review→build→review→merge). Fewer wasted agents, higher per-PR confidence. This is where the session found its rhythm.
+**Phase 3 (~40% → 42% weekly, ~2% consumed):** Close to pipeline. Proper verify-before-build on every agent, full review passes, issue triage running in parallel, learned rules applied consistently. Much closer to the structured swarm pipeline (scout→plan-review→build→review→merge). Fewer wasted agents, higher per-PR confidence.
+
+**Budget distribution:** Phase 1 consumed ~half the session's weekly budget (4 of 8 points) and produced the bulk of the output. Phases 2 and 3 together consumed the other half (2 points each) but ran at higher quality.
 
 The key insight: **the session learned its own operating model in real-time.** The rules that worked best (verify-before-build, deep review, trust builders over triage) were discovered through failure in phase 1 and codified by phase 3.
 
