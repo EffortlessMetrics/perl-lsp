@@ -45,10 +45,10 @@ parser_blockers:
   - id: "unexpected_rbrace_expr"
     category: "expression"
     affected_files: 105
-    root_cause: "Unexpected right brace inside expression context"
-    status: "filed"
+    root_cause: "Word operators as hash subscript keys (e.g., $h->{not})"
+    status: "fixed"
     issue: "#2189"
-    note: "Tier 1: investigation issue only, fix spec not yet written."
+    note: "Fixed via PR #2723. System corpus 105→10. Counts stale — run corpus ratchet."
 
   - id: "unclosed_paren"
     category: "expression"
@@ -61,10 +61,10 @@ parser_blockers:
   - id: "unexpected_comma_expr"
     category: "expression"
     affected_files: 98
-    root_cause: "Unexpected comma in grep/map/sort block arguments"
-    status: "filed"
+    root_cause: "Unknown functions with nullary builtins + grep/map file tests"
+    status: "fixed"
     issue: "#2140"
-    note: "Tier 1: issue count was 70 at filing time; baseline now shows 98."
+    note: "Fixed via PR #2674. System corpus 98→56. Counts stale — run corpus ratchet."
 
   - id: "unexpected_rparen_expr"
     category: "expression"
@@ -77,18 +77,18 @@ parser_blockers:
   - id: "unclosed_paren_identifier"
     category: "identifier"
     affected_files: 70
-    root_cause: "Bareword in sub call treated as unclosed paren"
-    status: "filed"
+    root_cause: "Qualified function calls lose paren context (e.g., Module::Name::func())"
+    status: "fixed"
     issue: "#2391"
-    note: "Tier 1: 15 files in issue at filing time; baseline now shows 70."
+    note: "Fixed via commit 4b16e2f3. Counts stale — run corpus ratchet."
 
   - id: "expected_module_name"
     category: "module"
     affected_files: 69
-    root_cause: "Module name parser fails on unusual package name forms"
-    status: "needs_investigation"
+    root_cause: "VString forms in use statements (e.g., use v5.10)"
+    status: "partial"
     issue: null
-    note: "Tier 1: 69 files. No issue filed."
+    note: "Partial fix via commit 5cbda340 (VString support in parse_use). 16 tests pass. CPAN corpus may need ratchet or have remaining edge cases."
 
   - id: "unclosed_brace_semicolon"
     category: "block"
