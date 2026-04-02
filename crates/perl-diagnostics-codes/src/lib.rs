@@ -147,6 +147,8 @@ pub enum DiagnosticCode {
     NumericComparisonWithUndef,
     /// printf/sprintf format specifier count does not match argument count
     PrintfFormatMismatch,
+    /// Statement that cannot be reached due to preceding unconditional exit
+    UnreachableCode,
 
     // Deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -228,6 +230,7 @@ impl DiagnosticCode {
             DiagnosticCode::AssignmentInCondition => "PL403",
             DiagnosticCode::NumericComparisonWithUndef => "PL404",
             DiagnosticCode::PrintfFormatMismatch => "PL405",
+            DiagnosticCode::UnreachableCode => "PL406",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::SecurityStringEval => "PL600",
@@ -284,6 +287,7 @@ impl DiagnosticCode {
             "PL403" => "https://docs.perl-lsp.org/errors/PL403",
             "PL404" => "https://docs.perl-lsp.org/errors/PL404",
             "PL405" => "https://docs.perl-lsp.org/errors/PL405",
+            "PL406" => "https://docs.perl-lsp.org/errors/PL406",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
@@ -353,6 +357,7 @@ impl DiagnosticCode {
 
             // Hints
             DiagnosticCode::UnusedImport
+            | DiagnosticCode::UnreachableCode
             | DiagnosticCode::CriticSeverity3
             | DiagnosticCode::CriticSeverity4
             | DiagnosticCode::CriticSeverity5 => DiagnosticSeverity::Hint,
@@ -364,7 +369,8 @@ impl DiagnosticCode {
         match self {
             DiagnosticCode::UnusedVariable
             | DiagnosticCode::UnusedParameter
-            | DiagnosticCode::UnusedImport => &[DiagnosticTag::Unnecessary],
+            | DiagnosticCode::UnusedImport
+            | DiagnosticCode::UnreachableCode => &[DiagnosticTag::Unnecessary],
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 &[DiagnosticTag::Deprecated]
             }
@@ -443,6 +449,10 @@ impl DiagnosticCode {
             DiagnosticCode::NumericComparisonWithUndef => Some(
                 "Comparing a potentially undefined value with a numeric operator \
                 produces a warning at runtime. Check for definedness first with `defined()`.",
+            ),
+            DiagnosticCode::UnreachableCode => Some(
+                "This statement cannot be executed because a preceding statement \
+                unconditionally exits (return, die, exit, croak). Remove or relocate it.",
             ),
             DiagnosticCode::PrintfFormatMismatch => Some(
                 "The number of format specifiers does not match the number of arguments. \
@@ -595,6 +605,7 @@ impl DiagnosticCode {
             "PL403" => Some(DiagnosticCode::AssignmentInCondition),
             "PL404" => Some(DiagnosticCode::NumericComparisonWithUndef),
             "PL405" => Some(DiagnosticCode::PrintfFormatMismatch),
+            "PL406" => Some(DiagnosticCode::UnreachableCode),
             "PL500" => Some(DiagnosticCode::DeprecatedDefined),
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
@@ -685,7 +696,8 @@ impl DiagnosticCode {
             | DiagnosticCode::ImplicitReturn
             | DiagnosticCode::AssignmentInCondition
             | DiagnosticCode::NumericComparisonWithUndef
-            | DiagnosticCode::PrintfFormatMismatch => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::PrintfFormatMismatch
+            | DiagnosticCode::UnreachableCode => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 DiagnosticCategory::Deprecated

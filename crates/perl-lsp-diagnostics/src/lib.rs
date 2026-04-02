@@ -57,6 +57,7 @@ pub use lints::missing_module;
 pub use lints::package_subroutine;
 pub use lints::security;
 pub use lints::strict_warnings;
+pub use lints::unreachable_code;
 pub use lints::unused_imports;
 pub use lints::version_compat;
 
