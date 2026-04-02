@@ -465,7 +465,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
             const newTrace = getTraceLevel();
-            client.setTrace(newTrace);
+            void client.setTrace(newTrace);
             outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
         }
 
@@ -679,7 +679,7 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         outputChannel.appendLine(`[startup] Language client failed to start: ${msg}`);
         stateChangeDisposable?.dispose();
         stateChangeDisposable = undefined;
-        try { client.dispose(); } catch { /* already dead */ }
+        try { void client.dispose(); } catch { /* already dead */ }
         client = undefined;
         healthWidget?.onStateChange(ClientState.Stopped);
         const choice = await vscode.window.showErrorMessage(
@@ -789,7 +789,7 @@ function createLanguageClient(serverPath: string): LanguageClient {
         serverOptions,
         clientOptions
     );
-    lc.setTrace(getTraceLevel());
+    void lc.setTrace(getTraceLevel());
     return lc;
 }
 
@@ -1260,6 +1260,6 @@ async function disposeLanguageClient() {
         const activeClient = client;
         client = undefined;
         await activeClient.stop();
-        activeClient.dispose();
+        void activeClient.dispose();
     }
 }
