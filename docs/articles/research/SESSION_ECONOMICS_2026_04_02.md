@@ -4,6 +4,7 @@
 **Duration**: ~5 hours (single session, ongoing)
 **Model**: Claude Opus 4.6 (1M context)
 **Operator**: Steven Zimmerman (orchestrator)
+**Session type**: Normal Claude Code run — not a special swarm event. Agent calls were natural parallelism for a release cleanup task that grew organically into multi-release build-out. This is roughly what a typical productive session looks like.
 
 ---
 
@@ -127,21 +128,28 @@ The blockers.yaml staleness is the most expensive: it caused the roadmap to plan
 
 **Implication**: Automated staleness detection for status files (corpus baselines, blocker ledgers, feature catalogs) would prevent this class of waste. Issue #2026 (automate corpus ratchet) addresses the parser baseline; similar automation for blockers.yaml would help.
 
-### 4. Targeted Deployment Beats Mass Parallelism
+### 4. This Was a Normal Session, Not a Swarm Event
 
-Comparing to session 6 (2026-03-22):
+This was not an orchestrated 200-agent swarm deployment. It was a normal Claude Code session — the user asked to do release cleanup, it naturally grew into multi-release planning, and agents were called as a normal tool for parallelizing independent work. The ~30 agents were spawned in 3 natural waves, not pre-planned.
 
-| Metric | Session 6 | This session | Ratio |
-|--------|-----------|-------------|-------|
+Comparing to session 6 (2026-03-22), which was a deliberate mass-swarm:
+
+| Metric | Session 6 (mass swarm) | This session (normal run) | Ratio |
+|--------|----------------------|--------------------------|-------|
 | Agents deployed | 200+ | ~30 | 0.15x |
 | PRs merged | 59 | 22 | 0.37x |
 | Weekly budget | 8% | 9% | 1.1x |
 | PRs per agent | 0.30 | 0.73 | 2.4x |
 | Bugs caught pre-merge | 0 (not tracked) | 4 | — |
+| Session type | Deliberate orchestrated swarm | Organic normal session | — |
 
-This session used 85% fewer agents but achieved 2.4x higher per-agent yield. The difference: full pipeline coverage (scout → plan-review → build → two-pass review → merge) vs. mass builder deployment with lighter review.
+The normal session had 2.4x higher per-agent yield. This likely reflects:
+- Agents were only spawned when there was clear, validated work to do
+- No speculative or exploratory mass-deployment
+- Full pipeline coverage happened naturally (review what you build)
+- The operator was making routing decisions interactively, not batch-dispatching
 
-Mass parallelism maximizes throughput when the work queue is well-defined and pre-validated. Targeted deployment maximizes quality and avoids waste when the work queue contains stale items.
+**Implication**: The economics of normal, interactive Claude Code usage with agents are already competitive with orchestrated swarm events — and possibly more efficient per unit of budget spent. The swarm model's advantage is raw throughput when the backlog is well-validated; the normal model's advantage is quality and waste avoidance.
 
 ### 5. The Orchestrator's Primary Job Is Routing, Not Building
 
