@@ -15,9 +15,9 @@
 
 ---
 
-## Session 1: Ad-Hoc Phase (0% → 75% session, 0% → ~40% weekly)
+## Session 1 (75% session consumed, 42% weekly at end)
 
-The first session started as release cleanup and grew organically into multi-release build-out. The approach evolved mid-session — early work was reactive (merge quickly, fix forward), later work adopted the proper pipeline (verify-before-build, full review, wait for CI).
+The full first session used 75% of a single 5-hour session window and brought the weekly total to 42%. The approach evolved mid-session: the early portion (~first half) was reactive and ad-hoc (merge quickly, fix forward), the later portion shifted to proper pipeline (verify-before-build, full review passes).
 
 ### What went well
 - 28 PRs merged, 48 issues closed
@@ -33,14 +33,25 @@ The first session started as release cleanup and grew organically into multi-rel
 - **First builder went off-scope**: Hook-fix builder created test files across 10+ unrelated crates before being redirected
 - **No CI gate on branch deletions**: Wasted ~55 min before discovering the hook bug
 
-### Economics
+### Economics (full session 1)
 - ~45 agents spawned across 6 waves
 - 23 of those discovered work already done (51% discovery rate)
 - 4 bugs caught by deep review (12-16x ROI on the review investment)
-- Budget: 75% of one 5-hour session window consumed
+- Budget: 75% of one 5-hour session, bringing weekly to 42%
+- Cost per merged PR: ~2.3% of session (75% / 33 PRs)
+- Cost per closed issue: ~1.5% of session (75% / 50 issues)
 
-### Pattern shift during session
-The first ~38% of session budget was ad-hoc: merge fast, fix CI blockers, reactive routing. After discovering the merged-red problem and the triage false positive, the back half shifted to the proper pipeline: verify issue state before spawning builders, require two-pass review, wait for CI. The back half had fewer wasted agents and higher per-PR quality.
+### How the session evolved
+
+**Phase 1 (~0-38% session, ~0-9% weekly):** Ad-hoc. Started with release cleanup (delete branches, close stale issue, fix git config). Grew into "let's build out the roadmap" and then "let's launch builders." Merged PRs on smoke-green without waiting for full CI gate. Discovered the merged-red problem, the triage false positive on #3020, and the worktree file leak pattern. Economics analysis began here — documenting what was happening as it happened.
+
+**Phase 2 (~38-60% session, ~9-40% weekly):** Transitional. Applied lessons from phase 1: started verifying issue state before spawning builders, added the "already-done" check to every builder prompt, launched triage agents to clean the issue backlog. Still merging fast but with two-pass review on feature PRs. The economics documentation thread itself consumed context during this phase.
+
+**Phase 3 (~60-75% session, ~40-42% weekly):** Close to pipeline. Proper verify-before-build on every agent, full review passes, issue triage running in parallel, learned rules applied consistently. Much closer to the structured swarm pipeline (scout→plan-review→build→review→merge). Fewer wasted agents, higher per-PR confidence. This is where the session found its rhythm.
+
+The key insight: **the session learned its own operating model in real-time.** The rules that worked best (verify-before-build, deep review, trust builders over triage) were discovered through failure in phase 1 and codified by phase 3.
+
+This document itself reflects the evolution — it went through 4 PRs (#3098 initial, #3099 closed due to conflict, #3101 with quality assessment, #3107 with session split) because it was being written and revised as the session progressed. Each revision incorporated lessons the session was still learning. The multi-stage PR creation for the economics doc consumed meaningful context, but the documentation-as-you-go approach captured insights that would have been lost in a post-hoc writeup.
 
 ---
 
