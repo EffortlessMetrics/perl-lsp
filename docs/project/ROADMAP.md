@@ -29,116 +29,36 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Found and filed: pre-push hook fires CI gate on branch deletions (#3081)
 - Found and fixed: `core.bare = true` corruption in `.git/config` (stale worktree interaction)
 
-## Active Milestone: v0.12.2 Stability Hardening
+## Completed: v0.12.2 Stability Hardening (shipped 2026-04-02)
 
-Focus: CI infrastructure improvements, dependency updates, and parser corpus
-confidence — close the gaps that make day-to-day development and release
-operations smoother without adding new user-facing features.
+- CI improvements: version sync gate (#3078), benchmark alerts (#3079), coverage baseline (#3080)
+- Pre-push hook fix (#3081, #3086), enforcement gaps (#3088), pipeline-labels race (#3100)
+- Error handling logging (#3087), test coverage batch (#3091)
+- 8 Dependabot PRs merged, perl-uri CI fix (#3084)
+- All 7 Tier 1 parser blockers confirmed fixed via scouts (#3085, #3096)
+- 10 PRs merged total
 
-### Track 1: CI & Infrastructure
+## Completed: v0.12.3 Diagnostic & Refactoring Hardening (shipped 2026-04-02)
 
-| Issue | Title | Status |
-|-------|-------|--------|
-| #3081 | Pre-push hook skip CI on branch deletion | filed |
-| #3078 | Version sync enforcement in merge gate | PR open |
-| #3079 | Benchmark regression alerts with real baselines | PR open |
-| #3080 | Parser branch coverage gate and baseline refresh | PR open |
-| #2027 | Version-check CI gate to prevent drift | research-verified |
-| #2026 | Automate corpus ratchet after parser fix merges | research-verified |
+- Dead code highlighting with DiagnosticTag::Unnecessary (#2060, PR #3092)
+- Perlcritic integration hardened: cached analyzer, walk-up discovery (#2018, PR #3097)
+- Strict/warnings diagnostics already implemented (PL100/PL101), catalogued in features.toml (#3095)
+- Subroutine inlining (#3040, PR #3083) — 4 bugs caught and fixed by deep review
+- Extract variable/subroutine (#3031, PR #3090)
+- Scoped rename already complete (#3037)
+- Moose/Moo method modifiers (#2328) and role composition (#2325) already implemented
+- DAP Phase 3 test suite (#435) already complete (20 tests, all AC criteria met)
+- 12 PRs merged + 6 issues discovered already-done
 
-### Track 2: Dependency Freshness
+## Active Milestone: v0.12.4 Diagnostics & Semantics
 
-7 Dependabot PRs pending review (#3064–#3071): `toml`, `insta`, `uuid`,
-`proptest`, `actions/deploy-pages`, `codecov/codecov-action`, and a grouped
-cargo update.
-
-### Track 3: Parser Corpus Confidence
-
-Target: raise CPAN clean rate from 72.1% toward 80%.
-
-| Blocker | Files | Issue | Status |
-|---------|-------|-------|--------|
-| `unexpected_token_in_expr` | 206 | — | needs investigation |
-| `unexpected_rbrace_expr` | 105 | #2189 | filed |
-| `unclosed_paren` | 99 | — | needs investigation |
-| `unexpected_comma_expr` | 98 | #2140 | filed |
-| `unexpected_rparen_expr` | 84 | — | needs investigation |
-| `unclosed_paren_identifier` | 70 | #2391 | filed |
-| `expected_module_name` | 69 | — | needs investigation |
-
-Focus for v0.12.2: scout and triage the top 3 uninvestigated blockers, land
-fixes for any that have straightforward root causes.
-
-### Track 4: Test & Error Handling Hygiene
-
-| Issue | Title |
-|-------|-------|
-| #3039 | Missing error path tests (should_panic) in critical runtime modules |
-| #3038 | Improve test error handling patterns to match production |
-| #3036 | Add trace logging for URI parsing failures |
-| #3032 | Log file re-indexing failures in workspace watcher |
-| #3029 | Log incremental parsing failures instead of silent fallback |
-| #3030 | Missing tests for lexer mode tracking |
-| #3024 | Missing tests for LSP error response builders |
-
-### Exit criteria
-
-- [ ] All 3 CI improvement PRs (#3078–#3080) merged
-- [ ] Pre-push hook branch-deletion fix (#3081) merged
-- [ ] Dependabot PRs reviewed and merged or closed
-- [ ] Top 3 uninvestigated parser blockers scouted with issues filed
-- [ ] CPAN clean rate holds or improves (baseline: 72.1%)
-- [ ] `nix develop -c just ci-gate` green
-- [ ] At least 3 error-handling hygiene issues closed
-
-## Next Milestone: v0.12.3 Diagnostic & Refactoring Hardening
-
-Focus: ship the diagnostic and refactoring features that make the editor
-experience materially better for daily Perl development.
-
-### Track 1: Diagnostics
+Remaining work:
 
 | Issue | Title | Status |
 |-------|-------|--------|
-| #2060 | Dead code highlighting with `DiagnosticTag::Unnecessary` | accuracy-reviewed |
-| #2018 | Integrate perlcritic for code quality diagnostics | accuracy-reviewed |
-| — | `strict` pragma enforcement diagnostics | roadmap (not filed) |
-| — | `warnings` pragma signal diagnostics | roadmap (not filed) |
-
-### Track 2: Refactoring
-
-| Issue | Title | Status |
-|-------|-------|--------|
-| #3037 | Complete scoped rename with scope filtering | plan-reviewed |
-| #3040 | Implement subroutine inlining for code actions | plan-reviewed |
-| #3031 | Implement extract variable/subroutine code actions | plan-reviewed |
-| #349 | Generate edits for extract variable/subroutine | plan-reviewed |
-| #1663 | Complete scoped rename + subroutine inlining | research-verified |
-
-### Track 3: Semantic Framework Coverage
-
-| Issue | Title | Status |
-|-------|-------|--------|
-| #3077 | Complete semantic framework coverage (inheritance, exports) | open |
-| #2328 | Moose/Moo method modifiers IDE support | known blocker |
-| #2325 | Moose/Moo role composition detection | known blocker |
-
-### Track 4: DAP Hardening
-
-| Issue | Title | Status |
-|-------|-------|--------|
-| #435 | DAP non-regression test suite (Phase 3) | in-build |
+| #3077 | Semantic framework coverage (inheritance, exports) | builder active |
 | #3028 | Cross-platform DAP continue/interrupt signal handling | open |
 | #3025 | DAP attach command for debugging existing processes | open |
-
-### Exit criteria
-
-- [ ] Dead code highlighting and perlcritic integration shipped
-- [ ] Workspace-scoped rename at GA
-- [ ] Extract variable/subroutine code actions at GA
-- [ ] Moose/Moo framework support (method modifiers + role composition) landed
-- [ ] DAP Phase 3 test suite complete
-- [ ] Parser CPAN clean rate ≥ 80%
 
 ### Supporting docs
 
@@ -148,26 +68,16 @@ experience materially better for daily Perl development.
 
 ## Now / Next / Later
 
-### Now (v0.12.2)
+### Now (v0.12.4 — finishing)
 
-- Merge 3 CI improvement PRs and 7 Dependabot PRs
-- Fix pre-push hook branch-deletion regression (#3081)
-- Scout top 3 uninvestigated parser blockers (206+99+84 affected files)
-- Close error-handling hygiene batch (#3029, #3032, #3036, #3038, #3039)
+- Semantic framework coverage (#3077) — builder active
+- DAP cross-platform signal handling (#3028) and attach command (#3025)
 
-### Next (v0.12.3)
+### Next (v0.12.5 — parser confidence)
 
-- Diagnostic hardening: dead code highlighting, perlcritic, `strict`, `warnings`
-- Refactoring reliability: workspace-scoped rename, extract variable/subroutine, subroutine inlining
-- Semantic framework coverage: Moose/Moo method modifiers and role composition
-- DAP Phase 3 test suite and cross-platform signal handling
-
-### Then (v0.12.4 — diagnostics & semantics)
-
-- Dead code highlighting (#2060), perlcritic integration (#2018)
-- `strict`/`warnings` enforcement diagnostics
-- Moose/Moo method modifiers (#2328), role composition (#2325)
-- Semantic framework coverage for inheritance and exports (#3077)
+- Corpus ratchet to get true post-fix baseline (all Tier 1 blockers fixed)
+- Quote-like operator parsing (#3020) and `state` keyword (#3033) — builders active
+- Remaining Tier 2/3 blocker fixes
 
 ### Then (v0.12.5 — parser confidence)
 

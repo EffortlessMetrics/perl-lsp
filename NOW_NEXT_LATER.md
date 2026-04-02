@@ -5,24 +5,23 @@ This file is the short planning snapshot for sequencing work. Use
 plan and [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for
 evidence-backed status and release facts.
 
-## NOW — v0.12.2 stability hardening
+## DONE — v0.12.2 stability + v0.12.3 diagnostics & refactoring (shipped 2026-04-02)
 
-- CI infrastructure: merge 3 CI improvement PRs (#3078–#3080) and 7 Dependabot PRs
-- Hook fix: pre-push hook skip CI gate on branch deletions (#3081)
-- Parser: scout top 3 uninvestigated blockers (206+99+84 affected CPAN files), target 80% clean rate
-- Hygiene: close error-handling and test-gap batch (#3029, #3032, #3036, #3038, #3039)
+- 27 PRs merged: CI gates, hook fix, error handling, test coverage, dep bumps
+- Diagnostics: dead code (PL406), perlcritic hardening, strict/warnings already done
+- Refactoring: subroutine inlining, extract var/sub, scoped rename already done
+- Moose/Moo, DAP Phase 3 all confirmed already implemented
 
-## NEXT — v0.12.3 diagnostic & refactoring hardening
+## NOW — v0.12.4 finishing + v0.12.5 parser confidence
 
-- Diagnostics: dead code highlighting (#2060), perlcritic integration (#2018), `strict`/`warnings` enforcement
-- Refactoring: workspace-scoped rename (#3037), extract variable/subroutine (#3031), subroutine inlining (#3040)
-- Frameworks: Moose/Moo method modifiers (#2328) and role composition (#2325)
-- DAP: Phase 3 test suite (#435), cross-platform signal handling (#3028), attach command (#3025)
+- Semantic framework coverage (#3077) — builder active
+- Parser: quote-like operators (#3020), state keyword (#3033) — builders active
+- Corpus ratchet needed to get true post-fix baseline (all Tier 1 blockers fixed)
+- DAP: cross-platform signals (#3028), attach command (#3025)
 
-## THEN — v0.12.4 parser & performance, v0.12.5 distribution
+## NEXT — v0.12.6 performance + v0.12.7 distribution
 
-- Parser corpus confidence: close Tier 1 blockers, target ≥85% CPAN clean rate
-- Performance: large-workspace startup (#2078), completion latency (#2077), memory profiling (#2085)
+- Performance: workspace startup (#2078), completion latency (#2077), CPAN-scale (#1664)
 - Distribution: Docker (#2083), Nix (#2081), Homebrew (#2086), Windows (#2596), Linux (#2095)
 - Supply chain: SBOM and SLSA provenance (#281)
 
