@@ -462,9 +462,42 @@ fn has_side_effects(body: &str) -> bool {
 }
 
 /// Check whether the body calls itself (direct recursion).
+///
+/// Skips occurrences of `sub_name(` that appear inside string literals to
+/// avoid false-positive recursion detection when the sub name is merely
+/// mentioned in a string (e.g. `my $msg = "add(1,2) adds two numbers"`).
 fn body_calls_self(body: &str, sub_name: &str) -> bool {
     let call_pattern = format!("{}(", sub_name);
-    body.contains(&call_pattern)
+    let bytes = body.as_bytes();
+    let mut pos = 0;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while pos < body.len() {
+        let b = bytes[pos];
+        match b {
+            b'\\' if in_single_quote || in_double_quote => {
+                pos += 2;
+                continue;
+            }
+            b'\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+                pos += 1;
+                continue;
+            }
+            b'"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+                pos += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if !in_single_quote && !in_double_quote && body[pos..].starts_with(&call_pattern) {
+            return true;
+        }
+        pos += body[pos..].chars().next().map_or(1, |c| c.len_utf8());
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------

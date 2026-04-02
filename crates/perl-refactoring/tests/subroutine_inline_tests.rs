@@ -326,3 +326,54 @@ fn test_collision_rename_decl_does_not_corrupt_sibling_variables() {
         "collision rename must not corrupt sibling variable $x_count; got: {inlined}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Edge case: recursion detection must not fire on sub name in string literals
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_recursion_detection_ignores_sub_name_in_string() {
+    // The sub body contains the sub name inside a string literal.
+    // body_calls_self must not treat this as actual recursion.
+    let source = r#"sub add {
+    my ($a, $b) = @_;
+    my $msg = "add(a,b) adds two numbers";
+    return $a + $b;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("add", "add(1, 2)");
+    assert!(
+        result.is_ok(),
+        "sub name in a string literal must not trigger Recursive rejection; got: {:?}",
+        result
+    );
+    let inlined = result.unwrap();
+    assert!(
+        inlined.contains("1 + 2") || inlined.contains("(1 + 2)"),
+        "inlined result should contain the substituted expression; got: {inlined}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Edge case: call argument containing a closing paren inside a string
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_inline_call_with_paren_in_string_argument() {
+    // The second argument is a string that contains ')' — the call-site parser
+    // must correctly identify the real closing paren, not the one inside the string.
+    let source = r#"sub greet {
+    my ($prefix, $name) = @_;
+    return $prefix . $name;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    // Second argument "hello)" contains ')' — naive paren-matching would split here
+    let result = inliner.inline_call("greet", r#"greet("Hi)", "World")"#);
+    assert!(
+        result.is_ok(),
+        "call with ')' inside a string argument must not fail; got: {:?}",
+        result
+    );
+}
