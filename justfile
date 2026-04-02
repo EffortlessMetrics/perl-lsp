@@ -1197,6 +1197,11 @@ coverage-branch-gate:
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
     @bash ./scripts/check-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
 
+# Refresh the checked-in coverage baseline from a fresh parser coverage snapshot.
+coverage-baseline-refresh:
+    @just coverage-lcov
+    @bash ./scripts/update-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
+
 # ============================================================================
 # Technical Debt Tracking (Issue #XXX)
 # ============================================================================
