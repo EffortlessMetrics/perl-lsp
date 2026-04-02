@@ -31,18 +31,6 @@ impl DebugAdapter {
     ) -> DapMessage {
         eprintln!("DAP request (mock): {} {:?}", command, arguments);
 
-        if command == "attach" {
-            let seq = self.next_seq();
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "attach".to_string(),
-                body: None,
-                message: Some("Attach not yet fully implemented".to_string()),
-            };
-        }
-
         let response = self.dispatch_request(request_seq, command, arguments);
         if command == "initialize" && Self::response_succeeded_for_command(&response, "initialize")
         {
