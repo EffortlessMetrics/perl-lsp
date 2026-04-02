@@ -132,7 +132,7 @@ impl CheckpointedIncrementalParser {
         CheckpointedIncrementalParser {
             source: String::new(),
             tree: None,
-            checkpoint_cache: CheckpointCache::new(10), // Keep 10 checkpoints
+            checkpoint_cache: CheckpointCache::new(50), // Keep 50 checkpoints for large files (#2080)
             token_cache: TokenCache::new(),
             stats: IncrementalStats::default(),
         }

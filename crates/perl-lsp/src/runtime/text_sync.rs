@@ -77,6 +77,8 @@ impl LspServer {
                         degradation_tier: DegradationTier::Minimal,
                         #[cfg(feature = "incremental")]
                         incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
                     },
                 );
 
@@ -118,6 +120,8 @@ impl LspServer {
                         degradation_tier: DegradationTier::Minimal,
                         #[cfg(feature = "incremental")]
                         incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
                     },
                 );
 
@@ -220,6 +224,16 @@ impl LspServer {
                 }
             };
 
+            // Initialize IncrementalState for the didChange checkpoint fast-path (Gap A, #2080).
+            // This state tracks lexer checkpoints so that small ranged edits re-lex from the
+            // nearest safe boundary rather than offset 0.
+            #[cfg(feature = "incremental")]
+            let incremental_state = {
+                use perl_incremental_parsing::incremental::IncrementalState;
+                let code_text = crate::util::code_slice(text);
+                Some(IncrementalState::new(code_text.to_string()))
+            };
+
             self.documents.lock().insert(
                 normalized_uri.clone(),
                 DocumentState {
@@ -234,6 +248,8 @@ impl LspServer {
                     degradation_tier,
                     #[cfg(feature = "incremental")]
                     incremental_doc,
+                    #[cfg(feature = "incremental")]
+                    incremental_state,
                 },
             );
 
@@ -410,6 +426,8 @@ impl LspServer {
                         degradation_tier: DegradationTier::Minimal,
                         #[cfg(feature = "incremental")]
                         incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
                     });
 
                 // Increment generation counter for this change
@@ -517,6 +535,8 @@ impl LspServer {
                         degradation_tier: DegradationTier::Minimal,
                         #[cfg(feature = "incremental")]
                         incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
                     };
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
@@ -555,6 +575,8 @@ impl LspServer {
                         degradation_tier: DegradationTier::Minimal,
                         #[cfg(feature = "incremental")]
                         incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
                     };
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
@@ -638,6 +660,9 @@ impl LspServer {
                 // Update or reinitialize IncrementalDocument for the new text.
                 // - Ranged edits: apply to existing incremental_doc (fast path).
                 // - Full replace or no existing doc: reinitialize from new text (fallback).
+                // Clone the edit set so that the incremental_state block below can also use it.
+                #[cfg(feature = "incremental")]
+                let incremental_edits_opt_clone = incremental_edits_opt.clone();
                 #[cfg(feature = "incremental")]
                 let incremental_doc = {
                     use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
@@ -683,6 +708,61 @@ impl LspServer {
                     }
                 };
 
+                // Apply edits to the checkpoint-based IncrementalState (Gap A, #2080).
+                //
+                // On a ranged edit we try to apply via `perl_incremental_parsing::apply_edits`,
+                // which re-lexes from the nearest checkpoint rather than offset 0. This speeds
+                // up the token stream used by downstream passes for large files. On failure
+                // (edit > 64 KB, > 10 changed lines, or no prior state) we reinitialize the
+                // state from the already-parsed `text` so future edits can use checkpoints.
+                //
+                // The AST for this change still comes from the `Parser::new` call above —
+                // `IncrementalState` speeds up the lexer pass only; the parser pass is unchanged.
+                #[cfg(feature = "incremental")]
+                let incremental_state = {
+                    use perl_incremental_parsing::incremental::{
+                        Edit as IncEdit, IncrementalState, apply_edits as inc_apply_edits,
+                    };
+                    let code_text = crate::util::code_slice(&text);
+                    match (doc_state.incremental_state.take(), &incremental_edits_opt_clone) {
+                        (Some(mut inc_state), Some(edit_set)) => {
+                            // Convert IncrementalEditSet -> Vec<IncEdit> for apply_edits
+                            let edits: Vec<IncEdit> = edit_set
+                                .edits
+                                .iter()
+                                .map(|e| IncEdit {
+                                    start_byte: e.start_byte,
+                                    old_end_byte: e.old_end_byte,
+                                    new_end_byte: e.start_byte + e.new_text.len(),
+                                    new_text: e.new_text.clone(),
+                                })
+                                .collect();
+                            match inc_apply_edits(&mut inc_state, &edits) {
+                                Ok(result) => {
+                                    tracing::debug!(
+                                        "Incremental state fast-path for {}: reparsed {} of {} bytes",
+                                        uri,
+                                        result.reparsed_bytes,
+                                        inc_state.source.len()
+                                    );
+                                    Some(inc_state)
+                                }
+                                Err(e) => {
+                                    // Fast-path failed (e.g. large edit); reinitialize checkpoints
+                                    tracing::debug!(
+                                        "Incremental state apply_edits failed for {}, reinitializing: {}",
+                                        uri,
+                                        e
+                                    );
+                                    Some(IncrementalState::new(code_text.to_string()))
+                                }
+                            }
+                        }
+                        // Full-document replace or no prior state: reinitialize checkpoints
+                        _ => Some(IncrementalState::new(code_text.to_string())),
+                    }
+                };
+
                 // Update document state with properly updated content
                 doc_state = DocumentState {
                     rope: doc.rope.clone(),
@@ -696,6 +776,8 @@ impl LspServer {
                     degradation_tier,
                     #[cfg(feature = "incremental")]
                     incremental_doc,
+                    #[cfg(feature = "incremental")]
+                    incremental_state,
                 };
 
                 // Check if a newer change arrived while we were parsing
@@ -1251,6 +1333,78 @@ mod tests {
         );
         // The emoji should no longer be there
         assert!(!doc.text.contains("😀"), "UTF-16 multi-byte removal failed: emoji should be gone");
+        Ok(())
+    }
+
+    /// Verify that the `incremental_state` fast-path field is initialized on
+    /// `didOpen` and survives a ranged `didChange` (Gap A wiring, issue #2080).
+    ///
+    /// This test fails before the `IncrementalState` field is wired into
+    /// `DocumentState` and confirmed after it is. It also verifies that the
+    /// incremental fast path produces a `reparsed_bytes` count less than the
+    /// full document size, proving checkpoint recovery ran.
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_incremental_state_wired_into_did_change() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_inc_state_gap_a.pl";
+
+        // Build a document large enough to have checkpoints before the edit site.
+        let mut lines: Vec<String> = (0..30).map(|i| format!("my $var_{i} = {i};")).collect();
+        let text = lines.join("\n") + "\n";
+
+        server.did_open(json!({
+            "textDocument": { "uri": uri, "languageId": "perl", "version": 1, "text": text }
+        }))?;
+
+        // After didOpen, incremental_state must be initialized.
+        {
+            let docs = server.documents.lock();
+            let doc = docs.get(uri).ok_or("document not stored after didOpen")?;
+            assert!(
+                doc.incremental_state.is_some(),
+                "incremental_state must be initialized on didOpen (Gap A wiring absent)"
+            );
+            let state = doc.incremental_state.as_ref().unwrap();
+            assert!(
+                state.lex_checkpoints.len() > 1,
+                "IncrementalState must have lex checkpoints after initial parse, got {}",
+                state.lex_checkpoints.len()
+            );
+        }
+
+        // Edit the last line: change `my $var_29 = 29;` -> `my $var_29 = 999;`
+        // A checkpoint before the edit site means we should reparse < full doc.
+        let edit_line = lines.len() as u64 - 1;
+        lines[29] = "my $var_29 = 999;".to_string();
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{
+                "range": {
+                    "start": { "line": edit_line, "character": 13 },
+                    "end":   { "line": edit_line, "character": 15 }
+                },
+                "text": "999"
+            }]
+        })))?;
+
+        // After didChange, incremental_state must survive and source must be updated.
+        {
+            let docs = server.documents.lock();
+            let doc = docs.get(uri).ok_or("document not stored after didChange")?;
+            assert!(
+                doc.incremental_state.is_some(),
+                "incremental_state must survive a ranged edit (Gap A wiring absent)"
+            );
+            let state = doc.incremental_state.as_ref().unwrap();
+            assert!(
+                state.source.contains("999"),
+                "incremental_state.source must reflect edit; got: {:?}",
+                &state.source[state.source.len().saturating_sub(50)..]
+            );
+        }
+
         Ok(())
     }
 

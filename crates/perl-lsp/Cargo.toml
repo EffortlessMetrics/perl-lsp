@@ -116,7 +116,7 @@ toml = "1.1.0"
 workspace = true
 
 [features]
-default = ["workspace"]  # Enable workspace indexing by default for cross-file features
+default = ["workspace", "incremental"]  # Enable workspace indexing and incremental parsing by default
 workspace = []  # Workspace-wide indexing for cross-file features
 incremental = ["perl-parser/incremental", "perl-incremental-parsing"]  # Incremental parsing support
 test-performance = []  # Performance optimizations for test environments
