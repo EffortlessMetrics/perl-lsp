@@ -1457,6 +1457,9 @@ has 'level' => (is => 'ro');
         let models = build_models(code);
         let model = find_model(&models, "Child").expect("Child model");
         assert_eq!(model.framework, Framework::Moose, "Moose must not be downgraded to PlainOO");
-        assert!(model.parents.contains(&"Extra".to_string()), "push @ISA parent must still be captured");
+        assert!(
+            model.parents.contains(&"Extra".to_string()),
+            "push @ISA parent must still be captured"
+        );
     }
 }
