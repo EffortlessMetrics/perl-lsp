@@ -2,6 +2,7 @@
 //!
 //! This module handles operators like s///, tr///, and m// that require
 //! context-sensitive parsing to distinguish from regular identifiers.
+//! It also handles quote-like operators: q, qq, qw, qr, qx.
 
 /// Context-sensitive token types
 #[derive(Debug, Clone, PartialEq)]
@@ -31,18 +32,6 @@ pub enum ContextToken {
         flags: String,
     },
     Identifier(String),
-}
-
-/// Return the matching close delimiter for a paired open delimiter, or `None`
-/// if the character is not a paired delimiter.
-fn paired_close(open: char) -> Option<char> {
-    match open {
-        '(' => Some(')'),
-        '[' => Some(']'),
-        '{' => Some('}'),
-        '<' => Some('>'),
-        _ => None,
-    }
 }
 
 /// Context-sensitive lexer for Perl operators
@@ -232,7 +221,7 @@ impl ContextSensitiveLexer {
         };
         self.next_char(); // consume opening delimiter
 
-        // For paired delimiters, the close is the matching bracket; otherwise
+        // For paired delimiters the close is the matching bracket; otherwise
         // the same character closes the construct.
         let close_delim = paired_close(open_delim).unwrap_or(open_delim);
         let is_paired = paired_close(open_delim).is_some();
@@ -241,8 +230,8 @@ impl ContextSensitiveLexer {
         let content = if is_paired {
             self.parse_paired(open_delim, close_delim)?
         } else {
-            // For symmetric delimiters treat as non-nested (backslash escapes
-            // are honoured so that e.g. q/foo\/bar/ works).
+            // For symmetric delimiters backslash escapes are honoured so that
+            // e.g. q/foo\/bar/ works.
             self.parse_until_delimiter(close_delim, true)?
         };
 
@@ -351,6 +340,17 @@ impl ContextSensitiveLexer {
             }
         }
         flags
+    }
+}
+
+/// Get the paired closing delimiter for an opening delimiter
+fn paired_close(open: char) -> Option<char> {
+    match open {
+        '(' => Some(')'),
+        '[' => Some(']'),
+        '{' => Some('}'),
+        '<' => Some('>'),
+        _ => None,
     }
 }
 
@@ -474,7 +474,7 @@ mod tests {
                 assert_eq!(content, "ls -la");
                 assert_eq!(flags, "");
             }
-            _ => unreachable!("Failed to parse qx/.../  operator"),
+            _ => unreachable!("Failed to parse qx/.../ operator"),
         }
     }
 
@@ -566,7 +566,7 @@ mod tests {
                 assert_eq!(content, "it\\'s a test");
                 assert_eq!(flags, "");
             }
-            _ => unreachable!("Failed to parse q/.../  with escaped delimiter"),
+            _ => unreachable!("Failed to parse q/.../ with escaped delimiter"),
         }
     }
 
