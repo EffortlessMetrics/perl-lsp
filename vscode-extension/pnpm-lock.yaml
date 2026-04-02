@@ -12,8 +12,8 @@ importers:
         specifier: ^0.5.16
         version: 0.5.16
       tar:
-        specifier: ^7.5.12
-        version: 7.5.12
+        specifier: ^7.5.13
+        version: 7.5.13
       vscode-languageclient:
         specifier: ^9.0.1
         version: 9.0.1
@@ -2111,8 +2111,8 @@ packages:
     resolution: {integrity: sha512-ujeqbceABgwMZxEJnk2HDY2DlnUZ+9oEcb1KzTVfYHio0UE6dG71n60d8D2I4qNvleWrrXpmjpt7vZeF1LnMZQ==}
     engines: {node: '>=6'}
 
-  tar@7.5.12:
-    resolution: {integrity: sha512-9TsuLcdhOn4XztcQqhNyq1KOwOOED/3k58JAvtULiYqbO8B/0IBAAIE1hj0Svmm58k27TmcigyDI0deMlgG3uw==}
+  tar@7.5.13:
+    resolution: {integrity: sha512-tOG/7GyXpFevhXVh8jOPJrmtRpOTsYqUIkVdVooZYJS/z8WhfQUX8RJILmeuJNinGAMSu1veBr4asSHFt5/hng==}
     engines: {node: '>=18'}
 
   terminal-link@4.0.0:
@@ -3062,7 +3062,7 @@ snapshots:
 
   '@types/tar@7.0.87':
     dependencies:
-      tar: 7.5.12
+      tar: 7.5.13
 
   '@types/vscode@1.110.0': {}
 
@@ -4852,7 +4852,7 @@ snapshots:
       readable-stream: 3.6.2
     optional: true
 
-  tar@7.5.12:
+  tar@7.5.13:
     dependencies:
       '@isaacs/fs-minipass': 4.0.1
       chownr: 3.0.0
