@@ -1421,6 +1421,15 @@ has 'level' => (is => 'ro');
         assert_eq!(model.export_ok, vec!["util_a".to_string(), "util_b".to_string()]);
     }
 
+    #[test]
+    fn export_assignment_without_our() {
+        // Symmetric to export_ok_assignment_without_our: bare `@EXPORT = qw(...)` form.
+        let code = "package MyLib;\n@EXPORT = qw(func_a func_b);\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "MyLib").expect("MyLib model");
+        assert_eq!(model.exports, vec!["func_a".to_string(), "func_b".to_string()]);
+    }
+
     // ---- Gap 2: push @ISA ----
 
     #[test]
@@ -1439,5 +1448,15 @@ has 'level' => (is => 'ro');
         let model = find_model(&models, "Child").expect("Child model");
         assert!(model.parents.contains(&"Base1".to_string()));
         assert!(model.parents.contains(&"Base2".to_string()));
+    }
+
+    #[test]
+    fn push_isa_does_not_downgrade_moose_framework() {
+        // If a package already uses Moose, push @ISA must not overwrite to PlainOO.
+        let code = "package Child;\nuse Moose;\nextends 'Base';\npush @ISA, 'Extra';\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert_eq!(model.framework, Framework::Moose, "Moose must not be downgraded to PlainOO");
+        assert!(model.parents.contains(&"Extra".to_string()), "push @ISA parent must still be captured");
     }
 }
