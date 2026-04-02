@@ -34,7 +34,6 @@
 
 use url::Url;
 
-
 /// Convert a `file://` URI to a filesystem path.
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,
