@@ -1,6 +1,7 @@
 //! Refactoring and modernization helpers.
 
 pub mod import_optimizer;
+pub mod inline;
 pub mod modernize;
 pub mod modernize_refactored;
 pub mod refactoring;
