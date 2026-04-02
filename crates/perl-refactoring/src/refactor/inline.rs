@@ -387,37 +387,67 @@ fn parse_param_names(line: &str) -> Vec<String> {
 // ---------------------------------------------------------------------------
 
 /// Count occurrences of the `return` keyword as a standalone token in `body`.
+///
+/// Skips occurrences inside single- or double-quoted string literals so that
+/// `my $msg = "will return a value";` is not counted as a return statement.
 fn count_return_statements(body: &str) -> usize {
     let mut count = 0usize;
     let mut pos = 0;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let bytes = body.as_bytes();
+
     while pos < body.len() {
-        let rest = &body[pos..];
-        if let Some(idx) = rest.find("return") {
-            let abs = pos + idx;
-            // Check character before
-            let before_ok = if abs > 0 {
-                let b = body.as_bytes()[abs - 1];
-                !b.is_ascii_alphanumeric() && b != b'_'
-            } else {
-                true
-            };
-            // Check character after
-            let after_ok = {
-                let after_pos = abs + 6;
-                if after_pos < body.len() {
-                    let b = body.as_bytes()[after_pos];
-                    !b.is_ascii_alphanumeric() && b != b'_'
+        let b = bytes[pos];
+
+        // Track string context — handle backslash escapes
+        match b {
+            b'\\' if in_single_quote || in_double_quote => {
+                // Skip escaped character
+                pos += 2;
+                continue;
+            }
+            b'\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+                pos += 1;
+                continue;
+            }
+            b'"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+                pos += 1;
+                continue;
+            }
+            _ => {}
+        }
+
+        // Only count `return` tokens outside string literals
+        if !in_single_quote && !in_double_quote {
+            let rest = &body[pos..];
+            if rest.starts_with("return") {
+                // Check character before
+                let before_ok = if pos > 0 {
+                    let prev = bytes[pos - 1];
+                    !prev.is_ascii_alphanumeric() && prev != b'_'
                 } else {
                     true
+                };
+                // Check character after
+                let after_pos = pos + 6;
+                let after_ok = if after_pos < body.len() {
+                    let next = bytes[after_pos];
+                    !next.is_ascii_alphanumeric() && next != b'_'
+                } else {
+                    true
+                };
+                if before_ok && after_ok {
+                    count += 1;
                 }
-            };
-            if before_ok && after_ok {
-                count += 1;
+                pos += 6;
+                continue;
             }
-            pos += idx + 6;
-        } else {
-            break;
         }
+
+        pos += body[pos..].chars().next().map_or(1, |c| c.len_utf8());
     }
     count
 }
@@ -432,9 +462,42 @@ fn has_side_effects(body: &str) -> bool {
 }
 
 /// Check whether the body calls itself (direct recursion).
+///
+/// Skips occurrences of `sub_name(` that appear inside string literals to
+/// avoid false-positive recursion detection when the sub name is merely
+/// mentioned in a string (e.g. `my $msg = "add(1,2) adds two numbers"`).
 fn body_calls_self(body: &str, sub_name: &str) -> bool {
     let call_pattern = format!("{}(", sub_name);
-    body.contains(&call_pattern)
+    let bytes = body.as_bytes();
+    let mut pos = 0;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while pos < body.len() {
+        let b = bytes[pos];
+        match b {
+            b'\\' if in_single_quote || in_double_quote => {
+                pos += 2;
+                continue;
+            }
+            b'\'' if !in_double_quote => {
+                in_single_quote = !in_single_quote;
+                pos += 1;
+                continue;
+            }
+            b'"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+                pos += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if !in_single_quote && !in_double_quote && body[pos..].starts_with(&call_pattern) {
+            return true;
+        }
+        pos += body[pos..].chars().next().map_or(1, |c| c.len_utf8());
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -551,7 +614,12 @@ fn split_args(args_str: &str) -> Vec<String> {
 // ---------------------------------------------------------------------------
 
 /// Replace occurrences of `$param_name` in `body` with the corresponding
-/// argument text.  Sorted by descending name length to avoid partial matches.
+/// argument text.
+///
+/// Uses word-boundary-aware replacement to avoid corrupting longer variable
+/// names that share a prefix with a parameter (e.g. replacing `$price` must
+/// not corrupt `$price_adjusted`).  Sorted by descending name length so that
+/// longer names are never shadowed by shorter prefix matches.
 fn substitute_params(body: &str, sub_map: &HashMap<String, String>) -> String {
     let mut result = body.to_string();
     let mut pairs: Vec<(&String, &String)> = sub_map.iter().collect();
@@ -559,7 +627,7 @@ fn substitute_params(body: &str, sub_map: &HashMap<String, String>) -> String {
 
     for (param, arg) in pairs {
         let var = format!("${}", param);
-        result = result.replace(&var, arg);
+        result = replace_whole_var(&result, &var, arg);
     }
     result
 }
@@ -574,8 +642,9 @@ fn rename_collisions(body: &str, outer_vars: &[String]) -> String {
         if result.contains(&my_decl) {
             let renamed_bare = format!("{}_inlined", bare);
             let renamed_decl = format!("my ${}", renamed_bare);
-            // Replace the declaration first
-            result = result.replace(&my_decl, &renamed_decl);
+            // Replace the declaration first — use word-boundary-aware replacement so
+            // that "my $x" does not corrupt "my $x_count" when the outer var is "$x".
+            result = replace_whole_var(&result, &my_decl, &renamed_decl);
             // Then replace all uses of $bare that are not the new $bare_inlined
             // We do this by replacing "$bare" with "$bare_inlined" across the body,
             // but we already renamed the declaration above so the decl is safe.
