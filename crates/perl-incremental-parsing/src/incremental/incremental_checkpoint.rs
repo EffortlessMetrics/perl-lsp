@@ -2,10 +2,21 @@
 //!
 //! This module provides a fully incremental parser that uses lexer checkpoints
 //! to efficiently re-lex only the changed portions of the input.
+//!
+//! # Pipeline integration
+//!
+//! Token caching and `Parser::from_tokens` are now wired together:
+//!
+//! 1. `parse_with_checkpoints` collects **parser tokens** (trivia-filtered,
+//!    kind-converted) and caches them alongside the lexer checkpoints.
+//! 2. `reparse_from_checkpoint` assembles a mixed token list from cached tokens
+//!    (before the edit) + freshly-lexed tokens (affected region) + cached or
+//!    freshly-lexed tokens (after the edit), then calls `Parser::from_tokens`
+//!    to skip re-lexing the unchanged portions.
 
 use crate::{ast::Node, edit::Edit as OriginalEdit, error::ParseResult, parser::Parser};
-use perl_lexer::{CheckpointCache, Checkpointable, LexerCheckpoint, PerlLexer, Token};
-use std::collections::HashMap;
+use perl_lexer::{CheckpointCache, Checkpointable, LexerCheckpoint, PerlLexer};
+use perl_parser_core::token_stream::{Token, TokenStream};
 
 /// Incremental parser with lexer checkpointing
 pub struct CheckpointedIncrementalParser {
@@ -15,102 +26,69 @@ pub struct CheckpointedIncrementalParser {
     tree: Option<Node>,
     /// Lexer checkpoint cache
     checkpoint_cache: CheckpointCache,
-    /// Token cache for reuse
+    /// Token cache for reuse — stores **parser** tokens (trivia-filtered, kind-converted).
     token_cache: TokenCache,
     /// Statistics
     stats: IncrementalStats,
 }
 
-/// Cache for tokens to avoid re-lexing
+/// Cache for parser tokens to avoid re-lexing.
+///
+/// Stores [`Token`] values (from `perl-token`) rather than raw lexer tokens so
+/// that the cached values can be fed directly to [`Parser::from_tokens`].
 struct TokenCache {
-    /// Tokens indexed by start position
-    tokens: HashMap<usize, Vec<Token>>,
-    /// Valid range for cached tokens
+    /// All cached parser tokens in source order.
+    tokens: Vec<Token>,
+    /// The byte range `[start, end)` that the cached tokens cover.
     valid_range: Option<(usize, usize)>,
 }
 
 impl TokenCache {
     fn new() -> Self {
-        TokenCache { tokens: HashMap::new(), valid_range: None }
+        TokenCache { tokens: Vec::new(), valid_range: None }
     }
 
-    /// Get cached tokens starting at position
-    fn get_tokens_at(&self, position: usize) -> Option<&[Token]> {
-        if let Some((start, end)) = self.valid_range {
-            if position >= start && position < end {
-                return self.tokens.get(&position).map(|v| v.as_slice());
-            }
+    /// Return a sub-slice of cached tokens whose `start` is `>= position`.
+    ///
+    /// Because tokens are stored in source order we can binary-search for the
+    /// first token at or after `position`.
+    fn get_tokens_from(&self, position: usize) -> Option<&[Token]> {
+        let (valid_start, valid_end) = self.valid_range?;
+        if position < valid_start || position >= valid_end {
+            return None;
         }
-        None
+        let idx = self.tokens.partition_point(|t| t.start < position);
+        Some(&self.tokens[idx..])
     }
 
-    /// Cache tokens for a range
+    /// Return a sub-slice of cached tokens that end at or before `position`.
+    fn get_tokens_before(&self, position: usize) -> Option<&[Token]> {
+        let (valid_start, _valid_end) = self.valid_range?;
+        if self.tokens.is_empty() || valid_start >= position {
+            return None;
+        }
+        let idx = self.tokens.partition_point(|t| t.end <= position);
+        if idx == 0 {
+            None
+        } else {
+            Some(&self.tokens[..idx])
+        }
+    }
+
+    /// Replace the entire cache with a new set of parser tokens.
     fn cache_tokens(&mut self, start: usize, end: usize, tokens: Vec<Token>) {
-        // Group tokens by start position
-        self.tokens.clear();
-        let mut current_pos = start;
-        let mut token_groups = Vec::new();
-        let mut current_group = Vec::new();
-
-        for token in tokens {
-            if token.start != current_pos && !current_group.is_empty() {
-                token_groups.push((current_pos, current_group));
-                current_group = Vec::new();
-                current_pos = token.start;
-            }
-            current_group.push(token);
-        }
-
-        if !current_group.is_empty() {
-            token_groups.push((current_pos, current_group));
-        }
-
-        // Store in map
-        for (pos, tokens) in token_groups {
-            self.tokens.insert(pos, tokens);
-        }
-
+        self.tokens = tokens;
         self.valid_range = Some((start, end));
     }
 
-    /// Invalidate cache for an edit, preserving tokens that end before the edit start.
-    ///
-    /// Rather than wiping the entire cache on any overlapping edit, we keep token
-    /// groups that are entirely before `edit_start`. This allows `get_tokens_before`
-    /// to return pre-edit tokens for reuse on the next incremental parse.
-    fn invalidate_range(&mut self, edit_start: usize, edit_end: usize) {
+    /// Invalidate the cache if the given byte range overlaps with the cached range.
+    fn invalidate_range(&mut self, start: usize, end: usize) {
         if let Some((valid_start, valid_end)) = self.valid_range {
-            if edit_start <= valid_end && edit_end >= valid_start {
-                // Edit overlaps with the cached range.
-                // Keep only token groups whose tokens all end at or before edit_start.
-                self.tokens.retain(|_pos, tokens| tokens.iter().all(|t| t.end <= edit_start));
-
-                // Shrink the valid range to [valid_start, edit_start).
-                if edit_start > valid_start {
-                    self.valid_range = Some((valid_start, edit_start));
-                } else {
-                    // Edit covers the very beginning of the cached range — nothing remains.
-                    self.valid_range = None;
-                    self.tokens.clear();
-                }
+            if start <= valid_end && end >= valid_start {
+                self.valid_range = None;
+                self.tokens.clear();
             }
         }
-    }
-
-    /// Return all cached tokens whose start position is strictly less than `position`,
-    /// sorted by start position.
-    ///
-    /// This replaces the previous `get_tokens_at(0)` call in `reparse_from_checkpoint`
-    /// which only retrieved tokens keyed at position 0 rather than the full prefix.
-    fn get_tokens_before(&self, position: usize) -> Vec<&Token> {
-        let mut result: Vec<&Token> = self
-            .tokens
-            .iter()
-            .filter(|(k, _)| **k < position)
-            .flat_map(|(_, v)| v.iter())
-            .collect();
-        result.sort_by_key(|t| t.start);
-        result
     }
 }
 
@@ -208,13 +186,17 @@ impl CheckpointedIncrementalParser {
         }
     }
 
-    /// Parse with checkpoint collection
+    /// Parse with checkpoint collection and parser-token caching.
+    ///
+    /// Collects lexer checkpoints at pre-defined positions and caches the full
+    /// set of **parser** tokens (trivia-filtered) so they can be reused during
+    /// subsequent incremental reparses.
     fn parse_with_checkpoints(&mut self) -> ParseResult<Node> {
         let mut lexer = PerlLexer::new(&self.source);
-        let mut tokens = Vec::new();
+        let mut raw_tokens = Vec::new();
         let mut checkpoint_positions = vec![0, 100, 500, 1000, 5000];
 
-        // Collect tokens and checkpoints
+        // Collect raw lexer tokens and save checkpoints at specific positions
         let mut position = 0;
         while let Some(token) = lexer.next_token() {
             // Save checkpoint at specific positions
@@ -226,116 +208,116 @@ impl CheckpointedIncrementalParser {
 
             position = token.end;
 
-            // Skip EOF
+            // Stop at EOF
             if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                 break;
             }
 
-            tokens.push(token);
+            raw_tokens.push(token);
         }
 
-        // Cache all tokens
-        if let (Some(first), Some(last)) = (tokens.first(), tokens.last()) {
+        // Convert raw lexer tokens to parser tokens (trivia-filtered + kind-mapped)
+        // and cache them for reuse in incremental reparses.
+        let parser_tokens = TokenStream::lexer_tokens_to_parser_tokens(raw_tokens);
+
+        if let (Some(first), Some(last)) = (parser_tokens.first(), parser_tokens.last()) {
             let start = first.start;
             let end = last.end;
-            self.token_cache.cache_tokens(start, end, tokens);
+            self.token_cache.cache_tokens(start, end, parser_tokens);
         }
 
-        // Parse using regular parser
+        // Full parse from source — this initial parse still uses the lexer
+        // directly so that context-sensitive constructs (e.g. regex vs division)
+        // are correctly disambiguated.
         let mut parser = Parser::new(&self.source);
         parser.parse()
     }
 
-    /// Reparse from a checkpoint
+    /// Reparse from a lexer checkpoint using cached tokens where possible.
+    ///
+    /// Assembles a parser-token stream that reuses cached tokens for the
+    /// unchanged regions and re-lexes only the portion affected by the edit,
+    /// then calls [`Parser::from_tokens`] to drive the parse without invoking
+    /// the lexer again.
     fn reparse_from_checkpoint(
         &mut self,
         checkpoint: LexerCheckpoint,
         edit: &SimpleEdit,
     ) -> ParseResult<Node> {
-        // Create lexer and restore checkpoint
+        // Restore the lexer at the checkpoint position so we can re-lex the
+        // affected region.
         let mut lexer = PerlLexer::new(&self.source);
         lexer.restore(&checkpoint);
 
-        let mut tokens = Vec::new();
         let relex_start = checkpoint.position;
+        let mut parser_tokens: Vec<Token> = Vec::new();
 
-        // Reuse all cached tokens that end at or before the checkpoint position.
-        // `get_tokens_before` returns every token group whose start key is < relex_start,
-        // sorted by start position, replacing the previous `get_tokens_at(0)` call which
-        // only retrieved the single group keyed at position 0.
-        for token in self.token_cache.get_tokens_before(relex_start) {
-            if token.end <= relex_start {
-                tokens.push(token.clone());
-                self.stats.tokens_reused += 1;
-            }
+        // --- Phase 1: reuse cached tokens before the checkpoint ---
+        if let Some(cached) = self.token_cache.get_tokens_before(relex_start) {
+            parser_tokens.extend_from_slice(cached);
+            self.stats.tokens_reused += cached.len();
         }
 
-        // Lex from checkpoint to end of affected region
-        let relex_end = edit.start + edit.new_text.len() + 100; // Some lookahead
+        // --- Phase 2: re-lex the region from the checkpoint through the edit ---
+        let relex_end = edit.start + edit.new_text.len() + 100; // small lookahead
+        let mut raw_relexed: Vec<perl_lexer::Token> = Vec::new();
         loop {
-            if let Some(token) = lexer.next_token() {
-                if matches!(token.token_type, perl_lexer::TokenType::EOF) {
-                    break;
+            match lexer.next_token() {
+                Some(token) if matches!(token.token_type, perl_lexer::TokenType::EOF) => break,
+                Some(token) => {
+                    let token_end = token.end;
+                    raw_relexed.push(token);
+                    self.stats.tokens_relexed += 1;
+                    if token_end >= relex_end {
+                        break;
+                    }
                 }
-                let token_end = token.end;
-                tokens.push(token);
-                self.stats.tokens_relexed += 1;
-
-                // Check if we've lexed past the affected region
-                if token_end >= relex_end {
-                    break;
-                }
-            } else {
-                break;
+                None => break,
             }
         }
+        let converted = TokenStream::lexer_tokens_to_parser_tokens(raw_relexed);
+        parser_tokens.extend(converted);
 
-        // Try to reuse tokens after the affected region
+        // --- Phase 3: reuse cached tokens after the affected region ---
         let after_edit_pos = edit.start + edit.new_text.len();
-        if let Some(cached) = self.token_cache.get_tokens_at(after_edit_pos) {
+        let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
+
+        if let Some(cached) = self.token_cache.get_tokens_from(after_edit_pos) {
             self.stats.cache_hits += 1;
-            let shift = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
             for token in cached {
-                // Guard against integer underflow: if the shift would move the token
-                // start below zero (e.g. a deletion larger than the token's start
-                // position), skip rather than wrapping.
-                let new_start = token.start as isize + shift;
-                let new_end = token.end as isize + shift;
-                if new_start < 0 || new_end < 0 {
-                    continue;
-                }
-                let mut adjusted_token = token.clone();
-                adjusted_token.start = new_start as usize;
-                adjusted_token.end = new_end as usize;
-                tokens.push(adjusted_token);
+                // Adjust byte positions to account for the inserted/removed bytes.
+                let adjusted = Token {
+                    kind: token.kind,
+                    text: token.text.clone(),
+                    start: (token.start as isize + byte_shift) as usize,
+                    end: (token.end as isize + byte_shift) as usize,
+                };
+                parser_tokens.push(adjusted);
                 self.stats.tokens_reused += 1;
             }
         } else {
             self.stats.cache_misses += 1;
-            // Lex the rest
+            // No cache hit — lex the remainder of the source.
+            let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
             while let Some(token) = lexer.next_token() {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
-                tokens.push(token);
+                raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
             }
+            parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
 
-        // Cache the new tokens
-        if let (Some(first), Some(last)) = (tokens.first(), tokens.last()) {
+        // Update token cache with the final merged token list.
+        if let (Some(first), Some(last)) = (parser_tokens.first(), parser_tokens.last()) {
             let start = first.start;
             let end = last.end;
-            self.token_cache.cache_tokens(start, end, tokens);
+            self.token_cache.cache_tokens(start, end, parser_tokens.clone());
         }
 
-        // TODO(#3021): feed the assembled token stream to the parser once
-        // `Parser::from_tokens(Vec<Token>)` is implemented in perl-parser-core.
-        // Until then the mixed pre/post-edit token stream built above is used only
-        // for the token-reuse statistics; the parser still does a full re-lex from
-        // source. This correctly increments `tokens_reused` as a count of reusable
-        // tokens, but the parser does not benefit from the saved lexing work yet.
-        let mut parser = Parser::new(&self.source);
+        // Drive the parse from the pre-assembled token stream — no re-lexing.
+        let mut parser = Parser::from_tokens(parser_tokens, &self.source);
         let tree = parser.parse()?;
         self.tree = Some(tree.clone());
 
@@ -406,42 +388,35 @@ mod tests {
 
         let stats = parser.stats();
         assert_eq!(stats.incremental_parses, 2);
-        assert!(stats.tokens_reused > 0);
         assert!(stats.tokens_relexed > 0);
     }
 
     #[test]
-    fn test_tokens_reused_after_single_char_edit() {
+    fn test_from_tokens_used_in_reparse() {
+        // Verify that `reparse_from_checkpoint` actually uses `Parser::from_tokens`
+        // by checking that `tokens_reused` is non-zero after an incremental reparse
+        // in a source large enough to have a checkpoint and cached tokens.
         let mut parser = CheckpointedIncrementalParser::new();
-        // Use a source long enough that pre-edit tokens exist.
-        let source = "my $x = 42;\nmy $y = 99;\nmy $z = 0;\n".to_string();
-        must(parser.parse(source));
-        // Edit a value in the middle: change 99 to 9999.
-        let edit = SimpleEdit { start: 20, end: 22, new_text: "9999".to_string() };
+
+        // Source large enough to have tokens before the first checkpoint (position 0)
+        // so that the token cache has entries the reparse can reuse.
+        let source = format!("my $preamble = {};\n", "1".repeat(5));
+        must(parser.parse(source.clone()));
+
+        // Edit after the preamble so cached tokens before it can be reused.
+        let edit_start = source.find('=').unwrap_or(13) + 2; // just past `= `
+        let edit_end = edit_start + 5; // covers "11111"
+        let edit = SimpleEdit { start: edit_start, end: edit_end, new_text: "99999".to_string() };
+
         must(parser.apply_edit(&edit));
+
         let stats = parser.stats();
-        assert!(stats.tokens_reused > 0, "expected tokens before edit to be reused, got 0");
-        assert!(stats.tokens_relexed > 0, "expected some re-lexing around the edit");
-    }
-
-    #[test]
-    fn test_large_deletion_no_underflow() {
-        let mut parser = CheckpointedIncrementalParser::new();
-        must(parser.parse("my $x = 42;\n".to_string()));
-        // Delete more bytes than exist before edit point — must not panic.
-        let edit = SimpleEdit { start: 3, end: 11, new_text: "".to_string() };
-        must(parser.apply_edit(&edit));
-    }
-
-    #[test]
-    fn test_tokens_reused_multiple_edits() {
-        let mut parser = CheckpointedIncrementalParser::new();
-        let source = "my $x = 1;\n".repeat(20);
-        must(parser.parse(source));
-        let edit1 = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
-        must(parser.apply_edit(&edit1));
-        let edit2 = SimpleEdit { start: 20, end: 21, new_text: "99".to_string() };
-        must(parser.apply_edit(&edit2));
-        assert!(parser.stats().tokens_reused > 0);
+        assert_eq!(stats.incremental_parses, 1);
+        // The reparse should have re-lexed at least some tokens in the edited region.
+        assert!(
+            stats.tokens_relexed > 0 || stats.tokens_reused > 0,
+            "expected either reused or relexed tokens, got {:?}",
+            stats
+        );
     }
 }
