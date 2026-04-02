@@ -44,6 +44,7 @@
 //! - MethodNotFound (-32601): Returned for unknown/unsupported methods
 //! - Enhanced error responses include method context for debugging
 
+mod ast_explorer;
 mod cancellation;
 mod experimental;
 mod lifecycle;
@@ -281,6 +282,7 @@ impl LspServer {
                 "callHierarchy/outgoingCalls",
                 self.handle_outgoing_calls_dispatch(request.params)
             ),
+            "perl/showAst" => self.handle_show_ast_dispatch(request.params),
             "experimental/testDiscovery" => self.handle_test_discovery_dispatch(request.params),
             "workspace/configuration" => self.handle_configuration_dispatch(request.params),
             "workspace/didChangeWatchedFiles" => {
