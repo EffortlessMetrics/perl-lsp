@@ -11,4 +11,12 @@ if echo "$CMD" | grep -qE 'git push --force|git push -f |git checkout \.|git res
   exit 2
 fi
 
+# Block git stash commands -- stash is shared across all worktrees and causes cross-contamination.
+# Use git restore <file> to discard changes, or git commit -m wip to save work in progress.
+if echo "$CMD" | grep -qE 'git stash( |$)'; then
+  echo "Blocked: git stash is shared across all worktrees and risks cross-contamination." >&2
+  echo "Use git restore <file> to discard changes or git commit -m wip to save work." >&2
+  exit 2
+fi
+
 exit 0

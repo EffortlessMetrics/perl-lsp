@@ -52,7 +52,28 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // Remove in-review, add merge-ready
+            // Only add merge-ready if reviewed-deep label is present.
+            // This enforces the two-pass review pipeline (reviewer + reviewer-deep).
+            // If reviewed-deep is missing, add needs-deep-review instead and wait.
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            const prLabels = pr.data.labels.map(l => l.name);
+            if (!prLabels.includes('reviewed-deep')) {
+              // Flag for deep review - do not merge without reviewer-deep sign-off
+              if (!prLabels.includes('needs-deep-review')) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  labels: ['needs-deep-review'],
+                });
+              }
+              return; // Do not add merge-ready until reviewer-deep has signed off
+            }
+            // reviewed-deep is present - proceed to merge-ready
             try {
               await github.rest.issues.removeLabel({
                 owner: context.repo.owner,
