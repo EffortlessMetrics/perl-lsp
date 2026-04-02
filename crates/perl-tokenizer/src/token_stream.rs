@@ -18,28 +18,143 @@
 //!     }
 //! }
 //! ```
+//!
+//! # Pre-lexed token stream
+//!
+//! For incremental parsing, use [`TokenStream::from_vec`] to create a stream
+//! from pre-lexed tokens without re-lexing from source:
+//!
+//! ```
+//! use perl_tokenizer::{Token, TokenKind, TokenStream};
+//!
+//! let tokens = vec![
+//!     Token::new(TokenKind::My, "my", 0, 2),
+//!     Token::new(TokenKind::ScalarSigil, "$", 3, 4),
+//!     Token::new(TokenKind::Identifier, "x", 4, 5),
+//!     Token::new(TokenKind::Assign, "=", 6, 7),
+//!     Token::new(TokenKind::Number, "1", 8, 9),
+//!     Token::new(TokenKind::Semicolon, ";", 9, 10),
+//!     Token::new(TokenKind::Eof, "", 10, 10),
+//! ];
+//! let mut stream = TokenStream::from_vec(tokens);
+//! assert!(matches!(stream.peek(), Ok(t) if t.kind == TokenKind::My));
+//! ```
 
 use perl_error::{ParseError, ParseResult};
 use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTokenType};
 pub use perl_token::{Token, TokenKind};
+use std::collections::VecDeque;
 
-/// Token stream that wraps perl-lexer
+/// Backing source for the token stream — either a live lexer or pre-lexed tokens.
+enum TokenStreamInner<'a> {
+    /// Live lexer producing tokens on demand from source text.
+    Lexer(PerlLexer<'a>),
+    /// Pre-lexed token buffer; used by [`TokenStream::from_vec`].
+    Buffered(VecDeque<Token>),
+}
+
+/// Token stream that wraps perl-lexer or a pre-lexed token buffer.
+///
+/// Provides three-token lookahead, transparent trivia skipping (in lexer mode),
+/// and statement-boundary state management used by the recursive-descent parser.
 pub struct TokenStream<'a> {
-    lexer: PerlLexer<'a>,
+    inner: TokenStreamInner<'a>,
     peeked: Option<Token>,
     peeked_second: Option<Token>,
     peeked_third: Option<Token>,
 }
 
 impl<'a> TokenStream<'a> {
-    /// Create a new token stream from source code
+    /// Create a new token stream from source code.
     pub fn new(input: &'a str) -> Self {
         TokenStream {
-            lexer: PerlLexer::new(input),
+            inner: TokenStreamInner::Lexer(PerlLexer::new(input)),
             peeked: None,
             peeked_second: None,
             peeked_third: None,
         }
+    }
+
+    /// Create a token stream from a pre-lexed token list.
+    ///
+    /// This constructor skips lexing entirely and feeds tokens directly from the
+    /// provided `Vec`. It is intended for the incremental parsing pipeline where
+    /// tokens from a prior parse run can be reused for unchanged regions.
+    ///
+    /// # Behaviour differences from [`TokenStream::new`]
+    ///
+    /// - [`on_stmt_boundary`](Self::on_stmt_boundary): clears lookahead cache only;
+    ///   no lexer mode reset (tokens are already classified).
+    /// - [`relex_as_term`](Self::relex_as_term): clears lookahead cache only;
+    ///   no re-lexing (token kinds are fixed from the original lex pass).
+    /// - [`enter_format_mode`](Self::enter_format_mode): no-op.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` — Pre-lexed tokens. An `Eof` token does **not** need to be
+    ///   included; the stream synthesises one when the buffer is exhausted.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_tokenizer::{Token, TokenKind, TokenStream};
+    ///
+    /// let tokens = vec![
+    ///     Token::new(TokenKind::My, "my", 0, 2),
+    ///     Token::new(TokenKind::Eof, "", 2, 2),
+    /// ];
+    /// let mut stream = TokenStream::from_vec(tokens);
+    /// assert!(matches!(stream.peek(), Ok(t) if t.kind == TokenKind::My));
+    /// ```
+    pub fn from_vec(tokens: Vec<Token>) -> Self {
+        TokenStream {
+            inner: TokenStreamInner::Buffered(VecDeque::from(tokens)),
+            peeked: None,
+            peeked_second: None,
+            peeked_third: None,
+        }
+    }
+
+    /// Convert a slice of raw [`LexerToken`]s to parser [`Token`]s, filtering out trivia.
+    ///
+    /// This is a convenience method for the incremental parsing pipeline where the
+    /// token cache stores raw lexer tokens (including whitespace and comments) and
+    /// needs to convert them to parser tokens before feeding to [`Self::from_vec`].
+    ///
+    /// Trivia token types (whitespace, newlines, comments, EOF) are discarded.
+    /// All other token types are converted using the same mapping as the live
+    /// [`TokenStream`] would apply.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_tokenizer::{TokenKind, TokenStream};
+    /// use perl_lexer::{PerlLexer, TokenType};
+    ///
+    /// // Collect raw lexer tokens
+    /// let mut lexer = PerlLexer::new("my $x = 1;");
+    /// let mut raw = Vec::new();
+    /// while let Some(t) = lexer.next_token() {
+    ///     if matches!(t.token_type, TokenType::EOF) { break; }
+    ///     raw.push(t);
+    /// }
+    ///
+    /// // Convert to parser tokens and build a stream
+    /// let parser_tokens = TokenStream::lexer_tokens_to_parser_tokens(raw);
+    /// let mut stream = TokenStream::from_vec(parser_tokens);
+    /// assert!(matches!(stream.peek(), Ok(t) if t.kind == TokenKind::My));
+    /// ```
+    pub fn lexer_tokens_to_parser_tokens(tokens: Vec<LexerToken>) -> Vec<Token> {
+        tokens
+            .into_iter()
+            .filter(|t| {
+                !matches!(
+                    t.token_type,
+                    LexerTokenType::Whitespace | LexerTokenType::Newline | LexerTokenType::EOF
+                ) && !matches!(t.token_type, LexerTokenType::Comment(_))
+            })
+            .map(Self::convert_lexer_token)
+            .collect()
     }
 
     /// Peek at the next token without consuming it
@@ -109,12 +224,21 @@ impl<'a> TokenStream<'a> {
         self.peeked_third.as_ref().ok_or(ParseError::UnexpectedEof)
     }
 
-    /// Enter format body parsing mode in the lexer
+    /// Enter format body parsing mode in the lexer.
+    ///
+    /// No-op when operating in buffered (pre-lexed) mode — the tokens are
+    /// already fully classified.
     pub fn enter_format_mode(&mut self) {
-        self.lexer.enter_format_mode();
+        if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
+            lexer.enter_format_mode();
+        }
+        // Buffered mode: no-op — tokens are pre-classified.
     }
 
-    /// Called at statement boundaries to reset lexer state and clear cached lookahead
+    /// Called at statement boundaries to reset lexer state and clear cached lookahead.
+    ///
+    /// In buffered mode only the lookahead cache is cleared; no lexer mode reset
+    /// is performed because the tokens are already fully classified.
     pub fn on_stmt_boundary(&mut self) {
         // Clear any cached lookahead tokens
         self.peeked = None;
@@ -122,7 +246,10 @@ impl<'a> TokenStream<'a> {
         self.peeked_third = None;
 
         // Reset lexer to expect a term (start of new statement)
-        self.lexer.set_mode(LexerMode::ExpectTerm);
+        if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
+            lexer.set_mode(LexerMode::ExpectTerm);
+        }
+        // Buffered mode: no lexer mode reset needed — tokens are pre-classified.
     }
 
     /// Re-lex the current peeked token in `ExpectTerm` mode.
@@ -132,14 +259,20 @@ impl<'a> TokenStream<'a> {
     /// delimiter. Rolls the lexer back to the peeked token's start position,
     /// switches to `ExpectTerm` mode, and clears the peek cache so the next
     /// `peek()` or `next()` re-lexes it as a regex.
+    ///
+    /// In buffered mode the peek cache is cleared but no re-lexing occurs —
+    /// token kinds are fixed from the original lex pass.
     pub fn relex_as_term(&mut self) {
-        if let Some(ref token) = self.peeked {
-            use perl_lexer::Checkpointable;
-            let pos = token.start;
-            // Build a checkpoint at the peeked token's position with ExpectTerm mode
-            let cp = perl_lexer::LexerCheckpoint::at_position(pos);
-            self.lexer.restore(&cp);
+        if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
+            if let Some(ref token) = self.peeked {
+                use perl_lexer::Checkpointable;
+                let pos = token.start;
+                // Build a checkpoint at the peeked token's position with ExpectTerm mode
+                let cp = perl_lexer::LexerCheckpoint::at_position(pos);
+                lexer.restore(&cp);
+            }
         }
+        // Both modes: clear the peek cache.
         self.peeked = None;
         self.peeked_second = None;
         self.peeked_third = None;
@@ -161,11 +294,19 @@ impl<'a> TokenStream<'a> {
         }
     }
 
-    /// Get the next token from the lexer
+    /// Get the next token from the backing source.
     fn next_token(&mut self) -> ParseResult<Token> {
+        match &mut self.inner {
+            TokenStreamInner::Lexer(lexer) => Self::next_token_from_lexer(lexer),
+            TokenStreamInner::Buffered(buf) => Self::next_token_from_buf(buf),
+        }
+    }
+
+    /// Drain the next non-trivia token from the live lexer.
+    fn next_token_from_lexer(lexer: &mut PerlLexer<'_>) -> ParseResult<Token> {
         // Skip whitespace and comments
         loop {
-            let lexer_token = self.lexer.next_token().ok_or(ParseError::UnexpectedEof)?;
+            let lexer_token = lexer.next_token().ok_or(ParseError::UnexpectedEof)?;
 
             match &lexer_token.token_type {
                 LexerTokenType::Whitespace | LexerTokenType::Newline => continue,
@@ -179,14 +320,27 @@ impl<'a> TokenStream<'a> {
                     });
                 }
                 _ => {
-                    return Ok(self.convert_token(lexer_token));
+                    return Ok(Self::convert_lexer_token(lexer_token));
                 }
             }
         }
     }
 
-    /// Convert a lexer token to a parser token
-    fn convert_token(&self, token: LexerToken) -> Token {
+    /// Return the next token from the pre-lexed buffer.
+    fn next_token_from_buf(buf: &mut VecDeque<Token>) -> ParseResult<Token> {
+        match buf.pop_front() {
+            Some(token) => Ok(token),
+            // Synthesise an EOF at position 0 when the buffer is exhausted.
+            // The caller (parser) makes EOF sticky so position doesn't matter
+            // for correctness; using 0 is safe.
+            None => Ok(Token { kind: TokenKind::Eof, text: "".into(), start: 0, end: 0 }),
+        }
+    }
+
+    /// Convert a raw lexer token to the parser `Token` type.
+    ///
+    /// Extracted from `next_token_from_lexer` to keep the match arm readable.
+    fn convert_lexer_token(token: LexerToken) -> Token {
         let kind = match &token.token_type {
             // Keywords
             LexerTokenType::Keyword(kw) => match kw.as_ref() {
