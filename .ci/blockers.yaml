@@ -25,6 +25,8 @@ last_verified: "2026-04-02"
 budgets:
   max_active_blockers: 50  # advisory only — no gate enforcement today
   note: "Archive entries with status: fixed — do not delete, move to archived section"
+  clean_rate_target: 0.90  # 90% CPAN/system corpus clean rate is the 0.12.x release criterion
+  clean_rate_note: "Baseline stale (2026-03-20 = 85.4%). Post-baseline fixes (#2674, #2723, #2613, #2767, #2897, #2769, #2892, #2787, #2840) estimated +386 CPAN files clean → ~94.3%. CI ratchet via PR #3110 will confirm."
 
 # =============================================================================
 # Parser Error Buckets
@@ -93,10 +95,10 @@ parser_blockers:
   - id: "unclosed_brace_semicolon"
     category: "block"
     affected_files: 21
-    root_cause: "Brace not closed before semicolon — block/hash ambiguity"
-    status: "needs_investigation"
+    root_cause: "Brace not closed before semicolon — block/hash ambiguity (bare function call with block: capture{}, where{}, scope_guard{})"
+    status: "partial"
     issue: null
-    note: "Tier 2: 21 files. No issue filed."
+    note: "Partial fix via PR #2261 (2026-03-19). System corpus 21 files remain; CPAN had 58 at 2026-03-20 baseline. Remaining cases need deeper investigation."
 
   - id: "expected_left_brace"
     category: "block"
@@ -166,9 +168,9 @@ parser_blockers:
     category: "expression"
     affected_files: 2
     root_cause: "Hash in list context fat-arrow ambiguity"
-    status: "filed"
+    status: "fixed"
     issue: "#2402"
-    note: "Tier 3: 2 files in system corpus."
+    note: "Fixed via PR #2613 (2026-03-21). Issue #2402 closed. System corpus had 2 files; CPAN had 53 at 2026-03-20 baseline. Counts stale — run corpus ratchet."
 
   - id: "unclosed_bracket"
     category: "expression"
