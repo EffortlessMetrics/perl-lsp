@@ -218,6 +218,62 @@ If a breaking change is necessary:
 
 See [STABILITY.md](docs/reference/STABILITY.md) for our API stability policy.
 
+## Updating Demo GIFs
+
+The three animated GIFs shown in `README.md` live in `docs/assets/gifs/`. They
+are produced from manual screen recordings, not generated automatically.
+
+### When to Re-Record
+
+Re-record a GIF when:
+- A menu label, key binding, or status bar message changes.
+- The workflow changes enough that the current GIF is misleading.
+- The GIF is blurry or hard to read at 960 px wide.
+
+### Recording Process
+
+1. Open `demo_workspace/` in VS Code with the `EffortlessMetrics.perl-lsp-rs`
+   extension active and the LSP server running.
+2. Set a clean theme (large font, minimal panels visible).
+3. Record the interaction using your platform screen-capture tool:
+   - Linux: `peek`, `simplescreenrecorder`, or `ffmpeg -f x11grab`
+   - macOS: QuickTime Player or ScreenFlow
+   - Windows: Xbox Game Bar, OBS Studio, or ShareX
+4. Save the raw recording to `docs/assets/recordings/` (gitignored).
+
+The full step-by-step script for each GIF is in
+[`docs/assets/gifs/README.md`](docs/assets/gifs/README.md).
+
+### Rendering
+
+After capturing, convert to a compressed GIF:
+
+```bash
+python scripts/marketing/render-walkthrough-gif.py \
+  --input docs/assets/recordings/goto-definition.mp4 \
+  --output docs/assets/gifs/goto-definition.gif \
+  --fps 12 \
+  --width 960 \
+  --max-bytes 3145728
+```
+
+Use `--start` and `--duration` to trim dead time. Run `--help` for all options.
+Requires `ffmpeg`; `gifsicle` is used automatically if available.
+
+### GIF Inventory
+
+| File | Workflow | Max size |
+|------|---------|---------|
+| `docs/assets/gifs/install-health.gif` | VS Code install, auto-download, `perllsp --health` | 3 MB |
+| `docs/assets/gifs/goto-definition.gif` | Ctrl+Click go-to-def, Find All References | 3 MB |
+| `docs/assets/gifs/extract-variable.gif` | Select, light-bulb, Extract Variable | 3 MB |
+
+### Commit Message Convention
+
+```
+docs: re-record goto-definition gif for v0.13 navigation changes
+```
+
 ## Adding New Crates
 
 1. Create the crate under `crates/` using the naming convention of its family
