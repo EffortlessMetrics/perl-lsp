@@ -1801,45 +1801,42 @@ fn cmd_generate_badges(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
-    let hooks_dir = resolve_git_hooks_dir(repo_root)?;
-    fs::create_dir_all(&hooks_dir)?;
-
-    let pre_commit_hook = r#"#!/usr/bin/env bash
+fn pre_push_hook_script() -> &'static str {
+    r#"#!/usr/bin/env bash
 set -euo pipefail
 
-GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
-GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
+# stdin provides: <local ref> <local sha> <remote ref> <remote sha>
+# Git sends all-zero SHA for deletions. Read all refs into an array first
+# so stdin is available for both the delete-check and the test-file scan.
+PUSH_REFS=()
+while IFS= read -r line; do
+    PUSH_REFS+=("$line")
+done
 
-if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
-   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
-   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
-   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ]; then
-    echo "❌ Refusing commit with placeholder git identity"
-    echo "   user.name:  $GIT_USER_NAME"
-    echo "   user.email: $GIT_USER_EMAIL"
-    echo ""
-    echo "   Fix this repo-local override first:"
-    echo "   git config --local --unset-all user.name"
-    echo "   git config --local --unset-all user.email"
-    exit 1
+# --- Skip CI gate when all refs are being deleted ---
+IS_DELETE_ONLY=true
+for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
+    local_sha="$(echo "$line" | awk '{print $2}')"
+    if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+        IS_DELETE_ONLY=false
+        break
+    fi
+done
+
+if [ "$IS_DELETE_ONLY" = true ]; then
+    echo "Branch deletion — skipping CI gate"
+    exit 0
 fi
-"#;
-    write_git_hook(&hooks_dir.join("pre-commit"), pre_commit_hook)?;
 
-    let pre_push_hook = r#"#!/usr/bin/env bash
-set -euo pipefail
-
-echo "🚪 Running local gate before push: nix develop -c just ci-gate"
+echo "Running local gate before push: nix develop -c just ci-gate"
 echo "   (Skip with: git push --no-verify)"
 echo ""
 
 # --- Check if test files changed and CURRENT_STATUS.md needs updating ---
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-# Detect test file changes in the commits being pushed
-# stdin provides: <local ref> <local sha> <remote ref> <remote sha>
 TEST_FILES_CHANGED=false
-while read -r _local_ref local_sha _remote_ref remote_sha; do
+for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
+    read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
     # For new branches, compare against merge-base with origin/master
     if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
         remote_sha="$(git merge-base "$local_sha" origin/master 2>/dev/null || echo "$local_sha")"
@@ -1876,8 +1873,36 @@ else
     echo "   Install just: cargo install just"
     exit 0
 fi
+"#
+}
+
+fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
+    let hooks_dir = resolve_git_hooks_dir(repo_root)?;
+    fs::create_dir_all(&hooks_dir)?;
+
+    let pre_commit_hook = r#"#!/usr/bin/env bash
+set -euo pipefail
+
+GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
+GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
+
+if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
+   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
+   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
+   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ]; then
+    echo "❌ Refusing commit with placeholder git identity"
+    echo "   user.name:  $GIT_USER_NAME"
+    echo "   user.email: $GIT_USER_EMAIL"
+    echo ""
+    echo "   Fix this repo-local override first:"
+    echo "   git config --local --unset-all user.name"
+    echo "   git config --local --unset-all user.email"
+    exit 1
+fi
 "#;
-    write_git_hook(&hooks_dir.join("pre-push"), pre_push_hook)?;
+    write_git_hook(&hooks_dir.join("pre-commit"), pre_commit_hook)?;
+
+    write_git_hook(&hooks_dir.join("pre-push"), pre_push_hook_script())?;
 
     println!("✅ Installed pre-commit and pre-push hooks");
     println!("   The pre-commit hook blocks known placeholder git identities");
@@ -3947,5 +3972,28 @@ mod tests {
         assert!(!is_allowlisted_exit_hit(
             r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#
         ));
+    }
+
+    #[test]
+    fn pre_push_hook_skips_ci_gate_on_delete_only_push() {
+        let hook = pre_push_hook_script();
+        // The hook must detect when all refs have a zero local SHA (deletion).
+        assert!(
+            hook.contains("0000000000000000000000000000000000000000"),
+            "hook must check for all-zero SHA (deletion sentinel)"
+        );
+        assert!(
+            hook.contains("IS_DELETE_ONLY"),
+            "hook must track whether this is a delete-only push"
+        );
+        assert!(
+            hook.contains("Branch deletion"),
+            "hook must print a message when skipping due to deletion"
+        );
+        // Normal pushes (non-zero SHA) must still run the gate.
+        assert!(
+            hook.contains("just ci-gate"),
+            "hook must still invoke the CI gate for normal pushes"
+        );
     }
 }
