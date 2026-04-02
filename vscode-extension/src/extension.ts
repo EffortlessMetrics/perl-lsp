@@ -17,6 +17,7 @@ import { WhatsNewManager } from './whatsNew';
 import { generateBoilerplate } from './fileCreation';
 import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
+import { registerPodPreview } from './podPreview';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -536,6 +537,7 @@ export async function activate(context: vscode.ExtensionContext) {
         configurationWatcher,
         fileCreationWatcher,
         arrowCompletionWatcher,
+        ...registerPodPreview(context),
     );
 
     // Initialize debug adapter

@@ -68,6 +68,7 @@
     "onCommand:perl-lsp.createDebugConfig",
     "onCommand:perl-lsp.runHealthCheck",
     "onCommand:perl-lsp.openConfigurationGuide",
+    "onCommand:perl-lsp.previewPod",
     "onWalkthrough:perl-lsp.gettingStarted"
   ],
   "contributes": {
@@ -529,6 +530,12 @@
         "title": "Report Issue",
         "category": "Perl",
         "icon": "$(github)"
+      },
+      {
+        "command": "perl-lsp.previewPod",
+        "title": "Preview POD",
+        "category": "Perl",
+        "icon": "$(preview)"
       }
     ],
     "menus": {
@@ -609,12 +616,21 @@
         },
         {
           "command": "perl-lsp.reportIssue"
+        },
+        {
+          "command": "perl-lsp.previewPod",
+          "when": "editorLangId == perl"
         }
       ],
       "editor/title": [
         {
           "command": "perl-lsp.runTests",
           "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/",
+          "group": "navigation"
+        },
+        {
+          "command": "perl-lsp.previewPod",
+          "when": "editorLangId == perl",
           "group": "navigation"
         }
       ],
