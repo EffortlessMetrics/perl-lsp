@@ -68,11 +68,7 @@ impl TokenCache {
             return None;
         }
         let idx = self.tokens.partition_point(|t| t.end <= position);
-        if idx == 0 {
-            None
-        } else {
-            Some(&self.tokens[..idx])
-        }
+        if idx == 0 { None } else { Some(&self.tokens[..idx]) }
     }
 
     /// Replace the entire cache with a new set of parser tokens.
