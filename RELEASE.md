@@ -273,7 +273,34 @@ docker run --rm effortlessmetrics/perl-lsp:0.12.1 perllsp --version
 docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.1
 ```
 
-### 6. Verify binary checksum
+### 6. Homebrew auto-bump
+
+The `brew-bump.yml` workflow triggers automatically on `release.published`. It downloads all four platform archives (`perllsp-${VERSION}-{x86_64,aarch64}-{apple-darwin,unknown-linux-gnu}.tar.gz`), computes SHA256 checksums, updates `Formula/perl-lsp.rb`, and creates a bump PR.
+
+To verify the workflow ran:
+
+```bash
+# Check that the workflow completed successfully
+gh run list --workflow brew-bump.yml --limit 5
+
+# Check the bump PR was created
+gh pr list --search "perl-lsp" --state open
+```
+
+If the workflow did not trigger automatically, run it manually:
+
+```bash
+gh workflow run brew-bump.yml --field tag=v0.12.1
+```
+
+To test that the formula works locally (requires macOS or Linuxbrew):
+
+```bash
+brew install --build-from-source Formula/perl-lsp.rb
+perllsp --health
+```
+
+### 7. Verify binary checksum
 
 ```bash
 # Download the Linux binary and verify its SHA256 matches the release
@@ -281,7 +308,7 @@ gh release download v0.12.1 --pattern 'perllsp-0.12.1-x86_64-unknown-linux-gnu.t
 sha256sum --check SHA256SUMS --ignore-missing
 ```
 
-### 7. Post-merge metrics update
+### 8. Post-merge metrics update
 
 After the release merges, the corpus metrics auto-regenerate. No manual step is required.
 

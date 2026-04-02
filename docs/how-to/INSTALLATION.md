@@ -12,6 +12,7 @@ expected, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 Use one of the public install paths that matches how you work:
 
 - VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching `perllsp` binary.
+- macOS or Linux: install via Homebrew (see below).
 - Other editors: download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and put it on your `PATH`.
 - Local testing or pre-release validation: install from this repo with `cargo install --path crates/perllsp`.
 
@@ -23,6 +24,24 @@ Verify the install before wiring it into an editor:
 perllsp --version
 perllsp --health
 perllsp --info
+```
+
+## Homebrew (macOS and Linux)
+
+Install the latest release with one command:
+
+```bash
+brew install perl-lsp
+```
+
+This covers macOS Intel, macOS Apple Silicon, Linux x86_64, and Linux aarch64 via Linuxbrew. The formula is automatically bumped on each release.
+
+Shell completions are not installed by default. To add them:
+
+```bash
+perllsp --completion bash > "$(brew --prefix)/etc/bash_completion.d/perllsp"
+perllsp --completion zsh > "$(brew --prefix)/share/zsh/site-functions/_perllsp"
+perllsp --completion fish > "$(brew --prefix)/share/fish/completions/perllsp.fish"
 ```
 
 ## Install From Source
