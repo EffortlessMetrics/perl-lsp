@@ -762,6 +762,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext .ts",
     "test": "jest --verbose",
     "test:ci": "jest --ci --coverage",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
@@ -782,7 +783,10 @@
     "@types/node": "^25.5.0",
     "@types/tar": "^7.0.87",
     "@types/vscode": "^1.88.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.0",
+    "@typescript-eslint/parser": "^8.58.0",
     "@vscode/vsce": "^3.7.1",
+    "eslint": "^9.39.4",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3"
