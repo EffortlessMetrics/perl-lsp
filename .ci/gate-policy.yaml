@@ -271,10 +271,11 @@ gates:
 
   - name: policy_checks
     tier: merge_gate
-    description: "Enforce project policies (docs baseline, ExitStatus helper, features invariants)"
+    description: "Enforce project policies (docs baseline, version sync, ExitStatus helper, features invariants)"
     required: true
     command: >-
       cargo xtask check-from-raw &&
+      bash scripts/check-version-sync.sh &&
       bash ci/check_missing_docs.sh &&
       bash ci/check_parse_errors.sh &&
       python3 scripts/check_features_invariants.py

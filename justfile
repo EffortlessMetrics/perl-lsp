@@ -731,6 +731,7 @@ ci-policy:
     @echo "⚖️  Checking project policies..."
     just ci-check-todos
     @cargo xtask check-from-raw
+    just version-check
     just ci-doc-claims
 
 # Check article inline claims against PUBLICATION_FACTS_LEDGER.md
