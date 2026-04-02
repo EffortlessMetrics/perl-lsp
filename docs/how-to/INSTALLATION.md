@@ -12,6 +12,7 @@ expected, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 Use one of the public install paths that matches how you work:
 
 - VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching `perllsp` binary.
+- macOS or Linux: `brew install perl-lsp` (see [HOMEBREW.md](HOMEBREW.md) for details).
 - Other editors: download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and put it on your `PATH`.
 - Local testing or pre-release validation: install from this repo with `cargo install --path crates/perllsp`.
 

@@ -74,8 +74,8 @@ jobs:
 
           # Download each platform asset
           for platform in "x86_64-apple-darwin" "aarch64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu"; do
-            echo "Downloading perl-lsp-${VERSION}-${platform}.tar.gz..."
-            gh release download "${TAG}" --pattern "perl-lsp-${VERSION}-${platform}.tar.gz" || true
+            echo "Downloading perllsp-${VERSION}-${platform}.tar.gz..."
+            gh release download "${TAG}" --pattern "perllsp-${VERSION}-${platform}.tar.gz" || true
           done
 
           # Compute SHA256
@@ -96,26 +96,26 @@ jobs:
           cd /tmp/brew-assets
 
           # macOS Intel
-          if [ -f "perl-lsp-${VERSION}-x86_64-apple-darwin.tar.gz" ]; then
-            SHA=$(sha256sum "perl-lsp-${VERSION}-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
+          if [ -f "perllsp-${VERSION}-x86_64-apple-darwin.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
             sed -i "/x86_64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
 
           # macOS ARM
-          if [ -f "perl-lsp-${VERSION}-aarch64-apple-darwin.tar.gz" ]; then
-            SHA=$(sha256sum "perl-lsp-${VERSION}-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
+          if [ -f "perllsp-${VERSION}-aarch64-apple-darwin.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
             sed -i "/aarch64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
 
           # Linux x64
-          if [ -f "perl-lsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" ]; then
-            SHA=$(sha256sum "perl-lsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+          if [ -f "perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
             sed -i "/x86_64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
 
           # Linux ARM
-          if [ -f "perl-lsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" ]; then
-            SHA=$(sha256sum "perl-lsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+          if [ -f "perllsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
             sed -i "/aarch64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
 

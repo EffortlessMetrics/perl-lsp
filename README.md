@@ -75,6 +75,16 @@ cargo install --path crates/perllsp
 
 Do not use `cargo install perl-lsp` on crates.io. That package name is owned by another project.
 
+### Homebrew (macOS and Linux)
+
+```bash
+brew install perl-lsp
+```
+
+Supports macOS Intel, macOS Apple Silicon, and Linux via Linuxbrew. See
+[docs/how-to/HOMEBREW.md](docs/how-to/HOMEBREW.md) for shell completions and
+formula maintenance details.
+
 ### Other editors
 
 Neovim:
