@@ -289,31 +289,30 @@ fn test_session_lifecycle_attach_missing_arguments() {
 #[test]
 // AC:5.5
 fn test_session_lifecycle_attach_validation() {
-    // Test that attach validates arguments correctly
+    // Test that attach with valid TCP args that cannot connect returns a descriptive error.
+    // Uses handle_request (real path) to exercise handle_attach directly.
     let (mut adapter, _rx) = create_test_adapter();
 
-    // Test with valid TCP attach arguments
+    // Port 13603 is not expected to be listening in CI.
     let args = json!({
         "host": "localhost",
         "port": 13603,
         "timeout": 5000
     });
 
-    let response = adapter.handle_request_mock(1, "attach", Some(args));
+    let response = adapter.handle_request(1, "attach", Some(args));
 
     match response {
         DapMessage::Response { success, command, message, .. } => {
-            assert!(!success, "Attach not yet implemented");
+            // Connection is refused (no listener on 13603), so success is false.
+            assert!(!success, "TCP attach with no listener should fail");
             assert_eq!(command, "attach");
             assert!(message.is_some());
-            // Should validate but indicate not implemented
             let msg = must_some(message);
+            // The error message must reference the target address or the failure reason.
             assert!(
-                msg.contains("not yet fully implemented")
-                    || msg.contains("localhost:13603")
-                    || msg.contains("Process ID attachment"),
-                "Should validate args: {}",
-                msg
+                msg.contains("localhost:13603") || msg.contains("Failed to connect"),
+                "Expected connection-refused error referencing the target, got: {msg}"
             );
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
@@ -1039,5 +1038,113 @@ fn test_multiple_sessions_sequential() {
             _ => must(Err::<(), _>("Expected Response".to_string())),
         }
         let _term_event = wait_for_event(&rx, 100);
+    }
+}
+
+// --- AC:5.5 Attach implementation tests ---
+
+#[test]
+// AC:5.5 — TCP attach succeeds when a mock listener is available
+fn test_attach_tcp_succeeds_with_mock_listener() -> Result<(), Box<dyn std::error::Error>> {
+    use std::net::TcpListener;
+
+    // Bind an ephemeral port so connect() succeeds
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    // Accept one connection so the OS does not refuse it
+    std::thread::spawn(move || {
+        let _ = listener.accept();
+    });
+
+    let (mut adapter, _rx) = create_test_adapter();
+    let args = json!({ "host": "127.0.0.1", "port": port });
+    let response = adapter.handle_request_mock(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "TCP attach to mock listener should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => return Err("Expected Response".into()),
+    }
+    Ok(())
+}
+
+#[test]
+// AC:5.5 — Double attach replaces the previous session (no leak)
+fn test_attach_double_attach_replaces_session() -> Result<(), Box<dyn std::error::Error>> {
+    use std::net::TcpListener;
+
+    // First listener
+    let l1 = TcpListener::bind("127.0.0.1:0")?;
+    let p1 = l1.local_addr()?.port();
+    std::thread::spawn(move || {
+        let _ = l1.accept();
+    });
+
+    // Second listener
+    let l2 = TcpListener::bind("127.0.0.1:0")?;
+    let p2 = l2.local_addr()?.port();
+    std::thread::spawn(move || {
+        let _ = l2.accept();
+    });
+
+    let (mut adapter, _rx) = create_test_adapter();
+
+    // First attach
+    let r1 = adapter.handle_request(1, "attach", Some(json!({ "host": "127.0.0.1", "port": p1 })));
+    match r1 {
+        DapMessage::Response { success, .. } => assert!(success, "first attach should succeed"),
+        _ => return Err("Expected Response for first attach".into()),
+    }
+
+    // Second attach — must succeed and replace the first session
+    let r2 = adapter.handle_request(2, "attach", Some(json!({ "host": "127.0.0.1", "port": p2 })));
+    match r2 {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "second (double) attach should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => return Err("Expected Response for second attach".into()),
+    }
+    Ok(())
+}
+
+#[test]
+// AC:5.5 — processId: 0 is rejected with a clear error
+fn test_attach_process_id_zero_rejected() {
+    let (mut adapter, _rx) = create_test_adapter();
+    let args = json!({ "processId": 0 });
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "processId 0 should be rejected");
+            assert_eq!(command, "attach");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("greater than zero"),
+                "expected 'greater than zero' error, got: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response".to_string())),
+    }
+}
+
+#[test]
+// AC:5.5 — port out of valid range is rejected with a clear error
+fn test_attach_port_out_of_range_integration() {
+    let (mut adapter, _rx) = create_test_adapter();
+    let args = json!({ "port": 99999_u64 });
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "port 99999 should be rejected");
+            assert_eq!(command, "attach");
+            let msg = must_some(message);
+            assert!(msg.contains("out of range"), "expected 'out of range' error, got: {msg}");
+        }
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 }
