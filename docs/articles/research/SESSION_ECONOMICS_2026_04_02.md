@@ -1,32 +1,89 @@
 # Session Economics: 2026-04-02 Release Cleanup & Multi-Release Build-Out
 
 **Session Date**: 2026-04-02
-**Duration**: ~5 hours (single session, ongoing)
 **Model**: Claude Opus 4.6 (1M context)
 **Operator**: Steven Zimmerman (orchestrator)
-**Session type**: Normal Claude Code run — not a special swarm event. Agent calls were natural parallelism for a release cleanup task that grew organically into multi-release build-out. This is roughly what a typical productive session looks like.
+**Session type**: Normal Claude Code run — not a special swarm event. Agent calls were natural parallelism for a release cleanup task that grew organically into multi-release build-out.
+
+### Budget (session 1 of 2, same day)
+
+| Metric | Value |
+|--------|-------|
+| Session 1 budget used | 75% of single session (reset at 5h mark) |
+| Weekly budget at end of session 1 | 42% |
+| Session 2 started at | 0% session, 42% weekly |
 
 ---
 
-## Resource Consumption
+## Session 1 (75% session consumed, 42% weekly at end)
 
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **Session budget used** | 38% of 20x max | Single 5-hour session |
-| **Weekly budget used** | 9% of weekly allocation | 1 session of ~40 possible |
+The full first session used 75% of a single 5-hour session window and brought the weekly total to 42%. The approach evolved mid-session: the early portion (~first half) was reactive and ad-hoc (merge quickly, fix forward), the later portion shifted to proper pipeline (verify-before-build, full review passes).
+
+### What went well
+- 28 PRs merged, 48 issues closed
+- Discovered 23 already-implemented features (the issue tracker was severely stale)
+- Deep review caught 4 real bugs in subroutine inlining before merge
+- Two full releases completed (0.12.2 stability, 0.12.3 refactoring)
+- Roadmap built out through 0.12.8 → 0.13.0
+
+### What went wrong
+- **Merged red**: Multiple PRs merged on smoke-green without full CI gate passing
+- **Triage false positive**: Triage agent closed #3020 as already-fixed but builder had real implementation
+- **Worktree file leaks**: Agent worktrees leaked modified files into main checkout, causing merge conflicts
+- **First builder went off-scope**: Hook-fix builder created test files across 10+ unrelated crates before being redirected
+- **No CI gate on branch deletions**: Wasted ~55 min before discovering the hook bug
+
+### Economics (full session 1)
+- ~45 agents spawned across 6 waves
+- 23 of those discovered work already done (51% discovery rate)
+- 4 bugs caught by deep review (12-16x ROI on the review investment)
+- Budget: 75% of one 5-hour session, bringing weekly to 42%
+- Cost per merged PR: ~2.3% of session (75% / 33 PRs)
+- Cost per closed issue: ~1.5% of session (75% / 50 issues)
+
+### How the session evolved
+
+**Phase 1 (~0-38% session, ~0-9% weekly):** Ad-hoc. Started with release cleanup (delete branches, close stale issue, fix git config). Grew into "let's build out the roadmap" and then "let's launch builders." Merged PRs on smoke-green without waiting for full CI gate. Discovered the merged-red problem, the triage false positive on #3020, and the worktree file leak pattern. Economics analysis began here — documenting what was happening as it happened.
+
+**Phase 2 (~38-60% session, ~9-40% weekly):** Transitional. Applied lessons from phase 1: started verifying issue state before spawning builders, added the "already-done" check to every builder prompt, launched triage agents to clean the issue backlog. Still merging fast but with two-pass review on feature PRs. The economics documentation thread itself consumed context during this phase.
+
+**Phase 3 (~60-75% session, ~40-42% weekly):** Close to pipeline. Proper verify-before-build on every agent, full review passes, issue triage running in parallel, learned rules applied consistently. Much closer to the structured swarm pipeline (scout→plan-review→build→review→merge). Fewer wasted agents, higher per-PR confidence. This is where the session found its rhythm.
+
+The key insight: **the session learned its own operating model in real-time.** The rules that worked best (verify-before-build, deep review, trust builders over triage) were discovered through failure in phase 1 and codified by phase 3.
+
+This document itself reflects the evolution — it went through 4 PRs (#3098 initial, #3099 closed due to conflict, #3101 with quality assessment, #3107 with session split) because it was being written and revised as the session progressed. Each revision incorporated lessons the session was still learning. The multi-stage PR creation for the economics doc consumed meaningful context, but the documentation-as-you-go approach captured insights that would have been lost in a post-hoc writeup.
 
 ---
 
-## Verified Output (from `gh` queries)
+## Session 2: Pipeline Phase (0% session, 42% weekly — starting now)
+
+The session reset gives a fresh 5-hour window. The remaining work is well-scoped: ~23 open issues, ~15 agents still running from session 1, proper pipeline rules in effect.
+
+### Active agents carried over
+Builders for: workspace-perf (#2078), Docker (#2083), Homebrew (#2086), Linux pkgs (#2095), corpus ratchet (#2026), VSCode ESLint (#1910), DAP attach (#3025), DAP signals (#3028), heredoc injection (#2059), token caching (#3021), dev guide (#3027), workspace docs (#3022), memory profiling (#2085), CPAN-scale (#1664), incremental parser (#2080), CPAN manifest (#2971).
+
+### Rules for session 2
+1. Wait for full CI gate before merge (lesson from session 1)
+2. Verify issue state before spawning builders (42% session 1 builders found work done)
+3. Trust builders over triage agents on "already-fixed" disagreements
+4. Clean worktree file leaks after each wave
+5. Run `just ci-gate` on master after merge batches
+
+---
+
+## Combined Output (both sessions, from `gh` queries)
 
 | Metric | Count | Verification |
 |--------|-------|-------------|
-| **PRs merged** | 22 | `gh pr list --state merged --search "merged:2026-04-02"` |
-| **PRs in review** | 2 (#3092, #3097) | `gh pr list --state open` |
-| **Issues closed** | 9 | `gh issue list --state closed --search "closed:2026-04-02"` |
-| **Issues created** | 4 (#3081, #3089, #3093, #3094) | `gh issue list --state all --search "created:2026-04-02"` |
-| **Remote branches deleted** | 11 | Manual count from `git push --delete` output |
-| **Dependabot PRs merged** | 8 of 8 | Includes 1 that needed `workflow` scope fix |
+| **PRs merged** | 33 | `gh pr list --state merged --search "merged:2026-04-02"` |
+| **Issues closed** | 50 | `gh issue list --state closed --search "closed:2026-04-02"` |
+| **Issues: start → now** | 68 → 23 (66% reduction) | |
+| **Issues created** | 4 (#3081, #3089, #3093, #3094) | |
+| **Remote branches deleted** | 11 | |
+| **Dependabot PRs merged** | 8 of 8 | |
+| **Releases completed** | 4 (0.12.2, 0.12.3, 0.12.4, 0.12.5 partial) | |
+| **Already-implemented discoveries** | 23 | |
+| **Bugs caught pre-merge** | 4 + 1 perf fix by deep review | |
 
 ### PR Breakdown by Type
 
