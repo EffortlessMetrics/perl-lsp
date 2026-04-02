@@ -17,7 +17,7 @@ include = ["src/**", "Cargo.toml", "README.md"]
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
-toml = "1.0.4"
+toml = "1.1.0"
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }
