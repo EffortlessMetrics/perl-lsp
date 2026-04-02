@@ -67,10 +67,82 @@ pub fn detect_parameters(node: &Node) -> Vec<String> {
     params.into_iter().collect()
 }
 
-/// Detect return values in a block
-pub fn detect_return_values(_node: &Node) -> Vec<String> {
-    // For now, return empty - could analyze return statements
+/// Detect return values in a block.
+///
+/// Uses a heuristic: if the last non-empty statement in the block is a bare
+/// variable expression (implicit return convention in Perl), and that variable
+/// was declared inside the block, treat it as the return value.
+///
+/// Returns a vec of bare name strings (without sigil, matching `detect_parameters`
+/// convention, e.g. `["result"]`).
+pub fn detect_return_values(node: &Node) -> Vec<String> {
+    let statements = match &node.kind {
+        NodeKind::Block { statements } => statements.as_slice(),
+        _ => return Vec::new(),
+    };
+
+    // Collect all variables declared inside the block (bare names, no sigil).
+    let mut declared_inside: HashSet<String> = HashSet::new();
+    for stmt in statements {
+        collect_declared_variables(stmt, &mut declared_inside);
+    }
+
+    // Look at the last non-empty statement for implicit or explicit return.
+    let last = statements
+        .iter()
+        .rev()
+        .find(|s| !matches!(&s.kind, NodeKind::Block { statements } if statements.is_empty()));
+
+    if let Some(last_stmt) = last
+        && let Some(var_name) = extract_last_expression_variable(last_stmt)
+        && declared_inside.contains(&var_name)
+    {
+        return vec![var_name];
+    }
+
     Vec::new()
+}
+
+/// Collect the bare names (no sigil) of all variables declared via `my` in a node.
+fn collect_declared_variables(node: &Node, declared: &mut HashSet<String>) {
+    match &node.kind {
+        NodeKind::VariableDeclaration { variable, .. } => {
+            if let NodeKind::Variable { name, .. } = &variable.kind {
+                declared.insert(name.clone());
+            }
+        }
+        NodeKind::VariableListDeclaration { variables, .. } => {
+            for v in variables {
+                if let NodeKind::Variable { name, .. } = &v.kind {
+                    declared.insert(name.clone());
+                }
+            }
+        }
+        NodeKind::Block { statements } => {
+            for stmt in statements {
+                collect_declared_variables(stmt, declared);
+            }
+        }
+        NodeKind::ExpressionStatement { expression } => {
+            collect_declared_variables(expression, declared);
+        }
+        _ => {}
+    }
+}
+
+/// If a statement is a bare variable expression or an explicit return, return the
+/// variable name (bare, no sigil). Used to detect the implicit return value.
+fn extract_last_expression_variable(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::ExpressionStatement { expression } => {
+            extract_last_expression_variable(expression)
+        }
+        NodeKind::Variable { name, .. } => Some(name.clone()),
+        NodeKind::Return { value } => {
+            value.as_ref().and_then(|v| extract_last_expression_variable(v))
+        }
+        _ => None,
+    }
 }
 
 /// Collect variables used in a node, excluding those declared within it.
