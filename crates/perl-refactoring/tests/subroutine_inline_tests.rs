@@ -318,8 +318,7 @@ fn test_collision_rename_decl_does_not_corrupt_sibling_variables() {
 "#;
     let inliner = SubInliner::new(source);
     // $x collides with the outer scope
-    let result =
-        inliner.inline_call_with_outer_vars("compute", "compute(7)", &["$x".to_string()]);
+    let result = inliner.inline_call_with_outer_vars("compute", "compute(7)", &["$x".to_string()]);
     let inlined = must(result);
     // $x_count must NEVER be renamed to $x_inlined_count
     assert!(
