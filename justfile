@@ -401,10 +401,10 @@ ci-full-msrv:
 # Check for nested Cargo.lock files (footgun prevention)
 ci-check-no-nested-lock:
     @echo "🔒 Checking for nested Cargo.lock files..."
-    @if find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null | \
+    @if find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' -o -path './.claude/worktrees' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null | \
         grep -v '^\./Cargo\.lock$' | grep -q .; then \
         echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
-        find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null | \
+        find . \( -path './target' -o -path './.runs' -o -path './archive' -o -path './fuzz' -o -path './tree-sitter-perl' -o -path './.claude/worktrees' \) -prune -o -name 'Cargo.lock' -type f -print 2>/dev/null | \
             grep -v '^\./Cargo\.lock$'; \
         exit 1; \
     fi
