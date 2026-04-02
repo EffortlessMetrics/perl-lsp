@@ -1,33 +1,38 @@
 # perl-lsp-diagnostics
 
-LSP diagnostics provider for Perl. Generates editor-visible diagnostics from
-parse errors, scope analysis, lint checks, and workspace-wide dead code detection.
+Perl diagnostics engine for editor-facing parse errors, lint checks, semantic
+warnings, and dead-code reporting. This crate turns parser and analysis results
+into `publishDiagnostics`-style output.
 
-## Features
+## Use this crate when
 
-- **Parse error diagnostics** -- converts parser errors into positioned diagnostics
-- **Scope analysis** -- undeclared variables, unused variables/parameters, shadowing, redeclaration
-- **Lint passes** -- common mistakes (assignment in condition, numeric undef), deprecated syntax (`defined @array`, `$[`), missing `use strict`/`use warnings`
-- **Dead code detection** -- workspace-wide unused subroutine/variable/constant/package detection (non-WASM only)
-- **Deduplication** -- removes duplicate diagnostics by range, severity, code, and message
-- **ERROR node classification** -- classifies AST error nodes with suggestions and explanations
+Use `perl-lsp-diagnostics` if you need the diagnostic logic itself. If you only
+need the shared diagnostic types, depend on the re-exported types rather than
+rebuilding the provider stack. If you want the umbrella API, use
+`perl-lsp-providers`.
 
-## Public API
+## Key exports
 
-| Export | Description |
-|--------|-------------|
-| `DiagnosticsProvider` | Core provider -- builds diagnostics from AST and parse errors |
-| `Diagnostic`, `DiagnosticSeverity`, `DiagnosticTag`, `RelatedInformation` | Diagnostic types |
-| `common_mistakes::check_common_mistakes` | Assignment-in-condition and numeric-undef checks |
-| `deprecated::check_deprecated_syntax` | Deprecated syntax detection |
-| `strict_warnings::check_strict_warnings` | Missing pragma advisories |
-| `detect_dead_code` | Workspace-wide dead code detection (non-WASM) |
+- `DiagnosticsProvider` - assembles diagnostics from AST, source, and optional
+  workspace context
+- `Diagnostic`, `DiagnosticSeverity`, `DiagnosticTag`, `RelatedInformation` -
+  shared diagnostic types
+- `common_mistakes`, `deprecated`, `missing_module`, `package_subroutine`,
+  `security`, `strict_warnings`, `unused_imports`, `version_compat` - lint
+  families re-exported for targeted checks
+- `detect_dead_code` - workspace-wide dead-code detection outside WASM builds
 
-## Workspace Role
+## Example
 
-Internal feature crate consumed by `perl-lsp` to publish diagnostics to editors.
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+```rust,ignore
+use perl_lsp_diagnostics::DiagnosticsProvider;
 
-## License
+let provider = DiagnosticsProvider::new();
+let diagnostics = provider.generate_diagnostics(&ast, source, Some(&workspace_index))?;
+```
 
-MIT OR Apache-2.0
+## Stack role
+
+This crate sits between parsing and the editor runtime. It consumes ASTs,
+scope analysis, and workspace data, then emits the diagnostics that `perl-lsp`
+publishes to clients.

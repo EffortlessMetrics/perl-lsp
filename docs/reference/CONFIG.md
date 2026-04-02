@@ -515,14 +515,14 @@ Flags passed when launching the `perl-lsp` binary. Source:
 Examples:
 
 ```bash
-perl-lsp --stdio                         # stdio mode (default)
-perl-lsp --stdio --log                   # with logging to stderr
-perl-lsp --socket --port 9257            # TCP socket mode
-perl-lsp --stdio --feature-profile prod  # production feature profile
-perl-lsp --check lib/MyModule.pm         # batch syntax check
-perl-lsp --check-project lib/            # project-wide parsability scan
-perl-lsp --info                          # print server information
-perl-lsp --completion bash >> ~/.bashrc  # install bash completions
+perllsp --stdio                         # stdio mode (default)
+perllsp --stdio --log                   # with logging to stderr
+perllsp --socket --port 9257            # TCP socket mode
+perllsp --stdio --feature-profile prod  # production feature profile
+perllsp --check lib/MyModule.pm         # batch syntax check
+perllsp --check-project lib/            # project-wide parsability scan
+perllsp --info                          # print server information
+perllsp --completion bash >> ~/.bashrc  # install bash completions
 ```
 
 ---
@@ -539,7 +539,7 @@ Set to any non-empty value to enable logging to stderr. Equivalent to the
 either enables logging.
 
 ```bash
-PERL_LSP_LOG=1 perl-lsp --stdio
+PERL_LSP_LOG=1 perllsp --stdio
 ```
 
 ### `RUST_LOG`
@@ -548,9 +548,9 @@ Standard `tracing`/`env_logger` filter directive. Controls log level and
 per-module filtering. Takes precedence over the `--log` flag default filter.
 
 ```bash
-RUST_LOG=perl_lsp=debug perl-lsp --stdio
-RUST_LOG=perl_parser=trace perl-lsp --stdio
-RUST_LOG=warn perl-lsp --stdio
+RUST_LOG=perl_lsp=debug perllsp --stdio
+RUST_LOG=perl_parser=trace perllsp --stdio
+RUST_LOG=warn perllsp --stdio
 ```
 
 Common filter tokens:
@@ -570,7 +570,7 @@ When set, disables ANSI colour in log output. Follows the
 [no-color.org](https://no-color.org) convention.
 
 ```bash
-NO_COLOR=1 perl-lsp --stdio
+NO_COLOR=1 perllsp --stdio
 ```
 
 ---
@@ -702,9 +702,9 @@ CLI flag or the `perl-lsp.featureProfile` VS Code setting.
 | `auto` | — | Resolves to the compile-time default (usually `production`). |
 
 ```bash
-perl-lsp --stdio --feature-profile ga-lock
-perl-lsp --stdio --feature-profile all
-perl-lsp --features-json --feature-profile production
+perllsp --stdio --feature-profile ga-lock
+perllsp --stdio --feature-profile all
+perllsp --features-json --feature-profile production
 ```
 
 ---

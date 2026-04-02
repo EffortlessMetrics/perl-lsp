@@ -98,7 +98,7 @@ cargo test -p perl-parser --features test-compat       # Documentation warnings 
 
 ```bash
 # LSP performance benchmarking
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --features test-performance -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --features test-performance -- --test-threads=2
 
 # Maintains performance improvements without documentation compilation overhead
 ```

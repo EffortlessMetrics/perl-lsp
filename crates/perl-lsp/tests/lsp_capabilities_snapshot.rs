@@ -35,7 +35,7 @@ fn test_production_capabilities_snapshot() -> Result<(), Box<dyn std::error::Err
             "Production capabilities have changed!\n\
             If this is intentional:\n\
             1. Update the changelog\n\
-            2. Validate regeneration with: cargo test -p perl-lsp --test lsp_capabilities_snapshot regenerate_snapshots\n\
+            2. Validate regeneration with: cargo test -p perl-lsp-rs --test lsp_capabilities_snapshot regenerate_snapshots\n\
             3. Commit the new snapshot\n\n\
             Expected:\n{}\n\n\
             Actual:\n{}",

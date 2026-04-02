@@ -61,13 +61,14 @@ cargo publish -p <crate-name>
 After publish completes:
 
 1. Verify `RELEASE_NOTES.md` and release artifacts are complete.
-2. Confirm `cargo install perl-lsp` works for the new release version.
-3. Update documentation links where versioned examples are present.
-4. Announce release in project channels.
+2. Confirm `cargo search perl-lsp-rs --limit 1` and `cargo search perllsp --limit 1` show the new release version.
+3. Confirm `cargo install perllsp` works for the new release version.
+4. Update documentation links where versioned examples are present.
+5. Announce release in project channels.
 
 - Confirm `Release` and `Publish to crates.io` workflows completed successfully.
-- Spot-check package index visibility with `cargo search` for critical crates (`perl-lsp`, `perl-parser`, `perl-dap`).
-- Validate `cargo install perl-lsp` succeeds and executes `perl-lsp --version`.
+- Spot-check package index visibility with `cargo search` for critical crates (`perllsp`, `perl-lsp-rs`, `perl-parser`, `perl-dap`).
+- Validate `cargo install perllsp` succeeds and executes `perllsp --version`.
 
 ## Pre-Publish Checklist
 

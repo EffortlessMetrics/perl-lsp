@@ -32,12 +32,12 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}
 2. Clean and rebuild:
    ```bash
    cargo clean
-   cargo build -p perl-lsp --release
+   cargo build -p perl-lsp-rs --release
    ```
 
 3. If using Nix:
    ```bash
-   nix develop -c cargo build -p perl-lsp --release
+   nix develop -c cargo build -p perl-lsp-rs --release
    ```
 
 ### Missing Dependencies
@@ -47,7 +47,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}
 **Solution**: perl-lsp is pure Rust and should not require system dependencies. If you see C compiler or libclang errors, you may be building optional crates. Use:
 
 ```bash
-cargo build -p perl-lsp --release
+cargo build -p perl-lsp-rs --release
 ```
 
 Not `cargo build --workspace` which includes optional native crates.

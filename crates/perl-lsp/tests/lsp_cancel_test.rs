@@ -222,7 +222,7 @@ fn test_cancel_request_no_response() {
     );
 
     // Use bounded read to check for no response
-    let response = read_response_timeout(&server, Duration::from_millis(200));
+    let response = read_response_only_timeout(&server, Duration::from_millis(200));
 
     // $/cancelRequest is a notification and should not produce any response
     assert!(response.is_none(), "$/cancelRequest produced an unexpected response");

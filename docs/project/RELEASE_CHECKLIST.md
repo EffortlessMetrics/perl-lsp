@@ -1,6 +1,9 @@
 # Release Checklist
 
-This checklist is for the current release run. The end-to-end release mechanics live in [RELEASE.md](../../RELEASE.md); crates publishing details live in [PUBLISHING.md](../PUBLISHING.md); changelog generation lives in [CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md).
+This checklist is the release gate for the current cut.
+The mechanics live in [RELEASE.md](../../RELEASE.md), the release-day sequence lives in
+[PUBLISHING_ROADMAP.md](../PUBLISHING_ROADMAP.md), and changelog generation lives in
+[CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md).
 
 Use `NEW_VERSION` as the target semver string for the release you are preparing.
 
@@ -48,10 +51,11 @@ for crate_name in allow:
 ## Post-Release Verification
 
 - [ ] `gh release view vNEW_VERSION` shows the expected release notes and assets.
-- [ ] `cargo search perl-lsp --limit 1` resolves `perl-lsp = "NEW_VERSION"`.
+- [ ] `cargo search perl-lsp-rs --limit 1` resolves `perl-lsp-rs = "NEW_VERSION"`.
+- [ ] `cargo search perllsp --limit 1` resolves `perllsp = "NEW_VERSION"`.
 - [ ] The VS Code Marketplace and Open VSX listings show `NEW_VERSION`.
 - [ ] `docker pull effortlessmetrics/perl-lsp:NEW_VERSION` and `docker pull ghcr.io/effortlessmetrics/perl-lsp:NEW_VERSION` succeed.
-- [ ] `cargo install perl-lsp` installs the new release and `perl-lsp --version` prints `NEW_VERSION`.
+- [ ] `cargo install perllsp` installs the new release and `perllsp --version` prints `NEW_VERSION`.
 - [ ] The smoke tests in [RELEASE.md](../../RELEASE.md) pass for the current release artifacts.
 - [ ] Any evidence-backed status docs are updated with `just status-update` and validated with `just status-check`.
 

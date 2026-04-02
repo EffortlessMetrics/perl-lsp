@@ -170,7 +170,7 @@ test-full:
 # LSP smoke test (deterministic, single-threaded)
 lsp-smoke:
     @echo "Running LSP smoke tests..."
-    cargo test -p perl-lsp --test cli_smoke --locked -- --test-threads=1
+    cargo test -p perl-lsp-rs --test cli_smoke --locked -- --test-threads=1
     @echo "LSP smoke tests passed"
 
 # Security audit (non-blocking, warns on issues)
@@ -280,7 +280,7 @@ mutation-regression:
     @echo "🧪 Running mutation regression harnesses..."
     @cargo test -p perl-parser --test mutation_hardening_tests
     @cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
-    @cargo test -p perl-lsp --test mutation_survivors_elimination
+    @cargo test -p perl-lsp-rs --test mutation_survivors_elimination
     @echo "✅ Mutation regression harnesses passed"
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
@@ -579,28 +579,28 @@ ci-test-parser-dap:
 # LSP integration tests (with adaptive threading)
 ci-test-lsp:
     @echo "🔌 Running LSP integration tests..."
-    RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --test-threads=2
+    RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- --test-threads=2
     @echo "✅ LSP tests passed"
 
 # LSP semantic definition tests (semantic-aware go-to-definition)
 ci-lsp-def:
     @echo "🔎 Running LSP semantic definition tests..."
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --test semantic_definition -- --test-threads=1
+        cargo test -p perl-lsp-rs --test semantic_definition -- --test-threads=1
     @echo "✅ LSP semantic definition tests passed"
 
 # LSP process-level smoke receipt (initialize/open/completion/hover/definition/shutdown)
 ci-lsp-smoke-e2e:
     @echo "💨 Running LSP stdio smoke E2E test..."
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --test lsp_smoke_e2e -- --test-threads=1
+        cargo test -p perl-lsp-rs --test lsp_smoke_e2e -- --test-threads=1
     @echo "✅ LSP smoke E2E passed"
 
 # LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
 ci-lsp-bdd:
     @echo "🎭 Running LSP BDD workflow tests..."
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --locked --test lsp_bdd_workflows -- --test-threads=1
+        cargo test -p perl-lsp-rs --locked --test lsp_bdd_workflows -- --test-threads=1
     @echo "✅ LSP BDD workflow tests passed"
 
 # LSP microcrate compatibility coverage (feature microcrates + provider re-export contract)
@@ -609,11 +609,11 @@ ci-lsp-microcrates:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-providers --locked --test microcrate_reexports_compatibility -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --locked --test lsp_color_tests -- --test-threads=1
+        cargo test -p perl-lsp-rs --locked --test lsp_color_tests -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --locked --test lsp_code_lens_tests -- --test-threads=1
+        cargo test -p perl-lsp-rs --locked --test lsp_code_lens_tests -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --locked --test lsp_inline_completion_tests -- --test-threads=1
+        cargo test -p perl-lsp-rs --locked --test lsp_inline_completion_tests -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test --locked -p perl-feature-catalog \
                    -p perl-lsp-feature-ids \
@@ -632,7 +632,7 @@ ci-semantic-frameworks:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-semantic-analyzer --test frameworks_moo -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --test moo_semantics_e2e -- --test-threads=1
+        cargo test -p perl-lsp-rs --test moo_semantics_e2e -- --test-threads=1
     @echo "✅ Framework semantic tests passed"
 
 # DAP smoke receipt (launch/breakpoint/step/stack/evaluate/disconnect)
@@ -645,7 +645,7 @@ ci-dap-smoke-e2e:
 # Documentation build (no deps)
 ci-docs:
     @echo "📚 Building documentation..."
-    cargo doc -p perl-parser -p perl-lsp --no-deps
+    cargo doc -p perl-parser -p perl-lsp-rs --no-deps
     @echo "✅ Docs build passed"
 
 # Mutation testing (expensive, ~15-30 min)
@@ -900,7 +900,7 @@ roadmap-gate:
     -cargo test -p perl-semantic-analyzer -- test_anonymous_subroutine --ignored --nocapture
     -cargo test -p perl-dap -- test_attach_tcp_valid_arguments test_attach_default_values --ignored --nocapture
     -cargo test -p perl-parser -- test_statement_with_or_modifier --ignored --nocapture
-    -RUST_TEST_THREADS=2 cargo test -p perl-lsp -- test_fix_undefined_variable test_user_story_debugging_workflow test_user_story_refactoring_legacy_code --ignored --test-threads=2 --nocapture
+    -RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- test_fix_undefined_variable test_user_story_debugging_workflow test_user_story_refactoring_legacy_code --ignored --test-threads=2 --nocapture
     @echo "=== Roadmap gate complete (failures = unimplemented features) ==="
 
 # Health Scoreboard (keep yourself honest)
@@ -1138,7 +1138,7 @@ perf-baseline:
     cargo bench -p perl-lsp-completion --bench completion_benchmark --locked
     cargo bench -p perl-lsp-navigation --bench navigation_benchmark --locked
     cargo bench -p perl-workspace-index --bench workspace_index_benchmark --locked
-    cargo bench -p perl-lsp --bench rope_performance_benchmark --locked
+    cargo bench -p perl-lsp-rs --bench rope_performance_benchmark --locked
     cargo bench -p perl-lsp-tooling --bench cache_benchmark --locked
     @echo "Baseline complete. See docs/project/PERFORMANCE_BASELINES.md"
 
@@ -1330,7 +1330,8 @@ semver-check-all:
     @just semver-check-package perl-parser
     @just semver-check-package perl-lexer
     @just semver-check-package perl-parser-core
-    @just semver-check-package perl-lsp
+    @just semver-check-package perl-lsp-rs
+    @just semver-check-package perllsp
 
 # Generate breaking changes report
 semver-report:
@@ -1630,8 +1631,8 @@ gate-list:
 # Release build (locked, optimized)
 release-build:
     @echo "Building release binary..."
-    cargo build -p perl-lsp --release --locked
-    @echo "Release build complete: target/release/perl-lsp"
+    cargo build -p perllsp --release --locked
+    @echo "Release build complete: target/release/perllsp"
 
 # Version sync check (Slice B: single source of version truth)
 version-check:
@@ -1706,14 +1707,14 @@ release-check: release-gate semver-check
 # Run on every PR for quick feedback
 lsp-tier-a:
     @echo "Running LSP Tier A (smoke tests)..."
-    cargo test -p perl-lsp --test cli_smoke --test lsp_capabilities_snapshot --test lsp_capabilities_contract --test lsp_protocol_tests --locked -- --test-threads=1
+    cargo test -p perl-lsp-rs --test cli_smoke --test lsp_capabilities_snapshot --test lsp_capabilities_contract --test lsp_protocol_tests --locked -- --test-threads=1
     @echo "LSP Tier A passed"
 
 # Tier B: core behavior tests for perl-lsp (~2-5 min)
 # Run at merge gate for thorough validation
 lsp-tier-b: lsp-tier-a
     @echo "Running LSP Tier B (core behavior)..."
-    env RUST_TEST_THREADS=2 cargo test -p perl-lsp \
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs \
         --test semantic_definition \
         --test lsp_completion_tests \
         --test lsp_unhappy_paths \
@@ -1778,7 +1779,7 @@ cpan-corpus-ratchet:
 # Tier C: full suite (nightly, all integration tests)
 lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."
-    env RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked -- --test-threads=2
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --locked -- --test-threads=2
     @echo "LSP Tier C passed"
 
 # ============================================================================

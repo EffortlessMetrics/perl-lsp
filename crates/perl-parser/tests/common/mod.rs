@@ -7,7 +7,7 @@
 //! - **Response Matching**: Match by ID for request/response pairing
 //! - **Timeouts**: Configurable via env vars, with sensible defaults
 //! - **Quiet Drain**: Wait for server to settle after changes before assertions
-//! - **Portable Spawn**: Attempts CARGO_BIN_EXE_perl-lsp → PATH → cargo run fallback
+//! - **Portable Spawn**: Attempts `perllsp` first, then the `perl-lsp` compatibility path
 //!
 //! ## Environment Variables
 //!
@@ -88,6 +88,11 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // Try CARGO_BIN_EXE_* first, then PATH, then cargo run
     let mut v: Vec<Command> = Vec::new();
 
+    if let Ok(p) = std::env::var("CARGO_BIN_EXE_perllsp") {
+        let mut c = Command::new(p);
+        c.arg("--stdio");
+        v.push(c);
+    }
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
         let mut c = Command::new(p);
         c.arg("--stdio");
@@ -99,7 +104,12 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
         v.push(c);
     }
 
-    // Try perl-lsp from PATH
+    // Try perllsp from PATH, then the compatibility alias
+    {
+        let mut c = Command::new("perllsp");
+        c.arg("--stdio");
+        v.push(c);
+    }
     {
         let mut c = Command::new("perl-lsp");
         c.arg("--stdio");
@@ -109,7 +119,13 @@ fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
     // Fallback: use cargo run
     {
         let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
+        c.args(["run", "-q", "-p", "perllsp", "--", "--stdio"]);
+        v.push(c);
+    }
+
+    {
+        let mut c = Command::new("cargo");
+        c.args(["run", "-q", "-p", "perl-lsp-rs", "--", "--stdio"]);
         v.push(c);
     }
 

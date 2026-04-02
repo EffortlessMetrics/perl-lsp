@@ -127,7 +127,8 @@
 //!
 //! ## LSP Feature Support
 //!
-//! This crate provides the engine for LSP features. The standalone server is in `perl-lsp`.
+//! This crate provides the engine for LSP features. The public standalone server is in
+//! `perllsp`, backed by the `perl-lsp-rs` implementation crate.
 //!
 //! ### Implemented Features
 //!
@@ -226,16 +227,16 @@
 //!
 //! ```bash
 //! # Build LSP server
-//! cargo build -p perl-lsp --release
+//! cargo build -p perllsp --release
 //!
 //! # Install globally
-//! cargo install --path crates/perl-lsp
+//! cargo install --path crates/perllsp
 //!
 //! # Run LSP server
-//! perl-lsp --stdio
+//! perllsp --stdio
 //!
 //! # Check server health
-//! perl-lsp --health
+//! perllsp --health
 //! ```
 //!
 //! ## Integration Examples
@@ -246,7 +247,7 @@
 //!
 //! ```json
 //! {
-//!   "perl.lsp.path": "/path/to/perl-lsp",
+//!   "perl.lsp.path": "/path/to/perllsp",
 //!   "perl.lsp.args": ["--stdio"]
 //! }
 //! ```
@@ -255,7 +256,7 @@
 //!
 //! ```lua
 //! require'lspconfig'.perl.setup{
-//!   cmd = { "/path/to/perl-lsp", "--stdio" },
+//!   cmd = { "/path/to/perllsp", "--stdio" },
 //! }
 //! ```
 //!
@@ -275,7 +276,8 @@
 //!
 //! ## Related Crates
 //!
-//! - `perl-lsp`: Standalone LSP server runtime (moved from this crate)
+//! - `perllsp`: Public Cargo entry point for the standalone LSP server
+//! - `perl-lsp-rs`: Standalone LSP server runtime implementation (moved from this crate)
 //! - `perl-lexer`: Context-aware Perl tokenizer
 //! - `perl-corpus`: Comprehensive test corpus and generators
 //! - `perl-dap`: Debug Adapter Protocol implementation

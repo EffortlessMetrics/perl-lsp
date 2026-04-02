@@ -5,9 +5,9 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 
-A fast, native Perl 5 language server with 30+ IDE features. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
+A fast, native Perl 5 language server extension. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
-> **0.12.0 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
+> **0.12.1 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
 
 ## Features
 
@@ -53,7 +53,8 @@ A fast, native Perl 5 language server with 30+ IDE features. Written in Rust for
 
 ### Walkthrough Previews
 
-These storyboard SVGs are capture plans for the launch demos from issue #2336. They are not the final GIFs; the shipped assets come from recorded editor sessions rendered through the helper script.
+These storyboard SVGs are preview assets for the walkthrough flow. They are not
+the final recorded GIFs.
 
 - [Install, auto-download, and health check storyboard](media/walkthrough/install-health.svg)
 - [Go to definition and find references storyboard](media/walkthrough/find-references.svg)
@@ -73,7 +74,7 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 codium --install-extension EffortlessMetrics.perl-lsp-rs
 ```
 
-The extension automatically downloads the correct `perl-lsp` binary for your platform on first activation:
+The extension automatically downloads the correct `perllsp` binary for your platform on first activation:
 
 | Platform | Architectures |
 |----------|--------------|
@@ -94,10 +95,10 @@ brew install perl-lsp
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # From source
-cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
+cargo install --git https://github.com/EffortlessMetrics/perl-lsp --package perllsp
 ```
 
-Then point the extension to your binary via `perl-lsp.serverPath`.
+Then point the extension to your `perllsp` binary via `perl-lsp.serverPath`.
 
 ## Configuration
 
@@ -105,10 +106,10 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `perl-lsp.autoDownload` | `true` | Automatically download `perl-lsp` if not found locally |
-| `perl-lsp.serverPath` | `""` | Absolute path to a `perl-lsp` binary (overrides auto-download) |
+| `perl-lsp.autoDownload` | `true` | Automatically download `perllsp` if not found locally |
+| `perl-lsp.serverPath` | `""` | Absolute path to a `perllsp` binary (overrides auto-download) |
 | `perl-lsp.channel` | `"latest"` | Release channel: `latest`, `stable`, or `tag` |
-| `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.0`) when channel is `tag` |
+| `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
 | `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
 | `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting |
 | `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`) |
@@ -151,7 +152,7 @@ For environments without internet access, set `perl-lsp.downloadBaseUrl` to an i
 - Postfix dereferencing (`$ref->@*`)
 - Smart match operator (`~~`)
 - Indirect object syntax
-- 150+ built-in function signatures with parameter documentation
+- Built-in function signatures with parameter documentation
 
 ## Commands
 
@@ -160,7 +161,7 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 | Command | Description |
 |---------|-------------|
 | **Perl: Restart Language Server** | Restart the language server |
-| **Perl: Show Server Version** | Display installed perl-lsp version |
+| **Perl: Show Server Version** | Display installed perllsp version |
 | **Perl: Reinstall Server Binary** | Re-download the managed binary |
 | **Perl: Organize Use Statements** | Sort and clean `use` statements |
 | **Perl: Run Tests in Current File** | Run tests in the active `.t` or `.pl` file |
@@ -169,7 +170,7 @@ Open the command palette (`Ctrl+Shift+P`) and search for "Perl":
 
 ## Compatibility
 
-The `perl-lsp` binary works with any editor that supports the Language Server Protocol:
+The `perllsp` binary works with any editor that supports the Language Server Protocol:
 
 | Editor | How to connect |
 |--------|---------------|
@@ -177,8 +178,8 @@ The `perl-lsp` binary works with any editor that supports the Language Server Pr
 | **Cursor** | This extension |
 | **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
 | **Emacs** | `lsp-mode` or `eglot` |
-| **Helix** | `languages.toml` with `perl-lsp --stdio` |
-| **Sublime Text** | LSP package with `perl-lsp --stdio` |
+| **Helix** | `languages.toml` with `perllsp --stdio` |
+| **Sublime Text** | LSP package with `perllsp --stdio` |
 | **GitHub Codespaces** | This extension |
 | **Gitpod** | This extension |
 
@@ -186,7 +187,7 @@ The `perl-lsp` binary works with any editor that supports the Language Server Pr
 
 **Server not starting?**
 1. Open the output channel: Command Palette > "Perl: Show Output Channel"
-2. Check that `perl-lsp` is available: Command Palette > "Perl: Show Server Version"
+2. Check that `perllsp` is available: Command Palette > "Perl: Show Server Version"
 3. If auto-download failed, check your network/proxy settings or install manually
 
 **Formatting not working?**

@@ -1,23 +1,30 @@
 # perl-lsp-code-actions
 
-LSP code actions provider for the Perl LSP ecosystem. Generates quick fixes
-driven by diagnostic codes and refactoring actions driven by AST analysis.
+Perl code action engine for quick fixes and AST-driven refactorings. It turns
+diagnostics and structured syntax into actionable edits such as import fixes,
+declaration insertion, extract-variable refactors, and loop conversions.
 
-## Public API
+## Use this crate when
 
-- `CodeActionsProvider` -- diagnostic-driven quick fixes (declare variable,
-  add pragmas, fix parse errors, fix barewords, handle unused variables).
-- `EnhancedCodeActionsProvider` -- AST-driven refactorings (extract variable,
-  extract subroutine, loop conversion, import management, postfix conversion,
-  error-checking insertion).
-- `CodeAction`, `CodeActionKind`, `CodeActionEdit` -- result types.
+Use `perl-lsp-code-actions` if you need the code-action logic itself. Use
+`perl-lsp-providers` when you want the umbrella re-export surface. This crate is
+the provider layer, not the editor transport layer.
 
-## Workspace Role
+## Key exports
 
-Internal feature crate in the `tree-sitter-perl-rs` workspace, consumed by
-`perl-lsp` for `textDocument/codeAction` request dispatch. Not intended for
-standalone use outside the workspace.
+- `CodeActionsProvider` - diagnostic-driven fixes for common Perl problems
+- `EnhancedCodeActionsProvider` - AST-driven refactorings and structural edits
+- `CodeAction`, `CodeActionKind`, `CodeActionEdit` - shared action types
 
-## License
+## What it covers
 
-MIT OR Apache-2.0
+- missing variable declarations and pragma fixes
+- parse-error and bareword recovery actions
+- import management and other refactor helpers
+- extract-variable, extract-subroutine, and loop-modernization actions
+
+## Stack role
+
+This crate sits behind the editor-facing LSP code-action handlers in `perl-lsp`.
+It consumes diagnostics and AST state, then returns the edits the client can
+offer to the user.

@@ -240,7 +240,7 @@ cargo test -p perl-parser --test fuzz_transliteration_crash_repro       # Transl
 ### Integration with Development Workflow
 - **[CLAUDE.md](../CLAUDE.md)**: Essential commands and project overview with robustness testing integration
 - **[CONTRIBUTING_LSP.md](../how-to/CONTRIBUTING_LSP.md)**: Development guidelines with quality assurance requirements
-- **[MIGRATION.md](../MIGRATION.md)**: Migration guidance including robustness testing adoption
+- **[UPGRADING.md](../how-to/UPGRADING.md)**: Upgrade guidance for current releases and robustness-adjacent adoption
 
 ## Summary
 

@@ -148,13 +148,51 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
+                if !self.is_valid_identifier(new_name) {
+                    return Err(JsonRpcError {
+                        code: -32602,
+                        message: format!("Invalid identifier: {}", new_name),
+                        data: None,
+                    });
+                }
+
                 // Check index access mode using routing helper
                 #[cfg(feature = "workspace")]
                 {
                     let access_mode = route_index_access(self.coordinator());
+                    let symbol_key = {
+                        let documents = self.documents_guard();
+                        self.get_document(&documents, uri).and_then(|doc| {
+                            doc.ast.as_ref().and_then(|ast| {
+                                let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
+                                let current_pkg =
+                                    crate::declaration::current_package_at(ast, offset);
+                                crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                            })
+                        })
+                    };
 
                     match access_mode {
                         IndexAccessMode::Partial(reason) => {
+                            if let (Some(coordinator), Some(key)) =
+                                (self.coordinator(), symbol_key.as_ref())
+                            {
+                                let edits = crate::workspace_rename::build_rename_edit(
+                                    coordinator.index(),
+                                    key,
+                                    new_name,
+                                );
+                                if !edits.is_empty() {
+                                    eprintln!(
+                                        "Rename: served {} partial-index workspace edits while {}",
+                                        edits.len(),
+                                        reason
+                                    );
+                                    return Ok(Some(crate::workspace_rename::to_workspace_edit(
+                                        edits,
+                                    )));
+                                }
+                            }
                             eprintln!(
                                 "Rename: workspace rename unavailable ({}), using same-file only",
                                 reason
@@ -166,29 +204,14 @@ impl LspServer {
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::Full(coordinator) => {
-                            // Full workspace rename available - use coordinator's index directly
-                            let documents = self.documents_guard();
-                            if let Some(doc) = self.get_document(&documents, uri) {
-                                if let Some(ref ast) = doc.ast {
-                                    let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
-                                    let current_pkg =
-                                        crate::declaration::current_package_at(ast, offset);
-                                    if let Some(key) = crate::declaration::symbol_at_cursor(
-                                        ast,
-                                        offset,
-                                        current_pkg,
-                                    ) {
-                                        // Use coordinator.index() directly instead of workspace_index()
-                                        // to ensure we go through routing policy
-                                        let idx = coordinator.index();
-                                        let edits = crate::workspace_rename::build_rename_edit(
-                                            idx, &key, new_name,
-                                        );
-                                        let ws_edit =
-                                            crate::workspace_rename::to_workspace_edit(edits);
-                                        return Ok(Some(ws_edit));
-                                    }
-                                }
+                            if let Some(key) = symbol_key.as_ref() {
+                                // Use coordinator.index() directly instead of workspace_index()
+                                // to ensure we go through routing policy
+                                let idx = coordinator.index();
+                                let edits =
+                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                                let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
+                                return Ok(Some(ws_edit));
                             }
                         }
                     }

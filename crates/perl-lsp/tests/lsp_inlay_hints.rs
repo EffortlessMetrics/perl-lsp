@@ -9,7 +9,13 @@ fn inlay_hints_for_substr_and_types() -> Result<(), Box<dyn std::error::Error>> 
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
         method: "initialize".into(),
-        params: Some(json!({"capabilities":{}})),
+        params: Some(json!({
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {}
+                }
+            }
+        })),
     };
     srv.handle_request(init);
 

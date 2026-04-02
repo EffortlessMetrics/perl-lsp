@@ -28,7 +28,11 @@ fn setup_server() -> LspServer {
         method: "initialize".to_string(),
         params: Some(json!({
             "processId": 1,
-            "capabilities": {}
+            "capabilities": {
+                "textDocument": {
+                    "inlayHint": {}
+                }
+            }
         })),
         id: Some(json!(1)),
     };

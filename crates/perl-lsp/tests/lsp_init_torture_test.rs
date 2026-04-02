@@ -6,7 +6,7 @@
 //!
 //! Run with:
 //! ```bash
-//! RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_init_torture_test -- --test-threads=1
+//! RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_init_torture_test -- --test-threads=1
 //! ```
 
 mod support;

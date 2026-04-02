@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BIN=${BIN:-target/debug/perl-lsp}
-cargo build -p perl-parser --bin perl-lsp --quiet
+BIN=${BIN:-target/debug/perllsp}
+cargo build -p perllsp --bin perllsp --quiet
 
 python3 - "$BIN" <<'PY'
 import json, subprocess, sys, os, time, signal

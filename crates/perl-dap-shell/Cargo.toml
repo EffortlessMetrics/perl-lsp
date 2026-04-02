@@ -1,15 +1,15 @@
 [package]
 name = "perl-dap-shell"
-version = "0.12.0"
+version = "0.12.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Shell argument and environment helpers for perl-dap"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-dap-shell"
-readme = "README.md"
 keywords = ["perl", "dap", "shell", "environment", "debugger"]
 categories = ["development-tools::debugging", "command-line-utilities"]
 include = [

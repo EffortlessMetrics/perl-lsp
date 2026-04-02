@@ -13,23 +13,23 @@ Get perl-lsp up and running in 5 minutes!
 ### From crates.io (Recommended)
 
 ```bash
-cargo install perl-lsp
+cargo install perllsp
 ```
 
 ### From Source
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd tree-sitter-perl
-cargo build --release -p perl-lsp
+cd perl-lsp
+cargo build --release -p perllsp
 ```
 
-The binary will be at `target/release/perl-lsp`.
+The binary will be at `target/release/perllsp`.
 
 ## Verify Installation
 
 ```bash
-perl-lsp --version
+perllsp --version
 ```
 
 You should see the version information displayed.
@@ -41,12 +41,12 @@ You should see the version information displayed.
 Run the LSP server in stdio mode:
 
 ```bash
-perl-lsp --stdio
+perllsp --stdio
 ```
 
 ### Editor Integration
 
-Configure your editor to use `perl-lsp` as the Perl language server. See [Editor Setup](./getting-started/editor-setup.md) for detailed instructions for:
+Configure your editor to use `perllsp` as the Perl language server. See [Editor Setup](./getting-started/editor-setup.md) for detailed instructions for:
 
 - Visual Studio Code
 - Neovim
@@ -88,14 +88,14 @@ cargo build --workspace
 cargo test
 
 # Build LSP server only
-cargo build -p perl-lsp --release
+cargo build -p perllsp --release
 
 # Build parser library
 cargo build -p perl-parser --release
 
 # Run specific tests
 cargo test -p perl-parser
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 ```
 
 ## Troubleshooting
@@ -105,14 +105,14 @@ cargo test -p perl-lsp
 Check the log output:
 
 ```bash
-RUST_LOG=debug perl-lsp --stdio
+RUST_LOG=debug perllsp --stdio
 ```
 
 ### Editor Not Connecting
 
 Ensure your editor's LSP client is properly configured. Check:
 
-1. The path to the `perl-lsp` binary
+1. The path to the `perllsp` binary
 2. The command-line arguments (`--stdio`)
 3. File type associations (`.pl`, `.pm`, `.t`)
 

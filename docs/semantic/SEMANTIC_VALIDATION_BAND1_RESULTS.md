@@ -84,7 +84,7 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 **Command:**
 ```bash
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition \
+  cargo test -p perl-lsp-rs --test semantic_definition \
     -- --nocapture semantic_definition_tests::definition_finds_scalar_variable_declaration
 ```
 

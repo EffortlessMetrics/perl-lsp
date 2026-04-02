@@ -1,6 +1,6 @@
 [package]
 name = "perl-dap-breakpoint"
-version = "0.12.0"
+version = "0.12.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -12,10 +12,11 @@ documentation = "https://docs.rs/perl-dap-breakpoint"
 readme = "README.md"
 keywords = ["perl", "dap", "debug", "breakpoint", "validation"]
 categories = ["development-tools::debugging", "development-tools"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 # Perl parser for AST-based validation
-perl-parser = { path = "../perl-parser", version = "0.12.0" }
+perl-parser = { path = "../perl-parser", version = "0.12.1" }
 
 # Rope for position mapping
 ropey = "1.6.1"

@@ -1,31 +1,35 @@
 # perl-lsp-rename
 
-LSP rename provider for Perl symbol refactoring.
+Perl rename provider for `textDocument/prepareRename` and `textDocument/rename`.
+It validates a symbol first, then produces the text edits needed to rename it
+consistently across definitions and references.
 
-## Features
+## Use this crate when
 
-- **Prepare rename**: validates that a symbol at a given position is renameable
-- **Rename execution**: generates text edits for all occurrences (definitions + references)
-- **Name validation**: rejects empty names, keywords, invalid identifiers, and naming conflicts
-- **Sigil handling**: preserves Perl sigils (`$`, `@`, `%`, `&`) during variable renames
-- **Special variable protection**: prevents renaming of built-in variables and functions
-- **Optional text search**: can also rename occurrences in comments and strings
+Use `perl-lsp-rename` if you need rename logic with Perl-specific rules. It is
+the right layer when you need validation, scope-aware symbol resolution, and
+edit generation. If you only need the shared provider surface, use
+`perl-lsp-providers`.
 
-## Public API
+## Key exports
 
-| Type | Purpose |
-|------|---------|
-| `RenameProvider` | Main entry point: `prepare_rename()` and `rename()` |
-| `RenameOptions` | Controls validation, comment/string renaming |
-| `RenameResult` | Contains edits, validity flag, and optional error |
-| `TextEdit` | A single location + replacement text |
+- `RenameProvider` - main entry point for `prepare_rename()` and `rename()`
+- `RenameOptions` - controls validation and whether comments/strings are
+  included
+- `RenameResult` - edits plus validation state
+- `TextEdit` - single replacement at a location
 
-## Workspace Role
+## Example
 
-Internal feature crate in the `tree-sitter-perl-rs` workspace, consumed by
-`perl-lsp` to handle `textDocument/rename` and `textDocument/prepareRename` requests.
-Depends on `perl-parser-core` for AST types and `perl-semantic-analyzer` for symbol tables.
+```rust,ignore
+use perl_lsp_rename::{RenameOptions, RenameProvider};
 
-## License
+let provider = RenameProvider::new(&ast, source.to_string());
+let _prepared = provider.prepare_rename(position);
+let result = provider.rename(position, "new_name", &RenameOptions::default());
+```
 
-MIT OR Apache-2.0
+## Stack role
+
+This is the rename engine consumed by `perl-lsp`. It relies on parser, scope,
+and symbol data, then returns the precise edits that the editor applies.

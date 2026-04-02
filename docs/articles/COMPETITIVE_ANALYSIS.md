@@ -89,7 +89,7 @@ perl-lsp occupies a different position in this landscape: zero-dependency static
 
 This has real implications:
 
-**Installation is trivial.** `cargo install perl-lsp` or a pre-built binary download. No Perl, no CPAN modules, no environment configuration. It starts in milliseconds regardless of what Perl installation exists (or doesn't exist) on the machine.
+**Installation is trivial.** `cargo install perllsp` or a pre-built binary download. No Perl, no CPAN modules, no environment configuration. It starts in milliseconds regardless of what Perl installation exists (or doesn't exist) on the machine.
 
 **It is safe on untrusted code.** No `BEGIN` block execution, no module loading, no Perl process at all. You can open a PR from an unknown contributor and get diagnostics, navigation, and completions without executing anything from that codebase.
 

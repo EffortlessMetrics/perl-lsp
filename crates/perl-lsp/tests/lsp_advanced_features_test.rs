@@ -6,7 +6,7 @@
 //! 1. Many of these tests are for speculative/future features not yet implemented
 //! 2. The tests exercise mocked/stubbed behavior rather than full LSP harness coverage
 //!
-//! To run these tests: `cargo test -p perl-lsp --features lsp-extras --test lsp_advanced_features_test`
+//! To run these tests: `cargo test -p perl-lsp-rs --features lsp-extras --test lsp_advanced_features_test`
 //! These tests should be rewritten with proper LspHarness before enabling in CI.
 
 #![cfg(feature = "lsp-extras")]

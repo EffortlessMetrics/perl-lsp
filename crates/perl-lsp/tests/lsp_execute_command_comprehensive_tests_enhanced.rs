@@ -13,6 +13,8 @@
 use serde_json::json;
 use std::time::Duration;
 
+use perl_lsp::execute_command::get_supported_commands;
+
 mod support;
 use support::lsp_harness::{LspHarness, TempWorkspace};
 
@@ -127,23 +129,19 @@ fn test_enhanced_execute_command_server_capabilities() -> TestResult {
         "ExecuteCommandProvider should list supported commands"
     );
 
-    let mut actual_commands: Vec<&str> = execute_command_provider["commands"]
+    let mut actual_commands: Vec<String> = execute_command_provider["commands"]
         .as_array()
         .ok_or("Commands should be an array per LSP specification")?
         .iter()
-        .map(|cmd| cmd.as_str().ok_or("All commands should be strings per LSP specification"))
+        .map(|cmd| {
+            cmd.as_str()
+                .map(str::to_owned)
+                .ok_or("All commands should be strings per LSP specification")
+        })
         .collect::<Result<_, _>>()?;
     actual_commands.sort_unstable();
 
-    let mut expected_commands = vec![
-        "perl.debugFile",
-        "perl.runCritic",
-        "perl.runFile",
-        "perl.runTest",
-        "perl.runTestFile",
-        "perl.runTestSub",
-        "perl.runTests",
-    ];
+    let mut expected_commands = get_supported_commands();
     expected_commands.sort_unstable();
 
     ensure!(

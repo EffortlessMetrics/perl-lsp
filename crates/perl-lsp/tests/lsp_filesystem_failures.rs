@@ -3,6 +3,7 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use url::Url;
 
 mod common;
@@ -13,7 +14,10 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn path_to_uri(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     Ok(Url::from_file_path(path).map_err(|_| "Failed to convert file path to URI")?.to_string())
 }
-use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
+use common::{
+    initialize_lsp, read_response, read_response_matching_i64, send_notification, send_request,
+    send_request_no_wait, start_lsp_server,
+};
 
 /// Filesystem failure scenario tests
 /// Tests handling of permission errors, disk space, and I/O failures
@@ -317,8 +321,8 @@ fn test_broken_symlink() -> TestResult {
     initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
-    let target = &temp_dir.join("target.pl");
-    let link = &temp_dir.join("link.pl");
+    let target = &temp_dir.join(format!("target_{}.pl", std::process::id()));
+    let link = &temp_dir.join(format!("link_{}.pl", std::process::id()));
 
     // Create file and symlink
     fs::write(target, "print 'target';")?;
@@ -327,7 +331,16 @@ fn test_broken_symlink() -> TestResult {
     #[cfg(unix)]
     std::os::unix::fs::symlink(target, link)?;
     #[cfg(windows)]
-    std::os::windows::fs::symlink_file(target, link)?;
+    {
+        if let Err(err) = std::os::windows::fs::symlink_file(target, link) {
+            if err.raw_os_error() == Some(1314) {
+                eprintln!("Skipping broken symlink test on Windows without symlink privilege");
+                let _ = fs::remove_file(target);
+                return Ok(());
+            }
+            return Err(err.into());
+        }
+    }
 
     // Delete target, leaving broken symlink
     fs::remove_file(target)?;
@@ -703,11 +716,13 @@ fn test_workspace_folder_deleted() -> TestResult {
     let server = start_lsp_server();
 
     let temp_dir = std::env::temp_dir();
-    let workspace_path = &temp_dir.to_path_buf();
-    let workspace_uri = path_to_uri(workspace_path)?;
+    let workspace_path = temp_dir.join(format!("workspace_deleted_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&workspace_path);
+    fs::create_dir(&workspace_path)?;
+    let workspace_uri = path_to_uri(&workspace_path)?;
 
     // Initialize with workspace folder
-    let response = send_request(
+    send_request_no_wait(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -724,6 +739,8 @@ fn test_workspace_folder_deleted() -> TestResult {
             }
         }),
     );
+    let response = read_response_matching_i64(&server, 1, Duration::from_secs(20))
+        .ok_or("initialize response timed out")?;
 
     eprintln!("Initialize response: {:?}", response);
     assert!(response["result"].is_object());
@@ -737,9 +754,7 @@ fn test_workspace_folder_deleted() -> TestResult {
         }),
     );
 
-    // Delete workspace folder
-    // Note: We can't actually delete temp_dir while we're using it
-    // Instead, simulate by removing workspace folder via LSP
+    // Simulate workspace removal via LSP without deleting the temp directory root.
     send_notification(
         &server,
         json!({
@@ -758,7 +773,7 @@ fn test_workspace_folder_deleted() -> TestResult {
     );
 
     // Try to perform workspace operations
-    send_request(
+    send_request_no_wait(
         &server,
         json!({
             "jsonrpc": "2.0",
@@ -770,10 +785,13 @@ fn test_workspace_folder_deleted() -> TestResult {
         }),
     );
 
-    let response = read_response(&server);
+    let response = read_response_matching_i64(&server, 2, Duration::from_secs(10))
+        .ok_or("workspace/symbol response timed out")?;
     // Should return an array (possibly empty) or null
     assert!(response.is_object());
     assert!(response["result"].is_array() || response["result"].is_null());
+
+    let _ = fs::remove_dir_all(&workspace_path);
 
     Ok(())
 }

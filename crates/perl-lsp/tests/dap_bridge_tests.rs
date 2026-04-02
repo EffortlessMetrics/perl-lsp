@@ -4,7 +4,7 @@
 //!
 //! Specification: docs/issue-207-spec.md#phase-1-bridge-implementation-ac1-ac4
 //!
-//! Run with: cargo test -p perl-lsp --features dap-phase1
+//! Run with: cargo test -p perl-lsp-rs --features dap-phase1
 
 #[cfg(feature = "dap-phase1")]
 mod dap_phase1_tests {

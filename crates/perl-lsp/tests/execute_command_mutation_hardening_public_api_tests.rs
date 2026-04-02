@@ -23,37 +23,114 @@ use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::fs;
 use std::io::Write;
-use tempfile::NamedTempFile;
+use std::path::{Path, PathBuf};
+use tempfile::{NamedTempFile, TempDir, tempdir};
+use url::Url;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn setup_provider_workspace()
+-> Result<(TempDir, ExecuteCommandProvider), Box<dyn std::error::Error>> {
+    let workspace = tempdir()?;
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![workspace.path().to_path_buf()]);
+    Ok((workspace, provider))
+}
+
+fn write_workspace_file(
+    workspace: &TempDir,
+    name: &str,
+    content: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let path = workspace.path().join(name);
+    fs::write(&path, content)?;
+    Ok(path)
+}
+
+fn file_uri(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(Url::from_file_path(path)
+        .map_err(|_| format!("Failed to create file URI for {}", path.display()))?
+        .to_string())
+}
+
+fn normalize_path_string(path: &str) -> String {
+    #[cfg(windows)]
+    {
+        if let Some(stripped) = path.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{}", stripped);
+        }
+        if let Some(stripped) = path.strip_prefix(r"\\?\") {
+            return stripped.to_string();
+        }
+    }
+
+    path.to_string()
+}
+
+fn setup_initialized_server() -> perl_lsp::LspServer {
+    use perl_lsp::{JsonRpcRequest, LspServer};
+
+    let server = LspServer::new();
+
+    let initialize = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(json!(1)),
+        method: "initialize".to_string(),
+        params: Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    };
+    server.handle_request(initialize);
+
+    let initialized = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    };
+    server.handle_request(initialized);
+
+    server
+}
 
 // ============= RETURN VALUE BYPASS MUTATION KILLERS =============
 // Target: Functions returning Ok(Default::default()) instead of proper results
 
 #[test]
 fn test_execute_command_not_default_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let (workspace, provider) = setup_provider_workspace()?;
 
     // Create test files for comprehensive testing
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test execution';\n";
-    let temp_file = "/tmp/test_execute_not_default.pl";
-    fs::write(temp_file, test_content)?;
+    let temp_file = write_workspace_file(&workspace, "test_execute_not_default.pl", test_content)?;
 
     let sub_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_function { print 'executed'; return 42; }\n";
-    let sub_file = "/tmp/test_sub_not_default.pl";
-    fs::write(sub_file, sub_content)?;
+    let sub_file = write_workspace_file(&workspace, "test_sub_not_default.pl", sub_content)?;
 
     // Test each command to ensure no Ok(Default::default()) returns
     let test_cases = vec![
-        ("perl.runTests", vec![Value::String(temp_file.to_string())], "runTests"),
-        ("perl.runFile", vec![Value::String(temp_file.to_string())], "runFile"),
+        ("perl.runTests", vec![Value::String(temp_file.to_string_lossy().to_string())], "runTests"),
+        ("perl.runFile", vec![Value::String(temp_file.to_string_lossy().to_string())], "runFile"),
         (
             "perl.runTestSub",
-            vec![Value::String(sub_file.to_string()), Value::String("test_function".to_string())],
+            vec![
+                Value::String(sub_file.to_string_lossy().to_string()),
+                Value::String("test_function".to_string()),
+            ],
             "runTestSub",
         ),
-        ("perl.debugTests", vec![Value::String(temp_file.to_string())], "debugTests"),
-        ("perl.runCritic", vec![Value::String(temp_file.to_string())], "runCritic"),
+        (
+            "perl.debugTests",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+            "debugTests",
+        ),
+        (
+            "perl.runCritic",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+            "runCritic",
+        ),
     ];
 
     for (command, args, description) in test_cases {
@@ -153,10 +230,6 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
             }
         }
     }
-
-    // Clean up
-    fs::remove_file(temp_file).ok();
-    fs::remove_file(sub_file).ok();
     Ok(())
 }
 
@@ -165,28 +238,40 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
 
 #[test]
 fn test_command_routing_specificity_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let (workspace, provider) = setup_provider_workspace()?;
 
     // Create test file
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'routing test';\n";
-    let temp_file = "/tmp/test_routing_comprehensive.pl";
-    fs::write(temp_file, test_content)?;
+    let temp_file =
+        write_workspace_file(&workspace, "test_routing_comprehensive.pl", test_content)?;
 
     // Execute all commands and verify they produce DIFFERENT results
     let run_tests_result = provider
-        .execute_command("perl.runTests", vec![Value::String(temp_file.to_string())])
+        .execute_command(
+            "perl.runTests",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        )
         .map_err(|e| format!("runTests should succeed: {}", e))?;
 
     let run_file_result = provider
-        .execute_command("perl.runFile", vec![Value::String(temp_file.to_string())])
+        .execute_command(
+            "perl.runFile",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        )
         .map_err(|e| format!("runFile should succeed: {}", e))?;
 
     let debug_tests_result = provider
-        .execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())])
+        .execute_command(
+            "perl.debugTests",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        )
         .map_err(|e| format!("debugTests should succeed: {}", e))?;
 
     let run_critic_result = provider
-        .execute_command("perl.runCritic", vec![Value::String(temp_file.to_string())])
+        .execute_command(
+            "perl.runCritic",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        )
         .map_err(|e| format!("runCritic should succeed: {}", e))?;
 
     // MUTATION KILLER: Verify command-specific behaviors (proves routing works)
@@ -230,9 +315,6 @@ fn test_command_routing_specificity_comprehensive() -> TestResult {
         debug_tests_result, run_critic_result,
         "debugTests and runCritic should produce different results - proves routing works"
     );
-
-    // Clean up
-    fs::remove_file(temp_file).ok();
     Ok(())
 }
 
@@ -362,42 +444,67 @@ fn test_parameter_validation_comprehensive() -> TestResult {
 
 #[test]
 fn test_file_path_extraction_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let (workspace, provider) = setup_provider_workspace()?;
 
     // Test that extract_file_path_argument returns actual values, not hardcoded ones
     // We do this indirectly by testing runCritic with different file paths
 
+    let existing_one = write_workspace_file(
+        &workspace,
+        "path1.pl",
+        "#!/usr/bin/perl\nmy $value = 1;\nprint $value;\n",
+    )?;
+    let existing_two = write_workspace_file(
+        &workspace,
+        "different_path.pl",
+        "#!/usr/bin/perl\nmy $value = 2;\nprint $value;\n",
+    )?;
+    let uri_file = write_workspace_file(
+        &workspace,
+        "uri_test.pl",
+        "#!/usr/bin/perl\nmy $value = 3;\nprint $value;\n",
+    )?;
+    let missing = workspace.path().join("missing_test.pl");
+
     let test_paths = vec![
-        "/tmp/path1.pl",
-        "/tmp/different_path.pl",
-        "/home/user/test.pl",
-        "file:///tmp/uri_test.pl",
+        (
+            existing_one.to_string_lossy().to_string(),
+            existing_one.to_string_lossy().to_string(),
+            true,
+        ),
+        (
+            existing_two.to_string_lossy().to_string(),
+            existing_two.to_string_lossy().to_string(),
+            true,
+        ),
+        (missing.to_string_lossy().to_string(), missing.to_string_lossy().to_string(), false),
+        (file_uri(&uri_file)?, uri_file.to_string_lossy().to_string(), true),
     ];
 
-    for path in test_paths {
+    for (input_path, expected_path, exists) in test_paths {
         let result =
-            provider.execute_command("perl.runCritic", vec![Value::String(path.to_string())]);
+            provider.execute_command("perl.runCritic", vec![Value::String(input_path.clone())])?;
 
-        // Should succeed or fail gracefully, but if it succeeds, it should process the actual path
-        match result {
-            Ok(response) => {
-                // If it succeeds, verify it processed the path (either found file or reported not found)
-                if response["status"] == "error" {
-                    let error_msg = response["error"].as_str().ok_or("error should be a string")?;
-                    if error_msg.contains("File not found") {
-                        // Good - it actually checked the specific path
-                        assert!(
-                            error_msg.contains(path.strip_prefix("file://").unwrap_or(path)),
-                            "Error should mention the actual path: {}",
-                            path
-                        );
-                    }
-                }
-            }
-            Err(error) => {
-                // Should have meaningful error related to the path
-                assert!(!error.is_empty(), "Error should not be empty for path: {}", path);
-            }
+        if exists {
+            assert_eq!(result["status"], "success", "Expected critic success for {}", input_path);
+            let violations =
+                result["violations"].as_array().ok_or("violations should be an array")?;
+            let first_violation =
+                violations.first().ok_or("Expected at least one violation for existing file")?;
+            let actual_file = first_violation["file"].as_str().ok_or("file should be a string")?;
+            assert_eq!(
+                normalize_path_string(actual_file),
+                normalize_path_string(&expected_path),
+                "Critic should report the actual resolved file path"
+            );
+        } else {
+            assert_eq!(result["status"], "error", "Missing files should return critic error");
+            let error_msg = result["error"].as_str().ok_or("error should be a string")?;
+            assert!(
+                error_msg.contains(&expected_path),
+                "Error should mention the actual missing path: {}",
+                expected_path
+            );
         }
     }
     Ok(())
@@ -408,17 +515,18 @@ fn test_file_path_extraction_validation() -> TestResult {
 
 #[test]
 fn test_response_structure_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let (workspace, provider) = setup_provider_workspace()?;
 
     // Create test file with known content
     let test_content =
         "#!/usr/bin/perl\n# Missing pragmas for violations\nmy $var = 42;\nprint $var;\n";
-    let temp_file = "/tmp/test_response_structure.pl";
-    fs::write(temp_file, test_content)?;
+    let temp_file = write_workspace_file(&workspace, "test_response_structure.pl", test_content)?;
 
     // Test runCritic response structure in detail
-    let result =
-        provider.execute_command("perl.runCritic", vec![Value::String(temp_file.to_string())]);
+    let result = provider.execute_command(
+        "perl.runCritic",
+        vec![Value::String(temp_file.to_string_lossy().to_string())],
+    );
     assert!(result.is_ok(), "runCritic should succeed");
     let result_value = result.map_err(|e| format!("runCritic should return Ok: {}", e))?;
 
@@ -476,9 +584,6 @@ fn test_response_structure_validation() -> TestResult {
         let severity = first_violation["severity"].as_u64().ok_or("severity should be a number")?;
         assert!((1..=5).contains(&severity), "Severity should be 1-5, got: {}", severity);
     }
-
-    // Clean up
-    fs::remove_file(temp_file).ok();
     Ok(())
 }
 
@@ -522,16 +627,17 @@ fn test_file_not_found_error_structure() -> TestResult {
 
 #[test]
 fn test_command_execution_success_failure_logic() -> TestResult {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let (workspace, provider) = setup_provider_workspace()?;
 
     // Create files for testing different execution scenarios
     let valid_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint \"success\";\n";
-    let valid_file = "/tmp/test_valid_execution.pl";
-    fs::write(valid_file, valid_content)?;
+    let valid_file = write_workspace_file(&workspace, "test_valid_execution.pl", valid_content)?;
 
     // Test successful execution
-    let success_result =
-        provider.execute_command("perl.runFile", vec![Value::String(valid_file.to_string())]);
+    let success_result = provider.execute_command(
+        "perl.runFile",
+        vec![Value::String(valid_file.to_string_lossy().to_string())],
+    );
     assert!(success_result.is_ok(), "Valid file should execute successfully");
     let success_value = success_result.map_err(|e| format!("runFile should return Ok: {}", e))?;
 
@@ -541,12 +647,14 @@ fn test_command_execution_success_failure_logic() -> TestResult {
 
     // Test with subroutine execution
     let sub_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_execution { print \"sub executed\"; return 1; }\n";
-    let sub_file = "/tmp/test_sub_execution.pl";
-    fs::write(sub_file, sub_content)?;
+    let sub_file = write_workspace_file(&workspace, "test_sub_execution.pl", sub_content)?;
 
     let sub_result = provider.execute_command(
         "perl.runTestSub",
-        vec![Value::String(sub_file.to_string()), Value::String("test_execution".to_string())],
+        vec![
+            Value::String(sub_file.to_string_lossy().to_string()),
+            Value::String("test_execution".to_string()),
+        ],
     );
     assert!(sub_result.is_ok(), "Valid subroutine should execute successfully");
     let sub_value = sub_result.map_err(|e| format!("runTestSub should return Ok: {}", e))?;
@@ -555,33 +663,32 @@ fn test_command_execution_success_failure_logic() -> TestResult {
     assert!(sub_value["success"].is_boolean(), "Sub execution should have success field");
     assert!(sub_value["subroutine"].is_string(), "Sub execution should have subroutine field");
     assert_eq!(sub_value["subroutine"], "test_execution", "Should have correct subroutine name");
-
-    // Clean up
-    fs::remove_file(valid_file).ok();
-    fs::remove_file(sub_file).ok();
     Ok(())
 }
 
 #[test]
 fn test_comprehensive_edge_cases() -> TestResult {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let (workspace, provider) = setup_provider_workspace()?;
 
     // Test empty file handling
     let empty_content = "";
-    let empty_file = "/tmp/test_empty_file.pl";
-    fs::write(empty_file, empty_content)?;
+    let empty_file = write_workspace_file(&workspace, "test_empty_file.pl", empty_content)?;
 
-    let empty_result =
-        provider.execute_command("perl.runCritic", vec![Value::String(empty_file.to_string())]);
+    let empty_result = provider.execute_command(
+        "perl.runCritic",
+        vec![Value::String(empty_file.to_string_lossy().to_string())],
+    );
     assert!(empty_result.is_ok(), "Should handle empty files");
     let empty_value =
         empty_result.map_err(|e| format!("runCritic should return Ok for empty file: {}", e))?;
     assert_eq!(empty_value["status"], "success", "Empty file should be success");
 
     // Test very large file path
-    let long_path = format!("/tmp/{}.pl", "x".repeat(100));
-    let long_result =
-        provider.execute_command("perl.runCritic", vec![Value::String(long_path.clone())]);
+    let long_path = workspace.path().join(format!("{}.pl", "x".repeat(100)));
+    let long_result = provider.execute_command(
+        "perl.runCritic",
+        vec![Value::String(long_path.to_string_lossy().to_string())],
+    );
 
     // Should handle gracefully (either process or report not found)
     match long_result {
@@ -596,14 +703,11 @@ fn test_comprehensive_edge_cases() -> TestResult {
     }
 
     // Test URI format handling
-    let uri_path = format!("file://{}", empty_file);
+    let uri_path = file_uri(&empty_file)?;
     let uri_result = provider.execute_command("perl.runCritic", vec![Value::String(uri_path)]);
     assert!(uri_result.is_ok(), "Should handle file:// URIs");
     let uri_value = uri_result.map_err(|e| format!("runCritic should return Ok for URI: {}", e))?;
     assert_eq!(uri_value["status"], "success", "URI file should be success");
-
-    // Clean up
-    fs::remove_file(empty_file).ok();
     Ok(())
 }
 
@@ -658,7 +762,7 @@ fn test_supported_commands_structure() -> TestResult {
 
 #[test]
 fn test_comprehensive_workflow_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+    let (workspace, provider) = setup_provider_workspace()?;
 
     // Create comprehensive test file
     let comprehensive_content = r#"#!/usr/bin/perl
@@ -678,22 +782,22 @@ my $result = comprehensive_workflow_test($value);
 print "Result: $result\n";
 "#;
 
-    let temp_file = "/tmp/comprehensive_workflow_test.pl";
-    fs::write(temp_file, comprehensive_content)?;
+    let temp_file =
+        write_workspace_file(&workspace, "comprehensive_workflow_test.pl", comprehensive_content)?;
 
     // Execute all commands and verify end-to-end behavior
     let all_commands = vec![
-        ("perl.runFile", vec![Value::String(temp_file.to_string())]),
-        ("perl.runTests", vec![Value::String(temp_file.to_string())]),
+        ("perl.runFile", vec![Value::String(temp_file.to_string_lossy().to_string())]),
+        ("perl.runTests", vec![Value::String(temp_file.to_string_lossy().to_string())]),
         (
             "perl.runTestSub",
             vec![
-                Value::String(temp_file.to_string()),
+                Value::String(temp_file.to_string_lossy().to_string()),
                 Value::String("comprehensive_workflow_test".to_string()),
             ],
         ),
-        ("perl.debugTests", vec![Value::String(temp_file.to_string())]),
-        ("perl.runCritic", vec![Value::String(temp_file.to_string())]),
+        ("perl.debugTests", vec![Value::String(temp_file.to_string_lossy().to_string())]),
+        ("perl.runCritic", vec![Value::String(temp_file.to_string_lossy().to_string())]),
     ];
 
     let mut all_results = Vec::new();
@@ -756,9 +860,6 @@ print "Result: $result\n";
             }
         }
     }
-
-    // Clean up
-    fs::remove_file(temp_file).ok();
     Ok(())
 }
 
@@ -789,9 +890,9 @@ fn test_provider_and_protocol_command_lists_are_in_sync() -> TestResult {
 
 #[test]
 fn test_run_subtest_handler_returns_correct_shape() -> TestResult {
-    use perl_lsp::{JsonRpcRequest, LspServer};
+    use perl_lsp::JsonRpcRequest;
 
-    let server = LspServer::new();
+    let server = setup_initialized_server();
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -816,9 +917,9 @@ fn test_run_subtest_handler_returns_correct_shape() -> TestResult {
 
 #[test]
 fn test_run_subtest_missing_argument_returns_error() -> TestResult {
-    use perl_lsp::{JsonRpcRequest, LspServer};
+    use perl_lsp::JsonRpcRequest;
 
-    let server = LspServer::new();
+    let server = setup_initialized_server();
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),

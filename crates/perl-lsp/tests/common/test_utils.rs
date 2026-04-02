@@ -26,6 +26,43 @@ fn next_request_id() -> i64 {
     TEST_UTILS_NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
+fn send_request_with_timeout(
+    server: &super::LspServer,
+    timeout: Duration,
+    mut request: Value,
+) -> Value {
+    let id = match request.get("id") {
+        Some(v) => v.clone(),
+        None => {
+            let next = next_request_id();
+            request["id"] = json!(next);
+            json!(next)
+        }
+    };
+
+    super::send_request_no_wait(server, request);
+
+    match &id {
+        Value::Number(n) if n.as_i64().is_some() => {
+            let id_num = n.as_i64().unwrap_or_else(|| panic!("ID number should be i64: {n:?}"));
+            super::read_response_matching_i64(server, id_num, timeout).unwrap_or_else(|| {
+                super::protocol_io::error_response_for_request(
+                    Some(id.clone()),
+                    super::protocol_io::ERR_TEST_TIMEOUT,
+                    "test harness timeout",
+                )
+            })
+        }
+        value => super::read_response_matching(server, value, timeout).unwrap_or_else(|| {
+            super::protocol_io::error_response_for_request(
+                Some(id),
+                super::protocol_io::ERR_TEST_TIMEOUT,
+                "test harness timeout",
+            )
+        }),
+    }
+}
+
 /// Test server builder with fluent interface
 pub struct TestServerBuilder {
     initialization_params: Option<Value>,
@@ -43,7 +80,7 @@ impl TestServerBuilder {
     pub fn new() -> Self {
         Self {
             initialization_params: None,
-            timeout: Duration::from_secs(5),
+            timeout: super::adaptive_timeout().max(Duration::from_secs(8)),
             workspace_folders: Vec::new(),
         }
     }
@@ -64,9 +101,6 @@ impl TestServerBuilder {
     }
 
     pub fn build(self) -> TestServer {
-        // Use the canonical common harness for server startup
-        let server = super::start_lsp_server();
-
         // Build initialization params
         let mut init_params = self.initialization_params.unwrap_or_else(|| {
             json!({
@@ -92,47 +126,56 @@ impl TestServerBuilder {
             }
         }
 
-        // Send initialize request via common harness
-        let init_id = next_request_id();
-        let init_response = super::send_request(
-            &server,
-            json!({
+        let timeout = self.timeout;
+        let has_workspace_folders = !self.workspace_folders.is_empty();
+        let init_timeout = (timeout + timeout).max(Duration::from_secs(15));
+
+        for attempt in 0..2 {
+            let server = super::start_lsp_server();
+            let init_request = json!({
                 "jsonrpc": "2.0",
-                "id": init_id,
                 "method": "initialize",
-                "params": init_params
-            }),
-        );
+                "params": init_params.clone()
+            });
 
-        // Verify initialization succeeded
-        if init_response.get("error").is_some() {
-            eprintln!("TestServerBuilder: Initialize failed: {init_response:#}");
+            let init_response = send_request_with_timeout(&server, init_timeout, init_request);
+            if init_response.get("error").is_none() {
+                // Send initialized notification (required by LSP protocol)
+                super::send_notification(
+                    &server,
+                    json!({
+                        "jsonrpc": "2.0",
+                        "method": "initialized",
+                        "params": {}
+                    }),
+                );
+
+                // Wait for index-ready notification to ensure deterministic completion behavior
+                // Only wait if workspace folders were specified (semantic tests usually don't need workspace index)
+                if has_workspace_folders {
+                    super::await_index_ready(&server);
+                } else {
+                    // For non-workspace tests, just do a brief quiet drain
+                    super::drain_until_quiet(
+                        &server,
+                        std::time::Duration::from_millis(50),
+                        std::time::Duration::from_millis(200),
+                    );
+                }
+
+                return TestServer { server, timeout };
+            }
+
+            if attempt == 0 {
+                eprintln!(
+                    "TestServerBuilder: Initialize failed on attempt 1, retrying with a fresh server: {init_response:#}"
+                );
+            } else {
+                panic!("TestServerBuilder: Initialize failed after retry: {init_response:#}");
+            }
         }
 
-        // Send initialized notification (required by LSP protocol)
-        super::send_notification(
-            &server,
-            json!({
-                "jsonrpc": "2.0",
-                "method": "initialized",
-                "params": {}
-            }),
-        );
-
-        // Wait for index-ready notification to ensure deterministic completion behavior
-        // Only wait if workspace folders were specified (semantic tests usually don't need workspace index)
-        if !self.workspace_folders.is_empty() {
-            super::await_index_ready(&server);
-        } else {
-            // For non-workspace tests, just do a brief quiet drain
-            super::drain_until_quiet(
-                &server,
-                std::time::Duration::from_millis(50),
-                std::time::Duration::from_millis(200),
-            );
-        }
-
-        TestServer { server, timeout: self.timeout }
+        unreachable!("TestServerBuilder initialization loop should always return or panic")
     }
 }
 
@@ -146,6 +189,18 @@ pub struct TestServer {
 }
 
 impl TestServer {
+    fn request(&self, method: &str, params: Value) -> Value {
+        send_request_with_timeout(
+            &self.server,
+            self.timeout,
+            json!({
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params
+            }),
+        )
+    }
+
     /// Send a text document did open notification
     pub fn open_document(&self, uri: &str, content: &str) {
         super::send_notification(
@@ -189,46 +244,21 @@ impl TestServer {
 
     /// Request diagnostics for a document
     pub fn get_diagnostics(&self, uri: &str) -> Value {
-        super::send_request(
-            &self.server,
-            json!({
-                "jsonrpc": "2.0",
-                "id": next_request_id(),
-                "method": "textDocument/diagnostic",
-                "params": {
-                    "textDocument": { "uri": uri }
-                }
-            }),
-        )
+        self.request("textDocument/diagnostic", json!({ "textDocument": { "uri": uri } }))
     }
 
     /// Request document symbols
     pub fn get_symbols(&self, uri: &str) -> Value {
-        super::send_request(
-            &self.server,
-            json!({
-                "jsonrpc": "2.0",
-                "id": next_request_id(),
-                "method": "textDocument/documentSymbol",
-                "params": {
-                    "textDocument": { "uri": uri }
-                }
-            }),
-        )
+        self.request("textDocument/documentSymbol", json!({ "textDocument": { "uri": uri } }))
     }
 
     /// Request definition at position
     pub fn get_definition(&self, uri: &str, line: u32, character: u32) -> Value {
-        super::send_request(
-            &self.server,
+        self.request(
+            "textDocument/definition",
             json!({
-                "jsonrpc": "2.0",
-                "id": next_request_id(),
-                "method": "textDocument/definition",
-                "params": {
-                    "textDocument": { "uri": uri },
-                    "position": { "line": line, "character": character }
-                }
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
             }),
         )
     }
@@ -241,65 +271,45 @@ impl TestServer {
         character: u32,
         include_declaration: bool,
     ) -> Value {
-        super::send_request(
-            &self.server,
+        self.request(
+            "textDocument/references",
             json!({
-                "jsonrpc": "2.0",
-                "id": next_request_id(),
-                "method": "textDocument/references",
-                "params": {
-                    "textDocument": { "uri": uri },
-                    "position": { "line": line, "character": character },
-                    "context": { "includeDeclaration": include_declaration }
-                }
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": include_declaration }
             }),
         )
     }
 
     /// Request hover information
     pub fn get_hover(&self, uri: &str, line: u32, character: u32) -> Value {
-        super::send_request(
-            &self.server,
+        self.request(
+            "textDocument/hover",
             json!({
-                "jsonrpc": "2.0",
-                "id": next_request_id(),
-                "method": "textDocument/hover",
-                "params": {
-                    "textDocument": { "uri": uri },
-                    "position": { "line": line, "character": character }
-                }
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
             }),
         )
     }
 
     /// Request completion items at a position
     pub fn get_completion(&self, uri: &str, line: u32, character: u32) -> Value {
-        super::send_request(
-            &self.server,
+        self.request(
+            "textDocument/completion",
             json!({
-                "jsonrpc": "2.0",
-                "id": next_request_id(),
-                "method": "textDocument/completion",
-                "params": {
-                    "textDocument": { "uri": uri },
-                    "position": { "line": line, "character": character }
-                }
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
             }),
         )
     }
 
     /// Request signature help
     pub fn get_signature_help(&self, uri: &str, line: u32, character: u32) -> Value {
-        super::send_request(
-            &self.server,
+        self.request(
+            "textDocument/signatureHelp",
             json!({
-                "jsonrpc": "2.0",
-                "id": next_request_id(),
-                "method": "textDocument/signatureHelp",
-                "params": {
-                    "textDocument": { "uri": uri },
-                    "position": { "line": line, "character": character }
-                }
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
             }),
         )
     }

@@ -11,14 +11,40 @@
 //! - Old perl-lsp installed in PATH
 //! - PERL_LSP_BIN pointing to wrong binary
 //!
-//! Fix: Run `cargo build -p perl-lsp` or just `cargo test -p perl-lsp`
+//! Fix: Run `cargo build -p perl-lsp-rs` or just `cargo test -p perl-lsp-rs`
 
 mod common;
 
 use serde_json::json;
+use std::time::Duration;
 
 /// The expected version from the crate being tested
 const EXPECTED_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn send_initialize_with_timeout(
+    server: &common::LspServer,
+    params: serde_json::Value,
+) -> serde_json::Value {
+    let id = json!(1);
+    common::send_request_no_wait(
+        server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "initialize",
+            "params": params,
+        }),
+    );
+
+    common::read_response_matching(
+        server,
+        &id,
+        common::adaptive_timeout().max(Duration::from_secs(15)),
+    )
+    .unwrap_or_else(|| {
+        panic!("initialize request timed out before the server returned serverInfo");
+    })
+}
 
 #[test]
 fn lsp_server_version_matches_crate_version() {
@@ -26,18 +52,13 @@ fn lsp_server_version_matches_crate_version() {
     let server = common::start_lsp_server();
 
     // Send initialize request
-    let response = common::send_request(
+    let response = send_initialize_with_timeout(
         &server,
         json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "capabilities": {},
-                "clientInfo": {"name": "version-test", "version": "0"},
-                "rootUri": null,
-                "workspaceFolders": null
-            }
+            "capabilities": {},
+            "clientInfo": {"name": "version-test", "version": "0"},
+            "rootUri": null,
+            "workspaceFolders": null
         }),
     );
 
@@ -63,8 +84,8 @@ fn lsp_server_version_matches_crate_version() {
         ║ You are running tests against a stale or incorrect perl-lsp binary ║\n\
         ║                                                                    ║\n\
         ║ FIX: Run one of these commands:                                    ║\n\
-        ║   cargo build -p perl-lsp       # Rebuild the binary               ║\n\
-        ║   cargo test -p perl-lsp        # Rebuild and test                 ║\n\
+        ║   cargo build -p perl-lsp-rs       # Rebuild the binary               ║\n\
+        ║   cargo test -p perl-lsp-rs        # Rebuild and test                 ║\n\
         ║                                                                    ║\n\
         ║ If using PERL_LSP_BIN, verify it points to the correct binary.     ║\n\
         ╚════════════════════════════════════════════════════════════════════╝\n",
@@ -84,16 +105,11 @@ fn lsp_server_identifier_is_perl_lsp() {
     let server = common::start_lsp_server();
 
     // Send initialize request
-    let response = common::send_request(
+    let response = send_initialize_with_timeout(
         &server,
         json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "capabilities": {},
-                "rootUri": null
-            }
+            "capabilities": {},
+            "rootUri": null
         }),
     );
 
