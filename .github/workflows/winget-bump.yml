@@ -70,9 +70,9 @@ jobs:
           $assetDir = Join-Path $env:RUNNER_TEMP 'winget-assets'
 
           New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
-          Write-Host "Downloading perl-lsp-$version-x86_64-pc-windows-msvc.zip..."
+          Write-Host "Downloading perllsp-$version-x86_64-pc-windows-msvc.zip..."
           gh release download $tag `
-            --pattern "perl-lsp-$version-x86_64-pc-windows-msvc.zip" `
+            --pattern "perllsp-$version-x86_64-pc-windows-msvc.zip" `
             --dir $assetDir
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -83,7 +83,7 @@ jobs:
         run: |
           $version = "${{ steps.tag.outputs.version }}"
           $assetDir = Join-Path $env:RUNNER_TEMP 'winget-assets'
-          $assetPath = Join-Path $assetDir "perl-lsp-$version-x86_64-pc-windows-msvc.zip"
+          $assetPath = Join-Path $assetDir "perllsp-$version-x86_64-pc-windows-msvc.zip"
 
           $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $assetPath).Hash.ToLowerInvariant()
           "sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8

@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$releaseZipUrl = "$RepositoryUrl/releases/download/v$Version/perl-lsp-$Version-x86_64-pc-windows-msvc.zip"
+$releaseZipUrl = "$RepositoryUrl/releases/download/v$Version/perllsp-$Version-x86_64-pc-windows-msvc.zip"
 
 function Resolve-RepoPath {
   param([Parameter(Mandatory = $true)][string]$RelativePath)
@@ -50,7 +50,7 @@ if ($ScoopManifestPath) {
     $content = [regex]::Replace($content, '"version":\s*"[^"]+"', ('"version": "' + $Version + '"'), 1)
     $content = [regex]::Replace(
       $content,
-      '"url":\s*"https://github\.com/EffortlessMetrics/perl-lsp/releases/download/v[^"]+/perl-lsp-[^"]+-x86_64-pc-windows-msvc\.zip"',
+      '"url":\s*"https://github\.com/EffortlessMetrics/perl-lsp/releases/download/v[^"]+/perllsp-[^"]+-x86_64-pc-windows-msvc\.zip"',
       ('"url": "' + $releaseZipUrl + '"'),
       1
     )
