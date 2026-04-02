@@ -583,3 +583,124 @@ fn n6_die_inside_or_not_unconditional() -> Result<(), Box<dyn std::error::Error>
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// T8: next inside a loop body
+// "while (1) { next; print 'dead'; }"
+// expect: 1 diagnostic on print inside loop body
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t8_next_inside_loop_body() -> Result<(), Box<dyn std::error::Error>> {
+    let next_stmt =
+        Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(13, 18));
+    let loop_body = block(vec![next_stmt, print_stmt(20, 40)]);
+    let ast = program(vec![while_loop(loop_body)]);
+
+    let mut diagnostics = vec![];
+    check_unreachable_code(&ast, &mut diagnostics);
+
+    assert!(
+        has_pl406(&diagnostics),
+        "T8: Expected PL406 for statement after next in loop, got: {:?}",
+        diagnostics
+    );
+    assert_eq!(count_pl406(&diagnostics), 1, "T8: Expected exactly 1 PL406");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// T9: redo inside a loop body
+// "while (1) { redo; print 'dead'; }"
+// expect: 1 diagnostic on print inside loop body
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t9_redo_inside_loop_body() -> Result<(), Box<dyn std::error::Error>> {
+    let redo_stmt =
+        Node::new(NodeKind::LoopControl { op: "redo".to_string(), label: None }, loc(13, 18));
+    let loop_body = block(vec![redo_stmt, print_stmt(20, 40)]);
+    let ast = program(vec![while_loop(loop_body)]);
+
+    let mut diagnostics = vec![];
+    check_unreachable_code(&ast, &mut diagnostics);
+
+    assert!(
+        has_pl406(&diagnostics),
+        "T9: Expected PL406 for statement after redo in loop, got: {:?}",
+        diagnostics
+    );
+    assert_eq!(count_pl406(&diagnostics), 1, "T9: Expected exactly 1 PL406");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// N7: confess (Carp::confess) followed by statement
+// "sub f { Carp::confess 'err'; my $x = 1; }"
+// expect: 1 diagnostic
+// ---------------------------------------------------------------------------
+
+#[test]
+fn t10_confess_qualified_followed_by_statement() -> Result<(), Box<dyn std::error::Error>> {
+    let confess_call = Node::new(
+        NodeKind::ExpressionStatement {
+            expression: Box::new(Node::new(
+                NodeKind::FunctionCall {
+                    name: "Carp::confess".to_string(),
+                    args: vec![Node::new(
+                        NodeKind::String { value: "err".to_string(), interpolated: false },
+                        loc(14, 19),
+                    )],
+                },
+                loc(10, 30),
+            )),
+        },
+        loc(10, 31),
+    );
+    let body = block(vec![confess_call, my_var_decl(33, 43, "x")]);
+    let ast = program(vec![sub_node("f", body)]);
+
+    let mut diagnostics = vec![];
+    check_unreachable_code(&ast, &mut diagnostics);
+
+    assert!(
+        has_pl406(&diagnostics),
+        "T10: Expected PL406 for statement after Carp::confess, got: {:?}",
+        diagnostics
+    );
+    assert_eq!(count_pl406(&diagnostics), 1, "T10: Expected exactly 1 PL406");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// N7: goto LABEL does not currently emit PL406 (known false negative,
+// tracked for future work — goto is rare in modern Perl)
+// This test documents the current behavior.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn n7_goto_label_not_yet_detected() -> Result<(), Box<dyn std::error::Error>> {
+    let goto_stmt = Node::new(
+        NodeKind::Goto {
+            target: Box::new(Node::new(
+                NodeKind::Identifier { name: "END".to_string() },
+                loc(5, 8),
+            )),
+        },
+        loc(0, 9),
+    );
+    let ast = program(vec![goto_stmt, print_stmt(12, 30)]);
+
+    let mut diagnostics = vec![];
+    check_unreachable_code(&ast, &mut diagnostics);
+
+    // goto is not yet in the unconditional-exit list.
+    // This test documents the current false-negative, not desired behavior.
+    assert_eq!(
+        count_pl406(&diagnostics),
+        0,
+        "N7: goto false-negative documented — no PL406 yet, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
