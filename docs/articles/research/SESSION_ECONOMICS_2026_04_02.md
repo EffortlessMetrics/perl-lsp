@@ -143,13 +143,21 @@ Comparing to session 6 (2026-03-22), which was a deliberate mass-swarm:
 | Bugs caught pre-merge | 0 (not tracked) | 4 | — |
 | Session type | Deliberate orchestrated swarm | Organic normal session | — |
 
-The normal session had 2.4x higher per-agent yield. This likely reflects:
-- Agents were only spawned when there was clear, validated work to do
-- No speculative or exploratory mass-deployment
-- Full pipeline coverage happened naturally (review what you build)
-- The operator was making routing decisions interactively, not batch-dispatching
+The normal session had 2.4x higher PRs-per-agent, but **PRs-per-agent is a throughput metric, not a quality metric.** This session merged multiple PRs on smoke-green without the full merge gate. The swarm session enforced `just ci-gate` on every PR. Higher throughput with lower gate enforcement is not necessarily higher yield — it may just be lower standards.
 
-**Implication**: The economics of normal, interactive Claude Code usage with agents are already competitive with orchestrated swarm events — and possibly more efficient per unit of budget spent. The swarm model's advantage is raw throughput when the backlog is well-validated; the normal model's advantage is quality and waste avoidance.
+Honest comparison:
+
+| Dimension | Session 6 (swarm) | This session (normal) | Better? |
+|-----------|-------------------|----------------------|---------|
+| Throughput (PRs) | 59 | 22 | Swarm |
+| Agent efficiency (PRs/agent) | 0.30 | 0.73 | Normal (but see quality) |
+| CI gate enforcement | Full (`just ci-gate`) | Partial (smoke only) | Swarm |
+| Bugs caught pre-merge | Not tracked | 4 | Normal (deep review) |
+| Bugs shipped (unknown) | Unknown | Likely higher | Swarm (stricter gates) |
+
+**The real question is: how many of these 22 PRs would have passed `just ci-gate`?** We don't know, because we didn't run it. The deep review pipeline caught 4 text-pattern bugs that CI wouldn't have, but CI catches type errors, API breakage, and integration failures that deep review doesn't.
+
+**Implication**: PRs-per-agent is a vanity metric without quality adjustment. A fairer comparison would be *trusted PRs per unit of budget* — but that requires knowing whether the merged PRs are actually correct, which we won't know until the next CI run or user report.
 
 ### 5. The Orchestrator's Primary Job Is Routing, Not Building
 
