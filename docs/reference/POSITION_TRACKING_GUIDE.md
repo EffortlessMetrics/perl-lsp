@@ -118,7 +118,7 @@ cargo test -p perl-parser --test parser_context -- test_crlf_line_endings
 
 # Test UTF-16 security enhancements (PR #153)
 cargo test -p perl-parser --test mutation_hardening_tests -- utf16_security
-cargo test -p perl-lsp lsp_encoding_edge_cases -- --nocapture
+cargo test -p perl-lsp-rs lsp_encoding_edge_cases -- --nocapture
 cargo test -p perl-parser position_tracker_tests -- test_boundary_validation
 
 # Test with specific edge cases including security scenarios

@@ -60,11 +60,11 @@ The `lsp_capability_snapshot_test.rs` tests cover:
 cargo test -p perl-parser --test ast_snapshot_tests
 
 # LSP capability snapshots
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_capability_snapshot_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_capability_snapshot_test -- --test-threads=2
 
 # All snapshot tests (combined)
 cargo test -p perl-parser --test ast_snapshot_tests
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_capability_snapshot_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_capability_snapshot_test -- --test-threads=2
 ```
 
 ## Updating Snapshots After Intentional Changes
@@ -74,7 +74,7 @@ When parser output, error messages, or LSP capabilities change intentionally:
 ```bash
 # Accept all pending new/changed snapshots automatically
 INSTA_UPDATE=unseen cargo test -p perl-parser --test ast_snapshot_tests
-INSTA_UPDATE=unseen RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_capability_snapshot_test -- --test-threads=2
+INSTA_UPDATE=unseen RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_capability_snapshot_test -- --test-threads=2
 
 # Or use cargo-insta for interactive review (recommended for large changes)
 cargo install cargo-insta

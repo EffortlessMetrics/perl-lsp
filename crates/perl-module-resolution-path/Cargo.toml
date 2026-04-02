@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Deterministic Perl module path resolution within workspace roots"
+description = "Resolve Perl module names to workspace-safe filesystem paths"
 readme = "README.md"
 documentation = "https://docs.rs/perl-module-resolution-path"
 keywords = ["perl", "module", "path", "workspace", "lsp"]
@@ -24,4 +24,3 @@ tempfile = "3.24.0"
 
 [lints]
 workspace = true
-

@@ -156,9 +156,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
-            { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+            { label: '$(info) Show Version', detail: 'Check installed perllsp version', command: 'perl-lsp.showVersion' },
             { label: '$(pulse) Run Health Check', detail: 'Check Perl, perltidy, and LSP binary', command: 'perl-lsp.runHealthCheck' },
-            { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perl-lsp binary', command: 'perl-lsp.reinstall' },
+            { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the managed perllsp binary', command: 'perl-lsp.reinstall' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
@@ -587,42 +587,43 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     const userPath = config.get<string>('serverPath');
     
     if (userPath && fs.existsSync(userPath)) {
-        outputChannel.appendLine(`Using user-configured perl-lsp: ${userPath}`);
+        outputChannel.appendLine(`Using user-configured Perl LSP binary: ${userPath}`);
         return userPath;
     }
     
     // Check bundled binary
     const platform = process.platform;
     const arch = process.arch;
-    let binaryName = 'perl-lsp';
-    
-    if (platform === 'win32') {
-        binaryName = 'perl-lsp.exe';
-    }
-    
-    const bundledPath = path.join(
-        context.extensionPath,
-        'bin',
-        `${platform}-${arch}`,
-        binaryName
-    );
-    
-    if (fs.existsSync(bundledPath)) {
-        outputChannel.appendLine(`Using bundled perl-lsp: ${bundledPath}`);
-        // Make sure it's executable on Unix-like systems
-        if (platform !== 'win32') {
-            fs.chmodSync(bundledPath, 0o755);
+    const binaryNames = platform === 'win32'
+        ? ['perllsp.exe', 'perl-lsp.exe']
+        : ['perllsp', 'perl-lsp'];
+
+    for (const binaryName of binaryNames) {
+        const bundledPath = path.join(
+            context.extensionPath,
+            'bin',
+            `${platform}-${arch}`,
+            binaryName
+        );
+
+        if (fs.existsSync(bundledPath)) {
+            outputChannel.appendLine(`Using bundled Perl LSP binary: ${bundledPath}`);
+            if (platform !== 'win32') {
+                fs.chmodSync(bundledPath, 0o755);
+            }
+            return bundledPath;
         }
-        return bundledPath;
     }
     
     // Try to find in PATH
     const pathDirs = process.env.PATH?.split(path.delimiter) || [];
     for (const dir of pathDirs) {
-        const fullPath = path.join(dir, binaryName);
-        if (fs.existsSync(fullPath)) {
-            outputChannel.appendLine(`Found perl-lsp in PATH: ${fullPath}`);
-            return fullPath;
+        for (const binaryName of binaryNames) {
+            const fullPath = path.join(dir, binaryName);
+            if (fs.existsSync(fullPath)) {
+                outputChannel.appendLine(`Found Perl LSP binary in PATH: ${fullPath}`);
+                return fullPath;
+            }
         }
     }
     
@@ -630,19 +631,19 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     const autoDownload = config.get<boolean>('autoDownload', true);
     
     if (autoDownload) {
-        outputChannel.appendLine('perl-lsp not found, attempting to download...');
+        outputChannel.appendLine('Perl LSP binary not found, attempting to download...');
         const downloader = new BinaryDownloader(context, outputChannel);
         const downloadedPath = await downloader.ensureBinary();
         
         if (downloadedPath) {
-            outputChannel.appendLine(`Downloaded perl-lsp to: ${downloadedPath}`);
+            outputChannel.appendLine(`Downloaded Perl LSP binary to: ${downloadedPath}`);
             return downloadedPath;
         }
     } else {
-        outputChannel.appendLine('perl-lsp not found and auto-download is disabled');
+        outputChannel.appendLine('Perl LSP binary not found and auto-download is disabled');
     }
     
-    outputChannel.appendLine('Failed to obtain perl-lsp');
+    outputChannel.appendLine('Failed to obtain a Perl LSP binary');
     return null;
 }
 
@@ -653,14 +654,14 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     if (!currentServerPath) {
         healthWidget?.onStateChange(ClientState.Stopped);
         const choice = await vscode.window.showErrorMessage(
-            'Perl Language Server (perl-lsp) not found.',
-            'Install (cargo install perl-lsp)',
+            'Perl Language Server (perllsp) not found.',
+            'Install (cargo install perllsp)',
             'Open Settings'
         );
 
-        if (choice === 'Install (cargo install perl-lsp)') {
+        if (choice === 'Install (cargo install perllsp)') {
             void vscode.window.showInformationMessage(
-                'Run in your terminal: cargo install perl-lsp\nThen reload VS Code.'
+                'Run in your terminal: cargo install perllsp\nThen reload VS Code.'
             );
         } else if (choice === 'Open Settings') {
             void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
@@ -830,7 +831,7 @@ export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent)
 }
 
 /**
- * Run `perl-lsp --health` and return `true` if the binary responds with `ok`.
+ * Run `perllsp --health` and return `true` if the binary responds with `ok`.
  *
  * Waits up to 5 seconds. Returns `false` on timeout, non-zero exit, or if
  * stdout does not start with `ok`.
@@ -1170,14 +1171,14 @@ async function showParserAst(): Promise<void> {
         panel.show();
     } catch {
         vscode.window.showWarningMessage(
-            'Show Parser AST is not supported by the current perl-lsp version'
+            'Show Parser AST is not supported by the current perllsp version'
         );
     }
 }
 
 async function reinstallServerBinary(context: vscode.ExtensionContext) {
     outputChannel.show(true);
-    outputChannel.appendLine('Reinstalling perl-lsp binary...');
+    outputChannel.appendLine('Reinstalling perllsp binary...');
 
     const downloader = new BinaryDownloader(context, outputChannel);
     const downloadedPath = await downloader.ensureBinary(true);
@@ -1194,7 +1195,7 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
     currentServerPath = downloadedPath;
     const healthOk = await runHealthCheck(downloadedPath);
     if (!healthOk) {
-        vscode.window.showErrorMessage('Downloaded perl-lsp failed its health check.', 'Show Output').then(selection => {
+        vscode.window.showErrorMessage('Downloaded perllsp failed its health check.', 'Show Output').then(selection => {
             if (selection === 'Show Output') {
                 outputChannel.show();
             }

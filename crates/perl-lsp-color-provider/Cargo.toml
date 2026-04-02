@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Document color detection and presentation for Perl LSP — hex, ANSI, named CSS colors, Term::ANSIColor"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

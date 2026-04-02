@@ -1,5 +1,5 @@
 [package]
-name = "perl-lsp"
+name = "perl-lsp-rs"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
 readme = "README.md"
-documentation = "https://docs.rs/perl-lsp"
+documentation = "https://docs.rs/perl-lsp-rs"
 keywords = ["perl", "lsp", "language-server", "ide", "tree-sitter"]
 categories = ["development-tools", "text-editors"]
 include = [
@@ -20,6 +20,14 @@ include = [
   "README.md",
   "LICENSE*"
 ]
+
+[lib]
+name = "perl_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "perl-lsp"
+path = "src/main.rs"
 
 [dependencies]
 perl-dap = { workspace = true, optional = true }
@@ -149,7 +157,7 @@ criterion = "0.8.1"
 perl-ast-utils = { workspace = true }
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
+pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"
 bin-dir = "{ bin }{ binary-ext }"
 pkg-fmt = "tgz"
 

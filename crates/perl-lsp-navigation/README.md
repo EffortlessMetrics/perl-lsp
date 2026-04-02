@@ -1,26 +1,39 @@
 # perl-lsp-navigation
 
-LSP navigation providers for Perl: workspace symbols, type hierarchy, type definition, find references, and document links.
+Perl navigation provider crate for symbol lookup and cross-file navigation.
+It covers workspace symbols, type hierarchy, type definition, single-file
+references, and document links.
 
-## Public API
+## Use this crate when
 
-- **`WorkspaceSymbolsProvider`** / **`WorkspaceSymbol`** -- indexes parsed documents and searches symbols with fuzzy, prefix, and exact matching.
-- **`TypeHierarchyProvider`** / **`TypeHierarchyItem`** / **`TypeHierarchySymbolKind`** -- compatibility re-exports from `perl-lsp-type-hierarchy`; prepares type hierarchy items and resolves super/subtypes via `@ISA`, `use parent`, and `use base`.
-- **`TypeDefinitionProvider`** -- go-to-type-definition for variables, method calls, constructors, and `bless` expressions (requires `lsp-compat` feature).
-- **`find_references_single_file`** -- finds all same-file references to a variable or subroutine by byte offset.
-- **`compute_links`** -- extracts document links from `use` and `require` statements with deferred resolution.
+Use `perl-lsp-navigation` if you need the navigation logic itself. Use
+`perl-lsp-workspace-symbols` when you only need symbol indexing and search, and
+use `perl-lsp-providers` when you want the umbrella re-export surface.
 
-## Workspace Role
+## Key exports
 
-Internal feature crate consumed by `perl-lsp` navigation request handlers. Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+- `WorkspaceSymbolsProvider` / `WorkspaceSymbol` - search indexed symbols with
+  ranking and container names
+- `TypeHierarchyProvider` / `TypeHierarchyItem` - infer parent and child types
+  from Perl inheritance relationships
+- `TypeDefinitionProvider` - find the type behind a variable, method call, or
+  constructor expression
+- `find_references_single_file` - same-file reference discovery
+- `compute_links` - document links for `use` and `require`
 
-## Features
+## Example
 
-| Feature | Purpose |
-|---------|---------|
-| `lsp-compat` | Enables `TypeDefinitionProvider::find_type_definition` and LSP type imports |
-| `slow_tests` | Enables slow/expensive integration tests |
+```rust,ignore
+use perl_lsp_navigation::{WorkspaceSymbolsProvider, find_references_single_file};
 
-## License
+let mut provider = WorkspaceSymbolsProvider::new();
+provider.index_document("file:///lib/Foo.pm", &ast, source);
+let symbols = provider.search("logger", &source_map);
+let refs = find_references_single_file(&ast, byte_offset);
+```
 
-MIT OR Apache-2.0
+## Stack role
+
+This crate is the navigation layer used by `perl-lsp` request handlers. It sits
+on top of parser output and semantic analysis, and below the editor protocol
+surface.

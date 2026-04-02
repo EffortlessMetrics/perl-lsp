@@ -54,7 +54,7 @@ True incremental parsing (reusing AST subtrees across edits) requires wiring `pe
 
 ```bash
 # Run the LSP text-sync tests (exercises full-reparse path)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Run incremental-parsing crate unit tests (not connected to LSP server)
 cargo test -p perl-incremental-parsing

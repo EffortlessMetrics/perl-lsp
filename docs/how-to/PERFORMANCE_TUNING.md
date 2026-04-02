@@ -787,10 +787,10 @@ limits.completionCap = 100
 
 ```bash
 # Enable debug logging
-RUST_LOG=perl_lsp=debug perl-lsp --stdio
+RUST_LOG=perl_lsp=debug perllsp --stdio
 
 # Enable trace logging
-RUST_LOG=perl_lsp=trace perl-lsp --stdio
+RUST_LOG=perl_lsp=trace perllsp --stdio
 ```
 
 ### Monitor Performance
@@ -839,10 +839,10 @@ Key metrics to monitor:
 
 ```bash
 # Measure startup time
-time perl-lsp --stdio < /dev/null
+time perllsp --stdio < /dev/null
 
 # Measure parsing time
-echo '{"jsonrpc":"2.0","id":1,"method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///test.pl","languageId":"perl","version":1,"text":"my $x = 1;"}}}' | time perl-lsp --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///test.pl","languageId":"perl","version":1,"text":"my $x = 1;"}}}' | time perllsp --stdio
 ```
 
 ### Automated Benchmarking

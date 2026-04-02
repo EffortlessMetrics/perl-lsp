@@ -1,17 +1,33 @@
 # perl-module-rename
 
-Deterministic module-import line edit planning for file rename workflows.
+Plan module rename edits for Perl source lines.
 
-## Scope
+This crate is the rewrite layer. It takes an old module name and a new one,
+then computes line edits for `use`/`require`, `@ISA`, and qualified calls.
 
-- Detect rename-impacted Perl module import lines (`use`, `require`, `use parent`, `use base`)
-- Plan line-based edits for old module to new module transitions
-- Support canonical (`Foo::Bar`) and legacy (`Foo'Bar`) package separators
-- Delegate import-line match policy to `perl-module-import-match`
-- Delegate token variant/boundary logic to `perl-module-token`
+## Pipeline
 
-## API
+- `perl-module-reference` finds the relevant module reference.
+- `perl-module-import-match` and `perl-module-token` identify matching lines.
+- `perl-module-rename` produces the actual edit plan and applies it.
 
-- `plan_module_rename_edits(source, old_module, new_module)`
-- `apply_module_rename_edits(source, edits)`
+## Key API
+
 - `ModuleLineEdit`
+- `plan_module_rename_edits`
+- `apply_module_rename_edits`
+- `line_references_isa_assignment`
+- `line_references_qualified_call`
+- `replace_module_name_prefix`
+
+## Example
+
+```rust
+use perl_module_rename::{apply_module_rename_edits, plan_module_rename_edits};
+
+let source = "use Foo::Bar;\nFoo::Bar::init();\n";
+let edits = plan_module_rename_edits(source, "Foo::Bar", "Renamed::Module");
+let rewritten = apply_module_rename_edits(source, &edits);
+
+assert_eq!(rewritten, "use Renamed::Module;\nRenamed::Module::init();\n");
+```

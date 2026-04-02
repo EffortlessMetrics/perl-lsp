@@ -1,4 +1,5 @@
 /// Comprehensive tests for LSP code actions and refactorings
+use perl_diagnostics_codes::DiagnosticCode;
 use serde_json::json;
 
 mod common;
@@ -396,7 +397,9 @@ print $undefined_var;
         .find(|diagnostic| {
             matches!(
                 diagnostic["code"].as_str(),
-                Some("undeclared-variable" | "undefined-variable")
+                Some(code)
+                    if code == DiagnosticCode::UndefinedVariable.as_str()
+                        || matches!(code, "undeclared-variable" | "undefined-variable")
             )
         })
         .ok_or("Expected undefined-variable style diagnostic in pull diagnostics")?;
@@ -559,9 +562,9 @@ print "test\n";
     Ok(())
 }
 
-/// Test multiple refactorings available
+/// Test multiple code action kinds available for the same selection
 #[test]
-fn test_multiple_refactorings() -> Result<(), Box<dyn std::error::Error>> {
+fn test_multiple_code_action_kinds() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
 
@@ -577,18 +580,18 @@ fn test_multiple_refactorings() -> Result<(), Box<dyn std::error::Error>> {
                     "languageId": "perl",
                     "version": 1,
                     "text": r#"
-$data = 10;
-$processed = $data * 2 + 5;
-if ($processed > 100) {
-    print "Result: $processed\n";
-}
+use strict;
+use warnings;
+
+open(my $fh, '<', 'data.txt');
 "#
                 }
             }
         }),
     );
 
-    // Request code actions for the complex expression
+    // Request code actions for the file operation. Current behavior offers a
+    // refactor plus other applicable action kinds for the same selection.
     let response = send_request(
         &server,
         json!({
@@ -598,8 +601,8 @@ if ($processed > 100) {
             "params": {
                 "textDocument": { "uri": uri },
                 "range": {
-                    "start": { "line": 2, "character": 16 },
-                    "end": { "line": 2, "character": 60 }
+                    "start": { "line": 4, "character": 0 },
+                    "end": { "line": 4, "character": 30 }
                 },
                 "context": {
                     "diagnostics": []
@@ -608,12 +611,76 @@ if ($processed > 100) {
         }),
     );
 
-    eprintln!("Code action response: {:?}", response);
     let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
 
-    // Should have multiple refactoring options
+    // Should have multiple action kinds available for the same selection.
     assert!(!actions.is_empty(), "Expected code actions but got none");
-    assert!(actions.iter().any(|a| a["kind"].as_str() == Some("refactor.extract")));
+    assert!(actions.iter().any(|a| a["kind"].as_str() == Some("refactor.rewrite")));
+    assert!(actions.iter().any(|a| a["kind"].as_str() == Some("quickfix")));
+    shutdown_and_exit(&server);
+    Ok(())
+}
+
+/// Test that context.only filters code actions to the requested kind family
+#[test]
+fn test_context_only_filters_to_requested_code_action_kinds()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"
+use strict;
+use warnings;
+
+open(my $fh, '<', 'data.txt');
+"#
+                }
+            }
+        }),
+    );
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "textDocument/codeAction",
+            "params": {
+                "textDocument": { "uri": uri },
+                "range": {
+                    "start": { "line": 4, "character": 0 },
+                    "end": { "line": 4, "character": 30 }
+                },
+                "context": {
+                    "diagnostics": [],
+                    "only": ["refactor"]
+                }
+            }
+        }),
+    );
+
+    let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
+
+    assert!(!actions.is_empty(), "Expected refactor code actions but got none");
+    assert!(actions.iter().all(|action| {
+        action["kind"]
+            .as_str()
+            .is_some_and(|kind| kind == "refactor" || kind.starts_with("refactor."))
+    }));
+    assert!(actions.iter().any(|action| action["kind"].as_str() == Some("refactor.rewrite")));
+    assert!(!actions.iter().any(|action| action["kind"].as_str() == Some("quickfix")));
+
     shutdown_and_exit(&server);
     Ok(())
 }

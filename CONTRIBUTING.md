@@ -23,7 +23,7 @@ nix develop          # Recommended: reproducible environment
 ### Build and Test
 
 ```bash
-cargo build -p perl-lsp --release     # Build the LSP server
+cargo build -p perllsp --release      # Build the public LSP binary
 cargo test --workspace --lib          # Run all library tests
 ```
 
@@ -58,30 +58,43 @@ For the full crate map, key paths, and architecture details, see [CLAUDE.md](CLA
 git checkout -b feature/your-feature-name
 ```
 
-### 2. Code
-
-Follow the [coding standards](#coding-standards) below.
-
-### 3. Test Locally
+### 2. Check the environment
 
 ```bash
-cargo fmt --all                       # Format
-cargo clippy --workspace              # Lint
-cargo test -p <your-crate>            # Test the crate you changed
+just devex
 ```
 
-### 4. Run the CI Gate
-
-You **must** pass the local CI gate before pushing:
+### 3. Iterate locally
 
 ```bash
-nix develop -c just ci-gate           # Required before push (~3-5 min)
+just pr-fast
 ```
 
-For faster iteration during development:
+### 4. Run the canonical pre-push gate
 
 ```bash
-just pr-fast                          # Quick check (~1-2 min)
+nix develop -c just ci-gate
+# or, without Nix:
+just ci-gate
+```
+
+### 5. Expand for larger changes or release prep
+
+```bash
+just ci-full
+```
+
+### 6. Keep docs and status in sync
+
+```bash
+just status-update
+just status-check
+```
+
+### 7. Before a release candidate
+
+```bash
+just release-check
 ```
 
 Install the pre-push hook to run the gate automatically:
@@ -93,9 +106,11 @@ bash scripts/install-githooks.sh
 ### 5. Open a Pull Request
 
 1. Push your branch and open a PR
-2. Describe your changes and link related issues (e.g., "Fixes #123")
-3. All PRs run format checks, clippy, and tests automatically in CI
-4. Merge with a conventional, descriptive squash commit
+2. Give the PR a CI-safe title in the form `type(scope): summary (#1234)` so
+   the title check passes on the first run
+3. Describe your changes and link related issues in the PR body
+4. All PRs run format checks, clippy, and tests automatically in CI
+5. Merge with a conventional, descriptive squash commit
 
 Once checks are green and reviews are complete, use an explicit conventional commit
 subject when squashing so history is release-friendly and changelog-friendly.
@@ -116,22 +131,25 @@ Conventional subject format:
 - include `!` for breaking changes, e.g. `feat!: ...`
 
 Do not rely on PR title defaults (often noisy, e.g. `(...#NNNN)`), because they
-break commit consistency for changelog generation.
+break commit consistency for changelog generation and can fail `validate-title`.
 
-#### CI Labels (Opt-in)
+Example PR title:
 
-Add these labels to trigger additional CI checks:
+```text
+docs(parser): rewrite the upgrade guide (#3052)
+```
 
-| Label | What it runs |
-|-------|--------------|
-| `ci:coverage` | Code coverage analysis |
-| `ci:bench` | Performance benchmarks |
-| `ci:mutation` | Mutation testing |
-| `ci:strict` | Pedantic clippy |
-| `ci:mac` | macOS build |
-| `ci:semver` | Breaking change detection |
+If you are driving the work from an agent or a worktree, keep the branch scoped
+to one concern and open the PR from that isolated worktree instead of editing
+the main checkout.
 
-For full CI details, see [CI & Automation](docs/project/CI.md).
+#### CI Labels and Gates
+
+The current PR smoke, merge gate, and label-gated workflows are documented in
+[docs/project/CI.md](docs/project/CI.md) and
+[docs/project/CI_TEST_LANES.md](docs/project/CI_TEST_LANES.md).
+If you change docs or generated status output, run `just status-update` and
+`just status-check` before opening the PR.
 
 ## Coding Standards
 
@@ -205,7 +223,8 @@ See [STABILITY.md](docs/reference/STABILITY.md) for our API stability policy.
 1. Create the crate under `crates/` using the naming convention of its family
 2. Add it to the workspace `members` in the root `Cargo.toml`
 3. Follow the structure of a sibling crate in the same family
-4. Run `nix develop -c just ci-gate` to verify
+4. Run `nix develop -c just ci-gate` to verify, and `just ci-full` for larger
+   workspace-impacting changes
 
 ## Getting Help
 

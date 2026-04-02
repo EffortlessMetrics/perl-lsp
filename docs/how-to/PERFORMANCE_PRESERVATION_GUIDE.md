@@ -108,8 +108,8 @@ DOCS_VALIDATE_CARGO_DOC=1 cargo test -p perl-parser --test missing_docs_ac_tests
 cargo bench -p perl-parser -- parse_performance
 
 # Monitor LSP performance preservation
-cargo test -p perl-lsp --test lsp_behavioral_tests -- --test-threads=2
-RUST_TEST_THREADS=2 cargo test -p perl-lsp  # Verify performance improvements maintained
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs  # Verify performance improvements maintained
 
 # Check incremental parsing performance
 cargo test -p perl-parser --test incremental_parsing_performance
@@ -132,7 +132,7 @@ time cargo test -p perl-parser --test mutation_hardening_tests  # Mutation test 
 cargo test -p perl-parser --test performance_regression_detection
 
 # Baseline verification
-cargo test -p perl-lsp --test revolutionary_performance_verification
+cargo test -p perl-lsp-rs --test revolutionary_performance_verification
 ```
 
 ## Implementation Insights and Lessons Learned

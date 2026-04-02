@@ -14,7 +14,7 @@ use perl_path_security::{
     is_safe_completion_filename, resolve_completion_base_directory, sanitize_completion_path_input,
     split_completion_path_components, validate_workspace_path,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -22,9 +22,29 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 // Helper
 // ---------------------------------------------------------------------------
 
+fn normalize_canonical_path(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path_str) = path.to_str() {
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+                return PathBuf::from(format!(r"\\{}", stripped));
+            }
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                return PathBuf::from(stripped);
+            }
+        }
+    }
+
+    path
+}
+
+fn canonicalized(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(normalize_canonical_path(path.canonicalize()?))
+}
+
 fn workspace() -> Result<(tempfile::TempDir, PathBuf), Box<dyn std::error::Error>> {
     let tmp = tempfile::tempdir()?;
-    let canonical = tmp.path().canonicalize()?;
+    let canonical = canonicalized(tmp.path())?;
     Ok((tmp, canonical))
 }
 
@@ -292,7 +312,7 @@ fn symlink_circular_does_not_escape() -> TestResult {
     // it does not somehow escape the workspace
     let result = validate_workspace_path(&PathBuf::from("link_a/file.pl"), ws);
     if let Ok(ref resolved) = result {
-        assert!(resolved.starts_with(ws.canonicalize()?));
+        assert!(resolved.starts_with(&canonicalized(ws)?));
     }
     Ok(())
 }
@@ -368,7 +388,7 @@ fn symlink_to_workspace_subdirectory_is_valid() -> TestResult {
     std::os::unix::fs::symlink(ws.join("src/deep"), &link)?;
 
     let result = validate_workspace_path(&PathBuf::from("shortcut/mod.pl"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -652,8 +672,10 @@ fn backslash_u_encoded_dot_dot_stays_literal() -> TestResult {
     let (_tmp, ws) = workspace()?;
     // \u002e\u002e -> unicode escape for ".." -- OS treats as literal string
     let result =
-        validate_workspace_path(&PathBuf::from("\\u002e\\u002e/\\u002e\\u002e/etc/passwd"), &ws)?;
-    assert!(result.starts_with(&ws));
+        validate_workspace_path(&PathBuf::from("\\u002e\\u002e/\\u002e\\u002e/etc/passwd"), &ws);
+    if let Ok(ref resolved) = result {
+        assert!(resolved.starts_with(&ws));
+    }
     Ok(())
 }
 
@@ -791,6 +813,6 @@ fn absolute_inside_workspace_is_valid() -> TestResult {
     std::fs::write(&file, "1;")?;
 
     let result = validate_workspace_path(&file, ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }

@@ -372,6 +372,33 @@ where
         }
     }
 
+    /// Peek a value from the cache without changing hit/miss counters.
+    ///
+    /// Expired entries are still removed so stale data does not linger.
+    pub fn peek(&self, key: &K) -> Option<V>
+    where
+        V: Clone,
+    {
+        let mut entries = self.entries.lock();
+        let mut access_order = self.access_order.lock();
+        let mut stats = self.stats.lock();
+
+        if let Some(ttl) = self.config.ttl {
+            if entries.get(key).is_some_and(|entry| entry.is_expired(ttl)) {
+                if let Some(entry) = entries.remove(key) {
+                    stats.current_bytes -= entry.size_bytes;
+                    stats.current_items = entries.len();
+                }
+                if let Some(pos) = access_order.iter().position(|k| k == key) {
+                    access_order.remove(pos);
+                }
+                return None;
+            }
+        }
+
+        entries.get(key).map(|entry| entry.value.clone())
+    }
+
     /// Remove a value from the cache.
     ///
     /// # Arguments
@@ -699,6 +726,18 @@ mod tests {
         cache.insert("key1".to_string(), "value1".to_string());
         assert_eq!(cache.remove(&"key1".to_string()), Some("value1".to_string()));
         assert_eq!(cache.get(&"key1".to_string()), None);
+    }
+
+    #[test]
+    fn test_cache_peek_does_not_change_stats() {
+        let cache = BoundedLruCache::<String, String>::default();
+        cache.insert("key1".to_string(), "value1".to_string());
+
+        assert_eq!(cache.peek(&"key1".to_string()), Some("value1".to_string()));
+
+        let stats = cache.stats();
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
     }
 
     #[test]

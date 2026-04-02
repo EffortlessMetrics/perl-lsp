@@ -83,10 +83,10 @@ cargo test -p perl-parser semantic::tests
 **Examples**:
 ```bash
 # Run all LSP integration tests (with adaptive threading)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Run specific integration test suite
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test
 
 # Run parser integration tests
 cargo test -p perl-parser --test substitution_fixed_tests
@@ -164,10 +164,10 @@ proptest! {
 RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test
 
 # Run with adaptive threading (faster)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- --test-threads=2
 
 # Run with debugging output
-RUST_LOG=debug RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --nocapture
+RUST_LOG=debug RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- --nocapture
 ```
 
 **Characteristics**:
@@ -352,16 +352,16 @@ pub fn wait_for_idle(&self) {
 **For CI Environments**:
 ```bash
 # GitHub Actions, GitLab CI, etc.
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 **For Local Development**:
 ```bash
 # Fast iteration (4 threads)
-RUST_TEST_THREADS=4 cargo test -p perl-lsp
+RUST_TEST_THREADS=4 cargo test -p perl-lsp-rs
 
 # Maximum reliability (serial)
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test specific_test -- --nocapture
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test specific_test -- --nocapture
 ```
 
 **For High-Performance Workstations**:
@@ -520,7 +520,7 @@ slow-timeout = { period = "120s", terminate-after = 3 }
 **Workaround**:
 ```bash
 # Run with serial execution for 100% reliability
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_document_symbols_test
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_document_symbols_test
 ```
 
 #### 2. LSP Document Links (`lsp_document_links_test.rs`)
@@ -539,7 +539,7 @@ retries = 3
 **Workaround**:
 ```bash
 # Use enhanced wait_for_idle with 3x multiplier
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_links_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_links_test -- --test-threads=2
 ```
 
 #### 3. LSP Encoding Edge Cases (`lsp_encoding_edge_cases.rs`)
@@ -560,7 +560,7 @@ retries = 3
 **Verification**:
 ```bash
 # Remove #[ignore] and validate
-cargo test -p perl-lsp --test lsp_encoding_edge_cases -- --nocapture
+cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- --nocapture
 ```
 
 ### BrokenPipe Error Handling (*Diataxis: How-to*)
@@ -598,7 +598,7 @@ std::thread::sleep(Duration::from_millis(100));
 **Testing BrokenPipe Resilience**:
 ```bash
 # Torture test for connection handling
-cargo test -p perl-lsp --test lsp_init_torture_test -- --nocapture
+cargo test -p perl-lsp-rs --test lsp_init_torture_test -- --nocapture
 ```
 
 ---
@@ -620,13 +620,13 @@ cargo test -p perl-lsp --test lsp_init_torture_test -- --nocapture
 **Examples**:
 ```bash
 # CI configuration (GitHub Actions)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Development (fast iteration)
 RUST_TEST_THREADS=4 cargo test --workspace
 
 # Debugging (serial, full output)
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test specific_test -- --nocapture
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test specific_test -- --nocapture
 ```
 
 **Implementation**:
@@ -658,7 +658,7 @@ pub fn max_concurrent_threads() -> usize {
 LSP_TEST_FALLBACKS=1 cargo test --workspace
 
 # Combine with adaptive threading
-RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Quick build verification
 LSP_TEST_FALLBACKS=1 cargo check --workspace
@@ -744,10 +744,10 @@ env:
 **Examples**:
 ```bash
 # Debug LSP server communication
-LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
+LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --nocapture
 
 # Combine with RUST_LOG for comprehensive debugging
-RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp --test specific_test -- --nocapture
+RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp-rs --test specific_test -- --nocapture
 ```
 
 ### RUST_LOG (*Diataxis: Reference*)
@@ -764,10 +764,10 @@ RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp --test specific_tes
 **Examples**:
 ```bash
 # Debug test failures
-RUST_LOG=debug cargo test -p perl-lsp --test failing_test -- --nocapture
+RUST_LOG=debug cargo test -p perl-lsp-rs --test failing_test -- --nocapture
 
 # Trace LSP protocol messages
-RUST_LOG=trace cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --nocapture
+RUST_LOG=trace cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- --nocapture
 
 # Module-specific logging
 RUST_LOG=perl_parser::semantic=debug cargo test -p perl-parser
@@ -789,25 +789,25 @@ cargo test --workspace --lib
 cargo test -p perl-parser --lib
 
 # 3. Integration tests with fast mode
-LSP_TEST_FALLBACKS=1 RUST_TEST_THREADS=4 cargo test -p perl-lsp
+LSP_TEST_FALLBACKS=1 RUST_TEST_THREADS=4 cargo test -p perl-lsp-rs
 
 # 4. Full validation before commit
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### Debugging Specific Test
 
 ```bash
 # Serial execution with full output
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test \
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test \
     -- test_workspace_symbol_search --nocapture
 
 # With debugging logs
-RUST_LOG=debug RUST_TEST_THREADS=1 cargo test -p perl-lsp \
+RUST_LOG=debug RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs \
     --test semantic_definition -- --nocapture
 
 # With LSP server stderr
-LSP_TEST_ECHO_STDERR=1 RUST_LOG=debug cargo test -p perl-lsp \
+LSP_TEST_ECHO_STDERR=1 RUST_LOG=debug cargo test -p perl-lsp-rs \
     --test failing_test -- --nocapture
 ```
 
@@ -817,7 +817,7 @@ LSP_TEST_ECHO_STDERR=1 RUST_LOG=debug cargo test -p perl-lsp \
 # Compare threading configurations
 for threads in 1 2 4 8; do
     echo "Testing with $threads threads:"
-    time RUST_TEST_THREADS=$threads cargo test -p perl-lsp
+    time RUST_TEST_THREADS=$threads cargo test -p perl-lsp-rs
 done
 
 # Profile test execution
@@ -865,12 +865,12 @@ jobs:
       # LSP integration tests (5-10 min)
       - name: LSP tests
         run: |
-          RUST_TEST_THREADS=2 cargo test --locked -p perl-lsp -- --test-threads=2
+          RUST_TEST_THREADS=2 cargo test --locked -p perl-lsp-rs -- --test-threads=2
 
       # Comprehensive E2E test (10-15 min)
       - name: E2E test
         run: |
-          RUST_TEST_THREADS=2 cargo test -p perl-lsp \
+          RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs \
             --test lsp_comprehensive_e2e_test -- --test-threads=2
 ```
 
@@ -903,7 +903,7 @@ test:
     CARGO_NET_RETRY: "4"
   script:
     - cargo test --locked --workspace --lib
-    - RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+    - RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
   artifacts:
     reports:
       junit: target/nextest/ci/junit.xml
@@ -943,7 +943,7 @@ cargo fmt --check --all
 cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs
 cargo test --workspace --lib --locked
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-    cargo test -p perl-lsp --test semantic_definition -- --test-threads=1
+    cargo test -p perl-lsp-rs --test semantic_definition -- --test-threads=1
 ```
 
 **Full CI Pipeline** (`just ci-full`):
@@ -952,8 +952,8 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 cargo fmt --check --all
 cargo clippy --workspace --all-targets -- -D warnings -A missing_docs
 cargo test --workspace --lib --bins
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --test-threads=2
-cargo doc -p perl-parser -p perl-lsp --no-deps
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- --test-threads=2
+cargo doc -p perl-parser -p perl-lsp-rs --no-deps
 ```
 
 ---
@@ -1031,7 +1031,7 @@ cargo install cargo-tarpaulin
 cargo tarpaulin --workspace --out Html --output-dir target/coverage
 
 # LSP-specific coverage
-cargo tarpaulin -p perl-lsp --out Lcov --output-dir target/coverage/lsp
+cargo tarpaulin -p perl-lsp-rs --out Lcov --output-dir target/coverage/lsp
 
 # Exclude property tests (reduce noise)
 cargo tarpaulin --workspace --exclude-files '**/prop_*.rs' --out Html
@@ -1119,10 +1119,10 @@ just ci-full
 LSP_TEST_FALLBACKS=1 RUST_TEST_THREADS=4 cargo test --workspace --lib
 
 # Debug specific test
-RUST_LOG=debug RUST_TEST_THREADS=1 cargo test -p perl-lsp --test failing_test -- --nocapture
+RUST_LOG=debug RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test failing_test -- --nocapture
 
 # CI configuration
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 ### Key Principles

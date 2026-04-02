@@ -15,6 +15,7 @@ use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_source_file::is_perl_source_uri;
+use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::time::Instant;
 
@@ -25,6 +26,39 @@ fn get_inline_value_regex() -> Option<&'static regex::Regex> {
         .get_or_init(|| regex::Regex::new(r"([$@%])([a-zA-Z_][a-zA-Z0-9_]*)"))
         .as_ref()
         .ok()
+}
+
+fn normalize_document_link_file_path(file_path: &str) -> Cow<'_, str> {
+    if !file_path.contains(['\\', '/']) {
+        return Cow::Borrowed(file_path);
+    }
+
+    let preserve_unc_prefix = file_path.starts_with("\\\\") || file_path.starts_with("//");
+    let mut normalized = String::with_capacity(file_path.len());
+    let mut chars = file_path.chars().peekable();
+
+    if preserve_unc_prefix {
+        normalized.push_str("//");
+        while matches!(chars.peek(), Some('\\' | '/')) {
+            chars.next();
+        }
+    }
+
+    let mut saw_separator = false;
+
+    for ch in chars {
+        let is_separator = ch == '\\' || ch == '/';
+        if is_separator {
+            if !saw_separator {
+                normalized.push('/');
+            }
+        } else {
+            normalized.push(ch);
+        }
+        saw_separator = is_separator;
+    }
+
+    Cow::Owned(normalized)
 }
 
 impl LspServer {
@@ -343,6 +377,7 @@ impl LspServer {
                                     data: None,
                                 }
                             })?;
+                        let normalized_file_path = normalize_document_link_file_path(file_path);
 
                         let base_uri = data_obj
                             .get("baseUri")
@@ -353,11 +388,15 @@ impl LspServer {
                                 data: None,
                             })?;
 
-                        // Resolve relative to base URI
+                        // Resolve relative to base URI. Prefer URL joins because tests
+                        // and editors may use synthetic file:// roots that are not
+                        // convertible to platform-native absolute paths on Windows.
                         if let Ok(base_url) = url::Url::parse(base_uri) {
-                            if let Ok(base_path) = base_url.to_file_path() {
+                            if let Ok(target_url) = base_url.join(&normalized_file_path) {
+                                link["target"] = json!(target_url.to_string());
+                            } else if let Ok(base_path) = base_url.to_file_path() {
                                 if let Some(parent) = base_path.parent() {
-                                    let resolved = parent.join(file_path);
+                                    let resolved = parent.join(normalized_file_path.as_ref());
                                     if let Ok(target_url) = url::Url::from_file_path(&resolved) {
                                         link["target"] = json!(target_url.to_string());
                                     }
@@ -443,28 +482,24 @@ impl LspServer {
                 data: None,
             })?;
 
-            let mut out = Vec::new();
-            if let Some(ref ast) = doc.ast {
-                // Use the pre-built cached parent map rather than rebuilding on every request.
-                // `doc.parent_map` and `selection_range::build_parent_map` share the same
-                // underlying Node type (`perl_parser_core::ast::Node`), so no conversion is needed.
-                let parent_map = &doc.parent_map;
-
-                for pos in positions {
-                    // Positions in array still need per-item extraction with graceful handling
-                    // Use try_from for safe u64→u32 conversion (strict-by-default)
+            // Use the text-based provider so selection expansion still works for
+            // hash access, strings, and function signatures even when the AST
+            // hierarchy does not expose those intermediate ranges directly.
+            let requested_positions: Vec<lsp_types::Position> = positions
+                .iter()
+                .map(|pos| {
                     let line =
                         pos["line"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
                     let col =
                         pos["character"].as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
-                    let off = self.pos16_to_offset(doc, line, col);
-                    let chain =
-                        crate::selection_range::selection_chain(ast, parent_map, off, &|o| {
-                            self.offset_to_pos16(doc, o)
-                        });
-                    out.push(chain);
-                }
-            }
+                    lsp_types::Position::new(line, col)
+                })
+                .collect();
+
+            let out = crate::features::lsp_selection_range::selection_ranges(
+                &doc.text,
+                &requested_positions,
+            );
             Ok(Some(json!(out)))
         } else {
             Ok(Some(json!([])))
@@ -1566,6 +1601,7 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
+    use super::normalize_document_link_file_path;
     use crate::LspServer;
     use crate::state::ClientCapabilities;
     use serde_json::json;
@@ -1700,6 +1736,21 @@ mod tests {
         assert!(
             caps.inlay_hint_resolve_support.is_none(),
             "inlay_hint_resolve_support must remain None when client sends no resolveSupport"
+        );
+    }
+
+    #[test]
+    fn normalize_document_link_file_path_collapses_windows_separators() {
+        assert_eq!(normalize_document_link_file_path(r"lib\\Thing.pm"), "lib/Thing.pm");
+        assert_eq!(normalize_document_link_file_path(r"lib\Thing.pm"), "lib/Thing.pm");
+        assert_eq!(normalize_document_link_file_path("lib/Thing.pm"), "lib/Thing.pm");
+    }
+
+    #[test]
+    fn normalize_document_link_file_path_preserves_unc_prefix() {
+        assert_eq!(
+            normalize_document_link_file_path(r"\\server\share\Thing.pm"),
+            "//server/share/Thing.pm"
         );
     }
 }

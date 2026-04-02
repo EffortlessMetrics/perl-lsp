@@ -864,8 +864,8 @@ enum Commands {
         #[arg(long)]
         check: bool,
 
-        /// Name of the root LSP crate to check (default: perl-lsp)
-        #[arg(long, default_value = "perl-lsp")]
+        /// Name of the root LSP crate to check (default: perl-lsp-rs)
+        #[arg(long, default_value = "perl-lsp-rs")]
         lsp_crate: String,
     },
 

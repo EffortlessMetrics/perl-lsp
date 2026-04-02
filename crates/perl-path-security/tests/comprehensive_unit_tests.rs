@@ -4,7 +4,7 @@
 //! might send to escape the workspace sandbox.
 
 use perl_path_security::{WorkspacePathError, validate_workspace_path};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -12,9 +12,29 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 // Helper
 // ---------------------------------------------------------------------------
 
+fn normalize_canonical_path(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path_str) = path.to_str() {
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+                return PathBuf::from(format!(r"\\{}", stripped));
+            }
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                return PathBuf::from(stripped);
+            }
+        }
+    }
+
+    path
+}
+
+fn canonicalized(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(normalize_canonical_path(path.canonicalize()?))
+}
+
 fn workspace() -> Result<(tempfile::TempDir, PathBuf), Box<dyn std::error::Error>> {
     let tmp = tempfile::tempdir()?;
-    let canonical = tmp.path().canonicalize()?;
+    let canonical = canonicalized(tmp.path())?;
     Ok((tmp, canonical))
 }
 
@@ -317,7 +337,7 @@ fn symlink_within_workspace_is_allowed() -> TestResult {
     std::os::unix::fs::symlink(&target, &link_path)?;
 
     let result = validate_workspace_path(&PathBuf::from("internal_link/file.pl"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -416,7 +436,7 @@ fn valid_absolute_inside_workspace() -> TestResult {
 
     let abs_path = target.join("Mod.pm");
     let result = validate_workspace_path(&abs_path, ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -587,7 +607,7 @@ fn existing_file_inside_workspace() -> TestResult {
     std::fs::write(ws.join("hello.pl"), "print 'hi';")?;
 
     let result = validate_workspace_path(&PathBuf::from("hello.pl"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     assert!(result.to_string_lossy().ends_with("hello.pl"));
     Ok(())
 }
@@ -600,7 +620,7 @@ fn existing_nested_dir_inside_workspace() -> TestResult {
     std::fs::write(ws.join("lib/My/Module.pm"), "package My::Module; 1;")?;
 
     let result = validate_workspace_path(&PathBuf::from("lib/My/Module.pm"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 

@@ -119,7 +119,7 @@ Major updates require careful review:
    cargo test --workspace
 
    # LSP integration tests
-   RUST_TEST_THREADS=2 cargo test -p perl-lsp
+   RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 
    # Property tests
    cargo test --release --features slow_tests

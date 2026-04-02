@@ -76,16 +76,16 @@ describe('BinaryDownloader.getLocalBinaryPath', () => {
     expect(binaryPath).toContain(process.arch);
   });
 
-  test('binary name is perl-lsp (or perl-lsp.exe on win32)', () => {
+  test('binary name is perllsp (or perllsp.exe on win32)', () => {
     const ctx = makeContext('/tmp/test-storage');
     const downloader = new BinaryDownloader(ctx, makeOutputChannel()) as any;
     const binaryPath: string = downloader.getLocalBinaryPath();
     const basename = path.basename(binaryPath);
 
     if (process.platform === 'win32') {
-      expect(basename).toBe('perl-lsp.exe');
+      expect(basename).toBe('perllsp.exe');
     } else {
-      expect(basename).toBe('perl-lsp');
+      expect(basename).toBe('perllsp');
     }
   });
 });
@@ -182,23 +182,23 @@ describe('BinaryDownloader.findBinary', () => {
   });
 
   test('finds binary in top-level directory', () => {
-    fs.writeFileSync(path.join(tmpDir, 'perl-lsp'), 'binary');
+    fs.writeFileSync(path.join(tmpDir, 'perllsp'), 'binary');
 
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel()) as any;
-    const result = downloader.findBinary(tmpDir, 'perl-lsp');
+    const result = downloader.findBinary(tmpDir, 'perllsp');
 
-    expect(result).toBe(path.join(tmpDir, 'perl-lsp'));
+    expect(result).toBe(path.join(tmpDir, 'perllsp'));
   });
 
   test('finds binary in nested directory', () => {
     const nested = path.join(tmpDir, 'subdir', 'bin');
     fs.mkdirSync(nested, { recursive: true });
-    fs.writeFileSync(path.join(nested, 'perl-lsp'), 'binary');
+    fs.writeFileSync(path.join(nested, 'perllsp'), 'binary');
 
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel()) as any;
-    const result = downloader.findBinary(tmpDir, 'perl-lsp');
+    const result = downloader.findBinary(tmpDir, 'perllsp');
 
-    expect(result).toBe(path.join(nested, 'perl-lsp'));
+    expect(result).toBe(path.join(nested, 'perllsp'));
   });
 
   test('returns null when binary is not found', () => {
@@ -209,11 +209,11 @@ describe('BinaryDownloader.findBinary', () => {
   });
 
   test('ignores files with different names', () => {
-    fs.writeFileSync(path.join(tmpDir, 'not-perl-lsp'), 'wrong');
-    fs.writeFileSync(path.join(tmpDir, 'perl-lsp.old'), 'wrong');
+    fs.writeFileSync(path.join(tmpDir, 'not-perllsp'), 'wrong');
+    fs.writeFileSync(path.join(tmpDir, 'perllsp.old'), 'wrong');
 
     const downloader = new BinaryDownloader(makeContext(), makeOutputChannel()) as any;
-    const result = downloader.findBinary(tmpDir, 'perl-lsp');
+    const result = downloader.findBinary(tmpDir, 'perllsp');
 
     expect(result).toBeNull();
   });
@@ -313,9 +313,9 @@ describe('BinaryDownloader download URL security', () => {
 describe('asset name validation', () => {
   test('valid asset names pass the regex', () => {
     const validNames = [
-      'perl-lsp-v0.12.0-x86_64-unknown-linux-gnu.tar.gz',
-      'perl-lsp-v0.12.0-aarch64-apple-darwin.tar.gz',
-      'perl-lsp-v0.12.0-x86_64-pc-windows-msvc.zip',
+      'perllsp-v0.12.0-x86_64-unknown-linux-gnu.tar.gz',
+      'perllsp-v0.12.0-aarch64-apple-darwin.tar.gz',
+      'perllsp-v0.12.0-x86_64-pc-windows-msvc.zip',
       'SHA256SUMS',
     ];
     const pattern = /^[a-zA-Z0-9_.-]+$/;
@@ -327,10 +327,10 @@ describe('asset name validation', () => {
   test('malicious asset names are rejected', () => {
     const maliciousNames = [
       '../../../etc/passwd',
-      'perl-lsp/../../../etc/shadow',
-      'perl-lsp; rm -rf /',
-      'perl-lsp\x00.tar.gz',
-      'perl-lsp$(whoami).tar.gz',
+      'perllsp/../../../etc/shadow',
+      'perllsp; rm -rf /',
+      'perllsp\x00.tar.gz',
+      'perllsp$(whoami).tar.gz',
     ];
     const pattern = /^[a-zA-Z0-9_.-]+$/;
     for (const name of maliciousNames) {
@@ -355,7 +355,7 @@ describe('BinaryDownloader.detectMusl', () => {
 // ---------------------------------------------------------------------------
 describe('parseLocalVersion', () => {
   test('extracts version from standard --version output', () => {
-    const out = 'perl-lsp 0.12.0\nGit tag: v0.12.0\nPerl Language Server using perl-parser v3\n';
+    const out = 'perllsp 0.12.0\nGit tag: v0.12.0\nPerl Language Server using perl-parser v3\n';
     expect(parseLocalVersion(out)).toBe('0.12.0');
   });
 
@@ -364,7 +364,7 @@ describe('parseLocalVersion', () => {
   });
 
   test('handles trailing whitespace on first line', () => {
-    expect(parseLocalVersion('perl-lsp 0.12.1  \n')).toBe('0.12.1');
+    expect(parseLocalVersion('perllsp 0.12.1  \n')).toBe('0.12.1');
   });
 
   test('returns null on empty string', () => {
@@ -372,12 +372,12 @@ describe('parseLocalVersion', () => {
   });
 
   test('handles single-line output with no newline', () => {
-    expect(parseLocalVersion('perl-lsp 0.13.0')).toBe('0.13.0');
+    expect(parseLocalVersion('perllsp 0.13.0')).toBe('0.13.0');
   });
 
   test('handles Windows CRLF line endings', () => {
     // On Windows, execFile stdout may use \r\n; trim() strips the \r from the first line.
-    const out = 'perl-lsp 0.12.0\r\nGit tag: v0.12.0\r\n';
+    const out = 'perllsp 0.12.0\r\nGit tag: v0.12.0\r\n';
     expect(parseLocalVersion(out)).toBe('0.12.0');
   });
 });
@@ -481,11 +481,11 @@ describe('checkForUpdateSilent', () => {
 
     // Place a stub binary in the expected auto-download location so
     // fs.existsSync passes.
-    const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
+    const binaryName = process.platform === 'win32' ? 'perllsp.exe' : 'perllsp';
     const binDir = path.join(ctx.globalStorageUri.fsPath, 'bin', `${process.platform}-${process.arch}`);
     fs.mkdirSync(binDir, { recursive: true });
     tmpBinary = path.join(binDir, binaryName);
-    fs.writeFileSync(tmpBinary, '#!/bin/sh\necho "perl-lsp 0.12.0"');
+    fs.writeFileSync(tmpBinary, '#!/bin/sh\necho "perllsp 0.12.0"');
   });
 
   afterEach(() => {
@@ -520,7 +520,7 @@ describe('checkForUpdateSilent', () => {
   });
 
   test('no-ops when serverPath is user-configured', async () => {
-    mockConfig({ channel: 'latest', serverPath: '/custom/perl-lsp' });
+    mockConfig({ channel: 'latest', serverPath: '/custom/perllsp' });
     const getLatestSpy = jest.spyOn(downloader as any, 'getLatestRelease');
 
     await downloader.checkForUpdateSilent();
@@ -731,7 +731,7 @@ describe('checkForUpdateSilent', () => {
       tag_name: 'v0.13.0',
       assets: [],
     });
-    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perl-lsp');
+    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perllsp');
     const vscode = require('vscode');
 
     await downloader.checkForUpdateSilent();
@@ -748,7 +748,7 @@ describe('checkForUpdateSilent', () => {
       tag_name: 'v0.13.0',
       assets: [],
     });
-    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perl-lsp');
+    const ensureSpy = jest.spyOn(downloader as any, 'ensureBinary').mockResolvedValue('/path/to/perllsp');
     const vscode = require('vscode');
     vscode.window.showInformationMessage.mockResolvedValue('Update');
 

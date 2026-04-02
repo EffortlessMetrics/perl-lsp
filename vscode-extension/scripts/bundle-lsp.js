@@ -25,7 +25,7 @@ if (!fs.existsSync(binDir)) {
 const currentPlatform = process.platform;
 const currentArch = process.arch;
 
-console.log(`Building perl-lsp for ${currentPlatform}-${currentArch}...`);
+console.log(`Building perllsp for ${currentPlatform}-${currentArch}...`);
 
 // For development, just build for current platform
 const platform = PLATFORMS.find(p => p.platform === currentPlatform && p.arch === currentArch);
@@ -37,8 +37,8 @@ if (!platform) {
 
 try {
     // Build the binary
-    console.log('Building perl-lsp binary...');
-    const buildCmd = `cargo build -p perl-lsp --release`;
+    console.log('Building perllsp binary...');
+    const buildCmd = `cargo build -p perllsp --release`;
     execSync(buildCmd, { 
         cwd: projectRoot,
         stdio: 'inherit'
@@ -51,21 +51,24 @@ try {
     }
     
     // Copy binary
-    const binaryName = platform.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
-    const sourcePath = path.join(projectRoot, 'target', 'release', binaryName);
-    const destPath = path.join(platformDir, binaryName);
-    
-    if (fs.existsSync(sourcePath)) {
-        fs.copyFileSync(sourcePath, destPath);
-        console.log(`Copied ${binaryName} to ${platformDir}`);
-        
-        // Make executable on Unix
-        if (platform.platform !== 'win32') {
-            fs.chmodSync(destPath, 0o755);
-        }
-    } else {
-        console.error(`Binary not found at ${sourcePath}`);
+    const binaryNames = platform.platform === 'win32'
+        ? ['perllsp.exe', 'perl-lsp.exe']
+        : ['perllsp', 'perl-lsp'];
+    const sourcePath = binaryNames
+        .map(binaryName => ({ binaryName, sourcePath: path.join(projectRoot, 'target', 'release', binaryName) }))
+        .find(candidate => fs.existsSync(candidate.sourcePath));
+
+    if (!sourcePath) {
+        console.error(`Binary not found at ${path.join(projectRoot, 'target', 'release')}`);
         process.exit(1);
+    }
+
+    const destPath = path.join(platformDir, sourcePath.binaryName);
+    fs.copyFileSync(sourcePath.sourcePath, destPath);
+    console.log(`Copied ${sourcePath.binaryName} to ${platformDir}`);
+
+    if (platform.platform !== 'win32') {
+        fs.chmodSync(destPath, 0o755);
     }
     
     console.log('Bundle complete!');

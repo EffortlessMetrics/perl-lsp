@@ -5,12 +5,11 @@
 ### How do I install perl-lsp?
 
 - **VS Code (recommended)**: install the [Perl LSP extension](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) — it downloads the server binary automatically.
-- **crates.io**: `cargo install perl-lsp`
 - **Pre-built binary**: download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 - **Installer script (Linux/macOS, best-effort)**:
   `curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash`
 - **From source**:
-  `cargo install --path crates/perl-lsp`
+  `cargo install --path crates/perllsp`
 
 ### Does perl-lsp require Perl to be installed?
 
@@ -62,7 +61,7 @@ Yes. The parser targets Perl 5.8 as the minimum and handles most idioms from tha
 
 ### Which editors work with perl-lsp?
 
-Any editor with LSP client support works. Point it at `perl-lsp --stdio`:
+Any editor with LSP client support works. Point it at `perllsp --stdio`:
 
 - **VS Code** — native extension with auto-download, UI settings, and DAP debugging
 - **Neovim** — via `nvim-lspconfig` (`perl_ls` server)
@@ -75,7 +74,7 @@ See [EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md) for editor-specific configurati
 
 ### Can I use it without VS Code?
 
-Yes. The VS Code extension is the easiest path, but `perl-lsp --stdio` is a plain LSP server that works with any compliant client. The extension is a convenience layer on top of the same binary.
+Yes. The VS Code extension is the easiest path, but `perllsp --stdio` is a plain LSP server that works with any compliant client. The extension is a convenience layer on top of the same binary.
 
 ### Does it support debugging (DAP)?
 
@@ -162,5 +161,5 @@ Yes. perl-lsp is dual-licensed under [MIT](../../LICENSE-MIT) and [Apache-2.0](.
 perl-lsp is in active development. Releases are cut when meaningful milestones
 are ready, such as parser coverage gains, new LSP features, or release-surface
 hardening. The workspace version on `main` can move ahead of the latest
-published release during release prep, so check GitHub Releases or crates.io
-for the currently shipped version.
+published release during release prep, so check GitHub Releases for the
+currently shipped public release.

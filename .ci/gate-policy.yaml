@@ -221,7 +221,7 @@ gates:
     command: >-
       env -u RUSTC_WRAPPER
       RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1
-      cargo test -p perl-lsp --test semantic_definition --locked
+      cargo test -p perl-lsp-rs --test semantic_definition --locked
       -- --test-threads=1
     timeout_seconds: 300
     retry_count: 1
@@ -293,7 +293,7 @@ gates:
     tier: merge_gate
     description: "Verify documentation builds without errors"
     required: true
-    command: cargo doc -p perl-parser -p perl-lsp --no-deps --locked
+    command: cargo doc -p perl-parser -p perl-lsp-rs --no-deps --locked
     timeout_seconds: 180
     retry_count: 0
     budgets:
@@ -556,7 +556,7 @@ gates:
     tier: release
     description: "Release build with locked dependencies"
     required: true
-    command: cargo build -p perl-lsp --release --locked
+    command: cargo build -p perllsp --release --locked
     timeout_seconds: 300
     retry_count: 0
     budgets:
@@ -607,7 +607,7 @@ gates:
     description: "LSP smoke tests: capabilities, protocol basics (<30s)"
     required: true
     command: >-
-      cargo test -p perl-lsp
+      cargo test -p perl-lsp-rs
       --test cli_smoke --test lsp_capabilities_snapshot
       --test lsp_capabilities_contract --test lsp_protocol_tests
       --locked -- --test-threads=1
@@ -628,7 +628,7 @@ gates:
     required: true
     command: >-
       env RUST_TEST_THREADS=2
-      cargo test -p perl-lsp
+      cargo test -p perl-lsp-rs
       --test semantic_definition --test lsp_completion_tests
       --test lsp_color_tests
       --test lsp_code_lens_tests

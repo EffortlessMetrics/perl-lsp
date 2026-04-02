@@ -6,6 +6,44 @@
 use super::super::*;
 use crate::protocol::{req_range, req_uri};
 
+fn requested_code_action_kinds(params: &Value) -> Vec<&str> {
+    params
+        .get("context")
+        .and_then(|context| context.get("only"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+fn code_action_kind_matches_filter(kind: &str, requested_kind: &str) -> bool {
+    requested_kind.is_empty()
+        || kind == requested_kind
+        || kind.strip_prefix(requested_kind).is_some_and(|suffix| suffix.starts_with('.'))
+}
+
+fn retain_requested_code_action_kinds(code_actions: &mut Vec<Value>, requested_kinds: &[&str]) {
+    if requested_kinds.is_empty() {
+        return;
+    }
+
+    code_actions.retain(|action| {
+        action.get("kind").and_then(Value::as_str).is_some_and(|kind| {
+            requested_kinds
+                .iter()
+                .any(|requested_kind| code_action_kind_matches_filter(kind, requested_kind))
+        })
+    });
+}
+
+fn display_diagnostic_message(diagnostic: &crate::features::diagnostics::Diagnostic) -> String {
+    match &diagnostic.suggestion {
+        Some(suggestion) => format!("{}\nSuggestion: {}", diagnostic.message, suggestion),
+        None => diagnostic.message.clone(),
+    }
+}
+
 impl LspServer {
     /// Handle textDocument/codeAction request
     pub(crate) fn handle_code_action(
@@ -19,6 +57,7 @@ impl LspServer {
 
         let uri = req_uri(&params)?;
         let ((start_line, start_char), (end_line, end_char)) = req_range(&params)?;
+        let requested_kinds = requested_code_action_kinds(&params);
 
         let documents = self.documents_guard();
         let doc = match self.get_document(&documents, uri) {
@@ -132,7 +171,7 @@ impl LspServer {
                             },
                             "code": diagnostic.code.clone(),
                             "source": "perl-lsp",
-                            "message": diagnostic.message.clone(),
+                            "message": display_diagnostic_message(diagnostic),
                         })
                     })
                     .collect();
@@ -323,6 +362,7 @@ impl LspServer {
             }
             code_actions.extend(pragma_actions);
 
+            retain_requested_code_action_kinds(&mut code_actions, &requested_kinds);
             Ok(Some(json!(code_actions)))
         } else {
             // No AST (parse error), but we can still offer some actions
@@ -395,6 +435,7 @@ impl LspServer {
                 }
             }
 
+            retain_requested_code_action_kinds(&mut code_actions, &requested_kinds);
             Ok(Some(json!(code_actions)))
         }
     }
@@ -512,6 +553,30 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn code_action_kind_filter_matches_subkinds() {
+        assert!(code_action_kind_matches_filter("refactor.rewrite", "refactor"));
+        assert!(code_action_kind_matches_filter("source.organizeImports", "source"));
+        assert!(code_action_kind_matches_filter("quickfix", "quickfix"));
+        assert!(!code_action_kind_matches_filter("quickfix", "refactor"));
+        assert!(!code_action_kind_matches_filter("refactor.rewrite.extra", "refactor.inline"));
+    }
+
+    #[test]
+    fn retain_requested_code_action_kinds_filters_unrequested_actions() {
+        let mut actions = vec![
+            json!({"title": "quickfix", "kind": "quickfix"}),
+            json!({"title": "rewrite", "kind": "refactor.rewrite"}),
+            json!({"title": "organize", "kind": "source.organizeImports"}),
+        ];
+
+        retain_requested_code_action_kinds(&mut actions, &["refactor"]);
+
+        let remaining_kinds: Vec<&str> =
+            actions.iter().filter_map(|action| action["kind"].as_str()).collect();
+        assert_eq!(remaining_kinds, vec!["refactor.rewrite"]);
+    }
 
     fn open_test_document(server: &LspServer, uri: &str, text: &str) {
         let result = server.test_handle_did_open(Some(json!({

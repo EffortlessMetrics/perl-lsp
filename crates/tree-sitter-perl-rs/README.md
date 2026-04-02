@@ -1,34 +1,37 @@
 # tree-sitter-perl
 
-Internal pure-Rust Perl parser and validation harness for the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
-workspace. **Not published to crates.io.**
+Pure-Rust Perl parser and comparison harness for the workspace.
 
-## Purpose
+This crate is not published to crates.io. Use it for parser work, regression
+checks, and benchmark comparisons against the native parser stack.
 
-Provides a Pest-based Perl 5 parser that emits tree-sitter-compatible
-S-expressions, plus a comparison harness for benchmarking against the
-native v3 recursive-descent parser (`perl-parser`).
+## Where it fits
 
-## Public API (feature-gated)
+`tree-sitter-perl` is the validation and parser-compatibility crate. The
+`pure-rust` path emits tree-sitter-compatible ASTs, while the comparison tools
+let us measure behavior against the rest of the workspace.
 
-| Export | Feature | Description |
-|--------|---------|-------------|
-| `PureRustPerlParser` | `pure-rust` | Main Pest-based parser |
-| `PerlParser`, `AstNode` | `pure-rust` | Grammar rule parser and AST nodes |
-| `EnhancedPerlParser`, `FullPerlParser` | `pure-rust` | Advanced parser variants |
-| `ComparisonHarness` | `pure-rust` / `test-utils` | C-vs-Rust parser comparison runner |
-| `language()`, `parse()` | `c-parser` | Tree-sitter C FFI (benchmarking only) |
+## Key entry points
+
+- `PureRustPerlParser`, `PerlParser`, `AstNode`
+- `EnhancedPerlParser`, `FullPerlParser`, `EnhancedFullPerlParser`
+- `ComparisonHarness`
+- `language()`, `parse()`, `parse_with_tree()`
+
+## Example
+
+```rust
+use tree_sitter_perl::parse;
+
+let tree = parse("my $x = 1;")?;
+assert!(tree.root_node().child_count() > 0);
+```
 
 ## Commands
 
 ```bash
-cargo build -p tree-sitter-perl                           # build
-cargo test  -p tree-sitter-perl                           # test
-cargo run   -p tree-sitter-perl --bin ts_test_parsers --features pure-rust  # parser comparison
-cargo run   -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust  # benchmarks
+cargo build -p tree-sitter-perl
+cargo test -p tree-sitter-perl
+cargo run -p tree-sitter-perl --bin ts_test_parsers --features pure-rust
+cargo run -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust
 ```
-
-## License
-
-MIT OR Apache-2.0

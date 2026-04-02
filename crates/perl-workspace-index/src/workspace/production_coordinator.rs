@@ -45,6 +45,8 @@ use super::state_machine::{IndexState, IndexStateMachine, InvalidationReason, Tr
 use super::workspace_index::{IndexResourceLimits, WorkspaceIndex};
 use crate::position::{Position, Range};
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use url::Url;
 
@@ -93,6 +95,11 @@ impl WorkspaceCacheManager {
     /// Get AST node from cache.
     pub fn get_ast(&self, key: &str) -> Option<Vec<u8>> {
         self.ast_cache.get(&key.to_string())
+    }
+
+    /// Peek AST node from cache without changing hit/miss counters.
+    pub fn peek_ast(&self, key: &str) -> Option<Vec<u8>> {
+        self.ast_cache.peek(&key.to_string())
     }
 
     /// Insert AST node into cache.
@@ -311,14 +318,24 @@ impl ProductionIndexCoordinator {
     /// `Ok(())` if indexing succeeded, otherwise an error.
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let start = self.slo_tracker.start_operation(OperationType::FileIndexing);
+        let cache_key = uri.to_string();
+        let content_fingerprint = Self::fingerprint_file_content(&text);
+
+        if self.cache.peek_ast(&cache_key).as_deref() == Some(content_fingerprint.as_slice()) {
+            let _ = self.cache.get_ast(&cache_key);
+            self.slo_tracker.record_operation_type(
+                OperationType::FileIndexing,
+                start,
+                OperationResult::Success,
+            );
+            return Ok(());
+        }
 
         // Index the file
-        self.index.index_file(uri.clone(), text)?;
+        self.index.index_file(uri, text)?;
 
-        // Cache the result
-        let cache_key = uri.to_string();
-        let serialized = self.serialize_file_index(&uri)?;
-        self.cache.insert_ast(cache_key, serialized);
+        // Cache the content fingerprint for repeated identical indexing.
+        self.cache.insert_ast(cache_key, content_fingerprint);
 
         // Update state if needed
         if matches!(self.state(), IndexState::Ready { .. }) {
@@ -507,10 +524,11 @@ impl ProductionIndexCoordinator {
             .into()
     }
 
-    /// Serialize file index for caching.
-    fn serialize_file_index(&self, _uri: &Url) -> Result<Vec<u8>, String> {
-        // Placeholder - in production, serialize the actual file index
-        Ok(Vec::new())
+    /// Create a content fingerprint for caching.
+    fn fingerprint_file_content(text: &str) -> Vec<u8> {
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        hasher.finish().to_le_bytes().to_vec()
     }
 }
 
@@ -589,6 +607,29 @@ mod tests {
 
         assert!(coordinator.find_definition("hello").is_none());
         assert!(coordinator.find_definition("goodbye").is_some());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_coordinator_reuses_identical_file_contents_without_dropping_symbols()
+    -> Result<(), String> {
+        let coordinator = ProductionIndexCoordinator::new();
+        coordinator.initialize()?;
+
+        let uri = Url::parse("file:///example.pl").map_err(|e| e.to_string())?;
+        let code = "sub hello { return 1; }";
+
+        coordinator.index_file(uri.clone(), code.to_string())?;
+        coordinator.index_file(uri, code.to_string())?;
+
+        assert!(coordinator.find_definition("hello").is_some());
+        assert_eq!(coordinator.index().file_count(), 1);
+
+        let stats = coordinator.statistics();
+        let ast_stats =
+            stats.cache_stats.get("ast").ok_or_else(|| "missing ast cache stats".to_string())?;
+        assert!(ast_stats.hits > 0);
 
         Ok(())
     }

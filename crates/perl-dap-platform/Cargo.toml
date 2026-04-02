@@ -1,15 +1,15 @@
 [package]
 name = "perl-dap-platform"
-version = "0.12.0"
+version = "0.12.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Cross-platform runtime utilities for perl-dap"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-dap-platform"
-readme = "README.md"
 keywords = ["perl", "dap", "platform", "path", "debugger"]
 categories = ["development-tools::debugging", "os"]
 include = [

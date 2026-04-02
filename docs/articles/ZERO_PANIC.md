@@ -368,7 +368,7 @@ just mutation-regression
 # Runs:
 #   cargo test -p perl-parser --test mutation_hardening_tests
 #   cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
-#   cargo test -p perl-lsp --test mutation_survivors_elimination
+#   cargo test -p perl-lsp-rs --test mutation_survivors_elimination
 ```
 
 These harnesses are tests specifically written to kill mutants that

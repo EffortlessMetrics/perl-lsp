@@ -42,8 +42,8 @@ pub mod protocol_io;
 pub use handshake::{await_index_ready, initialize_lsp, shutdown_and_exit};
 pub use protocol_io::{
     drain_until_quiet, read_notification_method, read_notification_timeout, read_response,
-    read_response_matching, read_response_matching_i64, read_response_timeout, send_raw,
-    send_raw_message, send_request_no_wait,
+    read_response_matching, read_response_matching_i64, read_response_only_timeout,
+    read_response_timeout, send_raw, send_raw_message, send_request_no_wait,
 };
 
 use binary_resolution::{CARGO_BIN_EXE, resolve_perl_lsp_cmds};
@@ -183,8 +183,8 @@ pub fn start_lsp_server() -> LspServer {
             eprintln!("║ Last error: {:?}", last_err);
             eprintln!("╠════════════════════════════════════════════════════════════════════╣");
             eprintln!("║ HINTS:                                                             ║");
-            eprintln!("║  • Run: cargo build -p perl-lsp   (builds debug binary)            ║");
-            eprintln!("║  • Or:  cargo test -p perl-lsp    (builds + tests automatically)   ║");
+            eprintln!("║  • Run: cargo build -p perl-lsp-rs   (builds debug binary)            ║");
+            eprintln!("║  • Or:  cargo test -p perl-lsp-rs    (builds + tests automatically)   ║");
             eprintln!("║  • Set PERL_LSP_BIN=/path/to/perl-lsp for custom binary            ║");
             eprintln!("╚════════════════════════════════════════════════════════════════════╝");
             must(Err::<std::process::Child, _>(format!(

@@ -1,32 +1,62 @@
-# perl-lsp
+# perl-lsp-rs
 
-[![Crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
-[![Documentation](https://docs.rs/perl-lsp/badge.svg)](https://docs.rs/perl-lsp)
+Use this crate when you need the internal implementation package behind the
+public `perllsp` Cargo entry.
 
-Standalone **Language Server Protocol (LSP) server for Perl**, providing IDE features such as diagnostics, completion, navigation, formatting, rename, semantic tokens, code actions, and inlay hints. Communicates over stdio or TCP and integrates with any LSP-compatible editor.
+## When to use this crate
 
-## Installation
+Use `perl-lsp-rs` when you want to work on or embed the real language server implementation:
+
+- run the `perllsp` binary behind an editor such as VS Code, Neovim, Emacs, or Helix
+- expose Perl LSP features over stdio or TCP
+- embed the server entry point from Rust instead of shelling out to a binary
+
+If you only need a parser, tokenizer, or a single feature provider, prefer the
+smaller workspace crates such as `perl-parser`, `perl-lexer`, or the
+`perl-lsp-*` provider crates.
+
+## Public install path
 
 ```bash
-cargo install perl-lsp
+cargo install perllsp
+```
+
+For a workspace-local install from this repository, use:
+
+```bash
+cargo install --path crates/perllsp
+```
+
+If you are hacking on the implementation package itself, use workspace package
+commands such as `cargo build -p perl-lsp-rs` or `cargo test -p perl-lsp-rs`.
+
+## Quick start
+
+```bash
+perllsp --stdio
+perllsp --health
 ```
 
 ## Usage
 
 ```bash
-perl-lsp --stdio          # stdio mode (default, for editor integration)
-perl-lsp --socket --port 9257  # TCP socket mode
-perl-lsp --health         # health check
-perl-lsp --version        # version info
+perllsp --stdio           # stdio mode (default, for editor integration)
+perllsp --socket --port 9257   # TCP socket mode
+perllsp --health          # health check
+perllsp --version         # version info
 ```
 
-## Public API
+## Embedding from Rust
 
 The `perl_lsp` library re-exports `LspServer`, `JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`, and a convenience `run_stdio()` entry point for embedding.
 
-## Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace
+## Workspace role
 
-Tier 6 executable crate. Delegates parsing to `perl-parser` and dispatches LSP features through dedicated provider crates (`perl-lsp-completion`, `perl-lsp-navigation`, `perl-lsp-diagnostics`, etc.).
+This is the internal executable implementation in the
+[`perl-lsp`](https://github.com/EffortlessMetrics/perl-lsp) workspace. It
+delegates parsing to `perl-parser` and dispatches feature work through focused
+provider crates such as `perl-lsp-completion`, `perl-lsp-navigation`, and
+`perl-lsp-diagnostics`.
 
 ## License
 
