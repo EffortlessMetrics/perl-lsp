@@ -42,6 +42,7 @@ perl-lsp-limits = { workspace = true }
 perl-lsp-uri = { workspace = true }
 perl-lsp-feature-governance = { workspace = true }
 perl-lsp-tooling = { workspace = true }
+perl-subprocess-runtime = { workspace = true }
 perl-lsp-config = { workspace = true }
 perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }

@@ -236,6 +236,40 @@ pub struct LspServer {
     /// exit paths including panics).
     #[cfg(feature = "workspace")]
     indexing_in_progress: Arc<AtomicBool>,
+    /// Shared Perl::Critic analyzer for the diagnostic pipeline.
+    ///
+    /// Lazily initialized on first use and reused across diagnostic cycles so
+    /// the per-instance violation cache survives between `textDocument/didChange`
+    /// events.  `invalidate_cache` is called on `didChange`; the whole entry is
+    /// reset to `None` when `perlcritic_enabled`, `perlcritic_severity`, or
+    /// `perlcritic_profile` changes via `didChangeConfiguration`.
+    ///
+    /// Only present on non-WASM targets (subprocess execution is unavailable
+    /// on WASM).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) critic_analyzer: Mutex<Option<crate::perl_critic::CriticAnalyzer>>,
+    /// Subprocess runtime override for the `CriticAnalyzer`.
+    ///
+    /// When `Some`, the lazy-init path in `collect_external_perlcritic_diagnostics`
+    /// uses this runtime instead of `OsSubprocessRuntime`.  Always `None` in
+    /// production; set to a `MockSubprocessRuntime` by the test helper
+    /// `LspServer::test_install_mock_critic_runtime` so that tests can exercise
+    /// the full diagnostic pipeline without spawning a real `perlcritic` process.
+    ///
+    /// Using a separate runtime override (rather than pre-building the analyzer)
+    /// ensures that config-sensitive values such as the auto-discovered
+    /// `.perlcriticrc` profile path are still resolved at analysis time.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) critic_runtime_override:
+        Mutex<Option<std::sync::Arc<dyn perl_subprocess_runtime::SubprocessRuntime>>>,
+    /// When `true`, skip the `command_exists("perlcritic")` guard during
+    /// diagnostic collection.  Always present on non-WASM targets but only
+    /// settable to `true` through the test API exposed via
+    /// `#[cfg(any(test, feature = "expose_lsp_test_api"))]`.
+    ///
+    /// Initialized to `false`; only the test helper methods flip this.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) skip_perlcritic_command_check: AtomicBool,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains

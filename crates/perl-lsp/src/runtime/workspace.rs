@@ -501,11 +501,46 @@ impl LspServer {
 
                 // Read perl settings once and update both configs
                 if let Some(perl) = settings.get("perl") {
+                    // Check whether any perlcritic-related setting is changing before
+                    // updating config so we can decide whether to reset the shared
+                    // CriticAnalyzer.  The analyzer is config-bound (severity, profile)
+                    // so any change to those fields requires a fresh instance.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let critic_config_changed = {
+                        let cfg = self.config.lock();
+                        let new_enabled = perl
+                            .get("perlcritic")
+                            .and_then(|v| v.get("enabled"))
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(cfg.perlcritic_enabled);
+                        let new_severity = perl
+                            .get("perlcritic")
+                            .and_then(|v| v.get("severity"))
+                            .and_then(|v| v.as_u64())
+                            .map(|v| v as u8)
+                            .unwrap_or(cfg.perlcritic_severity);
+                        let new_profile = perl
+                            .get("perlcritic")
+                            .and_then(|v| v.get("profile"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        new_enabled != cfg.perlcritic_enabled
+                            || new_severity != cfg.perlcritic_severity
+                            || new_profile != cfg.perlcritic_profile
+                    };
+
                     // Update server config (inlay hints, test runner)
                     {
                         let mut config = self.config.lock();
                         config.update_from_value(perl);
                         eprintln!("Updated server config from perl settings");
+                    }
+
+                    // Reset the shared CriticAnalyzer when any critic-related setting
+                    // changed so the next diagnostic cycle rebuilds it with the new config.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if critic_config_changed {
+                        *self.critic_analyzer.lock() = None;
                     }
 
                     // Update workspace config (include paths, @INC)
