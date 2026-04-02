@@ -126,9 +126,9 @@ impl DocumentStore {
 
     /// Estimate total bytes used by all stored document texts.
     ///
-    /// Only available when the  feature is enabled.
-    /// Returns the sum of  for every open document; does not
-    /// account for  or other metadata overhead.
+    /// Only available when the `memory-profiling` feature is enabled.
+    /// Returns the sum of `text.len()` for every open document; does not
+    /// account for `Document` struct overhead or other metadata overhead.
     #[cfg(feature = "memory-profiling")]
     pub fn total_text_bytes(&self) -> usize {
         let Ok(docs) = self.documents.read() else {
