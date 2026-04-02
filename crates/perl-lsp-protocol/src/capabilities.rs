@@ -181,6 +181,8 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
                         SemanticTokenType::REGEXP,
                         SemanticTokenType::OPERATOR,
                         SemanticTokenType::new("sql_string"), // DBI/SQL string context (Issue #2337)
+                        SemanticTokenType::new("sql_heredoc_keyword"), // SQL keyword in <<SQL heredoc (Issue #2059)
+                        SemanticTokenType::new("json_heredoc_key"), // JSON key in <<JSON heredoc (Issue #2059)
                     ],
                     token_modifiers: vec![
                         SemanticTokenModifier::DECLARATION,

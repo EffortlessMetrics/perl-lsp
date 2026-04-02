@@ -491,3 +491,123 @@ fn default_library_modifier_bitmask_decodes_correctly_via_advertised_legend() ->
     let _ = child.wait();
     Ok(())
 }
+
+/// Contract test for the `sql_heredoc_keyword` token type (Issue #2059).
+///
+/// Verifies that `sql_heredoc_keyword` is present in the advertised legend AND that
+/// opening a document with a `<<SQL` heredoc containing `SELECT` produces at least one
+/// token that decodes to `sql_heredoc_keyword` via the advertised legend.
+///
+/// Guards against the legend index ordering class of bug fixed in PR #2772: if
+/// `sql_heredoc_keyword` is missing from the advertised legend, the emitted index would
+/// decode as a wrong type for every LSP client.
+#[test]
+fn sql_heredoc_keyword_index_decodes_correctly_via_advertised_legend() -> Result<(), BoxError> {
+    let bin = env!("CARGO_BIN_EXE_perl-lsp");
+    let mut child = Command::new(bin)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let mut reader = BufReader::new(stdout);
+
+    let init_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "capabilities": {
+                "general": { "positionEncodings": ["utf-16"] }
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &init_req)?;
+    let init_resp = recv_until_id(&mut reader, 1)?;
+
+    let advertised_legend: Vec<String> =
+        init_resp["result"]["capabilities"]["semanticTokensProvider"]["legend"]["tokenTypes"]
+            .as_array()
+            .ok_or("tokenTypes missing from initialize response")?
+            .iter()
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .collect();
+
+    // Verify sql_heredoc_keyword is present in the advertised legend.
+    let sql_heredoc_advertised_idx = advertised_legend
+        .iter()
+        .position(|s| s == "sql_heredoc_keyword")
+        .ok_or("sql_heredoc_keyword is not in the advertised tokenTypes legend")?;
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"initialized","params":{}}).to_string(),
+    )?;
+
+    // Heredoc with SQL keyword — should produce sql_heredoc_keyword tokens.
+    let source = "my $sql = <<SQL;\nSELECT * FROM users WHERE id = ?\nSQL\n";
+    let did_open = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {
+            "textDocument": {
+                "uri": "file:///sql_heredoc_contract_test.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &did_open)?;
+
+    let sem_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/semanticTokens/full",
+        "params": {
+            "textDocument": { "uri": "file:///sql_heredoc_contract_test.pl" }
+        }
+    })
+    .to_string();
+    send_msg(&mut stdin, &sem_req)?;
+    let sem_resp = recv_until_id(&mut reader, 2)?;
+
+    let data = sem_resp["result"]["data"]
+        .as_array()
+        .ok_or("semanticTokens response missing data array")?;
+
+    let mut decoded_types: Vec<String> = Vec::new();
+    for chunk in data.chunks(5) {
+        let type_idx = chunk[3].as_u64().ok_or("token_type not u64")? as usize;
+        let type_name = advertised_legend
+            .get(type_idx)
+            .cloned()
+            .unwrap_or_else(|| format!("OUT_OF_RANGE({})", type_idx));
+        decoded_types.push(type_name);
+    }
+
+    let found = decoded_types.iter().any(|t| t == "sql_heredoc_keyword");
+    assert!(
+        found,
+        "No token decoded to 'sql_heredoc_keyword' via the advertised legend for <<SQL heredoc \
+         containing SELECT. Decoded types: {:?}. \
+         sql_heredoc_keyword is at advertised index {}.",
+        decoded_types, sql_heredoc_advertised_idx
+    );
+
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}).to_string(),
+    )?;
+    let _ = recv_until_id(&mut reader, 3)?;
+    send_msg(
+        &mut stdin,
+        &serde_json::json!({"jsonrpc":"2.0","method":"exit","params":null}).to_string(),
+    )?;
+    let _ = child.wait();
+    Ok(())
+}

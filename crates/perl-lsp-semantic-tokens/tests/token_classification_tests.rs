@@ -1243,3 +1243,127 @@ fn test_two_special_variables_in_same_expression_both_get_modifier() {
          got {special_count} special-variable tokens (expected >= 2)"
     );
 }
+
+// ===========================================================================
+// Heredoc language injection — Issue #2059
+// ===========================================================================
+
+#[test]
+fn sql_heredoc_keywords_are_classified() {
+    // <<SQL heredoc body containing SQL keywords should produce sql_heredoc_keyword tokens.
+    let code = "my $sql = <<SQL;\nSELECT * FROM users WHERE id = ?\nSQL\n";
+    let result = tokens_of_type(code, "sql_heredoc_keyword");
+    assert!(
+        !result.is_empty(),
+        "<<SQL heredoc body with SELECT/FROM/WHERE should produce >= 1 sql_heredoc_keyword token; \
+         got none. Legend has sql_heredoc_keyword: {}",
+        legend().map.contains_key("sql_heredoc_keyword")
+    );
+}
+
+#[test]
+fn json_heredoc_keys_are_classified() {
+    // <<JSON heredoc body with a quoted key:value should produce json_heredoc_key tokens.
+    let code = "my $j = <<JSON;\n{\"key\": \"value\", \"count\": 42}\nJSON\n";
+    let result = tokens_of_type(code, "json_heredoc_key");
+    assert!(
+        !result.is_empty(),
+        "<<JSON heredoc body with quoted keys should produce >= 1 json_heredoc_key token; \
+         got none. Legend has json_heredoc_key: {}",
+        legend().map.contains_key("json_heredoc_key")
+    );
+}
+
+#[test]
+fn non_sql_heredoc_body_is_plain_string() {
+    // <<EOF heredoc should not produce any injection tokens.
+    let code = "my $txt = <<EOF;\nSELECT this is just text\nEOF\n";
+    let sql_result = tokens_of_type(code, "sql_heredoc_keyword");
+    let json_result = tokens_of_type(code, "json_heredoc_key");
+    assert!(
+        sql_result.is_empty(),
+        "<<EOF heredoc should not produce sql_heredoc_keyword tokens; got: {:?}",
+        sql_result
+    );
+    assert!(
+        json_result.is_empty(),
+        "<<EOF heredoc should not produce json_heredoc_key tokens; got: {:?}",
+        json_result
+    );
+}
+
+#[test]
+fn multiple_heredocs_same_line_both_injected() {
+    // Two heredocs on the same line: first SQL, then JSON.
+    // Both bodies must get injection tokens.
+    let code = "my ($a, $b) = (<<SQL, <<JSON);\nSELECT 1\nSQL\n{\"x\": 1}\nJSON\n";
+    let sql_result = tokens_of_type(code, "sql_heredoc_keyword");
+    let json_result = tokens_of_type(code, "json_heredoc_key");
+    assert!(
+        !sql_result.is_empty(),
+        "First heredoc (<<SQL) on multi-heredoc line should produce sql_heredoc_keyword tokens"
+    );
+    assert!(
+        !json_result.is_empty(),
+        "Second heredoc (<<JSON) on multi-heredoc line should produce json_heredoc_key tokens"
+    );
+}
+
+#[test]
+fn command_heredoc_not_injected() {
+    // Backtick heredoc (command exec) must NOT produce sql_heredoc_keyword tokens.
+    let code = "my $out = <<`SQL`;\nSELECT 1\nSQL\n";
+    let result = tokens_of_type(code, "sql_heredoc_keyword");
+    assert!(
+        result.is_empty(),
+        "Backtick (command) heredoc must not produce sql_heredoc_keyword tokens; got: {:?}",
+        result
+    );
+}
+
+#[test]
+fn perl_variable_in_sql_heredoc_preserved() {
+    // A Perl variable inside a SQL heredoc body must still get a variable token.
+    // Injection tokens and variable tokens can coexist in the same heredoc body.
+    let code = "my $sql = <<SQL;\nSELECT * FROM users WHERE id = $user_id\nSQL\n";
+    let sql_result = tokens_of_type(code, "sql_heredoc_keyword");
+    let var_result = tokens_of_type(code, "variable");
+    assert!(
+        !sql_result.is_empty(),
+        "<<SQL heredoc should still produce sql_heredoc_keyword tokens when Perl variable present"
+    );
+    assert!(
+        !var_result.is_empty(),
+        "Perl variable $user_id inside SQL heredoc body should still get a variable token"
+    );
+}
+
+#[test]
+fn case_insensitive_sql_tag_is_recognized() {
+    // <<sql (lowercase) should also trigger SQL injection.
+    let code = "my $s = <<sql;\nSELECT 1\nsql\n";
+    let result = tokens_of_type(code, "sql_heredoc_keyword");
+    assert!(
+        !result.is_empty(),
+        "Lowercase <<sql tag should produce sql_heredoc_keyword tokens just like <<SQL"
+    );
+}
+
+#[test]
+fn quoted_sql_tag_is_recognized() {
+    // <<'SQL' (single-quoted delimiter) should trigger SQL injection.
+    let code = "my $s = <<'SQL';\nSELECT 1\nSQL\n";
+    let result = tokens_of_type(code, "sql_heredoc_keyword");
+    assert!(
+        !result.is_empty(),
+        "Single-quoted <<'SQL' tag should produce sql_heredoc_keyword tokens"
+    );
+}
+
+#[test]
+fn indented_heredoc_sql_tag_is_recognized() {
+    // <<~SQL (indented heredoc) should trigger SQL injection.
+    let code = "my $s = <<~SQL;\n    SELECT 1\n    SQL\n";
+    let result = tokens_of_type(code, "sql_heredoc_keyword");
+    assert!(!result.is_empty(), "Indented <<~SQL tag should produce sql_heredoc_keyword tokens");
+}

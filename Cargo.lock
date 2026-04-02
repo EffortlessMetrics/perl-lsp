@@ -2320,6 +2320,7 @@ dependencies = [
  "perl-lexer",
  "perl-parser-core",
  "perl-tdd-support",
+ "regex",
  "rustc-hash",
 ]
 

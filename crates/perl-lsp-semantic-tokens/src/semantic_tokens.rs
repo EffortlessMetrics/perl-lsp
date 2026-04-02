@@ -106,7 +106,10 @@
 
 use perl_lexer::{PerlLexer, StringPart, TokenType};
 use perl_parser_core::ast::{Node, NodeKind};
+use regex::Regex;
 use rustc_hash::FxHashMap;
+use std::collections::VecDeque;
+use std::sync::LazyLock;
 
 /// LSP semantic token encoding format for client transmission
 ///
@@ -154,27 +157,29 @@ pub fn legend() -> TokensLegend {
     // Clients decode emitted tokenType indices using the advertised legend;
     // any ordering mismatch renders every token with the wrong colour.
     let types = vec![
-        "namespace",     // 0
-        "type",          // 1
-        "class",         // 2
-        "interface",     // 3
-        "enum",          // 4
-        "enumMember",    // 5
-        "typeParameter", // 6
-        "function",      // 7
-        "method",        // 8
-        "property",      // 9
-        "macro",         // 10
-        "variable",      // 11
-        "parameter",     // 12
-        "keyword",       // 13
-        "modifier",      // 14
-        "comment",       // 15
-        "string",        // 16
-        "number",        // 17
-        "regexp",        // 18
-        "operator",      // 19
-        "sql_string",    // 20 — DBI/SQL string context (Issue #2337)
+        "namespace",           // 0
+        "type",                // 1
+        "class",               // 2
+        "interface",           // 3
+        "enum",                // 4
+        "enumMember",          // 5
+        "typeParameter",       // 6
+        "function",            // 7
+        "method",              // 8
+        "property",            // 9
+        "macro",               // 10
+        "variable",            // 11
+        "parameter",           // 12
+        "keyword",             // 13
+        "modifier",            // 14
+        "comment",             // 15
+        "string",              // 16
+        "number",              // 17
+        "regexp",              // 18
+        "operator",            // 19
+        "sql_string",          // 20 — DBI/SQL string context (Issue #2337)
+        "sql_heredoc_keyword", // 21 — SQL keyword inside <<SQL heredoc (Issue #2059)
+        "json_heredoc_key",    // 22 — JSON object key inside <<JSON heredoc (Issue #2059)
     ]
     .into_iter()
     .map(|s| s.to_string())
@@ -214,6 +219,122 @@ pub fn legend() -> TokensLegend {
 #[inline]
 fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
     *leg.map.get(k).unwrap_or(&0)
+}
+
+// ---------------------------------------------------------------------------
+// Heredoc language injection helpers (Issue #2059)
+// ---------------------------------------------------------------------------
+
+/// Regex matching SQL keywords (case-insensitive).
+///
+/// Matches word-boundary-delimited SQL keywords in a heredoc body and emits
+/// `sql_heredoc_keyword` semantic tokens for each match.
+static SQL_KW_RE: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\b(SELECT|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|LIKE|BETWEEN|JOIN|INNER|LEFT|RIGHT|OUTER|FULL|CROSS|ON|AS|DISTINCT|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|UNION|ALL|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|VIEW|RETURNING|WITH|CASE|WHEN|THEN|ELSE|END|EXISTS|EXCEPT|INTERSECT)\b"
+    ).ok()
+});
+
+/// Regex matching JSON object keys: `"key":`.
+static JSON_KEY_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r#""([^"\\]|\\.)*"\s*:"#).ok());
+
+/// Determine the injection language for a heredoc start token.
+///
+/// `text` is the full heredoc start token text (e.g. `<<SQL`, `<<'SQL'`, `<<~SQL`,
+/// `<<"sql"`). Returns `Some("sql")` or `Some("json")` for known language tags,
+/// and `None` for everything else (including backtick command heredocs).
+///
+/// # Edge cases handled
+///
+/// - `<<~SQL` — indented heredoc, strip the `~`
+/// - `<<'SQL'`, `<<"SQL"` — quoted delimiters, strip quotes
+/// - Case-insensitive: `<<sql`, `<<Sql`, `<<SQL` all map to `"sql"`
+/// - Backtick heredoc `<<\`SQL\`` — returns `None` (command exec, not injection)
+fn heredoc_injection_language(text: &str) -> Option<&'static str> {
+    let rest = text.strip_prefix("<<")?;
+    // Strip optional indented-heredoc `~`
+    let rest = rest.strip_prefix('~').unwrap_or(rest);
+    // Backtick delimiter → command heredoc, never inject
+    if rest.starts_with('`') {
+        return None;
+    }
+    // Strip matching quote characters (single or double)
+    let label = rest.trim_start_matches(['\'', '"']).trim_end_matches(['\'', '"']);
+    match label.to_ascii_lowercase().as_str() {
+        "sql" | "mysql" | "postgres" | "postgresql" | "sqlite" => Some("sql"),
+        "json" => Some("json"),
+        _ => None,
+    }
+}
+
+/// Emit semantic tokens for SQL keyword matches inside a heredoc body.
+fn tokenize_sql_body(
+    body: &str,
+    body_start: usize,
+    to_pos16: &impl Fn(usize) -> (u32, u32),
+    leg: &TokensLegend,
+    out: &mut Vec<(u32, u32, u32, u32, u32)>,
+) {
+    let re = match SQL_KW_RE.as_ref() {
+        Some(r) => r,
+        None => return,
+    };
+    let kind = kind_idx(leg, "sql_heredoc_keyword");
+    for mat in re.find_iter(body) {
+        let offset = body_start + mat.start();
+        let (sl, sc) = to_pos16(offset);
+        let (el, ec) = to_pos16(body_start + mat.end());
+        let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+        if len > 0 {
+            out.push((sl, sc, len, kind, 0));
+        }
+    }
+}
+
+/// Emit semantic tokens for JSON key matches inside a heredoc body.
+fn tokenize_json_body(
+    body: &str,
+    body_start: usize,
+    to_pos16: &impl Fn(usize) -> (u32, u32),
+    leg: &TokensLegend,
+    out: &mut Vec<(u32, u32, u32, u32, u32)>,
+) {
+    let re = match JSON_KEY_RE.as_ref() {
+        Some(r) => r,
+        None => return,
+    };
+    let kind = kind_idx(leg, "json_heredoc_key");
+    for mat in re.find_iter(body) {
+        // Highlight only the key string (before the colon), not the colon itself.
+        // The regex matches `"key":` — trim the trailing colon off the token length.
+        let match_text = mat.as_str();
+        let colon_offset = match_text.rfind(':').unwrap_or(match_text.len());
+        let key_start = body_start + mat.start();
+        let key_end = key_start + colon_offset;
+        let (sl, sc) = to_pos16(key_start);
+        let (el, ec) = to_pos16(key_end);
+        let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+        if len > 0 {
+            out.push((sl, sc, len, kind, 0));
+        }
+    }
+}
+
+/// Dispatch to the appropriate body tokenizer based on the injection language.
+fn tokenize_heredoc_body(
+    body: &str,
+    body_start: usize,
+    lang: &str,
+    to_pos16: &impl Fn(usize) -> (u32, u32),
+    leg: &TokensLegend,
+    out: &mut Vec<(u32, u32, u32, u32, u32)>,
+) {
+    match lang {
+        "sql" => tokenize_sql_body(body, body_start, to_pos16, leg, out),
+        "json" => tokenize_json_body(body, body_start, to_pos16, leg, out),
+        _ => {}
+    }
 }
 
 /// Returns `true` when `full_name` is a well-known Perl built-in special variable.
@@ -308,7 +429,12 @@ pub fn collect_semantic_tokens(
     let mut lexer_tokens: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
 
     // 1) Fast path from lexer categories: conservative single-line emission
-    let mut lexer = PerlLexer::new(text);
+    // FIFO queue of pending heredoc injection languages, one entry per heredoc start token
+    // encountered in source order. Multiple heredocs on the same line (`<<SQL, <<JSON`)
+    // are handled correctly: we push on HeredocStart and pop on HeredocBody.
+    let mut pending_heredoc_langs: VecDeque<Option<&'static str>> = VecDeque::new();
+    // Use with_body_tokens so the lexer emits HeredocBody tokens (needed for injection).
+    let mut lexer = PerlLexer::with_body_tokens(text);
     while let Some(tok) = lexer.next_token() {
         let (sl, sc) = to_pos16(tok.start);
         let (el, ec) = to_pos16(tok.end);
@@ -395,9 +521,27 @@ pub fn collect_semantic_tokens(
             | TokenType::QuoteSingle
             | TokenType::QuoteDouble
             | TokenType::QuoteWords
-            | TokenType::QuoteCommand
-            | TokenType::HeredocStart
-            | TokenType::HeredocBody(_) => "string",
+            | TokenType::QuoteCommand => "string",
+
+            TokenType::HeredocStart => {
+                // Record the injection language for this heredoc's upcoming body token.
+                pending_heredoc_langs.push_back(heredoc_injection_language(&tok.text));
+                "string"
+            }
+
+            TokenType::HeredocBody(_) => {
+                // Pop the queued injection language for the corresponding heredoc start.
+                // NOTE: The Arc<str> inside HeredocBody is always empty_arc(); the actual
+                // body text must be sliced from the source using tok.start..tok.end.
+                if let Some(maybe_lang) = pending_heredoc_langs.pop_front()
+                    && let Some(lang) = maybe_lang
+                {
+                    let body_end = tok.end.min(text.len());
+                    let body = &text[tok.start.min(body_end)..body_end];
+                    tokenize_heredoc_body(body, tok.start, lang, to_pos16, &leg, &mut lexer_tokens);
+                }
+                "string"
+            }
 
             TokenType::Number(_) => "number",
 

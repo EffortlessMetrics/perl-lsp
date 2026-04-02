@@ -112,8 +112,9 @@ fn legend_modifiers_have_no_duplicates() {
 #[test]
 fn legend_token_type_count() {
     let leg = legend();
-    // 20 standard LSP types + sql_string = 21 total (must match capabilities_for() advertisement)
-    assert_eq!(leg.token_types.len(), 21, "expected 21 token types");
+    // 20 standard LSP types + sql_string + sql_heredoc_keyword + json_heredoc_key
+    // = 23 total (must match capabilities_for() advertisement)
+    assert_eq!(leg.token_types.len(), 23, "expected 23 token types");
 }
 
 #[test]
