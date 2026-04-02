@@ -609,8 +609,9 @@ fn rename_collisions(body: &str, outer_vars: &[String]) -> String {
         if result.contains(&my_decl) {
             let renamed_bare = format!("{}_inlined", bare);
             let renamed_decl = format!("my ${}", renamed_bare);
-            // Replace the declaration first
-            result = result.replace(&my_decl, &renamed_decl);
+            // Replace the declaration first — use word-boundary-aware replacement so
+            // that "my $x" does not corrupt "my $x_count" when the outer var is "$x".
+            result = replace_whole_var(&result, &my_decl, &renamed_decl);
             // Then replace all uses of $bare that are not the new $bare_inlined
             // We do this by replacing "$bare" with "$bare_inlined" across the body,
             // but we already renamed the declaration above so the decl is safe.

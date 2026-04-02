@@ -293,3 +293,37 @@ fn test_return_in_string_literal_not_counted_as_return_statement() {
         result
     );
 }
+
+// ---------------------------------------------------------------------------
+// Edge case: collision rename declaration must not corrupt sibling variables
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_collision_rename_decl_does_not_corrupt_sibling_variables() {
+    // Sub body has BOTH $x and $x_count as local variables.
+    // Outer scope has $x (a collision).
+    // rename_collisions must rename only "my $x" to "my $x_inlined", and must
+    // NOT mangle the unrelated "my $x_count" declaration.
+    //
+    // Previously, the declaration-replacement step used str::replace which is
+    // not word-boundary-aware: replace("my $x", "my $x_inlined") on the text
+    // "my $x_count = 3;\n    my $x = 5;" would produce
+    // "my $x_inlined_count = 3;\n    my $x_inlined = 5;" — corrupting $x_count.
+    let source = r#"sub compute {
+    my ($a) = @_;
+    my $x_count = 3;
+    my $x = $a * 2;
+    return $x * $x_count;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    // $x collides with the outer scope
+    let result =
+        inliner.inline_call_with_outer_vars("compute", "compute(7)", &["$x".to_string()]);
+    let inlined = must(result);
+    // $x_count must NEVER be renamed to $x_inlined_count
+    assert!(
+        !inlined.contains("x_inlined_count"),
+        "collision rename must not corrupt sibling variable $x_count; got: {inlined}"
+    );
+}
