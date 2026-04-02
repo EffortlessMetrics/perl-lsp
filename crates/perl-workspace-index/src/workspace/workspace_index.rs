@@ -1226,6 +1226,43 @@ impl WorkspaceIndex {
         }
     }
 
+    /// Create a workspace index with pre-allocated capacity.
+    ///
+    /// Pre-allocating reduces the number of rehash operations during large-workspace
+    /// startup. Use this instead of `new()` when the approximate workspace size is
+    /// known in advance (e.g. from a file discovery scan).
+    ///
+    /// # Arguments
+    ///
+    /// * `estimated_files` - Expected number of source files in the workspace.
+    /// * `avg_symbols_per_file` - Expected average number of symbols per file.
+    ///
+    /// # Panics
+    ///
+    /// Does not panic. Overflow is prevented via `saturating_mul` and an upper cap
+    /// on the symbol/reference map capacity.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::with_capacity(1000, 20);
+    /// assert!(!index.has_symbols());
+    /// ```
+    pub fn with_capacity(estimated_files: usize, avg_symbols_per_file: usize) -> Self {
+        // Each symbol is stored twice (qualified + bare name) due to dual indexing.
+        let sym_cap =
+            estimated_files.saturating_mul(avg_symbols_per_file).saturating_mul(2).min(1_000_000);
+        let ref_cap = (sym_cap / 4).min(1_000_000);
+        Self {
+            files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
+            symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
+            global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            document_store: DocumentStore::new(),
+        }
+    }
+
     /// Normalize a URI to a consistent form using proper URI handling
     fn normalize_uri(uri: &str) -> String {
         perl_uri::normalize_uri(uri)
@@ -1589,6 +1626,11 @@ impl WorkspaceIndex {
             let mut files = self.files.write();
             let mut symbols = self.symbols.write();
             let mut global_refs = self.global_references.write();
+
+            // Pre-allocate capacity for the incoming batch to avoid rehashing.
+            // Each symbol is indexed under both its qualified name and bare name.
+            files.reserve(parsed.len());
+            symbols.reserve(parsed.len().saturating_mul(20).saturating_mul(2));
 
             for (key, uri_str, file_index) in parsed {
                 // Remove stale global references
@@ -4049,5 +4091,22 @@ Utils::process_data();
         let names = extract_module_names_from_use_args(&["'Foo'Bar'".to_string()]);
         // After stripping outer quotes the raw token is Foo'Bar — a valid legacy name
         assert_eq!(names, vec!["Foo'Bar"]);
+    }
+
+    #[test]
+    fn test_with_capacity_accepts_large_batch_without_panic() {
+        let index = WorkspaceIndex::with_capacity(100, 20);
+        for i in 0..100 {
+            let uri = must(url::Url::parse(&format!("file:///lib/Mod{}.pm", i)));
+            let src = format!("package Mod{};\nsub foo_{} {{ 1 }}\n1;\n", i, i);
+            index.index_file(uri, src).ok();
+        }
+        assert!(index.has_symbols());
+    }
+
+    #[test]
+    fn test_with_capacity_zero_does_not_panic() {
+        let index = WorkspaceIndex::with_capacity(0, 0);
+        assert!(!index.has_symbols());
     }
 }

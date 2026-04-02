@@ -226,7 +226,9 @@ impl ProductionIndexCoordinator {
 
         Self {
             state_machine: IndexStateMachine::new(),
-            index: Arc::new(WorkspaceIndex::new()),
+            // Pre-allocate for a typical Perl project: 1000 files × 20 symbols/file.
+            // This is a conservative default; the actual ceiling is `max_files: 10_000`.
+            index: Arc::new(WorkspaceIndex::with_capacity(1000, 20)),
             cache,
             slo_tracker,
             config,
