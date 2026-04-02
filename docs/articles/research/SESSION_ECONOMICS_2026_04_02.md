@@ -77,14 +77,17 @@ Builders for: workspace-perf (#2078), Docker (#2083), Homebrew (#2086), Linux pk
 
 | Metric | Count | Verification |
 |--------|-------|-------------|
-| **PRs merged** | 33 | `gh pr list --state merged --search "merged:2026-04-02"` |
-| **Issues closed** | 50 | `gh issue list --state closed --search "closed:2026-04-02"` |
-| **Issues: start → now** | 68 → 23 (66% reduction) | |
+| **PRs merged** | 56+ | `gh pr list --state merged --search "merged:2026-04-02"` |
+| **Issues closed** | 64+ | `gh issue list --state closed --search "closed:2026-04-02"` |
+| **Issues: start → now** | 68 → 4 (94% reduction) | |
 | **Issues created** | 4 (#3081, #3089, #3093, #3094) | |
 | **Remote branches deleted** | 11 | |
 | **Dependabot PRs merged** | 8 of 8 | |
-| **Releases completed** | 4 (0.12.2, 0.12.3, 0.12.4, 0.12.5 partial) | |
-| **Already-implemented discoveries** | 23 | |
+| **Releases completed** | 0.12.2, 0.12.3, 0.12.4, 0.12.5, 0.12.6, 0.12.7 (substantially) | |
+| **Already-implemented discoveries** | 23+ | |
+| **Agents spawned** | ~65 across 8+ waves | |
+| **Real bugs found pre-merge** | 13 (4 inlining + 4 distribution binary name + 5 VSCode floating promises) | |
+| **Key infrastructure shipped** | Incremental parsing pipeline (3 PRs), corpus ratchet automation, Docker image | |
 | **Bugs caught pre-merge** | 4 + 1 perf fix by deep review | |
 
 ### PR Breakdown by Type
