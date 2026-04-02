@@ -204,3 +204,92 @@ fn test_analyze_sub_not_found_returns_error() {
         analysis
     );
 }
+
+// ---------------------------------------------------------------------------
+// Edge case: partial variable name match in parameter substitution
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_param_substitution_does_not_corrupt_longer_var_names() {
+    // If the sub has param $n, and the body uses $name (a different variable
+    // that starts with the same prefix), substituting $n -> arg must NOT
+    // corrupt $name.  Previously this used naive str::replace which would
+    // turn "$name" into "42ame".
+    let source = r#"sub greet_n {
+    my ($n, $name) = @_;
+    return $name x $n;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("greet_n", "greet_n(3, \"hi\")");
+    let inlined = must(result);
+    // $name should NOT become "42ame" or corrupt form
+    assert!(
+        !inlined.contains("\"hi\"ame"),
+        "param $n substitution must not corrupt variable $name; got: {inlined}"
+    );
+    // $n and $name should both be correctly substituted
+    assert!(
+        inlined.contains("\"hi\" x 3") || inlined.contains("(\"hi\" x 3)"),
+        "both params must be substituted correctly; got: {inlined}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Edge case: collision rename must not break subsequent param substitution
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_collision_rename_does_not_break_param_substitution() {
+    // Sub has param $x. Outer scope also has $x.
+    // rename_collisions renames the local $x declaration to $x_inlined.
+    // substitute_params must then correctly substitute the param $x with the
+    // call-site argument WITHOUT corrupting $x_inlined (since the renamed
+    // variable name now has the original as a prefix).
+    //
+    // This tests that replace_whole_var (word-boundary-aware) is used for
+    // param substitution rather than naive str::replace.
+    let source = r#"sub add_one {
+    my ($x) = @_;
+    return $x + 1;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    // outer_vars includes $x, so rename_collisions will rename $x -> $x_inlined
+    // in the body.  After renaming the body no longer contains param $x, so
+    // substitute_params should find nothing to replace — the result reflects
+    // the renamed form.  Crucially, it must NOT produce "7_inlined + 1".
+    let result = inliner.inline_call_with_outer_vars("add_one", "add_one(7)", &["$x".to_string()]);
+    let inlined = must(result);
+    // The inlined result must NEVER contain "7_inlined" — that would mean the
+    // word-boundary check failed and "$x_inlined" was corrupted by a naive
+    // replace of "$x" -> "7".
+    assert!(
+        !inlined.contains("7_inlined"),
+        "param substitution must not corrupt $x_inlined after collision rename; got: {inlined}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Edge case: return keyword inside a string literal is not counted
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_return_in_string_literal_not_counted_as_return_statement() {
+    // The word "return" appears in a string, not as a control-flow statement.
+    // This sub has only 1 real return statement.
+    let source = r#"sub describe {
+    my ($x) = @_;
+    my $msg = "will return a value";
+    return $x + 1;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("describe", "describe(3)");
+    // Should succeed (not rejected as MultipleReturns)
+    assert!(
+        result.is_ok(),
+        "sub with 'return' in string should not be rejected as MultipleReturns; got: {:?}",
+        result
+    );
+}
