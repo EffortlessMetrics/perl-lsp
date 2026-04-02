@@ -7,6 +7,7 @@
 use perl_refactoring::refactor::inline::{
     InlineAbility, InlineError, SubInliner, analyze_sub_for_inlining,
 };
+use perl_tdd_support::must;
 
 // ---------------------------------------------------------------------------
 // Basic inlining
@@ -27,8 +28,7 @@ my $total = calculate_tax(100, 0.15);
 
     let inliner = SubInliner::new(source);
     let result = inliner.inline_call("calculate_tax", "calculate_tax(100, 0.15)");
-    assert!(result.is_ok(), "basic inlining should succeed: {:?}", result);
-    let inlined = result.unwrap();
+    let inlined = must(result);
     assert!(
         inlined.contains("100 * 0.15") || inlined.contains("(100 * 0.15)"),
         "inlined result should contain the substituted body, got: {inlined}"
@@ -44,8 +44,7 @@ fn test_inlining_substitutes_parameters_with_arguments() {
 "#;
     let inliner = SubInliner::new(source);
     let result = inliner.inline_call("double", "double(5)");
-    assert!(result.is_ok(), "single-arg inlining should succeed: {:?}", result);
-    let inlined = result.unwrap();
+    let inlined = must(result);
     assert!(
         inlined.contains("5 * 2") || inlined.contains("(5 * 2)"),
         "parameter $x should be replaced with 5, got: {inlined}"
@@ -61,8 +60,7 @@ fn test_inlining_multiple_parameters() {
 "#;
     let inliner = SubInliner::new(source);
     let result = inliner.inline_call("add", "add(3, 4)");
-    assert!(result.is_ok(), "multi-arg inlining should succeed: {:?}", result);
-    let inlined = result.unwrap();
+    let inlined = must(result);
     assert!(
         inlined.contains("3 + 4") || inlined.contains("(3 + 4)"),
         "both parameters should be substituted, got: {inlined}"
@@ -125,8 +123,7 @@ fn test_side_effect_sub_returns_warning() {
 "#;
     let inliner = SubInliner::new(source);
     let result = inliner.inline_call_with_warnings("greet", "greet(\"World\")");
-    assert!(result.is_ok(), "side-effect sub should be inlinable (with warning): {:?}", result);
-    let (_, warnings) = result.unwrap();
+    let (_, warnings) = must(result);
     assert!(!warnings.is_empty(), "side-effect sub should produce warnings");
 }
 
@@ -170,8 +167,7 @@ fn test_variable_collision_is_renamed() {
     // outer_vars simulates variables that exist in the call-site scope
     let result =
         inliner.inline_call_with_outer_vars("compute", "compute(7)", &["$result".to_string()]);
-    assert!(result.is_ok(), "collision should be handled by renaming: {:?}", result);
-    let inlined = result.unwrap();
+    let inlined = must(result);
     // The inline should NOT use $result verbatim if it collides
     assert!(
         !inlined.contains("my $result ="),
