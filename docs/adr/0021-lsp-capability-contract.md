@@ -122,7 +122,7 @@ fn build_capabilities() -> ServerCapabilities {
 
 ```bash
 # Default build - all tested features
-cargo build -p perl-lsp
+cargo build -p perl-lsp-rs
 ```
 
 Advertises all capabilities with passing acceptance tests.
@@ -131,7 +131,7 @@ Advertises all capabilities with passing acceptance tests.
 
 ```bash
 # Conservative build - proven stable only
-cargo build -p perl-lsp --features lsp-ga-lock
+cargo build -p perl-lsp-rs --features lsp-ga-lock
 ```
 
 Advertises only GA core capabilities with extensive production validation.

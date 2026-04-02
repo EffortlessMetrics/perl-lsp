@@ -32,7 +32,7 @@ First, ensure your LSP server advertises executeCommand capabilities:
 
 ```bash
 # Test that executeCommand is supported
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_capabilities
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_capabilities
 
 # Verify perl.runCritic is in supported commands list
 cargo test -p perl-parser --test execute_command_tests -- test_supported_commands_includes_run_critic
@@ -119,7 +119,7 @@ The perl.runCritic command implements a sophisticated dual strategy:
 **Test the Strategy**:
 ```bash
 # Test dual analyzer behavior
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
 ```
 
 **Learning Goal**: Understand that you always get analysis results, regardless of external tool availability.
@@ -265,10 +265,10 @@ Understanding timing expectations:
 
 ```bash
 # Validate performance targets
-cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_latency
+cargo test -p perl-lsp-rs --test lsp_performance_tests -- test_execute_command_latency
 
 # Test with adaptive threading (recommended for CI)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_execute_command_tests -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- --test-threads=2
 ```
 
 ### Step 12: Error Handling
@@ -293,10 +293,10 @@ The executeCommand workflow integrates with textDocument/codeAction for complete
 
 ```bash
 # Test integrated workflow
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- test_execute_command_and_code_actions
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- test_execute_command_and_code_actions
 
 # Test specific code action integration
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_modernize_code_actions
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_modernize_code_actions
 ```
 
 **Workflow**:
@@ -313,13 +313,13 @@ Explore the full command set:
 
 ```bash
 # perl.runTests - Execute Perl test files
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_run_tests
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_run_tests
 
 # perl.runFile - Execute single Perl file
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_run_file
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_run_file
 
 # perl.debugTests - Debug preparation
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_debug_tests
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_debug_tests
 ```
 
 ### Step 15: Quality Assurance Validation
@@ -328,13 +328,13 @@ Validate your setup meets all acceptance criteria:
 
 ```bash
 # AC1: Complete executeCommand LSP method implementation
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_ac1_execute_command_implementation
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_ac1_execute_command_implementation
 
 # AC2: perl.runCritic command integration
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_ac2_perlcritic_integration
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_ac2_perlcritic_integration
 
 # AC3: Advanced refactoring operations
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_ac3_advanced_refactoring_operations
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_ac3_advanced_refactoring_operations
 ```
 
 ## Troubleshooting Common Issues
@@ -345,10 +345,10 @@ cargo test -p perl-lsp --test lsp_code_actions_tests -- test_ac3_advanced_refact
 **Solution**:
 ```bash
 # Verify server capabilities
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_capabilities
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_capabilities
 
 # Check LSP server logs for capability advertisement
-perl-lsp --stdio --log
+perllsp --stdio --log
 ```
 
 ### Issue: Analysis Takes Too Long

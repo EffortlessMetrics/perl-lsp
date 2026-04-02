@@ -1,6 +1,6 @@
 [package]
 name = "perl-lsp-selection-range"
-version = "0.12.0"
+version = "0.12.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "SRP microcrate for Perl LSP smart selection range expansion"
+readme = "README.md"
 documentation = "https://docs.rs/perl-lsp-selection-range"
 keywords = ["perl", "lsp", "selection-range", "ide", "language-server"]
 categories = ["development-tools", "text-editors"]

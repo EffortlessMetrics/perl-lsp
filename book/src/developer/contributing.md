@@ -22,7 +22,7 @@ Thank you for your interest in contributing to Perl LSP! This guide will help yo
 
 3. **Build the Project**
    ```bash
-   cargo build -p perl-lsp --release     # LSP server
+   cargo build -p perl-lsp-rs --release     # LSP server
    cargo build -p perl-parser --release  # Parser library
    cargo test --workspace --lib          # Run all tests
    ```

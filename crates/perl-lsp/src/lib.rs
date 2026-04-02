@@ -15,16 +15,16 @@
 //!
 //! ```bash
 //! # Install from source
-//! cargo install --path crates/perl-lsp
+//! cargo install --path crates/perllsp
 //!
 //! # Run in stdio mode (default)
-//! perl-lsp --stdio
+//! perllsp --stdio
 //!
 //! # Check health status
-//! perl-lsp --health
+//! perllsp --health
 //!
 //! # Show version information
-//! perl-lsp --version
+//! perllsp --version
 //! ```
 //!
 //! ## Programmatic Usage
@@ -132,7 +132,7 @@
 //! Standard input/output transport for editor integration:
 //!
 //! ```bash
-//! perl-lsp --stdio
+//! perllsp --stdio
 //! ```
 //!
 //! Editors configure this mode in their LSP client settings:
@@ -141,7 +141,7 @@
 //!
 //! ```json
 //! {
-//!   "perl.lsp.command": "perl-lsp",
+//!   "perl.lsp.command": "perllsp",
 //!   "perl.lsp.args": ["--stdio"]
 //! }
 //! ```
@@ -150,7 +150,7 @@
 //!
 //! ```lua
 //! require'lspconfig'.perl.setup{
-//!   cmd = { "perl-lsp", "--stdio" }
+//!   cmd = { "perllsp", "--stdio" }
 //! }
 //! ```
 //!
@@ -159,7 +159,7 @@
 //! TCP socket transport for remote or debugging scenarios:
 //!
 //! ```bash
-//! perl-lsp --socket --port 9257
+//! perllsp --socket --port 9257
 //! ```
 //!
 //! Connect via TCP socket from any LSP client supporting network transport.
@@ -234,13 +234,13 @@
 //!
 //! ```bash
 //! # Run all LSP runtime tests
-//! cargo test -p perl-lsp
+//! cargo test -p perl-lsp-rs
 //!
 //! # Run with adaptive threading for resource-constrained environments
-//! RUST_TEST_THREADS=2 cargo test -p perl-lsp
+//! RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 //!
 //! # Test specific feature
-//! cargo test -p perl-lsp completion
+//! cargo test -p perl-lsp-rs completion
 //! ```
 //!
 //! # Logging and Diagnostics
@@ -248,7 +248,7 @@
 //! Enable logging for debugging:
 //!
 //! ```bash
-//! perl-lsp --stdio --log
+//! perllsp --stdio --log
 //! ```
 //!
 //! Logs are written to stderr, separate from LSP protocol communication on stdout/stdin.
@@ -323,6 +323,7 @@
 
 // Module declarations - migrated from perl-parser
 pub mod cancellation;
+pub mod cli;
 pub mod convert;
 pub mod diagnostics_catalog;
 pub mod dispatch;
@@ -340,6 +341,7 @@ pub mod transport;
 pub mod util;
 
 // Re-exports for key types
+pub use cli::run_cli;
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 pub use server::LspServer;
 
@@ -407,10 +409,6 @@ pub(crate) mod document_links {
 
 pub(crate) mod lsp_document_link {
     pub use crate::features::lsp_document_link::*;
-}
-
-pub(crate) mod selection_range {
-    pub use crate::features::selection_range::*;
 }
 
 pub(crate) mod linked_editing {

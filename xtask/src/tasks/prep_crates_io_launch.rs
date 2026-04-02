@@ -13,7 +13,7 @@ use tempfile::TempDir;
 use crate::utils::project_root;
 
 const CORE_LAUNCH_CRATES: &[&str] =
-    &["perl-parser", "perl-lexer", "perl-lsp", "perl-dap", "perl-corpus"];
+    &["perl-parser", "perl-lexer", "perl-lsp-rs", "perllsp", "perl-dap", "perl-corpus"];
 
 #[derive(Deserialize)]
 struct RootCargoManifest {
@@ -317,13 +317,13 @@ mod tests {
             packages: vec![
                 MetadataPackage {
                     name: "perl-parser".to_string(),
-                    version: "0.12.0".to_string(),
+                    version: "0.12.1".to_string(),
                     manifest_path: "/workspace/crates/perl-parser/Cargo.toml".to_string(),
                     publish: Some(JsonValue::Bool(true)),
                 },
                 MetadataPackage {
                     name: "perl-lexer".to_string(),
-                    version: "0.12.0".to_string(),
+                    version: "0.12.1".to_string(),
                     manifest_path: "/workspace/crates/perl-lexer/Cargo.toml".to_string(),
                     publish: Some(JsonValue::Bool(true)),
                 },
@@ -352,13 +352,13 @@ mod tests {
     fn crate_archive_path_points_to_packaged_archive_in_target_directory() {
         let package = MetadataPackage {
             name: "perl-parser".to_string(),
-            version: "0.12.0".to_string(),
+            version: "0.12.1".to_string(),
             manifest_path: "/workspace/crates/perl-parser/Cargo.toml".to_string(),
             publish: Some(JsonValue::Bool(true)),
         };
 
         let path = crate_archive_path(Path::new("/workspace/custom-target"), &package);
 
-        assert_eq!(path, Path::new("/workspace/custom-target/package/perl-parser-0.12.0.crate"));
+        assert_eq!(path, Path::new("/workspace/custom-target/package/perl-parser-0.12.1.crate"));
     }
 }

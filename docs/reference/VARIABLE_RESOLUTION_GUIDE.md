@@ -196,12 +196,12 @@ The system uses intelligent confidence scoring for delimiter detection:
 
 ### For LSP Server Users
 
-1. **Install the enhanced perl-lsp server**:
-```bash
-cargo install perl-lsp
-# Or build from source with latest enhancements
-cargo build --release -p perl-lsp
-```
+1. **Install the enhanced perllsp server**. For published installs, use the
+   workspace-level guidance in [../../README.md](../../README.md). For local
+   source testing:
+   ```bash
+   cargo install --path crates/perllsp
+   ```
 
 2. **Configure your editor** to use the enhanced diagnostics:
 ```json

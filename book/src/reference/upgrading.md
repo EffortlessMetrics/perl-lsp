@@ -87,12 +87,12 @@ let ast = parser.parse(source)?;
 **After (v0.9.x):**
 ```json
 // Setting removed - use standard installation methods
-// Install via: cargo install perl-lsp
+// Install via: cargo install perl-lsp-rs
 ```
 
 **Action Required:**
 - Remove `downloadBaseUrl` from VS Code settings
-- Use standard installation: `cargo install perl-lsp`
+- Use standard installation: `cargo install perl-lsp-rs`
 - Internal archive hosting no longer supported
 
 ### 4. UTF-16 Position Encoding
@@ -523,7 +523,7 @@ cargo check
 cargo test
 
 # Run LSP tests if using LSP features
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 
 # Check for warnings
 cargo clippy --workspace
@@ -796,7 +796,7 @@ perl-dap --version  # perl-dap 0.1.0
 **Adaptive Threading (PR #140):**
 ```bash
 # LSP tests now support adaptive threading
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Resource-efficient semantic tests
 just ci-lsp-def
@@ -827,7 +827,7 @@ cargo test --workspace
 cargo test -p perl-parser
 
 # LSP tests with threading constraints
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 
 # Semantic definition tests (resource-efficient)
 just ci-lsp-def
@@ -905,7 +905,7 @@ test lsp_comprehensive_test ... timeout after 30s
 **Solution:**
 ```bash
 # Use adaptive threading
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Or resource-efficient mode
 just ci-lsp-def

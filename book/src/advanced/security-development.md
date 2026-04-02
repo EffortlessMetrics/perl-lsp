@@ -244,7 +244,7 @@ my $test3 = "file\0with\0null";   # Null bytes blocked
 ### UTF-16 Position Security Tests
 ```bash
 # Test UTF-16 position conversion security (PR #153)
-cargo test -p perl-lsp lsp_encoding_edge_cases
+cargo test -p perl-lsp-rs lsp_encoding_edge_cases
 cargo test -p perl-parser --test mutation_hardening_tests -- utf16_position
 
 # Comprehensive position boundary testing

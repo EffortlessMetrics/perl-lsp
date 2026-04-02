@@ -121,6 +121,7 @@ pub fn run_hook_tests() -> Result<()> {
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
     ));
     fs::create_dir_all(&temp_root).context("Failed to create temporary ops directory")?;
+    ensure_temp_repo_isolated(&root, &temp_root)?;
 
     let task_repo = temp_root.join("task-completed-repo");
     create_non_rust_test_repo(&task_repo)?;
@@ -345,10 +346,40 @@ fn create_non_rust_test_repo(path: &Path) -> Result<()> {
         .with_context(|| format!("Failed to seed temp repo {}", path.display()))?;
 
     run_git(path, &["init"])?;
-    run_git(path, &["config", "user.name", "xtask hook tests"])?;
-    run_git(path, &["config", "user.email", "xtask@example.invalid"])?;
     run_git(path, &["add", "README.md"])?;
-    run_git(path, &["commit", "-m", "seed temp repo"])?;
+    run_git(
+        path,
+        &[
+            "-c",
+            "user.name=xtask hook tests",
+            "-c",
+            "user.email=xtask@example.invalid",
+            "commit",
+            "-m",
+            "seed temp repo",
+        ],
+    )?;
+
+    Ok(())
+}
+
+fn ensure_temp_repo_isolated(project_root: &Path, temp_root: &Path) -> Result<()> {
+    let canonical_project_root = project_root
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize {}", project_root.display()))?;
+    let canonical_temp_root = temp_root
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize {}", temp_root.display()))?;
+
+    if canonical_temp_root.starts_with(&canonical_project_root)
+        || canonical_project_root.starts_with(&canonical_temp_root)
+    {
+        bail!(
+            "Hook test temp root {} overlaps project root {}",
+            canonical_temp_root.display(),
+            canonical_project_root.display()
+        );
+    }
 
     Ok(())
 }

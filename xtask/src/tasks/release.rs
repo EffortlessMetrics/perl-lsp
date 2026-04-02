@@ -126,10 +126,10 @@ fn check_git_status() -> Result<bool> {
 }
 
 fn build_binaries(release_dir: &Path) -> Result<()> {
-    // Build perl-lsp
-    let output = Command::new("cargo").args(["build", "--release", "-p", "perl-lsp"]).output()?;
+    // Build perllsp
+    let output = Command::new("cargo").args(["build", "--release", "-p", "perllsp"]).output()?;
     if !output.status.success() {
-        bail!("Failed to build perl-lsp: {}", String::from_utf8_lossy(&output.stderr));
+        bail!("Failed to build perllsp: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     // Build perl-dap
@@ -141,11 +141,11 @@ fn build_binaries(release_dir: &Path) -> Result<()> {
     }
 
     // Copy binaries
-    fs::copy("target/release/perl-lsp", release_dir.join("binaries/perl-lsp"))?;
+    fs::copy("target/release/perllsp", release_dir.join("binaries/perllsp"))?;
     fs::copy("target/release/perl-dap", release_dir.join("binaries/perl-dap"))?;
 
     // Strip binaries
-    Command::new("strip").arg(release_dir.join("binaries/perl-lsp")).output()?;
+    Command::new("strip").arg(release_dir.join("binaries/perllsp")).output()?;
     Command::new("strip").arg(release_dir.join("binaries/perl-dap")).output()?;
 
     Ok(())
@@ -209,12 +209,7 @@ fn create_checksums(release_dir: &Path) -> Result<()> {
 fn create_release_archive(release_dir: &Path, version: &str) -> Result<()> {
     let output = Command::new("tar")
         .current_dir(release_dir.join("binaries"))
-        .args([
-            "-czf",
-            &format!("../perl-lsp-{}-linux-x64.tar.gz", version),
-            "perl-lsp",
-            "perl-dap",
-        ])
+        .args(["-czf", &format!("../perllsp-{}-linux-x64.tar.gz", version), "perllsp", "perl-dap"])
         .output()?;
     if !output.status.success() {
         bail!("Failed to create release archive");

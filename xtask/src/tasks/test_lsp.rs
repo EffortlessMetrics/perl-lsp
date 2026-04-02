@@ -252,12 +252,16 @@ fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     println!("🎨 Testing syntax highlighting...");
 
     // Find LSP server binary
-    let binary_path = if Path::new("target/debug/perl-lsp").exists() {
+    let binary_path = if Path::new("target/debug/perllsp").exists() {
+        PathBuf::from("target/debug/perllsp")
+    } else if Path::new("target/release/perllsp").exists() {
+        PathBuf::from("target/release/perllsp")
+    } else if Path::new("target/debug/perl-lsp").exists() {
         PathBuf::from("target/debug/perl-lsp")
     } else if Path::new("target/release/perl-lsp").exists() {
         PathBuf::from("target/release/perl-lsp")
     } else {
-        PathBuf::from("perl-lsp")
+        PathBuf::from("perllsp")
     };
 
     // Check if LSP server is available
@@ -266,8 +270,8 @@ fn test_syntax_highlighting(_test_dir: &Path) -> Result<()> {
     match output {
         Ok(_) => println!("   ✓ LSP server is available"),
         Err(_) => {
-            println!("   ⚠ LSP server not found. Run: cargo install --path crates/perl-lsp");
-            bail!("LSP server binary 'perl-lsp' not found");
+            println!("   ⚠ LSP server not found. Run: cargo install --path crates/perllsp");
+            bail!("LSP server binary 'perllsp' not found");
         }
     }
 

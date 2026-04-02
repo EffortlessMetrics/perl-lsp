@@ -51,12 +51,42 @@ mod tests {
     use super::*;
     use std::process::Command;
 
+    fn slow_command() -> Command {
+        #[cfg(windows)]
+        {
+            let mut cmd = Command::new("powershell");
+            cmd.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 10"]);
+            cmd
+        }
+
+        #[cfg(not(windows))]
+        {
+            let mut cmd = Command::new("sleep");
+            cmd.arg("10");
+            cmd
+        }
+    }
+
+    fn fast_command() -> Command {
+        #[cfg(windows)]
+        {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", "echo", "hello"]);
+            cmd
+        }
+
+        #[cfg(not(windows))]
+        {
+            let mut cmd = Command::new("echo");
+            cmd.arg("hello");
+            cmd
+        }
+    }
+
     #[test]
     fn unit_timeout_fires_for_slow_command() {
         let start = Instant::now();
-        let mut cmd = Command::new("sleep");
-        cmd.arg("10");
-        let result = run_command_with_timeout(cmd, 1);
+        let result = run_command_with_timeout(slow_command(), 1);
         let elapsed = start.elapsed();
 
         assert!(result.is_err(), "expected timeout error");
@@ -66,9 +96,7 @@ mod tests {
 
     #[test]
     fn unit_fast_command_succeeds() {
-        let mut cmd = Command::new("echo");
-        cmd.arg("hello");
-        let result = run_command_with_timeout(cmd, 10);
+        let result = run_command_with_timeout(fast_command(), 10);
 
         assert!(result.is_ok(), "expected success, got: {:?}", result.err());
         if let Ok(output) = result {

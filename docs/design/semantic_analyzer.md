@@ -436,7 +436,7 @@ sub example {
 ```bash
 # Run tests individually on constrained hardware (WSL with limited resources)
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture test_name
+  cargo test -p perl-lsp-rs --test semantic_definition -- --nocapture test_name
 ```
 
 **Coverage Target**: LSP protocol compliance, `SemanticModel` API, position conversions, and workspace integration.

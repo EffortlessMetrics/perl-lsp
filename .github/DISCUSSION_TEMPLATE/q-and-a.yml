@@ -4,7 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Ask anything about using perl-lsp -- editor setup, configuration, troubleshooting, or understanding how something works. If you found an answer, please mark it so others can find it quickly.
+        Ask anything about using perllsp -- editor setup, configuration, troubleshooting, or understanding how something works. If you found an answer, please mark it so others can find it quickly.
 
   - type: textarea
     id: question
@@ -27,7 +27,7 @@ body:
     id: version
     attributes:
       label: perl-lsp Version
-      description: Output of `perl-lsp --version` (Leave blank if you haven't installed it yet.)
+      description: Output of `perllsp --version` (Leave blank if you haven't installed it yet.)
       placeholder: "0.12.0"
 
   - type: textarea

@@ -126,7 +126,7 @@ EOF
 4. **Validate LSP integration with custom config**:
 ```bash
 # Test that LSP server respects configuration
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
 ```
 
 ### Problem: Performance Optimization
@@ -170,16 +170,16 @@ EOF
 cargo test -p perl-parser --test execute_command_tests -- test_run_builtin_critic_arithmetic_mutations
 
 # Validate <300ms performance target for files <100KB
-cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_latency
+cargo test -p perl-lsp-rs --test lsp_performance_tests -- test_execute_command_latency
 ```
 
 4. **Configure LSP timeouts**:
 ```bash
 # Test with extended timeouts for large files
-LSP_TEST_TIMEOUT_MS=10000 cargo test -p perl-lsp --test lsp_execute_command_tests
+LSP_TEST_TIMEOUT_MS=10000 cargo test -p perl-lsp-rs --test lsp_execute_command_tests
 
 # Use adaptive threading for better performance
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 ## Troubleshooting Common Issues
@@ -205,7 +205,7 @@ env PATH="$PATH" which perlcritic
 2. **Check LSP server environment**:
 ```bash
 # Start LSP server with environment logging
-env PATH="$PATH" perl-lsp --stdio --log
+env PATH="$PATH" perllsp --stdio --log
 
 # Test command detection logic
 cargo test -p perl-parser --test execute_command_tests -- test_command_exists_behavior
@@ -281,10 +281,10 @@ cargo test -p perl-parser --test execute_command_tests -- test_format_violation_
 1. **Verify server capabilities**:
 ```bash
 # Test capability advertisement
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_capabilities
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_capabilities
 
 # Manual LSP protocol test
-echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
 ```
 
 2. **Test JSON-RPC protocol directly**:
@@ -297,7 +297,7 @@ Content-Length: 140
 EOF
 
 # Test with LSP server
-perl-lsp --stdio < /tmp/test_request.json
+perllsp --stdio < /tmp/test_request.json
 ```
 
 3. **Check editor-specific integration**:
@@ -383,8 +383,8 @@ FROM rust:latest
 RUN apt-get update && apt-get install -y perlcritic perl
 COPY . /workspace
 WORKDIR /workspace
-RUN cargo build --release -p perl-lsp
-CMD ["./target/release/perl-lsp", "--stdio"]
+RUN cargo build --release -p perl-lsp-rs
+CMD ["./target/release/perllsp", "--stdio"]
 ```
 
 2. **GitHub Actions integration**:
@@ -404,7 +404,7 @@ jobs:
       run: sudo apt-get install -y perlcritic
     - name: Test executeCommand
       run: |
-        RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_execute_command_tests -- --test-threads=2
+        RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- --test-threads=2
 ```
 
 3. **Jenkins pipeline**:
@@ -419,7 +419,7 @@ pipeline {
         }
         stage('Analyze') {
             steps {
-                sh 'cargo test -p perl-lsp --test lsp_execute_command_tests'
+                sh 'cargo test -p perl-lsp-rs --test lsp_execute_command_tests'
             }
         }
     }
@@ -498,7 +498,7 @@ EOF
 perlcritic --profile .perlcriticrc test_file.pl
 
 # Validate LSP integration
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
 ```
 
 ## Monitoring and Maintenance
@@ -510,7 +510,7 @@ cargo test -p perl-lsp --test lsp_execute_command_tests -- test_perlcritic_dual_
 1. **Enable performance metrics**:
 ```bash
 # Test performance benchmarks
-cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_latency
+cargo test -p perl-lsp-rs --test lsp_performance_tests -- test_execute_command_latency
 
 # Monitor memory usage
 cargo test -p perl-parser --test execute_command_tests -- test_run_builtin_critic_arithmetic_mutations
@@ -519,10 +519,10 @@ cargo test -p perl-parser --test execute_command_tests -- test_run_builtin_criti
 2. **Log analysis timing**:
 ```bash
 # Enable detailed logging
-RUST_LOG=debug cargo test -p perl-lsp --test lsp_execute_command_tests -- --nocapture
+RUST_LOG=debug cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- --nocapture
 
 # Monitor specific timing thresholds
-LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp
+LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp-rs
 ```
 
 ### Health Checks
@@ -545,7 +545,7 @@ else
 fi
 
 # Test 2: Performance validation
-if cargo test -p perl-lsp --test lsp_performance_tests --quiet; then
+if cargo test -p perl-lsp-rs --test lsp_performance_tests --quiet; then
     echo "✅ Performance validation: PASS"
 else
     echo "❌ Performance validation: FAIL"
@@ -553,7 +553,7 @@ else
 fi
 
 # Test 3: Integration tests
-if RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_execute_command_tests --quiet; then
+if RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_execute_command_tests --quiet; then
     echo "✅ Integration tests: PASS"
 else
     echo "❌ Integration tests: FAIL"

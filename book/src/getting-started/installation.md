@@ -14,7 +14,7 @@ Choose one method:
 ### Option 1: Install from crates.io (Recommended)
 
 ```bash
-cargo install perl-lsp
+cargo install perl-lsp-rs
 ```
 
 ### Option 2: Install Script (Linux/macOS)

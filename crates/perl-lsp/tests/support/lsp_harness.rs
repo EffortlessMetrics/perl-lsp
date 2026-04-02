@@ -40,7 +40,35 @@ pub struct LspHarness {
     canceled_ids: Arc<Mutex<Vec<i32>>>, // Track canceled request IDs
 }
 
+fn uri_matches(expected: &str, actual: &str) -> bool {
+    if expected == actual {
+        return true;
+    }
+
+    if cfg!(windows) {
+        return expected.eq_ignore_ascii_case(actual);
+    }
+
+    false
+}
+
 impl LspHarness {
+    fn effective_request_timeout(&self, timeout: Duration) -> Duration {
+        if timeout < Duration::from_secs(2) || std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
+            return timeout;
+        }
+
+        let is_ci = std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok();
+
+        if is_ci {
+            timeout.max(Duration::from_secs(12))
+        } else if cfg!(windows) {
+            timeout.max(Duration::from_secs(10))
+        } else {
+            timeout
+        }
+    }
+
     fn is_coverage_instrumented() -> bool {
         std::env::var_os("LLVM_PROFILE_FILE").is_some()
             || std::env::var_os("CARGO_LLVM_COV").is_some()
@@ -249,7 +277,7 @@ impl LspHarness {
         }
 
         let mut harness = Self::new_raw();
-        harness.initialize_with_root(&workspace.root_uri, None)?;
+        harness.initialize_ready(&workspace.root_uri, None)?;
 
         Ok((harness, workspace))
     }
@@ -484,7 +512,9 @@ impl LspHarness {
                     if let Some(arr) = v.as_array() {
                         let found = arr.iter().any(|s| {
                             let uri = s.pointer("/location/uri").and_then(|u| u.as_str());
-                            want_uri.is_none_or(|expect| uri == Some(expect))
+                            want_uri.is_none_or(|expect| {
+                                uri.is_some_and(|actual| uri_matches(expect, actual))
+                            })
                         });
                         if found {
                             return Ok(());
@@ -774,6 +804,7 @@ impl LspHarness {
         request: Value,
         timeout: Duration,
     ) -> Result<Value, String> {
+        let timeout = self.effective_request_timeout(timeout);
         let expect_id = request.get("id").and_then(|v| v.as_i64());
 
         // Format request with Content-Length framing
@@ -836,6 +867,7 @@ impl LspHarness {
         request: Value,
         timeout: Duration,
     ) -> Result<Value, String> {
+        let timeout = self.effective_request_timeout(timeout);
         let expect_id = request.get("id").and_then(|v| v.as_i64());
 
         // Format request with Content-Length framing

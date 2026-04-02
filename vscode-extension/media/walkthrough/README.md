@@ -11,7 +11,7 @@ Status:
 
 | Target GIF | Storyboard | Source material |
 | --- | --- | --- |
-| `install-health.gif` | [`install-health.svg`](install-health.svg) | Fresh install, extension auto-download, and `perl-lsp --health` |
+| `install-health.gif` | [`install-health.svg`](install-health.svg) | Fresh install, extension auto-download, and `perllsp --health` |
 | `find-references.gif` | [`find-references.svg`](find-references.svg) | Go to definition and find references over `demo_workspace/main.pl` and `demo_workspace/lib/Utils.pm` |
 | `extract-variable.gif` | [`extract-variable.svg`](extract-variable.svg) | Code action refactor flow in `demo_workspace/main.pl` |
 

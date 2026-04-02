@@ -50,7 +50,7 @@
 //! ## Crate Organization
 //!
 //! Fixtures support proper crate-specific testing:
-//! - `cargo test -p perl-lsp` - LSP server integration tests
+//! - `cargo test -p perl-lsp-rs` - LSP server integration tests
 //! - `cargo test -p perl-parser` - Parser component tests
 //! - `cargo test -p perl-corpus` - Corpus validation tests
 //!

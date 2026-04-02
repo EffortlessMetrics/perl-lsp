@@ -241,7 +241,7 @@ Monitor these for SLO compliance:
 Enable performance logging:
 
 ```bash
-RUST_LOG=perl_parser::lsp=debug perl-lsp --stdio
+RUST_LOG=perl_parser::lsp=debug perllsp --stdio
 ```
 
 Latency information appears in logs as:

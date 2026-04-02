@@ -14,9 +14,29 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 // Helper
 // ---------------------------------------------------------------------------
 
+fn normalize_canonical_path(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path_str) = path.to_str() {
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+                return PathBuf::from(format!(r"\\{}", stripped));
+            }
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                return PathBuf::from(stripped);
+            }
+        }
+    }
+
+    path
+}
+
+fn canonicalized(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(normalize_canonical_path(path.canonicalize()?))
+}
+
 fn workspace() -> Result<(tempfile::TempDir, PathBuf), Box<dyn std::error::Error>> {
     let tmp = tempfile::tempdir()?;
-    let canonical = tmp.path().canonicalize()?;
+    let canonical = canonicalized(tmp.path())?;
     Ok((tmp, canonical))
 }
 
@@ -26,7 +46,7 @@ fn workspace_with_subdir(
 ) -> Result<(tempfile::TempDir, PathBuf), Box<dyn std::error::Error>> {
     let tmp = tempfile::tempdir()?;
     std::fs::create_dir_all(tmp.path().join(sub))?;
-    let canonical = tmp.path().canonicalize()?;
+    let canonical = canonicalized(tmp.path())?;
     Ok((tmp, canonical))
 }
 
@@ -286,7 +306,7 @@ fn existing_file_canonicalized_stays_in_workspace() -> TestResult {
     std::fs::write(&file, "1;")?;
 
     let result = validate_workspace_path(&PathBuf::from("real.pl"), ws)?;
-    assert_eq!(result, file.canonicalize()?);
+    assert_eq!(result, canonicalized(&file)?);
     Ok(())
 }
 
@@ -298,7 +318,7 @@ fn existing_dir_with_trailing_file() -> TestResult {
     std::fs::write(ws.join("lib/My/App.pm"), "package My::App; 1;")?;
 
     let result = validate_workspace_path(&PathBuf::from("lib/My/App.pm"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -312,7 +332,7 @@ fn parent_into_existing_subdir_stays_in_workspace() -> TestResult {
 
     // a/b/../c/file.pl resolves to a/c/file.pl — valid
     let result = validate_workspace_path(&PathBuf::from("a/b/../c/file.pl"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -367,7 +387,7 @@ fn symlink_self_referential_stays_in_workspace() -> TestResult {
     std::os::unix::fs::symlink(&target, &link)?;
 
     let result = validate_workspace_path(&PathBuf::from("alias/data.pl"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -412,7 +432,7 @@ fn relative_symlink_within_workspace_ok() -> TestResult {
     std::os::unix::fs::symlink(Path::new("../src/lib.pl"), ws.join("links/lib.pl"))?;
 
     let result = validate_workspace_path(&PathBuf::from("links/lib.pl"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -428,7 +448,7 @@ fn workspace_root_is_slash_tmp() -> TestResult {
         return Ok(());
     }
     let result = validate_workspace_path(&PathBuf::from("test_subdir_for_lsp"), ws)?;
-    assert!(result.starts_with(ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(ws)?));
     Ok(())
 }
 
@@ -466,7 +486,7 @@ fn workspace_root_canonicalization_resolves_symlink() -> TestResult {
 
     // Using the symlinked workspace root should still work
     let result = validate_workspace_path(&PathBuf::from("script.pl"), &ws_link)?;
-    assert!(result.starts_with(real_ws.canonicalize()?));
+    assert!(result.starts_with(&canonicalized(&real_ws)?));
     Ok(())
 }
 
@@ -844,7 +864,7 @@ fn concurrent_validations_are_safe() -> TestResult {
 
     for handle in handles {
         if let Ok(Ok(resolved)) = handle.join() {
-            if let Ok(canonical) = ws.canonicalize() {
+            if let Ok(canonical) = canonicalized(&ws) {
                 assert!(resolved.starts_with(&canonical));
             }
         }

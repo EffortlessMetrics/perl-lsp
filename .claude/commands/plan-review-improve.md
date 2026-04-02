@@ -31,6 +31,8 @@ Write your findings as an issue comment and label the issue as builder-ready.
 
    **Verdict:** READY FOR BUILDER / ALREADY FIXED (with evidence)
 
+   _(The Verdict line is mandatory. Do not submit this comment without declaring a terminal state: READY FOR BUILDER or ALREADY FIXED.)_
+
    ---
    _Plan reviewed by plan-reviewer agent._
    COMMENT_EOF

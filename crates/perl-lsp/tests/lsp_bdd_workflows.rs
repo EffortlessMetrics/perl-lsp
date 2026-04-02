@@ -112,6 +112,22 @@ fn workspace_edit_new_texts_for_uri(edit: &Value, target_uri: &str) -> Vec<Strin
     new_texts
 }
 
+fn uri_matches(expected: &str, actual: &str) -> bool {
+    if expected == actual {
+        return true;
+    }
+
+    if cfg!(windows) {
+        return expected.eq_ignore_ascii_case(actual);
+    }
+
+    false
+}
+
+fn uri_set_contains(uris: &BTreeSet<String>, target_uri: &str) -> bool {
+    uris.iter().any(|uri| uri_matches(target_uri, uri))
+}
+
 fn first_location_uri(response: &Value) -> Option<String> {
     if let Some(arr) = response.as_array() {
         arr.first().and_then(|v| v.get("uri").and_then(Value::as_str)).map(ToOwned::to_owned)
@@ -152,6 +168,91 @@ fn wait_for_definition_uri(
 
     Err(format!(
         "definition did not resolve to {want_uri} within {budget:?}; last response: {last_response:?}"
+    ))
+}
+
+fn wait_for_references_uris(
+    harness: &mut LspHarness,
+    request_uri: &str,
+    line: u32,
+    character: u32,
+    want_uris: &[&str],
+    budget: Duration,
+) -> Result<Value, String> {
+    let start = Instant::now();
+    let mut last_response = None;
+    let mut last_error = None;
+
+    while start.elapsed() < budget {
+        match harness.request_with_timeout(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": request_uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": true }
+            }),
+            Duration::from_secs(2),
+        ) {
+            Ok(response) => {
+                let uris = ref_uris(&response);
+                if want_uris.iter().all(|want_uri| uri_set_contains(&uris, want_uri)) {
+                    return Ok(response);
+                }
+                last_response = Some(response);
+            }
+            Err(error) => last_error = Some(error),
+        }
+
+        harness.barrier();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    Err(format!(
+        "references did not include {:?} within {:?}; last response: {:?}; last error: {:?}",
+        want_uris, budget, last_response, last_error
+    ))
+}
+
+fn wait_for_rename_edit_uris(
+    harness: &mut LspHarness,
+    request_uri: &str,
+    line: u32,
+    character: u32,
+    new_name: &str,
+    want_uris: &[&str],
+    budget: Duration,
+) -> Result<Value, String> {
+    let start = Instant::now();
+    let mut last_response = None;
+    let mut last_error = None;
+
+    while start.elapsed() < budget {
+        match harness.request_with_timeout(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": request_uri },
+                "position": { "line": line, "character": character },
+                "newName": new_name
+            }),
+            Duration::from_secs(2),
+        ) {
+            Ok(response) => {
+                let uris = workspace_edit_uris(&response);
+                if want_uris.iter().all(|want_uri| uri_set_contains(&uris, want_uri)) {
+                    return Ok(response);
+                }
+                last_response = Some(response);
+            }
+            Err(error) => last_error = Some(error),
+        }
+
+        harness.barrier();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    Err(format!(
+        "rename did not touch {:?} within {:?}; last response: {:?}; last error: {:?}",
+        want_uris, budget, last_response, last_error
     ))
 }
 
@@ -338,6 +439,8 @@ my $also = process_data();
 
     harness.open(&module_uri, module)?;
     harness.open(&main_uri, main)?;
+    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(10))?;
+    harness.barrier();
 
     scenario.when("requesting definition on the qualified call in the script");
     let (line, character) = find_position(main, "process_data()");
@@ -356,13 +459,13 @@ my $also = process_data();
 
     scenario.when("requesting references on the module definition");
     let (def_line, def_char) = find_position(module, "process_data");
-    let references = harness.request(
-        "textDocument/references",
-        json!({
-            "textDocument": { "uri": module_uri },
-            "position": { "line": def_line, "character": def_char },
-            "context": { "includeDeclaration": true }
-        }),
+    let references = wait_for_references_uris(
+        &mut harness,
+        &module_uri,
+        def_line,
+        def_char,
+        &[&module_uri, &main_uri],
+        Duration::from_secs(10),
     )?;
 
     scenario.then("references include both module and script locations");
@@ -407,17 +510,19 @@ my $also = process_data();
     harness.open(&module_uri, module)?;
     harness.open(&main_uri, main)?;
 
-    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(2)).ok();
+    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(10))?;
+    harness.barrier();
 
     scenario.when("renaming the function at its declaration");
     let (def_line, def_char) = find_position(module, "process_data");
-    let edit = harness.request(
-        "textDocument/rename",
-        json!({
-            "textDocument": { "uri": module_uri },
-            "position": { "line": def_line, "character": def_char },
-            "newName": "process_records"
-        }),
+    let edit = wait_for_rename_edit_uris(
+        &mut harness,
+        &module_uri,
+        def_line,
+        def_char,
+        "process_records",
+        &[&module_uri, &main_uri],
+        Duration::from_secs(10),
     )?;
 
     scenario.then("the workspace edit touches both files");
@@ -826,10 +931,14 @@ my $result = Foo::process_records();
 
     harness.open(&module_uri, module_v1)?;
     harness.open(&main_uri, main_v1)?;
+    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(10))?;
+    harness.barrier();
 
     scenario.when("updating both files with didChange to a new function name");
     harness.change_full(&module_uri, 2, module_v2)?;
     harness.change_full(&main_uri, 2, main_v2)?;
+    harness.barrier();
+    harness.wait_for_symbol("process_records", Some(&module_uri), Duration::from_secs(10))?;
     harness.barrier();
 
     scenario.then("go-to-definition resolves the updated symbol across files");
@@ -893,6 +1002,7 @@ my $result = Foo::process_data();
     let module_uri = workspace.uri("lib/Foo.pm");
     let main_uri = workspace.uri("main.pl");
 
+    harness.open(&module_uri, module)?;
     harness.open(&main_uri, main)?;
     harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(10))?;
     harness.barrier();
@@ -912,13 +1022,14 @@ my $result = Foo::process_data();
     assert!(has_lsp_range(&prepare), "prepareRename should return a range-compatible payload");
 
     scenario.when("renaming the symbol from the same call site");
-    let edit = harness.request(
-        "textDocument/rename",
-        json!({
-            "textDocument": { "uri": main_uri },
-            "position": { "line": line, "character": character },
-            "newName": "process_records"
-        }),
+    let edit = wait_for_rename_edit_uris(
+        &mut harness,
+        &main_uri,
+        line,
+        character,
+        "process_records",
+        &[&module_uri, &main_uri],
+        Duration::from_secs(10),
     )?;
 
     scenario.then("rename returns edits affecting both declaration and usage files");
@@ -1199,6 +1310,14 @@ return$x*2}
     let (mut harness, workspace) = setup_workspace(&[("format.pl", unformatted)])?;
     let uri = workspace.uri("format.pl");
     harness.open(&uri, unformatted)?;
+    let formatting_timeout = if cfg!(windows)
+        || std::env::var("CI").is_ok()
+        || std::env::var("GITHUB_ACTIONS").is_ok()
+    {
+        Duration::from_secs(10)
+    } else {
+        Duration::from_secs(5)
+    };
 
     scenario.when("requesting document formatting");
     let formatting_response = harness.request_raw_with_timeout(
@@ -1210,7 +1329,7 @@ return$x*2}
                 "options": { "tabSize": 4, "insertSpaces": true }
             }
         }),
-        Duration::from_secs(5),
+        formatting_timeout,
     );
 
     scenario.then("the response is structured edits or a graceful tooling error");
