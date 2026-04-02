@@ -791,34 +791,38 @@ impl LspServer {
             return;
         }
 
-        // Walk up the directory tree from the file's parent to the workspace root
-        // looking for `.perlcriticrc`.  This ensures that a repo-root config file
-        // is discovered even when the edited file lives in a sub-directory.
-        let resolved_profile = profile.or_else(|| {
-            let workspace_root = self.root_path.lock().clone();
-            let mut dir = file_path.parent().map(|p| p.to_path_buf());
-            while let Some(current) = dir {
-                let candidate = current.join(".perlcriticrc");
-                if candidate.exists() {
-                    return candidate.to_str().map(|s| s.to_string());
-                }
-                // Stop at the workspace root or the filesystem root.
-                if workspace_root.as_deref() == Some(current.as_path())
-                    || current.parent().is_none()
-                {
-                    break;
-                }
-                dir = current.parent().map(|p| p.to_path_buf());
-            }
-            None
-        });
-
         // Lazy-init the shared CriticAnalyzer.  If the profile or severity
         // changed, `didChangeConfiguration` has already reset the field to
         // `None`, so we rebuild here with the current config.
+        //
+        // The `.perlcriticrc` walk-up is intentionally placed inside the
+        // `is_none()` branch so that filesystem stat calls are skipped on
+        // every subsequent diagnostic cycle once the analyzer is warm.
         {
             let mut guard = self.critic_analyzer.lock();
             if guard.is_none() {
+                // Walk up the directory tree from the file's parent to the
+                // workspace root looking for `.perlcriticrc`.  Ensures that a
+                // repo-root config is found even when the file lives in a
+                // sub-directory.  Only runs when the analyzer needs (re-)init.
+                let resolved_profile = profile.or_else(|| {
+                    let workspace_root = self.root_path.lock().clone();
+                    let mut dir = file_path.parent().map(|p| p.to_path_buf());
+                    while let Some(current) = dir {
+                        let candidate = current.join(".perlcriticrc");
+                        if candidate.exists() {
+                            return candidate.to_str().map(|s| s.to_string());
+                        }
+                        // Stop at the workspace root or the filesystem root.
+                        if workspace_root.as_deref() == Some(current.as_path())
+                            || current.parent().is_none()
+                        {
+                            break;
+                        }
+                        dir = current.parent().map(|p| p.to_path_buf());
+                    }
+                    None
+                });
                 let critic_config = crate::perl_critic::CriticConfig {
                     severity,
                     profile: resolved_profile,
