@@ -57,13 +57,13 @@
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
     error::{ParseError, ParseOutput, ParseResult, RecoveryKind, RecoverySite},
-    heredoc_collector::{self, collect_all, HeredocContent, PendingHeredoc},
+    heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 /// Strip Perl-style line comments from `qw()` content.
