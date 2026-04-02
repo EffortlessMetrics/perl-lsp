@@ -207,7 +207,17 @@ impl LspServer {
             let incremental_doc = {
                 use perl_incremental_parsing::incremental::incremental_document::IncrementalDocument;
                 let code_text = crate::util::code_slice(text);
-                IncrementalDocument::new(code_text.to_string()).ok()
+                match IncrementalDocument::new(code_text.to_string()) {
+                    Ok(doc) => Some(doc),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Incremental parsing init failed for {}, falling back to full parsing: {}",
+                            uri,
+                            e
+                        );
+                        None
+                    }
+                }
             };
 
             self.documents.lock().insert(
@@ -624,14 +634,39 @@ impl LspServer {
                             // Try applying the incremental edits to the existing tree
                             match inc.apply_edits(&edits) {
                                 Ok(()) => Some(inc),
-                                Err(_) => {
+                                Err(e) => {
                                     // Fallback: reinitialize from the post-change source
-                                    IncrementalDocument::new(code_text.to_string()).ok()
+                                    tracing::warn!(
+                                        "Incremental edit application failed for {}, reinitializing: {}",
+                                        uri,
+                                        e
+                                    );
+                                    match IncrementalDocument::new(code_text.to_string()) {
+                                        Ok(doc) => Some(doc),
+                                        Err(e2) => {
+                                            tracing::warn!(
+                                                "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
+                                                uri,
+                                                e2
+                                            );
+                                            None
+                                        }
+                                    }
                                 }
                             }
                         }
                         // Full-document replace or no prior incremental state: reinitialize
-                        _ => IncrementalDocument::new(code_text.to_string()).ok(),
+                        _ => match IncrementalDocument::new(code_text.to_string()) {
+                            Ok(doc) => Some(doc),
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Incremental parsing reinit failed for {}, falling back to full parsing: {}",
+                                    uri,
+                                    e
+                                );
+                                None
+                            }
+                        },
                     }
                 };
 

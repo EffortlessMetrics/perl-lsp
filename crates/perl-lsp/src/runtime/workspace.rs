@@ -628,16 +628,25 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(url) = url::Url::parse(uri) {
-                            // Clear old index data before re-indexing
-                            workspace_index.clear_file(uri);
-                            match workspace_index.index_file(url, content.clone()) {
-                                Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
-                                Err(e) => {
-                                    tracing::warn!("Failed to re-index file {}: {}", uri, e);
+                    match std::fs::read_to_string(&path) {
+                        Ok(content) => {
+                            if let Ok(url) = url::Url::parse(uri) {
+                                // Clear old index data before re-indexing
+                                workspace_index.clear_file(uri);
+                                match workspace_index.index_file(url, content.clone()) {
+                                    Ok(()) => tracing::debug!("Re-indexed file: {}", uri),
+                                    Err(e) => {
+                                        tracing::warn!("Failed to re-index file {}: {}", uri, e);
+                                    }
                                 }
                             }
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "Failed to read file for re-indexing ({}): {}",
+                                path.display(),
+                                e
+                            );
                         }
                     }
                 }
@@ -650,11 +659,20 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        doc.text = content;
-                        doc.version += 1;
-                        // Clear cached AST so it is regenerated on next access
-                        doc.ast = None;
+                    match std::fs::read_to_string(&path) {
+                        Ok(content) => {
+                            doc.text = content;
+                            doc.version += 1;
+                            // Clear cached AST so it is regenerated on next access
+                            doc.ast = None;
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "Failed to read file for document store update ({}): {}",
+                                path.display(),
+                                e
+                            );
+                        }
                     }
                 }
             }
@@ -893,7 +911,7 @@ impl LspServer {
                         continue;
                     };
 
-                    eprintln!("File will be created: {}", uri);
+                    tracing::debug!("File will be created: {}", uri);
                 }
             }
         }
@@ -914,7 +932,7 @@ impl LspServer {
                         continue;
                     };
 
-                    eprintln!("File created: {}", uri);
+                    tracing::debug!("File created: {}", uri);
 
                     // Index the new file if it's a Perl file
                     // Note: Mutation operation - use coordinator with lifecycle tracking
@@ -922,17 +940,32 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                if let Ok(content) = std::fs::read_to_string(&path) {
-                                    coordinator.notify_change(uri);
-                                    if let Ok(url) = url::Url::parse(uri) {
-                                        match coordinator.index().index_file(url, content) {
-                                            Ok(()) => eprintln!("Indexed new file: {}", uri),
-                                            Err(e) => {
-                                                eprintln!("Failed to index new file {}: {}", uri, e)
+                                match std::fs::read_to_string(&path) {
+                                    Ok(content) => {
+                                        coordinator.notify_change(uri);
+                                        if let Ok(url) = url::Url::parse(uri) {
+                                            match coordinator.index().index_file(url, content) {
+                                                Ok(()) => {
+                                                    tracing::debug!("Indexed new file: {}", uri)
+                                                }
+                                                Err(e) => {
+                                                    tracing::warn!(
+                                                        "Failed to index new file {}: {}",
+                                                        uri,
+                                                        e
+                                                    )
+                                                }
                                             }
                                         }
+                                        coordinator.notify_parse_complete(uri);
                                     }
-                                    coordinator.notify_parse_complete(uri);
+                                    Err(e) => {
+                                        tracing::debug!(
+                                            "Failed to read new file for indexing ({}): {}",
+                                            path.display(),
+                                            e
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -941,7 +974,7 @@ impl LspServer {
 
                 // Trigger client refresh after file creations
                 if let Err(e) = self.refresh_controller.refresh_all(self) {
-                    eprintln!("Failed to refresh client after file creations: {}", e);
+                    tracing::warn!("Failed to refresh client after file creations: {}", e);
                 }
             }
         }
@@ -965,7 +998,7 @@ impl LspServer {
                         continue;
                     };
 
-                    eprintln!("File renamed: {} -> {}", old_uri, new_uri);
+                    tracing::debug!("File renamed: {} -> {}", old_uri, new_uri);
 
                     // Update the index for the renamed file
                     // Note: Mutation operation - use coordinator with lifecycle tracking
@@ -980,17 +1013,30 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                if let Ok(content) = std::fs::read_to_string(&path) {
-                                    if let Ok(url) = url::Url::parse(new_uri) {
-                                        match coordinator.index().index_file(url, content) {
-                                            Ok(()) => {
-                                                eprintln!("Indexed renamed file: {}", new_uri)
+                                match std::fs::read_to_string(&path) {
+                                    Ok(content) => {
+                                        if let Ok(url) = url::Url::parse(new_uri) {
+                                            match coordinator.index().index_file(url, content) {
+                                                Ok(()) => {
+                                                    tracing::debug!(
+                                                        "Indexed renamed file: {}",
+                                                        new_uri
+                                                    )
+                                                }
+                                                Err(e) => tracing::warn!(
+                                                    "Failed to index renamed file {}: {}",
+                                                    new_uri,
+                                                    e
+                                                ),
                                             }
-                                            Err(e) => eprintln!(
-                                                "Failed to index renamed file {}: {}",
-                                                new_uri, e
-                                            ),
                                         }
+                                    }
+                                    Err(e) => {
+                                        tracing::debug!(
+                                            "Failed to read renamed file for indexing ({}): {}",
+                                            path.display(),
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -1312,7 +1358,7 @@ impl LspServer {
                                     if let Err(e) =
                                         coordinator.index().index_file(url, doc.text.clone())
                                     {
-                                        eprintln!("Failed to re-index file {}: {}", uri, e);
+                                        tracing::warn!("Failed to re-index file {}: {}", uri, e);
                                     }
                                 }
                                 coordinator.notify_parse_complete(uri);
