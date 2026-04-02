@@ -34,8 +34,6 @@
 
 use url::Url;
 
-#[cfg(all(not(target_arch = "wasm32"), windows))]
-use percent_encoding::percent_decode_str;
 
 /// Convert a `file://` URI to a filesystem path.
 ///
@@ -155,6 +153,8 @@ fn normalize_filesystem_path(path: &std::path::Path) -> std::path::PathBuf {
 
 #[cfg(all(not(target_arch = "wasm32"), windows))]
 fn windows_rooted_file_uri_to_path(url: &Url) -> Option<std::path::PathBuf> {
+    use percent_encoding::percent_decode_str;
+
     match url.host_str() {
         None | Some("localhost") => {}
         Some(_) => return None,
