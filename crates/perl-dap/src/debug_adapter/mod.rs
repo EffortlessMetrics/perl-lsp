@@ -1632,4 +1632,46 @@ mod tests {
         }
         Ok(())
     }
+
+    // --- Signal handling tests (#3028) ---
+
+    #[test]
+    fn test_send_continue_signal_does_not_panic_on_pid_1() {
+        // PID 1 on Unix is init (EPERM), on Windows GenerateConsoleCtrlEvent returns 0.
+        // Must not panic on any platform.
+        let adapter = DebugAdapter::new();
+        let _ = adapter.send_continue_signal(1);
+    }
+
+    #[test]
+    fn test_send_interrupt_signal_does_not_panic_on_pid_1() {
+        let adapter = DebugAdapter::new();
+        let _ = adapter.send_interrupt_signal(1);
+    }
+
+    #[test]
+    fn test_send_continue_signal_pid_zero_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_continue_signal(0));
+    }
+
+    #[test]
+    fn test_send_interrupt_signal_pid_zero_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_interrupt_signal(0));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_send_continue_signal_nonexistent_pid_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_continue_signal(999_999));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_send_interrupt_signal_nonexistent_pid_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_interrupt_signal(999_999));
+    }
 }

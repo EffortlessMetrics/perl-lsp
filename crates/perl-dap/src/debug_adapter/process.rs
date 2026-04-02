@@ -1242,85 +1242,126 @@ impl DebugAdapter {
         }
     }
 
-    /// Send continue/resume signal to process (Unix only)
-    #[allow(unused_variables)]
+    /// Send continue/resume signal to process.
+    ///
+    /// On Unix, sends SIGCONT. On Windows there is no direct equivalent of SIGCONT
+    /// for externally-attached processes; the function returns `false` and logs a
+    /// structured warning. Note that `handle_continue` emits the DAP `continued`
+    /// event unconditionally, so the client will not be left in a stuck state even
+    /// when this returns `false`.
     pub(super) fn send_continue_signal(&self, pid: u32) -> bool {
+        if pid == 0 {
+            tracing::warn!("send_continue_signal called with pid 0, ignoring");
+            return false;
+        }
         #[cfg(unix)]
         {
-            let pid = pid as i32;
-            match signal::kill(Pid::from_raw(pid), Signal::SIGCONT) {
+            let pid_i = pid as i32;
+            match signal::kill(Pid::from_raw(pid_i), Signal::SIGCONT) {
                 Ok(()) => {
-                    eprintln!("Sent SIGCONT to process {}", pid);
+                    tracing::info!("Sent SIGCONT to process {}", pid);
                     true
                 }
                 Err(e) => {
-                    eprintln!("Failed to send SIGCONT to process {}: {}", pid, e);
-                    false
-                }
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            eprintln!("Continue signal not supported on this platform");
-            false
-        }
-    }
-
-    /// Send interrupt signal to process (cross-platform)
-    #[allow(unused_variables)] // pid unused on non-unix/non-windows platforms (e.g., wasm32)
-    pub(super) fn send_interrupt_signal(&self, pid: u32) -> bool {
-        #[cfg(unix)]
-        {
-            let pid = pid as i32;
-            match signal::kill(Pid::from_raw(pid), Signal::SIGINT) {
-                Ok(()) => {
-                    eprintln!("Sent SIGINT to process {}", pid);
-                    true
-                }
-                Err(e) => {
-                    eprintln!("Failed to send SIGINT to process {}: {}", pid, e);
+                    tracing::warn!("Failed to send SIGCONT to process {}: {}", pid, e);
                     false
                 }
             }
         }
         #[cfg(windows)]
         {
-            // On Windows, we use TerminateProcess or send Ctrl+C event
-            // For Perl debugger, we can try sending input directly
+            // Windows has no direct SIGCONT equivalent for external processes.
+            // The caller (handle_continue) emits the continued event regardless.
+            tracing::warn!(
+                "send_continue_signal: SIGCONT not available on Windows for pid {}",
+                pid
+            );
+            false
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            tracing::warn!("send_continue_signal: unsupported platform for pid {}", pid);
+            false
+        }
+    }
+
+    /// Send interrupt signal to process (cross-platform).
+    ///
+    /// On Unix, sends SIGINT. On Windows, tries `GenerateConsoleCtrlEvent` first
+    /// (works when the target is in the same console group), then falls back to
+    /// writing the interrupt character to debugger stdin (session mode only).
+    /// Returns `false` on unsupported platforms.
+    pub(super) fn send_interrupt_signal(&self, pid: u32) -> bool {
+        if pid == 0 {
+            tracing::warn!("send_interrupt_signal called with pid 0, ignoring");
+            return false;
+        }
+        #[cfg(unix)]
+        {
+            let pid_i = pid as i32;
+            match signal::kill(Pid::from_raw(pid_i), Signal::SIGINT) {
+                Ok(()) => {
+                    tracing::info!("Sent SIGINT to process {}", pid);
+                    true
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to send SIGINT to process {}: {}", pid, e);
+                    false
+                }
+            }
+        }
+        #[cfg(windows)]
+        {
+            use winapi::um::wincon::{CTRL_C_EVENT, GenerateConsoleCtrlEvent};
+            // Try GenerateConsoleCtrlEvent first (works for processes in same console group).
+            let result = unsafe { GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid) };
+            if result != 0 {
+                tracing::info!("Sent Ctrl+C event to process {}", pid);
+                return true;
+            }
+            tracing::warn!(
+                "GenerateConsoleCtrlEvent failed for pid {}, trying stdin fallback",
+                pid
+            );
+
+            // Fallback: write interrupt character to debugger stdin (session mode only).
             if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             {
                 if let Some(stdin) = session.process.stdin.as_mut() {
-                    // Send interrupt character (Ctrl+C equivalent in Perl debugger)
                     match stdin.write_all(b"\x03\n") {
                         Ok(()) => {
                             let _ = stdin.flush();
-                            eprintln!("Sent interrupt signal to Perl debugger on process {}", pid);
+                            tracing::info!("Sent interrupt via stdin to process {}", pid);
                             true
                         }
                         Err(e) => {
-                            eprintln!("Failed to send interrupt to process {}: {}", pid, e);
-                            // Fallback: try to kill the process
+                            tracing::error!("Failed to send interrupt to process {}: {}", pid, e);
                             if Self::terminate_child_process(&mut session.process) {
-                                eprintln!("Terminated process {} as fallback", pid);
+                                tracing::warn!("Terminated process {} as fallback", pid);
                                 session.state = DebugState::Terminated;
                                 true
                             } else {
-                                eprintln!("Failed to terminate process {}", pid);
+                                tracing::error!("Failed to terminate process {}", pid);
                                 false
                             }
                         }
                     }
                 } else {
-                    eprintln!("No stdin handle for process {}", pid);
+                    tracing::warn!("No stdin handle for process {}", pid);
                     false
                 }
             } else {
+                // attached_pid mode: GenerateConsoleCtrlEvent was already attempted above.
+                tracing::warn!(
+                    "GenerateConsoleCtrlEvent failed and no session active for pid {}",
+                    pid
+                );
                 false
             }
         }
         #[cfg(not(any(unix, windows)))]
         {
-            eprintln!("Interrupt signal not supported on this platform");
+            tracing::warn!("send_interrupt_signal: unsupported platform for pid {}", pid);
             false
         }
     }
