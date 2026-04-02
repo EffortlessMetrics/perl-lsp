@@ -565,6 +565,8 @@ mod tests {
                 degradation_tier: crate::state::DegradationTier::Minimal,
                 #[cfg(feature = "incremental")]
                 incremental_doc: None,
+                #[cfg(feature = "incremental")]
+                incremental_state: None,
             },
         );
 

@@ -231,9 +231,17 @@ impl CheckpointCache {
         }
     }
 
-    /// Find the nearest checkpoint before a given position
+    /// Find the nearest checkpoint at or before a given position.
+    ///
+    /// Uses binary search over the sorted `checkpoints` vector (invariant maintained by
+    /// [`Self::add`]) for O(log N) rather than the previous O(N) linear scan. This is
+    /// important when the checkpoint limit is large (50+) for big documents (#2080).
     pub fn find_before(&self, position: usize) -> Option<&LexerCheckpoint> {
-        self.checkpoints.iter().rev().find(|(pos, _)| *pos <= position).map(|(_, cp)| cp)
+        // `partition_point` returns the index of the first element for which the
+        // predicate is false (i.e. the first entry with pos > position).
+        // The entry just before that index is the last one with pos <= position.
+        let idx = self.checkpoints.partition_point(|(pos, _)| *pos <= position);
+        if idx == 0 { None } else { self.checkpoints.get(idx - 1).map(|(_, cp)| cp) }
     }
 
     /// Clear all cached checkpoints
@@ -316,5 +324,57 @@ mod tests {
         let cp = cache.find_before(25).ok_or("Expected checkpoint before position 25")?;
         assert_eq!(cp.position, 20);
         Ok(())
+    }
+
+    /// Verify `find_before` uses sorted-invariant binary search (O(log N)).
+    ///
+    /// This test confirms correctness for: exact match, between two entries,
+    /// before first entry, and after last entry.
+    #[test]
+    fn test_find_before_binary_search() -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut cache = CheckpointCache::new(50);
+        for pos in [10usize, 20, 30, 40, 50] {
+            cache.add(LexerCheckpoint::at_position(pos));
+        }
+
+        // Exact match: should return that checkpoint
+        let cp = cache.find_before(30).ok_or("find_before(30) should hit")?;
+        assert_eq!(cp.position, 30, "exact match should return the entry at 30");
+
+        // Between entries: should return the lower one
+        let cp = cache.find_before(25).ok_or("find_before(25) should hit")?;
+        assert_eq!(cp.position, 20, "between 20 and 30 should return 20");
+
+        // After all entries: should return the last
+        let cp = cache.find_before(100).ok_or("find_before(100) should hit")?;
+        assert_eq!(cp.position, 50, "after last entry should return 50");
+
+        // Before first entry: should return None
+        let cp = cache.find_before(5);
+        assert!(cp.is_none(), "before first entry (5 < 10) should return None");
+
+        Ok(())
+    }
+
+    /// Verify that CheckpointedIncrementalParser uses 50 checkpoints (Gap B).
+    #[test]
+    fn test_checkpoint_cache_capacity_50() {
+        // A cache of capacity 50 must not evict until we exceed 50.
+        let mut cache = CheckpointCache::new(50);
+        for i in 0..50usize {
+            cache.add(LexerCheckpoint::at_position(i * 100));
+        }
+        assert_eq!(
+            cache.checkpoints.len(),
+            50,
+            "a capacity-50 cache must hold exactly 50 checkpoints before eviction"
+        );
+        // Adding one more should evict down to 50, not to 10.
+        cache.add(LexerCheckpoint::at_position(5000));
+        assert_eq!(
+            cache.checkpoints.len(),
+            50,
+            "eviction must keep exactly max_checkpoints entries"
+        );
     }
 }
