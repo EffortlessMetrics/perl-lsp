@@ -121,6 +121,10 @@ pub struct ClassModel {
     pub roles: Vec<String>,
     /// Method modifiers (before/after/around)
     pub modifiers: Vec<MethodModifier>,
+    /// Names exported by default via `@EXPORT`
+    pub exports: Vec<String>,
+    /// Names available for explicit import via `@EXPORT_OK`
+    pub export_ok: Vec<String>,
 }
 
 impl ClassModel {
@@ -140,6 +144,8 @@ pub struct ClassModelBuilder {
     current_parents: Vec<String>,
     current_roles: Vec<String>,
     current_modifiers: Vec<MethodModifier>,
+    current_exports: Vec<String>,
+    current_export_ok: Vec<String>,
     /// Track which packages have framework detection applied
     framework_map: HashMap<String, Framework>,
 }
@@ -162,6 +168,8 @@ impl ClassModelBuilder {
             current_parents: Vec::new(),
             current_roles: Vec::new(),
             current_modifiers: Vec::new(),
+            current_exports: Vec::new(),
+            current_export_ok: Vec::new(),
             framework_map: HashMap::new(),
         }
     }
@@ -179,7 +187,9 @@ impl ClassModelBuilder {
         // Produce a ClassModel if the package uses a framework, has attributes, or has parents
         let has_oo_indicator = framework != Framework::None
             || !self.current_attributes.is_empty()
-            || !self.current_parents.is_empty();
+            || !self.current_parents.is_empty()
+            || !self.current_exports.is_empty()
+            || !self.current_export_ok.is_empty();
         if has_oo_indicator {
             let model = ClassModel {
                 name: self.current_package.clone(),
@@ -189,6 +199,8 @@ impl ClassModelBuilder {
                 parents: std::mem::take(&mut self.current_parents),
                 roles: std::mem::take(&mut self.current_roles),
                 modifiers: std::mem::take(&mut self.current_modifiers),
+                exports: std::mem::take(&mut self.current_exports),
+                export_ok: std::mem::take(&mut self.current_export_ok),
             };
             self.models.push(model);
         } else {
@@ -198,6 +210,8 @@ impl ClassModelBuilder {
             self.current_parents.clear();
             self.current_roles.clear();
             self.current_modifiers.clear();
+            self.current_exports.clear();
+            self.current_export_ok.clear();
         }
     }
 
@@ -236,25 +250,64 @@ impl ClassModelBuilder {
                 self.detect_framework(module, args);
             }
 
-            // `our @ISA = qw(Parent1 Parent2);`
+            // `our @ISA = qw(Parent1 Parent2);` / `our @EXPORT = qw(...);` / `our @EXPORT_OK = qw(...);`
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind
                     && sigil == "@"
-                    && name == "ISA"
                     && let Some(init) = initializer
                 {
-                    self.extract_isa_from_node(init);
+                    match name.as_str() {
+                        "ISA" => self.extract_isa_from_node(init),
+                        "EXPORT" => {
+                            self.current_exports.extend(collect_symbol_names(init));
+                        }
+                        "EXPORT_OK" => {
+                            self.current_export_ok.extend(collect_symbol_names(init));
+                        }
+                        _ => {}
+                    }
                 }
             }
 
-            // `@ISA = qw(Parent1 Parent2);` (bare assignment without `our`)
+            // `@ISA = qw(...);` / `@EXPORT = qw(...);` / `@EXPORT_OK = qw(...);` (bare assignment without `our`)
             NodeKind::Assignment { lhs, rhs, .. } => {
                 if let NodeKind::Variable { sigil, name } = &lhs.kind
                     && sigil == "@"
-                    && name == "ISA"
                 {
-                    self.extract_isa_from_node(rhs);
+                    match name.as_str() {
+                        "ISA" => self.extract_isa_from_node(rhs),
+                        "EXPORT" => {
+                            self.current_exports.extend(collect_symbol_names(rhs));
+                        }
+                        "EXPORT_OK" => {
+                            self.current_export_ok.extend(collect_symbol_names(rhs));
+                        }
+                        _ => {}
+                    }
                 }
+            }
+
+            // `push @ISA, 'Parent';` or `push @ISA, 'Base1', 'Base2';`
+            // Also recurse into the inner expression so that assignments like
+            // `@EXPORT_OK = qw(...)` (wrapped in ExpressionStatement) are still handled.
+            NodeKind::ExpressionStatement { expression } => {
+                if let NodeKind::FunctionCall { name, args } = &expression.kind
+                    && name == "push"
+                {
+                    if let Some(first_arg) = args.first() {
+                        if let NodeKind::Variable { sigil, name: var_name } = &first_arg.kind
+                            && sigil == "@"
+                            && var_name == "ISA"
+                        {
+                            for arg in args.iter().skip(1) {
+                                self.extract_isa_from_node(arg);
+                            }
+                            return;
+                        }
+                    }
+                }
+                // Fall through: visit the inner expression for assignments, etc.
+                self.visit_node(expression);
             }
 
             NodeKind::Class { name, body } => {
@@ -1337,5 +1390,54 @@ has 'level' => (is => 'ro');
             model.parents.contains(&"MyApp::User".to_string()),
             "Moose extends should still populate parents"
         );
+    }
+
+    // ---- Gap 1: Export surface ----
+
+    #[test]
+    fn export_array_captured() {
+        let code = "package MyUtils;\nour @EXPORT = qw(foo bar);\nour @EXPORT_OK = qw(baz);\nsub foo {}\nsub bar {}\nsub baz {}\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "MyUtils").expect("MyUtils model");
+        assert_eq!(model.exports, vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(model.export_ok, vec!["baz".to_string()]);
+    }
+
+    #[test]
+    fn export_non_oo_package_produces_model() {
+        let code = "package MyUtils;\nour @EXPORT = qw(helper);\nsub helper { 1 }\n1;";
+        let models = build_models(code);
+        assert!(
+            find_model(&models, "MyUtils").is_some(),
+            "export-only package must produce a model"
+        );
+    }
+
+    #[test]
+    fn export_ok_assignment_without_our() {
+        let code = "package MyLib;\n@EXPORT_OK = qw(util_a util_b);\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "MyLib").expect("MyLib model");
+        assert_eq!(model.export_ok, vec!["util_a".to_string(), "util_b".to_string()]);
+    }
+
+    // ---- Gap 2: push @ISA ----
+
+    #[test]
+    fn push_isa_single_parent() {
+        let code = "package Child;\npush @ISA, 'Parent';\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert!(model.parents.contains(&"Parent".to_string()), "push @ISA must capture parent");
+        assert_eq!(model.framework, Framework::PlainOO);
+    }
+
+    #[test]
+    fn push_isa_multiple_parents() {
+        let code = "package Child;\npush @ISA, 'Base1', 'Base2';\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Child").expect("Child model");
+        assert!(model.parents.contains(&"Base1".to_string()));
+        assert!(model.parents.contains(&"Base2".to_string()));
     }
 }

@@ -227,8 +227,11 @@ impl SemanticAnalyzer {
     /// For packages not in `class_models` (plain packages with no OO indicators),
     /// falls back to the symbol table looking for `PackageName::method_name`.
     ///
-    /// Returns `None` when no ancestor in the same file defines the method.
-    /// Cross-file inheritance is out of scope — tracked as a follow-up issue.
+    /// Returns `None` when no ancestor defined in the same source file
+    /// defines the method. For cross-file inherited-method navigation, the
+    /// LSP layer (`inherited_method_definition_location` in `navigation.rs`)
+    /// handles workspace index traversal - this method is intentionally
+    /// scoped to the current file's `class_models` only.
     pub fn resolve_inherited_method_hover(
         &self,
         receiver_class: &str,
