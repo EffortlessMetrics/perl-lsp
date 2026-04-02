@@ -6,15 +6,30 @@
 /// Context-sensitive token types
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContextToken {
-    Substitution { pattern: String, replacement: String, flags: String },
-    Transliteration { search: String, replace: String, flags: String },
-    Match { pattern: String, flags: String },
+    Substitution {
+        pattern: String,
+        replacement: String,
+        flags: String,
+    },
+    Transliteration {
+        search: String,
+        replace: String,
+        flags: String,
+    },
+    Match {
+        pattern: String,
+        flags: String,
+    },
     /// Quote-like operators: q, qq, qw, qr, qx
     ///
     /// - `operator`: the operator keyword ("q", "qq", "qw", "qr", "qx")
     /// - `content`: the delimited content
     /// - `flags`: modifier flags (only non-empty for `qr`, e.g. "imsx")
-    QuoteOp { operator: String, content: String, flags: String },
+    QuoteOp {
+        operator: String,
+        content: String,
+        flags: String,
+    },
     Identifier(String),
 }
 
