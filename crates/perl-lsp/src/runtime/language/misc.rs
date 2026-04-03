@@ -637,7 +637,11 @@ impl LspServer {
         Err(JsonRpcError { code: -32602, message: "Invalid parameters".to_string(), data: None })
     }
 
-    /// Handle textDocument/inlineCompletion request
+    /// Handle textDocument/inlineCompletion request.
+    ///
+    /// When an AI backend is registered and AI completion is enabled in config,
+    /// the handler tries the backend first. On failure or empty results, it
+    /// falls back to deterministic completions (controlled by `ai_config.fallback`).
     pub(crate) fn handle_inline_completion(
         &self,
         params: Option<Value>,
@@ -648,22 +652,102 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
 
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let provider = InlineCompletionProvider::new();
-                let completions = provider.get_inline_completions(&doc.text, line, character);
-                return Ok(Some(serde_json::to_value(completions).map_err(|e| {
-                    crate::protocol::internal_error(&format!(
-                        "Failed to serialize inline completions: {}",
-                        e
-                    ))
-                })?));
+            // Snapshot text under document lock, then release before any slow work
+            let text = {
+                let documents = self.documents_guard();
+                match self.get_document(&documents, uri) {
+                    Some(doc) => doc.text.clone(),
+                    None => {
+                        return Ok(Some(json!({ "items": [] })));
+                    }
+                }
+            };
+
+            let provider = InlineCompletionProvider::new();
+
+            // Try AI backend if enabled
+            let ai_config = self.config.lock().ai_completion.clone();
+            if ai_config.enabled {
+                if let Some(context) = provider.prepare_context(&text, line, character) {
+                    let backend_result = self.try_ai_inline_completion(&context, &ai_config);
+                    match backend_result {
+                        Ok(ref items) if !items.is_empty() => {
+                            let list = perl_lsp_inline_completion::InlineCompletionList {
+                                items: items.clone(),
+                            };
+                            return Ok(Some(serde_json::to_value(list).map_err(|e| {
+                                crate::protocol::internal_error(&format!(
+                                    "Failed to serialize inline completions: {}",
+                                    e
+                                ))
+                            })?));
+                        }
+                        Err(ref e) => {
+                            tracing::debug!("AI inline completion failed: {}", e);
+                            if !ai_config.fallback {
+                                return Ok(Some(json!({ "items": [] })));
+                            }
+                            // Fall through to deterministic
+                        }
+                        _ => {
+                            // Ok(empty) — fall through to deterministic if fallback enabled
+                            if !ai_config.fallback {
+                                return Ok(Some(json!({ "items": [] })));
+                            }
+                        }
+                    }
+                }
             }
+
+            // Deterministic fallback
+            let completions = provider.get_inline_completions(&text, line, character);
+            return Ok(Some(serde_json::to_value(completions).map_err(|e| {
+                crate::protocol::internal_error(&format!(
+                    "Failed to serialize inline completions: {}",
+                    e
+                ))
+            })?));
         }
 
-        Ok(Some(json!({
-            "items": []
-        })))
+        Ok(Some(json!({ "items": [] })))
+    }
+
+    /// Attempt AI-backed inline completion.
+    ///
+    /// Returns `Ok(items)` on success, `Err` on any failure.
+    fn try_ai_inline_completion(
+        &self,
+        context: &perl_lsp_inline_completion::PreparedInlineCompletionContext,
+        ai_config: &perl_lsp_config::AiCompletionConfig,
+    ) -> Result<
+        Vec<perl_lsp_inline_completion::InlineCompletionItem>,
+        perl_lsp_inline_completion::BackendError,
+    > {
+        // Get the backend from server state (if registered)
+        let backend = self.ai_backend();
+        let backend = match backend.as_ref() {
+            Some(b) => b,
+            None => return Ok(vec![]),
+        };
+
+        let req = perl_lsp_inline_completion::BackendRequest {
+            context: context.clone(),
+            max_output_tokens: ai_config.max_output_tokens,
+            timeout_ms: ai_config.timeout_ms,
+        };
+
+        let texts = backend.complete(&req)?;
+        let items = texts
+            .into_iter()
+            .map(|text| perl_lsp_inline_completion::InlineCompletionItem {
+                insert_text: text,
+                filter_text: None,
+                range: None,
+                command: None,
+            })
+            .collect();
+
+        Ok(items)
     }
 
     /// Handle textDocument/inlineValue request

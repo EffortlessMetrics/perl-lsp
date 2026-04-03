@@ -73,7 +73,9 @@ impl RequestPriority {
 pub(crate) fn request_priority(method: &str) -> RequestPriority {
     match method {
         "textDocument/hover" => RequestPriority::Hover,
-        "textDocument/completion" | "completionItem/resolve" => RequestPriority::Completion,
+        "textDocument/completion" | "completionItem/resolve" | "textDocument/inlineCompletion" => {
+            RequestPriority::Completion
+        }
         "textDocument/references"
         | "textDocument/definition"
         | "textDocument/declaration"
@@ -800,6 +802,30 @@ mod tests {
     // =====================================================================
     // Helper constructors for tests
     // =====================================================================
+
+    #[test]
+    fn inline_completion_gets_completion_priority() {
+        assert_eq!(request_priority("textDocument/inlineCompletion"), RequestPriority::Completion);
+    }
+
+    #[test]
+    fn inline_completion_gets_dedup_key() {
+        let params = serde_json::json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 5, "character": 10 }
+        });
+        let key = extract_dedup_key(
+            "textDocument/inlineCompletion",
+            Some(&params),
+            RequestPriority::Completion,
+        );
+        assert!(key.is_some());
+        let key = key.unwrap();
+        assert_eq!(key.method, "textDocument/inlineCompletion");
+        assert_eq!(key.uri, "file:///test.pl");
+        assert_eq!(key.line, 5);
+        assert_eq!(key.character, 10);
+    }
 
     fn make_queued_read(method: &str, arrival_seq: u64) -> QueuedRead {
         make_queued_read_with_seq(method, 0, arrival_seq)
