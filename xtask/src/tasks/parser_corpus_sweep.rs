@@ -381,6 +381,7 @@ fn resolve_manifest_module_path(path: &str) -> Option<PathBuf> {
     resolve_manifest_module_path_impl(path, windows_manifest_module_path)
 }
 
+#[allow(unused_variables)]
 fn resolve_manifest_module_path_impl<F>(path: &str, windows_converter: F) -> Option<PathBuf>
 where
     F: Fn(&str) -> Option<PathBuf>,
