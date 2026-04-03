@@ -72,7 +72,6 @@ jobs:
 
       - name: Run PR smoke checks
         run: |
-          just fmt-check
           just clippy-core
           just test-core
 

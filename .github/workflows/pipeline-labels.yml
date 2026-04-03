@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Auto-label scout reports
         if: contains(github.event.issue.labels.*.name, 'swarm-discovered')
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // Scout-filed issues need plan review before building
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Label PR as in-review
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             await github.rest.issues.addLabels({
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Label PR as merge-ready on approval
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // Only add merge-ready if reviewed-deep label is present AND the PR

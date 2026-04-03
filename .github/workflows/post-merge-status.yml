@@ -27,7 +27,7 @@ jobs:
   regenerate-status:
     name: Regenerate status subsystem files
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
