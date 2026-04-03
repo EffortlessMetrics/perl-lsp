@@ -9,7 +9,7 @@ Source0:        __SOURCE_TARBALL__
 
 %description
 perl-lsp is a native Perl language server written in Rust.
-This package installs the perl-lsp and perl-dap executables from the release artifact.
+This package installs the perllsp and perl-dap executables from the release artifact.
 
 %prep
 %autosetup -n __SOURCE_DIR__
@@ -19,13 +19,13 @@ true
 
 %install
 rm -rf %{buildroot}
-install -Dpm 0755 perl-lsp %{buildroot}%{_bindir}/perl-lsp
+install -Dpm 0755 perllsp %{buildroot}%{_bindir}/perllsp
 install -Dpm 0755 perl-dap %{buildroot}%{_bindir}/perl-dap
 
 %files
 %license LICENSE-MIT LICENSE-APACHE
 %doc README.md
-%{_bindir}/perl-lsp
+%{_bindir}/perllsp
 %{_bindir}/perl-dap
 
 %changelog

@@ -11,7 +11,7 @@ sha256sums=('__DOWNLOAD_SHA256__')
 
 package() {
   cd "$srcdir/__SOURCE_DIR__"
-  install -Dm755 perl-lsp "$pkgdir/usr/bin/perl-lsp"
+  install -Dm755 perllsp "$pkgdir/usr/bin/perllsp"
   install -Dm755 perl-dap "$pkgdir/usr/bin/perl-dap"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
   install -Dm644 LICENSE-MIT "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MIT"
