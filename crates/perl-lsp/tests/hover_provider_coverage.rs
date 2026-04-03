@@ -689,12 +689,10 @@ my $limit = MAX;
     // ── Type inference in hover (Issue #2357) ────────────────────────────
 
     #[test]
-    #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
     fn test_hover_blessed_ref_shows_class_type_from_new() -> Result<(), Box<dyn std::error::Error>>
     {
         // This test verifies that hovering on a variable assigned from a blessed reference
         // shows the inferred class type.
-        // Currently fails because TypeInferenceEngine is not integrated into hover.
         let code = r#"
 package Foo;
 sub new { bless {}, shift }
@@ -704,7 +702,7 @@ package main;
 my $obj = Foo->new();
 $obj;
 "#;
-        let resp = hover_at(code, "file:///blessed.pl", "$obj", 5)?;
+        let resp = hover_at(code, "file:///blessed.pl", "$obj", 7)?;
         let content = hover_content(&resp).ok_or("expected hover for $obj")?;
 
         // Should show the scalar variable
@@ -726,7 +724,6 @@ $obj;
     }
 
     #[test]
-    #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
     fn test_hover_scalar_from_literal_assignment_shows_type()
     -> Result<(), Box<dyn std::error::Error>> {
         // Scalar with integer literal should show Integer type inference
@@ -750,7 +747,6 @@ $obj;
     }
 
     #[test]
-    #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
     fn test_hover_shows_inferred_type_from_function_call() -> Result<(), Box<dyn std::error::Error>>
     {
         // Function returning scalar reference should infer reference type
@@ -779,7 +775,6 @@ $name;
     // ── Additional type inference coverage for Issue #348 ────────────────
 
     #[test]
-    #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
     fn test_hover_hash_variable_shows_inferred_type() -> Result<(), Box<dyn std::error::Error>> {
         // Hash variables should show their inferred type when concretely assigned.
         let code = "my %config = (host => 'localhost', port => 8080);\n%config;\n";
@@ -802,7 +797,6 @@ $name;
     }
 
     #[test]
-    #[ignore = "Type inference not yet wired to hover - waiting for #2357"]
     fn test_hover_string_literal_assignment_shows_str_type()
     -> Result<(), Box<dyn std::error::Error>> {
         // Scalar holding a string literal should infer to Str type.

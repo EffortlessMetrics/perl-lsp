@@ -39,6 +39,8 @@ scripts/__pycache__/
 # Claude — agents/ is gitignored to allow swapping the active agents symlink.
 # agents2/, agents3/, agents4/ etc. are version-tracked.
 /.claude/agents/
+# Worktrees used by Claude agent isolation — ephemeral, never committed.
+/.claude/worktrees/
 
 # Swarm ops — ignore the entire directory (contains repo mirror artifacts),
 # but force-track the specific knowledge files we need.
