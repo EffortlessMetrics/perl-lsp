@@ -312,6 +312,11 @@ impl LspServer {
             }
         });
 
+        // Advertise experimental custom requests
+        capabilities["experimental"] = json!({
+            "perlInlineCompletionStream": true
+        });
+
         Ok(Some(json!({
             "capabilities": capabilities,
             "serverInfo": {

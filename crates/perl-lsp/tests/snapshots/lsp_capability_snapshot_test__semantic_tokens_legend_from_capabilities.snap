@@ -1,6 +1,5 @@
 ---
 source: crates/perl-lsp/tests/lsp_capability_snapshot_test.rs
-assertion_line: 119
 expression: "&legend"
 ---
 tokenModifiers:
@@ -39,3 +38,5 @@ tokenTypes:
   - regexp
   - operator
   - sql_string
+  - sql_heredoc_keyword
+  - json_heredoc_key

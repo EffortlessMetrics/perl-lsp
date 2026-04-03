@@ -22,6 +22,7 @@ mod refresh;
 pub mod routing;
 pub(crate) mod scheduler;
 mod serving;
+pub(crate) mod stream_session;
 mod symbol_extraction;
 mod test_api;
 mod test_runners;
@@ -206,6 +207,8 @@ pub struct LspServer {
     pub(crate) notebook_store: notebook::NotebookStore,
     /// Trace level set by client via $/setTrace (off, messages, verbose)
     trace_level: Arc<Mutex<String>>,
+    /// Stream session manager for progressive inline completion.
+    stream_session_manager: stream_session::StreamSessionManager,
     /// Runtime feature profile selected by launch arguments or compiled default.
     feature_profile: FeatureProfile,
     /// Cache of extracted POD documentation keyed by resolved file path.
@@ -334,6 +337,11 @@ impl LspServer {
         let new_flag = Arc::new(AtomicBool::new(false));
         flags.insert(uri.to_string(), Arc::clone(&new_flag));
         new_flag
+    }
+
+    /// Access the stream session manager for progressive inline completion.
+    pub(crate) fn stream_sessions(&self) -> &stream_session::StreamSessionManager {
+        &self.stream_session_manager
     }
 
     /// Send a notification to the client via the outbound channel
