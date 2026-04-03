@@ -55,6 +55,73 @@ pub struct ServerConfig {
     /// When `Some`, passes `--profile=<path>` to perlcritic. When `None`,
     /// the auto-discovery logic looks for `.perlcriticrc` in the workspace root.
     pub perlcritic_profile: Option<String>,
+
+    /// AI-powered inline completion configuration.
+    pub ai_completion: AiCompletionConfig,
+}
+
+/// Configuration for AI-powered inline completions.
+///
+/// Disabled by default. When enabled, the server calls an external AI provider
+/// for inline completion suggestions, falling back to deterministic rules on
+/// timeout, error, or when AI is disabled.
+#[derive(Debug, Clone)]
+pub struct AiCompletionConfig {
+    /// Whether AI completions are enabled. Default: false.
+    pub enabled: bool,
+    /// Provider type. Currently only "openai_compat" is supported.
+    pub provider: String,
+    /// API endpoint URL.
+    pub endpoint: String,
+    /// Model identifier (e.g., "gpt-4o-mini").
+    pub model: String,
+    /// Environment variable name containing the API key.
+    pub api_key_env: String,
+    /// Request timeout in milliseconds. Default: 1800.
+    pub timeout_ms: u64,
+    /// Maximum output tokens per request. Default: 64.
+    pub max_output_tokens: u32,
+    /// Maximum requests per second. Default: 1.
+    pub rate_limit_rps: f64,
+    /// Maximum concurrent in-flight requests. Default: 1.
+    pub max_inflight: u32,
+    /// Whether to fall back to deterministic completions on AI failure. Default: true.
+    pub fallback: bool,
+    /// Streaming-specific configuration.
+    pub streaming: AiStreamingConfig,
+}
+
+/// Streaming sub-configuration for AI completions.
+#[derive(Debug, Clone)]
+pub struct AiStreamingConfig {
+    /// Whether streaming mode is enabled. Default: true.
+    pub enabled: bool,
+    /// Minimum milliseconds between emitted updates. Default: 60.
+    pub update_debounce_ms: u64,
+}
+
+impl Default for AiCompletionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: "openai_compat".to_string(),
+            endpoint: String::new(),
+            model: "gpt-4o-mini".to_string(),
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            timeout_ms: 1800,
+            max_output_tokens: 64,
+            rate_limit_rps: 1.0,
+            max_inflight: 1,
+            fallback: true,
+            streaming: AiStreamingConfig::default(),
+        }
+    }
+}
+
+impl Default for AiStreamingConfig {
+    fn default() -> Self {
+        Self { enabled: true, update_debounce_ms: 60 }
+    }
 }
 
 impl Default for ServerConfig {
@@ -73,6 +140,7 @@ impl Default for ServerConfig {
             perlcritic_enabled: false,
             perlcritic_severity: 3,
             perlcritic_profile: None,
+            ai_completion: AiCompletionConfig::default(),
         }
     }
 }
@@ -129,6 +197,47 @@ impl ServerConfig {
             }
             if let Some(profile) = critic.get("profile").and_then(|v| v.as_str()) {
                 self.perlcritic_profile = Some(profile.to_string());
+            }
+        }
+
+        if let Some(ai) = settings.get("aiCompletion") {
+            if let Some(enabled) = ai.get("enabled").and_then(|v| v.as_bool()) {
+                self.ai_completion.enabled = enabled;
+            }
+            if let Some(provider) = ai.get("provider").and_then(|v| v.as_str()) {
+                self.ai_completion.provider = provider.to_string();
+            }
+            if let Some(endpoint) = ai.get("endpoint").and_then(|v| v.as_str()) {
+                self.ai_completion.endpoint = endpoint.to_string();
+            }
+            if let Some(model) = ai.get("model").and_then(|v| v.as_str()) {
+                self.ai_completion.model = model.to_string();
+            }
+            if let Some(key_env) = ai.get("apiKeyEnv").and_then(|v| v.as_str()) {
+                self.ai_completion.api_key_env = key_env.to_string();
+            }
+            if let Some(timeout) = ai.get("timeoutMs").and_then(|v| v.as_u64()) {
+                self.ai_completion.timeout_ms = timeout;
+            }
+            if let Some(tokens) = ai.get("maxOutputTokens").and_then(|v| v.as_u64()) {
+                self.ai_completion.max_output_tokens = tokens as u32;
+            }
+            if let Some(rps) = ai.get("rateLimitRps").and_then(|v| v.as_f64()) {
+                self.ai_completion.rate_limit_rps = rps;
+            }
+            if let Some(inflight) = ai.get("maxInflight").and_then(|v| v.as_u64()) {
+                self.ai_completion.max_inflight = inflight as u32;
+            }
+            if let Some(fallback) = ai.get("fallback").and_then(|v| v.as_bool()) {
+                self.ai_completion.fallback = fallback;
+            }
+            if let Some(streaming) = ai.get("streaming") {
+                if let Some(enabled) = streaming.get("enabled").and_then(|v| v.as_bool()) {
+                    self.ai_completion.streaming.enabled = enabled;
+                }
+                if let Some(debounce) = streaming.get("updateDebounceMs").and_then(|v| v.as_u64()) {
+                    self.ai_completion.streaming.update_debounce_ms = debounce;
+                }
             }
         }
     }
@@ -240,6 +349,8 @@ pub struct ProjectConfig {
     pub diagnostics: ProjectDiagnosticsConfig,
     /// `[features]` section: LSP feature toggles.
     pub features: ProjectFeaturesConfig,
+    /// `[ai_completion]` section: AI completion settings.
+    pub ai_completion: ProjectAiCompletionConfig,
 }
 
 /// `[perl]` section of `.perl-lsp.toml`.
@@ -269,6 +380,22 @@ pub struct ProjectDiagnosticsConfig {
 pub struct ProjectFeaturesConfig {
     /// Whether inlay hints are enabled globally. Maps to `ServerConfig.inlay_hints_enabled`.
     pub inlay_hints: Option<bool>,
+}
+
+/// `[ai_completion]` section of `.perl-lsp.toml`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectAiCompletionConfig {
+    /// Whether AI completions are enabled.
+    pub enabled: Option<bool>,
+    /// Provider type.
+    pub provider: Option<String>,
+    /// API endpoint URL.
+    pub endpoint: Option<String>,
+    /// Model identifier.
+    pub model: Option<String>,
+    /// Environment variable name for API key.
+    pub api_key_env: Option<String>,
 }
 
 /// Load project config from `<workspace_root>/.perl-lsp.toml`.
@@ -302,6 +429,21 @@ impl ProjectConfig {
         }
         if let Some(hints) = self.features.inlay_hints {
             config.inlay_hints_enabled = hints;
+        }
+        if let Some(enabled) = self.ai_completion.enabled {
+            config.ai_completion.enabled = enabled;
+        }
+        if let Some(ref provider) = self.ai_completion.provider {
+            config.ai_completion.provider = provider.clone();
+        }
+        if let Some(ref endpoint) = self.ai_completion.endpoint {
+            config.ai_completion.endpoint = endpoint.clone();
+        }
+        if let Some(ref model) = self.ai_completion.model {
+            config.ai_completion.model = model.clone();
+        }
+        if let Some(ref key_env) = self.ai_completion.api_key_env {
+            config.ai_completion.api_key_env = key_env.clone();
         }
     }
 
@@ -525,5 +667,52 @@ mod tests {
         // use_system_inc = false (default)
         let inc = config.get_system_inc();
         assert!(inc.is_empty(), "system inc is empty when use_system_inc=false");
+    }
+
+    // ── AiCompletionConfig ──────────────────────────────────────
+
+    #[test]
+    fn server_config_default_ai_completion_disabled() {
+        let config = ServerConfig::default();
+        assert!(!config.ai_completion.enabled, "AI completion disabled by default");
+        assert_eq!(config.ai_completion.provider, "openai_compat");
+        assert!(config.ai_completion.endpoint.is_empty());
+        assert_eq!(config.ai_completion.timeout_ms, 1800);
+        assert_eq!(config.ai_completion.max_output_tokens, 64);
+        assert!(config.ai_completion.fallback);
+        assert!(config.ai_completion.streaming.enabled);
+        assert_eq!(config.ai_completion.streaming.update_debounce_ms, 60);
+    }
+
+    #[test]
+    fn server_config_ai_completion_updated_via_settings() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({
+            "aiCompletion": {
+                "enabled": true,
+                "provider": "openai_compat",
+                "endpoint": "https://api.openai.com/v1/chat/completions",
+                "model": "gpt-4o",
+                "apiKeyEnv": "MY_KEY",
+                "timeoutMs": 3000,
+                "maxOutputTokens": 128,
+                "rateLimitRps": 2.0,
+                "maxInflight": 2,
+                "fallback": false,
+                "streaming": {
+                    "enabled": false,
+                    "updateDebounceMs": 100
+                }
+            }
+        }));
+        assert!(config.ai_completion.enabled);
+        assert_eq!(config.ai_completion.endpoint, "https://api.openai.com/v1/chat/completions");
+        assert_eq!(config.ai_completion.model, "gpt-4o");
+        assert_eq!(config.ai_completion.api_key_env, "MY_KEY");
+        assert_eq!(config.ai_completion.timeout_ms, 3000);
+        assert_eq!(config.ai_completion.max_output_tokens, 128);
+        assert!(!config.ai_completion.fallback);
+        assert!(!config.ai_completion.streaming.enabled);
+        assert_eq!(config.ai_completion.streaming.update_debounce_ms, 100);
     }
 }
