@@ -270,6 +270,13 @@ pub struct LspServer {
     /// Initialized to `false`; only the test helper methods flip this.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_perlcritic_command_check: AtomicBool,
+    /// Optional AI inline-completion backend.
+    ///
+    /// When `Some`, the `handle_inline_completion` handler will attempt
+    /// AI-backed completions before falling back to deterministic rules.
+    /// Set to `None` by default; a backend can be registered later.
+    pub(crate) ai_inline_backend:
+        Mutex<Option<Arc<dyn perl_lsp_inline_completion::InlineCompletionBackend>>>,
 }
 
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
@@ -294,6 +301,16 @@ impl LspServer {
     /// Active feature profile for this server instance.
     pub(crate) const fn feature_profile(&self) -> FeatureProfile {
         self.feature_profile
+    }
+
+    /// Get the registered AI inline-completion backend, if any.
+    ///
+    /// Returns `None` when no backend has been registered (the default).
+    /// The returned `Arc` is a cheap clone suitable for use outside the lock.
+    pub(crate) fn ai_backend(
+        &self,
+    ) -> Option<Arc<dyn perl_lsp_inline_completion::InlineCompletionBackend>> {
+        self.ai_inline_backend.lock().clone()
     }
 
     /// Get the subprocess runtime for external tool execution (perltidy, perlcritic).

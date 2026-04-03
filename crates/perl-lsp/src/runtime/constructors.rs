@@ -62,6 +62,7 @@ impl LspServer {
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            ai_inline_backend: Mutex::new(None),
         }
     }
 
@@ -163,6 +164,7 @@ impl LspServer {
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            ai_inline_backend: Mutex::new(None),
         }
     }
 
@@ -227,6 +229,7 @@ impl LspServer {
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            ai_inline_backend: Mutex::new(None),
         }
     }
 }
