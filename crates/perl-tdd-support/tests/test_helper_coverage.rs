@@ -5,7 +5,7 @@
 //! TDD workflow state transitions, and coverage tracker boundaries.
 
 use perl_tdd_support::governance::*;
-use perl_tdd_support::must::{must, must_err, must_some};
+use perl_tdd_support::{must, must_err, must_some};
 use perl_tdd_support::tdd_basic::{
     DiagnosticSeverity, RefactoringAnalyzer, RefactoringCategory, TddState, TddWorkflow,
 };

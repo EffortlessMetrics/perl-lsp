@@ -9,7 +9,7 @@ use perl_builtins::builtin_signatures::create_builtin_signatures;
 use perl_builtins::builtin_signatures_phf::{
     BUILTIN_FULL_SIGS, BUILTIN_SIGS, builtin_count, get_param_names, is_builtin,
 };
-use perl_tdd_support::must::must_some;
+use perl_tdd_support::must_some;
 
 // ============================================================
 // builtin_signatures_phf — BUILTIN_SIGS static map

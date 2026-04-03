@@ -161,6 +161,8 @@ fn inlay_hint_clone() {
         kind: InlayHintKind::Parameter,
         padding_left: false,
         padding_right: true,
+        tooltip: None,
+        location: None,
     };
     let cloned = hint.clone();
     assert_eq!(cloned.label, "test:");
@@ -177,6 +179,8 @@ fn inlay_hint_debug() {
         kind: InlayHintKind::Type,
         padding_left: true,
         padding_right: false,
+        tooltip: None,
+        location: None,
     };
     let dbg = format!("{:?}", hint);
     assert!(dbg.contains("Num"));
