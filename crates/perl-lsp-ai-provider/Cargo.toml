@@ -1,0 +1,23 @@
+[package]
+name = "perl-lsp-ai-provider"
+version = "0.1.0"
+edition = "2024"
+description = "AI completion providers for perl-lsp"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-lsp-inline-completion = { path = "../perl-lsp-inline-completion" }
+ureq = { version = "3", features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tracing = "0.1.44"
+
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
+[lints]
+workspace = true

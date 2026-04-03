@@ -62,6 +62,7 @@ members = [
     "crates/perl-lsp-file-completion",
     "crates/perl-lsp-completion-item",
     "crates/perl-lsp-inline-completion",
+    "crates/perl-lsp-ai-provider",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-document-highlight",
     "crates/perl-lsp-folding",
