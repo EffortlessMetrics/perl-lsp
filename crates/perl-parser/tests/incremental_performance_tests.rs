@@ -7,6 +7,7 @@
 mod incremental_performance_tests {
     use perl_parser::incremental_v2::{IncrementalMetrics, IncrementalParserV2};
     use perl_parser::{edit::Edit, position::Position};
+    use perl_tdd_support::must;
     use std::time::{Duration, Instant};
 
     /// Performance test utilities for incremental parsing

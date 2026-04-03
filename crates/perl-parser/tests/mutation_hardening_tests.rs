@@ -11,6 +11,8 @@ use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::IncrementalEdit;
 #[cfg(feature = "incremental")]
 use perl_parser::position::Position;
+#[cfg(feature = "incremental")]
+use perl_tdd_support::must;
 
 /// Tests targeting specific mutation survivors in incremental_document.rs
 #[cfg(all(test, feature = "incremental"))]

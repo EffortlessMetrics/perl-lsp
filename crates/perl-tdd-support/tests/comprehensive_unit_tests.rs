@@ -5,7 +5,6 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use perl_tdd_support::governance::*;
-use perl_tdd_support::must::{must, must_err, must_some};
 use perl_tdd_support::tdd_basic::{
     Diagnostic, DiagnosticSeverity, RefactoringAnalyzer, RefactoringCategory, TddState, TddWorkflow,
 };
@@ -15,6 +14,7 @@ use perl_tdd_support::test_generator::{
 };
 use perl_tdd_support::test_runner::{TestItem, TestKind, TestRange, TestResult, TestStatus};
 use perl_tdd_support::{Node, NodeKind, SourceLocation};
+use perl_tdd_support::{must, must_err, must_some};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};

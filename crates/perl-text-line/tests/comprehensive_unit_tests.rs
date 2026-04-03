@@ -4,7 +4,7 @@
 //! `is_keyword_boundary`, and `skip_ascii_whitespace` with edge-case and
 //! boundary testing.
 
-use perl_tdd_support::must::must_some;
+use perl_tdd_support::must_some;
 use perl_text_line::{
     is_identifier_byte, is_keyword_boundary, line_bounds_at, skip_ascii_whitespace,
 };

@@ -10,7 +10,7 @@ use perl_error::recovery;
 use perl_error::{
     BudgetTracker, ErrorContext, ParseBudget, ParseError, ParseOutput, get_error_contexts,
 };
-use perl_tdd_support::must::must_some;
+use perl_tdd_support::must_some;
 
 // ---------------------------------------------------------------------------
 // ParseError variant construction and Display
