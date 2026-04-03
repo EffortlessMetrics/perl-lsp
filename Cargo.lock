@@ -2537,7 +2537,6 @@ dependencies = [
  "perl-lsp-diagnostics",
  "perl-lsp-inlay-hints",
  "perl-lsp-navigation",
- "perl-lsp-providers",
  "perl-lsp-rename",
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
@@ -2738,7 +2737,6 @@ dependencies = [
 name = "perl-tdd-support"
 version = "0.12.1"
 dependencies = [
- "anyhow",
  "lsp-types",
  "perl-parser-core",
  "perl-test-must",
@@ -2823,7 +2821,6 @@ version = "0.12.1"
 dependencies = [
  "logos",
  "perl-tdd-support",
- "regex",
 ]
 
 [[package]]

@@ -21,10 +21,9 @@ ignored = ["perl-lexer", "regex"]  # perl-lexer re-exported via perl-ts-heredoc-
 perl-lexer = { path = "../perl-lexer" }
 perl-parser = { path = "../perl-parser" }
 perl-parser-pest = { path = "../perl-parser-pest", optional = true }
-tree-sitter = "0.26.6"
+tree-sitter = { version = "0.26.6", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 postcard = { version = "1.1.3", features = ["alloc"] }
-proptest = "1.11.0"
 walkdir = "2.5.0"
 thiserror = "2.0.17"
 unicode-ident = "1.0.22"
@@ -50,6 +49,7 @@ perl-ts-advanced-parsers = { path = "../perl-ts-advanced-parsers", optional = tr
 [dev-dependencies]
 criterion = "0.8.1"
 test-case = "3.3.1"
+proptest = "1.11.0"
 
 [lints.rust]
 unused_imports = "warn"
@@ -78,7 +78,7 @@ pure-rust = [
 # Source v2 Pest modules from perl-parser-pest microcrate (enabled by default).
 v2-pest-microcrate = ["dep:perl-parser-pest"]
 bindings = ["dep:bindgen"]
-c-parser = ["dep:cc"]
+c-parser = ["dep:cc", "dep:tree-sitter"]
 pure-rust-standalone = ["pure-rust"]  # For benchmarking without perl-lexer
 token-parser = [
   "dep:perl-ts-logos-lexer",
