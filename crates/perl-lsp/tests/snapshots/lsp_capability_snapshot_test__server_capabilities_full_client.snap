@@ -1,6 +1,5 @@
 ---
 source: crates/perl-lsp/tests/lsp_capability_snapshot_test.rs
-assertion_line: 52
 expression: caps
 ---
 callHierarchyProvider: true
@@ -53,7 +52,7 @@ executeCommandProvider:
     - perl.goToTest
     - perl.goToImplementation
 experimental:
-  inlineCompletionProvider: {}
+  perlInlineCompletionStream: true
 foldingRangeProvider: true
 hoverProvider: true
 implementationProvider: true
@@ -112,6 +111,8 @@ semanticTokensProvider:
       - regexp
       - operator
       - sql_string
+      - sql_heredoc_keyword
+      - json_heredoc_key
   range: true
 signatureHelpProvider:
   retriggerCharacters:

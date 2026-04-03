@@ -358,6 +358,14 @@ impl LspServer {
         self.handle_inline_completion(params)
     }
 
+    // Streaming inline completion (custom request)
+    pub(super) fn handle_streaming_inline_completion_dispatch(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_streaming_inline_completion(params)
+    }
+
     // Inline value
     pub(super) fn handle_inline_value_dispatch(
         &self,

@@ -26,5 +26,6 @@ mod navigation;
 mod references;
 mod rename;
 mod semantic_tokens;
+mod streaming;
 mod symbols;
 mod virtual_content;

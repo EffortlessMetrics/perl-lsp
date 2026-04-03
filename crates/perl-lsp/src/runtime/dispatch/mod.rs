@@ -256,6 +256,9 @@ impl LspServer {
             "textDocument/inlineCompletion" => {
                 self.handle_inline_completion_dispatch(request.params)
             }
+            "textDocument/perlInlineCompletionStream" => {
+                self.handle_streaming_inline_completion_dispatch(request.params)
+            }
             "textDocument/inlineValue" => self.handle_inline_value_dispatch(request.params),
             "textDocument/moniker" => self.handle_moniker_dispatch(request.params),
             "textDocument/documentColor" => self.handle_document_color_dispatch(request.params),

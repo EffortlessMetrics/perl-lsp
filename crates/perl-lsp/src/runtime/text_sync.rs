@@ -386,6 +386,9 @@ impl LspServer {
                 params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
 
+            // Cancel any active streaming inline completion sessions for this URI.
+            self.stream_sessions().cancel_for_uri(uri);
+
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one
                 let mut documents = self.documents.lock();
@@ -873,6 +876,9 @@ impl LspServer {
             let normalized_uri = self.normalize_uri_key(uri);
 
             tracing::debug!("Document closed: {}", uri);
+
+            // Cancel any active streaming inline completion sessions for this URI.
+            self.stream_sessions().cancel_for_uri(uri);
 
             // Invalidate the SemanticAnalyzer cache for this URI on close.
             {
