@@ -65,8 +65,13 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                 links.push(DocumentLink {
                     range: to_range(text, s, e),
                     target: Url::parse(&format!("https://metacpan.org/pod/{}", name))
+                        .map_err(|e| {
+                            tracing::debug!(module = %name, error = %e, "document link: failed to build MetaCPAN URL");
+                        })
                         .ok()
-                        .and_then(|url| url.to_string().parse::<Uri>().ok()),
+                        .and_then(|url| url.to_string().parse::<Uri>().map_err(|e| {
+                            tracing::debug!(module = %name, error = %e, "document link: failed to parse MetaCPAN URI");
+                        }).ok()),
                     tooltip: Some(format!("Open {} on MetaCPAN", name)),
                     data: None,
                 });
@@ -90,8 +95,13 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                     links.push(DocumentLink {
                         range: to_range(text, s, e),
                         target: Url::parse(&format!("https://metacpan.org/pod/{}", name))
+                            .map_err(|e| {
+                                tracing::debug!(module = %name, error = %e, "document link: failed to build MetaCPAN URL");
+                            })
                             .ok()
-                            .and_then(|url| url.to_string().parse::<Uri>().ok()),
+                            .and_then(|url| url.to_string().parse::<Uri>().map_err(|e| {
+                                tracing::debug!(module = %name, error = %e, "document link: failed to parse MetaCPAN URI");
+                            }).ok()),
                         tooltip: Some(format!("Open {} on MetaCPAN", name)),
                         data: None,
                     });
@@ -115,14 +125,25 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                         // Try to resolve relative to current file
                         let target = if PathBuf::from(path).is_absolute() {
                             // Absolute path - works on both Unix and Windows
-                            Url::from_file_path(path).ok()
+                            Url::from_file_path(path)
+                                .map_err(|()| {
+                                    tracing::debug!(
+                                        path,
+                                        "document link: failed to convert absolute path to URL"
+                                    );
+                                })
+                                .ok()
                         } else {
                             // Relative to current file's directory
-                            uri.to_file_path().ok().and_then(|base_path| {
+                            uri.to_file_path().map_err(|()| {
+                                tracing::debug!(uri = %uri, "document link: URI is not a file path");
+                            }).ok().and_then(|base_path| {
                                 base_path.parent().and_then(|parent| {
                                     let resolved = parent.join(path);
                                     // Normalize the path for the current OS
-                                    Url::from_file_path(&resolved).ok()
+                                    Url::from_file_path(&resolved).map_err(|()| {
+                                        tracing::debug!(path = %resolved.display(), "document link: failed to convert resolved path to URL");
+                                    }).ok()
                                 })
                             })
                         };
@@ -135,7 +156,9 @@ pub fn collect_document_links(text: &str, uri: &Url) -> Result<Vec<DocumentLink>
                             };
                             links.push(DocumentLink {
                                 range: to_range(text, s, e),
-                                target: target_url.to_string().parse::<Uri>().ok(),
+                                target: target_url.to_string().parse::<Uri>().map_err(|e| {
+                                    tracing::debug!(error = %e, "document link: failed to parse file URI");
+                                }).ok(),
                                 tooltip: Some(format!("Open {}", display_path)),
                                 data: None,
                             });

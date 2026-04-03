@@ -116,9 +116,17 @@ impl PullDiagnosticsProvider {
                 let parse_errors: Vec<ParseError> = parser.errors().to_vec();
                 let ast = std::sync::Arc::new(ast);
                 let provider = DiagnosticsProvider::new(&ast, content.to_string());
-                let source_path = url::Url::parse(&uri.to_string())
+                let uri_str = uri.to_string();
+                let source_path = url::Url::parse(&uri_str)
+                    .map_err(|e| {
+                        tracing::warn!(uri = %uri_str, error = %e, "pull diagnostics: failed to parse URI");
+                    })
                     .ok()
-                    .and_then(|value| value.to_file_path().ok());
+                    .and_then(|value| {
+                        value.to_file_path().map_err(|()| {
+                            tracing::warn!(uri = %uri_str, "pull diagnostics: URI is not a file path");
+                        }).ok()
+                    });
                 provider
                     .get_diagnostics_with_path(
                         &ast,
@@ -306,6 +314,9 @@ impl PullDiagnosticsProvider {
             category: format!("{:?}", DiagnosticCode::ParseError.category()),
             fixable: is_fixable_diagnostic(code_str),
             tags: vec![],
+        })
+        .map_err(|e| {
+            tracing::warn!(error = %e, "pull diagnostics: failed to serialize diagnostic data");
         })
         .ok();
 

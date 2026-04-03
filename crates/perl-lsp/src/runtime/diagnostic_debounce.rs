@@ -41,13 +41,17 @@ impl DiagnosticDebouncer {
     }
 
     pub(crate) fn schedule(&self, uri: &str) {
-        let _ = self.tx.send(DebounceMsg::Schedule(uri.to_string()));
+        if let Err(e) = self.tx.send(DebounceMsg::Schedule(uri.to_string())) {
+            tracing::debug!(error = %e, "diagnostic debounce: channel closed on schedule");
+        }
     }
 }
 
 impl Drop for DiagnosticDebouncer {
     fn drop(&mut self) {
-        let _ = self.tx.send(DebounceMsg::Shutdown);
+        if let Err(e) = self.tx.send(DebounceMsg::Shutdown) {
+            tracing::debug!(error = %e, "diagnostic debounce: channel closed on shutdown");
+        }
     }
 }
 

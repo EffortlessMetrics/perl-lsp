@@ -131,14 +131,22 @@ impl LspServer {
                     ProviderCleanupContext::new(request.method.clone(), request.params.clone());
 
                 // Batch registration to reduce lock overhead
-                let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(token);
-                let _ = GLOBAL_CANCELLATION_REGISTRY.register_cleanup(request_id, cleanup_context);
+                if let Err(e) = GLOBAL_CANCELLATION_REGISTRY.register_token(token) {
+                    tracing::trace!(error = %e, "cancellation: failed to register token");
+                }
+                if let Err(e) =
+                    GLOBAL_CANCELLATION_REGISTRY.register_cleanup(request_id, cleanup_context)
+                {
+                    tracing::trace!(error = %e, "cancellation: failed to register cleanup");
+                }
 
                 // Quick cancellation check after registration
                 if GLOBAL_CANCELLATION_REGISTRY.is_cancelled(request_id) {
                     if let Some(token) = GLOBAL_CANCELLATION_REGISTRY.get_token(request_id) {
                         let cleanup_context =
-                            GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).ok().flatten();
+                            GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).map_err(|e| {
+                                tracing::trace!(error = %e, "cancellation: failed to cancel request (early)");
+                            }).ok().flatten();
                         return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
                     }
                     return Some(cancelled_response_with_method(request_id, &request.method));
@@ -331,7 +339,9 @@ impl LspServer {
             if let Some(token) = GLOBAL_CANCELLATION_REGISTRY.get_token(request_id) {
                 if token.is_cancelled() {
                     let cleanup_context =
-                        GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).ok().flatten();
+                        GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).map_err(|e| {
+                            tracing::trace!(error = %e, "cancellation: failed to cancel request (post-dispatch)");
+                        }).ok().flatten();
                     return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
                 }
             }
