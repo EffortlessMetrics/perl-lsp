@@ -146,6 +146,15 @@ fn write_snapshots(snapshots_dir: &Path) -> Result<(), Box<dyn std::error::Error
 fn regenerate_snapshots() -> Result<(), Box<dyn std::error::Error>> {
     use std::fs;
 
+    // If UPDATE_SNAPSHOTS=1, write to the real snapshots directory
+    if std::env::var("UPDATE_SNAPSHOTS").as_deref() == Ok("1") {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let snapshots_dir = manifest_dir.join("tests").join("snapshots");
+        write_snapshots(&snapshots_dir)?;
+        eprintln!("Snapshots updated in {:?}", snapshots_dir);
+        return Ok(());
+    }
+
     let temp_dir = tempfile::tempdir()?;
     write_snapshots(temp_dir.path())?;
 
