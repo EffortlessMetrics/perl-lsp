@@ -24,7 +24,7 @@ doctest = false
 
 [dependencies]
 perl-workspace-index = { workspace = true }
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

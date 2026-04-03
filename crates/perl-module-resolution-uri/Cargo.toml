@@ -18,12 +18,12 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 perl-module-path = { workspace = true }
 perl-path-security = { workspace = true }
 perl-workspace-folder = { workspace = true }
-url = "2.5.8"
+url.workspace = true
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
-proptest = "1.11.0"
-tempfile = "3.24.0"
+proptest.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

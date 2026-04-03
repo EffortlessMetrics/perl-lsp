@@ -19,9 +19,9 @@ perl-module-resolution-path = { workspace = true }
 perl-module-resolution-uri = { workspace = true }
 
 [dev-dependencies]
-url = "2.5.8"
-proptest = "1.11.0"
-tempfile = "3.24.0"
+url.workspace = true
+proptest.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

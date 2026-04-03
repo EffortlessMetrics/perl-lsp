@@ -19,7 +19,7 @@ perl-module-boundary = { workspace = true }
 perl-module-name = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.11.0"
+proptest.workspace = true
 perl-module-path = { workspace = true }
 
 [lints]

@@ -15,7 +15,7 @@ categories = ["development-tools"]
 include = ["src/**", "Cargo.toml", "README.md"]
 
 [dependencies]
-lsp-types = "0.97.0"
+lsp-types.workspace = true
 perl-lsp-feature-ids = { workspace = true }
 
 [lints]

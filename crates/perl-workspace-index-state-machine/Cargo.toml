@@ -15,7 +15,7 @@ categories = ["development-tools", "text-editors"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-parking_lot = "0.12.5"
+parking_lot.workspace = true
 
 [lints]
 workspace = true

@@ -19,8 +19,8 @@ perl-module-path = { workspace = true }
 perl-path-security = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.11.0"
-tempfile = "3.24.0"
+proptest.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

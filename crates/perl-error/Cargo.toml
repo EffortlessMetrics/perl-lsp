@@ -14,7 +14,7 @@ keywords = ["perl", "parser", "error", "recovery", "diagnostics"]
 categories = ["parsing", "development-tools"]
 
 [dependencies]
-thiserror = "2.0.18"
+thiserror.workspace = true
 perl-ast = { workspace = true }
 perl-ast-v2 = { workspace = true }
 perl-regex = { workspace = true }

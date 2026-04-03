@@ -14,7 +14,7 @@ keywords = ["perl", "regex", "validation", "security", "backtracking"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
-thiserror = "2.0.18"
+thiserror.workspace = true
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }

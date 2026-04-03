@@ -15,7 +15,7 @@ categories = ["development-tools", "encoding"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-url = "2.5.8"
+url.workspace = true
 
 [lints]
 workspace = true

@@ -18,17 +18,17 @@ include = ["src/**", "tests/**", "examples/**", "benches/**", "README.md", "LICE
 # Core dependencies
 unicode-ident = "1.0.22"
 memchr = "2.7.6"
-tracing = "0.1.44"
+tracing.workspace = true
 
 # For better error handling
-thiserror = "2.0.18"
+thiserror.workspace = true
 perl-position-tracking = { workspace = true }
 perl-keywords = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.8.1"
+criterion.workspace = true
 pretty_assertions = "1.4.1"
-proptest = "1.11.0"
+proptest.workspace = true
 
 [features]
 default = []

@@ -16,7 +16,7 @@ include = ["src/**", "build.rs", "features_sot.toml", "Cargo.toml", "README.md"]
 
 [dependencies]
 serde = { workspace = true }
-lsp-types = "0.97.0"
+lsp-types.workspace = true
 perl-lsp-capability-map = { workspace = true }
 
 [build-dependencies]

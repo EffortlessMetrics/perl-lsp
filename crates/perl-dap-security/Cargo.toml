@@ -18,12 +18,12 @@ name = "perl_dap_security"
 path = "src/lib.rs"
 
 [dependencies]
-thiserror = "2.0.18"
+thiserror.workspace = true
 perl-path-security = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0.102"
-tempfile = "3.24.0"
+anyhow.workspace = true
+tempfile.workspace = true
 perl-tdd-support = { workspace = true }
 
 [lints]
