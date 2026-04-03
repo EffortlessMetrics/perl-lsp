@@ -322,9 +322,6 @@ impl IncrementalParserV2 {
 
         // Fall back to original strategies for compatibility
         let is_simple = self.is_simple_value_edit(last_tree);
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG try_incremental_parse: is_simple_value_edit = {}", is_simple);
-        }
         if is_simple {
             return self.incremental_parse_simple(source, last_tree);
         }
@@ -335,9 +332,6 @@ impl IncrementalParserV2 {
         }
 
         // For complex structural changes, fall back to full parse
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG try_incremental_parse: falling back to None");
-        }
         None
     }
 
@@ -347,18 +341,11 @@ impl IncrementalParserV2 {
         source: &str,
         last_tree: &IncrementalTree,
     ) -> Option<Node> {
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG try_advanced_reuse_parse: starting advanced analysis");
-        }
-
         // Parse the new source to get target tree structure
         let mut parser = Parser::new(source);
         let new_tree = match parser.parse() {
             Ok(tree) => tree,
             Err(_) => {
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!("DEBUG try_advanced_reuse_parse: new tree parse failed");
-                }
                 return None;
             }
         };
@@ -371,10 +358,6 @@ impl IncrementalParserV2 {
             &self.reuse_config,
         );
 
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG advanced reuse analysis: {}", analysis_result.performance_summary());
-        }
-
         // Store analysis results for inspection
         self.last_reuse_analysis = Some(analysis_result);
 
@@ -385,24 +368,8 @@ impl IncrementalParserV2 {
                 self.reused_nodes = analysis.reused_nodes;
                 self.reparsed_nodes = analysis.total_new_nodes - analysis.reused_nodes;
 
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!("DEBUG try_advanced_reuse_parse: using advanced reuse result");
-                    println!(
-                        "  Reused: {}, Reparsed: {}, Efficiency: {:.1}%",
-                        self.reused_nodes, self.reparsed_nodes, analysis.reuse_percentage
-                    );
-                }
-
                 // Return the new tree with reuse benefits counted
                 return Some(new_tree);
-            }
-
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!(
-                    "DEBUG try_advanced_reuse_parse: efficiency target not met ({:.1}% < {:.1}%)",
-                    analysis.reuse_percentage,
-                    self.reuse_config.min_confidence * 100.0
-                );
             }
         }
 
@@ -412,48 +379,21 @@ impl IncrementalParserV2 {
     fn is_simple_value_edit(&self, tree: &IncrementalTree) -> bool {
         // Don't attempt incremental parsing for too many edits at once
         if self.pending_edits.len() > 10 {
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!(
-                    "DEBUG is_simple_value_edit: too many edits: {}",
-                    self.pending_edits.len()
-                );
-            }
             return false;
-        }
-
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG is_simple_value_edit: checking {} edits", self.pending_edits.len());
         }
 
         // Track cumulative shift so we can map each edit back to the
         // coordinates in the original source code represented by `tree`.
         let mut cumulative_shift: isize = 0;
 
-        for (i, edit) in self.pending_edits.edits().iter().enumerate() {
+        for edit in self.pending_edits.edits() {
             let original_start = (edit.start_byte as isize - cumulative_shift) as usize;
             let original_end = (edit.old_end_byte as isize - cumulative_shift) as usize;
-
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!(
-                    "DEBUG edit {}: start_byte={}, old_end_byte={}, new_end_byte={}",
-                    i, edit.start_byte, edit.old_end_byte, edit.new_end_byte
-                );
-                println!(
-                    "DEBUG edit {}: original_start={}, original_end={}",
-                    i, original_start, original_end
-                );
-            }
 
             let affected_node = tree.find_containing_node(original_start, original_end);
 
             match affected_node {
                 Some(node) => {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG edit {}: found containing node: {:?} at {}..{}",
-                            i, node.kind, node.location.start, node.location.end
-                        );
-                    }
                     match &node.kind {
                         // Support string and numeric literals
                         NodeKind::Number { .. } | NodeKind::String { .. } => {
@@ -462,17 +402,8 @@ impl IncrementalParserV2 {
                                 && original_end <= node.location.end
                             {
                                 cumulative_shift += edit.byte_shift();
-                                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                                    println!(
-                                        "DEBUG edit {}: Number/String within bounds, continuing",
-                                        i
-                                    );
-                                }
                                 continue;
                             } else {
-                                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                                    println!("DEBUG edit {}: Number/String outside bounds", i);
-                                }
                                 return false;
                             }
                         }
@@ -482,17 +413,8 @@ impl IncrementalParserV2 {
                                 && original_end <= node.location.end
                             {
                                 cumulative_shift += edit.byte_shift();
-                                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                                    println!(
-                                        "DEBUG edit {}: Variable within bounds, continuing",
-                                        i
-                                    );
-                                }
                                 continue;
                             } else {
-                                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                                    println!("DEBUG edit {}: Variable outside bounds", i);
-                                }
                                 return false;
                             }
                         }
@@ -502,40 +424,22 @@ impl IncrementalParserV2 {
                                 && original_end <= node.location.end
                             {
                                 cumulative_shift += edit.byte_shift();
-                                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                                    println!(
-                                        "DEBUG edit {}: Identifier within bounds, continuing",
-                                        i
-                                    );
-                                }
                                 continue;
                             } else {
-                                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                                    println!("DEBUG edit {}: Identifier outside bounds", i);
-                                }
                                 return false;
                             }
                         }
                         _ => {
-                            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                                println!("DEBUG edit {}: Not a simple value: {:?}", i, node.kind);
-                            }
                             return false; // Not a simple value
                         }
                     }
                 }
                 None => {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG edit {}: No containing node found", i);
-                    }
                     return false; // No containing node found
                 }
             }
         }
 
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG is_simple_value_edit: returning true");
-        }
         true
     }
 
@@ -627,47 +531,22 @@ impl IncrementalParserV2 {
         source: &str,
         last_tree: &IncrementalTree,
     ) -> Option<Node> {
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG incremental_parse_simple: starting");
-        }
-
         // Validate that the source is long enough for our edits
         if source.is_empty() {
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!("DEBUG incremental_parse_simple: source is empty, returning None");
-            }
             return None;
         }
 
         // Reuse the previous tree by cloning nodes and applying the edits.
         let new_root = self.clone_and_update_node(&last_tree.root, source, &last_tree.source);
 
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG incremental_parse_simple: created new_root");
-        }
-
         // Validate that the new tree makes sense
         if !self.validate_incremental_result(&new_root, source) {
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!("DEBUG incremental_parse_simple: validation failed, returning None");
-            }
             return None;
-        }
-
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG incremental_parse_simple: validation passed");
         }
 
         // After producing the new tree, analyse how many nodes were reused
         // versus reparsed for metrics.
         self.count_reuse_potential(&last_tree.root, &new_root);
-
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!(
-                "DEBUG incremental_parse_simple: after count_reuse_potential, reused={}, reparsed={}",
-                self.reused_nodes, self.reparsed_nodes
-            );
-        }
 
         Some(new_root)
     }
@@ -687,24 +566,10 @@ impl IncrementalParserV2 {
 
         // Position boundary validation
         if node.location.start > source.len() || node.location.end > source.len() {
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!(
-                    "DEBUG validate_incremental_result: position out of bounds - start={}, end={}, source_len={}",
-                    node.location.start,
-                    node.location.end,
-                    source.len()
-                );
-            }
             return false;
         }
 
         if node.location.start > node.location.end {
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!(
-                    "DEBUG validate_incremental_result: invalid range - start={}, end={}",
-                    node.location.start, node.location.end
-                );
-            }
             return false;
         }
 
@@ -712,12 +577,6 @@ impl IncrementalParserV2 {
         if !source.is_char_boundary(node.location.start)
             || !source.is_char_boundary(node.location.end)
         {
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!(
-                    "DEBUG validate_incremental_result: invalid Unicode boundaries - start={}, end={}",
-                    node.location.start, node.location.end
-                );
-            }
             return false;
         }
 
@@ -730,22 +589,10 @@ impl IncrementalParserV2 {
                 NodeKind::Number { value } => {
                     // Number value should be parseable and match source
                     if value.trim() != node_text.trim() {
-                        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                            println!(
-                                "DEBUG validate_incremental_result: Number value mismatch - expected '{}', got '{}'",
-                                node_text, value
-                            );
-                        }
                         return false;
                     }
                     // Validate it's actually a number
                     if value.parse::<f64>().is_err() && value.parse::<i64>().is_err() {
-                        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                            println!(
-                                "DEBUG validate_incremental_result: Number value is not parseable: '{}'",
-                                value
-                            );
-                        }
                         return false;
                     }
                 }
@@ -754,36 +601,18 @@ impl IncrementalParserV2 {
                     if !node_text.is_empty()
                         && !value.contains(node_text.trim_matches(|c| c == '"' || c == '\''))
                     {
-                        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                            println!(
-                                "DEBUG validate_incremental_result: String content mismatch - node_text='{}', value='{}'",
-                                node_text, value
-                            );
-                        }
                         // Be lenient for string validation as quotes might be handled differently
                     }
                 }
                 NodeKind::Variable { name, .. } => {
                     // Variable name should appear in the source text
                     if !node_text.contains(name) {
-                        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                            println!(
-                                "DEBUG validate_incremental_result: Variable name '{}' not found in node_text '{}'",
-                                name, node_text
-                            );
-                        }
                         return false;
                     }
                 }
                 NodeKind::Identifier { name } => {
                     // Identifier name should match source text
                     if name.trim() != node_text.trim() {
-                        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                            println!(
-                                "DEBUG validate_incremental_result: Identifier mismatch - expected '{}', got '{}'",
-                                node_text, name
-                            );
-                        }
                         return false;
                     }
                 }
@@ -817,15 +646,6 @@ impl IncrementalParserV2 {
                     if stmt.location.start < node.location.start
                         || stmt.location.end > node.location.end
                     {
-                        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                            println!(
-                                "DEBUG validate_node_tree_consistency: Child node {}..{} outside parent {}..{}",
-                                stmt.location.start,
-                                stmt.location.end,
-                                node.location.start,
-                                node.location.end
-                            );
-                        }
                         return false;
                     }
                     if !self.validate_node_tree_consistency(stmt, source, depth + 1, max_depth) {
@@ -864,13 +684,6 @@ impl IncrementalParserV2 {
 
         // Check if this node is affected by any edit
         let affected = self.is_node_affected(node);
-
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!(
-                "DEBUG clone_and_update_node: {:?} at {}..{}, shift={}, affected={}",
-                node.kind, node.location.start, node.location.end, shift, affected
-            );
-        }
 
         // Handle container nodes that need recursive processing
         match &node.kind {
@@ -927,33 +740,12 @@ impl IncrementalParserV2 {
                         (node.location.end as isize + shift + self.calculate_content_delta(node))
                             as usize;
 
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG clone_and_update_node: Number node, new_start={}, new_end={}",
-                            new_start, new_end
-                        );
-                    }
-
                     if new_start < new_source.len() && new_end <= new_source.len() {
                         let new_value = &new_source[new_start..new_end];
-
-                        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                            println!(
-                                "DEBUG clone_and_update_node: Number updated from source: '{}'",
-                                new_value
-                            );
-                        }
 
                         return Node::new(
                             NodeKind::Number { value: new_value.to_string() },
                             SourceLocation { start: new_start, end: new_end },
-                        );
-                    } else if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG clone_and_update_node: Number bounds check failed, new_start={}, new_end={}, source_len={}",
-                            new_start,
-                            new_end,
-                            new_source.len()
                         );
                     }
                 }
@@ -977,11 +769,6 @@ impl IncrementalParserV2 {
                 }
                 // Container nodes - recursively process children
                 NodeKind::Program { statements } => {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG clone_and_update_node: Program node - recursing into children"
-                        );
-                    }
                     let new_statements = statements
                         .iter()
                         .map(|stmt| self.clone_and_update_node(stmt, new_source, old_source))
@@ -996,11 +783,6 @@ impl IncrementalParserV2 {
                     );
                 }
                 NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG clone_and_update_node: VariableDeclaration node - recursing into children"
-                        );
-                    }
                     let new_variable =
                         Box::new(self.clone_and_update_node(variable, new_source, old_source));
                     let new_initializer = initializer.as_ref().map(|init| {
@@ -1020,23 +802,11 @@ impl IncrementalParserV2 {
                         new_location,
                     );
                 }
-                _ => {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG clone_and_update_node: Affected node type not handled: {:?}",
-                            node.kind
-                        );
-                    }
-                }
+                _ => {}
             }
         }
 
         // Node is not affected or cannot be updated - clone with shifted positions
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!(
-                "DEBUG clone_and_update_node: falling through to clone_with_shifted_positions"
-            );
-        }
         self.clone_with_shifted_positions(node, shift)
     }
 
@@ -1046,36 +816,15 @@ impl IncrementalParserV2 {
     /// splitting characters across edit boundaries.
     fn calculate_shift_at(&self, position: usize) -> isize {
         let mut shift = 0;
-        for (i, edit) in self.pending_edits.edits().iter().enumerate() {
+        for edit in self.pending_edits.edits() {
             let original_old_end = (edit.old_end_byte as isize - shift) as usize;
-
-            if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                println!(
-                    "DEBUG calculate_shift_at: edit {} - original_old_end={}, position={}, shift={}",
-                    i, original_old_end, position, shift
-                );
-            }
 
             if original_old_end <= position {
                 let edit_shift = edit.byte_shift();
                 shift += edit_shift;
-
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!(
-                        "DEBUG calculate_shift_at: applying edit shift {} (total shift now {})",
-                        edit_shift, shift
-                    );
-                }
             } else {
                 break;
             }
-        }
-
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!(
-                "DEBUG calculate_shift_at: final shift for position {} is {}",
-                position, shift
-            );
         }
 
         shift
@@ -1098,12 +847,6 @@ impl IncrementalParserV2 {
         // Find the previous character boundary
         for i in (0..=position).rev() {
             if i < source.len() && source.is_char_boundary(i) {
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!(
-                        "DEBUG ensure_unicode_boundary: adjusted position {} to {}",
-                        position, i
-                    );
-                }
                 return i;
             }
         }
@@ -1276,118 +1019,52 @@ impl IncrementalParserV2 {
 
     fn count_reuse_potential(&mut self, old_root: &Node, new_root: &Node) {
         // Compare trees and count which nodes could have been reused
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG count_reuse_potential: analyzing old vs new tree");
-        }
         let (reused, reparsed) = self.analyze_reuse(old_root, new_root);
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG count_reuse_potential: got reused={}, reparsed={}", reused, reparsed);
-        }
         self.reused_nodes = reused;
         self.reparsed_nodes = reparsed;
     }
 
     fn analyze_reuse(&self, old_node: &Node, new_node: &Node) -> (usize, usize) {
-        if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-            println!("DEBUG analyze_reuse: comparing {:?} vs {:?}", old_node.kind, new_node.kind);
-        }
-
         // Check if nodes are structurally equivalent
         match (&old_node.kind, &new_node.kind) {
             (
                 NodeKind::Program { statements: old_stmts },
                 NodeKind::Program { statements: new_stmts },
             ) => {
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!(
-                        "DEBUG analyze_reuse: Program node with {} old stmts, {} new stmts",
-                        old_stmts.len(),
-                        new_stmts.len()
-                    );
-                }
                 let mut reused = 1; // Program node itself
                 let mut reparsed = 0;
 
-                for (i, (old_stmt, new_stmt)) in old_stmts.iter().zip(new_stmts.iter()).enumerate()
-                {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: analyzing statement {}", i);
-                    }
+                for (old_stmt, new_stmt) in old_stmts.iter().zip(new_stmts.iter()) {
                     let (r, p) = self.analyze_reuse(old_stmt, new_stmt);
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG analyze_reuse: statement {} -> reused={}, reparsed={}",
-                            i, r, p
-                        );
-                    }
                     reused += r;
                     reparsed += p;
                 }
 
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!(
-                        "DEBUG analyze_reuse: Program total -> reused={}, reparsed={}",
-                        reused, reparsed
-                    );
-                }
                 (reused, reparsed)
             }
             (
                 NodeKind::VariableDeclaration { variable: old_var, initializer: old_init, .. },
                 NodeKind::VariableDeclaration { variable: new_var, initializer: new_init, .. },
             ) => {
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!("DEBUG analyze_reuse: VariableDeclaration");
-                }
                 let mut reused = 1; // VarDecl itself
                 let mut reparsed = 0;
 
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!("DEBUG analyze_reuse: analyzing variable");
-                }
                 let (r, p) = self.analyze_reuse(old_var, new_var);
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!("DEBUG analyze_reuse: variable -> reused={}, reparsed={}", r, p);
-                }
                 reused += r;
                 reparsed += p;
 
                 if let (Some(old_i), Some(new_i)) = (old_init, new_init) {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: analyzing initializer");
-                    }
                     let (r, p) = self.analyze_reuse(old_i, new_i);
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!(
-                            "DEBUG analyze_reuse: initializer -> reused={}, reparsed={}",
-                            r, p
-                        );
-                    }
                     reused += r;
                     reparsed += p;
                 }
 
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!(
-                        "DEBUG analyze_reuse: VariableDeclaration total -> reused={}, reparsed={}",
-                        reused, reparsed
-                    );
-                }
                 (reused, reparsed)
             }
             (NodeKind::Number { value: old_val }, NodeKind::Number { value: new_val }) => {
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!("DEBUG analyze_reuse: Number '{}' vs '{}'", old_val, new_val);
-                }
                 if old_val != new_val {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: Number values differ -> (0, 1)");
-                    }
                     (0, 1) // Value changed - reparsed
                 } else {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: Number values same -> (1, 0)");
-                    }
                     (1, 0) // Value same - could have been reused
                 }
             }
@@ -1395,37 +1072,16 @@ impl IncrementalParserV2 {
                 NodeKind::Variable { sigil: old_s, name: old_n },
                 NodeKind::Variable { sigil: new_s, name: new_n },
             ) => {
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!(
-                        "DEBUG analyze_reuse: Variable '{}{}' vs '{}{}'",
-                        old_s, old_n, new_s, new_n
-                    );
-                }
                 if old_s == new_s && old_n == new_n {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: Variable same -> (1, 0)");
-                    }
                     (1, 0) // Reused
                 } else {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: Variable different -> (0, 1)");
-                    }
                     (0, 1) // Reparsed
                 }
             }
             _ => {
-                if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                    println!("DEBUG analyze_reuse: fallback case");
-                }
                 if self.nodes_match(old_node, new_node) {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: nodes match -> (1, 0)");
-                    }
                     (1, 0)
                 } else {
-                    if std::env::var("PERL_INCREMENTAL_DEBUG").is_ok() {
-                        println!("DEBUG analyze_reuse: nodes differ -> (0, 1)");
-                    }
                     (0, 1)
                 }
             }
