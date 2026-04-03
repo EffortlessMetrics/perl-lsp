@@ -24,42 +24,48 @@ default:
 # Helper to time a command and report duration
 [private]
 _timed name cmd:
-    @START=$$(date +%s); \
-    echo ">>> Starting {{name}}..."; \
-    {{cmd}}; \
-    RC=$$?; \
-    END=$$(date +%s); \
-    DURATION=$$((END - START)); \
-    if [ $$RC -eq 0 ]; then \
-        echo "<<< {{name}} completed in $${DURATION}s"; \
-    else \
-        echo "<<< {{name}} FAILED in $${DURATION}s (exit $$RC)"; \
-        exit $$RC; \
+    #!/usr/bin/env bash
+    set -uo pipefail
+    START=$(date +%s)
+    echo ">>> Starting {{name}}..."
+    {{cmd}}
+    RC=$?
+    END=$(date +%s)
+    DURATION=$((END - START))
+    if [ $RC -eq 0 ]; then
+        echo "<<< {{name}} completed in ${DURATION}s"
+    else
+        echo "<<< {{name}} FAILED in ${DURATION}s (exit $RC)"
+        exit $RC
     fi
 
 # Tier: PR-fast (required for every PR iteration, must be fast ~1-2 min)
 pr-fast: _check-tools-basic
-    @echo "=============================================="
-    @echo "  PR-FAST GATE (quick validation)"
-    @echo "=============================================="
-    @START=$$(date +%s); \
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "=============================================="
+    echo "  PR-FAST GATE (quick validation)"
+    echo "=============================================="
+    START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
     just _timed "clippy-core" "just clippy-core" && \
-    just _timed "test-core" "just test-core"; \
-    RC=$$?; \
-    END=$$(date +%s); \
-    echo ""; \
+    just _timed "test-core" "just test-core"
+    RC=$?
+    END=$(date +%s)
+    echo ""
     echo "=============================================="
-    @echo "  PR-fast gate complete (total: $$((END - START))s)"
-    @echo "=============================================="
-    @exit $$RC
+    echo "  PR-fast gate complete (total: $((END - START))s)"
+    echo "=============================================="
+    exit $RC
 
 # Tier: Merge-gate (required before merge to master ~3-5 min)
 merge-gate: _check-tools-basic pr-fast
-    @echo "=============================================="
-    @echo "  MERGE GATE (full pre-merge validation)"
-    @echo "=============================================="
-    @START=$$(date +%s); \
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "=============================================="
+    echo "  MERGE GATE (full pre-merge validation)"
+    echo "=============================================="
+    START=$(date +%s)
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
@@ -71,39 +77,41 @@ merge-gate: _check-tools-basic pr-fast
     just _timed "ci-v2-parity" "just ci-v2-parity" && \
     just _timed "ci-lsp-def" "just ci-lsp-def" && \
     just _timed "ci-parser-features-check" "just ci-parser-features-check" && \
-    just _timed "ci-features-invariants" "just ci-features-invariants"; \
-    RC=$$?; \
-    END=$$(date +%s); \
-    echo ""; \
+    just _timed "ci-features-invariants" "just ci-features-invariants"
+    RC=$?
+    END=$(date +%s)
+    echo ""
     echo "=============================================="
-    @if [ $$RC -eq 0 ]; then \
-        echo "  Merge gate PASSED (total: $$((END - START))s)"; \
-    else \
-        echo "  Merge gate FAILED (total: $$((END - START))s)"; \
+    if [ $RC -eq 0 ]; then
+        echo "  Merge gate PASSED (total: $((END - START))s)"
+    else
+        echo "  Merge gate FAILED (total: $((END - START))s)"
     fi
-    @echo "=============================================="
-    @exit $$RC
+    echo "=============================================="
+    exit $RC
 
 # Tier: Nightly (scheduled, non-blocking comprehensive tests)
 nightly: merge-gate
-    @echo "=============================================="
-    @echo "  NIGHTLY GATE (comprehensive validation)"
-    @echo "=============================================="
-    @START=$$(date +%s); \
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "=============================================="
+    echo "  NIGHTLY GATE (comprehensive validation)"
+    echo "=============================================="
+    START=$(date +%s)
     just _timed "mutation-subset" "just mutation-subset" && \
     just _timed "fuzz-bounded" "just fuzz-bounded" && \
-    just _timed "benchmarks" "just benchmarks"; \
-    RC=$$?; \
-    END=$$(date +%s); \
-    echo ""; \
+    just _timed "benchmarks" "just benchmarks"
+    RC=$?
+    END=$(date +%s)
+    echo ""
     echo "=============================================="
-    @if [ $$RC -eq 0 ]; then \
-        echo "  Nightly gate PASSED (total: $$((END - START))s)"; \
-    else \
-        echo "  Nightly gate FAILED (total: $$((END - START))s)"; \
+    if [ $RC -eq 0 ]; then
+        echo "  Nightly gate PASSED (total: $((END - START))s)"
+    else
+        echo "  Nightly gate FAILED (total: $((END - START))s)"
     fi
-    @echo "=============================================="
-    @exit $$RC
+    echo "=============================================="
+    exit $RC
 
 # ============================================================================
 # Individual Gate Targets
@@ -331,17 +339,19 @@ devex-targeted base='origin/master' mode='all':
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:
-    @MISSING=""; \
-    if ! command -v cargo >/dev/null 2>&1; then MISSING="$$MISSING cargo"; fi; \
-    if ! command -v rustfmt >/dev/null 2>&1; then MISSING="$$MISSING rustfmt"; fi; \
-    if ! cargo nextest --version >/dev/null 2>&1; then MISSING="$$MISSING cargo-nextest"; fi; \
-    if [ -n "$$MISSING" ]; then \
-        echo "ERROR: Missing required tools:$$MISSING"; \
-        echo "  Install Rust: https://rustup.rs"; \
-        echo "  Install nextest: cargo install cargo-nextest --locked"; \
-        exit 1; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    MISSING=""
+    if ! command -v cargo >/dev/null 2>&1; then MISSING="$MISSING cargo"; fi
+    if ! command -v rustfmt >/dev/null 2>&1; then MISSING="$MISSING rustfmt"; fi
+    if ! cargo nextest --version >/dev/null 2>&1; then MISSING="$MISSING cargo-nextest"; fi
+    if [ -n "$MISSING" ]; then
+        echo "ERROR: Missing required tools:$MISSING"
+        echo "  Install Rust: https://rustup.rs"
+        echo "  Install nextest: cargo install cargo-nextest --locked"
+        exit 1
     fi
-    @cargo xtask check-toolchain
+    cargo xtask check-toolchain
 
 # ============================================================================
 # CI Validation Commands (Issue #211)
@@ -353,11 +363,13 @@ _check-tools-basic:
 
 # Phase 0: publish receipts to review/receipts/YYYY-MM-DD/
 receipts date='':
-    @d="{{date}}"; \
-    if [ -z "$$d" ]; then \
-        cargo xtask publish-receipts; \
-    else \
-        cargo xtask publish-receipts "$$d"; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    d="{{date}}"
+    if [ -z "$d" ]; then
+        cargo xtask publish-receipts
+    else
+        cargo xtask publish-receipts "$d"
     fi
 
 # Issue #211: measure CI lane runtimes locally (baseline before cleanup)
@@ -666,13 +678,14 @@ ci-cost-estimate:
 # Trace a command with /usr/bin/time -v to capture Max RSS (peak memory)
 # Usage: just trace 'cargo clippy -p perl-parser --no-deps -j1 -- -D warnings'
 trace cmd:
-    @mkdir -p target/ci-trace
-    @bash -c 'set -euo pipefail; \
-      log=target/ci-trace/trace-$(date +%Y%m%d-%H%M%S).log; \
-      echo "CMD: {{cmd}}" | tee -a "$$log"; \
-      /usr/bin/time -v {{cmd}} 2>&1 | tee -a "$$log"; \
-      echo "---" | tee -a "$$log"; \
-      echo "Log: $$log"'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p target/ci-trace
+    log=target/ci-trace/trace-$(date +%Y%m%d-%H%M%S).log
+    echo "CMD: {{cmd}}" | tee -a "$log"
+    /usr/bin/time -v {{cmd}} 2>&1 | tee -a "$log"
+    echo "---" | tee -a "$log"
+    echo "Log: $log"
 
 # Trace each low-mem step individually to find memory hotspots
 trace-lowmem-steps:
@@ -1061,19 +1074,21 @@ bench-compare-strict:
 
 # Save current results as a new baseline
 bench-baseline version='':
-    @echo "📝 Saving benchmark baseline..."
-    @mkdir -p benchmarks/baselines
-    @if [ -z "{{version}}" ]; then \
-        VERSION="v$(date +%Y%m%d)"; \
-    else \
-        VERSION="{{version}}"; \
-    fi; \
-    if [ ! -f benchmarks/results/latest.json ]; then \
-        echo "No results found. Running benchmarks first..."; \
-        just bench; \
-    fi; \
-    cp benchmarks/results/latest.json "benchmarks/baselines/$$VERSION.json"; \
-    echo "Baseline saved to benchmarks/baselines/$$VERSION.json"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Saving benchmark baseline..."
+    mkdir -p benchmarks/baselines
+    if [ -z "{{version}}" ]; then
+        VERSION="v$(date +%Y%m%d)"
+    else
+        VERSION="{{version}}"
+    fi
+    if [ ! -f benchmarks/results/latest.json ]; then
+        echo "No results found. Running benchmarks first..."
+        just bench
+    fi
+    cp benchmarks/results/latest.json "benchmarks/baselines/$VERSION.json"
+    echo "Baseline saved to benchmarks/baselines/$VERSION.json"
 
 # Run parser benchmarks only
 bench-parser:
@@ -1427,18 +1442,20 @@ fuzz-minimize target crash:
 
 # Check for crash artifacts (fails if crashes found)
 fuzz-check-crashes:
-    @echo "💥 Checking for crash artifacts..."
-    @if [ -d fuzz/artifacts ]; then \
-        CRASHES=$$(find fuzz/artifacts -type f 2>/dev/null | wc -l); \
-        if [ $$CRASHES -gt 0 ]; then \
-            echo "⚠️  Found $$CRASHES crash artifacts:"; \
-            find fuzz/artifacts -type f 2>/dev/null; \
-            exit 1; \
-        else \
-            echo "✅ No crashes found"; \
-        fi; \
-    else \
-        echo "✅ No artifacts directory (no crashes)"; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Checking for crash artifacts..."
+    if [ -d fuzz/artifacts ]; then
+        CRASHES=$(find fuzz/artifacts -type f 2>/dev/null | wc -l)
+        if [ $CRASHES -gt 0 ]; then
+            echo "Found $CRASHES crash artifacts:"
+            find fuzz/artifacts -type f 2>/dev/null
+            exit 1
+        else
+            echo "No crashes found"
+        fi
+    else
+        echo "No artifacts directory (no crashes)"
     fi
 
 # Run all fuzz targets for regression testing (short duration)
@@ -1609,13 +1626,16 @@ ci-check-todos:
 
 # Fast merge gate with receipt generation
 ci-gate-with-receipts:
-    @echo "🚪 Running fast merge gate with receipts..."
-    @mkdir -p .receipts/$(date +%Y%m%d)
-    @for gate in workflow-audit no-nested-lock format clippy-lib test-lib policy lsp-definition; do \
-        cargo xtask gates --gate "$${gate}" --receipt --receipt-path ".receipts/$(date +%Y%m%d)/$${gate}.json" || exit 1; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Running fast merge gate with receipts..."
+    DATE=$(date +%Y%m%d)
+    mkdir -p ".receipts/$DATE"
+    for gate in workflow-audit no-nested-lock format clippy-lib test-lib policy lsp-definition; do
+        cargo xtask gates --gate "$gate" --receipt --receipt-path ".receipts/$DATE/$gate.json" || exit 1
     done
-    @echo "✅ Merge gate passed with receipts!"
-    @echo "📁 Receipts: .receipts/$(date +%Y%m%d)/"
+    echo "Merge gate passed with receipts!"
+    echo "Receipts: .receipts/$DATE/"
 
 # Gate execution for individual gate (with receipt)
 gate-execute gate_id:
