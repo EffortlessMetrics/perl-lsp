@@ -91,25 +91,25 @@ perl-workspace-discovery = { workspace = true }
 perl-workspace-folder = { workspace = true }
 perl-workspace-ignore = { workspace = true }
 perl-keywords = { workspace = true }
-lsp-types = "0.97.0"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-url = "2.5.8"
-anyhow = "1.0.102"
-regex = "1.12.2"
+lsp-types.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+url.workspace = true
+anyhow.workspace = true
+regex.workspace = true
 md5 = "0.8.0"
-parking_lot = "0.12.5"
-walkdir = "2.5.0"
+parking_lot.workspace = true
+walkdir.workspace = true
 uuid = { version = "1.23.0", features = ["v4"] }
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
-tokio = { version = "1.49.0", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
-once_cell = "1.21.3"
-tracing = "0.1.44"
+tokio = { workspace = true }
+once_cell.workspace = true
+tracing.workspace = true
 
 [build-dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { workspace = true }
 toml = "1.1.0"
 
 [lints]
@@ -148,13 +148,13 @@ insta = { version = "1.47.1", features = ["yaml"] }
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"
 serial_test = "3.4.0"
-tempfile = "3.24.0"
-proptest = "1.11.0"
+tempfile.workspace = true
+proptest.workspace = true
 perl-tdd-support = { workspace = true }
 perl-content-length-framing = { workspace = true }
 which = "8.0.2"
-parking_lot = "0.12.5"
-criterion = "0.8.1"
+parking_lot.workspace = true
+criterion.workspace = true
 perl-ast-utils = { workspace = true }
 
 [package.metadata.binstall]

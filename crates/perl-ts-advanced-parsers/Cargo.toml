@@ -14,8 +14,8 @@ keywords = ["perl", "parser", "heredoc", "incremental", "lsp"]
 categories = ["parsing", "development-tools", "text-processing"]
 
 [dependencies]
-regex = "1.12.2"
-serde = { version = "1.0.228", features = ["derive"] }
+regex.workspace = true
+serde = { workspace = true }
 pest = "2.8.4"
 perl-ts-heredoc-parser = { path = "../perl-ts-heredoc-parser" }
 perl-parser-pest = { path = "../perl-parser-pest" }

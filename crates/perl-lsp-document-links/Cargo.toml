@@ -19,8 +19,8 @@ doctest = false
 [dependencies]
 perl-module-import = { workspace = true }
 perl-module-path = { workspace = true }
-serde_json = "1.0.149"
-url = "2.5.8"
+serde_json.workspace = true
+url.workspace = true
 
 [lints]
 workspace = true

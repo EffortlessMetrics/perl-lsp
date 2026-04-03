@@ -16,9 +16,9 @@ categories = ["development-tools", "development-tools::debugging"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-clap = { version = "4.5.60", features = ["derive"] }
+clap = { workspace = true }
 perl-lsp-feature-governance = { workspace = true }
-tracing = "0.1.44"
+tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 

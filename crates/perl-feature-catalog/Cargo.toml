@@ -15,13 +15,13 @@ categories = ["development-tools", "development-tools::testing"]
 include = ["src/**", "Cargo.toml", "README.md"]
 
 [dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
-thiserror = "2.0.18"
+serde = { workspace = true }
+thiserror.workspace = true
 toml = "1.1.0"
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }
-tempfile = "3"
+tempfile.workspace = true
 
 [lints]
 workspace = true

@@ -18,7 +18,7 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
-lsp-types = { version = "0.97.0" }
+lsp-types = { workspace = true }
 serde_json = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-qualified-name = { workspace = true }
@@ -32,7 +32,7 @@ lsp-compat = []  # Enable LSP-specific functionality
 slow_tests = []  # Enable slow/expensive tests
 
 [dev-dependencies]
-criterion = "0.8.1"
+criterion.workspace = true
 perl-parser-core = { workspace = true }
 perl-tdd-support = { workspace = true }
 

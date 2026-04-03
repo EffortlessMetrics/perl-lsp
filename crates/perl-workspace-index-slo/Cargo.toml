@@ -15,11 +15,11 @@ categories = ["development-tools", "text-editors"]
 include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-parking_lot = "0.12.5"
+parking_lot.workspace = true
 perl-percentile = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.11.0"
+proptest.workspace = true
 
 [lints]
 workspace = true

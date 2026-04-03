@@ -17,7 +17,7 @@ categories = ["parsing", "text-processing"]
 tree-sitter = "0.26.6"
 
 [dev-dependencies]
-criterion = "0.8.1"
+criterion.workspace = true
 test-case = "3.3.1"
 
 [features]

@@ -20,7 +20,7 @@ doctest = false
 [dependencies]
 
 [dev-dependencies]
-proptest = "1.11.0"
+proptest.workspace = true
 
 [lints]
 workspace = true

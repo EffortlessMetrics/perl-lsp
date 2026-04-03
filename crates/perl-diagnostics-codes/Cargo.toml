@@ -15,7 +15,7 @@ categories = ["development-tools", "development-tools::testing"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-serde = { version = "1.0.228", features = ["derive"], optional = true }
+serde = { workspace = true, optional = true }
 
 [features]
 default = []

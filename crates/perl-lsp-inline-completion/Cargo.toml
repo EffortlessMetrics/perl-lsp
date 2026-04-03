@@ -17,9 +17,9 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
-lsp-types = "0.97.0"
+lsp-types.workspace = true
 perl-position-tracking = { workspace = true }
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

@@ -20,7 +20,7 @@ include = [
 ]
 
 [dependencies]
-lsp-types = "0.97.0"
+lsp-types.workspace = true
 
 [lints]
 workspace = true

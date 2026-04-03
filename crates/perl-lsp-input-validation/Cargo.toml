@@ -15,13 +15,13 @@ categories = ["development-tools", "text-editors"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-anyhow = "1.0.102"
+anyhow.workspace = true
 serde_json = { workspace = true }
 perl-path-security = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
-tempfile = "3.24.0"
+tempfile.workspace = true
 
 [lints]
 workspace = true

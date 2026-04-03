@@ -21,7 +21,7 @@ include = [
 ]
 
 [dependencies]
-proptest = "1.11"
+proptest.workspace = true
 
 [lints]
 workspace = true

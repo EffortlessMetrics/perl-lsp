@@ -14,7 +14,7 @@ keywords = ["perl", "lsp", "limits", "timeout", "resource-management"]
 categories = ["development-tools", "text-editors"]
 
 [dependencies]
-serde_json = "1.0.149"
+serde_json.workspace = true
 
 [lints]
 workspace = true

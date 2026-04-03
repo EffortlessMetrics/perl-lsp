@@ -39,8 +39,8 @@ perl-lsp-code-lens = { workspace = true }
 perl-lsp-folding = { workspace = true }
 perl-lsp-uri = { workspace = true }
 rustc-hash = "2.1.2"
-serde_json = "1.0.149"
-lsp-types = { version = "0.97.0", optional = true }
+serde_json.workspace = true
+lsp-types = { workspace = true, optional = true }
 
 # Unix-only dependency for signal handling in debug adapter
 [target.'cfg(unix)'.dependencies]
