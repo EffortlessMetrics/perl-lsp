@@ -18,6 +18,7 @@ import { generateBoilerplate } from './fileCreation';
 import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
+import { StreamingCompletionController } from './streamingCompletion';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -25,6 +26,7 @@ let testAdapter: PerlTestAdapter | undefined;
 let currentServerPath: string | null = null;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let healthWidget: HealthWidget | undefined;
+let streamingController: StreamingCompletionController | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -706,6 +708,14 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     }
 
     await refreshTestAdapter(context);
+
+    // Initialize streaming inline completion controller
+    if (streamingController) {
+        streamingController.dispose();
+    }
+    streamingController = new StreamingCompletionController(client);
+    context.subscriptions.push(streamingController);
+
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
 }

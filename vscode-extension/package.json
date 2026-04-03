@@ -286,6 +286,23 @@
         }
       },
       {
+        "title": "Perl LSP: AI Completion",
+        "properties": {
+          "perl-lsp.aiCompletion.enabled": {
+            "type": "boolean",
+            "default": false,
+            "order": 10,
+            "markdownDescription": "Enable AI-powered inline completions."
+          },
+          "perl-lsp.aiCompletion.streaming.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 20,
+            "markdownDescription": "Enable progressive streaming for AI completions (requires `aiCompletion.enabled`)."
+          }
+        }
+      },
+      {
         "title": "Perl LSP: Advanced",
         "properties": {
           "perl-lsp.channel": {
