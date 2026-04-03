@@ -59,7 +59,9 @@ jobs:
           cache-on-failure: true
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Run cargo-audit (JSON output for processing)
         id: audit
@@ -106,19 +108,12 @@ jobs:
           cache-on-failure: true
 
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
 
-      - name: Run cargo-deny (advisories)
-        run: cargo deny --locked check advisories
-
-      - name: Run cargo-deny (licenses)
-        run: cargo deny --locked check licenses
-
-      - name: Run cargo-deny (bans)
-        run: cargo deny --locked check bans
-
-      - name: Run cargo-deny (sources)
-        run: cargo deny --locked check sources
+      - name: Run cargo-deny (all checks)
+        run: cargo deny --locked check advisories licenses bans sources
 
   # ============================================================================
   # Trivy Comprehensive Scanning

@@ -86,8 +86,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
-      with:
-        submodules: recursive
 
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
@@ -99,7 +97,9 @@ jobs:
         cache-on-failure: true
 
     - name: Install just
-      run: cargo install just
+      uses: taiki-e/install-action@v2
+      with:
+        tool: just
 
     - name: Run benchmarks
       run: |
@@ -270,8 +270,9 @@ jobs:
     timeout-minutes: 20
     if: |
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'schedule'
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:semver'))
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
@@ -394,7 +395,7 @@ jobs:
         cache-on-failure: true
 
     - name: Install cargo-fuzz
-      run: cargo install cargo-fuzz
+      run: cargo install cargo-fuzz --locked
 
     - name: Run fuzzer
       run: |
