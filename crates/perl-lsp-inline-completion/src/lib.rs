@@ -6,80 +6,8 @@
 
 use perl_position_tracking::utf16_line_col_to_offset;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 const MAX_INLINE_COMPLETION_ITEMS: usize = 5;
-
-// ---------------------------------------------------------------------------
-// Backend trait for pluggable AI completion providers
-// ---------------------------------------------------------------------------
-
-/// A streaming chunk emitted by an AI backend.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StreamChunk {
-    /// Cumulative completion text so far.
-    pub text: String,
-    /// Whether this is the final chunk.
-    pub is_final: bool,
-}
-
-/// Flow-control signal returned by the streaming sink.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StreamControl {
-    /// Continue receiving chunks.
-    Continue,
-    /// Stop the stream early (e.g. user cancelled).
-    Stop,
-}
-
-/// Errors that a backend may surface.
-#[derive(Debug)]
-pub enum BackendError {
-    /// HTTP/network transport failure.
-    Transport(String),
-    /// Authentication or authorization failure.
-    Auth(String),
-    /// The request exceeded its timeout.
-    Timeout,
-    /// The backend is rate-limiting requests.
-    RateLimited,
-}
-
-impl fmt::Display for BackendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Transport(msg) => write!(f, "transport error: {msg}"),
-            Self::Auth(msg) => write!(f, "auth error: {msg}"),
-            Self::Timeout => write!(f, "request timed out"),
-            Self::RateLimited => write!(f, "rate limited"),
-        }
-    }
-}
-
-impl std::error::Error for BackendError {}
-
-/// A request to an AI backend for inline completion.
-pub struct BackendRequest {
-    /// The prepared context from the editor.
-    pub context: PreparedInlineCompletionContext,
-    /// Maximum number of tokens to generate.
-    pub max_output_tokens: u32,
-    /// Timeout in milliseconds for the request.
-    pub timeout_ms: u64,
-}
-
-/// Trait for AI backends that produce inline completions via streaming.
-pub trait InlineCompletionBackend: Send + Sync {
-    /// Stream a completion for the given request.
-    ///
-    /// The `sink` callback is invoked for each streaming chunk. Return
-    /// [`StreamControl::Stop`] to cancel early.
-    fn stream(
-        &self,
-        req: &BackendRequest,
-        sink: &mut dyn FnMut(StreamChunk) -> StreamControl,
-    ) -> Result<(), BackendError>;
-}
 
 /// Prepared context for inline completion suggestions and future AI handoff.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
