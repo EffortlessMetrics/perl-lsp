@@ -77,18 +77,18 @@ Builders for: workspace-perf (#2078), Docker (#2083), Homebrew (#2086), Linux pk
 
 | Metric | Count | Verification |
 |--------|-------|-------------|
-| **PRs merged** | 56+ | `gh pr list --state merged --search "merged:2026-04-02"` |
-| **Issues closed** | 64+ | `gh issue list --state closed --search "closed:2026-04-02"` |
-| **Issues: start → now** | 68 → 4 (94% reduction) | |
+| **PRs merged** | 62+ (and counting) | `gh pr list --state merged --search "merged:2026-04-02"` |
+| **Issues closed** | 67 of 68 (99%) | `gh issue list --state closed --search "closed:2026-04-02"` |
+| **Issues: start → now** | 68 → 1 (99% reduction) | Only #3018 (AI/LLM, deferred by design) |
 | **Issues created** | 4 (#3081, #3089, #3093, #3094) | |
-| **Remote branches deleted** | 11 | |
+| **Remote branches deleted** | 11+ (323 queued for cleanup) | |
 | **Dependabot PRs merged** | 8 of 8 | |
-| **Releases completed** | 0.12.2, 0.12.3, 0.12.4, 0.12.5, 0.12.6, 0.12.7 (substantially) | |
-| **Already-implemented discoveries** | 23+ | |
-| **Agents spawned** | ~65 across 8+ waves | |
+| **Releases completed** | 0.12.2 through 0.12.8 (all milestones) | |
+| **Already-implemented discoveries** | 24+ | |
+| **Agents spawned** | ~80+ across 10+ waves | |
 | **Real bugs found pre-merge** | 13 (4 inlining + 4 distribution binary name + 5 VSCode floating promises) | |
-| **Key infrastructure shipped** | Incremental parsing pipeline (3 PRs), corpus ratchet automation, Docker image | |
-| **Bugs caught pre-merge** | 4 + 1 perf fix by deep review | |
+| **Key infrastructure shipped** | Incremental parsing pipeline, corpus ratchet, Docker image, justfile Windows fix | |
+| **CI fix** | justfile $$ escaping broken on Windows — all gate recipes non-functional | |
 
 ### PR Breakdown by Type
 
