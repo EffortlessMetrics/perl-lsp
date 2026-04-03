@@ -19,6 +19,7 @@ interface ReleaseAsset {
 
 interface Release {
     tag_name: string;
+    prerelease?: boolean;
     assets: ReleaseAsset[];
 }
 
@@ -94,8 +95,8 @@ export class BinaryDownloader {
         // Download binary
         try {
             return await this.downloadWithProgress();
-        } catch (error: any) {
-            const errorMsg = error?.message || String(error);
+        } catch (error: unknown) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
             this.outputChannel.appendLine(`Failed to download binary: ${errorMsg}`);
             
             // Provide helpful error messages
@@ -351,19 +352,25 @@ export class BinaryDownloader {
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
                     try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.message && parsed.message.includes('Not Found')) {
-                            reject(new Error('No releases found'));
-                        } else if (Array.isArray(parsed)) {
+                        const parsed: unknown = JSON.parse(data);
+                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'message' in parsed) {
+                            const msg = parsed as { message: string };
+                            if (msg.message.includes('Not Found')) {
+                                reject(new Error('No releases found'));
+                                return;
+                            }
+                        }
+                        if (Array.isArray(parsed)) {
                             // For stable channel, find first non-prerelease
-                            const stableRelease = parsed.find((r: any) => !r.prerelease);
+                            const releases = parsed as Release[];
+                            const stableRelease = releases.find(r => !r.prerelease);
                             if (stableRelease) {
                                 resolve(stableRelease);
                             } else {
-                                resolve(parsed[0]); // Fall back to latest
+                                resolve(releases[0]); // Fall back to latest
                             }
                         } else {
-                            resolve(parsed);
+                            resolve(parsed as Release);
                         }
                     } catch (e) {
                         reject(e);
