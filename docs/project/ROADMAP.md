@@ -10,7 +10,8 @@
 
 - Workspace version line: `v0.12.1`
 - Latest published release: `v0.12.1` (tagged 2026-03-30, cleanup completed 2026-04-02)
-- Active release target: `v0.12.2` stability hardening
+- 0.12.x milestone ladder: complete (v0.12.2 through v0.12.8 shipped 2026-04-02)
+- Active work: quality cleanup, then v0.13.0 announcement prep
 - Canonical local receipt: `nix develop -c just ci-gate`
 
 ## How To Read This File
@@ -50,67 +51,65 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - DAP Phase 3 test suite (#435) already complete (20 tests, all AC criteria met)
 - 12 PRs merged + 6 issues discovered already-done
 
-## Active Milestone: v0.12.4 Diagnostics & Semantics
+## Completed: v0.12.4 Diagnostics & Semantics (shipped 2026-04-02)
 
-Remaining work:
+- Semantic framework coverage: inheritance, exports (#3077, PR #3098)
+- Cross-platform DAP continue/interrupt signal handling (#3028, PR #3117)
+- DAP attach command: stale mock stub removed, tests updated (#3025, PR #3135)
 
-| Issue | Title | Status |
-|-------|-------|--------|
-| #3077 | Semantic framework coverage (inheritance, exports) | builder active |
-| #3028 | Cross-platform DAP continue/interrupt signal handling | open |
-| #3025 | DAP attach command for debugging existing processes | open |
+## Completed: v0.12.5 Parser Confidence (shipped 2026-04-02)
 
-### Supporting docs
+- All Tier 1 parser blockers confirmed fixed
+- Incremental parser checkpoint recovery (#2080, PR #3114)
+- Token caching for incremental parsing (#3021, PR #3116)
+- Corpus ratchet automation (#2026, PR #3110)
+- 90% CPAN clean rate target documented (#3076, PR #3123)
 
-- [CURRENT_STATUS.md](CURRENT_STATUS.md)
-- [PARSER_EDGE_CASE_ROADMAP.md](PARSER_EDGE_CASE_ROADMAP.md)
-- [CPAN_CORPUS_STRATEGY.md](CPAN_CORPUS_STRATEGY.md)
+## Completed: v0.12.6 Performance (shipped 2026-04-02)
+
+- Large-workspace HashMap optimization (#2078, PR #3112)
+- Memory profiling infrastructure (#2085, PR #3125)
+- CPAN-scale benchmarks: 10K files, 500K symbols (#1664, PR #3121/3132)
+- Large-workspace testing and profiling guide (#3022, PR #3126)
+
+## Completed: v0.12.7 Distribution & Packaging (shipped 2026-04-02)
+
+- Docker image with perllsp + Perl runtime (#2083, PR #3113)
+- Linux/macOS installer script (#2095, PR #3122)
+- Homebrew bump workflow + install docs (#2086, PR #3120)
+- Windows bump workflows aligned (#2596, PR #3106)
+
+## Completed: v0.12.8 Announcement Polish (shipped 2026-04-02)
+
+- Heredoc language injection for SQL/JSON (#2059, PR #3134)
+- POD preview panel (#2062, PR #3131)
+- AST explorer debug panel (#2065, PR #3124)
+- Problem-first README rewrite (#3119)
+- End-to-end LSP feature development guide (#3027, PR #3115)
+- GIF recording guide and asset structure (#2336, PR #3130)
+
+## Active: Quality Cleanup (0.12.x tail)
+
+- Debug println removal from library code (in progress)
+- Unused dependency removal across 6 crates (in progress)
+- Banned unwrap()/expect() replacement in production code (in progress)
+- Clippy zero-warning enforcement (done, PR #3138)
 
 ## Now / Next / Later
 
-### Now (v0.12.4 — finishing)
+### Now (0.12.x quality tail)
 
-- Semantic framework coverage (#3077) — builder active
-- DAP cross-platform signal handling (#3028) and attach command (#3025)
+- Code quality cleanup: debug prints, unused deps, banned patterns
+- Test coverage gaps and broken integration tests
+- VSCode extension lint/quality audit
+- One remaining open issue: #3018 (AI/LLM completion, deferred to 0.13.0+)
 
-### Next (v0.12.5 — parser confidence)
+### Next (v0.13.0 — public alpha announcement)
 
-- Corpus ratchet to get true post-fix baseline (all Tier 1 blockers fixed)
-- Quote-like operator parsing (#3020) and `state` keyword (#3033) — builders active
-- Remaining Tier 2/3 blocker fixes
-
-### Then (v0.12.5 — parser confidence)
-
-- Corpus ratchet toward 90%+ CPAN clean rate (#3076)
-- Quote-like operator parsing (#3020), `state` keyword (#3033)
-- Top Tier 1 blocker fixes (206+99+84 affected files)
-- Incremental parser checkpoint recovery (#2080)
-
-### Then (v0.12.6 — performance)
-
-- Large-workspace startup (#2078), completion latency (#2077), memory (#2085)
-- Async task spawning overhead (#2082), CPAN-scale tuning (#1664)
-- Benchmark regression detection (#2087)
-
-### Then (v0.12.7 — distribution & packaging)
-
-- Docker image (#2083), Nix flake (#2081), Homebrew verification (#2086)
-- Windows package managers (#2596, #2089), Linux installers (#2095)
-- Supply chain: SBOM generation and SLSA provenance (#281)
-
-### Then (v0.12.8 — announcement polish)
-
-- Rich hover docs with type info and POD excerpts (#1657)
-- CPAN module docs on hover via MetaCPAN (#2061)
-- Heredoc language injection for SQL/HTML/JSON (#2059)
-- POD preview panel (#2062), debug launch templates (#2020)
-- Animated GIFs showcasing features (#2336, #3026)
-
-### Later (v0.13.0 — public alpha announcement)
-
-- The 0.12.x line builds confidence; 0.13.0 is the initial public alpha announcement
-- Seamless install story across all distribution channels
-- Performance, security, and API stabilization work toward `v1.0.0`
+- The 0.12.x line has built confidence across parser, diagnostics, refactoring, and distribution
+- Quality cleanup PRs land, version bump to 0.13.0
+- Seamless install story verified across all distribution channels
+- Announcement blog post / release notes
 
 ## Milestone Ladder
 
@@ -140,19 +139,20 @@ workspace-scoped rename, extract variable/subroutine, and Moose/Moo framework su
 
 ### v0.12.4
 
-Parser corpus confidence and performance profiling: close Tier 1 parser blockers,
-large-workspace startup and completion latency work, benchmark regression detection.
+Diagnostics and semantics: semantic framework coverage, DAP cross-platform signals,
+DAP attach command cleanup. Shipped 2026-04-02.
 
-### v0.12.5
+### v0.12.5–v0.12.8
 
-Distribution and packaging: Docker, Nix, Homebrew, Windows/Linux package managers,
-supply chain security (SBOM, SLSA provenance).
+Parser confidence, performance, distribution, and announcement polish.
+All shipped 2026-04-02 in a single high-throughput swarm session
+(59 PRs merged, 67 issues closed, ~70 agents).
 
 ### v0.13.0
 
-Initial public alpha announcement. The 0.12.x line builds confidence
-across parser corpus, diagnostics, refactoring, and distribution so that
-0.13.0 is ready for public announcement.
+Initial public alpha announcement. The 0.12.x line built confidence
+across parser corpus, diagnostics, refactoring, and distribution.
+0.13.0 is the announcement version.
 
 ### Beyond v0.13.0
 
