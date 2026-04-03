@@ -15,8 +15,10 @@ categories = ["development-tools", "development-tools::testing"]
 include = ["src/**", "Cargo.toml", "README.md"]
 
 [dependencies]
-perl-lsp-feature-contracts = { workspace = true }
 perl-lsp-feature-ids = { workspace = true }
+
+[dev-dependencies]
+perl-lsp-feature-contracts = { workspace = true }
 
 [lints]
 workspace = true
