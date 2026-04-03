@@ -347,10 +347,10 @@ pub fn resolve_manifest_modules(
             if line.is_empty() {
                 continue;
             }
-            if let Some((_module_file, path)) = line.split_once('=') {
-                if let Some(p) = resolve_manifest_module_path(path) {
-                    resolved.push(p);
-                }
+            if let Some((_module_file, path)) = line.split_once('=')
+                && let Some(p) = resolve_manifest_module_path(path)
+            {
+                resolved.push(p);
             }
         }
     }
@@ -397,10 +397,10 @@ where
 
     #[cfg(windows)]
     {
-        if let Some(converted) = windows_converter(path) {
-            if converted.exists() {
-                return Some(converted);
-            }
+        if let Some(converted) = windows_converter(path)
+            && converted.exists()
+        {
+            return Some(converted);
         }
     }
 
