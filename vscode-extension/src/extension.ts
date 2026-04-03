@@ -121,7 +121,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         interface MenuAction extends vscode.QuickPickItem {
             command?: string;
-            args?: any[];
+            args?: unknown[];
             disabled?: boolean;
         }
 
@@ -938,7 +938,7 @@ async function restartServer(context: vscode.ExtensionContext) {
                 outputChannel.show();
             }
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         outputChannel.appendLine(`Failed to restart perl-lsp: ${message}`);
         vscode.window.showErrorMessage(`Failed to restart Perl Language Server: ${message}`, 'Show Output').then(selection => {

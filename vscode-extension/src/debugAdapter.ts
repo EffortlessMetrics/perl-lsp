@@ -104,14 +104,23 @@ export async function createDebugConfigWizard(): Promise<void> {
     if (workspaceFolders.length === 1) {
         workspaceRoot = workspaceFolders[0].uri.fsPath;
     } else {
-        const picked = await vscode.window.showQuickPick(
-            workspaceFolders.map(f => ({ label: f.name, description: f.uri.fsPath, fsPath: f.uri.fsPath })),
-            { placeHolder: 'Select workspace folder' }
-        );
+        interface WorkspaceFolderItem extends vscode.QuickPickItem {
+            fsPath: string;
+        }
+
+        const items: WorkspaceFolderItem[] = workspaceFolders.map(f => ({
+            label: f.name,
+            description: f.uri.fsPath,
+            fsPath: f.uri.fsPath
+        }));
+
+        const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select workspace folder'
+        });
         if (!picked) {
             return;
         }
-        workspaceRoot = (picked as any).fsPath;
+        workspaceRoot = picked.fsPath;
     }
 
     const launchPath = path.join(workspaceRoot, '.vscode', 'launch.json');
