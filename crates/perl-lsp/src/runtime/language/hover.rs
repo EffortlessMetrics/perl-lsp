@@ -229,6 +229,20 @@ impl LspServer {
                 String::new()
             };
 
+            // Infer type for variables using TypeInferenceEngine
+            let type_info = if symbol_info.kind.is_variable() {
+                let var_name = &symbol_info.name; // already without sigil
+                let mut type_engine = crate::type_inference::TypeInferenceEngine::new();
+                let _ = type_engine.infer(ast); // ignore errors, just build env
+                type_engine
+                    .hover_label_for(var_name)
+                    .filter(|label| label != "Any")
+                    .map(|label| format!("\n**Type**: `{}`", label))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+
             let attrs_info = if symbol_info.attributes.is_empty() {
                 String::new()
             } else {
@@ -250,10 +264,11 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
+                        type_info,
                         tied_info,
                         attrs_info,
                         complexity_section,

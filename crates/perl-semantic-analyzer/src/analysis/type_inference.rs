@@ -672,6 +672,16 @@ impl TypeInferenceEngine {
                 Ok(last_type)
             }
 
+            NodeKind::MethodCall { object, method, .. } => {
+                // Detect ClassName->new() pattern and return Object("ClassName")
+                if method == "new" {
+                    if let NodeKind::Identifier { name } = &object.kind {
+                        return Ok(Object(name.clone()));
+                    }
+                }
+                Ok(Any)
+            }
+
             _ => Ok(Any), // Default for unhandled nodes
         }
     }
