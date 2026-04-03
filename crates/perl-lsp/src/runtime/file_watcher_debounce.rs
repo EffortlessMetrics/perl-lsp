@@ -59,13 +59,17 @@ impl FileWatcherDebouncer {
     ///
     /// Repeated schedules of the same URI within the window reset its deadline.
     pub fn schedule(&self, uri: &str) {
-        let _ = self.tx.send(WatcherMsg::Schedule(uri.to_string()));
+        if let Err(e) = self.tx.send(WatcherMsg::Schedule(uri.to_string())) {
+            tracing::debug!(error = %e, "file watcher debounce: channel closed on schedule");
+        }
     }
 }
 
 impl Drop for FileWatcherDebouncer {
     fn drop(&mut self) {
-        let _ = self.tx.send(WatcherMsg::Shutdown);
+        if let Err(e) = self.tx.send(WatcherMsg::Shutdown) {
+            tracing::debug!(error = %e, "file watcher debounce: channel closed on shutdown");
+        }
     }
 }
 

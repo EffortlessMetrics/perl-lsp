@@ -571,7 +571,9 @@ impl ExecuteCommandProvider {
     fn find_workspace_root(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
         // Tier 1: explicit workspace roots registered with the provider.
         if !self.workspace_roots.is_empty() {
-            let canonical_path = path.canonicalize().ok();
+            let canonical_path = path.canonicalize().map_err(|e| {
+                tracing::debug!(path = %path.display(), error = %e, "workspace root: failed to canonicalize path");
+            }).ok();
             for root in &self.workspace_roots {
                 let Ok(canonical_root) = root.canonicalize() else { continue };
                 if canonical_path.as_ref().is_some_and(|p| p.starts_with(&canonical_root)) {

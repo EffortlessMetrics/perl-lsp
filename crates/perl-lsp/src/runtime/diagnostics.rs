@@ -775,9 +775,18 @@ impl LspServer {
         }
 
         // Convert URI to file system path; skip non-file URIs
-        let file_path = match url::Url::parse(uri).ok().and_then(|u| u.to_file_path().ok()) {
-            Some(p) => p,
-            None => return,
+        let file_path = match url::Url::parse(uri) {
+            Ok(u) => match u.to_file_path() {
+                Ok(p) => p,
+                Err(()) => {
+                    tracing::warn!(uri, "perlcritic: URI is not a file path");
+                    return;
+                }
+            },
+            Err(e) => {
+                tracing::warn!(uri, error = %e, "perlcritic: failed to parse URI");
+                return;
+            }
         };
 
         // Silently skip if perlcritic is not installed.
