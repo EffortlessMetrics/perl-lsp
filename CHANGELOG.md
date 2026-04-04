@@ -9,6 +9,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - No unreleased changes have been recorded yet.
 
+## [0.12.2] - 2026-04-04
+
+`v0.12.2` is the confidence-building release for the 0.12.x series. 89 commits
+across 59 PRs spanning new features, performance, testing, distribution, and
+documentation. The entire 0.12.x roadmap from v0.12.2 through v0.12.8 milestones
+is consolidated into this single release.
+
+### Added
+
+- **AI inline completion**: opt-in OpenAI-compatible provider with SSE streaming,
+  session management, cancellation, and deterministic fallback when AI is off
+  (#3157–#3168)
+- **heredoc language injection**: SQL keyword and JSON key detection in heredocs
+  with multi-heredoc-per-line support (#3134)
+- **type inference in hover**: `TypeInferenceEngine` wired to show inferred types
+  on hover (#3150)
+- **dead code highlighting**: `DiagnosticTag::Unnecessary` for unreachable code
+  (#3092)
+- **extract variable/subroutine**: AST-aware code action for extracting
+  expressions and blocks (#3090)
+- **subroutine inlining**: code action to inline simple subroutines (#3083)
+- **POD preview panel**: VS Code command `Perl: Preview POD` (#3131)
+- **AST explorer debug panel**: `perl/showAst` custom LSP handler (#3124)
+- **Docker image**: `effortlessmetrics/perl-lsp` with perllsp + Perl runtime
+  (#3113)
+- **DAP cross-platform signals**: continue and interrupt signal handling on
+  Linux/macOS/Windows (#3117)
+- **context-sensitive quote parsing**: `qw`, `s///`, `tr///` disambiguation in
+  complex expressions (#3105)
+- **semantic framework coverage**: inheritance and export analysis for Moo/Moose
+  patterns (#3103)
+- **Linux/macOS installer**: fixed and improved install script (#3122)
+- **streaming inline completion controller**: VS Code gating on AI config flags
+  (#3161, #3164)
+
+### Performance
+
+- **incremental parsing pipeline**: token caching (#3116), checkpoint recovery
+  (#3114), and `Parser::from_tokens` (#3128) complete the incremental path
+- **CPAN-scale benchmarks**: 10K files indexed in 672ms, 500K symbol lookup in
+  10.6µs (#3121, #3132)
+- **large-workspace HashMap optimization**: faster startup for big projects
+  (#3112)
+- **memory profiling infrastructure**: heap tracking for workspace indexing
+  (#3125)
+- **completion latency benchmarks**: baseline for regression detection (#3104)
+
+### Fixed
+
+- **DAP attach cleanup**: removed stale mock stub and updated tests (#3135)
+- **perlcritic integration**: hardened diagnostic pipeline (#3097)
+- **silent error handling**: 23+ silently swallowed errors now emit trace logs
+  (#3087, #3151)
+- **distribution binary name**: Linux packaging templates and Windows bump
+  workflows aligned with `perllsp` (#3106, #3144)
+- **Homebrew asset names**: brew-bump workflow aligned (#3120)
+- **CI efficiency**: 10 improvements reducing CI minutes (#3156)
+- **VS Code type safety**: replaced `any` types with proper TypeScript types
+  (#3154)
+- **LSP capability snapshots**: regenerated stale snapshots (#3142, #3147)
+- **inline completion**: removed duplicate backend type definitions (#3162)
+- **pipeline-labels race**: fixed race condition on `reviewed-deep` label (#3100)
+
+### Testing
+
+- **147 DAP tests**: serde, edge cases, and error paths across 4 DAP crates
+  (#3152)
+- **AI inline completion tests**: integration tests for streaming and
+  deterministic paths (#3165, #3168)
+- **error builder/lexer mode tests**: missing coverage for error paths (#3091)
+
+### Documentation
+
+- **AI inline completion config reference** (#3167)
+- **end-to-end LSP feature development guide** (#3115)
+- **large-workspace testing and profiling guide** (#3126)
+- **GIF recording guide** for marketing assets (#3130)
+- **problem-first README rewrite** (#3119)
+
+### Dependencies
+
+- unified 16 scattered dependency versions via workspace deps (#3153)
+- removed 8 unused dependencies across 6 crates (#3146)
+- dependabot: insta 1.47.1, proptest, tar, toml 1.1.0, uuid 1.23.0,
+  actions/deploy-pages 5, codecov/codecov-action 6
+
 ## [0.12.1] - 2026-03-30
 
 `v0.12.1` is the fix-forward cut after the initial public alpha release. It does
