@@ -472,6 +472,13 @@ export async function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
         }
 
+        if (
+            event.affectsConfiguration('perl-lsp.aiCompletion.enabled') ||
+            event.affectsConfiguration('perl-lsp.aiCompletion.streaming.enabled')
+        ) {
+            refreshStreamingController(client);
+        }
+
         if (requiresClientRefresh(event)) {
             await promptForClientRefresh(context);
         }
@@ -709,12 +716,8 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
 
     await refreshTestAdapter(context);
 
-    // Initialize streaming inline completion controller
-    if (streamingController) {
-        streamingController.dispose();
-    }
-    streamingController = new StreamingCompletionController(client);
-    context.subscriptions.push(streamingController);
+    // Initialize streaming inline completion controller (config-gated)
+    refreshStreamingController(client);
 
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
@@ -994,6 +997,33 @@ async function refreshTestAdapter(context: vscode.ExtensionContext) {
     outputChannel.appendLine('Perl test integration enabled.');
 }
 
+/**
+ * Create or dispose the streaming inline completion controller based on config.
+ *
+ * The controller is only active when both `aiCompletion.enabled` and
+ * `aiCompletion.streaming.enabled` are true and a language client is running.
+ */
+function refreshStreamingController(activeClient: LanguageClient | undefined): void {
+    // Always dispose any existing controller first
+    if (streamingController) {
+        streamingController.dispose();
+        streamingController = undefined;
+    }
+
+    if (!activeClient) {
+        return;
+    }
+
+    const config = vscode.workspace.getConfiguration('perl-lsp');
+    const aiEnabled = config.get<boolean>('aiCompletion.enabled', false);
+    const streamingEnabled = config.get<boolean>('aiCompletion.streaming.enabled', true);
+
+    if (aiEnabled && streamingEnabled) {
+        streamingController = new StreamingCompletionController(activeClient);
+        outputChannel.appendLine('Streaming inline completion controller enabled.');
+    }
+}
+
 async function runCheckSyntax(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== 'perl') {
@@ -1260,6 +1290,11 @@ async function promptForClientRefresh(context: vscode.ExtensionContext) {
 }
 
 async function disposeLanguageClient() {
+    if (streamingController) {
+        streamingController.dispose();
+        streamingController = undefined;
+    }
+
     if (testAdapter) {
         testAdapter.dispose();
         testAdapter = undefined;
