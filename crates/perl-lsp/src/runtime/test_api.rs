@@ -279,4 +279,44 @@ impl LspServer {
         cfg.perlcritic_severity = severity;
         cfg.perlcritic_profile = profile;
     }
+
+    /// Test-only entrypoint for LSP `textDocument/inlineCompletion`.
+    ///
+    /// Exercises inline completion functionality in tests.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri` and `position`.
+    ///
+    /// # Returns
+    /// - `Ok(Some(list))`: Inline completion list with items.
+    /// - `Ok(None)`: No completions available.
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or document not found.
+    pub fn test_handle_inline_completion(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_inline_completion(params)
+    }
+
+    /// Install a mock AI inline-completion backend for testing.
+    ///
+    /// Replaces any previously registered backend with the provided one.
+    /// Pass `None` to clear the backend entirely.
+    pub fn test_install_ai_backend(
+        &self,
+        backend: Option<std::sync::Arc<dyn perl_lsp_inline_completion::InlineCompletionBackend>>,
+    ) {
+        *self.ai_inline_backend.lock() = backend;
+    }
+
+    /// Configure AI completion settings directly for test purposes.
+    ///
+    /// Avoids direct access to `self.config` from integration tests.
+    pub fn test_configure_ai_completion(&self, enabled: bool, fallback: bool) {
+        let mut cfg = self.config.lock();
+        cfg.ai_completion.enabled = enabled;
+        cfg.ai_completion.fallback = fallback;
+    }
 }
