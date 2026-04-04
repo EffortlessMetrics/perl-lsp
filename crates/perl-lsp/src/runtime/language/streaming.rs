@@ -84,31 +84,136 @@ impl LspServer {
         let session_id = session.session_id.clone();
         let token_clone = token.clone();
 
-        // NOTE: The actual AI backend is not yet wired into LspServer.
-        // When a backend becomes available, this section would call
-        // `backend.stream(&req, &mut |chunk| { ... })`.
-        //
-        // For now we emit a single final progress notification with
-        // an empty candidate list so that the protocol contract is
-        // exercised end-to-end.
-        let _ = &req; // suppress unused warning
-
-        let progress = json!({
-            "token": token_clone,
-            "value": {
-                "kind": "perlInlineCompletionStream",
-                "sessionId": session_id,
-                "sequence": session.next_sequence(),
-                "isFinal": true,
-                "items": []
+        // Get the AI backend; fall back to one-shot if unavailable
+        let backend = match self.ai_backend() {
+            Some(b) => b,
+            None => {
+                if ai_config.fallback {
+                    return self.handle_inline_completion(Some(params));
+                }
+                // No backend and no fallback -- emit empty final and return
+                let progress = json!({
+                    "token": token_clone,
+                    "value": {
+                        "kind": "perlInlineCompletionStream",
+                        "sessionId": session_id,
+                        "sequence": session.next_sequence(),
+                        "isFinal": true,
+                        "items": []
+                    }
+                });
+                if let Err(e) = self.notify("$/progress", progress) {
+                    tracing::debug!(
+                        "streaming inline completion: failed to send empty final: {}",
+                        e
+                    );
+                }
+                self.stream_sessions().cleanup();
+                return Ok(Some(json!(null)));
             }
-        });
+        };
 
-        if let Err(e) = self.notify("$/progress", progress) {
-            tracing::debug!("streaming inline completion: failed to send progress: {}", e);
+        // Capture values needed inside the streaming closure.
+        // No document locks are held at this point -- notify() only
+        // touches the outbound channel, so it is safe to call during
+        // the (potentially slow) network streaming call.
+        let start_line = session.start_line;
+        let start_character = session.start_character;
+
+        // Track whether we sent any chunk so we know if a final is needed
+        let mut sent_final = false;
+
+        // Stream from the backend -- each chunk carries cumulative text
+        let stream_result =
+            backend.stream(&req, &mut |chunk: perl_lsp_inline_completion::StreamChunk| {
+                // Check cancellation before emitting
+                if session.is_cancelled() {
+                    return perl_lsp_inline_completion::StreamControl::Stop;
+                }
+
+                // Update session cumulative text
+                if let Ok(mut text) = session.current_text.lock() {
+                    *text = chunk.text.clone();
+                }
+
+                let seq = session.next_sequence();
+                let is_final = chunk.is_final;
+                if is_final {
+                    sent_final = true;
+                }
+
+                let progress = json!({
+                    "token": token_clone,
+                    "value": {
+                        "kind": "perlInlineCompletionStream",
+                        "sessionId": session_id,
+                        "sequence": seq,
+                        "isFinal": is_final,
+                        "items": [{
+                            "insertText": chunk.text,
+                            "range": {
+                                "start": { "line": start_line, "character": start_character },
+                                "end": { "line": start_line, "character": start_character }
+                            }
+                        }]
+                    }
+                });
+
+                if let Err(e) = self.notify("$/progress", progress) {
+                    tracing::debug!("streaming inline completion: failed to send progress: {}", e);
+                    return perl_lsp_inline_completion::StreamControl::Stop;
+                }
+
+                if is_final {
+                    perl_lsp_inline_completion::StreamControl::Stop
+                } else {
+                    perl_lsp_inline_completion::StreamControl::Continue
+                }
+            });
+
+        // If the stream ended without sending a final chunk, send one now
+        if !sent_final && !session.is_cancelled() {
+            let cumulative_text =
+                session.current_text.lock().map(|t| t.clone()).unwrap_or_default();
+
+            let items = if cumulative_text.is_empty() {
+                json!([])
+            } else {
+                json!([{
+                    "insertText": cumulative_text,
+                    "range": {
+                        "start": { "line": start_line, "character": start_character },
+                        "end": { "line": start_line, "character": start_character }
+                    }
+                }])
+            };
+
+            let progress = json!({
+                "token": token_clone,
+                "value": {
+                    "kind": "perlInlineCompletionStream",
+                    "sessionId": session_id,
+                    "sequence": session.next_sequence(),
+                    "isFinal": true,
+                    "items": items
+                }
+            });
+
+            if let Err(e) = self.notify("$/progress", progress) {
+                tracing::debug!(
+                    "streaming inline completion: failed to send final progress: {}",
+                    e
+                );
+            }
         }
 
-        // Cleanup
+        // Log backend errors but don't propagate -- the protocol contract
+        // only needs the final isFinal:true notification to be sent.
+        if let Err(e) = stream_result {
+            tracing::debug!("streaming inline completion backend error: {}", e);
+        }
+
+        // Cleanup completed/cancelled sessions
         self.stream_sessions().cleanup();
 
         // Final response is null -- all data was sent via $/progress

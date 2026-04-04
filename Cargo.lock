@@ -2320,6 +2320,7 @@ dependencies = [
  "perl-diagnostics-codes",
  "perl-incremental-parsing",
  "perl-keywords",
+ "perl-lsp-ai-provider",
  "perl-lsp-cancellation",
  "perl-lsp-capability-map",
  "perl-lsp-code-actions",

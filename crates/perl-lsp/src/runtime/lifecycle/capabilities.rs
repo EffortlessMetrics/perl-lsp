@@ -206,6 +206,9 @@ impl LspServer {
         // Load .perl-lsp.toml from workspace root (base layer; LSP config overrides later)
         self.load_and_apply_project_config();
 
+        // Construct the AI inline-completion backend if enabled in config
+        self.refresh_ai_backend();
+
         // Check for available tools quickly with a timeout
         // Use which/where command which is much faster than spawning the actual tools
         let has_perltidy = self.detect_tool("perltidy");

@@ -419,6 +419,7 @@ perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.12.1" 
 perl-lsp-file-completion = { path = "crates/perl-lsp-file-completion", version = "0.12.1" }
 perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.12.1" }
 perl-lsp-inline-completion = { path = "crates/perl-lsp-inline-completion", version = "0.12.1" }
+perl-lsp-ai-provider = { path = "crates/perl-lsp-ai-provider" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12.1" }
 perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.1" }
 perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.1" }
