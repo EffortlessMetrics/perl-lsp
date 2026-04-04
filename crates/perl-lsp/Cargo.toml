@@ -48,6 +48,7 @@ perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }
 perl-lsp-code-actions = { workspace = true }
 perl-lsp-inline-completion = { workspace = true }
+perl-lsp-ai-provider = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 perl-diagnostics-codes = { workspace = true }

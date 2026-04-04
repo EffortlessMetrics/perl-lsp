@@ -550,6 +550,9 @@ impl LspServer {
                         eprintln!("Updated workspace config from perl settings");
                     }
 
+                    // Refresh AI backend when config changes (constructs or clears provider)
+                    self.refresh_ai_backend();
+
                     // Trigger client refresh for configuration-dependent features
                     if let Err(e) = self.refresh_controller.refresh_all(self) {
                         eprintln!("Failed to refresh client after config change: {}", e);

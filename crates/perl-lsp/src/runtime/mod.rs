@@ -316,6 +316,54 @@ impl LspServer {
         self.ai_inline_backend.lock().clone()
     }
 
+    /// Refresh the AI inline-completion backend based on current configuration.
+    ///
+    /// When `ai_completion.enabled` is `true` and the API key environment variable
+    /// resolves to a non-empty string, constructs an `OpenAiProvider` and stores it.
+    /// Otherwise clears the backend to `None`, disabling AI completions.
+    ///
+    /// Called during initialization (after project config is loaded) and on every
+    /// `didChangeConfiguration` notification that touches the `aiCompletion` section.
+    pub(crate) fn refresh_ai_backend(&self) {
+        let ai_config = self.config.lock().ai_completion.clone();
+
+        if !ai_config.enabled {
+            *self.ai_inline_backend.lock() = None;
+            return;
+        }
+
+        // Resolve API key from environment variable
+        let api_key = std::env::var(&ai_config.api_key_env).unwrap_or_default();
+        if api_key.is_empty() {
+            eprintln!(
+                "[perl-lsp] AI completion enabled but {} is empty or unset",
+                ai_config.api_key_env
+            );
+            *self.ai_inline_backend.lock() = None;
+            return;
+        }
+
+        let provider_config = perl_lsp_ai_provider::OpenAiConfig {
+            endpoint: ai_config.endpoint.clone(),
+            model: ai_config.model.clone(),
+            api_key,
+            timeout_ms: ai_config.timeout_ms,
+        };
+
+        let limiter = Arc::new(perl_lsp_ai_provider::RateLimiter::new(
+            ai_config.rate_limit_rps,
+            ai_config.max_inflight,
+        ));
+
+        let provider = perl_lsp_ai_provider::OpenAiProvider::new(provider_config, limiter);
+        *self.ai_inline_backend.lock() = Some(Arc::new(provider));
+
+        eprintln!(
+            "[perl-lsp] AI inline completion backend configured (endpoint={}, model={})",
+            ai_config.endpoint, ai_config.model
+        );
+    }
+
     /// Get the subprocess runtime for external tool execution (perltidy, perlcritic).
     ///
     /// Returns a new `OsSubprocessRuntime` for executing external processes.
