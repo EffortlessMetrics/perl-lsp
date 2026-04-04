@@ -18,7 +18,8 @@
 //!
 //! Run with:
 //!   RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs \
-//!     --features expose_lsp_test_api -- ai_inline --test-threads=2
+//!     --features expose_lsp_test_api \
+//!     --test lsp_ai_inline_completion_tests -- --test-threads=2
 
 #![cfg(feature = "expose_lsp_test_api")]
 
