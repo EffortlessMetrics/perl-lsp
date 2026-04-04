@@ -114,9 +114,9 @@ impl LspServer {
         };
 
         // Capture values needed inside the streaming closure.
-        // The closure borrows `self` indirectly via notify(), so we
-        // clone the outbound sender to avoid holding any document locks
-        // during the (potentially slow) network call.
+        // No document locks are held at this point -- notify() only
+        // touches the outbound channel, so it is safe to call during
+        // the (potentially slow) network streaming call.
         let start_line = session.start_line;
         let start_character = session.start_character;
 
