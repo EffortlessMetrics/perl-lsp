@@ -2,7 +2,7 @@
   "name": "perl-lsp-rs",
   "displayName": "Perl Language Server (perl-lsp)",
   "description": "Fast, native Perl 5 language server: go-to-definition, completions, diagnostics, refactoring, debugging, and 98 LSP/DAP features. Zero runtime dependencies.",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "publisher": "EffortlessMetrics",
   "preview": true,
   "markdown": "github",

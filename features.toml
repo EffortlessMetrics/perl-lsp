@@ -3,7 +3,7 @@
 # Used to generate capabilities, documentation, and compliance reports
 
 [meta]
-version = "0.12.1"
+version = "0.12.2"
 lsp_version = "3.18"
 compliance_percent = 100  # 98/98 protocol features implemented, 53/53 advertised
 
