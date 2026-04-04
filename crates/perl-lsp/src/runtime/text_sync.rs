@@ -386,8 +386,9 @@ impl LspServer {
                 params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
 
-            // Cancel any active streaming inline completion sessions for this URI.
-            self.stream_sessions().cancel_for_uri(uri);
+            // Cancel any active streaming inline completion sessions for this URI
+            // that are older than the new document version.
+            self.stream_sessions().cancel_for_uri_version(uri, version_i64);
 
             if let Some(changes) = params["contentChanges"].as_array() {
                 // Get current document state or create new one

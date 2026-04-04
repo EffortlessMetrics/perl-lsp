@@ -100,7 +100,6 @@ impl StreamSessionManager {
 
     /// Cancel all sessions for a given URI where the document version is older
     /// than the supplied version (on document version change).
-    #[allow(dead_code)] // Reserved for future version-aware cancellation
     pub fn cancel_for_uri_version(&self, uri: &str, version: i64) {
         let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
         for (key, session) in sessions.iter() {
