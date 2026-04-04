@@ -1,6 +1,6 @@
 [package]
 name = "perl-lsp-ai-provider"
-version = "0.1.0"
+version = "0.12.2"
 edition = "2024"
 description = "AI completion providers for perl-lsp"
 license = "MIT OR Apache-2.0"

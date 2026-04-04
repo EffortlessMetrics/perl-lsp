@@ -1,6 +1,6 @@
 [package]
 name = "perl-ts-partial-ast"
-version = "0.12.1"
+version = "0.12.2"
 edition = "2024"
 rust-version = "1.92"
 description = "Partial parse and anti-pattern AST for Perl"
