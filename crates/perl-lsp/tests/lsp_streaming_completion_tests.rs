@@ -485,7 +485,7 @@ fn streaming_completion_progress_schema_validation() -> TestResult {
     Ok(())
 }
 
-// TODO: When a mock streaming backend is wired (emitting chunks like
+// TODO(#3171): When a mock streaming backend is wired (emitting chunks like
 // "fi", "find_", "find_user($id)"), add tests that verify:
 // 1. Multiple intermediate $/progress notifications with increasing sequence numbers
 // 2. Each chunk's cumulative text in the items array
