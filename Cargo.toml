@@ -419,12 +419,12 @@ perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.12.2" 
 perl-lsp-file-completion = { path = "crates/perl-lsp-file-completion", version = "0.12.2" }
 perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.12.2" }
 perl-lsp-inline-completion = { path = "crates/perl-lsp-inline-completion", version = "0.12.2" }
-perl-lsp-ai-provider = { path = "crates/perl-lsp-ai-provider" }
+perl-lsp-ai-provider = { path = "crates/perl-lsp-ai-provider", version = "0.12.2" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12.2" }
 perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.2" }
 perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.2" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.12.2" }
-perl-ts-heredoc-analysis = { path = "crates/perl-ts-heredoc-analysis" }
+perl-ts-heredoc-analysis = { path = "crates/perl-ts-heredoc-analysis", version = "0.12.2" }
 
 # Tier 3: Two-level dependencies
 perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.12.2" }
@@ -447,7 +447,7 @@ perl-lsp-rs = { path = "crates/perl-lsp", version = "0.12.2" }
 perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.2" }
 
 # External dependencies
-tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
+tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", version = "0.12.2", features = ["pure-rust"] }
 tree-sitter = "0.26.6"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
