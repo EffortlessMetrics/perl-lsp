@@ -793,8 +793,9 @@ mod mock_streaming_completion_tests {
             final_progress["params"]["value"]["items"][0]["insertText"], "find_",
             "error path should preserve final cumulative text"
         );
-        let last_sequence = final_progress["params"]["value"]["sequence"]
-            .as_u64()
-            .expect("final progress frame should carry sequence");
+        assert!(
+            final_progress["params"]["value"]["sequence"].as_u64().is_some(),
+            "final progress frame should carry sequence"
+        );
     }
 }
