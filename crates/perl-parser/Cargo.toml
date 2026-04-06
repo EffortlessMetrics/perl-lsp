@@ -102,7 +102,7 @@ doc-coverage = []  # SPEC-149 documentation coverage tests
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
-insta = { version = "1.47.1", features = ["yaml"] }
+insta = { version = "1.47.2", features = ["yaml"] }
 criterion.workspace = true
 parking_lot.workspace = true
 predicates = "3.1.3"
