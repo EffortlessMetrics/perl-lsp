@@ -485,9 +485,309 @@ fn streaming_completion_progress_schema_validation() -> TestResult {
     Ok(())
 }
 
-// TODO(#3171): When a mock streaming backend is wired (emitting chunks like
-// "fi", "find_", "find_user($id)"), add tests that verify:
+// Mock streaming-backend coverage includes:
 // 1. Multiple intermediate $/progress notifications with increasing sequence numbers
 // 2. Each chunk's cumulative text in the items array
 // 3. Cancellation mid-stream via session cancel-previous semantics
-// 4. Backend error propagation and graceful fallback
+// 4. Backend error propagation and graceful termination
+
+#[cfg(feature = "expose_lsp_test_api")]
+mod mock_streaming_completion_tests {
+    use parking_lot::Mutex;
+    use perl_content_length_framing::ContentLengthFramer;
+    use perl_lsp::{JsonRpcRequest, LspServer};
+    use serde_json::{json, Value};
+    use std::io::Write;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+    use std::thread;
+
+    #[derive(Clone)]
+    struct TestOutputCapture {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl TestOutputCapture {
+        fn new() -> Self {
+            Self { buffer: Arc::new(Mutex::new(Vec::new())) }
+        }
+
+        fn messages(&self) -> Vec<Value> {
+            let bytes = self.buffer.lock().clone();
+            parse_jsonrpc_frames(&bytes)
+        }
+    }
+
+    impl Write for TestOutputCapture {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.buffer.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn parse_jsonrpc_frames(bytes: &[u8]) -> Vec<Value> {
+        let mut framer = ContentLengthFramer::new();
+        let mut messages = Vec::new();
+        framer.push(bytes);
+        while let Ok(Some(message)) = framer.try_next() {
+            if let Ok(value) = serde_json::from_slice::<Value>(&message) {
+                messages.push(value);
+            }
+        }
+        messages
+    }
+
+    fn wait_for_progress_messages(
+        capture: &TestOutputCapture,
+        token: &str,
+        timeout: Duration,
+    ) -> Vec<Value> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let messages = capture.messages();
+            let matching: Vec<_> = messages
+                .into_iter()
+                .filter(|msg| {
+                    msg.get("method").and_then(|v| v.as_str()) == Some("$/progress")
+                        && msg.pointer("/params/token").and_then(|v| v.as_str()) == Some(token)
+                })
+                .collect();
+            if !matching.is_empty() || Instant::now() >= deadline {
+                return matching;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn create_server() -> (LspServer, TestOutputCapture) {
+        let capture = TestOutputCapture::new();
+        let output = Box::new(capture.clone()) as Box<dyn Write + Send>;
+        let server = LspServer::with_output(Arc::new(Mutex::new(output)));
+
+        let init_request = JsonRpcRequest {
+            _jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "initialize".into(),
+            params: Some(json!({
+                "processId": std::process::id(),
+                "rootUri": "file:///workspace",
+                "capabilities": {
+                    "textDocument": {
+                        "inlineCompletion": { "dynamicRegistration": false },
+                    }
+                }
+            })),
+        };
+        let _ = server.handle_request(init_request);
+
+        let initialized = JsonRpcRequest {
+            _jsonrpc: "2.0".into(),
+            id: None,
+            method: "initialized".into(),
+            params: Some(json!({})),
+        };
+        let _ = server.handle_request(initialized);
+
+        server.test_configure_ai_completion(true, true);
+        let config_request = JsonRpcRequest {
+            _jsonrpc: "2.0".into(),
+            id: None,
+            method: "workspace/didChangeConfiguration".into(),
+            params: Some(json!({
+                "settings": {
+                    "perl": {
+                        "aiCompletion": {
+                            "enabled": true,
+                            "streaming": {
+                                "enabled": true
+                            }
+                        }
+                    }
+                }
+            })),
+        };
+        let _ = server.handle_request(config_request);
+
+        (server, capture)
+    }
+
+    fn open_doc(server: &LspServer, uri: &str, text: &str) {
+        let _ = server.handle_request(JsonRpcRequest {
+            _jsonrpc: "2.0".into(),
+            id: None,
+            method: "textDocument/didOpen".into(),
+            params: Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text,
+                }
+            })),
+        });
+    }
+
+    fn request_streaming_completion(server: &LspServer, uri: &str, token: &str) -> Value {
+        let request = JsonRpcRequest {
+            _jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "textDocument/perlInlineCompletionStream".into(),
+            params: Some(json!({
+                "textDocument": { "uri": uri, "version": 1 },
+                "position": { "line": 0, "character": 19 },
+                "partialResultToken": token,
+            })),
+        };
+
+        server
+            .handle_request(request)
+            .and_then(|response| response.result)
+            .unwrap_or(json!(null))
+    }
+
+    struct MockChunkBackend {
+        chunks: Vec<&'static str>,
+        delays_ms: Vec<u64>,
+    }
+
+    impl perl_lsp_inline_completion::InlineCompletionBackend for MockChunkBackend {
+        fn stream(
+            &self,
+            _req: &perl_lsp_inline_completion::BackendRequest,
+            sink: &mut dyn FnMut(
+                perl_lsp_inline_completion::StreamChunk,
+            ) -> perl_lsp_inline_completion::StreamControl,
+        ) -> Result<(), perl_lsp_inline_completion::BackendError> {
+            for (idx, chunk) in self.chunks.iter().enumerate() {
+                if let Some(delay_ms) = self.delays_ms.get(idx) {
+                    if *delay_ms > 0 {
+                        thread::sleep(Duration::from_millis(*delay_ms));
+                    }
+                }
+                let is_final = idx + 1 == self.chunks.len();
+                let _ = sink(perl_lsp_inline_completion::StreamChunk {
+                    text: (*chunk).to_string(),
+                    is_final,
+                });
+            }
+            Ok(())
+        }
+    }
+
+    struct MockErrorChunkBackend;
+
+    impl perl_lsp_inline_completion::InlineCompletionBackend for MockErrorChunkBackend {
+        fn stream(
+            &self,
+            _req: &perl_lsp_inline_completion::BackendRequest,
+            sink: &mut dyn FnMut(
+                perl_lsp_inline_completion::StreamChunk,
+            ) -> perl_lsp_inline_completion::StreamControl,
+        ) -> Result<(), perl_lsp_inline_completion::BackendError> {
+            let _ = sink(perl_lsp_inline_completion::StreamChunk {
+                text: "find_".to_string(),
+                is_final: false,
+            });
+            Err(perl_lsp_inline_completion::BackendError::Provider("mock stream error".into()))
+        }
+    }
+
+    #[test]
+    fn streaming_completion_mock_backend_cumulative_chunks() {
+        let (server, capture) = create_server();
+
+        let backend = MockChunkBackend {
+            chunks: vec!["fi", "find_", "find_user($id)"],
+            delays_ms: vec![0, 0, 0],
+        };
+        server.test_install_ai_backend(Some(Arc::new(backend)));
+
+        let uri = "file:///streaming-mock-chunks.pl";
+        open_doc(&server, uri, "my $obj = Package->");
+        let result = request_streaming_completion(&server, uri, "stream-mock-1");
+        assert!(result.is_null());
+
+        let progress = wait_for_progress_messages(&capture, "stream-mock-1", Duration::from_millis(500));
+        assert_eq!(progress.len(), 3);
+
+        let expected = ["fi", "find_", "find_user($id)"];
+        let mut last_sequence = None;
+        for idx in 0..progress.len() {
+            let value = &progress[idx]["params"]["value"];
+            let sequence = value["sequence"].as_u64().expect("progress should include sequence");
+            if let Some(previous) = last_sequence {
+                assert!(sequence > previous);
+            } else {
+                assert_eq!(sequence, 0);
+            }
+            last_sequence = Some(sequence);
+            assert_eq!(value["items"][0]["insertText"], expected[idx]);
+        }
+    }
+
+    #[test]
+    fn streaming_completion_mock_backend_cancel_previous_isolation() {
+        let (server, capture) = create_server();
+        let server = Arc::new(server);
+
+        let backend = MockChunkBackend {
+            chunks: vec!["fi", "find_", "find_user($id)"],
+            delays_ms: vec![0, 120, 120],
+        };
+        server.test_install_ai_backend(Some(Arc::new(backend)));
+
+        let uri = "file:///streaming-mock-cancel.pl";
+        open_doc(&server, uri, "my $obj = Package->");
+
+        let first = {
+            let server = Arc::clone(&server);
+            let uri = uri.to_string();
+            thread::spawn(move || {
+                request_streaming_completion(&server, &uri, "stream-cancel-old");
+            })
+        };
+
+        thread::sleep(Duration::from_millis(30));
+        let new_result = request_streaming_completion(&server, uri, "stream-cancel-new");
+        assert!(new_result.is_null());
+
+        first.join().expect("first streaming request thread panicked");
+
+        thread::sleep(Duration::from_millis(250));
+        let old_progress = wait_for_progress_messages(&capture, "stream-cancel-old", Duration::from_millis(300));
+        let new_progress = wait_for_progress_messages(&capture, "stream-cancel-new", Duration::from_millis(300));
+
+        assert_eq!(old_progress.len(), 1);
+        assert!(!new_progress.is_empty());
+    }
+
+    #[test]
+    fn streaming_completion_mock_backend_error_sends_final_progress() {
+        let (server, capture) = create_server();
+        server.test_install_ai_backend(Some(Arc::new(MockErrorChunkBackend)));
+
+        let uri = "file:///streaming-mock-error.pl";
+        open_doc(&server, uri, "my $obj = Package->");
+
+        let result = request_streaming_completion(&server, uri, "stream-error-1");
+        assert!(result.is_null());
+
+        let progress = wait_for_progress_messages(&capture, "stream-error-1", Duration::from_millis(500));
+        assert!(progress.len() >= 2);
+        assert_eq!(progress[0]["params"]["value"]["items"][0]["insertText"], "find_");
+        assert_eq!(progress[0]["params"]["value"]["isFinal"].as_bool(), Some(false));
+        assert_eq!(progress[1]["params"]["value"]["items"][0]["insertText"], "find_");
+        assert_eq!(progress[1]["params"]["value"]["isFinal"].as_bool(), Some(true));
+        let first_sequence = progress[0]["params"]["value"]["sequence"]
+            .as_u64()
+            .expect("first progress frame should carry sequence");
+        let final_sequence = progress[1]["params"]["value"]["sequence"]
+            .as_u64()
+            .expect("final progress frame should carry sequence");
+        assert!(final_sequence > first_sequence);
+    }
+}
