@@ -61,8 +61,24 @@ jobs:
         with:
           tool: just
 
+      - name: Restore CPAN corpus cache
+        id: cpan-corpus-cache
+        uses: actions/cache@v4
+        with:
+          path: target/cpan-corpus
+          key: cpan-corpus-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cpan-corpus-${{ runner.os }}-
+
+      - name: Install CPAN corpus
+        if: steps.cpan-corpus-cache.outputs.cache-hit != 'true'
+        run: cargo xtask cpan-corpus install
+
+      - name: Verify corpus baseline path
+        run: test -d target/cpan-corpus/lib/perl5
+
       - name: Run corpus ratchet
-        run: just cpan-corpus-ratchet
+        run: cargo xtask cpan-corpus ratchet
 
       - name: Commit updated baseline if changed
         # TODO(#follow-up): Switch to creating a PR instead of direct push once a
