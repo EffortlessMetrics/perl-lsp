@@ -176,6 +176,7 @@ allow = [
 
     # Tier 2 — Core infrastructure
     "perl-parser-core",
+    "perl-test-must",
     "perl-tdd-support",
     "perl-edit",
     "perl-incremental-parsing",

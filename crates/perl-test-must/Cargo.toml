@@ -9,7 +9,6 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
-publish = false
 
 [lib]
 doctest = false
