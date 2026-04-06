@@ -496,11 +496,11 @@ mod mock_streaming_completion_tests {
     use parking_lot::Mutex;
     use perl_content_length_framing::ContentLengthFramer;
     use perl_lsp::{JsonRpcRequest, LspServer};
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::io::Write;
     use std::sync::Arc;
-    use std::time::{Duration, Instant};
     use std::thread;
+    use std::time::{Duration, Instant};
 
     #[derive(Clone)]
     struct TestOutputCapture {
@@ -643,10 +643,7 @@ mod mock_streaming_completion_tests {
             })),
         };
 
-        server
-            .handle_request(request)
-            .and_then(|response| response.result)
-            .unwrap_or(json!(null))
+        server.handle_request(request).and_then(|response| response.result).unwrap_or(json!(null))
     }
 
     struct MockChunkBackend {
@@ -711,7 +708,8 @@ mod mock_streaming_completion_tests {
         let result = request_streaming_completion(&server, uri, "stream-mock-1");
         assert!(result.is_null());
 
-        let progress = wait_for_progress_messages(&capture, "stream-mock-1", Duration::from_millis(500));
+        let progress =
+            wait_for_progress_messages(&capture, "stream-mock-1", Duration::from_millis(500));
         assert_eq!(progress.len(), 3);
 
         let expected = ["fi", "find_", "find_user($id)"];
@@ -758,8 +756,10 @@ mod mock_streaming_completion_tests {
         first.join().expect("first streaming request thread panicked");
 
         thread::sleep(Duration::from_millis(250));
-        let old_progress = wait_for_progress_messages(&capture, "stream-cancel-old", Duration::from_millis(300));
-        let new_progress = wait_for_progress_messages(&capture, "stream-cancel-new", Duration::from_millis(300));
+        let old_progress =
+            wait_for_progress_messages(&capture, "stream-cancel-old", Duration::from_millis(300));
+        let new_progress =
+            wait_for_progress_messages(&capture, "stream-cancel-new", Duration::from_millis(300));
 
         assert_eq!(old_progress.len(), 1);
         assert!(!new_progress.is_empty());
@@ -776,7 +776,8 @@ mod mock_streaming_completion_tests {
         let result = request_streaming_completion(&server, uri, "stream-error-1");
         assert!(result.is_null());
 
-        let progress = wait_for_progress_messages(&capture, "stream-error-1", Duration::from_millis(500));
+        let progress =
+            wait_for_progress_messages(&capture, "stream-error-1", Duration::from_millis(500));
         assert!(progress.len() >= 2);
         assert_eq!(progress[0]["params"]["value"]["items"][0]["insertText"], "find_");
         assert_eq!(progress[0]["params"]["value"]["isFinal"].as_bool(), Some(false));
