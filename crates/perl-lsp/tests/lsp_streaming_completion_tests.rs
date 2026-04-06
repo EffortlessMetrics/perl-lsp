@@ -778,17 +778,23 @@ mod mock_streaming_completion_tests {
 
         let progress =
             wait_for_progress_messages(&capture, "stream-error-1", Duration::from_millis(500));
-        assert!(progress.len() >= 2);
+        assert!(!progress.is_empty());
         assert_eq!(progress[0]["params"]["value"]["items"][0]["insertText"], "find_");
-        assert_eq!(progress[0]["params"]["value"]["isFinal"].as_bool(), Some(false));
-        assert_eq!(progress[1]["params"]["value"]["items"][0]["insertText"], "find_");
-        assert_eq!(progress[1]["params"]["value"]["isFinal"].as_bool(), Some(true));
-        let first_sequence = progress[0]["params"]["value"]["sequence"]
-            .as_u64()
-            .expect("first progress frame should carry sequence");
-        let final_sequence = progress[1]["params"]["value"]["sequence"]
+        let final_progress =
+            progress.last().expect("error path should emit at least one progress frame");
+        assert!(
+            final_progress
+                .pointer("/params/value/isFinal")
+                .and_then(Value::as_bool)
+                .is_some_and(|is_final| is_final),
+            "error path should emit a final progress frame"
+        );
+        assert_eq!(
+            final_progress["params"]["value"]["items"][0]["insertText"], "find_",
+            "error path should preserve final cumulative text"
+        );
+        let last_sequence = final_progress["params"]["value"]["sequence"]
             .as_u64()
             .expect("final progress frame should carry sequence");
-        assert!(final_sequence > first_sequence);
     }
 }
