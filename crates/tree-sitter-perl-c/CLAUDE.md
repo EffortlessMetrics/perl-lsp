@@ -48,9 +48,9 @@ Perl grammar:
 - `tree_sitter/parser.h`, `tree_sitter/array.h`, `tree_sitter/alloc.h` —
   tree-sitter runtime headers required by `parser.c` and `scanner.c`
 
-The canonical source of truth for these files inside this repository is
-`crates/tree-sitter-perl-rs/src/` (and `crates/tree-sitter-perl-rs/src/tree_sitter/`).
-This crate carries its own copy so the published package is self-contained.
+The `c-src/` directory IS the canonical source of truth for these files
+inside this repository. This crate carries its own copy so the published
+package is self-contained.
 
 ### Key Types and Functions (lib.rs)
 
@@ -109,5 +109,6 @@ let lang = language();
 - Legacy crate kept as the honest C-FFI reference implementation; active
   development for the native parser uses the v3 Rust parser in
   `crates/perl-parser/`.
-- The C sources under `c-src/` are a vendored snapshot; upstream updates
-  should be pulled from `crates/tree-sitter-perl-rs/src/` and mirrored here.
+- The C sources under `c-src/` are a vendored snapshot. The old harness crate
+  (`tree-sitter-perl-rs`) has been archived to `archive/crates/tree-sitter-perl-rs/`;
+  `c-src/` is now the sole source of truth for upstream C grammar snapshots.

@@ -21,7 +21,6 @@ coverage:
 # Files/patterns to exclude from coverage analysis
 ignore:
   - "archive/**"
-  - "crates/tree-sitter-perl-rs/**"
   - "crates/tree-sitter-perl-c/**"
   - "crates/*/tests/**"
   - "crates/*/benches/**"

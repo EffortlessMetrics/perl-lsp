@@ -100,8 +100,8 @@ fn test_workspace_dependencies_dont_reference_excluded() {
             }
 
             // Check for references to excluded crate directories in path declarations.
-            // The crate `tree-sitter-perl` at `crates/tree-sitter-perl-rs` is a workspace
-            // member, not an excluded crate, so we only flag paths pointing into excluded dirs.
+            // `tree-sitter-perl-rs` has been archived to `archive/crates/tree-sitter-perl-rs/`
+            // and is no longer a workspace member. Only flag paths pointing into excluded dirs.
             if !line.trim().starts_with('#')
                 && (line.contains("path = \"tree-sitter-perl-c")
                     || line.contains("path = \"tree-sitter-perl/")

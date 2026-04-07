@@ -108,17 +108,8 @@ fn check_workspace_dependencies(root: &Path) -> Result<()> {
         let excluded = excluded_set();
         let offending = workspace_dependencies
             .iter()
-            .filter_map(|(name, value)| {
+            .filter_map(|(name, _value)| {
                 if !excluded.contains(name.as_str()) {
-                    return None;
-                }
-
-                let is_tree_sitter_perl = name.as_str() == "tree-sitter-perl";
-                let uses_workspace_path =
-                    value.as_table().and_then(|value| value.get("path")).and_then(Value::as_str)
-                        == Some("crates/tree-sitter-perl-rs");
-
-                if is_tree_sitter_perl && uses_workspace_path {
                     return None;
                 }
 

@@ -172,7 +172,7 @@ technical_debt:
     target: "v1.1"
     issue: null
     added: "2026-02-28"
-    notes: "cargo-machete reports deps in tree-sitter-perl-c, perl-parser-pest, tree-sitter-perl (excluded/legacy) and workspace crates perl-lsp-feature-contracts, perl-lsp-completion, perl-ts-advanced-parsers, perl-ts-logos-lexer"
+    notes: "cargo-machete reports deps in tree-sitter-perl-c, perl-parser-pest, tree-sitter-perl (excluded/legacy) and workspace crates perl-lsp-feature-contracts, perl-lsp-completion"
 
 # =============================================================================
 # Historical Records
