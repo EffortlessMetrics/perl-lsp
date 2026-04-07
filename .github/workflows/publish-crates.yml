@@ -217,18 +217,58 @@ jobs:
           TOTAL=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
           echo "Publishing $TOTAL crates..."
 
+          # Compute the sparse-index path for a crate name per the cargo
+          # sparse-index layout: https://doc.rust-lang.org/cargo/reference/registry-index.html
+          #   1-char names -> "1/<name>"
+          #   2-char names -> "2/<name>"
+          #   3-char names -> "3/<first-char>/<name>"
+          #   4+ char names -> "<first-two-chars>/<next-two-chars>/<name>"
+          # Crate names are lowercased for index path lookup.
+          sparse_index_path() {
+            local name_lc
+            name_lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+            local len=${#name_lc}
+            case "$len" in
+              1) printf '1/%s' "$name_lc" ;;
+              2) printf '2/%s' "$name_lc" ;;
+              3) printf '3/%s/%s' "${name_lc:0:1}" "$name_lc" ;;
+              *) printf '%s/%s/%s' "${name_lc:0:2}" "${name_lc:2:2}" "$name_lc" ;;
+            esac
+          }
+
+          # Returns 0 if $1@$2 is present (non-yanked) in the crates.io sparse
+          # index, 1 otherwise. Uses curl to fetch the index file and parses the
+          # JSON-lines body for the exact version.
+          check_sparse_index() {
+            local name="$1"
+            local version="$2"
+            local path
+            path=$(sparse_index_path "$name")
+            local url="https://index.crates.io/${path}"
+            local body
+            body=$(curl -fsSL --max-time 15 "$url" 2>/dev/null) || return 1
+            printf '%s\n' "$body" | VERS="$version" python3 -c '
+          import json, os, sys
+          target = os.environ["VERS"]
+          for line in sys.stdin:
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  entry = json.loads(line)
+              except Exception:
+                  continue
+              if entry.get("vers") == target and not entry.get("yanked", False):
+                  sys.exit(0)
+          sys.exit(1)
+          '
+          }
+
           CRATES_LIST="$(mktemp)"
           echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             echo ""
             echo "===> $CRATE@$VERSION"
-
-            # Check if already published
-            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
-            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
-              echo "::warning::$CRATE@$VERSION already published, skipping"
-              continue
-            fi
 
             if [ "$DRY_RUN" = "true" ]; then
               TARGET_DIR="${RUNNER_TEMP}/cargo-package-${CRATE//\//-}"
@@ -238,70 +278,142 @@ jobs:
               continue
             fi
 
+            # Fast-path: if the crate@version is already in the sparse index,
+            # nothing to do. This lets re-runs after a partial failure skip
+            # the work that already landed.
+            if check_sparse_index "$CRATE" "$VERSION"; then
+              echo "::notice::$CRATE@$VERSION already present in sparse index, skipping"
+              continue
+            fi
+
             # Publish with retries.
             # Use --no-verify because workspace dev-dependency cycles can fail
             # verification before all crates are indexed on crates.io.
+            #
+            # Each attempt = (publish + progressive index wait + sparse-index verify).
+            # If the sparse-index verify never confirms the upload, retry the
+            # whole cycle up to 3 times before failing hard. This distinguishes
+            # slow-indexing (crate IS published, just not yet visible — confirmed
+            # by the sparse-index check) from silently-dropped uploads (cargo
+            # publish returned 0 but the crate never appeared).
             PUBLISHED=false
             for attempt in 1 2 3; do
               echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify"
               PUBLISH_LOG="$(mktemp)"
-              if cargo publish -p "$CRATE" --no-verify 2>&1 | tee "$PUBLISH_LOG"; then
-                PUBLISHED=true
-                rm -f "$PUBLISH_LOG"
-                break
-              fi
+              PUBLISH_EXIT=0
+              cargo publish -p "$CRATE" --no-verify 2>&1 | tee "$PUBLISH_LOG" || PUBLISH_EXIT=${PIPESTATUS[0]}
 
+              ALREADY_EXISTS=false
               if grep -q "crate ${CRATE}@${VERSION} already exists on crates.io index" "$PUBLISH_LOG"; then
-                echo "::warning::$CRATE@$VERSION already exists on crates.io index, skipping"
+                echo "::warning::$CRATE@$VERSION already exists on crates.io index"
+                ALREADY_EXISTS=true
+              fi
+              rm -f "$PUBLISH_LOG"
+
+              # If cargo publish hard-failed and it wasn't the "already exists"
+              # benign case, back off and retry the publish.
+              if [ "$PUBLISH_EXIT" != "0" ] && [ "$ALREADY_EXISTS" != "true" ]; then
+                echo "Publish attempt $attempt failed (exit $PUBLISH_EXIT), waiting 30s before retry..."
+                sleep 30
+                continue
+              fi
+
+              # Progressive sparse-index wait: probe at 5s, 15s, 45s, 90s
+              # elapsed. Most crates are indexed within ~30s; the 90s cap is
+              # the worst-case wait per attempt (down from the previous 300s
+              # fixed sleep). Deltas: 5, 10, 30, 45 -> cumulative 5, 15, 45, 90.
+              echo "Waiting for $CRATE@$VERSION to appear in sparse index..."
+              INDEXED=false
+              ELAPSED=0
+              for delta in 5 10 30 45; do
+                sleep "$delta"
+                ELAPSED=$((ELAPSED + delta))
+                if check_sparse_index "$CRATE" "$VERSION"; then
+                  echo "$CRATE@$VERSION indexed after ${ELAPSED}s"
+                  INDEXED=true
+                  break
+                fi
+                echo "  ${ELAPSED}s elapsed, not yet in sparse index..."
+              done
+
+              if [ "$INDEXED" = "true" ]; then
                 PUBLISHED=true
-                rm -f "$PUBLISH_LOG"
                 break
               fi
 
-              rm -f "$PUBLISH_LOG"
-              echo "Attempt $attempt failed, waiting 30s..."
-              sleep 30
+              echo "::warning::$CRATE@$VERSION not in sparse index after 90s on attempt $attempt/3; will retry publish"
             done
 
             if [ "$PUBLISHED" != "true" ]; then
-              echo "::error::Failed to publish $CRATE after 3 attempts"
+              echo "::error::Failed to publish $CRATE@$VERSION after 3 attempts — not visible in sparse index at https://index.crates.io/$(sparse_index_path "$CRATE")"
               exit 1
             fi
-
-            # Wait for crates.io sparse index to pick up the new version
-            echo "Waiting for $CRATE@$VERSION to appear in index..."
-            for i in $(seq 1 30); do
-              SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
-              if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
-                echo "$CRATE@$VERSION indexed successfully"
-                break
-              fi
-              if [ "$i" = "30" ]; then
-                echo "::warning::$CRATE@$VERSION not yet indexed after 5 min, proceeding anyway"
-              fi
-              sleep 10
-            done
           done < "$CRATES_LIST"
 
           echo ""
           echo "All crates processed."
 
-  # Step 3: Verify all crates are published
+  # Step 3: Verify all crates are published.
+  #
+  # This job runs UNCONDITIONALLY (`if: always()` gated on compute-order
+  # producing the crate list) so that even a partial publish run produces a
+  # hard error listing exactly which crates failed to land. This is the final
+  # safety net against the "soft success" class of bug where the publish
+  # step prints a warning and exits 0 while real uploads silently failed
+  # (see #3197).
+  #
+  # Verification hits the crates.io sparse index directly, which is the
+  # authoritative view of what is actually published (cargo search hits a
+  # different cache and can lag).
   verify:
     name: Verify all crates published
     needs: [compute-order, publish]
-    if: github.event.inputs.dry_run != 'true'
+    if: always() && needs.compute-order.result == 'success' && github.event.inputs.dry_run != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Verify all crates
+      - name: Verify all crates against sparse index
         env:
           CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
         run: |
+          sparse_index_path() {
+            local name_lc
+            name_lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+            local len=${#name_lc}
+            case "$len" in
+              1) printf '1/%s' "$name_lc" ;;
+              2) printf '2/%s' "$name_lc" ;;
+              3) printf '3/%s/%s' "${name_lc:0:1}" "$name_lc" ;;
+              *) printf '%s/%s/%s' "${name_lc:0:2}" "${name_lc:2:2}" "$name_lc" ;;
+            esac
+          }
+
+          check_sparse_index() {
+            local name="$1"
+            local version="$2"
+            local path
+            path=$(sparse_index_path "$name")
+            local url="https://index.crates.io/${path}"
+            local body
+            body=$(curl -fsSL --max-time 15 "$url" 2>/dev/null) || return 1
+            printf '%s\n' "$body" | VERS="$version" python3 -c '
+          import json, os, sys
+          target = os.environ["VERS"]
+          for line in sys.stdin:
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  entry = json.loads(line)
+              except Exception:
+                  continue
+              if entry.get("vers") == target and not entry.get("yanked", False):
+                  sys.exit(0)
+          sys.exit(1)
+          '
+          }
+
           FAILED=""
           TOTAL=0
           OK=0
@@ -311,13 +423,12 @@ jobs:
           while read -r CRATE VERSION; do
             TOTAL=$((TOTAL + 1))
 
-            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
-            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+            if check_sparse_index "$CRATE" "$VERSION"; then
               echo "OK $CRATE@$VERSION"
               OK=$((OK + 1))
             else
-              echo "FAIL $CRATE@$VERSION"
-              FAILED="${FAILED} ${CRATE}"
+              echo "FAIL $CRATE@$VERSION (not present in https://index.crates.io/$(sparse_index_path "$CRATE"))"
+              FAILED="${FAILED} ${CRATE}@${VERSION}"
             fi
           done < "$CRATES_LIST"
 
@@ -325,11 +436,22 @@ jobs:
           echo "Published: ${OK}/${TOTAL}"
 
           if [ -n "$FAILED" ]; then
-            echo "::error::Failed crates:${FAILED}"
+            echo "::error::The following crates are missing from the crates.io sparse index:${FAILED}"
+            {
+              echo "## Publish verification FAILED :x:"
+              echo ""
+              echo "Verified ${OK}/${TOTAL} crates present in the crates.io sparse index."
+              echo ""
+              echo "**Missing crates:**"
+              for entry in $FAILED; do
+                echo "- \`${entry}\`"
+              done
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
       - name: Summary
+        if: success()
         env:
           CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
           TARGET_VERSION: ${{ needs.compute-order.outputs.version }}
@@ -339,4 +461,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Crates**: ${COUNT} published in topological order" >> $GITHUB_STEP_SUMMARY
           echo "- **Target version**: ${TARGET_VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: All crates verified on crates.io" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: All crates verified on crates.io sparse index" >> $GITHUB_STEP_SUMMARY
