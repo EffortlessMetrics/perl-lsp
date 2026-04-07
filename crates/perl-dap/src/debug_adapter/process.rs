@@ -1314,6 +1314,12 @@ impl DebugAdapter {
         {
             use winapi::um::wincon::{CTRL_C_EVENT, GenerateConsoleCtrlEvent};
             // Try GenerateConsoleCtrlEvent first (works for processes in same console group).
+            // SAFETY: GenerateConsoleCtrlEvent is a stable Win32 API that takes two POD-by-value
+            // arguments (a u32 control code and a u32 process group id) and returns a BOOL. It
+            // has no preconditions on the calling thread or process state, holds no caller-owned
+            // resources, and cannot dereference invalid memory because both arguments are passed
+            // by value. The only failure mode is the call returning 0 (FALSE), which we handle
+            // explicitly via the `if result != 0` check below.
             let result = unsafe { GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid) };
             if result != 0 {
                 tracing::info!("Sent Ctrl+C event to process {}", pid);
