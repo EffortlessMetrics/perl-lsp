@@ -81,6 +81,14 @@ jobs:
         if: ${{ env.VSCE_PAT != '' }}
         working-directory: vscode-extension
         run: |
+          # Idempotency guard: skip if this version is already on the marketplace.
+          PUBLISHED_VERSION=$(vsce show EffortlessMetrics.perl-lsp-rs --json 2>/dev/null \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['versions'][0]['version'])" \
+            2>/dev/null || echo "")
+          if [ "$PUBLISHED_VERSION" = "$VERSION" ]; then
+            echo "::warning::VSCode Marketplace already has version $VERSION — skipping publish."
+            exit 0
+          fi
           vsce publish --pat "$VSCE_PAT" --packagePath "${{ env.VSIX_FILE }}"
 
       - name: Verify Open VSX CLI
@@ -92,7 +100,8 @@ jobs:
         if: ${{ env.OVSX_PAT != '' }}
         working-directory: vscode-extension
         run: |
-          ovsx publish "${{ env.OPENVSX_VSIX_FILE }}" --pat "$OVSX_PAT"
+          # --skip-duplicate exits 0 with a notice if the version already exists (idempotent).
+          ovsx publish "${{ env.OPENVSX_VSIX_FILE }}" --pat "$OVSX_PAT" --skip-duplicate
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
