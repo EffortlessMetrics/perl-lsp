@@ -264,6 +264,50 @@ jobs:
           '
           }
 
+          # Build a map of crate name -> manifest path from cargo metadata.
+          # We cannot assume crates/<name>/Cargo.toml because some crates have
+          # a different directory name than their package name (e.g. perl-lsp-rs
+          # lives in crates/perl-lsp/).
+          MANIFEST_MAP="$(mktemp)"
+          cargo metadata --format-version=1 --no-deps | python3 -c '
+          import json, sys
+          meta = json.load(sys.stdin)
+          ws = set(meta["workspace_members"])
+          for pkg in meta["packages"]:
+              if pkg["id"] in ws:
+                  print("{} {}".format(pkg["name"], pkg["manifest_path"]))
+          ' > "$MANIFEST_MAP"
+
+          # Write a Python helper script that strips [dev-dependencies] from a
+          # Cargo.toml in-place.
+          #
+          # Why strip? cargo publish resolves dev-deps during manifest
+          # preparation even with --no-verify, which causes publish failures
+          # when a crate has a dev-dep on a workspace sibling not yet on
+          # crates.io. Stripping dev-deps from the on-disk manifest before
+          # the publish call is the only reliable fix. This is safe: downstream
+          # consumers never use dev-deps, so the published Cargo.toml is
+          # functionally identical for all users of the crate. The original
+          # Cargo.toml is always restored from backup after each publish.
+          #
+          # The regex matches [dev-dependencies] and everything up to the next
+          # TOML section header (^[) or end of file. It does NOT match
+          # [target.*.dev-dependencies] because that variant does not start at
+          # column 0 with exactly "[dev-dependencies]".
+          STRIP_SCRIPT="$(mktemp --suffix=.py)"
+          cat > "$STRIP_SCRIPT" << 'STRIP_SCRIPT_EOF'
+          import re, sys, pathlib
+          path = pathlib.Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          new_text = re.sub(
+              r"^\[dev-dependencies\].*?(?=^\[|\Z)",
+              "",
+              text,
+              flags=re.MULTILINE | re.DOTALL,
+          )
+          path.write_text(new_text, encoding="utf-8")
+          STRIP_SCRIPT_EOF
+
           CRATES_LIST="$(mktemp)"
           echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
@@ -285,6 +329,25 @@ jobs:
               echo "::notice::$CRATE@$VERSION already present in sparse index, skipping"
               continue
             fi
+
+            # Locate the manifest for this crate (package name may differ from
+            # directory name, so we look it up from cargo metadata).
+            MANIFEST_PATH="$(grep "^${CRATE} " "$MANIFEST_MAP" | awk '{print $2}')"
+            if [ -z "$MANIFEST_PATH" ]; then
+              echo "::error::Could not find manifest path for $CRATE in cargo metadata"
+              exit 1
+            fi
+
+            # Back up the manifest and register a trap to restore it on any
+            # unexpected exit so [dev-dependencies] is always reinstated.
+            MANIFEST_BACKUP="$(mktemp)"
+            cp "$MANIFEST_PATH" "$MANIFEST_BACKUP"
+            # shellcheck disable=SC2064
+            trap "cp '$MANIFEST_BACKUP' '$MANIFEST_PATH'; rm -f '$MANIFEST_BACKUP'" EXIT
+
+            # Strip [dev-dependencies] from the manifest before publishing.
+            echo "Stripping [dev-dependencies] from $MANIFEST_PATH before publish"
+            python3 "$STRIP_SCRIPT" "$MANIFEST_PATH"
 
             # Publish with retries.
             # Use --no-verify because workspace dev-dependency cycles can fail
@@ -343,6 +406,13 @@ jobs:
 
               echo "::warning::$CRATE@$VERSION not in sparse index after 90s on attempt $attempt/3; will retry publish"
             done
+
+            # Restore the original Cargo.toml (with [dev-dependencies]) now
+            # that publishing is done, then clear the EXIT trap so it does not
+            # fire redundantly on the next loop iteration.
+            cp "$MANIFEST_BACKUP" "$MANIFEST_PATH"
+            rm -f "$MANIFEST_BACKUP"
+            trap - EXIT
 
             if [ "$PUBLISHED" != "true" ]; then
               echo "::error::Failed to publish $CRATE@$VERSION after 3 attempts — not visible in sparse index at https://index.crates.io/$(sparse_index_path "$CRATE")"
