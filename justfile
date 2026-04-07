@@ -2015,6 +2015,91 @@ release-turnkey VERSION *ARGS="":
 publish-release VERSION *ARGS="":
     @cargo xtask publish-release "{{VERSION}}" {{ARGS}}
 
+# Dry-run publish gate: package every allowlisted crate in topological order.
+# Mirrors the dev-dep strip and packaging steps from publish-crates.yml.
+# Runs automatically in CI on every PR that touches Cargo.toml.
+# Use this locally to verify your change won't break the publish workflow.
+publish-dry-run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Publish dry-run gate ==="
+    echo "Running publish-topo unit tests..."
+    python3 scripts/tests/test-publish-topo.py -v
+
+    echo ""
+    echo "Computing topological publish order..."
+    cargo metadata --format-version=1 --no-deps \
+      | python3 scripts/publish-topo.py > /tmp/publish-dry-run-crates.json
+
+    COUNT=$(python3 -c 'import json; print(len(json.load(open("/tmp/publish-dry-run-crates.json"))))')
+    echo "  ${COUNT} crates in publish allowlist"
+
+    STRIP_SCRIPT="$(mktemp --suffix=.py)"
+    cat > "$STRIP_SCRIPT" << 'STRIP_SCRIPT_EOF'
+    import re, sys, pathlib
+    path = pathlib.Path(sys.argv[1])
+    text = path.read_text(encoding="utf-8")
+    new_text = re.sub(
+        r"^\[dev-dependencies\].*?(?=^\[|\Z)",
+        "",
+        text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    path.write_text(new_text, encoding="utf-8")
+    STRIP_SCRIPT_EOF
+
+    MANIFEST_MAP="$(mktemp)"
+    cargo metadata --format-version=1 --no-deps | python3 -c '
+    import json, sys
+    meta = json.load(sys.stdin)
+    ws = set(meta["workspace_members"])
+    for pkg in meta["packages"]:
+        if pkg["id"] in ws:
+            print("{} {}".format(pkg["name"], pkg["manifest_path"]))
+    ' > "$MANIFEST_MAP"
+
+    FAILED=""
+    CRATES_LIST="$(mktemp)"
+    python3 -c \
+      'import json,sys; [print("{} {}".format(c["name"],c["version"])) for c in json.load(open("/tmp/publish-dry-run-crates.json"))]' \
+      > "$CRATES_LIST"
+
+    while read -r CRATE VERSION; do
+      echo ""
+      echo "===> Packaging $CRATE@$VERSION"
+      MANIFEST_PATH="$(grep "^${CRATE} " "$MANIFEST_MAP" | awk '{print $2}')"
+      if [ -z "$MANIFEST_PATH" ]; then
+        echo "  ERROR: Could not find manifest path"
+        FAILED="${FAILED} ${CRATE}"
+        continue
+      fi
+      MANIFEST_BACKUP="$(mktemp)"
+      cp "$MANIFEST_PATH" "$MANIFEST_BACKUP"
+      # shellcheck disable=SC2064
+      trap "cp '$MANIFEST_BACKUP' '$MANIFEST_PATH'; rm -f '$MANIFEST_BACKUP'" EXIT
+      python3 "$STRIP_SCRIPT" "$MANIFEST_PATH"
+      TARGET_DIR="/tmp/cargo-package-dry-run-${CRATE//\//-}"
+      rm -rf "$TARGET_DIR"
+      if CARGO_TARGET_DIR="$TARGET_DIR" CARGO_PACKAGE_NO_VERIFY=1 \
+         bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"; then
+        echo "  OK"
+      else
+        echo "  FAILED"
+        FAILED="${FAILED} ${CRATE}"
+      fi
+      cp "$MANIFEST_BACKUP" "$MANIFEST_PATH"
+      rm -f "$MANIFEST_BACKUP"
+      trap - EXIT
+    done < "$CRATES_LIST"
+
+    echo ""
+    if [ -n "$FAILED" ]; then
+      echo "ERROR: Packaging failed for:${FAILED}"
+      echo "These crates would break the publish workflow. Fix before merging."
+      exit 1
+    fi
+    echo "=== All ${COUNT} crates packaged successfully. ==="
+
 # Run post-release installed-binary smoke test for a release version.
 smoke-test-release VERSION:
     @cargo xtask smoke-test-release "{{VERSION}}"
