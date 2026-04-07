@@ -132,6 +132,7 @@ members = [
     "crates/perl-dap-variables",
     "crates/perl-feature-catalog",
     "crates/tree-sitter-perl-c",
+    "crates/tree-sitter-perl-rs",
     "crates/perl-ci-hygiene",
     "xtask",
 ]
@@ -179,6 +180,8 @@ allow = [
     "perl-parser-core",
     "perl-test-must",
     "perl-tdd-support",
+    # Tier 2+ — Rust-native tree-sitter facade (depends on perl-parser-core + perl-ast)
+    "tree-sitter-perl-rs",
     "perl-edit",
     "perl-incremental-parsing",
     "perl-symbol-types",
@@ -451,6 +454,7 @@ perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.2" }
 
 # External dependencies
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c", version = "0.12.2" }
+tree-sitter-perl-rs = { path = "crates/tree-sitter-perl-rs", version = "0.12.2" }
 tree-sitter = "0.26.8"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }

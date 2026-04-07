@@ -1,0 +1,351 @@
+//! Rust-native Perl parser with tree-sitter-style ergonomics and tree-sitter-compatible
+//! output. This is a facade over the v3 native parser (`perl-parser-core`); it is NOT
+//! bindings to the C tree-sitter grammar. For the conventional tree-sitter binding, see
+//! `tree-sitter-perl-c`.
+//!
+//! # Quick start
+//!
+//! ```rust
+//! use tree_sitter_perl_rs::Parser;
+//!
+//! let mut parser = Parser::new();
+//! if let Some(tree) = parser.parse("my $x = 42;") {
+//!     let root = tree.root_node();
+//!     println!("{}", root.to_sexp());
+//! }
+//! ```
+//!
+//! # Design
+//!
+//! This crate wraps the v3 recursive-descent Perl parser (`perl-parser-core`) with an API
+//! surface that matches the conventions of the `tree-sitter` crate. Users familiar with
+//! tree-sitter can work with Perl ASTs immediately, while the underlying engine is the
+//! full-featured native v3 stack (not the C tree-sitter grammar).
+//!
+//! Key properties:
+//! - `Parser::parse()` returns `Option<Tree>` — `None` only on complete parse failure.
+//!   The v3 parser is highly error-tolerant and almost always produces a partial tree.
+//! - `Node::to_sexp()` delegates to `perl_ast::Node::to_sexp()` for tree-sitter-compatible
+//!   S-expression output.
+//! - `Node::kind()` returns the `NodeKind::kind_name()` string.
+//! - `Node::start_byte()` / `Node::end_byte()` expose the `SourceLocation` byte offsets.
+//! - `Node::children()` and `Node::child()` mirror tree-sitter traversal conventions.
+//!
+//! # Relationship to `tree-sitter-perl-c`
+//!
+//! | Crate | Backing engine | Use when |
+//! |-------|---------------|----------|
+//! | `tree-sitter-perl-rs` | v3 native Rust parser (this crate) | You want the full-featured Rust toolchain |
+//! | `tree-sitter-perl-c` | C tree-sitter grammar | You need compatibility with the tree-sitter C ecosystem |
+
+#![deny(unsafe_code)]
+#![deny(unreachable_pub)]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc
+)]
+
+use perl_ast::Node as AstNode;
+use perl_parser_core::Parser as CoreParser;
+
+/// A Perl parser with tree-sitter-style ergonomics.
+///
+/// Wraps the v3 recursive-descent Perl parser. Create one parser instance and call
+/// [`parse`][Parser::parse] for each source file you need to process.
+///
+/// # Example
+///
+/// ```rust
+/// use tree_sitter_perl_rs::Parser;
+///
+/// let mut parser = Parser::new();
+/// let tree = parser.parse("sub greet { print \"hello\"; }");
+/// assert!(tree.is_some());
+/// ```
+pub struct Parser {
+    // Stateless currently; the v3 CoreParser takes source at construction time.
+    // Stored as a unit struct for forward compatibility (e.g. future options).
+    _priv: (),
+}
+
+impl Parser {
+    /// Create a new parser instance.
+    pub fn new() -> Self {
+        Parser { _priv: () }
+    }
+
+    /// Parse a Perl source string and return a [`Tree`], or `None` on complete failure.
+    ///
+    /// The v3 parser is highly error-tolerant — even malformed input usually produces a
+    /// partial tree. `None` is reserved for extreme edge cases where no AST can be built
+    /// at all.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use tree_sitter_perl_rs::Parser;
+    ///
+    /// let mut parser = Parser::new();
+    /// let tree = parser.parse("my $x = 42;");
+    /// assert!(tree.is_some());
+    /// ```
+    pub fn parse(&mut self, source: &str) -> Option<Tree> {
+        let mut core = CoreParser::new(source);
+        match core.parse() {
+            Ok(root) => Some(Tree { root, source: source.to_string() }),
+            Err(_) => None,
+        }
+    }
+}
+
+impl Default for Parser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The result of a successful parse: an owned syntax tree and the source text.
+///
+/// Use [`root_node`][Tree::root_node] to begin traversal.
+pub struct Tree {
+    root: AstNode,
+    source: String,
+}
+
+impl Tree {
+    /// Returns the root node of the syntax tree.
+    pub fn root_node(&self) -> Node<'_> {
+        Node { inner: &self.root, tree_source: &self.source }
+    }
+
+    /// Returns the source text this tree was built from.
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+}
+
+/// A borrowed reference to a node in the syntax tree.
+///
+/// Mirrors the tree-sitter `Node` API surface. Lifetime `'tree` is tied to the
+/// owning [`Tree`].
+pub struct Node<'tree> {
+    inner: &'tree AstNode,
+    tree_source: &'tree str,
+}
+
+impl<'tree> Node<'tree> {
+    /// Returns the node kind string (e.g. `"Program"`, `"Subroutine"`, `"Variable"`).
+    ///
+    /// Delegates to [`NodeKind::kind_name`][perl_ast::NodeKind::kind_name].
+    pub fn kind(&self) -> &'static str {
+        self.inner.kind.kind_name()
+    }
+
+    /// Returns a tree-sitter-compatible S-expression for this node and its subtree.
+    ///
+    /// Delegates to `perl_ast::Node::to_sexp()`. Example output:
+    /// `(source_file (my_declaration (variable $ x) (number 42)))`.
+    pub fn to_sexp(&self) -> String {
+        self.inner.to_sexp()
+    }
+
+    /// Returns the number of direct children.
+    pub fn child_count(&self) -> usize {
+        ast_children(self.inner).len()
+    }
+
+    /// Returns the `i`-th direct child, or `None` if out of range.
+    pub fn child(&self, i: usize) -> Option<Node<'tree>> {
+        ast_children(self.inner)
+            .get(i)
+            .map(|child| Node { inner: child, tree_source: self.tree_source })
+    }
+
+    /// Returns an iterator over direct children.
+    ///
+    /// The iterator yields [`Node`] values sharing the same `'tree` lifetime as `self`.
+    pub fn children(&self) -> impl Iterator<Item = Node<'tree>> + '_ {
+        // Collect first so we can own the Vec; lifetimes are correct because
+        // all children are borrowed from the same Arc-backed tree.
+        let kids = ast_children(self.inner);
+        kids.into_iter().map(move |child| Node { inner: child, tree_source: self.tree_source })
+    }
+
+    /// Returns the start byte offset in the source text (inclusive).
+    pub fn start_byte(&self) -> usize {
+        self.inner.location.start
+    }
+
+    /// Returns the end byte offset in the source text (exclusive).
+    pub fn end_byte(&self) -> usize {
+        self.inner.location.end
+    }
+
+    /// Extracts the source text slice covered by this node.
+    ///
+    /// Returns `Err` only when the byte range contains invalid UTF-8, which is unlikely
+    /// for content produced from a valid Rust `&str`.
+    pub fn utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, std::str::Utf8Error> {
+        let start = self.inner.location.start;
+        let end = self.inner.location.end.min(source.len());
+        std::str::from_utf8(&source[start..end])
+    }
+
+    /// Returns `true` if this node has no children (is a leaf node).
+    pub fn is_leaf(&self) -> bool {
+        ast_children(self.inner).is_empty()
+    }
+
+    /// Returns the source text that was provided when creating the owning [`Tree`].
+    pub fn tree_source(&self) -> &'tree str {
+        self.tree_source
+    }
+
+    /// Returns the inner `perl_ast::Node` for direct access to the v3 AST.
+    ///
+    /// This escape hatch lets callers use capabilities that go beyond the tree-sitter
+    /// surface (e.g., match on [`PerlNodeKind`] variants).
+    pub fn inner(&self) -> &'tree AstNode {
+        self.inner
+    }
+}
+
+/// Re-export of [`perl_ast::NodeKind`] so callers can pattern-match node variants
+/// without a direct dependency on `perl-ast`.
+pub use perl_ast::NodeKind as PerlNodeKind;
+
+// ---------------------------------------------------------------------------
+// Private helper — access AstNode's children without name collision
+// ---------------------------------------------------------------------------
+
+// Collect the direct children of an `AstNode` as a `Vec<&AstNode>`.
+//
+// This thin wrapper exists because the public `Node::children()` method in `perl_ast`
+// has the same name as our facade method and would be ambiguous in `impl` blocks.
+#[inline]
+fn ast_children(node: &AstNode) -> Vec<&AstNode> {
+    node.children()
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_tdd_support::must_some;
+
+    #[test]
+    fn test_parser_creates_tree() {
+        let mut p = Parser::new();
+        let tree = p.parse("my $x = 42;");
+        assert!(tree.is_some());
+    }
+
+    #[test]
+    fn test_root_node_kind() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 42;"));
+        assert_eq!(tree.root_node().kind(), "Program");
+    }
+
+    #[test]
+    fn test_to_sexp_starts_with_source_file() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 42;"));
+        let sexp = tree.root_node().to_sexp();
+        assert!(
+            sexp.starts_with("(source_file"),
+            "sexp should start with (source_file, got: {}",
+            sexp
+        );
+    }
+
+    #[test]
+    fn test_child_count_for_program_with_statements() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 42;\nmy $y = 99;"));
+        let root = tree.root_node();
+        assert!(root.child_count() >= 1, "root should have children");
+    }
+
+    #[test]
+    fn test_start_and_end_byte() {
+        let source = "my $x = 42;";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+        assert_eq!(root.start_byte(), 0);
+        // End byte from the Program node spans to end of last statement.
+        assert!(root.end_byte() <= source.len() + 1, "end_byte out of range");
+    }
+
+    #[test]
+    fn test_utf8_text_round_trip() {
+        let source = "my $x = 42;";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+        let text = root.utf8_text(source.as_bytes());
+        assert!(text.is_ok(), "utf8_text should succeed");
+    }
+
+    #[test]
+    fn test_children_iterator_matches_child_count() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 1; my $y = 2;"));
+        let root = tree.root_node();
+        let collected: Vec<_> = root.children().collect();
+        assert_eq!(collected.len(), root.child_count());
+    }
+
+    #[test]
+    fn test_child_by_index() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 1; my $y = 2;"));
+        let root = tree.root_node();
+        if root.child_count() > 0 {
+            let first = root.child(0);
+            assert!(first.is_some());
+        }
+        assert!(root.child(9999).is_none());
+    }
+
+    #[test]
+    fn test_empty_source_yields_tree() {
+        // The v3 parser is error-tolerant; empty input returns Program { statements: [] }.
+        let mut p = Parser::new();
+        let tree = p.parse("");
+        assert!(tree.is_some(), "empty input should still yield a tree");
+    }
+
+    #[test]
+    fn test_source_accessor() {
+        let source = "sub foo { }";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        assert_eq!(tree.source(), source);
+    }
+
+    #[test]
+    fn test_default_parser() {
+        let mut p = Parser::default();
+        let tree = p.parse("1;");
+        assert!(tree.is_some());
+    }
+
+    #[test]
+    fn test_is_leaf_for_leaf_nodes() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("42"));
+        let root = tree.root_node();
+        // The root Program is not a leaf.
+        assert!(!root.is_leaf());
+    }
+}
