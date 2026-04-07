@@ -46,3 +46,30 @@ fn snapshot_package_declaration() {
     let sexp = tree.root_node().to_sexp();
     insta::assert_snapshot!("package_declaration", sexp);
 }
+
+#[test]
+fn snapshot_package_with_multiple_subs() {
+    let mut parser = Parser::new();
+    let src = "package Animal;\n\nsub new { my ($class, %args) = @_; bless {}, $class; }\n\nsub speak { return \"...\"; }\n\nsub name { return $_[0]->{name}; }";
+    let tree = must_some(parser.parse(src));
+    let sexp = tree.root_node().to_sexp();
+    insta::assert_snapshot!("package_with_multiple_subs", sexp);
+}
+
+#[test]
+fn snapshot_nested_blocks() {
+    let mut parser = Parser::new();
+    let src = "sub outer { if (1) { while (1) { last; } } }";
+    let tree = must_some(parser.parse(src));
+    let sexp = tree.root_node().to_sexp();
+    insta::assert_snapshot!("nested_blocks", sexp);
+}
+
+#[test]
+fn snapshot_complex_regex() {
+    let mut parser = Parser::new();
+    let src = r#"my @matches = ($text =~ /(\w+)\s+=\s+(\d+)/g);"#;
+    let tree = must_some(parser.parse(src));
+    let sexp = tree.root_node().to_sexp();
+    insta::assert_snapshot!("complex_regex", sexp);
+}

@@ -1,0 +1,6 @@
+---
+source: crates/tree-sitter-perl-rs/tests/snapshots.rs
+assertion_line: 65
+expression: sexp
+---
+(source_file (sub outer ()(block (if (number 1) (block (while (number 1) (block (last))))))))
