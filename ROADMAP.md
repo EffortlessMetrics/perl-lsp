@@ -13,30 +13,26 @@ project docs when you need exact release facts, receipts, or milestone detail.
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
 - Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
-## Now (v0.12.2 — stability hardening)
+## Now (pre-announcement cleanup)
 
-- Merge CI improvement PRs (#3078–#3080) and Dependabot batch (#3064–#3071)
-- Fix pre-push hook branch-deletion regression (#3081)
-- Scout top 3 uninvestigated parser blockers and raise CPAN clean rate toward 80%
-- Close error-handling hygiene batch and test gap issues
+- `v0.12.2` shipped to GitHub Releases on 2026-04-04 (work consolidated 2026-04-02; v0.12.2 through v0.12.8 milestones merged into a single release)
+- Pre-announcement plumbing: license badge fix, Docker arm64 timeout fix, dependency triage, harness archival, SRP microcrate extractions
+- Distribution channel verification across crates.io, VSCode Marketplace, Open VSX, Docker Hub, GitHub Releases
+- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (0.12.x quality tail)" for the active item list
 
-## Next (v0.12.3 — diagnostic & refactoring hardening)
+## Next (v0.13.0 — public alpha announcement)
 
-- Dead code highlighting, perlcritic integration, `strict`/`warnings` diagnostics
-- Workspace-scoped rename, extract variable/subroutine, subroutine inlining
-- Moose/Moo framework support (method modifiers, role composition)
-- DAP Phase 3 test suite and cross-platform signal handling
+- 0.12.x line built confidence across parser, diagnostics, refactoring, distribution, AI inline completion
+- Quality cleanup PRs land, version bump to 0.13.0
+- Seamless install story verified across all distribution channels
+- Announcement blog post / release notes
 
-## Then
+## Beyond v0.13.0
 
-- `v0.12.4`: parser corpus confidence (≥85% CPAN clean) and performance profiling
-- `v0.12.5`: distribution and packaging (Docker, Nix, Homebrew, Windows/Linux package managers)
-
-## Later (v0.13.0 — public alpha announcement)
-
-- 0.12.x builds confidence; 0.13.0 is the initial public alpha announcement
-- Seamless install story across all distribution channels
-- Performance, security, and compatibility hardening on the path to `v1.0.0`
+- Stability contract for APIs and advertised wire behavior
+- Performance hardening for larger workspaces
+- Security posture and documentation hardening
+- Path to `v1.0.0`
 
 ## Update Rules
 

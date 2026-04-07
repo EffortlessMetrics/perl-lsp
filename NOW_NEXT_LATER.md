@@ -5,35 +5,38 @@ This file is the short planning snapshot for sequencing work. Use
 plan and [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for
 evidence-backed status and release facts.
 
-## DONE — v0.12.2 stability + v0.12.3 diagnostics & refactoring (shipped 2026-04-02)
+## DONE — v0.12.2 through v0.12.8 (consolidated and shipped)
 
-- 27 PRs merged: CI gates, hook fix, error handling, test coverage, dep bumps
-- Diagnostics: dead code (PL406), perlcritic hardening, strict/warnings already done
-- Refactoring: subroutine inlining, extract var/sub, scoped rename already done
-- Moose/Moo, DAP Phase 3 all confirmed already implemented
+- Work consolidated and merged 2026-04-02 (~70 PRs): CI gates, error handling, test coverage, parser confidence, performance, distribution, AI inline completion, packaging, announcement polish
+- `v0.12.2` cut as a GitHub Release on 2026-04-04 with binaries, SBOM, and SHA256SUMS
+- Editor channels (VSCode Marketplace, Open VSX) and Docker Hub: published 2026-04-04
 
-## NOW — v0.12.4 finishing + v0.12.5 parser confidence
+## NOW — pre-announcement cleanup
 
-- Semantic framework coverage (#3077) — builder active
-- Parser: quote-like operators (#3020), state keyword (#3033) — builders active
-- Corpus ratchet needed to get true post-fix baseline (all Tier 1 blockers fixed)
-- DAP: cross-platform signals (#3028), attach command (#3025)
+- License badge fixed (canonical SPDX text in all 126 LICENSE files), GitHub now reports `Apache-2.0` instead of `NOASSERTION`
+- Docker arm64 timeout fix landed (Dockerfile MSRV pin + workflow timeout bump)
+- Dependency triage complete: 7 dependabot PRs merged including 3 majors (eslint v10, actions/cache v5, similar 3.0.0)
+- SRP microcrate extractions in flight (anti_pattern_detector, bench_parser) to free the dead `tree-sitter-perl-rs` harness for archival
+- Publishing the modern parsers as `tree-sitter-perl-c` (C tree-sitter FFI) and a new `tree-sitter-perl-rs` (Rust v3 facade with tree-sitter-compatible output)
+- Per-crate publish blockers cleared (perl-lsp-ai-provider unblocked, perl-heredoc-anti-patterns extraction in progress)
 
-## NEXT — v0.12.6 performance + v0.12.7 distribution
+## NEXT — v0.13.0 public alpha announcement
 
-- Performance: workspace startup (#2078), completion latency (#2077), CPAN-scale (#1664)
-- Distribution: Docker (#2083), Nix (#2081), Homebrew (#2086), Windows (#2596), Linux (#2095)
-- Supply chain: SBOM and SLSA provenance (#281)
+- Re-trigger crates.io publish after the SRP extractions and harness archival land
+- Final smoke test across all distribution channels
+- Bump workspace to `0.13.0`
+- Announcement blog post / release notes
 
-## LATER — v0.13.0 public alpha announcement
+## LATER — beyond v0.13.0
 
-- 0.12.x builds confidence; 0.13.0 is the initial public alpha announcement
-- Seamless install across all distribution channels
-- Performance, security, and API-stability work on the path to `v1.0.0`
+- Stability contract for APIs and advertised wire behavior
+- Performance hardening for larger workspaces
+- Security posture and documentation hardening
+- Path to `v1.0.0`
 
 ## Working Rules
 
-- Last updated: `2026-04-02`
+- Last updated: `2026-04-07`
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.
