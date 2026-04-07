@@ -71,7 +71,7 @@ fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<
     match mutex.lock() {
         Ok(guard) => guard,
         Err(poisoned) => {
-            eprintln!("Warning: poisoned mutex recovered: {ctx}");
+            tracing::warn!(ctx, "Poisoned mutex recovered");
             poisoned.into_inner()
         }
     }

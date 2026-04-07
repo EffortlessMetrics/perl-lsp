@@ -68,9 +68,7 @@ impl DebugAdapter {
                                     );
                                 }
                                 Err(error) => {
-                                    eprintln!(
-                                        "Failed to send framed variables command, falling back: {error}"
-                                    );
+                                    tracing::warn!(%error, "Failed to send framed variables command, falling back");
                                     let cmd = format!("V {} .\n", frame_id);
                                     let _ = stdin.write_all(cmd.as_bytes());
                                     let _ = stdin.flush();
@@ -90,9 +88,7 @@ impl DebugAdapter {
                                     );
                                 }
                                 Err(error) => {
-                                    eprintln!(
-                                        "Failed to send framed variables command, falling back: {error}"
-                                    );
+                                    tracing::warn!(%error, "Failed to send framed variables command, falling back");
                                     let cmd = format!("V {} ::\n", frame_id);
                                     let _ = stdin.write_all(cmd.as_bytes());
                                     let _ = stdin.flush();
@@ -112,9 +108,7 @@ impl DebugAdapter {
                                     );
                                 }
                                 Err(error) => {
-                                    eprintln!(
-                                        "Failed to send framed variables command, falling back: {error}"
-                                    );
+                                    tracing::warn!(%error, "Failed to send framed variables command, falling back");
                                     let cmd = format!("V {} *\n", frame_id);
                                     let _ = stdin.write_all(cmd.as_bytes());
                                     let _ = stdin.flush();

@@ -9,7 +9,7 @@ impl DebugAdapter {
         command: &str,
         arguments: Option<Value>,
     ) -> DapMessage {
-        eprintln!("DAP request: {} {:?}", command, arguments);
+        tracing::debug!(command, arguments = ?arguments, "DAP request");
 
         let response = self.dispatch_request(request_seq, command, arguments);
 
@@ -29,7 +29,7 @@ impl DebugAdapter {
         command: &str,
         arguments: Option<Value>,
     ) -> DapMessage {
-        eprintln!("DAP request (mock): {} {:?}", command, arguments);
+        tracing::debug!(command, arguments = ?arguments, "DAP request (mock)");
 
         let response = self.dispatch_request(request_seq, command, arguments);
         if command == "initialize" && Self::response_succeeded_for_command(&response, "initialize")

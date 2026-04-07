@@ -37,10 +37,10 @@ impl LspServer {
                 let flat_data: Vec<_> = data.into_iter().flatten().collect();
 
                 if start.elapsed() >= deadline {
-                    eprintln!(
-                        "SemanticTokens: deadline exceeded ({:?}), returning {} tokens",
-                        start.elapsed(),
-                        flat_data.len() / 5 // Each token is 5 u32s
+                    tracing::debug!(
+                        elapsed = ?start.elapsed(),
+                        tokens = flat_data.len() / 5, // Each token is 5 u32s
+                        "SemanticTokens: deadline exceeded"
                     );
                 }
 
@@ -59,7 +59,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
 
-            eprintln!("Getting semantic tokens for: {}", uri);
+            tracing::debug!(uri, "Getting semantic tokens");
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -68,7 +68,7 @@ impl LspServer {
                     let tokens = provider.extract(ast);
                     let encoded = encode_semantic_tokens(&tokens);
 
-                    eprintln!("Found {} semantic tokens", tokens.len());
+                    tracing::debug!(count = tokens.len(), "Found semantic tokens");
 
                     return Ok(Some(json!({
                         "data": encoded
@@ -92,10 +92,7 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
 
-            eprintln!(
-                "Getting semantic tokens for range: {} (lines {}-{})",
-                uri, start_line, end_line
-            );
+            tracing::debug!(uri, start_line, end_line, "Getting semantic tokens for range");
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -111,7 +108,7 @@ impl LspServer {
 
                     let encoded = encode_semantic_tokens(&range_tokens);
 
-                    eprintln!("Found {} semantic tokens in range", range_tokens.len());
+                    tracing::debug!(count = range_tokens.len(), "Found semantic tokens in range");
 
                     return Ok(Some(json!({
                         "data": encoded

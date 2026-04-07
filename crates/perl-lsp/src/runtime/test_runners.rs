@@ -8,7 +8,7 @@ use super::*;
 impl LspServer {
     /// Run a specific test
     pub(crate) fn run_test(&self, test_id: &str) -> Result<Option<Value>, JsonRpcError> {
-        eprintln!("Running test: {}", test_id);
+        tracing::debug!(test_id, "Running test");
 
         // Parse test ID to get URI and test name
         let parts: Vec<&str> = test_id.split("::").collect();
@@ -64,7 +64,7 @@ impl LspServer {
 
     /// Run all tests in a file
     pub(crate) fn run_test_file(&self, uri: &str) -> Result<Option<Value>, JsonRpcError> {
-        eprintln!("Running test file: {}", uri);
+        tracing::debug!(uri, "Running test file");
 
         let documents = self.documents.lock();
         if let Some(doc) = documents.get(uri) {

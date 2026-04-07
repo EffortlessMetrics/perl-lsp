@@ -35,7 +35,7 @@ impl DiagnosticDebouncer {
             .name("diag-debounce".into())
             .spawn(move || worker_loop(rx, interval, publish_fn))
         {
-            eprintln!("diagnostic debounce thread spawn failed: {e}");
+            tracing::error!(error = %e, "diagnostic debounce thread spawn failed");
         }
         Self { tx }
     }

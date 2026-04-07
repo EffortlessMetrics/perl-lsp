@@ -79,14 +79,11 @@ impl LspServer {
                         let latency = start_time.elapsed();
 
                         // Log performance metrics for AC12 validation
-                        eprintln!(
-                            "Enhanced cancellation processed in {:?} for request {:?}",
-                            latency, idv
-                        );
+                        tracing::debug!(latency = ?latency, request = ?idv, "Enhanced cancellation processed");
 
                         // Validate performance requirements (<50ms end-to-end response time)
                         if latency.as_millis() > 50 {
-                            eprintln!("WARNING: Cancellation latency exceeded 50ms: {:?}", latency);
+                            tracing::warn!(latency = ?latency, "Cancellation latency exceeded 50ms");
                         }
 
                         // Optional: Send response with enhanced context for client tracking
@@ -321,7 +318,7 @@ impl LspServer {
             "$/setTrace" => self.handle_set_trace_dispatch(request.params),
             "$/test/slowOperation" => self.handle_slow_operation_dispatch(&id, request.params),
             _ => {
-                eprintln!("Method not implemented: {}", request.method);
+                tracing::debug!(method = %request.method, "Method not implemented");
                 // Enhanced error response with comprehensive context
                 Err(enhanced_error(
                     METHOD_NOT_FOUND,
@@ -352,7 +349,7 @@ impl LspServer {
 
         match result {
             Ok(Some(result)) if should_respond => {
-                eprintln!("Sending successful response for request {}", request.method);
+                tracing::trace!(method = %request.method, "Sending successful response");
                 Some(JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
                     id,
@@ -361,15 +358,15 @@ impl LspServer {
                 })
             }
             Ok(Some(_)) => {
-                eprintln!("Request {} is a notification (id missing), no response", request.method);
+                tracing::trace!(method = %request.method, "Request is a notification (id missing), no response");
                 None
             }
             Ok(None) => {
-                eprintln!("Request {} is a notification, no response", request.method);
+                tracing::trace!(method = %request.method, "Request is a notification, no response");
                 None // Notification, no response
             }
             Err(error) if should_respond => {
-                eprintln!("Sending error response for request {}: {:?}", request.method, error);
+                tracing::debug!(method = %request.method, error = ?error, "Sending error response");
                 Some(JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
                     id,
@@ -378,10 +375,7 @@ impl LspServer {
                 })
             }
             Err(error) => {
-                eprintln!(
-                    "Suppressed error response for notification request {}: {:?}",
-                    request.method, error
-                );
+                tracing::debug!(method = %request.method, error = ?error, "Suppressed error response for notification request");
                 None
             }
         }

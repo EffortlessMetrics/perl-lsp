@@ -176,7 +176,7 @@ impl DebugAdapter {
         {
             self.send_interrupt_signal(pid)
         } else {
-            eprintln!("No active debug session to pause");
+            tracing::warn!("No active debug session to pause");
             false
         };
 

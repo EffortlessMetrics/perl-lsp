@@ -5,7 +5,6 @@ pub use perl_content_length_framing::frame;
 use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
 use std::io::{self, BufRead, Read, Write};
 
-const LOG_PREFIX: &str = "[perl-lsp:transport]";
 const LOG_PREVIEW_MAX_BYTES: usize = 160;
 
 fn body_preview(body: &[u8]) -> String {
@@ -53,17 +52,18 @@ impl ContentLengthMessageReader {
                 Ok(Some(body)) => match serde_json::from_slice::<JsonRpcRequest>(&body) {
                     Ok(request) => return Ok(Some(request)),
                     Err(error) => {
-                        eprintln!(
-                            "{LOG_PREFIX} incoming JSON parse error: {error}; payload_bytes={}; preview=\"{}\"",
-                            body.len(),
-                            body_preview(&body)
+                        tracing::warn!(
+                            payload_bytes = body.len(),
+                            preview = %body_preview(&body),
+                            %error,
+                            "incoming JSON parse error"
                         );
                         continue;
                     }
                 },
                 Ok(None) => {}
                 Err(error) => {
-                    eprintln!("{LOG_PREFIX} frame parse error: {error}");
+                    tracing::warn!(%error, "frame parse error");
                     continue;
                 }
             }
@@ -102,10 +102,7 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
             match value.trim().parse::<usize>() {
                 Ok(length) => content_length = Some(length),
                 Err(error) => {
-                    eprintln!(
-                        "{LOG_PREFIX} invalid Content-Length header: {error}; raw_header=\"{}\"",
-                        header
-                    );
+                    tracing::warn!(raw_header = header, %error, "invalid Content-Length header");
                     return Ok(None);
                 }
             }
@@ -115,7 +112,7 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
     let length = match content_length {
         Some(length) => length,
         None => {
-            eprintln!("{LOG_PREFIX} missing Content-Length header");
+            tracing::warn!("missing Content-Length header");
             return Ok(None);
         }
     };
@@ -131,10 +128,11 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
     match serde_json::from_slice::<JsonRpcRequest>(&body) {
         Ok(request) => Ok(Some(request)),
         Err(error) => {
-            eprintln!(
-                "{LOG_PREFIX} JSON parse error: {error}; payload_bytes={}; preview=\"{}\"",
-                body.len(),
-                body_preview(&body)
+            tracing::warn!(
+                payload_bytes = body.len(),
+                preview = %body_preview(&body),
+                %error,
+                "JSON parse error"
             );
             Ok(None)
         }
@@ -170,12 +168,12 @@ pub fn write_notification<W: Write>(
 /// Log outgoing response metadata for transport debugging.
 pub fn log_response(response: &JsonRpcResponse) {
     if let Ok(content) = serde_json::to_string(response) {
-        eprintln!(
-            "{LOG_PREFIX} outgoing response id={:?} has_result={} has_error={} payload_bytes={}",
-            response.id,
-            response.result.is_some(),
-            response.error.is_some(),
-            content.len()
+        tracing::debug!(
+            id = ?response.id,
+            has_result = response.result.is_some(),
+            has_error = response.error.is_some(),
+            payload_bytes = content.len(),
+            "outgoing response"
         );
     }
 }

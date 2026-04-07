@@ -25,7 +25,7 @@ impl LspServer {
     pub(super) fn handle_exit_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
         // LSP spec: exit with 0 if shutdown was called, 1 otherwise
         let exit_code = if self.shutdown_received.load(Ordering::Acquire) { 0 } else { 1 };
-        eprintln!("LSP server exiting with code {}", exit_code);
+        tracing::info!(exit_code, "LSP server exiting");
         std::process::exit(exit_code);
     }
 
@@ -43,7 +43,7 @@ impl LspServer {
                     "off" | "messages" | "verbose" => value.to_string(),
                     _ => "off".to_string(),
                 };
-                eprintln!("Trace level set to: {}", level);
+                tracing::debug!(level, "Trace level set");
                 *self.trace_level.lock() = level;
             }
         }
@@ -69,14 +69,14 @@ impl LspServer {
             }
         }
         if let Err(e) = self.notify("$/logTrace", params) {
-            eprintln!("Failed to send logTrace notification: {}", e);
+            tracing::warn!(error = %e, "Failed to send logTrace notification");
         }
     }
 
     /// Handle initialized notification
     pub(super) fn handle_initialized_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
         self.initialized.store(true, Ordering::Release);
-        eprintln!("Server initialized");
+        tracing::info!("Server initialized");
 
         // Register file watchers for Perl files only if client supports it
         if self.client_capabilities.lock().dynamic_registration_support {
@@ -89,15 +89,15 @@ impl LspServer {
 
         // Send index-ready notification
         if let Err(e) = self.send_index_ready_notification() {
-            eprintln!("Failed to send index-ready notification: {}", e);
+            tracing::warn!(error = %e, "Failed to send index-ready notification");
         }
 
         if std::env::var("PERL_LSP_QUIET").is_err() {
             let folder_count = self.workspace_folders.lock().len();
             if folder_count == 0 {
-                eprintln!("perl-lsp ready (single-file mode)");
+                tracing::info!("perl-lsp ready (single-file mode)");
             } else {
-                eprintln!("perl-lsp ready ({folder_count} workspace folder(s))");
+                tracing::info!(folder_count, "perl-lsp ready");
             }
         }
 

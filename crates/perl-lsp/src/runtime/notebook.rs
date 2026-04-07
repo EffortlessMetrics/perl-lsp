@@ -335,7 +335,7 @@ impl LspServer {
             // Use existing didOpen handler for the cell
             self.handle_did_open(Some(did_open_params))?;
 
-            eprintln!("Notebook cell opened: {} (notebook: {})", cell_uri, notebook_uri);
+            tracing::debug!(cell_uri, notebook_uri, "Notebook cell opened");
         }
 
         // Create and store notebook state
@@ -350,10 +350,7 @@ impl LspServer {
         // Register notebook in store
         self.notebook_store.register_notebook(notebook_state);
 
-        eprintln!(
-            "Notebook opened: {} (type: {}, version: {})",
-            notebook_uri, notebook_type, version
-        );
+        tracing::debug!(uri = notebook_uri, notebook_type, version, "Notebook opened");
 
         Ok(())
     }
@@ -379,7 +376,7 @@ impl LspServer {
             self.notebook_store.update_version(notebook_uri, version);
         }
 
-        eprintln!("Notebook changed: {}", notebook_uri);
+        tracing::debug!(uri = notebook_uri, "Notebook changed");
 
         // Handle change events
         if let Some(change) = params.get("change") {
@@ -454,7 +451,7 @@ impl LspServer {
                             });
 
                             self.handle_did_open(Some(did_open_params))?;
-                            eprintln!("New cell opened: {}", cell_uri);
+                            tracing::debug!(cell_uri, "New cell opened");
 
                             if !updated_cells.iter().any(|cell| cell.document == cell_uri) {
                                 updated_cells.push(NotebookCellState {
@@ -484,7 +481,7 @@ impl LspServer {
                             });
 
                             self.handle_did_close(Some(did_close_params))?;
-                            eprintln!("Cell closed: {}", cell_uri);
+                            tracing::debug!(cell_uri, "Cell closed");
 
                             let previous_len = updated_cells.len();
                             updated_cells.retain(|cell| cell.document != cell_uri);
@@ -517,10 +514,10 @@ impl LspServer {
                                 };
                                 self.notebook_store
                                     .update_cell_execution(cell_doc_uri, Some(execution_summary));
-                                eprintln!(
-                                    "Cell execution summary updated: {} (order: {:?})",
-                                    cell_doc_uri,
-                                    es.get("executionOrder")
+                                tracing::debug!(
+                                    cell_uri = cell_doc_uri,
+                                    execution_order = ?es.get("executionOrder"),
+                                    "Cell execution summary updated"
                                 );
                             }
                         }
@@ -549,7 +546,7 @@ impl LspServer {
                             });
 
                             self.handle_did_change(Some(did_change_params))?;
-                            eprintln!("Cell text changed: {}", cell_uri);
+                            tracing::debug!(cell_uri, "Cell text changed");
                         }
                     }
                 }
@@ -571,7 +568,7 @@ impl LspServer {
             .and_then(|v| v.as_str())
             .ok_or_else(|| invalid_params("Missing notebookDocument.uri"))?;
 
-        eprintln!("Notebook saved: {}", notebook_uri);
+        tracing::debug!(uri = notebook_uri, "Notebook saved");
 
         // Optionally trigger post-save actions on all cells
         // For now, just log the event
@@ -607,14 +604,14 @@ impl LspServer {
                 });
 
                 self.handle_did_close(Some(did_close_params))?;
-                eprintln!("Cell closed: {}", cell_uri);
+                tracing::debug!(cell_uri, "Cell closed");
             }
         }
 
         // Unregister notebook from store
         self.notebook_store.unregister_notebook(notebook_uri);
 
-        eprintln!("Notebook closed: {}", notebook_uri);
+        tracing::debug!(uri = notebook_uri, "Notebook closed");
 
         Ok(())
     }

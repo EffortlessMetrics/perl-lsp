@@ -49,7 +49,7 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
 #[cfg(feature = "workspace")]
 fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, ready: bool) {
     if let Err(e) = outbound.send_notification("perl-lsp/index-ready", json!({ "ready": ready })) {
-        eprintln!("Failed to send index-ready notification: {}", e);
+        tracing::warn!(error = %e, "Failed to send index-ready notification");
     }
 }
 
@@ -68,7 +68,7 @@ fn send_progress_create(outbound: &super::outbound::OutboundSender, request_id: 
         "window/workDoneProgress/create",
         json!({ "token": WORKSPACE_INDEX_PROGRESS_TOKEN }),
     ) {
-        eprintln!("Failed to send workDoneProgress/create: {}", e);
+        tracing::warn!(error = %e, "Failed to send workDoneProgress/create");
     }
 }
 
@@ -87,7 +87,7 @@ fn send_progress_begin(outbound: &super::outbound::OutboundSender) {
             }
         }),
     ) {
-        eprintln!("Failed to send progress begin: {}", e);
+        tracing::warn!(error = %e, "Failed to send progress begin");
     }
 }
 
@@ -107,7 +107,7 @@ fn send_progress_report(outbound: &super::outbound::OutboundSender, indexed: usi
             }
         }),
     ) {
-        eprintln!("Failed to send progress report: {}", e);
+        tracing::warn!(error = %e, "Failed to send progress report");
     }
 }
 
@@ -124,7 +124,7 @@ fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) 
             }
         }),
     ) {
-        eprintln!("Failed to send progress end: {}", e);
+        tracing::warn!(error = %e, "Failed to send progress end");
     }
 }
 
@@ -155,7 +155,7 @@ impl LspServer {
             params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
         let cap = workspace_symbol_cap();
 
-        eprintln!("Workspace symbol search v2: '{}' (cap: {})", query, cap);
+        tracing::debug!(query, cap, "Workspace symbol search v2");
 
         // Use routing helper for lifecycle-aware dispatch
         #[cfg(feature = "workspace")]
@@ -182,19 +182,21 @@ impl LspServer {
                         .collect();
 
                     if !lsp_symbols.is_empty() {
-                        eprintln!(
-                            "Workspace symbol: returned {} results from index (Ready state)",
-                            lsp_symbols.len()
+                        tracing::debug!(
+                            count = lsp_symbols.len(),
+                            "Workspace symbol: returned results from index (Ready state)"
                         );
                         return Ok(Some(json!(lsp_symbols)));
                     }
                     // If index is empty, fall through to open-doc search
                 }
                 IndexAccessMode::Partial(reason) => {
-                    eprintln!("Workspace symbol: {}, using open-doc fallback", reason);
+                    tracing::debug!(reason, "Workspace symbol: using open-doc fallback");
                 }
                 IndexAccessMode::None => {
-                    eprintln!("Workspace symbol: no workspace feature, using open-doc fallback");
+                    tracing::debug!(
+                        "Workspace symbol: no workspace feature, using open-doc fallback"
+                    );
                 }
             }
         }
@@ -255,7 +257,10 @@ impl LspServer {
 
         // Truncate to cap in case we went slightly over
         all_symbols.truncate(cap);
-        eprintln!("Workspace symbol: returned {} results from open documents", all_symbols.len());
+        tracing::debug!(
+            count = all_symbols.len(),
+            "Workspace symbol: returned results from open documents"
+        );
         Ok(Some(json!(all_symbols)))
     }
 
@@ -266,7 +271,7 @@ impl LspServer {
         query: &str,
         _cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
-        eprintln!("Workspace symbol: no workspace feature, returning empty for query '{}'", query);
+        tracing::debug!(query, "Workspace symbol: no workspace feature, returning empty");
         Ok(Some(json!([])))
     }
 
@@ -279,7 +284,7 @@ impl LspServer {
         let query =
             params.as_ref().and_then(|p| p.get("query")).and_then(|q| q.as_str()).unwrap_or("");
 
-        eprintln!("Workspace symbol search: '{}'", query);
+        tracing::debug!(query, "Workspace symbol search");
 
         // Lightweight snapshot: only clone fields needed for symbol extraction,
         // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
@@ -302,7 +307,7 @@ impl LspServer {
         let mut symbols = provider.search(query, &source_map);
         symbols.truncate(cap);
 
-        eprintln!("Found {} symbols total (cap: {})", symbols.len(), cap);
+        tracing::debug!(count = symbols.len(), cap, "Found symbols total");
 
         let result = serde_json::to_value(&symbols).unwrap_or_else(|_| json!([]));
 
@@ -442,7 +447,7 @@ impl LspServer {
 
                 for item in items {
                     if let Some(section) = item.get("section").and_then(|s| s.as_str()) {
-                        eprintln!("Configuration requested for section: {}", section);
+                        tracing::debug!(section, "Configuration requested");
 
                         // Handle workspace configuration sections
                         let value = if section.starts_with("perl.workspace.") {
@@ -497,7 +502,7 @@ impl LspServer {
     pub(super) fn handle_did_change_configuration(&self, params: Option<Value>) {
         if let Some(params) = params {
             if let Some(settings) = params.get("settings") {
-                eprintln!("Configuration changed, updating server settings");
+                tracing::debug!("Configuration changed, updating server settings");
 
                 // Read perl settings once and update both configs
                 if let Some(perl) = settings.get("perl") {
@@ -533,7 +538,7 @@ impl LspServer {
                     {
                         let mut config = self.config.lock();
                         config.update_from_value(perl);
-                        eprintln!("Updated server config from perl settings");
+                        tracing::debug!("Updated server config from perl settings");
                     }
 
                     // Reset the shared CriticAnalyzer when any critic-related setting
@@ -547,7 +552,7 @@ impl LspServer {
                     {
                         let mut workspace_config = self.workspace_config.lock();
                         workspace_config.update_from_value(perl);
-                        eprintln!("Updated workspace config from perl settings");
+                        tracing::debug!("Updated workspace config from perl settings");
                     }
 
                     // Refresh AI backend when config changes (constructs or clears provider)
@@ -555,7 +560,7 @@ impl LspServer {
 
                     // Trigger client refresh for configuration-dependent features
                     if let Err(e) = self.refresh_controller.refresh_all(self) {
-                        eprintln!("Failed to refresh client after config change: {}", e);
+                        tracing::warn!(error = %e, "Failed to refresh client after config change");
                     }
                 }
             }
@@ -580,7 +585,7 @@ impl LspServer {
         };
 
         let Ok(params) = serde_json::from_value::<DidChangeWatchedFilesParams>(params) else {
-            eprintln!("Failed to parse didChangeWatchedFiles params");
+            tracing::warn!("Failed to parse didChangeWatchedFiles params");
             return Ok(None);
         };
 
@@ -588,7 +593,7 @@ impl LspServer {
             let uri = change.uri.to_string();
             let change_type = change.typ;
 
-            eprintln!("File change detected: {} (type: {:?})", uri, change_type);
+            tracing::debug!(uri, change_type = ?change_type, "File change detected");
 
             match change_type {
                 FileChangeType::DELETED => {
@@ -611,7 +616,7 @@ impl LspServer {
                         documents.remove(&uri);
                     }
 
-                    eprintln!("Removed deleted file from index: {}", uri);
+                    tracing::debug!(uri, "Removed deleted file from index");
 
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
@@ -887,7 +892,7 @@ impl LspServer {
                         continue;
                     };
 
-                    eprintln!("File deleted: {}", uri);
+                    tracing::debug!(uri, "File deleted");
 
                     // Remove from workspace index
                     // Note: Mutation operation - use coordinator with lifecycle tracking
@@ -907,7 +912,7 @@ impl LspServer {
 
                 // Trigger client refresh after file deletions
                 if let Err(e) = self.refresh_controller.refresh_all(self) {
-                    eprintln!("Failed to refresh client after file deletions: {}", e);
+                    tracing::warn!(error = %e, "Failed to refresh client after file deletions");
                 }
             }
         }
@@ -928,7 +933,7 @@ impl LspServer {
                         continue;
                     };
 
-                    eprintln!("File will be deleted: {}", uri);
+                    tracing::debug!(uri, "File will be deleted");
                 }
             }
         }
@@ -1095,7 +1100,7 @@ impl LspServer {
 
                 // Trigger client refresh after file renames
                 if let Err(e) = self.refresh_controller.refresh_all(self) {
-                    eprintln!("Failed to refresh client after file renames: {}", e);
+                    tracing::warn!(error = %e, "Failed to refresh client after file renames");
                 }
             }
         }
@@ -1116,7 +1121,7 @@ impl LspServer {
                 if !change.added.is_empty() {
                     let mut workspace_folders = self.workspace_folders.lock();
                     for uri in &change.added {
-                        eprintln!("Added workspace folder: {}", uri);
+                        tracing::debug!(uri, "Added workspace folder");
                         workspace_folders.push(uri.to_string());
                     }
                 }
@@ -1124,7 +1129,7 @@ impl LspServer {
                 if !change.removed.is_empty() {
                     let mut workspace_folders = self.workspace_folders.lock();
                     for uri in &change.removed {
-                        eprintln!("Removed workspace folder: {}", uri);
+                        tracing::debug!(uri, "Removed workspace folder");
                         workspace_folders.retain(|f| f.as_str() != uri);
 
                         // Also remove documents from the removed workspace
@@ -1136,7 +1141,7 @@ impl LspServer {
                             .collect();
 
                         for doc_uri in docs_to_remove {
-                            eprintln!("Removing document from removed workspace: {}", doc_uri);
+                            tracing::debug!(uri = %doc_uri, "Removing document from removed workspace");
                             documents.remove(&doc_uri);
                         }
                     }
@@ -1144,7 +1149,7 @@ impl LspServer {
 
                 // Trigger client refresh after workspace folder changes
                 if let Err(e) = self.refresh_controller.refresh_all(self) {
-                    eprintln!("Failed to refresh client after workspace folder changes: {}", e);
+                    tracing::warn!(error = %e, "Failed to refresh client after workspace folder changes");
                 }
 
                 // Rebuild workspace index after folder changes
@@ -1170,7 +1175,7 @@ impl LspServer {
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_err()
         {
-            eprintln!("Workspace indexing already in progress, skipping concurrent scan");
+            tracing::debug!("Workspace indexing already in progress, skipping concurrent scan");
             return;
         }
         let indexing_guard = IndexingGuard(Arc::clone(&self.indexing_in_progress));
@@ -1314,7 +1319,7 @@ impl LspServer {
                 ));
             };
 
-            eprintln!("Applying workspace edit");
+            tracing::debug!("Applying workspace edit");
 
             // Apply changes to each document
             if let Some(changes) = edit["changes"].as_object() {

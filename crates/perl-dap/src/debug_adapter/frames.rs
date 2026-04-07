@@ -32,7 +32,7 @@ impl DebugAdapter {
                     );
                 }
                 Err(error) => {
-                    eprintln!("Failed to send framed stackTrace command, falling back: {error}");
+                    tracing::warn!(%error, "Failed to send framed stackTrace command, falling back");
                     let _ = stdin.write_all(b"T\n");
                     let _ = stdin.flush();
                     Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);

@@ -36,7 +36,7 @@ impl LspServer {
             std::thread::sleep(Duration::from_millis(50));
             if let Some(id) = id {
                 if self.is_cancelled(id) {
-                    eprintln!("Operation cancelled at iteration {}", i);
+                    tracing::debug!(iteration = i, "Operation cancelled");
                     return Ok(Some(json!({
                         "jsonrpc": "2.0",
                         "id": id,
@@ -47,13 +47,13 @@ impl LspServer {
 
                 if let Some(to) = timeout {
                     if start.elapsed() >= to {
-                        eprintln!("Server-side timeout at iteration {}", i);
+                        tracing::debug!(iteration = i, "Server-side timeout");
                         return Err(server_cancelled_error());
                     }
                 }
             }
         }
-        eprintln!("Slow operation completed without cancellation");
+        tracing::debug!("Slow operation completed without cancellation");
         Ok(Some(json!({"status": "completed", "iterations": 20})))
     }
 }
