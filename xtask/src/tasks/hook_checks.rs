@@ -351,6 +351,9 @@ fn create_non_rust_test_repo(
     temp_root: &Path,
     isolated_hooks_dir: &Path,
 ) -> Result<()> {
+    // SAFETY (issue #3203): assert the repo directory path lives inside the temp
+    // root before creating it. See assert_path_inside_temp_root for full rationale.
+    assert_path_inside_temp_root(path, temp_root, "create_non_rust_test_repo dir")?;
     fs::create_dir_all(path)
         .with_context(|| format!("Failed to create temp repo {}", path.display()))?;
 
