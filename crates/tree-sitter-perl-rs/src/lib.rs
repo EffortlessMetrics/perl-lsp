@@ -142,6 +142,11 @@ impl<'tree> Node<'tree> {
     /// Returns the node kind string (e.g. `"Program"`, `"Subroutine"`, `"Variable"`).
     ///
     /// Delegates to [`NodeKind::kind_name`][perl_ast::NodeKind::kind_name].
+    ///
+    /// Note: this returns the v3 internal kind name, not the tree-sitter grammar node
+    /// type string. For example, the root node returns `"Program"` rather than
+    /// `"source_file"`. Use [`to_sexp`][Node::to_sexp] for tree-sitter-compatible
+    /// S-expression output which uses the canonical grammar names.
     pub fn kind(&self) -> &'static str {
         self.inner.kind.kind_name()
     }
@@ -170,8 +175,8 @@ impl<'tree> Node<'tree> {
     ///
     /// The iterator yields [`Node`] values sharing the same `'tree` lifetime as `self`.
     pub fn children(&self) -> impl Iterator<Item = Node<'tree>> + '_ {
-        // Collect first so we can own the Vec; lifetimes are correct because
-        // all children are borrowed from the same Arc-backed tree.
+        // Collect into a Vec so we can own the references. The lifetimes are valid
+        // because all child nodes are part of the same owned tree (Tree::root).
         let kids = ast_children(self.inner);
         kids.into_iter().map(move |child| Node { inner: child, tree_source: self.tree_source })
     }
@@ -190,8 +195,12 @@ impl<'tree> Node<'tree> {
     ///
     /// Returns `Err` only when the byte range contains invalid UTF-8, which is unlikely
     /// for content produced from a valid Rust `&str`.
+    ///
+    /// If the node's byte offsets extend beyond `source`, the result is clamped to
+    /// the available range rather than panicking. This can happen when `source` is a
+    /// different buffer than the one used to build the tree.
     pub fn utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, std::str::Utf8Error> {
-        let start = self.inner.location.start;
+        let start = self.inner.location.start.min(source.len());
         let end = self.inner.location.end.min(source.len());
         std::str::from_utf8(&source[start..end])
     }
@@ -294,6 +303,44 @@ mod tests {
         let root = tree.root_node();
         let text = root.utf8_text(source.as_bytes());
         assert!(text.is_ok(), "utf8_text should succeed");
+        // The root node spans the whole source — verify the actual content, not just Ok.
+        let extracted = text.unwrap();
+        assert_eq!(extracted, source, "utf8_text should return the full source for the root node");
+    }
+
+    #[test]
+    fn test_utf8_text_multibyte_unicode() {
+        // 'é' is 2 bytes in UTF-8; the parser must not split a codepoint boundary.
+        let source = "my $x = 'café';";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+        let bytes = source.as_bytes();
+        let text = root.utf8_text(bytes);
+        assert!(text.is_ok(), "utf8_text should handle multi-byte UTF-8");
+    }
+
+    #[test]
+    fn test_utf8_text_mismatched_source_does_not_panic() {
+        // utf8_text takes a caller-supplied byte slice. When the slice is shorter
+        // than the tree's byte offsets, the implementation must clamp rather than panic.
+        let source = "my $x = 42;";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+        // A shorter slice — would panic without the start.min(source.len()) guard.
+        let short = b"my";
+        let result = root.utf8_text(short);
+        assert!(result.is_ok(), "utf8_text should not panic with short source slice");
+    }
+
+    #[test]
+    fn test_invalid_perl_returns_some_tree() {
+        // The v3 parser is error-tolerant — even syntactically invalid Perl should
+        // produce a partial tree (Some), not None. None is only returned on cancellation.
+        let mut p = Parser::new();
+        let tree = p.parse("sub { @@@@invalid{{{{");
+        assert!(tree.is_some(), "invalid Perl should still yield an error-recovery tree");
     }
 
     #[test]
