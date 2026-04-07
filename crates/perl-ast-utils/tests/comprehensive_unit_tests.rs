@@ -332,12 +332,13 @@ fn get_indent_at_last_character() {
 // ============================================================================
 
 #[test]
-fn find_node_at_range_single_node_exact_match() {
+fn find_node_at_range_single_node_exact_match() -> Result<(), String> {
     let node = create_test_node(NodeKind::Number { value: "42".to_string() }, 0, 2);
     let result = find_node_at_range(&node, (0, 2));
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().location.start, 0);
-    assert_eq!(result.unwrap().location.end, 2);
+    let found = result.ok_or("expected Some node")?;
+    assert_eq!(found.location.start, 0);
+    assert_eq!(found.location.end, 2);
+    Ok(())
 }
 
 #[test]
