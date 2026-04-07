@@ -639,14 +639,14 @@ enum Commands {
         cleanup: bool,
     },
 
-    /// Bump version numbers across project
+    /// Bump the workspace version across every tracked site.
+    ///
+    /// Non-interactive and idempotent. Delegates to `perl-ci-hygiene
+    /// bump-version`, which owns the canonical site list shared with the
+    /// `check-version-sync` CI gate.
     BumpVersion {
-        /// New version to set
+        /// New version to set (X.Y.Z format).
         version: String,
-
-        /// Skip confirmation
-        #[arg(long)]
-        yes: bool,
     },
 
     /// Publish crates to crates.io
@@ -1280,7 +1280,7 @@ fn main() -> Result<()> {
         Commands::TestLsp { create_only, test, cleanup } => {
             test_lsp::run(create_only, test, cleanup)
         }
-        Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
+        Commands::BumpVersion { version } => bump_version::run(version),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
         Commands::PublishRelease { version, dry_run, git_ref } => {
             publish::publish_release(version, dry_run, git_ref)
