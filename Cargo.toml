@@ -116,6 +116,7 @@ members = [
     "crates/perl-workspace-discovery",
     "crates/perl-corpus",
     "crates/perl-lsp",
+    "crates/perl-lsp-ux-tests",
     "crates/perllsp",
     "crates/perl-dap",
     "crates/perl-dead-code",

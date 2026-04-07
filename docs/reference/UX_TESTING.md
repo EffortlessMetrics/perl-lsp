@@ -1,153 +1,164 @@
-# UX Testing Reference
+# UX Testing Guide
 
-This document describes the UX regression gate that protects the first-5-minutes
-user experience from regressions on every PR.
+The `perl-lsp-ux-tests` crate provides a systematic regression prevention
+harness for common first-5-minutes user experiences.  It spawns the real
+`perl-lsp` binary over stdio and verifies that the server behaves correctly
+in each scenario — not just "didn't crash" but "returned a useful response."
 
-## Background
+## Quick Start
 
-User-visible breakages are the most damaging kind. A user who cannot start the
-LSP server, open a Perl file, or see a meaningful error message will not use the
-tool. The UX regression gate systematically finds, tests, and keeps fixed the
-scenarios that matter most in the first few minutes of use.
+```bash
+# Run all base scenarios (scenarios 01–09, excluding large-file):
+just ux-tests
 
-## How the CI Gate Works
+# Run full suite including large-file scenario:
+just ux-tests-full
 
-The `ux-regression-gate` GitHub Actions workflow runs on every PR that touches
-UX-relevant paths:
+# Run with verbose server stderr output:
+UX_TEST_ECHO_STDERR=1 just ux-tests
 
-- `crates/perl-lsp*/**` — LSP server code
-- `crates/perl-dap*/**` — Debug Adapter Protocol code
-- `crates/perl-lsp-ux-tests/**` — the UX test harness itself
-- `vscode-extension/**` — VS Code extension
-- `features.toml` — LSP capability definitions
-- `.github/workflows/ux-regression-gate.yml` — the gate itself
-
-PRs that touch only `docs/`, `test_corpus/`, `archive/`, or `xtask/` do NOT
-trigger the gate. This keeps CI fast for non-UX changes.
-
-### Trigger conditions
-
-The gate runs on:
-
-1. Every PR push to a UX-relevant file (path filters above)
-2. PRs with the `merge-ready` label (matching the ci.yml pattern)
-
-### What the gate does
-
-1. Installs system dependencies: `perl`, `perltidy`, `perlcritic`
-2. Detects whether `just ux-tests` is available (graceful degradation if not)
-3. Runs `just ux-tests` — the test harness in `crates/perl-lsp-ux-tests/`
-4. Parses results and writes a per-scenario pass/fail summary to the job summary
-5. Uploads a results artifact on failure
-6. Posts a commit status (`ci/ux-regression-gate`) to the PR
-
-### Coverage tracking
-
-At the end of each run, the gate prints:
-
-```
-UX Coverage: N scenarios across M categories
-  startup: X scenario(s)
-  first-open: Y scenario(s)
-  ...
+# Run a single scenario:
+cargo test -p perl-lsp-ux-tests --test ux_scenario_01_simple_file
 ```
 
-Watch this metric grow as new scenarios are added.
+## V1 Scenarios
 
-### UX test categories
-
-| Category | What it covers |
-| --- | --- |
-| `startup` | LSP server process starts cleanly, no crash on init |
-| `first-open` | Opening a `.pl` file produces diagnostics within timeout |
-| `missing-dep` | Graceful degradation when `perltidy`/`perlcritic` absent |
-| `bad-config` | Clear, actionable error on malformed `.perltidyrc` / config |
-| `protocol-handling` | LSP/DAP protocol correctness for basic operations |
-| `error-messages` | User-visible error messages are clear and actionable |
-
-## What to Do When the Gate Fails on Your PR
-
-1. **Read the job summary** on the failed PR check. It lists each failed scenario
-   and the specific assertion that broke.
-
-2. **Reproduce locally:**
-   ```bash
-   just ux-tests
-   ```
-   This runs the same test harness as CI. You need `perl`, `perltidy`, and
-   `perlcritic` installed locally.
-
-3. **Find the failing test** in `crates/perl-lsp-ux-tests/`. Each scenario is a
-   named test case. The test name will appear in the output.
-
-4. **Fix the regression.** The gate exists to protect users — fix the behavior,
-   not the test. If the behavior change was intentional, update the test and
-   explain why in the PR description.
-
-5. **Re-run `just ux-tests`** to confirm the fix before pushing.
-
-## Graceful Degradation (Pre-Harness Period)
-
-While `crates/perl-lsp-ux-tests/` is being developed, the gate **does not block**
-PRs. Instead it:
-
-- Detects that `just ux-tests` is unavailable
-- Prints a loud warning in the job log
-- Marks the job as SKIPPED (success) so the commit status is green
-
-Once the harness PR lands and `just ux-tests` is registered in the justfile,
-the gate becomes active automatically — no workflow change needed.
+| # | Scenario | What it tests |
+|---|----------|---------------|
+| 01 | Simple file | Fresh open, hover on `$x`, no crash |
+| 02 | Missing perltidy | Format request degrades gracefully |
+| 03 | Missing perl | Server starts, hover/completion work in degraded mode |
+| 04 | Missing perlcritic | Diagnostics degrade gracefully |
+| 05 | Bad config | Invalid tool paths do not crash the server |
+| 06 | Large file | 1k-line (base) / 10k-line (integration-test) file |
+| 07 | Multi-file workspace | Multiple modules + cross-file definition |
+| 08 | Shebang detection | Files without `.pl` extension but `languageId=perl` |
+| 09 | BOM and encoding | UTF-8 BOM, `use utf8`, Unicode in comments |
 
 ## How to Add a New Scenario
 
-When you discover a new UX blocker:
+1. Create `crates/perl-lsp-ux-tests/tests/ux_scenario_NN_my_scenario.rs`.
+2. Import the harness:
+   ```rust
+   use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+   ```
+3. Build a `ScenarioConfig`:
+   ```rust
+   let config = ScenarioConfig::default()
+       .with_file("test.pl", "my $x = 1;\n");
+   ```
+4. Create the harness:
+   ```rust
+   let harness = UxHarness::new(config).expect("harness setup");
+   ```
+5. Drive LSP interactions:
+   ```rust
+   harness.open_file("test.pl", source).expect("didOpen");
+   let hover = harness.hover("test.pl", 0, 3).expect("no error");
+   ```
+6. Assert on outcomes:
+   ```rust
+   harness.assert_no_crash();
+   harness.assert_message_contains("some expected text");
+   ```
+7. Add a skip guard at the top:
+   ```rust
+   if !perl_lsp_ux_tests::resolve_binary().is_ok() {
+       eprintln!("SKIP: binary not found");
+       return;
+   }
+   ```
 
-1. **File a GitHub issue** labelled `ux-regression` describing the failure and
-   which category it belongs to (see table above).
+## ScenarioConfig Reference
 
-2. **Write a test** in `crates/perl-lsp-ux-tests/tests/` that reproduces the
-   failure. Follow the naming convention: `test_<category>_<description>`.
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `timeout` | `Duration` | 10s | Per-request timeout |
+| `path_restriction` | `Option<Vec<String>>` | `None` (full PATH) | Override child PATH |
+| `echo_stderr` | `bool` | `false` | Print server stderr |
+| `extra_env` | `Vec<(String, Option<String>)>` | `[]` | Set/unset env vars |
+| `workspace_files` | `Vec<(String, String)>` | `[]` | Pre-seed workspace |
 
-3. **Make the test pass** by fixing the underlying behavior.
-
-4. **Verify coverage** by running `just ux-tests` and checking that the new
-   scenario appears in the output under its category.
-
-5. **Reference the issue** in the test docstring so future readers know why
-   the test exists.
-
-### Example test structure
+### Simulating a Missing Tool
 
 ```rust
-/// Startup: LSP server should not crash on an empty workspace.
-/// Regression for: https://github.com/owner/perl-lsp/issues/XXXX
-#[test]
-fn test_startup_empty_workspace() -> Result<()> {
-    // startup category
-    let server = UxTestServer::start()?;
-    let init_result = server.initialize_empty_workspace()?;
-    assert!(init_result.capabilities.text_document_sync.is_some(),
-        "LSP server must advertise textDocumentSync on startup");
-    Ok(())
-}
+// Completely empty PATH (no tools at all):
+let config = ScenarioConfig { path_restriction: Some(vec![]), ..Default::default() };
+
+// Keep system dirs but remove any entry containing "tidy":
+use perl_lsp_ux_tests::env::RestrictedPath;
+let restricted = RestrictedPath::current_excluding("perltidy");
+let config = ScenarioConfig { path_restriction: Some(/*...*/), ..Default::default() };
 ```
 
-## Running the Gate Locally
+## UxHarness Method Reference
 
-```bash
-# Full UX test suite
-just ux-tests
+| Method | Purpose |
+|--------|---------|
+| `open_file(path, content)` | `textDocument/didOpen` |
+| `hover(path, line, char)` | `textDocument/hover` → `Option<Value>` |
+| `completion(path, line, char)` | `textDocument/completion` → `Vec<Value>` |
+| `format_document(path)` | `textDocument/formatting` → `FormatResult` |
+| `definition(path, line, char)` | `textDocument/definition` → `Vec<Value>` |
+| `collect_notifications()` | Drain buffered server events |
+| `assert_no_crash()` | Assert no crash signatures in event log |
+| `assert_message_contains(needle)` | Assert a `window/showMessage` contains `needle` |
+| `assert_no_message_containing(needle)` | Assert no message contains `needle` |
+| `root_uri()` | The `file://` URI of the workspace root |
 
-# With verbose output
-cargo test -p perl-lsp-ux-tests -- --nocapture
+## LspEvent Variants
 
-# Single scenario
-cargo test -p perl-lsp-ux-tests -- test_startup_empty_workspace --exact
+Events captured from the server's stdout:
+
+```rust
+LspEvent::WindowMessage { message_type, message }  // window/showMessage
+LspEvent::LogMessage { message_type, message }     // window/logMessage
+LspEvent::Diagnostics { uri, diagnostics }         // textDocument/publishDiagnostics
+LspEvent::Other { method, params }                 // anything else
 ```
 
-## Related
+`message_type` follows LSP spec: 1=Error, 2=Warning, 3=Info, 4=Log.
 
-- `crates/perl-lsp-ux-tests/` — the test harness crate
-- `.github/workflows/ux-regression-gate.yml` — the CI gate workflow
-- `features.toml` — LSP capability definitions (source of truth for features)
-- [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)
+## Debugging a Failing Scenario
+
+1. Enable server stderr output:
+   ```bash
+   UX_TEST_ECHO_STDERR=1 cargo test -p perl-lsp-ux-tests --test ux_scenario_02_missing_perltidy -- --nocapture
+   ```
+2. Check what binary is being resolved:
+   ```bash
+   PERL_LSP_BIN=/path/to/custom/perl-lsp cargo test -p perl-lsp-ux-tests
+   ```
+3. Increase the timeout for slow environments:
+   ```bash
+   UX_TEST_TIMEOUT_MS=30000 cargo test -p perl-lsp-ux-tests
+   ```
+4. Run a single test with full output:
+   ```bash
+   cargo test -p perl-lsp-ux-tests --test ux_scenario_07_multi_file_workspace -- scenario_07_definition_request_does_not_crash --nocapture
+   ```
+
+## What the Tests Do NOT Cover
+
+- VSCode extension UI (that requires a VSCode test runner — separate scope).
+- Protocol-level compliance (covered by `lsp_3_17_*` tests in `perl-lsp`).
+- Parser correctness (covered by `perl-parser` tests).
+- Performance benchmarks (covered by `criterion` benchmarks).
+- Syntax highlighting (tree-sitter grammar, separate scope).
+
+## Coverage Strategy
+
+These tests verify the **user-observable experience**, not internal implementation.
+When a scout files a UX blocker issue, the fix workflow is:
+1. Builder fixes the root cause.
+2. Add a scenario (or assertion) to the relevant `ux_scenario_NN_*.rs` that
+   would have caught the regression.
+3. The scenario then serves as a permanent regression gate.
+
+## Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `PERL_LSP_BIN` | Override path to `perl-lsp` binary |
+| `UX_TEST_TIMEOUT_MS` | Per-request timeout in milliseconds (default: 10000) |
+| `UX_TEST_ECHO_STDERR` | If set, echo perl-lsp stderr to test output |

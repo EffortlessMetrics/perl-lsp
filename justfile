@@ -913,6 +913,23 @@ ci-lsp-smoke-e2e:
         cargo test -p perl-lsp-rs --test lsp_smoke_e2e -- --test-threads=1
     @echo "✅ LSP smoke E2E passed"
 
+# UX regression test harness — systematic first-5-minutes scenario testing.
+# Runs all 9 base scenarios (scenarios 01-09, excluding the large-file integration-test tier).
+# For the full large-file tier: just ux-tests-full
+ux-tests:
+    @echo "Running UX regression test harness (base scenarios)..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests -- --test-threads=1
+    @echo "UX tests passed"
+
+# UX regression test harness — full suite including large-file scenario.
+# Slower (~5-10 min).  Run before releases or after large LSP changes.
+ux-tests-full:
+    @echo "Running UX regression test harness (full, including large-file)..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
+    @echo "UX tests (full) passed"
+
 # LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
 ci-lsp-bdd:
     @echo "🎭 Running LSP BDD workflow tests..."
