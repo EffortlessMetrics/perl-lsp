@@ -111,7 +111,7 @@ tracing.workspace = true
 
 [build-dependencies]
 serde = { workspace = true }
-toml = "1.1.0"
+toml = "1.1.2"
 
 [lints]
 workspace = true
@@ -145,7 +145,7 @@ utf16-complete = ["perl-parser/utf16-complete"]  # Complete UTF-16 round-trip su
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
-insta = { version = "1.47.1", features = ["yaml"] }
+insta = { version = "1.47.2", features = ["yaml"] }
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"
 serial_test = "3.4.0"

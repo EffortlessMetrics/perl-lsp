@@ -16,7 +16,7 @@ categories = ["development-tools", "text-editors"]
 [dependencies]
 serde_json.workspace = true
 serde = { workspace = true }
-toml = "1.1.0"
+toml = "1.1.2"
 
 [dev-dependencies]
 tempfile.workspace = true
