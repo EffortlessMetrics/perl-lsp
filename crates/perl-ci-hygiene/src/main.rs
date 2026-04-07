@@ -1172,6 +1172,9 @@ fn cmd_profile_stack_overflow(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
+/// Crate identifier for the v3 native Rust parser benchmark.
+const RUST_BENCH_CRATE: &str = "perl-parser-bench";
+
 /// Binary identifier for the v3 native Rust parser benchmark.
 ///
 /// Used by [`cmd_quick_bench`] and asserted in the unit test that guards
@@ -1197,7 +1200,7 @@ fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
         "--quiet",
         "--release",
         "-p",
-        "perl-parser-bench",
+        RUST_BENCH_CRATE,
         "--bin",
         RUST_BENCH_BIN,
         "--",
