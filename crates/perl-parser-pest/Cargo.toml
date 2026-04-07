@@ -1,7 +1,6 @@
 [package]
 name = "perl-parser-pest"
 version = "0.12.2"
-publish = false
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
