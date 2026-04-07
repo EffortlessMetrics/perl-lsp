@@ -237,36 +237,41 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_timeout_within_bounds() {
-        assert_eq!(validate_timeout(1000).unwrap(), 1000);
-        assert_eq!(validate_timeout(5000).unwrap(), 5000);
-        assert_eq!(validate_timeout(100_000).unwrap(), 100_000);
+    fn test_validate_timeout_within_bounds() -> Result<()> {
+        assert_eq!(validate_timeout(1000)?, 1000);
+        assert_eq!(validate_timeout(5000)?, 5000);
+        assert_eq!(validate_timeout(100_000)?, 100_000);
+        Ok(())
     }
 
     #[test]
-    fn test_validate_timeout_zero() {
-        assert_eq!(validate_timeout(0).unwrap(), 1, "Zero timeout should be clamped to 1ms");
+    fn test_validate_timeout_zero() -> Result<()> {
+        assert_eq!(validate_timeout(0)?, 1, "Zero timeout should be clamped to 1ms");
+        Ok(())
     }
 
     #[test]
     fn test_validate_timeout_excessive() {
+        use perl_tdd_support::must_err;
         let result = validate_timeout(500_000);
         assert!(result.is_err(), "Excessive timeout should be an error");
-        assert_eq!(result.unwrap_err(), SecurityError::ExcessiveTimeout(500_000));
+        assert_eq!(must_err(result), SecurityError::ExcessiveTimeout(500_000));
         assert!(validate_timeout(1_000_000).is_err());
     }
 
     #[test]
-    fn test_validate_timeout_boundary_at_max_is_ok() {
+    fn test_validate_timeout_boundary_at_max_is_ok() -> Result<()> {
         assert!(validate_timeout(MAX_TIMEOUT_MS).is_ok());
-        assert_eq!(validate_timeout(MAX_TIMEOUT_MS).unwrap(), MAX_TIMEOUT_MS);
+        assert_eq!(validate_timeout(MAX_TIMEOUT_MS)?, MAX_TIMEOUT_MS);
+        Ok(())
     }
 
     #[test]
     fn test_validate_timeout_one_over_max_is_error() {
+        use perl_tdd_support::must_err;
         assert!(validate_timeout(MAX_TIMEOUT_MS + 1).is_err());
         assert_eq!(
-            validate_timeout(MAX_TIMEOUT_MS + 1).unwrap_err(),
+            must_err(validate_timeout(MAX_TIMEOUT_MS + 1)),
             SecurityError::ExcessiveTimeout(MAX_TIMEOUT_MS + 1)
         );
     }
@@ -309,10 +314,11 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_timeout_boundary_values() {
-        assert_eq!(validate_timeout(1).unwrap(), 1);
-        assert_eq!(validate_timeout(MAX_TIMEOUT_MS).unwrap(), MAX_TIMEOUT_MS);
+    fn test_validate_timeout_boundary_values() -> Result<()> {
+        assert_eq!(validate_timeout(1)?, 1);
+        assert_eq!(validate_timeout(MAX_TIMEOUT_MS)?, MAX_TIMEOUT_MS);
         assert!(validate_timeout(MAX_TIMEOUT_MS + 1).is_err());
+        Ok(())
     }
 
     #[test]
