@@ -239,9 +239,9 @@ impl<'a> DeclarationProvider<'a> {
 
             // If we exhausted the cap, we have a cycle
             if depth >= cap {
-                eprintln!(
-                    "Cycle detected in ParentMap - node is its own ancestor (depth limit {})",
-                    cap
+                tracing::warn!(
+                    depth_limit = cap,
+                    "Cycle detected in ParentMap - node is its own ancestor"
                 );
                 break;
             }

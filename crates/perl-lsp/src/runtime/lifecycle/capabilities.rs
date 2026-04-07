@@ -174,7 +174,7 @@ impl LspServer {
 
             if supports_pull {
                 self.client_supports_pull_diags.store(true, Ordering::Relaxed);
-                eprintln!("Client supports pull diagnostics - suppressing automatic publishing");
+                tracing::debug!("Client supports pull diagnostics - suppressing automatic publishing");
             }
 
             // Initialize workspace folders
@@ -183,19 +183,19 @@ impl LspServer {
             {
                 let mut folders = self.workspace_folders.lock();
                 for uri in extract_workspace_folder_uris(workspace_folders) {
-                    eprintln!("Initialized with workspace folder: {}", uri);
+                    tracing::debug!(uri, "Initialized with workspace folder");
                     folders.push(uri);
                 }
             } else if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
                 // Fallback to rootUri if workspaceFolders is not provided
                 let mut folders = self.workspace_folders.lock();
-                eprintln!("Initialized with root URI: {}", root_uri);
+                tracing::debug!(root_uri, "Initialized with root URI");
                 folders.push(root_uri.to_string());
                 // Also set the root path for module resolution
                 self.set_root_uri(root_uri);
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
                 // Legacy fallback: rootPath is deprecated since LSP 3.0 but still sent by some clients
-                eprintln!("Initialized with legacy rootPath: {}", root_path);
+                tracing::debug!(root_path, "Initialized with legacy rootPath");
                 let root_uri = root_path_to_file_uri(root_path);
                 let mut folders = self.workspace_folders.lock();
                 folders.push(root_uri.clone());
@@ -214,7 +214,7 @@ impl LspServer {
         let has_perltidy = self.detect_tool("perltidy");
         let has_perlcritic = self.detect_tool("perlcritic");
 
-        eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
+        tracing::debug!(perltidy = has_perltidy, perlcritic = has_perlcritic, "Tool availability");
 
         // TextDocumentSyncKind::Full (1): the server always reparses the full
         // document on every didChange notification.  Advertising Incremental (2)
@@ -372,7 +372,7 @@ pub(crate) fn apply_disabled_feature_id(
         "lsp.type_definition" => flags.type_definition = false,
         "lsp.execute_command" => flags.execute_command = false,
         "lsp.moniker" => flags.moniker = false,
-        unknown => eprintln!("[perl-lsp] Unknown disabledFeatures ID ignored: {unknown}"),
+        unknown => tracing::warn!(id = unknown, "Unknown disabledFeatures ID ignored"),
     }
 }
 

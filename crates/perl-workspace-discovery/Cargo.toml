@@ -18,6 +18,7 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 perl-source-file = { workspace = true }
 perl-workspace-ignore = { workspace = true }
 walkdir.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

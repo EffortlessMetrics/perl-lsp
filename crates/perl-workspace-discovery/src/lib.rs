@@ -149,12 +149,12 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
 }
 
 fn log_discovery(result: &DiscoveryResult) {
-    eprintln!(
-        "[perl-workspace-discovery] {} files via {:?} in {:.1}ms (excluded: {})",
-        result.files.len(),
-        result.method,
-        result.duration.as_secs_f64() * 1000.0,
-        result.excluded_count
+    tracing::debug!(
+        files = result.files.len(),
+        method = ?result.method,
+        duration_ms = result.duration.as_secs_f64() * 1000.0,
+        excluded = result.excluded_count,
+        "workspace discovery complete"
     );
 }
 

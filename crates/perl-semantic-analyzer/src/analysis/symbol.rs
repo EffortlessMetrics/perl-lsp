@@ -874,7 +874,7 @@ impl SymbolExtractor {
 
             _ => {
                 // For any unhandled node types, log a warning
-                eprintln!("Warning: Unhandled node type in symbol extractor: {:?}", node.kind);
+                tracing::warn!(kind = ?node.kind, "Unhandled node type in symbol extractor");
             }
         }
     }

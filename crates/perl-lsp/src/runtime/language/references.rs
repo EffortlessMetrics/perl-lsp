@@ -72,7 +72,7 @@ impl LspServer {
                             IndexAccessMode::Full(coordinator) => {
                                 let index = coordinator.index();
                                 if let Some(symbol_key) = symbol_key.as_ref() {
-                                    eprintln!("Looking for references of {:?}", symbol_key);
+                                    tracing::debug!(key = ?symbol_key, "Looking for references");
 
                                     // Try to find references using the symbol key
                                     let mut all_refs = index.find_refs(symbol_key);
@@ -86,9 +86,9 @@ impl LspServer {
 
                                     let mut workspace_locations: Vec<Value> = Vec::new();
                                     if !all_refs.is_empty() {
-                                        eprintln!(
-                                            "Found {} references via find_refs",
-                                            all_refs.len()
+                                        tracing::debug!(
+                                            count = all_refs.len(),
+                                            "Found references via find_refs"
                                         );
                                         // Convert internal Locations to LSP Locations
                                         let lsp_locations =
@@ -102,7 +102,7 @@ impl LspServer {
 
                                     // Check deadline before text search
                                     if start.elapsed() >= deadline {
-                                        eprintln!(
+                                        tracing::debug!(
                                             "References: deadline exceeded, returning partial results"
                                         );
                                         workspace_locations.truncate(cap);
@@ -134,7 +134,7 @@ impl LspServer {
                                     'pattern_loop: for pattern in patterns {
                                         // Check deadline between patterns
                                         if start.elapsed() >= deadline {
-                                            eprintln!(
+                                            tracing::debug!(
                                                 "References: deadline exceeded during text search"
                                             );
                                             break 'pattern_loop;
@@ -179,11 +179,11 @@ impl LspServer {
                                     all_combined_locations.truncate(cap);
 
                                     if !all_combined_locations.is_empty() {
-                                        eprintln!(
-                                            "Found {} total references via combined search (capped at {}, elapsed {:?})",
-                                            all_combined_locations.len(),
+                                        tracing::debug!(
+                                            count = all_combined_locations.len(),
                                             cap,
-                                            start.elapsed()
+                                            elapsed = ?start.elapsed(),
+                                            "Found total references via combined search"
                                         );
                                         return Ok(Some(json!(all_combined_locations)));
                                     }
@@ -202,11 +202,11 @@ impl LspServer {
                                         // Cap results before conversion
                                         let capped_refs: Vec<_> =
                                             refs.into_iter().take(cap).collect();
-                                        eprintln!(
-                                            "Found {} references via find_references for {} (capped at {})",
-                                            capped_refs.len(),
-                                            symbol_name,
-                                            cap
+                                        tracing::debug!(
+                                            count = capped_refs.len(),
+                                            symbol = %symbol_name,
+                                            cap,
+                                            "Found references via find_references"
                                         );
                                         // Convert internal Locations to LSP Locations
                                         let lsp_locations =
@@ -362,9 +362,9 @@ impl LspServer {
                                 }
                             }
                             IndexAccessMode::Partial(reason) => {
-                                eprintln!(
-                                    "References: {}, attempting partial workspace lookup",
-                                    reason
+                                tracing::debug!(
+                                    reason,
+                                    "References: attempting partial workspace lookup"
                                 );
                                 if let (Some(coordinator), Some(symbol_key)) =
                                     (self.coordinator(), symbol_key.as_ref())
@@ -384,25 +384,25 @@ impl LspServer {
                                                 partial_refs.into_iter().take(cap),
                                             );
                                         if !lsp_locations.is_empty() {
-                                            eprintln!(
-                                                "References: returned {} partial-index results (elapsed {:?})",
-                                                lsp_locations.len(),
-                                                start.elapsed()
+                                            tracing::debug!(
+                                                count = lsp_locations.len(),
+                                                elapsed = ?start.elapsed(),
+                                                "References: returned partial-index results"
                                             );
                                             return Ok(Some(json!(lsp_locations)));
                                         }
                                     }
                                 }
 
-                                eprintln!("References: {}, using same-file fallback", reason);
+                                tracing::debug!(reason, "References: using same-file fallback");
                                 if !needle.is_empty() {
                                     let open_doc_locations =
                                         self.search_open_document_references(&needle, cap);
                                     if !open_doc_locations.is_empty() {
-                                        eprintln!(
-                                            "References: returned {} open-document results (elapsed {:?})",
-                                            open_doc_locations.len(),
-                                            start.elapsed()
+                                        tracing::debug!(
+                                            count = open_doc_locations.len(),
+                                            elapsed = ?start.elapsed(),
+                                            "References: returned open-document results"
                                         );
                                         return Ok(Some(json!(open_doc_locations)));
                                     }
@@ -446,10 +446,10 @@ impl LspServer {
                             })
                             .collect();
 
-                        eprintln!(
-                            "References: returned {} same-file results (elapsed {:?})",
-                            locations.len(),
-                            start.elapsed()
+                        tracing::debug!(
+                            count = locations.len(),
+                            elapsed = ?start.elapsed(),
+                            "References: returned same-file results"
                         );
                         return Ok(Some(json!(locations)));
                     }

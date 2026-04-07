@@ -86,18 +86,12 @@ impl LspServer {
             let folders = self.workspace_folders.lock();
             if folders.is_empty() || has_symbols {
                 coordinator.transition_to_ready(file_count, symbol_count);
-                eprintln!(
-                    "Index coordinator transitioned to Ready (files: {}, symbols: {})",
-                    file_count, symbol_count
-                );
+                tracing::debug!(files = file_count, symbols = symbol_count, "Index coordinator transitioned to Ready");
             } else {
                 // Workspace folders exist but no symbols indexed yet
                 // Stay in Building state - files will be indexed as they're opened
                 // or when file watcher events are received
-                eprintln!(
-                    "Index coordinator remaining in Building state ({} workspace folders, awaiting files)",
-                    folders.len()
-                );
+                tracing::debug!(workspace_folders = folders.len(), "Index coordinator remaining in Building state, awaiting files");
             }
         }
 

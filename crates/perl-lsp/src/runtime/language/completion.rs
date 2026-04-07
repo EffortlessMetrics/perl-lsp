@@ -174,7 +174,7 @@ impl LspServer {
 
                 for symbol in workspace_symbols {
                     if completions.len() >= cap {
-                        eprintln!("Completion: cap reached ({}), stopping workspace scan", cap);
+                        tracing::debug!(cap, "Completion: cap reached, stopping workspace scan");
                         break;
                     }
 
@@ -209,7 +209,7 @@ impl LspServer {
                 }
             }
             IndexAccessMode::Partial(reason) => {
-                eprintln!("Completion: workspace index partial ({})", reason);
+                tracing::debug!(reason, "Completion: workspace index partial");
             }
             IndexAccessMode::None => {}
         }
@@ -477,14 +477,14 @@ impl LspServer {
                     .collect();
 
                 if is_incomplete {
-                    eprintln!(
-                        "Completion: returning {} items (capped at {}, elapsed {:?})",
-                        items.len(),
+                    tracing::debug!(
+                        count = items.len(),
                         cap,
-                        start.elapsed()
+                        elapsed = ?start.elapsed(),
+                        "Completion: returning items (capped)"
                     );
                 } else {
-                    eprintln!("Returning {} completions", items.len());
+                    tracing::debug!(count = items.len(), "Returning completions");
                 }
                 return Ok(Some(json!({"isIncomplete": is_incomplete, "items": items})));
             }

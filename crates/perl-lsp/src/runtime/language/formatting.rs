@@ -77,7 +77,7 @@ impl LspServer {
                     trim_final_newlines: None,
                 });
 
-            eprintln!("Formatting document: {}", uri);
+            tracing::debug!(uri, "Formatting document");
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -106,7 +106,7 @@ impl LspServer {
                         return Ok(Some(json!(lsp_edits)));
                     }
                     Err(e) => {
-                        eprintln!("Formatting error: {}", e);
+                        tracing::warn!(error = %e, "Formatting error");
                         return Err(formatting_error_to_rpc("Formatting failed", e));
                     }
                 }
@@ -138,7 +138,7 @@ impl LspServer {
                 WirePosition::new(end_line, end_char),
             );
 
-            eprintln!("Formatting range in document: {}", uri);
+            tracing::debug!(uri, "Formatting range in document");
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -167,7 +167,7 @@ impl LspServer {
                         return Ok(Some(json!(lsp_edits)));
                     }
                     Err(e) => {
-                        eprintln!("Range formatting error: {}", e);
+                        tracing::warn!(error = %e, "Range formatting error");
                         return Err(formatting_error_to_rpc("Range formatting failed", e));
                     }
                 }
@@ -203,7 +203,7 @@ impl LspServer {
                 return Ok(Some(json!([])));
             }
 
-            eprintln!("Formatting {} ranges in document: {}", ranges_array.len(), uri);
+            tracing::debug!(count = ranges_array.len(), uri, "Formatting ranges in document");
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -254,7 +254,7 @@ impl LspServer {
                             all_edits.extend(edits);
                         }
                         Err(e) => {
-                            eprintln!("Range formatting error for range {}: {}", idx, e);
+                            tracing::warn!(idx, error = %e, "Range formatting error");
                             return Err(formatting_error_to_rpc(
                                 &format!("Range formatting failed for range {}", idx),
                                 e,
