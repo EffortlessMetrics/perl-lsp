@@ -218,7 +218,7 @@ fn test_class_produces_symbol_decl() {
 // ── Container tracking ────────────────────────────────────────────────────────
 
 #[test]
-fn test_subroutine_inside_package_has_container() {
+fn test_subroutine_inside_package_has_container() -> Result<(), String> {
     // package Foo; sub bar { }
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(18, 21));
     let sub_node = Node::new(
@@ -242,19 +242,24 @@ fn test_subroutine_inside_package_has_container() {
 
     assert_eq!(decls.len(), 2);
     // Package decl has no container
-    let pkg_decl = decls.iter().find(|d| d.kind == SymbolKind::Package).unwrap();
+    let pkg_decl =
+        decls.iter().find(|d| d.kind == SymbolKind::Package).ok_or("expected Package decl")?;
     assert!(pkg_decl.container.is_none());
 
     // Sub decl uses current package context
-    let sub_decl = decls.iter().find(|d| d.kind == SymbolKind::Subroutine).unwrap();
+    let sub_decl = decls
+        .iter()
+        .find(|d| d.kind == SymbolKind::Subroutine)
+        .ok_or("expected Subroutine decl")?;
     assert_eq!(sub_decl.container.as_deref(), Some("Foo"));
     assert_eq!(sub_decl.qualified_name, "Foo::bar");
+    Ok(())
 }
 
 // ── Nested block walking ──────────────────────────────────────────────────────
 
 #[test]
-fn test_subroutine_inside_package_block() {
+fn test_subroutine_inside_package_block() -> Result<(), String> {
     // package Foo { sub baz { } }
     let inner_body = Node::new(NodeKind::Block { statements: vec![] }, loc(20, 23));
     let inner_sub = Node::new(
@@ -283,10 +288,14 @@ fn test_subroutine_inside_package_block() {
 
     // Should include both the Package decl and the Subroutine inside
     assert_eq!(decls.len(), 2);
-    let sub_decl = decls.iter().find(|d| d.kind == SymbolKind::Subroutine).unwrap();
+    let sub_decl = decls
+        .iter()
+        .find(|d| d.kind == SymbolKind::Subroutine)
+        .ok_or("expected Subroutine decl")?;
     assert_eq!(sub_decl.name, "baz");
     assert_eq!(sub_decl.container.as_deref(), Some("Foo"));
     assert_eq!(sub_decl.qualified_name, "Foo::baz");
+    Ok(())
 }
 
 // ── SymbolDecl structural properties ─────────────────────────────────────────

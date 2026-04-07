@@ -8,7 +8,7 @@ use perl_dap_breakpoint::{
     AstBreakpointValidator, BreakpointError, BreakpointValidation, BreakpointValidator,
     SearchDirection, ValidationReason, find_nearest_valid_line,
 };
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 
 // ---------------------------------------------------------------------------
 // Extended ValidationReason tests
@@ -647,7 +647,7 @@ fn integration_validate_then_suggest() -> Result<(), Box<dyn std::error::Error>>
     assert_eq!(nearest, Some(3));
 
     // Validate the suggested line
-    let suggested_result = v.validate(nearest.unwrap());
+    let suggested_result = v.validate(must_some(nearest));
     assert!(suggested_result.verified);
     Ok(())
 }
@@ -674,7 +674,7 @@ fn integration_find_nearest_both_then_validate() -> Result<(), Box<dyn std::erro
     let nearest = find_nearest_valid_line(&v, 2, SearchDirection::Both, None);
     assert!(nearest.is_some());
 
-    let line = nearest.unwrap();
+    let line = must_some(nearest);
     let result = v.validate(line);
     assert!(result.verified);
     Ok(())

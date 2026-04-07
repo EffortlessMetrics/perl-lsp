@@ -332,6 +332,7 @@ pub fn get_shebang_lens(source: &str) -> Option<CodeLens> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     fn extract_lenses(source: &str) -> Result<Vec<CodeLens>, String> {
         let mut parser = perl_parser::Parser::new(source);
@@ -531,7 +532,7 @@ mod tests {
         let lenses =
             CodeLensProvider::extract_subtest_lenses("subtest 'quoted name' => sub { };\n");
         assert_eq!(lenses.len(), 1);
-        let cmd = lenses[0].command.as_ref().unwrap();
+        let cmd = must_some(lenses[0].command.as_ref());
         assert_eq!(cmd.title, "\u{25b6} Run Subtest: quoted name");
     }
 
