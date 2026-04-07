@@ -15,6 +15,8 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     "ci-security.yml",
     // Path-filtered to UX-relevant crates only; runs on all PRs touching LSP/DAP/extension
     "ux-regression-gate.yml",
+    // Path-gated at workflow level (only runs when Cargo.toml files change)
+    "publish-dry-run.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
