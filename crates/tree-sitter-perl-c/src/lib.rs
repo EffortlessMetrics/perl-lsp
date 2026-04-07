@@ -1,10 +1,10 @@
-//! Tree-sitter Perl parser with C scanner implementation
+//! Tree-sitter Perl grammar binding (C FFI).
 //!
-//! This crate provides the legacy C implementation of the tree-sitter Perl parser
-//! for comparison and benchmarking purposes. It vendors a snapshot of the
-//! upstream tree-sitter Perl grammar (`parser.c` + `scanner.c`) under
-//! `c-src/` and exposes it via a hand-written FFI declaration — no bindgen
-//! or `libclang` dependency is required to build.
+//! This is the conventional C/tree-sitter reference implementation, maintained
+//! for compatibility and comparison against the native v3 Rust parser in
+//! `perl-parser`. It vendors a snapshot of the upstream tree-sitter Perl grammar
+//! (`parser.c` + `scanner.c`) under `c-src/` and exposes it via a hand-written
+//! FFI declaration — no bindgen or `libclang` dependency is required to build.
 
 use std::path::Path;
 use tree_sitter::{Language, Parser};
