@@ -60,13 +60,81 @@ jobs:
               if pkg["id"] in workspace_members:
                   packages[pkg["name"]] = pkg
 
-          # Build dependency graph (only internal deps)
-          deps = {}
+          # Build separate normal and dev dependency graphs (only internal deps).
+          # cargo publish resolves dev-deps from the registry when packaging the
+          # manifest, so a crate that dev-depends on another workspace member
+          # must be published after that member.  However, dev-dep edges can
+          # form cycles between workspace crates (e.g. crate A dev-depends on
+          # crate B while B normally depends on A).  We break those cycles by
+          # running Tarjan SCC: intra-SCC dev edges are dropped (they are the
+          # only edges that can close a cycle), while inter-SCC dev edges are
+          # kept so that the ordering constraint is honoured.
+          from collections import defaultdict
+
+          normal_deps = defaultdict(set)
+          dev_deps = defaultdict(set)
           for name, pkg in packages.items():
-              deps[name] = set()
               for dep in pkg["dependencies"]:
-                  if dep["name"] in packages and dep.get("kind") != "dev":
-                      deps[name].add(dep["name"])
+                  if dep["name"] not in packages:
+                      continue
+                  if dep.get("kind") == "dev":
+                      dev_deps[name].add(dep["name"])
+                  else:
+                      normal_deps[name].add(dep["name"])
+
+          # Tarjan SCC on the full graph (normal + dev edges).
+          def tarjan_sccs(graph, nodes):
+              index_counter = [0]
+              stack = []
+              lowlink = {}
+              index = {}
+              on_stack = {}
+              sccs = []
+
+              def strongconnect(v):
+                  index[v] = index_counter[0]
+                  lowlink[v] = index_counter[0]
+                  index_counter[0] += 1
+                  stack.append(v)
+                  on_stack[v] = True
+                  for w in graph.get(v, set()):
+                      if w not in index:
+                          strongconnect(w)
+                          lowlink[v] = min(lowlink[v], lowlink[w])
+                      elif on_stack.get(w):
+                          lowlink[v] = min(lowlink[v], index[w])
+                  if lowlink[v] == index[v]:
+                      scc = []
+                      while True:
+                          w = stack.pop()
+                          on_stack[w] = False
+                          scc.append(w)
+                          if w == v:
+                              break
+                      sccs.append(scc)
+
+              sys.setrecursionlimit(max(10000, len(nodes) * 2))
+              for v in nodes:
+                  if v not in index:
+                      strongconnect(v)
+              return sccs
+
+          full_graph = {name: normal_deps[name] | dev_deps[name] for name in packages}
+          sccs = tarjan_sccs(full_graph, list(packages.keys()))
+          node_to_scc = {}
+          for i, scc in enumerate(sccs):
+              for node in scc:
+                  node_to_scc[node] = i
+
+          # Build final dep graph: normal edges always included; dev edges only
+          # when they cross SCC boundaries (intra-SCC dev edges are dropped to
+          # break cycles).
+          deps = {}
+          for name in packages:
+              deps[name] = set(normal_deps[name])
+              for dep in dev_deps[name]:
+                  if node_to_scc.get(dep) != node_to_scc.get(name):
+                      deps[name].add(dep)
 
           # Topological sort (Kahn algorithm)
           in_degree = {name: len(d) for name, d in deps.items()}
