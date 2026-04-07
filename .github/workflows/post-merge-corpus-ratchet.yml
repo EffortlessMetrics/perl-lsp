@@ -63,7 +63,7 @@ jobs:
 
       - name: Restore CPAN corpus cache
         id: cpan-corpus-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target/cpan-corpus
           key: cpan-corpus-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
