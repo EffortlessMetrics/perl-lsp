@@ -2526,29 +2526,18 @@ fn cmd_check_parse_errors(repo_root: &Path) -> Result<i32> {
 
     let baseline = read_required_usize(&baseline_file)?;
 
-    let _ = command_status(
-        repo_root,
-        "cargo",
-        &[
-            "run",
-            "-p",
-            "xtask",
-            "--no-default-features",
-            "-q",
-            "--",
-            "corpus-audit",
-            "--fresh",
-            "--corpus-path",
-            ".",
-            "--output",
-            report_file.to_string_lossy().as_ref(),
-        ],
-        &[],
-    )?;
-
+    // NOTE (issue #3202): we deliberately do NOT spawn `cargo run -p xtask -- corpus-audit`
+    // here. The justfile target `ci-parser-features-check` runs corpus-audit first, then
+    // invokes this check. Spawning xtask from inside this binary used to cause a Windows
+    // file-lock race: the parent xtask.exe was still running and Windows blocks relinking
+    // a running executable, surfacing as `os error 5: Access is denied`. By requiring the
+    // report to exist already, we keep this command pure (just JSON read + comparison) and
+    // unblock all Windows contributors from running `just ci-gate` locally.
     if !report_file.is_file() {
         return Err(color_eyre::eyre::eyre!(
-            "Report file not generated: {}",
+            "Report file not found: {}\n\nRun `cargo xtask corpus-audit --fresh --corpus-path . --output {}` first, \
+             or use `just ci-parser-features-check` which runs both steps in order.",
+            report_file.display(),
             report_file.display()
         ));
     }
