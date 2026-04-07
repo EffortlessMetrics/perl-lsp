@@ -613,7 +613,7 @@ enum Commands {
     },
 
     /// Run three-way parser comparison
-    #[cfg(feature = "legacy")]
+    #[cfg(feature = "parser-tasks")]
     CompareThree {
         /// Show detailed output
         #[arg(long)]
@@ -1273,7 +1273,7 @@ fn main() -> Result<()> {
             })
         }
         Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output),
-        #[cfg(feature = "legacy")]
+        #[cfg(feature = "parser-tasks")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
         }

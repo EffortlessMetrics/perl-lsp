@@ -1,12 +1,34 @@
 //! Corpus test task implementation
 
 use crate::types::ScannerType;
-use color_eyre::eyre::{Context, Result};
+#[cfg(feature = "parser-tasks")]
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::{Context, Result, bail};
 use indicatif::{ProgressBar, ProgressStyle};
 use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::PathBuf;
 use walkdir::WalkDir;
+
+/// Parse Perl source with the C tree-sitter scanner and adapt the error type
+/// so it can flow through `color_eyre::eyre::Result` with `?`. The underlying
+/// `tree_sitter_perl_c::parse_perl_code` returns `Box<dyn Error>` which is not
+/// `Send + Sync` and therefore can't auto-convert to `eyre::Report`.
+///
+/// When the `parser-tasks` feature is disabled (pure `legacy` build for the
+/// v2-parity gate), we fall back to a stub that returns an error. The pest-only
+/// code paths never invoke this function, so the stub only trips if someone
+/// explicitly asks for `ScannerType::C` or `ScannerType::Both` in a
+/// `legacy`-only build.
+#[cfg(feature = "parser-tasks")]
+fn parse_with_c_scanner(source: &str) -> Result<tree_sitter::Tree> {
+    tree_sitter_perl_c::parse_perl_code(source).map_err(|e| eyre!("C parser failed: {e}"))
+}
+
+#[cfg(not(feature = "parser-tasks"))]
+fn parse_with_c_scanner(_source: &str) -> Result<tree_sitter::Tree> {
+    bail!("C tree-sitter scanner unavailable: rebuild xtask with --features parser-tasks")
+}
 
 /// Corpus test case containing input code and expected S-expression
 #[derive(Debug)]
@@ -142,7 +164,7 @@ fn normalize_sexp(s: &str) -> String {
 }
 
 fn parse_with_incrate_v2(source: &str) -> String {
-    let mut parser = tree_sitter_perl::PureRustPerlParser::new();
+    let mut parser = perl_parser_pest::PureRustPerlParser::new();
     match parser.parse(source) {
         Ok(ast) => parser.to_sexp(&ast),
         Err(e) => format!("(ERROR {})", e),
@@ -190,7 +212,7 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
             // Use the C-based tree-sitter parser
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            let tree = parse_with_c_scanner(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => parse_with_incrate_v2(&test_case.source),
@@ -233,7 +255,7 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
         }
         Some(ScannerType::Both) => {
             // Parse using both C and V3 scanners and compare results
-            let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+            let c_tree = parse_with_c_scanner(&test_case.source)?;
             let c_raw = c_tree.root_node().to_sexp();
             let c_sexp = normalize_sexp(&c_raw);
 
@@ -302,7 +324,7 @@ fn diagnose_parse_differences(
 
     // Parse with current parser(s)
     if let Some(ScannerType::Both) = scanner {
-        let c_tree = tree_sitter_perl::parse(&test_case.source)?;
+        let c_tree = parse_with_c_scanner(&test_case.source)?;
         let c_sexp = normalize_sexp(&c_tree.root_node().to_sexp());
 
         let mut v3_parser = perl_parser::Parser::new(&test_case.source);
@@ -385,7 +407,7 @@ fn diagnose_parse_differences(
 
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
-            let tree = tree_sitter_perl::parse(&test_case.source)?;
+            let tree = parse_with_c_scanner(&test_case.source)?;
             tree.root_node().to_sexp()
         }
         Some(ScannerType::Rust) => parse_with_incrate_v2(&test_case.source),
@@ -519,7 +541,7 @@ fn test_current_parser() -> Result<()> {
 
     for source in test_cases {
         println!("\nInput: '{}'", source);
-        match tree_sitter_perl::parse(source) {
+        match parse_with_c_scanner(source) {
             Ok(tree) => {
                 let sexp = normalize_sexp(&tree.root_node().to_sexp());
                 println!("Output: {}", sexp);

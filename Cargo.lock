@@ -4352,6 +4352,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-perl-c"
+version = "0.12.1"
+dependencies = [
+ "bindgen",
+ "cc",
+ "tree-sitter",
+]
+
+[[package]]
 name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5057,7 +5066,7 @@ dependencies = [
  "tempfile",
  "toml",
  "tree-sitter",
- "tree-sitter-perl",
+ "tree-sitter-perl-c",
  "walkdir",
 ]
 
