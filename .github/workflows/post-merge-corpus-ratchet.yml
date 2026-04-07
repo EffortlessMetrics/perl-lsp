@@ -75,7 +75,9 @@ jobs:
         run: cargo xtask cpan-corpus install
 
       - name: Verify corpus baseline path
-        run: test -d target/cpan-corpus/lib/perl5
+        # Use the workspace-root-absolute path so this check cannot drift
+        # from xtask's workspace-root-anchored resolution (see issue #3189).
+        run: test -d "$GITHUB_WORKSPACE/target/cpan-corpus/lib/perl5"
 
       - name: Run corpus ratchet
         run: cargo xtask cpan-corpus ratchet
