@@ -2,22 +2,29 @@
 name = "perl-lsp-ai-provider"
 version = "0.12.2"
 edition = "2024"
-description = "AI completion providers for perl-lsp"
+rust-version = "1.92"
+authors.workspace = true
+description = "AI completion providers (OpenAI-compatible streaming) for perl-lsp"
 license = "MIT OR Apache-2.0"
-publish = false
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-ai-provider"
+readme = "README.md"
+keywords = ["perl", "lsp", "ai", "completion", "openai"]
+categories = ["development-tools", "text-editors"]
 
 [lib]
 doctest = false
 
 [dependencies]
-perl-lsp-inline-completion = { path = "../perl-lsp-inline-completion" }
+perl-lsp-inline-completion = { workspace = true }
 ureq = { version = "3", features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = "0.1.44"
 
 [dev-dependencies]
-perl-tdd-support = { path = "../perl-tdd-support" }
+perl-tdd-support = { workspace = true }
 
 [lints]
 workspace = true
