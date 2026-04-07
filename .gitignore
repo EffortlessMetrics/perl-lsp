@@ -218,3 +218,6 @@ docs/assets/recordings/*.mp4
 docs/assets/recordings/*.mov
 docs/assets/recordings/*.mkv
 docs/assets/recordings/*.webm
+
+# Playwright MCP browser session artifacts (page state dumps)
+.playwright-mcp/
