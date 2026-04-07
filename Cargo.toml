@@ -11,6 +11,7 @@ members = [
     "crates/perl-builtins-phf",
     "crates/perl-regex",
     "crates/perl-heredoc",
+    "crates/perl-heredoc-anti-patterns",
     "crates/perl-error",
     "crates/perl-tokenizer",
     "crates/perl-lexer",
@@ -162,6 +163,7 @@ allow = [
     "perl-regex",
     "perl-quote",
     "perl-pod",
+    "perl-heredoc-anti-patterns",
 
     # Tier 1b — Depend only on Tier 1 crates
     "perl-ast",
@@ -320,6 +322,7 @@ perl-pragma = { path = "crates/perl-pragma", version = "0.12.2" }
 perl-lexer = { path = "crates/perl-lexer", version = "0.12.2" }
 perl-ast = { path = "crates/perl-ast", version = "0.12.2" }
 perl-heredoc = { path = "crates/perl-heredoc", version = "0.12.2" }
+perl-heredoc-anti-patterns = { path = "crates/perl-heredoc-anti-patterns", version = "0.12.2" }
 perl-error = { path = "crates/perl-error", version = "0.12.2" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.12.2" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.12.2" }

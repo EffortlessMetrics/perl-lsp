@@ -1855,6 +1855,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-heredoc-anti-patterns"
+version = "0.12.2"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "perl-incremental-parsing"
 version = "0.12.2"
 dependencies = [
@@ -2019,13 +2026,13 @@ name = "perl-lsp-diagnostics"
 version = "0.12.2"
 dependencies = [
  "perl-diagnostics-codes",
+ "perl-heredoc-anti-patterns",
  "perl-lsp-diagnostic-types",
  "perl-parser",
  "perl-parser-core",
  "perl-pragma",
  "perl-semantic-analyzer",
  "perl-tdd-support",
- "perl-ts-heredoc-analysis",
  "perl-workspace-index",
 ]
 
