@@ -7,6 +7,10 @@
 //! The resulting behavior is intentionally conservative: common non-source directories
 //! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`).
 
+// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
+
 use perl_source_file::is_perl_source_path;
 use perl_workspace_ignore::{is_skipped_dir_name, path_contains_skipped_component};
 use std::path::{Path, PathBuf};

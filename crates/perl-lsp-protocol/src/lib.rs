@@ -9,6 +9,8 @@
 //! - [`capabilities`] — Server capability configuration advertised during `initialize`
 
 #![deny(unsafe_code)]
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 #![warn(missing_docs)]
 
 pub mod capabilities;
