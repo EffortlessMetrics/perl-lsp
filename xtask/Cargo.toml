@@ -48,7 +48,11 @@ assert_cmd = "2.1.2"
 perl-tdd-support = { workspace = true }
 
 [features]
-# Additional tasks that depend on legacy tree-sitter parsers
-legacy = ["perl-parser-pest", "tree-sitter-perl-c"]
-# Parser-related tasks
-parser-tasks = ["perl-parser-pest", "tree-sitter-perl-c"]
+# Legacy Pest-based (v2) tasks -- v2-parity corpus, v2-only diagnostics.
+# Does not include the C tree-sitter parser (no libclang/C toolchain needed).
+legacy = ["perl-parser-pest"]
+# Parser-related tasks that additionally require the C tree-sitter parser
+# (bindings generation, highlight tests, three-way parser comparison).
+# Building this feature requires a C toolchain and libclang to compile
+# `tree-sitter-perl-c`.
+parser-tasks = ["legacy", "tree-sitter-perl-c"]

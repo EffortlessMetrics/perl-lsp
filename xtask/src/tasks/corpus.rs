@@ -1,7 +1,9 @@
 //! Corpus test task implementation
 
 use crate::types::ScannerType;
-use color_eyre::eyre::{Context, Result, eyre};
+#[cfg(feature = "parser-tasks")]
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::{Context, Result, bail};
 use indicatif::{ProgressBar, ProgressStyle};
 use similar::{ChangeTag, TextDiff};
 use std::fs;
@@ -12,8 +14,20 @@ use walkdir::WalkDir;
 /// so it can flow through `color_eyre::eyre::Result` with `?`. The underlying
 /// `tree_sitter_perl_c::parse_perl_code` returns `Box<dyn Error>` which is not
 /// `Send + Sync` and therefore can't auto-convert to `eyre::Report`.
+///
+/// When the `parser-tasks` feature is disabled (pure `legacy` build for the
+/// v2-parity gate), we fall back to a stub that returns an error. The pest-only
+/// code paths never invoke this function, so the stub only trips if someone
+/// explicitly asks for `ScannerType::C` or `ScannerType::Both` in a
+/// `legacy`-only build.
+#[cfg(feature = "parser-tasks")]
 fn parse_with_c_scanner(source: &str) -> Result<tree_sitter::Tree> {
     tree_sitter_perl_c::parse_perl_code(source).map_err(|e| eyre!("C parser failed: {e}"))
+}
+
+#[cfg(not(feature = "parser-tasks"))]
+fn parse_with_c_scanner(_source: &str) -> Result<tree_sitter::Tree> {
+    bail!("C tree-sitter scanner unavailable: rebuild xtask with --features parser-tasks")
 }
 
 /// Corpus test case containing input code and expected S-expression
