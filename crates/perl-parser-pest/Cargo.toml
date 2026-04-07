@@ -33,5 +33,9 @@ perl-tdd-support = { workspace = true }
 [lib]
 doctest = false
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

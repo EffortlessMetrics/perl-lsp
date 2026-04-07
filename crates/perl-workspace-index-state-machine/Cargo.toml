@@ -17,5 +17,8 @@ include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 [dependencies]
 parking_lot.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

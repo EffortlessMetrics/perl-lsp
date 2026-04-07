@@ -13,5 +13,8 @@ documentation = "https://docs.rs/perl-lsp-diagnostic-types"
 keywords = ["perl", "lsp", "diagnostics", "types"]
 categories = ["development-tools", "text-editors"]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

@@ -23,6 +23,9 @@ toml = "1.1.2"
 perl-tdd-support = { path = "../perl-tdd-support" }
 tempfile.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

@@ -16,5 +16,8 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

@@ -943,6 +943,12 @@ ci-docs:
     cargo doc -p perl-parser -p perl-lsp-rs --no-deps
     @echo "✅ Docs build passed"
 
+# Verify docs.rs builds for all publishable crates
+# Usage: just docs-verify [--fast]  (--fast skips large crates)
+docs-verify *args:
+    @echo "Verifying docs.rs builds for all publishable crates..."
+    bash scripts/verify-docs-rs.sh {{args}}
+
 # Mutation testing (expensive, ~15-30 min)
 ci-test-mutation:
     @echo "🧬 Running mutation tests..."

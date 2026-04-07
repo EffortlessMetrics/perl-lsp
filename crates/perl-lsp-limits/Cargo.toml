@@ -16,5 +16,8 @@ categories = ["development-tools", "text-editors"]
 [dependencies]
 serde_json.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

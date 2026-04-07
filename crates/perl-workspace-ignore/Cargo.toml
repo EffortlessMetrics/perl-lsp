@@ -14,5 +14,8 @@ keywords = ["perl", "workspace", "discovery", "ignore", "lsp"]
 categories = ["development-tools", "filesystem"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

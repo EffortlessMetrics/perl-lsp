@@ -64,6 +64,10 @@ anyhow = { workspace = true, optional = true }
 name = "perl-parse"
 required-features = ["cli"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

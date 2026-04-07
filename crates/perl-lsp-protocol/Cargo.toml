@@ -31,5 +31,9 @@ perl-lsp-feature-contracts = { workspace = true }
 [features]
 lsp-ga-lock = []
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

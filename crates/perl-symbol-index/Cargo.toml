@@ -16,5 +16,8 @@ categories = ["text-editors", "development-tools"]
 [lib]
 doctest = false
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

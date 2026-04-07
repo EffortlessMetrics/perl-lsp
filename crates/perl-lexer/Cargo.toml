@@ -37,6 +37,10 @@ simd = []
 # Enable slow stress tests (regex fuzzing, etc.)
 slow_tests = []
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

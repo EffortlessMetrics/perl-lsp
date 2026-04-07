@@ -38,5 +38,9 @@ perl-tdd-support = { path = "../perl-tdd-support" }
 perl-test-generators = { path = "../perl-test-generators" }
 proptest.workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

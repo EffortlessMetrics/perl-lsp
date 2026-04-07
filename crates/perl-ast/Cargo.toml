@@ -18,5 +18,8 @@ perl-ast-v2 = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-token = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

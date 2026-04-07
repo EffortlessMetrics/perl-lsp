@@ -113,6 +113,10 @@ tracing.workspace = true
 serde = { workspace = true }
 toml = "1.1.2"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

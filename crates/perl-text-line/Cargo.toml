@@ -19,6 +19,9 @@ proptest.workspace = true
 perl-module-token-parser = { workspace = true }
 perl-tdd-support = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

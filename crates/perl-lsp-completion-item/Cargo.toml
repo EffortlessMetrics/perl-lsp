@@ -19,5 +19,8 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

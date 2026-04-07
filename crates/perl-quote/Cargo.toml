@@ -19,5 +19,8 @@ categories = ["parsing", "text-processing"]
 perl-tdd-support = { path = "../perl-tdd-support" }
 proptest.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

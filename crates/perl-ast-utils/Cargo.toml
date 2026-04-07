@@ -31,5 +31,8 @@ perl-ast = { workspace = true }
 [dev-dependencies]
 perl-ast = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

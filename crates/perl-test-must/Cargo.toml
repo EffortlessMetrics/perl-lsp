@@ -16,5 +16,8 @@ doctest = false
 # Zero dependencies — that is the entire point.
 [dependencies]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

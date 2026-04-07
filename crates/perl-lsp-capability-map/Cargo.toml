@@ -18,5 +18,8 @@ include = ["src/**", "Cargo.toml", "README.md"]
 lsp-types.workspace = true
 perl-lsp-feature-ids = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

@@ -19,5 +19,8 @@ proptest.workspace = true
 perl-module-path = { workspace = true }
 perl-module-token = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
