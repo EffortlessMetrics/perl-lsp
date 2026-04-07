@@ -238,6 +238,7 @@ allow = [
     # Tier 5 — Application crates
     "perl-dead-code",
     "perl-parser",
+    "perl-parser-pest",
     "perl-corpus",
 
     # Tier 5 — DAP components
