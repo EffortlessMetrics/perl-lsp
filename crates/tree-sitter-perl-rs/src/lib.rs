@@ -161,14 +161,22 @@ impl<'tree> Node<'tree> {
 
     /// Returns the number of direct children.
     pub fn child_count(&self) -> usize {
-        ast_children(self.inner).len()
+        let mut count = 0usize;
+        self.inner.for_each_child(|_| count += 1);
+        count
     }
 
     /// Returns the `i`-th direct child, or `None` if out of range.
     pub fn child(&self, i: usize) -> Option<Node<'tree>> {
-        ast_children(self.inner)
-            .get(i)
-            .map(|child| Node { inner: child, tree_source: self.tree_source })
+        let mut idx = 0usize;
+        let mut found: Option<&'tree AstNode> = None;
+        self.inner.for_each_child(|child| {
+            if found.is_none() && idx == i {
+                found = Some(child);
+            }
+            idx += 1;
+        });
+        found.map(|child| Node { inner: child, tree_source: self.tree_source })
     }
 
     /// Returns an iterator over direct children.
@@ -207,7 +215,7 @@ impl<'tree> Node<'tree> {
 
     /// Returns `true` if this node has no children (is a leaf node).
     pub fn is_leaf(&self) -> bool {
-        ast_children(self.inner).is_empty()
+        self.inner.first_child().is_none()
     }
 
     /// Returns the source text that was provided when creating the owning [`Tree`].

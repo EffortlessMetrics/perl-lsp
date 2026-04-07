@@ -13,7 +13,7 @@ keywords = ["perl", "parser", "tree-sitter", "lsp", "ast"]
 
 [lib]
 name = "tree_sitter_perl_rs"
-doctest = false
+doctest = true
 
 [dependencies]
 perl-parser-core = { workspace = true }
