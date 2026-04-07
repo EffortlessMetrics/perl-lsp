@@ -335,10 +335,7 @@ impl LspServer {
         // Resolve API key from environment variable
         let api_key = std::env::var(&ai_config.api_key_env).unwrap_or_default();
         if api_key.is_empty() {
-            eprintln!(
-                "[perl-lsp] AI completion enabled but {} is empty or unset",
-                ai_config.api_key_env
-            );
+            tracing::warn!(env_var = %ai_config.api_key_env, "AI completion enabled but env var is empty or unset");
             *self.ai_inline_backend.lock() = None;
             return;
         }
@@ -358,10 +355,7 @@ impl LspServer {
         let provider = perl_lsp_ai_provider::OpenAiProvider::new(provider_config, limiter);
         *self.ai_inline_backend.lock() = Some(Arc::new(provider));
 
-        eprintln!(
-            "[perl-lsp] AI inline completion backend configured (endpoint={}, model={})",
-            ai_config.endpoint, ai_config.model
-        );
+        tracing::info!(endpoint = %ai_config.endpoint, model = %ai_config.model, "AI inline completion backend configured");
     }
 
     /// Get the subprocess runtime for external tool execution (perltidy, perlcritic).

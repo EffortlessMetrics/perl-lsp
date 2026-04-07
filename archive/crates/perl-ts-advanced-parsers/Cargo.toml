@@ -19,6 +19,7 @@ serde = { workspace = true }
 pest = "2.8.4"
 perl-ts-heredoc-parser = { path = "../perl-ts-heredoc-parser" }
 perl-parser-pest = { path = "../perl-parser-pest" }
+tracing.workspace = true
 
 [features]
 stress-tests = []

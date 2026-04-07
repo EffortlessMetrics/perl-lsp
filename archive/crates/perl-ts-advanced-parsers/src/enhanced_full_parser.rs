@@ -50,7 +50,7 @@ impl EnhancedFullParser {
 
         // Phase 4: Parse with Pest
         let pairs = PerlParser::parse(Rule::program, &fully_processed).map_err(|e| {
-            eprintln!("Enhanced parser error: {:?}", e);
+            tracing::warn!(error = ?e, "Enhanced parser error");
             ParseError::ParseFailed
         })?;
 

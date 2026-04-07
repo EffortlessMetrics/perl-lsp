@@ -11,7 +11,7 @@ use super::*;
 impl LspServer {
     /// Run the LSP server using stdio
     pub fn run(&self) -> io::Result<()> {
-        eprintln!("LSP server started (stdio)");
+        tracing::info!("LSP server started (stdio)");
         let reader_arc = Arc::clone(&self.reader);
         let mut reader = reader_arc.lock();
         self.serve(&mut **reader)
@@ -25,7 +25,7 @@ impl LspServer {
             // Read LSP message using transport module
             match message_reader.read_next(reader)? {
                 Some(request) => {
-                    eprintln!("Received request: {}", request.method);
+                    tracing::trace!(method = %request.method, "Received request");
 
                     // Handle the request
                     if let Some(response) = self.handle_request(request) {
@@ -36,7 +36,7 @@ impl LspServer {
                 }
                 None => {
                     // EOF reached, exit cleanly
-                    eprintln!("LSP server: EOF, shutting down");
+                    tracing::info!("LSP server: EOF, shutting down");
                     break;
                 }
             }
@@ -69,7 +69,7 @@ impl LspServer {
 
         while let Some(request) = rx.recv().await {
             let method = request.method.clone();
-            eprintln!("Received request: {}", method);
+            tracing::trace!(method = %method, "Received request");
 
             match classify(&method) {
                 RequestClass::Control => {

@@ -50,7 +50,7 @@ impl FileWatcherDebouncer {
             .name("file-watcher-debounce".into())
             .spawn(move || worker_loop(rx, interval, publish_fn))
         {
-            eprintln!("file watcher debounce thread spawn failed: {e}");
+            tracing::error!(error = %e, "file watcher debounce thread spawn failed");
         }
         Self { tx }
     }

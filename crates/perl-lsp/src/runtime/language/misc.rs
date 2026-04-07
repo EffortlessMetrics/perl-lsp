@@ -129,7 +129,7 @@ impl LspServer {
                 // Apply cap to inlay hints
                 let mut result = enriched_hints;
                 if result.len() > cap {
-                    eprintln!("InlayHints: capping from {} to {}", result.len(), cap);
+                    tracing::debug!(from = result.len(), to = cap, "InlayHints: capping");
                     result.truncate(cap);
                 }
                 return Ok(Some(json!(result)));
@@ -535,7 +535,7 @@ impl LspServer {
 
                     // Apply cap to code lenses
                     if lenses.len() > cap {
-                        eprintln!("CodeLens: capping from {} to {}", lenses.len(), cap);
+                        tracing::debug!(from = lenses.len(), to = cap, "CodeLens: capping");
                         lenses.truncate(cap);
                     }
 
@@ -547,7 +547,11 @@ impl LspServer {
                     text_lenses.extend(CodeLensProvider::extract_subtest_lenses(&doc.text));
                     // Apply cap to text-based lenses
                     if text_lenses.len() > cap {
-                        eprintln!("CodeLens (text): capping from {} to {}", text_lenses.len(), cap);
+                        tracing::debug!(
+                            from = text_lenses.len(),
+                            to = cap,
+                            "CodeLens (text): capping"
+                        );
                         text_lenses.truncate(cap);
                     }
                     return Ok(Some(json!(text_lenses)));
@@ -609,9 +613,10 @@ impl LspServer {
                     for (scanned_docs, view) in snapshot.iter().enumerate() {
                         // Check deadline periodically (every 10 documents)
                         if scanned_docs % 10 == 0 && start.elapsed() >= deadline {
-                            eprintln!(
-                                "CodeLensResolve: deadline exceeded after {} docs, returning partial count {}",
-                                scanned_docs, count
+                            tracing::debug!(
+                                scanned = scanned_docs,
+                                count,
+                                "CodeLensResolve: deadline exceeded, returning partial"
                             );
                             break;
                         }
@@ -1335,7 +1340,7 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
 
-            eprintln!("Discovering tests for: {}", uri);
+            tracing::debug!(uri, "Discovering tests");
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -1393,7 +1398,7 @@ impl LspServer {
                         })
                         .collect();
 
-                    eprintln!("Found {} test items", test_items.len());
+                    tracing::debug!(count = test_items.len(), "Found test items");
 
                     return Ok(Some(json!(test_items)));
                 }
@@ -1431,7 +1436,7 @@ impl LspServer {
 
             let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
 
-            eprintln!("Executing command: {}", command);
+            tracing::debug!(command, "Executing command");
 
             // Use the new execute command provider for new commands
             // Collect workspace roots, deduplicating to avoid redundant security checks
@@ -1555,11 +1560,7 @@ impl LspServer {
                     {
                         Ok(child) => {
                             let pid = child.id();
-                            eprintln!(
-                                "Debug session started: perl -d {} (pid {})",
-                                resolved.display(),
-                                pid
-                            );
+                            tracing::info!(file = %resolved.display(), pid, "Debug session started");
                             return Ok(Some(json!({
                                 "status": "started",
                                 "pid": pid,

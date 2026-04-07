@@ -4,6 +4,10 @@
 //! with heredoc support, streaming parsers, error recovery, incremental
 //! parsing, and an experimental LSP server implementation.
 
+// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
+
 pub mod context_aware_parser;
 pub mod disambiguated_parser;
 pub mod enhanced_full_parser;

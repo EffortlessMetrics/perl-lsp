@@ -14,10 +14,10 @@ impl DebugAdapter {
     /// serves the DAP session on that stream.
     pub(crate) fn run_socket(&mut self, port: u16) -> io::Result<()> {
         let listener = TcpListener::bind(("127.0.0.1", port))?;
-        eprintln!("DAP socket transport listening on 127.0.0.1:{port}");
+        tracing::info!(port, "DAP socket transport listening on 127.0.0.1");
 
         let (stream, peer_addr) = listener.accept()?;
-        eprintln!("DAP socket client connected: {peer_addr}");
+        tracing::info!(peer_addr = %peer_addr, "DAP socket client connected");
 
         let reader_stream = stream.try_clone()?;
         self.run_with_io(reader_stream, stream)
@@ -43,21 +43,21 @@ impl DebugAdapter {
                 let framed = match serde_json::to_vec(&msg) {
                     Ok(payload) => frame(&payload),
                     Err(e) => {
-                        eprintln!("Failed to serialize DAP message: {} - {:#?}", e, msg);
+                        tracing::error!(error = %e, message = ?msg, "Failed to serialize DAP message");
                         continue;
                     }
                 };
 
                 let mut writer = lock_or_recover(&event_writer, "event_writer");
                 if let Err(e) = writer.write_all(&framed) {
-                    eprintln!("Failed to write DAP frame in event handler: {}", e);
+                    tracing::error!(error = %e, "Failed to write DAP frame in event handler");
                     continue;
                 }
                 if let Err(e) = writer.flush() {
-                    eprintln!("Failed to flush DAP frame in event handler: {}", e);
+                    tracing::error!(error = %e, "Failed to flush DAP frame in event handler");
                 }
             }
-            eprintln!("Event handler thread terminating - channel closed");
+            tracing::debug!("Event handler thread terminating - channel closed");
         });
 
         let mut reader = BufReader::new(input);
@@ -77,7 +77,7 @@ impl DebugAdapter {
                     Ok(Some(body)) => body,
                     Ok(None) => break,
                     Err(error) => {
-                        eprintln!("Failed to parse DAP transport frame: {error}");
+                        tracing::warn!(%error, "Failed to parse DAP transport frame");
                         continue;
                     }
                 };
@@ -85,10 +85,7 @@ impl DebugAdapter {
                 let msg = match serde_json::from_slice::<DapMessage>(&body) {
                     Ok(msg) => msg,
                     Err(_) => {
-                        eprintln!(
-                            "Failed to parse DAP message: {}",
-                            String::from_utf8_lossy(&body)
-                        );
+                        tracing::warn!(body = %String::from_utf8_lossy(&body), "Failed to parse DAP message");
                         continue;
                     }
                 };
@@ -101,7 +98,7 @@ impl DebugAdapter {
                 let payload = match serde_json::to_vec(&response) {
                     Ok(payload) => payload,
                     Err(e) => {
-                        eprintln!("Failed to serialize DAP response: {}", e);
+                        tracing::error!(error = %e, "Failed to serialize DAP response");
                         continue;
                     }
                 };

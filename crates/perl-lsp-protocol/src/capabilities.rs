@@ -304,7 +304,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
 pub fn capabilities_json(build: BuildFlags) -> Value {
     let caps = capabilities_for(build.clone());
     let mut json = serde_json::to_value(caps).unwrap_or_else(|e| {
-        eprintln!("Failed to serialize capabilities to JSON: {}", e);
+        tracing::error!(error = %e, "Failed to serialize capabilities to JSON");
         serde_json::json!({})
     });
 

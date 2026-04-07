@@ -43,6 +43,10 @@
 //! # }
 //! ```
 
+// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -322,7 +326,7 @@ pub fn create_launch_json_snippet() -> String {
         "env": {}
     });
     serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
-        eprintln!("Failed to serialize launch.json snippet: {}", e);
+        tracing::error!(error = %e, "Failed to serialize launch.json snippet");
         "{}".to_string()
     })
 }
@@ -356,7 +360,7 @@ pub fn create_attach_json_snippet() -> String {
         "timeout": 5000
     });
     serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
-        eprintln!("Failed to serialize attach.json snippet: {}", e);
+        tracing::error!(error = %e, "Failed to serialize attach.json snippet");
         "{}".to_string()
     })
 }

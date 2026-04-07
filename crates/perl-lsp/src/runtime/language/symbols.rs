@@ -186,10 +186,10 @@ impl LspServer {
 
                     // Apply cap to document symbols
                     if document_symbols.len() > cap {
-                        eprintln!(
-                            "DocumentSymbol: capping from {} to {}",
-                            document_symbols.len(),
-                            cap
+                        tracing::debug!(
+                            from = document_symbols.len(),
+                            to = cap,
+                            "DocumentSymbol: capping"
                         );
                         document_symbols.truncate(cap);
                     }
@@ -197,20 +197,20 @@ impl LspServer {
                     return Ok(Some(json!(document_symbols)));
                 } else {
                     // Fallback: Extract symbols via regex when parse fails
-                    eprintln!("Using fallback symbol extraction for {}", uri);
+                    tracing::debug!(uri, "Using fallback symbol extraction");
                     let mut symbols = self.extract_symbols_fallback(&doc.text);
                     // Append POD section symbols from a direct line scan
                     symbols.extend(pod_section_symbols(&doc.text));
                     // Apply cap to fallback symbols
                     if symbols.len() > cap {
-                        eprintln!(
-                            "DocumentSymbol (fallback): capping from {} to {}",
-                            symbols.len(),
-                            cap
+                        tracing::debug!(
+                            from = symbols.len(),
+                            to = cap,
+                            "DocumentSymbol (fallback): capping"
                         );
                         symbols.truncate(cap);
                     }
-                    eprintln!("Returning {} fallback symbols", symbols.len());
+                    tracing::debug!(count = symbols.len(), "Returning fallback symbols");
                     return Ok(Some(json!(symbols)));
                 }
             }

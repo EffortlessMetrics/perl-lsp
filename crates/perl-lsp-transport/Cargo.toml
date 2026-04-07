@@ -24,6 +24,7 @@ include = [
 perl-lsp-protocol = { workspace = true }
 perl-content-length-framing = { workspace = true }
 serde_json.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true
