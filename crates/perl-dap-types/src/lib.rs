@@ -109,26 +109,28 @@ mod tests {
     }
 
     #[test]
-    fn stack_frame_serde_round_trip() {
+    fn stack_frame_serde_round_trip() -> serde_json::Result<()> {
         let src = Source::new("/script.pl");
         let frame = StackFrame::new(1, "run", src, 5);
-        let json = serde_json::to_string(&frame).unwrap();
-        let back: StackFrame = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&frame)?;
+        let back: StackFrame = serde_json::from_str(&json)?;
         assert_eq!(back.id, 1);
         assert_eq!(back.line, 5);
+        Ok(())
     }
 
     #[test]
-    fn stack_frame_optional_fields_omitted_in_json() {
+    fn stack_frame_optional_fields_omitted_in_json() -> serde_json::Result<()> {
         let src = Source::new("/a.pl");
         let frame = StackFrame::new(1, "foo", src, 1);
-        let json = serde_json::to_string(&frame).unwrap();
+        let json = serde_json::to_string(&frame)?;
         assert!(!json.contains("endLine"), "endLine should be absent: {json}");
         assert!(!json.contains("endColumn"), "endColumn should be absent: {json}");
+        Ok(())
     }
 
     #[test]
-    fn variable_type_field_serializes_as_type_not_type_underscore() {
+    fn variable_type_field_serializes_as_type_not_type_underscore() -> serde_json::Result<()> {
         let var = Variable {
             name: "$x".to_string(),
             value: "42".to_string(),
@@ -137,13 +139,14 @@ mod tests {
             named_variables: None,
             indexed_variables: None,
         };
-        let json = serde_json::to_string(&var).unwrap();
+        let json = serde_json::to_string(&var)?;
         assert!(json.contains("\"type\":"), "must serialize as 'type' not 'type_': {json}");
         assert!(!json.contains("type_"), "must not leak Rust field name: {json}");
+        Ok(())
     }
 
     #[test]
-    fn variable_optional_fields_omitted_when_none() {
+    fn variable_optional_fields_omitted_when_none() -> serde_json::Result<()> {
         let var = Variable {
             name: "$x".to_string(),
             value: "1".to_string(),
@@ -152,13 +155,14 @@ mod tests {
             named_variables: None,
             indexed_variables: None,
         };
-        let json = serde_json::to_string(&var).unwrap();
+        let json = serde_json::to_string(&var)?;
         assert!(!json.contains("namedVariables"), "absent: {json}");
         assert!(!json.contains("indexedVariables"), "absent: {json}");
+        Ok(())
     }
 
     #[test]
-    fn variable_serde_round_trip() {
+    fn variable_serde_round_trip() -> serde_json::Result<()> {
         let var = Variable {
             name: "@arr".to_string(),
             value: "(3 elements)".to_string(),
@@ -167,9 +171,10 @@ mod tests {
             named_variables: None,
             indexed_variables: Some(3),
         };
-        let json = serde_json::to_string(&var).unwrap();
-        let back: Variable = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&var)?;
+        let back: Variable = serde_json::from_str(&json)?;
         assert_eq!(back.variables_reference, 7);
         assert_eq!(back.indexed_variables, Some(3));
+        Ok(())
     }
 }
