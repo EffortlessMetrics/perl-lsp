@@ -43,6 +43,10 @@
 //! # }
 //! ```
 
+// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
