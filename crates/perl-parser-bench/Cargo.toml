@@ -20,7 +20,7 @@ walkdir.workspace = true
 
 [[bin]]
 name = "perl-parser-bench"
-path = "src/main.rs"
+path = "src/bin/perl-parser-bench.rs"
 
 [lints]
 workspace = true
