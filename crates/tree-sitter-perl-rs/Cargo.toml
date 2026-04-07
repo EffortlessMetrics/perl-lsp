@@ -8,8 +8,23 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Rust-native Perl parser with tree-sitter-style ergonomics and tree-sitter-compatible output over the native v3 parser."
-categories = ["parsing", "development-tools"]
+readme = "README.md"
+documentation = "https://docs.rs/tree-sitter-perl-rs"
+categories = ["development-tools", "parser-implementations", "parsing"]
 keywords = ["perl", "parser", "tree-sitter", "lsp", "ast"]
+include = [
+    "src/**",
+    "tests/**",
+    "README.md",
+    "ROADMAP.md",
+    "CLAUDE.md",
+    "Cargo.toml",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lib]
 name = "tree_sitter_perl_rs"
