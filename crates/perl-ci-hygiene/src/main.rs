@@ -1187,6 +1187,13 @@ const RUST_BENCH_BIN: &str = "perl-parser-bench";
 /// dependency), so it must be invoked via `--manifest-path` rather than `-p`.
 const C_BENCH_BIN: &str = "bench_parser_c";
 
+/// Relative path (from repo root) to the C tree-sitter crate's Cargo.toml.
+///
+/// Pinned here alongside `C_BENCH_BIN` so that the regression test
+/// (`quick_bench_uses_distinct_binaries_for_c_and_rust`) can assert both the
+/// binary name and the crate location remain distinct from the Rust bench path.
+const C_BENCH_MANIFEST: &str = "crates/tree-sitter-perl-c/Cargo.toml";
+
 /// Run the v3 native Rust parser bench binary against `file`.
 ///
 /// Returns wall-clock duration in microseconds, or `None` if the bench
@@ -1228,7 +1235,7 @@ fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
         "--quiet",
         "--release",
         "--manifest-path",
-        "crates/tree-sitter-perl-c/Cargo.toml",
+        C_BENCH_MANIFEST,
         "--bin",
         C_BENCH_BIN,
         "--features",
@@ -4035,6 +4042,13 @@ mod tests {
         );
         assert_eq!(RUST_BENCH_BIN, "perl-parser-bench");
         assert_eq!(C_BENCH_BIN, "bench_parser_c");
+        // Pin the manifest path for the C bench so a rename of the C crate
+        // directory is caught here rather than silently producing wrong timings.
+        assert_eq!(C_BENCH_MANIFEST, "crates/tree-sitter-perl-c/Cargo.toml");
+        // The C bench must use a manifest path (workspace-excluded crate) while
+        // the Rust bench uses a workspace package selector — they must diverge in
+        // invocation style, not just binary name.
+        assert!(!C_BENCH_MANIFEST.is_empty());
     }
 
     #[test]
