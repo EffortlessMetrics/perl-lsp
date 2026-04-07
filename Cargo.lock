@@ -4337,6 +4337,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-perl-c"
+version = "0.12.2"
+dependencies = [
+ "cc",
+ "criterion",
+ "test-case",
+ "tree-sitter",
+]
+
+[[package]]
 name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

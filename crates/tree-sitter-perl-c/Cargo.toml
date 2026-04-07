@@ -1,17 +1,26 @@
 [package]
 name = "tree-sitter-perl-c"
-version = "0.12.1"
+version = "0.12.2"
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Tree-sitter Perl grammar with C scanner (legacy implementation)"
-publish = false
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
-homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 documentation = "https://docs.rs/tree-sitter-perl-c"
 keywords = ["tree-sitter", "perl", "parser", "grammar", "ffi"]
 categories = ["parsing", "text-processing"]
+include = [
+    "src/**",
+    "c-src/**",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
 
 [dependencies]
 tree-sitter = "0.26.6"
@@ -40,4 +49,3 @@ path = "src/bin/parse_c.rs"
 
 [build-dependencies]
 cc = "1.2.51"
-bindgen = "0.72.1" 

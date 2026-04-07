@@ -125,6 +125,7 @@ members = [
     "crates/perl-dap-security",
     "crates/perl-dap-variables",
     "crates/perl-feature-catalog",
+    "crates/tree-sitter-perl-c",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ts-heredoc-analysis",
     "crates/perl-ts-statement-tracker",
@@ -138,7 +139,6 @@ members = [
 
 exclude = [
     "tree-sitter-perl",           # Legacy C parser
-    "crates/tree-sitter-perl-c",  # Requires libclang-dev (bindgen)
     "fuzz",                       # cargo-fuzz specialized requirements
     "archive",                    # Archived legacy components
 ]
@@ -162,6 +162,7 @@ allow = [
     "perl-regex",
     "perl-quote",
     "perl-pod",
+    "tree-sitter-perl-c",
 
     # Tier 1b — Depend only on Tier 1 crates
     "perl-ast",
@@ -449,6 +450,7 @@ perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.2" }
 
 # External dependencies
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", version = "0.12.2", features = ["pure-rust"] }
+tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c", version = "0.12.2" }
 tree-sitter = "0.26.8"
 ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }

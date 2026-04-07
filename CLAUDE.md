@@ -179,7 +179,7 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 
 ## Workspace Exclusions
 
-`crates/tree-sitter-perl-c/` (needs libclang), `tree-sitter-perl/` (legacy C), `fuzz/` (fuzz builds), `archive/` (archived).
+`tree-sitter-perl/` (legacy C), `fuzz/` (fuzz builds), `archive/` (archived).
 
 ## Key Paths
 
