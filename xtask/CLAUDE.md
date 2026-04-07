@@ -156,9 +156,8 @@ Notes for releases:
 - The command does **not** rewrite changelog entries, release notes, blog
   posts, or PR references — historical mentions of past versions are
   immutable history, not version-bump targets.
-- Crates listed in `[workspace.exclude]` (currently
-  `crates/tree-sitter-perl-c`) are tracked on their own version cadence
-  and are skipped.
+- Crates listed in `[workspace.exclude]` (`tree-sitter-perl`, `fuzz`,
+  `archive`) are tracked on their own version cadence and are skipped.
 - After bumping, run `cargo build` once so `Cargo.lock` updates, then
   commit `Cargo.toml`, `Cargo.lock`, and every doc/manifest the bump
   command touched.
