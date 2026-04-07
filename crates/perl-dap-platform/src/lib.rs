@@ -96,6 +96,7 @@ pub fn setup_environment(include_paths: &[PathBuf]) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_err};
 
     #[test]
     fn test_resolve_perl_path() {
@@ -127,27 +128,26 @@ mod tests {
     #[test]
     fn resolve_from_path_env_finds_perl_in_first_dir() {
         use std::fs;
-        let tempdir = tempfile::tempdir().unwrap();
+        let tempdir = must(tempfile::tempdir());
         let bin = tempdir.path().join(PERL_EXECUTABLE);
-        fs::write(&bin, "").unwrap();
+        must(fs::write(&bin, ""));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&bin).unwrap().permissions();
+            let mut perms = must(fs::metadata(&bin)).permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&bin, perms).unwrap();
+            must(fs::set_permissions(&bin, perms));
         }
         let path_str = tempdir.path().to_string_lossy().to_string();
         let result = resolve_perl_path_from_path_env(&path_str);
-        assert!(result.is_ok(), "expected perl found, got: {:?}", result);
-        assert_eq!(result.unwrap(), bin);
+        assert_eq!(must(result), bin);
     }
 
     #[test]
     fn resolve_from_path_env_empty_path_returns_error() {
         let result = resolve_perl_path_from_path_env("");
         assert!(result.is_err());
-        let msg = format!("{}", result.unwrap_err());
+        let msg = format!("{}", must_err(result));
         assert!(
             msg.contains("perl") || msg.contains("PATH"),
             "error should mention perl/PATH: {msg}"
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn resolve_from_path_env_no_perl_on_path_returns_error() {
-        let tempdir = tempfile::tempdir().unwrap();
+        let tempdir = must(tempfile::tempdir());
         let path_str = tempdir.path().to_string_lossy().to_string();
         let result = resolve_perl_path_from_path_env(&path_str);
         assert!(result.is_err());
