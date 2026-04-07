@@ -8,10 +8,10 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.12.1`
-- Latest published release: `v0.12.1` (tagged 2026-03-30, cleanup completed 2026-04-02)
-- 0.12.x milestone ladder: complete (v0.12.2 through v0.12.8 shipped 2026-04-02)
-- Active work: quality cleanup, then v0.13.0 announcement prep
+- Workspace version line: `v0.12.2`
+- Latest published release: `v0.12.2` (tagged and shipped to GitHub Releases 2026-04-04)
+- 0.12.x milestone ladder: complete (v0.12.2 through v0.12.8 work consolidated and shipped 2026-04-02; cut as `v0.12.2` GitHub Release on 2026-04-04)
+- Active work: pre-announcement cleanup (license badge, dependency freshness, distribution channel verification), then v0.13.0 announcement
 - Canonical local receipt: `nix develop -c just ci-gate`
 
 ## How To Read This File
@@ -99,10 +99,13 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 
 ### Now (0.12.x quality tail)
 
-- Code quality cleanup: debug prints, unused deps, banned patterns
+- Pre-announcement license badge fix (PR #3193): canonical SPDX text in all 126 LICENSE files
+- Pre-announcement Docker arm64 timeout fix (#3188 → PR #3191, merged)
+- Per-release dependency triage: 7 dependabot PRs merged 2026-04-07 (#3178–#3184)
+- Code quality cleanup: debug prints (only `crates/perl-corpus/src/bin/main.rs` CLI output remains, library code clean), unused deps, remaining `unwrap()`/`expect()` audit in production code
 - Test coverage gaps and broken integration tests
-- VSCode extension lint/quality audit
-- One remaining open issue: #3018 (AI/LLM completion, deferred to 0.13.0+)
+- VSCode extension lint/quality audit (eslint v10 landed in #3179)
+- AI inline completion (#3018) shipped in v0.12.2 — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
 
 ### Next (v0.13.0 — public alpha announcement)
 
@@ -189,4 +192,4 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-04-02 -->
+<!-- Last Updated: 2026-04-07 -->
