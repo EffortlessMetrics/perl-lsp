@@ -11,10 +11,12 @@ members = [
     "crates/perl-builtins-phf",
     "crates/perl-regex",
     "crates/perl-heredoc",
+    "crates/perl-heredoc-anti-patterns",
     "crates/perl-error",
     "crates/perl-tokenizer",
     "crates/perl-lexer",
     "crates/perl-parser",
+    "crates/perl-parser-bench",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
@@ -39,6 +41,7 @@ members = [
     "crates/perl-lsp-critic-parser",
     "crates/perl-subprocess-runtime",
     "crates/perl-lsp-formatting",
+    "crates/perl-lsp-formatting-types",
     "crates/perl-lsp-diagnostic-types",
     "crates/perl-lsp-diagnostics",
     "crates/perl-lsp-semantic-tokens",
@@ -51,6 +54,7 @@ members = [
     "crates/perl-lsp-capability-map",
     "crates/perl-lsp-feature-profile",
     "crates/perl-lsp-feature-profile-cli",
+    "crates/perl-lsp-feature-policy",
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-diagnostic-catalog",
@@ -107,6 +111,7 @@ members = [
     "crates/perl-path-security",
     "crates/perl-pod",
     "crates/perl-percentile",
+    "crates/perl-workspace-folder",
     "crates/perl-workspace-ignore",
     "crates/perl-workspace-discovery",
     "crates/perl-corpus",
@@ -120,6 +125,7 @@ members = [
     "crates/perl-dap-platform",
     "crates/perl-dap-command-args",
     "crates/perl-dap-shell",
+    "crates/perl-dap-stack",
     "crates/perl-dap-types",
     "crates/perl-dap-value",
     "crates/perl-dap-security",
@@ -162,6 +168,7 @@ allow = [
     "perl-regex",
     "perl-quote",
     "perl-pod",
+    "perl-heredoc-anti-patterns",
     "tree-sitter-perl-c",
 
     # Tier 1b — Depend only on Tier 1 crates
@@ -204,6 +211,7 @@ allow = [
     "perl-lsp-file-completion",
     "perl-lsp-completion-item",
     "perl-lsp-inline-completion",
+    "perl-lsp-ai-provider",
     "perl-lsp-inlay-hints",
     "perl-lsp-code-lens",
     "perl-lsp-color-provider",
@@ -239,6 +247,7 @@ allow = [
     # Tier 5 — Application crates
     "perl-dead-code",
     "perl-parser",
+    "perl-parser-pest",
     "perl-corpus",
 
     # Tier 5 — DAP components
@@ -321,6 +330,7 @@ perl-pragma = { path = "crates/perl-pragma", version = "0.12.2" }
 perl-lexer = { path = "crates/perl-lexer", version = "0.12.2" }
 perl-ast = { path = "crates/perl-ast", version = "0.12.2" }
 perl-heredoc = { path = "crates/perl-heredoc", version = "0.12.2" }
+perl-heredoc-anti-patterns = { path = "crates/perl-heredoc-anti-patterns", version = "0.12.2" }
 perl-error = { path = "crates/perl-error", version = "0.12.2" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.12.2" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.12.2" }

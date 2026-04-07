@@ -1,3 +1,5 @@
+mod version_sync;
+
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{Context, Result};
@@ -93,8 +95,23 @@ enum CliCommand {
     TestWithOverride,
     /// Emit a single initialize request against perl-lsp stdin.
     SimpleLspTest,
-    /// Check workspace version sync across Cargo.toml, features.toml, and VSCode manifest.
+    /// Check workspace version sync across every tracked site.
+    ///
+    /// This walks Cargo.toml (workspace + per-crate), features.toml, the
+    /// VSCode extension manifest, and the doc surface (README, CLAUDE.md,
+    /// ROADMAP) and fails if any site drifts from the canonical workspace
+    /// version.
     CheckVersionSync,
+
+    /// Bump the workspace version across every tracked site.
+    ///
+    /// Non-interactive and idempotent: running it twice with the same
+    /// version produces no diff on the second run. Pair it with
+    /// `check-version-sync` in CI to catch drift at merge time.
+    BumpVersion {
+        /// New version to set (X.Y.Z format).
+        version: String,
+    },
     /// Run edge case test suites, with optional benchmark/coverage submodes.
     TestEdgeCases {
         /// Run edge case benchmark suite.
@@ -214,6 +231,7 @@ fn run() -> Result<i32> {
         CliCommand::TestWithOverride => cmd_test_with_override(&repo_root)?,
         CliCommand::SimpleLspTest => cmd_simple_lsp_test(&repo_root)?,
         CliCommand::CheckVersionSync => cmd_check_version_sync(&repo_root)?,
+        CliCommand::BumpVersion { version } => cmd_bump_version(&repo_root, &version)?,
         CliCommand::TestEdgeCases { bench, coverage } => {
             cmd_test_edge_cases(&repo_root, bench, coverage)?
         }
@@ -989,8 +1007,8 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
     for (name, path) in candidates {
         let size = fs::metadata(&path).map(|metadata| metadata.len()).unwrap_or(0);
 
-        let c_time = run_bench_parser_ms(repo_root, "c-scanner test-utils", &path, false)?;
-        let rust_time = run_bench_parser_ms(repo_root, "pure-rust test-utils", &path, false)?;
+        let c_time = run_bench_parser_ms(repo_root, &path, false)?;
+        let rust_time = run_bench_parser_ms(repo_root, &path, false)?;
 
         let speedup = if let (Some(c_val), Some(rust_val)) = (c_time, rust_time) {
             if rust_val > 0.0 { Some(c_val / rust_val) } else { None }
@@ -1172,21 +1190,16 @@ fn cmd_profile_stack_overflow(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn run_bench_parser_ms(
-    repo_root: &Path,
-    features: &str,
-    file: &Path,
-    _fail_fast: bool,
-) -> Result<Option<f64>> {
+fn run_bench_parser_ms(repo_root: &Path, file: &Path, _fail_fast: bool) -> Result<Option<f64>> {
     let file_arg = file.to_string_lossy().into_owned();
     let args = [
         "run",
         "--quiet",
         "--release",
-        "--features",
-        features,
+        "-p",
+        "perl-parser-bench",
         "--bin",
-        "bench_parser",
+        "perl-parser-bench",
         "--",
         file_arg.as_str(),
     ];
@@ -1487,43 +1500,25 @@ EOF
 }
 
 fn cmd_check_version_sync(repo_root: &Path) -> Result<i32> {
-    let cargo_toml = read_to_value(repo_root.join("Cargo.toml"))?;
-    let features_toml = read_to_value(repo_root.join("features.toml"))?;
-    let vscode_json = read_json_value(&repo_root.join("vscode-extension/package.json"))?;
+    version_sync::check(repo_root)?;
+    Ok(0)
+}
 
-    let cargo_version = cargo_toml
-        .get("workspace")
-        .and_then(|workspace| workspace.get("package"))
-        .and_then(|pkg| pkg.get("version"))
-        .and_then(|value| value.as_str())
-        .unwrap_or("");
-    let features_version = features_toml
-        .get("meta")
-        .and_then(|meta| meta.get("version"))
-        .and_then(|value| value.as_str())
-        .unwrap_or("");
-    let vscode_version = vscode_json.get("version").and_then(|value| value.as_str()).unwrap_or("");
-
-    println!("Version sync check:");
-    println!("  Cargo.toml [workspace]: {}", cargo_version);
-    println!("  features.toml:          {}", features_version);
-    println!("  vscode-extension:       {}", vscode_version);
-
-    if cargo_version.is_empty() || features_version.is_empty() || vscode_version.is_empty() {
-        return Err(color_eyre::eyre::eyre!("one or more version values were missing"));
+fn cmd_bump_version(repo_root: &Path, new_version: &str) -> Result<i32> {
+    version_sync::validate_version_format(new_version)?;
+    println!("Bumping workspace version to {new_version}");
+    let report = version_sync::bump(repo_root, new_version)?;
+    println!(
+        "Version sync bump: {} sites inspected, {} updated ({} already current), {} files touched",
+        report.sites_total, report.sites_updated, report.sites_unchanged, report.files_updated,
+    );
+    for file in &report.touched_files {
+        println!("  updated: {}", file.display());
     }
-
-    if cargo_version == features_version && cargo_version == vscode_version {
-        println!("Version sync check: all sources agree on {cargo_version}");
-        Ok(0)
-    } else {
-        Err(color_eyre::eyre::eyre!(
-            "version mismatch detected: {} != {} != {}",
-            cargo_version,
-            features_version,
-            vscode_version
-        ))
+    if report.sites_updated == 0 {
+        println!("Version sync bump: no changes required (already at {new_version})");
     }
+    Ok(0)
 }
 
 fn cmd_test_edge_cases(repo_root: &Path, bench: bool, coverage: bool) -> Result<i32> {
@@ -2531,29 +2526,18 @@ fn cmd_check_parse_errors(repo_root: &Path) -> Result<i32> {
 
     let baseline = read_required_usize(&baseline_file)?;
 
-    let _ = command_status(
-        repo_root,
-        "cargo",
-        &[
-            "run",
-            "-p",
-            "xtask",
-            "--no-default-features",
-            "-q",
-            "--",
-            "corpus-audit",
-            "--fresh",
-            "--corpus-path",
-            ".",
-            "--output",
-            report_file.to_string_lossy().as_ref(),
-        ],
-        &[],
-    )?;
-
+    // NOTE (issue #3202): we deliberately do NOT spawn `cargo run -p xtask -- corpus-audit`
+    // here. The justfile target `ci-parser-features-check` runs corpus-audit first, then
+    // invokes this check. Spawning xtask from inside this binary used to cause a Windows
+    // file-lock race: the parent xtask.exe was still running and Windows blocks relinking
+    // a running executable, surfacing as `os error 5: Access is denied`. By requiring the
+    // report to exist already, we keep this command pure (just JSON read + comparison) and
+    // unblock all Windows contributors from running `just ci-gate` locally.
     if !report_file.is_file() {
         return Err(color_eyre::eyre::eyre!(
-            "Report file not generated: {}",
+            "Report file not found: {}\n\nRun `cargo xtask corpus-audit --fresh --corpus-path . --output {}` first, \
+             or use `just ci-parser-features-check` which runs both steps in order.",
+            report_file.display(),
             report_file.display()
         ));
     }
@@ -3140,7 +3124,9 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     let baseline_path = repo_root.join("ci").join("todo_baseline.txt");
     // "xtask" is excluded because it is build tooling whose source code documents and implements
     // the TODO-scanner itself (unwired_scan.rs), producing unavoidable self-referential matches.
-    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask"];
+    // ".claude" is excluded because it contains ephemeral agent worktrees and tooling state that
+    // are gitignored — the scanner should not see them as project source.
+    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask", ".claude"];
     let exclude_files = [
         repo_root.join("ci").join("check_todos.sh"),
         repo_root.join("crates").join("perl-parser").join("tests").join("missing_docs_ac_tests.rs"),

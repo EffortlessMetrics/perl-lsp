@@ -18,7 +18,7 @@ pub mod ci_metrics;
 pub mod ci_policy;
 pub mod clean;
 pub mod compare;
-#[cfg(feature = "legacy")]
+#[cfg(feature = "parser-tasks")]
 pub mod compare_parsers;
 #[cfg(feature = "legacy")]
 pub mod corpus;
