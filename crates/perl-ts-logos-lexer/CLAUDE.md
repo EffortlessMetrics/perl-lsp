@@ -2,7 +2,7 @@
 
 ## Crate Overview
 
-- **Version**: 0.1.0
+- **Version**: workspace (currently 0.12.2)
 - **Tier**: Tree-sitter microcrate (experimental, `publish = false`)
 - **Purpose**: Logos-based tokenizer and recursive descent parsers for Perl, providing context-aware lexing with slash disambiguation and regex/quote-like operator parsing.
 

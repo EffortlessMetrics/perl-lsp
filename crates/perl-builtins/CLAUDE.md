@@ -4,7 +4,8 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-- **Crate**: `perl-builtins` v0.10.0
+- **Crate**: `perl-builtins`
+- **Version**: workspace (currently 0.12.2)
 - **Tier**: Tier 1 leaf crate (no internal workspace dependencies)
 - **Purpose**: Supply signature information for 200+ Perl built-in functions (including 27 file test operators) to enable code completion, signature help, hover info, and inlay hints in the LSP.
 

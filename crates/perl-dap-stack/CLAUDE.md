@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Parses Perl debugger stack output into DAP-compatible `StackFrame` structures and classifies frames as user code, library code, core, or eval.
 
-**Version**: 0.1.0
+**Version**: workspace (currently 0.12.2)
 
 ## Commands
 

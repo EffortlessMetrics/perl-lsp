@@ -2,7 +2,7 @@
 
 ## Crate Overview
 
-- **Version**: 0.1.0
+- **Version**: workspace (currently 0.12.2)
 - **Tier**: Leaf crate (no internal workspace dependencies; depends only on external crates)
 - **Purpose**: Standalone heredoc analysis tools for Perl parsing. Provides anti-pattern detection, dynamic delimiter recovery, encoding-aware lexing, context-sensitive operator parsing, statement boundary tracking, and runtime heredoc evaluation.
 
