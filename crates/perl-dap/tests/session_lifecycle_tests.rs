@@ -201,7 +201,7 @@ fn test_session_lifecycle_launch_missing_arguments() {
             assert!(!success, "Launch should fail without arguments");
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert!(must_some(message).contains("Missing launch arguments"));
+            assert!(must_some(message).contains("no launch configuration was provided"));
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
@@ -228,7 +228,7 @@ fn test_session_lifecycle_launch_empty_program() {
             assert!(message.is_some());
             let msg = must_some(message);
             assert!(
-                msg.contains("empty") || msg.contains("cannot be empty"),
+                msg.contains("No Perl script was specified") || msg.contains("empty"),
                 "Error should mention empty path: {}",
                 msg
             );
@@ -258,7 +258,7 @@ fn test_session_lifecycle_launch_nonexistent_program() {
             assert!(message.is_some());
             let msg = must_some(message);
             assert!(
-                msg.contains("Could not access") || msg.contains("not a regular file"),
+                msg.contains("Cannot find") || msg.contains("is not a file"),
                 "Error should mention access issue: {}",
                 msg
             );

@@ -364,8 +364,15 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
 
         if (!dapPath) {
             vscode.window.showErrorMessage(
-                'Perl Debug Adapter (perl-dap) not found. It ships with perl-lsp — re-download from the release page or install via: cargo install perl-dap'
-            );
+                'Perl Debug Adapter (perl-dap) not found. ' +
+                'Use "Perl LSP: Reinstall" from the Command Palette to re-download it, ' +
+                'or install it manually with: cargo install perl-dap',
+                'Reinstall'
+            ).then(sel => {
+                if (sel === 'Reinstall') {
+                    void vscode.commands.executeCommand('perl-lsp.reinstall');
+                }
+            });
             return undefined;
         }
 
@@ -552,7 +559,10 @@ export function activateDebugger(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand(VSCODE_DEBUG_TEST_COMMAND, (test: unknown) => {
             const target = parseDebugTestLaunchTarget(test);
             if (!target) {
-                void vscode.window.showErrorMessage('Unable to resolve the Perl test to debug.');
+                void vscode.window.showErrorMessage(
+                    'Cannot debug this test: the test location could not be resolved. ' +
+                    'Save the file and try again, or launch the debugger manually via the Run and Debug panel.'
+                );
                 return undefined;
             }
 

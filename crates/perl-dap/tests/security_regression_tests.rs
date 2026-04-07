@@ -31,11 +31,7 @@ fn test_command_injection_via_program_argument() -> TestResult {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail because file '-e' does not exist");
             let msg = message.ok_or("Expected error message")?;
-            assert!(
-                msg.contains("Could not access program file"),
-                "Should fail with access error: {}",
-                msg
-            );
+            assert!(msg.contains("Cannot find"), "Should fail with access error: {}", msg);
         }
         _ => return Err("Expected Response".into()),
     }
@@ -78,11 +74,7 @@ fn test_launch_with_nonexistent_file_errors_gracefully() -> TestResult {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for nonexistent file");
             let msg = message.ok_or("Expected error message")?;
-            assert!(
-                msg.contains("Could not access program file"),
-                "Should return meaningful error: {}",
-                msg
-            );
+            assert!(msg.contains("Cannot find"), "Should return meaningful error: {}", msg);
         }
         _ => return Err("Expected Response".into()),
     }
@@ -107,7 +99,11 @@ fn test_launch_with_empty_program_rejected() -> TestResult {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for empty program");
             let msg = message.ok_or("Expected error message")?;
-            assert!(msg.contains("cannot be empty"), "Should indicate empty path: {}", msg);
+            assert!(
+                msg.contains("No Perl script was specified"),
+                "Should indicate empty path: {}",
+                msg
+            );
         }
         _ => return Err("Expected Response".into()),
     }
@@ -133,7 +129,7 @@ fn test_launch_with_whitespace_program_rejected() -> TestResult {
             assert!(!success, "Launch should fail for whitespace-only program");
             let msg = message.ok_or("Expected error message")?;
             assert!(
-                msg.contains("cannot be empty"),
+                msg.contains("No Perl script was specified"),
                 "Should indicate empty path after trimming: {}",
                 msg
             );
@@ -165,11 +161,7 @@ fn test_launch_with_directory_rejected() -> TestResult {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for directory path");
             let msg = message.ok_or("Expected error message")?;
-            assert!(
-                msg.contains("not a regular file"),
-                "Should indicate path is not a file: {}",
-                msg
-            );
+            assert!(msg.contains("is not a file"), "Should indicate path is not a file: {}", msg);
         }
         _ => return Err("Expected Response".into()),
     }
