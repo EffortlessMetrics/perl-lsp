@@ -163,7 +163,7 @@ fn run_highlight_test_case(
     // Parse the source code using tree-sitter-perl
     let mut parser = Parser::new();
     parser
-        .set_language(&tree_sitter_perl::language())
+        .set_language(&tree_sitter_perl_c::language())
         .context("Failed to load tree-sitter-perl language")?;
     let tree = parser
         .parse(&test_case.source, None)
@@ -172,7 +172,7 @@ fn run_highlight_test_case(
     // Load and compile the highlight query
     let query_source =
         fs::read_to_string("queries/highlights.scm").context("Failed to read highlight query")?;
-    let query = Query::new(&tree_sitter_perl::language(), &query_source)
+    let query = Query::new(&tree_sitter_perl_c::language(), &query_source)
         .context("Failed to compile highlight query")?;
 
     // Execute the query and collect actual capture names
