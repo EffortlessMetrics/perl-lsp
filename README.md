@@ -79,6 +79,9 @@ The workspace has 134 crates organized into focused layers:
 | Semantic analysis | `crates/perl-semantic-analyzer` |
 | Workspace indexing | `crates/perl-workspace-index` |
 | LSP feature providers | `crates/perl-lsp-*` |
+| Tree-sitter interop (C FFI reference) | `crates/tree-sitter-perl-c` |
+
+The native Rust parser (`perl-parser`), lexer (`perl-lexer`), and analysis stack are the architectural center. Tree-sitter compatibility is a valuable interoperability surface: `tree-sitter-perl-c` is the conventional C/tree-sitter grammar binding maintained for compatibility and comparison. A Rust-native facade with tree-sitter-compatible ergonomics over the v3 parser (`tree-sitter-perl-rs`) is planned.
 
 See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
