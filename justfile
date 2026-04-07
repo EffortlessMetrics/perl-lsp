@@ -352,9 +352,11 @@ doctor:
     # command (dirname, sed, awk) costs 0.5-5s due to fork overhead. We use
     # pure bash parameter expansion wherever possible to keep the budget low.
     # ------------------------------------------------------------------
-    # Two cheap rev-parse calls (one process each) to avoid sed parsing.
+    # One rev-parse call. --git-common-dir is absolute when run from a worktree,
+    # relative (".git") when run from the main checkout.
+    # Avoid `git rev-parse --show-toplevel` — it takes ~10s on Windows with many
+    # registered worktrees. Use $PWD as the fallback for the relative case.
     common_dir=$(git rev-parse --git-common-dir 2>/dev/null || true)
-    cwd_top=$(git rev-parse --show-toplevel 2>/dev/null || true)
     if [ -z "$common_dir" ]; then
         echo "❌ not inside a git repository"
         exit 1
@@ -362,11 +364,20 @@ doctor:
     # Resolve to an absolute path with bash builtins (avoid `dirname`).
     case "$common_dir" in
         /*|[A-Za-z]:*) abs_common="$common_dir" ;;
-        *) abs_common="$cwd_top/$common_dir" ;;
+        *) abs_common="$PWD/$common_dir" ;;
     esac
     # main_root = parent of the common .git directory (bash builtin).
     main_root="${abs_common%/*}"
     main_git_dir="$abs_common"
+    # Detect whether we are running from the main checkout or a worktree.
+    # git --git-common-dir returns a RELATIVE path (".git") only from the main
+    # checkout; from any worktree it returns an absolute path. This is reliable
+    # and avoids path-prefix comparisons that break when worktrees are nested
+    # inside the main checkout directory (e.g. .claude/worktrees/agent-*).
+    case "$common_dir" in
+        /*|[A-Za-z]:*) running_in_main=0 ;;
+        *) running_in_main=1 ;;
+    esac
 
     # ------------------------------------------------------------------
     # Check 1: core.bare = true corruption (#3205)
@@ -546,7 +557,7 @@ doctor:
     # When run from the main checkout, reuse the cached status from Check 3.
     # When run from a worktree, query the worktree's own status.
     # ------------------------------------------------------------------
-    if [ "$cwd_top" = "$main_root" ] || [ -z "$cwd_top" ]; then
+    if [ "$running_in_main" = "1" ]; then
         dirty="$main_dirty_full"
     else
         dirty=$(git status --porcelain --untracked-files=no 2>/dev/null || true)
