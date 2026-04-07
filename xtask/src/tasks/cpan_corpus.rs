@@ -22,14 +22,37 @@ const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
 /// Default path for the full CPAN corpus baseline report
 const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
-/// Default install target directory
+/// Default install target directory (relative to workspace root)
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
+/// Temp report path used by ratchet (relative to workspace root)
+const CPAN_RATCHET_REPORT_PATH: &str = "target/cpan-corpus-ratchet-report.json";
 /// cpanm cache directory preserved across install resets
 const CPANM_CACHE_DIR: &str = ".cpanm";
 /// Standalone cpanm bootstrap URL
 const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 /// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
 const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
+
+/// Return the workspace root path, anchored at compile time to the xtask
+/// crate's manifest directory. This makes every relative CPAN corpus path
+/// resolve deterministically against the workspace root regardless of the
+/// current working directory `cargo xtask` was invoked from.
+///
+/// Using `env!("CARGO_MANIFEST_DIR")` (the xtask crate dir) with `.parent()`
+/// is robust because:
+/// - it is baked into the xtask binary at build time, so no runtime shell-out,
+/// - it does not depend on `CARGO_TARGET_DIR` or `std::env::current_dir()`,
+/// - it always points at the workspace that built this xtask binary.
+pub(crate) fn workspace_root() -> PathBuf {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir.parent().map(PathBuf::from).unwrap_or(manifest_dir)
+}
+
+/// Join a path segment onto the workspace root so callers get an absolute
+/// path even if the current working directory is not the workspace root.
+fn workspace_path(rel: &str) -> PathBuf {
+    workspace_root().join(rel)
+}
 
 /// Configuration for cpan-corpus sub-commands
 #[derive(Debug, Clone)]
@@ -48,10 +71,14 @@ pub struct CpanCorpusConfig {
 
 impl Default for CpanCorpusConfig {
     fn default() -> Self {
+        // Anchor default paths at the workspace root rather than the current
+        // working directory, so `cargo xtask cpan-corpus ...` always looks
+        // for the corpus in the same place `actions/cache` restored it to
+        // (see issue #3189).
         Self {
-            dist_list: PathBuf::from(DIST_LIST_PATH),
-            manifest: PathBuf::from(CPAN_MANIFEST_PATH),
-            install_dir: PathBuf::from(CPAN_INSTALL_DIR),
+            dist_list: workspace_path(DIST_LIST_PATH),
+            manifest: workspace_path(CPAN_MANIFEST_PATH),
+            install_dir: workspace_path(CPAN_INSTALL_DIR),
             top_n: 1000,
             verbose: false,
         }
@@ -411,7 +438,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
 
     let baseline_path = if enforce {
-        let bp = PathBuf::from(CPAN_BASELINE_PATH);
+        let bp = workspace_path(CPAN_BASELINE_PATH);
         if bp.exists() {
             Some(bp)
         } else {
@@ -504,8 +531,10 @@ pub fn ratchet(config: &CpanCorpusConfig) -> Result<()> {
     let base_roots = vec![lib_perl5.clone()];
     let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
 
-    // Write a temp report to capture results
-    let report_path = PathBuf::from("target/cpan-corpus-ratchet-report.json");
+    // Write a temp report to capture results. Anchor at workspace root so
+    // the target directory is the same one cargo uses for builds, even when
+    // xtask is invoked from a subdirectory.
+    let report_path = workspace_path(CPAN_RATCHET_REPORT_PATH);
     if let Some(parent) = report_path.parent() {
         fs::create_dir_all(parent).context("Failed to create report directory")?;
     }
@@ -673,10 +702,28 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = CpanCorpusConfig::default();
-        assert_eq!(config.dist_list, PathBuf::from(".ci/cpan-top-1000-distributions.txt"));
-        assert_eq!(config.manifest, PathBuf::from(".ci/cpan-corpus-manifest.txt"));
-        assert_eq!(config.install_dir, PathBuf::from("target/cpan-corpus"));
+        // Default paths are anchored at the workspace root (see issue #3189)
+        // so that `cargo xtask cpan-corpus ...` finds the corpus regardless
+        // of the current working directory.
+        let root = workspace_root();
+        assert_eq!(config.dist_list, root.join(".ci/cpan-top-1000-distributions.txt"));
+        assert_eq!(config.manifest, root.join(".ci/cpan-corpus-manifest.txt"));
+        assert_eq!(config.install_dir, root.join("target/cpan-corpus"));
         assert_eq!(config.top_n, 1000);
+    }
+
+    #[test]
+    fn test_workspace_root_points_at_workspace() {
+        // Guardrail: `workspace_root()` must point at a directory that
+        // contains the top-level workspace `Cargo.toml`. If xtask ever
+        // moves out of `<workspace>/xtask/`, this assertion catches the
+        // regression so the corpus ratchet path resolution does not drift.
+        let root = workspace_root();
+        assert!(
+            root.join("Cargo.toml").exists(),
+            "workspace_root() = {} must contain Cargo.toml",
+            root.display()
+        );
     }
 
     #[test]
