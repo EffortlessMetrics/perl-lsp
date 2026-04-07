@@ -186,7 +186,11 @@ impl LspServer {
 
                     // Apply cap to document symbols
                     if document_symbols.len() > cap {
-                        tracing::debug!(from = document_symbols.len(), to = cap, "DocumentSymbol: capping");
+                        tracing::debug!(
+                            from = document_symbols.len(),
+                            to = cap,
+                            "DocumentSymbol: capping"
+                        );
                         document_symbols.truncate(cap);
                     }
 
@@ -199,7 +203,11 @@ impl LspServer {
                     symbols.extend(pod_section_symbols(&doc.text));
                     // Apply cap to fallback symbols
                     if symbols.len() > cap {
-                        tracing::debug!(from = symbols.len(), to = cap, "DocumentSymbol (fallback): capping");
+                        tracing::debug!(
+                            from = symbols.len(),
+                            to = cap,
+                            "DocumentSymbol (fallback): capping"
+                        );
                         symbols.truncate(cap);
                     }
                     tracing::debug!(count = symbols.len(), "Returning fallback symbols");
