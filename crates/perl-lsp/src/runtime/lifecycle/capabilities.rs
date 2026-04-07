@@ -174,7 +174,9 @@ impl LspServer {
 
             if supports_pull {
                 self.client_supports_pull_diags.store(true, Ordering::Relaxed);
-                tracing::debug!("Client supports pull diagnostics - suppressing automatic publishing");
+                tracing::debug!(
+                    "Client supports pull diagnostics - suppressing automatic publishing"
+                );
             }
 
             // Initialize workspace folders

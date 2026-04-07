@@ -547,7 +547,11 @@ impl LspServer {
                     text_lenses.extend(CodeLensProvider::extract_subtest_lenses(&doc.text));
                     // Apply cap to text-based lenses
                     if text_lenses.len() > cap {
-                        tracing::debug!(from = text_lenses.len(), to = cap, "CodeLens (text): capping");
+                        tracing::debug!(
+                            from = text_lenses.len(),
+                            to = cap,
+                            "CodeLens (text): capping"
+                        );
                         text_lenses.truncate(cap);
                     }
                     return Ok(Some(json!(text_lenses)));
@@ -609,7 +613,11 @@ impl LspServer {
                     for (scanned_docs, view) in snapshot.iter().enumerate() {
                         // Check deadline periodically (every 10 documents)
                         if scanned_docs % 10 == 0 && start.elapsed() >= deadline {
-                            tracing::debug!(scanned = scanned_docs, count, "CodeLensResolve: deadline exceeded, returning partial");
+                            tracing::debug!(
+                                scanned = scanned_docs,
+                                count,
+                                "CodeLensResolve: deadline exceeded, returning partial"
+                            );
                             break;
                         }
 

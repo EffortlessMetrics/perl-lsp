@@ -183,13 +183,20 @@ impl LspServer {
                                     new_name,
                                 );
                                 if !edits.is_empty() {
-                                    tracing::debug!(count = edits.len(), reason, "Rename: served partial-index workspace edits");
+                                    tracing::debug!(
+                                        count = edits.len(),
+                                        reason,
+                                        "Rename: served partial-index workspace edits"
+                                    );
                                     return Ok(Some(crate::workspace_rename::to_workspace_edit(
                                         edits,
                                     )));
                                 }
                             }
-                            tracing::debug!(reason, "Rename: workspace rename unavailable, using same-file only");
+                            tracing::debug!(
+                                reason,
+                                "Rename: workspace rename unavailable, using same-file only"
+                            );
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::None => {
