@@ -2,7 +2,7 @@
 
 ## Crate Overview
 
-- **Version**: 0.1.0 (publish = false)
+- **Version**: workspace (currently 0.12.2)
 - **Tier**: Tree-sitter microcrate (`perl-ts-*` family)
 - **Purpose**: Extends the Perl AST with nodes for partial parses, anti-pattern
   detection, phase-aware heredoc handling, and tree-sitter compatibility.

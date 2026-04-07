@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Multi-phase heredoc processing (detect, collect, integrate), slash token disambiguation (division vs regex vs substitution vs transliteration), dynamic delimiter recovery, and a lexer adapter that rewrites ambiguous tokens for PEG grammar compatibility.
 
-**Version**: 0.1.0
+**Version**: workspace (currently 0.12.2)
 
 ## Commands
 

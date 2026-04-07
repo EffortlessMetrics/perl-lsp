@@ -2,7 +2,7 @@
 
 ## Crate Overview
 
-- **Version**: 0.1.0
+- **Version**: workspace (currently 0.12.2)
 - **Tier**: Experimental / internal (`publish = false`)
 - **Purpose**: Composed parser experiments layering heredoc processing, slash disambiguation, error recovery, incremental parsing, streaming, and an experimental LSP server on top of the Pest grammar.
 
