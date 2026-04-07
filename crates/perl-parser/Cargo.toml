@@ -14,7 +14,6 @@ keywords = ["perl", "parser", "ast", "lsp", "semantic-analysis"]
 categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",
-  "build.rs",
   "features_sot.toml",
   "Cargo.toml",
   "README.md",
