@@ -321,15 +321,298 @@ ci-local:
         exit 1; \
     fi
 
+# Checks that required tools (cargo, rustfmt, rustup, clippy, etc.) are installed.
+# For workspace state corruption checks (core.bare, worktree leaks, stale branches),
+# use `just doctor` instead.
 # Developer environment diagnostics (onboarding/troubleshooting helper)
-doctor:
+doctor-env:
     @echo "=============================================="
     @echo "  perl-lsp developer environment doctor"
     @echo "=============================================="
     @cargo xtask devex-doctor
 
 # Short alias for the developer environment quick check
-devex: doctor
+devex: doctor-env
+
+# Run before any agent-spawning session. Safe to run repeatedly (idempotent).
+# Checks: core.bare corruption (#3205), stale branches, worktree leaks, orphaned
+# worktree dirs, pre-push hook, workspace cleanliness, master fast-forward state.
+# Workspace health check — auto-detects and auto-fixes recurring state corruption
+doctor:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    echo "🩺 perl-lsp doctor — workspace health check"
+    echo
+
+    issues=0
+    fixed=0
+
+    # ------------------------------------------------------------------
+    # Locate main checkout. NOTE: on Git Bash for Windows, every external
+    # command (dirname, sed, awk) costs 0.5-5s due to fork overhead. We use
+    # pure bash parameter expansion wherever possible to keep the budget low.
+    # ------------------------------------------------------------------
+    # One rev-parse call. --git-common-dir is absolute when run from a worktree,
+    # relative (".git") when run from the main checkout.
+    # Avoid `git rev-parse --show-toplevel` — it takes ~10s on Windows with many
+    # registered worktrees. Use $PWD as the fallback for the relative case.
+    common_dir=$(git rev-parse --git-common-dir 2>/dev/null || true)
+    if [ -z "$common_dir" ]; then
+        echo "❌ not inside a git repository"
+        exit 1
+    fi
+    # Resolve to an absolute path with bash builtins (avoid `dirname`).
+    case "$common_dir" in
+        /*|[A-Za-z]:*) abs_common="$common_dir" ;;
+        *) abs_common="$PWD/$common_dir" ;;
+    esac
+    # main_root = parent of the common .git directory (bash builtin).
+    main_root="${abs_common%/*}"
+    main_git_dir="$abs_common"
+    # Detect whether we are running from the main checkout or a worktree.
+    # git --git-common-dir returns a RELATIVE path (".git") only from the main
+    # checkout; from any worktree it returns an absolute path. This is reliable
+    # and avoids path-prefix comparisons that break when worktrees are nested
+    # inside the main checkout directory (e.g. .claude/worktrees/agent-*).
+    case "$common_dir" in
+        /*|[A-Za-z]:*) running_in_main=0 ;;
+        *) running_in_main=1 ;;
+    esac
+
+    # ------------------------------------------------------------------
+    # Check 1: core.bare = true corruption (#3205)
+    # ------------------------------------------------------------------
+    bare_value=$(git --git-dir="$main_git_dir" config --local --get core.bare 2>/dev/null || true)
+    if [ "$bare_value" = "true" ]; then
+        echo "⚠️  git config core.bare = true detected in main checkout (#3205)"
+        if git --git-dir="$main_git_dir" config --local --unset core.bare 2>/dev/null; then
+            echo "   Auto-fixed: unset core.bare"
+            fixed=$((fixed + 1))
+        else
+            echo "   Fix: git --git-dir=\"$main_git_dir\" config --local --unset core.bare"
+            issues=$((issues + 1))
+        fi
+    else
+        echo "✅ git config core.bare unset (was OK)"
+    fi
+
+    # ------------------------------------------------------------------
+    # One batched ref dump — used by both stale-branch and master-FF checks.
+    # ------------------------------------------------------------------
+    refs_dump=$(git -C "$main_root" for-each-ref \
+        --format='%(refname:short)|%(upstream:short)' \
+        refs/heads/ refs/remotes/ 2>/dev/null || true)
+
+    # Parse refs_dump in pure bash (no awk subshell) into two arrays.
+    declare -A remote_ref_set=()
+    declare -a branch_upstreams=()
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        ref="${line%%|*}"
+        up="${line#*|}"
+        case "$ref" in
+            origin/*) remote_ref_set["$ref"]=1 ;;
+            *)
+                if [ -n "$up" ] && [ "$up" != "$ref" ]; then
+                    branch_upstreams+=("$ref|$up")
+                fi
+                ;;
+        esac
+    done <<<"$refs_dump"
+
+    # ------------------------------------------------------------------
+    # Check 2: Stale local branches (upstream gone)
+    # NOTE: deliberately no `git remote prune` — that contacts the remote.
+    # Run `git fetch --prune` manually if you want fresh remote state.
+    # ------------------------------------------------------------------
+    stale_list=()
+    for entry in "${branch_upstreams[@]}"; do
+        b="${entry%%|*}"
+        u="${entry#*|}"
+        case "$b" in master|main|HEAD) continue ;; esac
+        if [ -z "${remote_ref_set[$u]:-}" ]; then
+            stale_list+=("$b")
+        fi
+    done
+    if [ "${#stale_list[@]}" -eq 0 ]; then
+        echo "✅ no stale local branches found"
+    else
+        echo "⚠️  ${#stale_list[@]} stale local branches (upstream gone)"
+        for b in "${stale_list[@]}"; do
+            echo "   $b"
+        done
+        echo "   Fix: git branch -D <branch>   # only after confirming the PR is merged"
+        issues=$((issues + 1))
+    fi
+
+    # ------------------------------------------------------------------
+    # One batched dirty-status check on the main checkout.
+    # Used by both leak detection (Check 3) and workspace-clean (Check 6).
+    # ------------------------------------------------------------------
+    main_dirty_full=$(git -C "$main_root" status --porcelain --untracked-files=no 2>/dev/null || true)
+    declare -A main_dirty_set=()
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        # Strip the two-char status prefix and any leading spaces.
+        path="${line:3}"
+        # Handle rename entries: "old -> new" — take the new path.
+        case "$path" in *" -> "*) path="${path##* -> }" ;; esac
+        main_dirty_set["$path"]=1
+    done <<<"$main_dirty_full"
+
+    # ------------------------------------------------------------------
+    # Check 3: Worktree file leaks
+    # Only walk worktrees if the main checkout has tracked dirt.
+    # ------------------------------------------------------------------
+    leak_count=0
+    leak_report=""
+    if [ -d "$main_root/.claude/worktrees" ] && [ "${#main_dirty_set[@]}" -gt 0 ]; then
+        for wt_dir in "$main_root"/.claude/worktrees/agent-*; do
+            [ -d "$wt_dir" ] || continue
+            wt_status=$(git -C "$wt_dir" status --porcelain --untracked-files=no 2>/dev/null || true)
+            [ -z "$wt_status" ] && continue
+            wt_overlaps=()
+            while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                p="${line:3}"
+                case "$p" in *" -> "*) p="${p##* -> }" ;; esac
+                if [ -n "${main_dirty_set[$p]:-}" ]; then
+                    wt_overlaps+=("$p")
+                fi
+            done <<<"$wt_status"
+            if [ "${#wt_overlaps[@]}" -gt 0 ]; then
+                leak_count=$((leak_count + ${#wt_overlaps[@]}))
+                wt_name="${wt_dir##*/}"
+                leak_report+=$'\n'"   from $wt_name:"
+                for o in "${wt_overlaps[@]}"; do
+                    leak_report+=$'\n'"     $o"
+                done
+            fi
+        done
+    fi
+    if [ "$leak_count" -eq 0 ]; then
+        echo "✅ no worktree file leaks"
+    else
+        echo "⚠️  $leak_count worktree file leaks (files modified in main + agent worktree)"
+        echo "$leak_report"
+        echo "   Fix: cd \"$main_root\" && git restore <file>   # discard leaked changes"
+        issues=$((issues + 1))
+    fi
+
+    # ------------------------------------------------------------------
+    # Check 4: Orphaned worktree directories
+    # ------------------------------------------------------------------
+    orphan_count=0
+    orphans=""
+    if [ -d "$main_root/.claude/worktrees" ]; then
+        # Build a set of registered worktree paths (forward-slash normalized).
+        registered_dump=$(git -C "$main_root" worktree list --porcelain 2>/dev/null || true)
+        declare -A registered_set=()
+        while IFS= read -r line; do
+            case "$line" in
+                "worktree "*)
+                    p="${line#worktree }"
+                    p="${p//\\//}"
+                    registered_set["$p"]=1
+                    ;;
+            esac
+        done <<<"$registered_dump"
+        for wt_dir in "$main_root"/.claude/worktrees/*/; do
+            [ -d "$wt_dir" ] || continue
+            wt_dir_clean="${wt_dir%/}"
+            wt_dir_norm="${wt_dir_clean//\\//}"
+            if [ -z "${registered_set[$wt_dir_norm]:-}" ]; then
+                orphan_count=$((orphan_count + 1))
+                orphans+=$'\n'"   $wt_dir_clean (no corresponding git worktree)"
+            fi
+        done
+    fi
+    if [ "$orphan_count" -eq 0 ]; then
+        echo "✅ no orphaned worktree directories"
+    else
+        echo "⚠️  $orphan_count orphaned worktree directories under .claude/worktrees/"
+        echo "$orphans"
+        echo "   Fix: git worktree prune; rm -rf <dir>   # only after confirming it is truly orphaned"
+        issues=$((issues + 1))
+    fi
+
+    # ------------------------------------------------------------------
+    # Check 5: pre-push hook installed
+    # ------------------------------------------------------------------
+    hook_path="$main_git_dir/hooks/pre-push"
+    if [ -f "$hook_path" ] && [ -x "$hook_path" ]; then
+        echo "✅ pre-push hook installed"
+    elif [ -f "$hook_path" ]; then
+        echo "⚠️  pre-push hook present but not executable: $hook_path"
+        echo "   Fix: chmod +x \"$hook_path\""
+        issues=$((issues + 1))
+    else
+        echo "⚠️  pre-push hook not installed"
+        echo "   Fix: cargo xtask ci-hygiene install-githooks   # or: bash scripts/install-githooks.sh"
+        issues=$((issues + 1))
+    fi
+
+    # ------------------------------------------------------------------
+    # Check 6: Workspace clean
+    # When run from the main checkout, reuse the cached status from Check 3.
+    # When run from a worktree, query the worktree's own status.
+    # ------------------------------------------------------------------
+    if [ "$running_in_main" = "1" ]; then
+        dirty="$main_dirty_full"
+    else
+        dirty=$(git status --porcelain --untracked-files=no 2>/dev/null || true)
+    fi
+    if [ -z "$dirty" ]; then
+        echo "✅ workspace clean"
+    else
+        # Count lines without spawning wc.
+        dirty_count=0
+        while IFS= read -r _line; do
+            [ -z "$_line" ] && continue
+            dirty_count=$((dirty_count + 1))
+        done <<<"$dirty"
+        echo "⚠️  workspace has $dirty_count uncommitted changes"
+        # Print up to the first 10 dirty entries.
+        shown=0
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            echo "   $line"
+            shown=$((shown + 1))
+            [ "$shown" -ge 10 ] && break
+        done <<<"$dirty"
+        if [ "$dirty_count" -gt 10 ]; then
+            echo "   ... and $((dirty_count - 10)) more"
+        fi
+        echo "   Fix: review with 'git status', then commit or 'git restore' as appropriate"
+        issues=$((issues + 1))
+    fi
+
+    # ------------------------------------------------------------------
+    # Check 7: Master is fast-forward-able
+    # Use the cached refs_dump to check origin/master existence (no extra call).
+    # ------------------------------------------------------------------
+    if [ -n "${remote_ref_set[origin/master]:-}" ]; then
+        behind=$(git rev-list --count HEAD..origin/master 2>/dev/null || echo 0)
+        if [ "$behind" = "0" ]; then
+            echo "✅ master is up to date with origin/master"
+        else
+            echo "⚠️  HEAD is $behind commits behind origin/master"
+            echo "   Fix: git pull --ff-only"
+            issues=$((issues + 1))
+        fi
+    else
+        echo "⚠️  origin/master ref not found (cannot check fast-forward state)"
+        echo "   Fix: git fetch origin master:refs/remotes/origin/master"
+        issues=$((issues + 1))
+    fi
+
+    echo
+    if [ "$issues" -eq 0 ] && [ "$fixed" -eq 0 ]; then
+        echo "✅ all checks passed"
+    else
+        echo "$issues issues found, $fixed auto-fixed"
+    fi
+    exit 0
 
 # Targeted checks for changed crates (fast feedback for active branch)
 devex-targeted base='origin/master' mode='all':

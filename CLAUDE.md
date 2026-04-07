@@ -76,6 +76,7 @@ Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accura
 ## Quick Reference
 
 ```bash
+just doctor                           # Workspace health check (run before any agent-spawning session)
 nix develop -c just ci-gate           # Canonical local gate (REQUIRED before push)
 cargo build -p perl-lsp-rs --release     # Build LSP server
 cargo test --workspace --lib          # Run all tests

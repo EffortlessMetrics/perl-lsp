@@ -55,8 +55,11 @@ perl-dap --stdio  # Standard DAP transport
 ## Developer Workflow
 
 ```bash
-# Check the local environment
-just devex          # Alias: just doctor
+# Workspace health check (run before any agent-spawning session)
+just doctor         # Detects+fixes core.bare, worktree leaks, stale branches, etc.
+
+# Check the local environment (tools, Rust components)
+just devex          # Alias: just doctor-env
 
 # Fast validation while iterating
 just pr-fast

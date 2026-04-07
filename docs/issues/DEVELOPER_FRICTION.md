@@ -113,7 +113,7 @@ rustup override set 1.92.0
 
 # Or let repo tooling validate it for you
 just pr-fast
-just doctor
+just doctor-env
 ```
 
 #### Proposed Solutions
@@ -783,7 +783,8 @@ cargo clippy --workspace --lib        # Lint
 cargo doc -p perl-parser              # Check docs
 
 # Debugging
-just doctor                           # Environment diagnostics
+just doctor                           # Workspace health check (state corruption)
+just doctor-env                       # Environment diagnostics (tools, components)
 perl-lsp --health                     # Server health
 RUST_LOG=perl_lsp=debug perl-lsp --stdio  # Debug logging
 ```
