@@ -38,7 +38,7 @@ impl LspServer {
                 // No .perl-lsp.toml found — normal, no action needed
             }
             Ok(Some(project_config)) => {
-                eprintln!("Loaded .perl-lsp.toml from {}", root.display());
+                tracing::debug!(path = %root.display(), "Loaded .perl-lsp.toml");
                 {
                     let mut config = self.config.lock();
                     project_config.apply_to_server_config(&mut config);
@@ -49,7 +49,7 @@ impl LspServer {
                 }
             }
             Err(msg) => {
-                eprintln!("Warning: {}", msg);
+                tracing::warn!(message = msg, "Project config warning");
                 // Emit user-visible warning so devs can fix a broken .perl-lsp.toml
                 if let Err(e) = self.notify(
                     "window/showMessage",
@@ -58,7 +58,7 @@ impl LspServer {
                         "message": format!("perl-lsp: {}", msg)
                     }),
                 ) {
-                    eprintln!("Failed to send showMessage warning: {}", e);
+                    tracing::warn!(error = %e, "Failed to send showMessage warning");
                 }
             }
         }

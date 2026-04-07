@@ -18,7 +18,7 @@ impl LspServer {
             return Ok(());
         }
         self.send_request("workspace/codeLens/refresh", json!(null))?;
-        eprintln!("[perl-lsp] Requested code lens refresh");
+        tracing::debug!("Requested code lens refresh");
         Ok(())
     }
 
@@ -28,7 +28,7 @@ impl LspServer {
             return Ok(());
         }
         self.send_request("workspace/semanticTokens/refresh", json!(null))?;
-        eprintln!("[perl-lsp] Requested semantic tokens refresh");
+        tracing::debug!("Requested semantic tokens refresh");
         Ok(())
     }
 
@@ -38,7 +38,7 @@ impl LspServer {
             return Ok(());
         }
         self.send_request("workspace/inlayHint/refresh", json!(null))?;
-        eprintln!("[perl-lsp] Requested inlay hint refresh");
+        tracing::debug!("Requested inlay hint refresh");
         Ok(())
     }
 
@@ -48,7 +48,7 @@ impl LspServer {
             return Ok(());
         }
         self.send_request("workspace/inlineValue/refresh", json!(null))?;
-        eprintln!("[perl-lsp] Requested inline value refresh");
+        tracing::debug!("Requested inline value refresh");
         Ok(())
     }
 
@@ -58,7 +58,7 @@ impl LspServer {
             return Ok(());
         }
         self.send_request("workspace/diagnostic/refresh", json!(null))?;
-        eprintln!("[perl-lsp] Requested diagnostic refresh");
+        tracing::debug!("Requested diagnostic refresh");
         Ok(())
     }
 
@@ -68,7 +68,7 @@ impl LspServer {
             return Ok(());
         }
         self.send_request("workspace/foldingRange/refresh", json!(null))?;
-        eprintln!("[perl-lsp] Requested folding range refresh");
+        tracing::debug!("Requested folding range refresh");
         Ok(())
     }
 }

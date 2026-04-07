@@ -481,9 +481,9 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        eprintln!("Processing documentSymbol request");
+        tracing::debug!("Processing documentSymbol request");
         let result = self.handle_document_symbol(params);
-        eprintln!("DocumentSymbol result: {:?}", result.is_ok());
+        tracing::debug!(ok = result.is_ok(), "DocumentSymbol result");
         result
     }
 

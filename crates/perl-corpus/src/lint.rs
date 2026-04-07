@@ -259,14 +259,14 @@ pub fn lint(sections: &[Section]) -> Result<()> {
 pub fn lint_with_config(sections: &[Section], config: &LintConfig) -> Result<()> {
     let result = check_sections(sections, config);
 
-    // Print warnings
+    // Log warnings
     for warning in &result.warnings {
-        eprintln!("⚠️  {}", warning);
+        tracing::warn!("{}", warning);
     }
 
-    // Print errors
+    // Log errors
     for error in &result.errors {
-        eprintln!("❌ {}", error);
+        tracing::error!("{}", error);
     }
 
     if !result.is_ok() {

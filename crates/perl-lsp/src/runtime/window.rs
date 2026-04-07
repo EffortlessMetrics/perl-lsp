@@ -308,22 +308,19 @@ impl LspServer {
                 let removed = self.progress_tokens.lock().remove(token);
 
                 if removed {
-                    eprintln!("Progress cancelled by client: {}", token);
+                    tracing::debug!(token, "Progress cancelled by client");
 
                     // Look up the request ID associated with this progress token
                     // and signal cancellation via the global registry
                     let request_id = self.progress_token_to_request.lock().remove(token);
                     if let Some(req_id) = request_id {
-                        eprintln!(
-                            "Signalling cancellation for request {:?} via progress token {}",
-                            req_id, token
-                        );
+                        tracing::debug!(request = ?req_id, token, "Signalling cancellation via progress token");
                         if let Err(e) = GLOBAL_CANCELLATION_REGISTRY.cancel_request(&req_id) {
-                            eprintln!("Failed to cancel request via registry: {}", e);
+                            tracing::warn!(error = %e, "Failed to cancel request via registry");
                         }
                     }
                 } else {
-                    eprintln!("Progress cancel for unknown token: {}", token);
+                    tracing::debug!(token, "Progress cancel for unknown token");
                 }
             }
         }

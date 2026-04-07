@@ -1,6 +1,8 @@
 //! Shared CLI entrypoint for the perl-lsp binaries.
 
 #![deny(clippy::option_env_unwrap)]
+// cli.rs is user-facing CLI output — eprintln!/println! are intentional here.
+#![allow(clippy::print_stderr, clippy::print_stdout)]
 
 use crate::LspServer;
 use perl_lsp_launcher::{

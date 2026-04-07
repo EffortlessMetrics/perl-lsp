@@ -205,12 +205,12 @@ impl LspServer {
                 .collect()
         };
 
-        eprintln!(
-            "Publishing {} diagnostics for {} (version {}, tier: {})",
-            lsp_diagnostics.len(),
-            normalized_uri,
+        tracing::debug!(
+            count = lsp_diagnostics.len(),
+            uri = %normalized_uri,
             version,
-            degradation_tier
+            tier = %degradation_tier,
+            "Publishing diagnostics"
         );
 
         // Only publish if client doesn't support pull diagnostics
@@ -226,7 +226,7 @@ impl LspServer {
                     "diagnostics": lsp_diagnostics
                 }),
             ) {
-                eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
+                tracing::error!(uri, error = %e, "Failed to publish diagnostics");
             }
         }
     }
@@ -897,7 +897,7 @@ impl LspServer {
                 }
             }
             Some(Err(e)) => {
-                eprintln!("perlcritic failed for {}: {}", uri, e);
+                tracing::warn!(uri, error = %e, "perlcritic failed");
             }
             None => {}
         }

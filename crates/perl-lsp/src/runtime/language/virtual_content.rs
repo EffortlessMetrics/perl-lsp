@@ -59,14 +59,14 @@ fn fetch_perldoc(module: &str) -> Option<String> {
     let output = match crate::util::run_command_with_timeout(cmd, 10) {
         Ok(output) => output,
         Err(e) => {
-            eprintln!("Failed to run perldoc for module {}: {}", module, e);
+            tracing::warn!(module, error = %e, "Failed to run perldoc");
             return None;
         }
     };
 
     if output.status.success() {
         String::from_utf8(output.stdout)
-            .map_err(|e| eprintln!("Invalid UTF-8 in perldoc output for {}: {}", module, e))
+            .map_err(|e| tracing::warn!(module, error = %e, "Invalid UTF-8 in perldoc output"))
             .ok()
     } else {
         None

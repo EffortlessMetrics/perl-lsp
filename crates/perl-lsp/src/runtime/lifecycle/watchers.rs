@@ -38,7 +38,7 @@ impl LspServer {
         let register_options = match serde_json::to_value(opts) {
             Ok(val) => Some(val),
             Err(e) => {
-                eprintln!("[perl-lsp] Failed to serialize file watcher options: {}", e);
+                tracing::error!(error = %e, "Failed to serialize file watcher options");
                 return;
             }
         };
@@ -52,7 +52,7 @@ impl LspServer {
         let params_value = match serde_json::to_value(&params) {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("[perl-lsp] Failed to serialize registration params: {}", e);
+                tracing::error!(error = %e, "Failed to serialize registration params");
                 return;
             }
         };
@@ -68,7 +68,7 @@ impl LspServer {
         if let Err(e) =
             self.outbound.send_request(request_id as i64, "client/registerCapability", params_value)
         {
-            eprintln!("[perl-lsp] Failed to send file watcher request: {}", e);
+            tracing::error!(error = %e, "Failed to send file watcher request");
         }
     }
 }

@@ -254,7 +254,7 @@ impl DebugAdapter {
                         *counter += 1;
                         *counter
                     } else {
-                        eprintln!("Failed to lock thread counter, using 1");
+                        tracing::warn!("Failed to lock thread counter, using 1");
                         1
                     }
                 };
@@ -315,13 +315,15 @@ impl DebugAdapter {
                         }
                     })
                 } else {
-                    eprintln!("Failed to lock session in output reader");
+                    tracing::warn!("Failed to lock session in output reader");
                     None
                 }
             };
 
             let Some(control_stream) = control_stream else {
-                eprintln!("No debugger output stream available - output reader thread exiting");
+                tracing::warn!(
+                    "No debugger output stream available - output reader thread exiting"
+                );
                 // Send termination event
                 if let Some(ref sender) = sender {
                     emit_event_safe(
@@ -351,7 +353,7 @@ impl DebugAdapter {
                 line.clear();
                 match reader.read_line(&mut line) {
                     Ok(0) => {
-                        eprintln!("Perl debugger process terminated");
+                        tracing::debug!("Perl debugger process terminated");
                         DebugAdapter::clear_active_session_state_with_state(
                             &session,
                             &tcp_session,
@@ -372,7 +374,7 @@ impl DebugAdapter {
                         } else {
                             normalized_text
                         };
-                        eprintln!("Debugger output: {}", text); // Debug logging
+                        tracing::trace!(output = %text, "Debugger output");
                         {
                             let mut output = lock_or_recover(
                                 &recent_output,
@@ -396,7 +398,9 @@ impl DebugAdapter {
                                 })),
                             )
                         {
-                            eprintln!("Failed to send output event - client may have disconnected");
+                            tracing::warn!(
+                                "Failed to send output event - client may have disconnected"
+                            );
                             break; // Exit the loop if client is gone
                         }
 
@@ -493,7 +497,7 @@ impl DebugAdapter {
 
                             let thread_id = {
                                 let Ok(mut guard) = session.lock() else {
-                                    eprintln!(
+                                    tracing::warn!(
                                         "Failed to lock session when processing debugger context"
                                     );
                                     continue;
@@ -606,7 +610,9 @@ impl DebugAdapter {
                                     })),
                                 )
                             {
-                                eprintln!("Failed to send stopped event - client disconnected");
+                                tracing::warn!(
+                                    "Failed to send stopped event - client disconnected"
+                                );
                                 return;
                             }
                             continue;
@@ -617,7 +623,7 @@ impl DebugAdapter {
                             _debugger_ready = true;
                             let thread_id = {
                                 let Ok(mut guard) = session.lock() else {
-                                    eprintln!(
+                                    tracing::warn!(
                                         "Failed to lock session when processing debugger prompt"
                                     );
                                     continue;
@@ -686,13 +692,15 @@ impl DebugAdapter {
                                     })),
                                 )
                             {
-                                eprintln!("Failed to send stopped event - client disconnected");
+                                tracing::warn!(
+                                    "Failed to send stopped event - client disconnected"
+                                );
                                 return; // Exit thread
                             }
                         }
                     }
                     Err(e) => {
-                        eprintln!("Error reading from debugger: {}", e);
+                        tracing::error!(error = %e, "Error reading from debugger");
                         // Send termination event before exiting
                         if let Some(ref sender) = sender {
                             emit_event_safe(
@@ -771,10 +779,7 @@ impl DebugAdapter {
                     })),
                 );
 
-                eprintln!(
-                    "Attach request: Process ID attachment to PID {} (signal-control mode)",
-                    pid
-                );
+                tracing::info!(pid, "Attach request: Process ID attachment (signal-control mode)");
 
                 DapMessage::Response {
                     seq,
@@ -896,7 +901,7 @@ impl DebugAdapter {
                         if let Ok(mut guard) = self.tcp_session.lock() {
                             if let Some(ref mut s) = *guard {
                                 if let Err(e) = s.start_reader() {
-                                    eprintln!("Failed to start TCP reader: {}", e);
+                                    tracing::error!(error = %e, "Failed to start TCP reader");
                                     return DapMessage::Response {
                                         seq,
                                         request_seq,
@@ -980,7 +985,7 @@ impl DebugAdapter {
                                         }
                                     }
                                     DapEvent::Error { message } => {
-                                        eprintln!("TCP attach error: {}", message);
+                                        tracing::error!(message, "TCP attach error");
                                     }
                                 }
                             }
@@ -1047,7 +1052,7 @@ impl DebugAdapter {
             && let Some(mut active_session) = guard.take()
         {
             if !Self::terminate_child_process(&mut active_session.process) {
-                eprintln!("Failed to ensure debug session process termination");
+                tracing::warn!("Failed to ensure debug session process termination");
             }
             active_session.state = DebugState::Terminated;
         }
@@ -1079,7 +1084,7 @@ impl DebugAdapter {
                 Ok(Some(_)) => return true,
                 Ok(None) => thread::sleep(Duration::from_millis(25)),
                 Err(e) => {
-                    eprintln!("Failed to poll debug session process: {}", e);
+                    tracing::warn!(error = %e, "Failed to poll debug session process");
                     return false;
                 }
             }
@@ -1106,13 +1111,13 @@ impl DebugAdapter {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to send SIGTERM to process {}: {}", pid, e);
+                    tracing::warn!(pid, error = %e, "Failed to send SIGTERM to process");
                 }
             }
         }
 
         if let Err(e) = process.kill() {
-            eprintln!("Failed to terminate process: {}", e);
+            tracing::warn!(error = %e, "Failed to terminate process");
         }
         Self::wait_for_child_exit(process, Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS))
     }

@@ -564,7 +564,7 @@ impl LspServer {
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
 
-            eprintln!("Preparing call hierarchy at: {} ({}:{})", uri, line, character);
+            tracing::debug!(uri, line, character, "Preparing call hierarchy");
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -598,7 +598,7 @@ impl LspServer {
             let item = &params["item"];
             let target_name = item["name"].as_str().unwrap_or("");
 
-            eprintln!("Getting incoming calls for: {}", target_name);
+            tracing::debug!(target = target_name, "Getting incoming calls");
 
             let ch_item = self.json_to_call_hierarchy_item(item)?;
 
@@ -683,7 +683,7 @@ impl LspServer {
             let uri = item["uri"].as_str().unwrap_or("");
             let ch_item = self.json_to_call_hierarchy_item(item)?;
 
-            eprintln!("Getting outgoing calls for: {}", item["name"].as_str().unwrap_or(""));
+            tracing::debug!(target = item["name"].as_str().unwrap_or(""), "Getting outgoing calls");
 
             // Snapshot all open documents for fallback callee resolution.
             let documents = self.documents_guard();

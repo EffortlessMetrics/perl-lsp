@@ -34,8 +34,7 @@ impl FullPerlParser {
 
         // Phase 3: Parse with Pest
         let pairs = PerlParser::parse(Rule::program, &fully_processed).map_err(|e| {
-            eprintln!("Pest parse error: {:?}", e);
-            eprintln!("Input after preprocessing: {:?}", fully_processed);
+            tracing::warn!(error = ?e, input = ?fully_processed.as_str(), "Pest parse error");
             ParseError::ParseFailed
         })?;
 
@@ -102,8 +101,7 @@ impl FullPerlParser {
         depth: usize,
     ) {
         if depth > 100 {
-            eprintln!("WARNING: Deep recursion detected at depth {}", depth);
-            eprintln!("Node type: {:?}", std::mem::discriminant(node));
+            tracing::warn!(depth, node_type = ?std::mem::discriminant(node), "Deep recursion detected");
             return;
         }
 

@@ -83,7 +83,7 @@ impl StatefulPerlParser {
                     }
                     // Check if this line contains a heredoc declaration
                     else if let Some(heredoc_info) = self.extract_heredoc_declaration(line) {
-                        eprintln!("DEBUG: Found heredoc declaration: {:?}", heredoc_info);
+                        tracing::debug!(info = ?heredoc_info, "Found heredoc declaration");
                         self.pending_heredocs.push_back(heredoc_info);
                         processed_lines.push(line.to_string());
                         i += 1;

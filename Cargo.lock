@@ -1552,6 +1552,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1610,6 +1611,7 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2164,6 +2166,7 @@ dependencies = [
  "perl-lsp-feature-flags",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2346,6 +2349,7 @@ dependencies = [
  "perl-content-length-framing",
  "perl-lsp-protocol",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2806,6 +2810,7 @@ dependencies = [
  "perl-workspace-ignore",
  "proptest",
  "tempfile",
+ "tracing",
  "walkdir",
 ]
 
