@@ -1,5 +1,10 @@
 # tree-sitter-perl-c
 
+[![crates.io](https://img.shields.io/crates/v/tree-sitter-perl-c.svg)](https://crates.io/crates/tree-sitter-perl-c)
+[![docs.rs](https://docs.rs/tree-sitter-perl-c/badge.svg)](https://docs.rs/tree-sitter-perl-c)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+[![MSRV](https://img.shields.io/badge/MSRV-1.92-blue)](https://www.rust-lang.org/)
+
 Tree-sitter Perl grammar with C scanner — the legacy C-FFI implementation.
 
 ## Overview

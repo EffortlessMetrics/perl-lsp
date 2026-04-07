@@ -6,9 +6,14 @@
 
 <p align="center">
   <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/v/perl-lsp-rs.svg" alt="crates.io" /></a>
+  <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/d/perl-lsp-rs.svg" alt="Downloads" /></a>
+  <a href="https://docs.rs/perl-lsp-rs"><img src="https://docs.rs/perl-lsp-rs/badge.svg" alt="docs.rs" /></a>
   <a href="https://github.com/EffortlessMetrics/perl-lsp/releases"><img src="https://img.shields.io/github/v/release/EffortlessMetrics/perl-lsp?display_name=tag" alt="GitHub release" /></a>
-  <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License" /></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.92%2B-orange.svg" alt="Rust" /></a>
+  <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="License: MIT OR Apache-2.0" /></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92-blue" alt="MSRV" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"><img src="https://img.shields.io/visual-studio-marketplace/v/EffortlessMetrics.perl-lsp-rs" alt="VSCode Marketplace" /></a>
+  <a href="https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs"><img src="https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs" alt="Open VSX" /></a>
 </p>
 
 ---
