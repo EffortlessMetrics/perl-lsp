@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INCRATE_DIR="${ROOT_DIR}/crates/tree-sitter-perl-rs/src"
+INCRATE_DIR="${ROOT_DIR}/archive/crates/tree-sitter-perl-rs/src"
 MICROCRATE_DIR="${ROOT_DIR}/crates/perl-parser-pest/src"
 
 V2_BUNDLE_FILES=(

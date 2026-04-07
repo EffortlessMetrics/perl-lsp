@@ -132,13 +132,6 @@ members = [
     "crates/perl-dap-variables",
     "crates/perl-feature-catalog",
     "crates/tree-sitter-perl-c",
-    "crates/tree-sitter-perl-rs",
-    "crates/perl-ts-heredoc-analysis",
-    "crates/perl-ts-statement-tracker",
-    "crates/perl-ts-logos-lexer",
-    "crates/perl-ts-heredoc-parser",
-    "crates/perl-ts-partial-ast",
-    "crates/perl-ts-advanced-parsers",
     "crates/perl-ci-hygiene",
     "xtask",
 ]
@@ -436,8 +429,6 @@ perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.12
 perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.12.2" }
 perl-lsp-selection-range = { path = "crates/perl-lsp-selection-range", version = "0.12.2" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.12.2" }
-perl-ts-heredoc-analysis = { path = "crates/perl-ts-heredoc-analysis", version = "0.12.2" }
-
 # Tier 3: Two-level dependencies
 perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.12.2" }
 perl-workspace-index-monitoring = { path = "crates/perl-workspace-index-monitoring", version = "0.12.2" }
@@ -459,7 +450,6 @@ perl-lsp-rs = { path = "crates/perl-lsp", version = "0.12.2" }
 perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.2" }
 
 # External dependencies
-tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", version = "0.12.2", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c", version = "0.12.2" }
 tree-sitter = "0.26.8"
 ropey = "1.6.1"

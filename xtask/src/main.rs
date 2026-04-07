@@ -451,11 +451,11 @@ enum Commands {
     #[cfg(feature = "parser-tasks")]
     Bindings {
         /// Header file to generate bindings from
-        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
+        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
         header: PathBuf,
 
         /// Output file for bindings
-        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/bindings.rs")]
+        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/bindings.rs")]
         output: PathBuf,
     },
 

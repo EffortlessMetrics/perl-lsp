@@ -5,10 +5,11 @@
 //! library as `tree-sitter-perl-c`.
 //!
 //! The C sources live under `c-src/` and are a snapshot of the upstream
-//! tree-sitter Perl grammar. The original source of truth is
-//! `crates/tree-sitter-perl-rs/src/` within this repository; this crate
-//! carries its own copy so the published package is self-contained and
-//! does not need paths outside the crate directory.
+//! tree-sitter Perl grammar. The `c-src/` directory IS the canonical source
+//! of truth within this repository; this crate carries its own copy so the
+//! published package is self-contained and does not need paths outside the
+//! crate directory. (The old `tree-sitter-perl-rs` harness has been archived
+//! to `archive/crates/tree-sitter-perl-rs/`.)
 //!
 //! No bindgen is involved: the single symbol we need from the C library
 //! (`tree_sitter_perl`) is declared by hand in `src/lib.rs`.

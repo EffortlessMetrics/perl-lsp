@@ -260,18 +260,12 @@ fn run() -> Result<i32> {
     Ok(code)
 }
 
-const CI_REPORT_CRATES_EXCLUDE: [&str; 11] = [
+const CI_REPORT_CRATES_EXCLUDE: [&str; 5] = [
     "tree-sitter-perl-c",
-    "tree-sitter-perl-rs",
     "perl-parser-pest",
     "perl-tdd-support",
     "perl-test-must",
     "perl-ci-hygiene",
-    "perl-ts-heredoc-analysis",
-    "perl-ts-logos-lexer",
-    "perl-ts-heredoc-parser",
-    "perl-ts-partial-ast",
-    "perl-ts-advanced-parsers",
 ];
 
 const CI_TEST_FILE_SUFFIXES: [&str; 3] = ["_test.rs", "_tests.rs", "tests.rs"];
@@ -702,7 +696,7 @@ fn cmd_check_v2_bundle_sync(repo_root: &Path) -> Result<i32> {
     const V2_BUNDLE_FILES: [&str; 5] =
         ["grammar.pest", "pure_rust_parser.rs", "pratt_parser.rs", "sexp_formatter.rs", "error.rs"];
 
-    let source_root = repo_root.join("crates/tree-sitter-perl-rs/src");
+    let source_root = repo_root.join("archive/crates/tree-sitter-perl-rs/src");
     let microcrate_root = repo_root.join("crates/perl-parser-pest/src");
     let mut status = 0;
     for file in V2_BUNDLE_FILES {
@@ -755,7 +749,8 @@ fn cmd_benchmark_pure_rust_vs_c(repo_root: &Path) -> Result<i32> {
     println!("=== Pure Rust (Pest) vs C Parser Benchmark ===");
     println!("Building both implementations...");
 
-    let rust_parser = repo_root.join("crates/tree-sitter-perl-rs/target/release/parse-rust");
+    let rust_parser =
+        repo_root.join("archive/crates/tree-sitter-perl-rs/target/release/parse-rust");
     let c_parser = repo_root.join("crates/tree-sitter-perl-c/target/release/parse_c");
 
     command_status_strict(
@@ -835,7 +830,8 @@ fn cmd_benchmark_rust_vs_c_simple(repo_root: &Path) -> Result<i32> {
     println!("=== Pure Rust (Pest) vs C Parser Benchmark ===");
     println!();
 
-    let rust_parser = repo_root.join("crates/tree-sitter-perl-rs/target/release/parse-rust");
+    let rust_parser =
+        repo_root.join("archive/crates/tree-sitter-perl-rs/target/release/parse-rust");
     let c_parser = repo_root.join("crates/tree-sitter-perl-c/target/release/parse_c");
     let workspace =
         repo_root.join("target").join("perl-ci-hygiene").join("benchmark_rust_vs_c_simple");
@@ -1040,7 +1036,7 @@ fn cmd_simple_bench(repo_root: &Path) -> Result<i32> {
     println!("Pure Rust Perl Parser Performance Test");
     println!("======================================");
 
-    let parser = repo_root.join("crates/tree-sitter-perl-rs/target/release/parse-rust");
+    let parser = repo_root.join("archive/crates/tree-sitter-perl-rs/target/release/parse-rust");
     command_status_strict(
         repo_root,
         "cargo",
@@ -3425,17 +3421,7 @@ fn is_fatal_excluded(path: &Path, repo_root: &Path) -> Result<bool> {
     }) {
         return Ok(true);
     }
-    for excluded in [
-        "tree-sitter-perl-c",
-        "tree-sitter-perl-rs",
-        "perl-tdd-support",
-        "perl-ts-heredoc-analysis",
-        "perl-ts-logos-lexer",
-        "perl-ts-heredoc-parser",
-        "perl-ts-partial-ast",
-        "perl-ts-advanced-parsers",
-        "perl-ci-hygiene",
-    ] {
+    for excluded in ["tree-sitter-perl-c", "perl-tdd-support", "perl-ci-hygiene"] {
         if rel_string.contains(&format!("/{excluded}/")) {
             return Ok(true);
         }
