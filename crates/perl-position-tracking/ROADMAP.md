@@ -5,13 +5,13 @@
 ## Purpose
 UTF-8/UTF-16 position tracking and conversion for Perl LSP
 
-## Current Status (v0.10.0)
+## Current Status (workspace version)
 - **Status:** Initial Public Alpha
 - **Integration:** Part of the `perl-lsp` workspace.
 
 ## Future Milestones
 
-### v0.10.x Hardening
+### Hardening
 - Address early adopter feedback.
 - Refine API contracts and error handling.
 - Improve test coverage and documentation.
