@@ -833,8 +833,16 @@ parser-audit:
     @python3 -c "import json; r=json.load(open('corpus_audit_report.json')); po=r['parse_outcomes']; print(f'Parse success: {po[\"ok\"]}/{po[\"total\"]} files ({100*po[\"ok\"]/po[\"total\"]:.0f}%)')"
 
 # Check parser features baseline (CI mode, fails on regression)
+#
+# Issue #3202: corpus-audit and check-parse-errors must run as SEPARATE
+# top-level cargo invocations (not nested) on Windows. Nesting them caused
+# `os error 5: Access is denied` because the inner cargo tried to relink
+# the still-running parent xtask.exe.
 ci-parser-features-check:
     @echo "🔍 Checking parser features baseline..."
+    @echo "  Step 1/2: corpus-audit (regenerates corpus_audit_report.json)"
+    @cargo run -p xtask --no-default-features -q -- corpus-audit --fresh --corpus-path . --output corpus_audit_report.json
+    @echo "  Step 2/2: check-parse-errors (compares to baseline)"
     @cargo xtask ci-hygiene check-parse-errors
 
 # Check features.toml invariants (GA+advertised must have tests, no duplicates)
