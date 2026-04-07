@@ -121,6 +121,7 @@ The user is an **observer** who checks in every few hours or daily.
 
 Every code-writing subagent MUST use `isolation: "worktree"`. No editing files on local HEAD.
 
+- **Session start**: Run `just doctor` before spawning the first worktree agent. It auto-detects and (where safe) auto-fixes the recurring state-corruption bugs that have bitten the worktree workflow — `core.bare = true` (#3205), worktree file leaks, orphaned worktree directories, stale local branches, missing pre-push hook, and an out-of-date master.
 - Subagent prompts MUST include: "Run ALL commands from your worktree path. Do NOT cd to the main repo."
 - No code-writing agent is active until it has: a named worktree, a branch, a claimed file surface, and a verification command.
 - Builder prompts must explicitly state the exact files to touch — no open-ended "fix all the things."
