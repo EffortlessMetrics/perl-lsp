@@ -1,0 +1,24 @@
+[package]
+name = "perl-heredoc-anti-patterns"
+version = "0.12.2"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-heredoc-anti-patterns"
+description = "Anti-pattern detection for problematic Perl heredoc patterns (format blocks, BEGIN-time heredocs, dynamic delimiters, source filters, etc.)"
+readme = "README.md"
+keywords = ["perl", "heredoc", "lint", "static-analysis", "parser"]
+categories = ["parsing", "development-tools"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+regex.workspace = true
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
