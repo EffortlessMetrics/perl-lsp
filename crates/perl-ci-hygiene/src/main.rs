@@ -3140,7 +3140,9 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     let baseline_path = repo_root.join("ci").join("todo_baseline.txt");
     // "xtask" is excluded because it is build tooling whose source code documents and implements
     // the TODO-scanner itself (unwired_scan.rs), producing unavoidable self-referential matches.
-    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask"];
+    // ".claude" is excluded because it contains ephemeral agent worktrees and tooling state that
+    // are gitignored — the scanner should not see them as project source.
+    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask", ".claude"];
     let exclude_files = [
         repo_root.join("ci").join("check_todos.sh"),
         repo_root.join("crates").join("perl-parser").join("tests").join("missing_docs_ac_tests.rs"),

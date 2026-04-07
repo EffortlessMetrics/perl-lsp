@@ -203,6 +203,7 @@ allow = [
     "perl-lsp-file-completion",
     "perl-lsp-completion-item",
     "perl-lsp-inline-completion",
+    "perl-lsp-ai-provider",
     "perl-lsp-inlay-hints",
     "perl-lsp-code-lens",
     "perl-lsp-color-provider",
