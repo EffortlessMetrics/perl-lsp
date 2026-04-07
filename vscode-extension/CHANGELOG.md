@@ -2,6 +2,40 @@
 
 All notable changes to the Perl Language Server extension will be documented in this file.
 
+## [0.12.2] - 2026-04-04
+
+The 0.12.2 release line. Aligned with the workspace `v0.12.2` cut on 2026-04-04
+and consolidates the v0.12.2 through v0.12.8 milestones into a single release.
+
+### Added
+- **AI inline completion**: opt-in OpenAI-compatible streaming provider with
+  session management, version-aware cancellation, and a deterministic fallback
+  when AI is disabled. Wired into the LSP server's `inlineCompletion` request
+  via the new `experimental.perlInlineCompletionStream` extension.
+- **Heredoc language injection**: SQL keyword and JSON key detection in
+  heredocs with multi-heredoc-per-line support.
+- **Type inference in hover**: type hints rendered alongside symbol info.
+- **Dead code highlighting**: `DiagnosticTag::Unnecessary` for unreachable code.
+- **Refactoring code actions**: extract variable, extract subroutine, inline
+  subroutine, scoped rename.
+- **POD preview panel**: `Perl: Preview POD` command opens a side panel with
+  formatted POD output.
+- **AST explorer debug panel**: `perl/showAst` custom LSP handler for
+  inspecting parser output during diagnostics.
+
+### Performance
+- Incremental parsing pipeline (token caching + checkpoint recovery).
+- Large-workspace HashMap optimization (faster startup).
+- CPAN-scale benchmarks: 10K files indexed in 672ms.
+
+### Fixed
+- Inline completion duplicate backend types removed.
+- Streaming completion controller gating on AI config flags.
+
+### Changed
+- **Version Bump**: 0.12.2 release aligned with the workspace and shipped
+  `perllsp` asset line.
+
 ## [0.12.1] - 2026-03-30
 
 ### Fixed
