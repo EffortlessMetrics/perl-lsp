@@ -989,8 +989,8 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
     for (name, path) in candidates {
         let size = fs::metadata(&path).map(|metadata| metadata.len()).unwrap_or(0);
 
-        let c_time = run_bench_parser_ms(repo_root, "c-scanner test-utils", &path, false)?;
-        let rust_time = run_bench_parser_ms(repo_root, "pure-rust test-utils", &path, false)?;
+        let c_time = run_bench_parser_ms(repo_root, &path, false)?;
+        let rust_time = run_bench_parser_ms(repo_root, &path, false)?;
 
         let speedup = if let (Some(c_val), Some(rust_val)) = (c_time, rust_time) {
             if rust_val > 0.0 { Some(c_val / rust_val) } else { None }
@@ -1172,21 +1172,16 @@ fn cmd_profile_stack_overflow(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn run_bench_parser_ms(
-    repo_root: &Path,
-    features: &str,
-    file: &Path,
-    _fail_fast: bool,
-) -> Result<Option<f64>> {
+fn run_bench_parser_ms(repo_root: &Path, file: &Path, _fail_fast: bool) -> Result<Option<f64>> {
     let file_arg = file.to_string_lossy().into_owned();
     let args = [
         "run",
         "--quiet",
         "--release",
-        "--features",
-        features,
+        "-p",
+        "perl-parser-bench",
         "--bin",
-        "bench_parser",
+        "perl-parser-bench",
         "--",
         file_arg.as_str(),
     ];

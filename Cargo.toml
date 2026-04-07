@@ -16,6 +16,7 @@ members = [
     "crates/perl-tokenizer",
     "crates/perl-lexer",
     "crates/perl-parser",
+    "crates/perl-parser-bench",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
