@@ -7,7 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- No unreleased changes have been recorded yet.
+Pre-announcement cleanup wave following the v0.12.2 GitHub Release. These
+changes target the v0.13.0 public alpha announcement.
+
+### Added
+
+- **`perl-heredoc-anti-patterns` microcrate**: SRP extraction from
+  `perl-ts-heredoc-analysis::anti_pattern_detector`. The only module of
+  the larger heredoc-analysis crate that production code (perl-lsp-diagnostics)
+  actually consumes. Now a clean publishable leaf crate. (#3199)
+- **`perl-parser-bench` microcrate**: SRP extraction of the `bench_parser`
+  binary that was misplaced inside the tree-sitter-perl-rs harness. Uses
+  `perl-parser` (v3 native) directly. Replaces `perl-ci-hygiene`'s
+  subprocess invocation. (#3198)
+- **`perl-parser-pest` is now publishable**: enabled the legacy v2 Pest-based
+  Perl parser for crates.io publication as a learning tool / Pest reference
+  implementation for the broader Perl-in-Rust ecosystem. (#3195)
+- **`perl-lsp-ai-provider` is now publishable**: filled out crates.io metadata
+  and added to the publish allow-list. Was blocking `perl-lsp-rs` from
+  publishing because perl-lsp-rs hard-depends on it. (#3196)
+- **GitHub Discussions enabled** for community Q&A.
+- **Homepage URL** set in repo metadata.
+- **`.gitignore`**: Playwright MCP browser session artifacts. (#3190)
+
+### Fixed
+
+- **License detection**: GitHub now reports `Apache-2.0` instead of
+  `NOASSERTION`. Replaced all 126 LICENSE files (root + 62 per-crate × 2)
+  with canonical SPDX text. The previous LICENSE-APACHE held only the
+  short Apache header notice (not the full ~200-line canonical text);
+  the previous LICENSE-MIT held curly quotes that broke licensee's
+  pattern match. (#3193)
+- **Docker arm64 publish workflow**: Dockerfile pinned to
+  `rust:1.92-slim-bookworm` (was tracking older toolchain), and
+  `timeout-minutes` bumped 30→90 for the arm64 builder image and the
+  consolidated Docker Hub publish job. (#3188 → #3191)
+- **`perl-ci-hygiene check-todos`**: now skips `.claude/` ephemeral
+  agent-worktree state. The scanner was treating gitignored worktree
+  files as project source and flagging their TODO comments. (#3196)
+- **README "Current release"** line: stale `v0.12.1` → `v0.12.2`. (#3186)
+- **Top-level `ROADMAP.md` and `NOW_NEXT_LATER.md`**: stuck describing
+  v0.12.2 as in-progress with already-merged PR numbers. Refreshed to
+  reflect post-v0.12.2 pre-announcement state. (#3200)
+- **`docs/project/ROADMAP.md`**: same staleness, current-framing block
+  refreshed and the dead `#3018` reference dropped (AI inline completion
+  shipped in v0.12.2). (#3194)
+
+### Removed
+
+- 3 stray standalone `LICENSE` files in `crates/perl-corpus/`,
+  `crates/perl-lexer/`, `crates/perl-parser/`. They were byte-identical
+  1069-byte orphans holding the old curly-quote MIT text alongside the
+  proper LICENSE-MIT and LICENSE-APACHE files. Not referenced by any
+  Cargo.toml `license-file` field. (#3196)
+
+### Dependencies
+
+7 Dependabot PRs merged, including 3 majors verified safe via parallel
+worktree investigation:
+
+- **major**: `eslint` 9.39.4 → 10.2.0 (#3179) — flat config already in
+  use, lint passes clean with v10
+- **major**: `actions/cache` v4 → v5 (#3181) — Node 24 runtime bump
+  only, no schema or cache-key changes, existing v4 caches remain
+  readable
+- **major**: `similar` 2.7.0 → 3.0.0 (#3184) — only consumer is
+  `xtask`, breaking changes don't intersect our usage
+- `tokio` 1.50.0 → 1.51.0 (#3180)
+- `tree-sitter` 0.26.7 → 0.26.8 (#3182)
+- dependencies group with 3 updates (#3183)
+- npm group in vscode-extension (#3178)
 
 ## [0.12.2] - 2026-04-04
 
