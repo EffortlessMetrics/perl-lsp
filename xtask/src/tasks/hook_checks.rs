@@ -123,8 +123,15 @@ pub fn run_hook_tests() -> Result<()> {
     fs::create_dir_all(&temp_root).context("Failed to create temporary ops directory")?;
     ensure_temp_repo_isolated(&root, &temp_root)?;
 
+    // Create an empty hooks directory inside the temp root that all temp-repo
+    // git invocations will use. This overrides any inherited `core.hooksPath`
+    // (e.g. the parent repo's `.git/hooks`) so the main repo's hooks cannot
+    // fire inside the temp repo. See issue #3203.
+    let isolated_hooks_dir = temp_root.join("empty-hooks");
+    fs::create_dir_all(&isolated_hooks_dir).context("Failed to create isolated hooks directory")?;
+
     let task_repo = temp_root.join("task-completed-repo");
-    create_non_rust_test_repo(&task_repo)?;
+    create_non_rust_test_repo(&task_repo, &temp_root, &isolated_hooks_dir)?;
 
     let task_completed_no_payload =
         run_script(task_completed.as_path(), None, None, Some(task_repo.as_path()))?;
@@ -339,16 +346,28 @@ fn git_bash_executable() -> Option<PathBuf> {
     bash.exists().then_some(bash)
 }
 
-fn create_non_rust_test_repo(path: &Path) -> Result<()> {
+fn create_non_rust_test_repo(
+    path: &Path,
+    temp_root: &Path,
+    isolated_hooks_dir: &Path,
+) -> Result<()> {
     fs::create_dir_all(path)
         .with_context(|| format!("Failed to create temp repo {}", path.display()))?;
-    fs::write(path.join("README.md"), "# hook test repo\n")
+
+    // SAFETY (issue #3203): assert the README.md path lives inside the temp
+    // root before writing. The hook-tests scaffold once overwrote the real
+    // workspace README.md when this invariant was violated; this assertion
+    // catches any future regression at the call site.
+    let readme_path = path.join("README.md");
+    assert_path_inside_temp_root(&readme_path, temp_root, "create_non_rust_test_repo README.md")?;
+    fs::write(&readme_path, "# hook test repo\n")
         .with_context(|| format!("Failed to seed temp repo {}", path.display()))?;
 
-    run_git(path, &["init"])?;
-    run_git(path, &["add", "README.md"])?;
+    run_git(path, isolated_hooks_dir, &["init"])?;
+    run_git(path, isolated_hooks_dir, &["add", "README.md"])?;
     run_git(
         path,
+        isolated_hooks_dir,
         &[
             "-c",
             "user.name=xtask hook tests",
@@ -359,6 +378,45 @@ fn create_non_rust_test_repo(path: &Path) -> Result<()> {
             "seed temp repo",
         ],
     )?;
+
+    Ok(())
+}
+
+/// Assert that `path` lives strictly inside `temp_root`.
+///
+/// This guards every filesystem write the hook-tests scaffold performs against
+/// the bug from issue #3203, where the scaffold once scribbled onto the real
+/// workspace `README.md`. The check uses canonicalized paths so symlinks and
+/// platform-specific path normalization (UNC vs. plain on Windows) cannot fool
+/// the comparison. The parent of `path` is canonicalized when `path` itself
+/// does not yet exist.
+fn assert_path_inside_temp_root(path: &Path, temp_root: &Path, context: &str) -> Result<()> {
+    let canonical_temp_root = temp_root
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize temp root {}", temp_root.display()))?;
+
+    let canonical_target = if path.exists() {
+        path.canonicalize().with_context(|| format!("Failed to canonicalize {}", path.display()))?
+    } else {
+        let parent =
+            path.parent().with_context(|| format!("Path has no parent: {}", path.display()))?;
+        let canonical_parent = parent
+            .canonicalize()
+            .with_context(|| format!("Failed to canonicalize parent {}", parent.display()))?;
+        let file_name = path
+            .file_name()
+            .with_context(|| format!("Path has no file name: {}", path.display()))?;
+        canonical_parent.join(file_name)
+    };
+
+    if !canonical_target.starts_with(&canonical_temp_root) {
+        bail!(
+            "hook-tests refusing to write outside temp root ({}): {} -> {}",
+            context,
+            path.display(),
+            canonical_target.display()
+        );
+    }
 
     Ok(())
 }
@@ -384,9 +442,17 @@ fn ensure_temp_repo_isolated(project_root: &Path, temp_root: &Path) -> Result<()
     Ok(())
 }
 
-fn run_git(repo: &Path, args: &[&str]) -> Result<()> {
+/// Run a git command inside a temp repo with hook isolation enforced.
+///
+/// Every invocation prepends `-c core.hooksPath=<isolated_hooks_dir>` so that
+/// any inherited `core.hooksPath` (e.g. the parent repo's `.git/hooks`) cannot
+/// fire inside the temp repo. See issue #3203 — the parent repo's pre-commit
+/// hook firing inside the temp repo was the original symptom of this bug.
+fn run_git(repo: &Path, isolated_hooks_dir: &Path, args: &[&str]) -> Result<()> {
+    let hooks_override = format!("core.hooksPath={}", isolated_hooks_dir.display());
     let output = Command::new("git")
         .current_dir(repo)
+        .args(["-c", hooks_override.as_str()])
         .args(args)
         .output()
         .with_context(|| format!("Failed to run git {:?} in {}", args, repo.display()))?;
@@ -506,5 +572,229 @@ fn assert_regex(content: &str, pattern: &Regex, desc: &str, pass: &mut u32, fail
     } else {
         eprintln!("  FAIL: {desc} - pattern '{pattern}' not found");
         *fail += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Regression tests for issue #3203 — hook-tests scaffold safety.
+    //!
+    //! These tests guard the two-part fix:
+    //!   1. Every git invocation in the temp repo must override
+    //!      `core.hooksPath` so the parent repo's hooks cannot fire.
+    //!   2. Every filesystem write in the scaffold must be inside the temp
+    //!      root, asserted at the call site so a regression bails loudly
+    //!      instead of scribbling on the workspace.
+
+    use super::*;
+    use std::collections::HashSet;
+    use tempfile::TempDir;
+
+    #[test]
+    fn assert_path_inside_temp_root_accepts_child_path() {
+        let tempdir = TempDir::new().expect("create tempdir");
+        let temp_root = tempdir.path();
+        let child = temp_root.join("subdir").join("README.md");
+        std::fs::create_dir_all(child.parent().unwrap()).unwrap();
+        assert_path_inside_temp_root(&child, temp_root, "test").expect("child path is allowed");
+    }
+
+    #[test]
+    fn assert_path_inside_temp_root_rejects_workspace_readme() {
+        // Construct two unrelated tempdirs. The "fake workspace" stands in
+        // for the real workspace root that #3203 saw scribbled.
+        let temp_root_dir = TempDir::new().expect("create temp root");
+        let fake_workspace = TempDir::new().expect("create fake workspace");
+        let workspace_readme = fake_workspace.path().join("README.md");
+        std::fs::write(&workspace_readme, "real workspace content")
+            .expect("seed fake workspace README");
+
+        let err = assert_path_inside_temp_root(
+            &workspace_readme,
+            temp_root_dir.path(),
+            "regression #3203",
+        )
+        .expect_err("must refuse to write outside temp root");
+
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("hook-tests refusing to write outside temp root"),
+            "expected refusal message, got: {msg}"
+        );
+
+        // The fake workspace README must remain untouched.
+        let after = std::fs::read_to_string(&workspace_readme).unwrap();
+        assert_eq!(after, "real workspace content", "fake workspace README was scribbled");
+    }
+
+    #[test]
+    fn create_non_rust_test_repo_writes_only_inside_temp_root() {
+        // Skip if git is not available (e.g. minimal CI containers).
+        if Command::new("git").arg("--version").output().is_err() {
+            eprintln!("skipping: git binary unavailable");
+            return;
+        }
+
+        let tempdir = TempDir::new().expect("create tempdir");
+        let temp_root = tempdir.path();
+        let isolated_hooks_dir = temp_root.join("empty-hooks");
+        std::fs::create_dir_all(&isolated_hooks_dir).unwrap();
+        let task_repo = temp_root.join("task-completed-repo");
+
+        // Snapshot the workspace (project_root) to verify nothing in it
+        // changes during the test.
+        let project_root_path = project_root().expect("project root");
+        let workspace_snapshot = snapshot_top_level(&project_root_path);
+
+        create_non_rust_test_repo(&task_repo, temp_root, &isolated_hooks_dir)
+            .expect("create_non_rust_test_repo succeeds");
+
+        // The README we wrote must be the temp-repo one.
+        let temp_readme = task_repo.join("README.md");
+        assert!(temp_readme.exists(), "temp repo README.md must exist");
+        let content = std::fs::read_to_string(&temp_readme).unwrap();
+        assert_eq!(content, "# hook test repo\n");
+
+        // The workspace must be byte-for-byte the same.
+        let workspace_after = snapshot_top_level(&project_root_path);
+        assert_eq!(
+            workspace_snapshot, workspace_after,
+            "create_non_rust_test_repo modified files in the workspace root"
+        );
+
+        // The workspace README in particular must contain its real content,
+        // not the temp-repo placeholder.
+        let workspace_readme = project_root_path.join("README.md");
+        if workspace_readme.exists() {
+            let real = std::fs::read_to_string(&workspace_readme).unwrap();
+            assert_ne!(
+                real.trim(),
+                "# hook test repo",
+                "workspace README.md was overwritten with temp-repo placeholder"
+            );
+        }
+    }
+
+    #[test]
+    fn run_git_overrides_inherited_hooks_path() {
+        // Skip if git is not available.
+        if Command::new("git").arg("--version").output().is_err() {
+            eprintln!("skipping: git binary unavailable");
+            return;
+        }
+
+        let tempdir = TempDir::new().expect("create tempdir");
+        let temp_root = tempdir.path();
+        let isolated_hooks_dir = temp_root.join("empty-hooks");
+        std::fs::create_dir_all(&isolated_hooks_dir).unwrap();
+        let repo = temp_root.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+
+        // Plant a hostile pre-commit hook in a directory and set the env
+        // variable that would normally cause it to fire. The hook would
+        // exit 1 and overwrite an external sentinel if it fired.
+        let hostile_hooks = temp_root.join("hostile-hooks");
+        std::fs::create_dir_all(&hostile_hooks).unwrap();
+        let hostile_hook = hostile_hooks.join("pre-commit");
+        let sentinel = temp_root.join("sentinel.txt");
+        std::fs::write(&sentinel, "untouched").unwrap();
+        // Use bash since git uses bash on all supported platforms here.
+        let hook_body =
+            format!("#!/usr/bin/env bash\necho corrupted > '{}'\nexit 1\n", sentinel.display());
+        std::fs::write(&hostile_hook, hook_body).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&hostile_hook).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&hostile_hook, perms).unwrap();
+        }
+
+        // run_git is called with the isolated hooks dir, so the hostile
+        // hook must NOT fire even though we point GIT_DIR-style env at it.
+        // We simulate inheritance via -c on a *separate* git invocation
+        // that does not go through run_git, just to prove the wrapper.
+        run_git(&repo, &isolated_hooks_dir, &["init"]).expect("git init in temp repo");
+
+        // Force the inherited core.hooksPath to the hostile dir using
+        // GIT_CONFIG_COUNT/GIT_CONFIG_KEY_<n>/GIT_CONFIG_VALUE_<n>. The
+        // run_git wrapper passes `-c core.hooksPath=...` which must
+        // override anything inherited via env.
+        let hostile_path = hostile_hooks.to_string_lossy().to_string();
+
+        // Seed identity locally so we can attempt a commit.
+        run_git(&repo, &isolated_hooks_dir, &["config", "user.email", "t@example.invalid"])
+            .expect("set user.email");
+        run_git(&repo, &isolated_hooks_dir, &["config", "user.name", "t"]).expect("set user.name");
+
+        std::fs::write(repo.join("file.txt"), "hi").unwrap();
+
+        // Build a manual command that mimics run_git but ALSO sets the
+        // hostile core.hooksPath via env, to verify the explicit -c
+        // override wins. We test this by calling the same code path the
+        // wrapper uses but injecting GIT_CONFIG_* env vars.
+        let hooks_override = format!("core.hooksPath={}", isolated_hooks_dir.display());
+        let status = Command::new("git")
+            .current_dir(&repo)
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "core.hooksPath")
+            .env("GIT_CONFIG_VALUE_0", &hostile_path)
+            .args(["-c", hooks_override.as_str()])
+            .args(["add", "file.txt"])
+            .status()
+            .expect("git add");
+        assert!(status.success(), "git add must succeed");
+
+        let status = Command::new("git")
+            .current_dir(&repo)
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "core.hooksPath")
+            .env("GIT_CONFIG_VALUE_0", &hostile_path)
+            .args(["-c", hooks_override.as_str()])
+            .args(["commit", "-m", "x"])
+            .status()
+            .expect("git commit");
+        assert!(status.success(), "commit must succeed (hostile hook should NOT fire)");
+
+        // Sentinel must be untouched — proves the hostile hook never ran.
+        let sentinel_after = std::fs::read_to_string(&sentinel).unwrap();
+        assert_eq!(sentinel_after, "untouched", "hostile hook fired despite -c override");
+    }
+
+    /// Capture the set of immediate top-level entries in `dir`, with file
+    /// content hashes for files. Used to verify the workspace is unchanged
+    /// across a hook-tests-style operation.
+    fn snapshot_top_level(dir: &Path) -> HashSet<(String, Option<u64>)> {
+        let mut out = HashSet::new();
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return out;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            // Skip target/ — it churns under cargo and is not part of the
+            // safety invariant.
+            if name == "target" {
+                continue;
+            }
+            let meta = match entry.metadata() {
+                Ok(m) => m,
+                Err(_) => {
+                    out.insert((name, None));
+                    continue;
+                }
+            };
+            let hash = if meta.is_file() {
+                std::fs::read(entry.path()).ok().map(|bytes| {
+                    use std::hash::{DefaultHasher, Hash, Hasher};
+                    let mut h = DefaultHasher::new();
+                    bytes.hash(&mut h);
+                    h.finish()
+                })
+            } else {
+                None
+            };
+            out.insert((name, hash));
+        }
+        out
     }
 }
