@@ -232,9 +232,12 @@ pub fn publish_release(version: String, dry_run: bool, git_ref: Option<String>) 
 
 pub fn smoke_test_release(version: String) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("scripts").join("smoke-test-release.sh");
+    // Use a relative path with forward slashes so bash (Git Bash / MSYS2 on
+    // Windows) does not interpret backslashes in an absolute Windows path as
+    // escape sequences. `current_dir(&root)` below anchors the relative path.
+    let script = std::path::PathBuf::from("scripts/smoke-test-release.sh");
     let status = Command::new("bash")
-        .arg(script)
+        .arg(&script)
         .arg(version)
         .current_dir(&root)
         .env("XTASK_SMOKE_TEST_RELEASE", "1")
