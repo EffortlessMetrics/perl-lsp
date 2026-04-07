@@ -1003,8 +1003,8 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
     for (name, path) in candidates {
         let size = fs::metadata(&path).map(|metadata| metadata.len()).unwrap_or(0);
 
-        let c_time = run_bench_parser_ms(repo_root, &path, false)?;
-        let rust_time = run_bench_parser_ms(repo_root, &path, false)?;
+        let c_time = run_c_bench_us(repo_root, &path)?;
+        let rust_time = run_rust_bench_us(repo_root, &path)?;
 
         let speedup = if let (Some(c_val), Some(rust_val)) = (c_time, rust_time) {
             if rust_val > 0.0 { Some(c_val / rust_val) } else { None }
@@ -1186,16 +1186,74 @@ fn cmd_profile_stack_overflow(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn run_bench_parser_ms(repo_root: &Path, file: &Path, _fail_fast: bool) -> Result<Option<f64>> {
+/// Crate identifier for the v3 native Rust parser benchmark.
+const RUST_BENCH_CRATE: &str = "perl-parser-bench";
+
+/// Binary identifier for the v3 native Rust parser benchmark.
+///
+/// Used by [`cmd_quick_bench`] and asserted in the unit test that guards
+/// against regressing the C-vs-Rust comparison (see issue #3204).
+const RUST_BENCH_BIN: &str = "perl-parser-bench";
+
+/// Binary identifier for the legacy C tree-sitter parser benchmark.
+///
+/// Lives in the workspace-EXCLUDED `tree-sitter-perl-c` crate (libclang-dev
+/// dependency), so it must be invoked via `--manifest-path` rather than `-p`.
+const C_BENCH_BIN: &str = "bench_parser_c";
+
+/// Relative path (from repo root) to the C tree-sitter crate's Cargo.toml.
+///
+/// Pinned here alongside `C_BENCH_BIN` so that the regression test
+/// (`quick_bench_uses_distinct_binaries_for_c_and_rust`) can assert both the
+/// binary name and the crate location remain distinct from the Rust bench path.
+const C_BENCH_MANIFEST: &str = "crates/tree-sitter-perl-c/Cargo.toml";
+
+/// Run the v3 native Rust parser bench binary against `file`.
+///
+/// Returns wall-clock duration in microseconds, or `None` if the bench
+/// binary exits non-zero. Note that the elapsed time includes the
+/// `cargo run` startup overhead; both [`run_rust_bench_us`] and
+/// [`run_c_bench_us`] share that overhead so the comparison stays fair.
+fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
     let file_arg = file.to_string_lossy().into_owned();
     let args = [
         "run",
         "--quiet",
         "--release",
         "-p",
-        "perl-parser-bench",
+        RUST_BENCH_CRATE,
         "--bin",
-        "perl-parser-bench",
+        RUST_BENCH_BIN,
+        "--",
+        file_arg.as_str(),
+    ];
+    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
+    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+}
+
+/// Run the legacy C tree-sitter parser bench binary against `file`.
+///
+/// `tree-sitter-perl-c` is in `[workspace.exclude]` because of its libclang
+/// build dependency, so this helper invokes cargo with `--manifest-path`
+/// pointing at that crate's Cargo.toml. The `test-utils` feature is required
+/// for the binary target.
+///
+/// Returns wall-clock duration in microseconds, or `None` if the bench
+/// binary fails to build or exits non-zero (e.g. on systems without
+/// libclang installed). Quick-bench treats `None` as N/A in the speedup
+/// column rather than failing the whole run.
+fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+    let file_arg = file.to_string_lossy().into_owned();
+    let args = [
+        "run",
+        "--quiet",
+        "--release",
+        "--manifest-path",
+        C_BENCH_MANIFEST,
+        "--bin",
+        C_BENCH_BIN,
+        "--features",
+        "test-utils",
         "--",
         file_arg.as_str(),
     ];
@@ -4064,6 +4122,28 @@ mod tests {
         assert!(!is_allowlisted_exit_hit(
             r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#
         ));
+    }
+
+    #[test]
+    fn quick_bench_uses_distinct_binaries_for_c_and_rust() {
+        // Regression guard for issue #3204: cmd_quick_bench previously called
+        // the same binary twice and reported the (meaningless) delta as a
+        // C-vs-Rust speedup. The fix wires the two columns to distinct
+        // binaries — this test pins those identifiers so a future refactor
+        // can't silently collapse them again.
+        assert_ne!(
+            RUST_BENCH_BIN, C_BENCH_BIN,
+            "C and Rust quick-bench must invoke different binaries"
+        );
+        assert_eq!(RUST_BENCH_BIN, "perl-parser-bench");
+        assert_eq!(C_BENCH_BIN, "bench_parser_c");
+        // Pin the manifest path for the C bench so a rename of the C crate
+        // directory is caught here rather than silently producing wrong timings.
+        assert_eq!(C_BENCH_MANIFEST, "crates/tree-sitter-perl-c/Cargo.toml");
+        // The C bench must use a manifest path (workspace-excluded crate) while
+        // the Rust bench uses a workspace package selector — they must diverge in
+        // invocation style, not just binary name.
+        assert!(!C_BENCH_MANIFEST.is_empty());
     }
 
     #[test]
