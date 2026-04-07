@@ -1805,7 +1805,7 @@ fn pre_push_hook_script() -> &'static str {
 # Bypass policy
 # -------------
 # OK to bypass with `git push --no-verify`:
-#   * Deletion-only push on master (the hook already auto-skips, but if it
+#   * Deletion-only push on any branch (the hook already auto-skips, but if it
 #     doesn't, bypassing is safe — there's nothing to validate).
 #   * Urgent fixes during incident response, when the gate has a known bug
 #     being tracked (see hint output below for issue numbers).
@@ -4157,16 +4157,22 @@ mod tests {
         );
         // The lighter gate should NOT shell out to `just ci-gate` from the
         // doc-only branch — it should exit before reaching that fallback.
-        // We verify this indirectly: the doc-only message must precede an exit.
-        let doc_idx = hook
-            .find("Doc-only push")
-            .or_else(|| hook.find("doc-only push"))
-            .expect("doc-only message must exist");
-        let after_doc = &hook[doc_idx..];
+        // We verify this by anchoring to the runtime echo (not the comment block),
+        // confirming exit 0 appears inside the fast-path if-block.
+        let runtime_echo = "Doc-only fast-path gate passed";
+        let fast_path_idx =
+            hook.find(runtime_echo).expect("doc-only fast-path completion message must exist");
+        let after_fast_path = &hook[fast_path_idx..];
         assert!(
-            after_doc.contains("exit 0"),
-            "doc-only branch must exit 0 without invoking the full gate"
+            after_fast_path.contains("exit 0"),
+            "doc-only branch must exit 0 immediately after the fast-path message"
         );
+        // Also verify `just ci-gate` does NOT appear between the doc-only announcement
+        // and the exit — the fast-path must truly skip the full gate.
+        let announce = "Doc-only push";
+        let announce_idx = hook.rfind(announce).expect("doc-only announcement must exist");
+        let gate_after_announce = hook[announce_idx..fast_path_idx].contains("just ci-gate");
+        assert!(!gate_after_announce, "doc-only fast-path must not invoke just ci-gate");
     }
 
     #[test]
@@ -4182,6 +4188,55 @@ mod tests {
         assert!(
             hook.contains("cargo xtask fmt") || hook.contains("cargo fmt"),
             "hook must suggest the fmt fix command on fmt failures"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_doc_only_classifier_matches_correct_paths() {
+        let hook = pre_push_hook_script();
+        // The doc-only case statement must list exactly the right patterns so that
+        // code-touching files are never silently skipped.
+        // Verify all expected doc patterns are in the case statement.
+        assert!(hook.contains("*.md"), "hook case must include *.md");
+        assert!(hook.contains("*.txt"), "hook case must include *.txt");
+        assert!(hook.contains("LICENSE*"), "hook case must include LICENSE*");
+        assert!(hook.contains("CHANGELOG*"), "hook case must include CHANGELOG*");
+        assert!(hook.contains("docs/*"), "hook case must include docs/*");
+        assert!(
+            hook.contains(".github/ISSUE_TEMPLATE/*"),
+            "hook case must include .github/ISSUE_TEMPLATE/*"
+        );
+        // .github/workflows/ must NOT be in the doc-only allowlist — CI yaml is code.
+        // Verify it by checking the case statement doesn't whitelist all of .github/
+        assert!(
+            !hook.contains(".github/*"),
+            "hook must not treat all of .github/ as doc-only (workflows are code)"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_new_branch_remote_sha_zero_falls_back_safely() {
+        let hook = pre_push_hook_script();
+        // When pushing a brand-new branch, git sends all-zero SHA as the remote SHA.
+        // The hook must handle this by falling back to merge-base with origin/master,
+        // and if that fails, comparing SHA to itself (empty diff -> full gate).
+        assert!(
+            hook.contains("0000000000000000000000000000000000000000"),
+            "hook must check for all-zero remote SHA (new branch)"
+        );
+        assert!(
+            hook.contains("merge-base"),
+            "hook must use git merge-base for new-branch diff computation"
+        );
+        assert!(
+            hook.contains("HAS_DIFFABLE_REF"),
+            "hook must track whether any ref produced a diff"
+        );
+        // If no ref produces a diff (e.g., merge-base fails), DOC_ONLY must be false
+        // so the full gate runs (safe fallback).
+        assert!(
+            hook.contains("HAS_DIFFABLE_REF") && hook.contains("DOC_ONLY=false"),
+            "hook must fall back to full gate when no diffable ref is found"
         );
     }
 }
