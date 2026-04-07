@@ -514,23 +514,27 @@ fn dap_condition_rejects_cr() -> TestResult {
 // ===========================================================================
 
 #[test]
-fn dap_timeout_zero_capped_to_one() {
-    assert_eq!(validate_timeout(0).unwrap(), 1);
+fn dap_timeout_zero_capped_to_one() -> TestResult {
+    assert_eq!(validate_timeout(0)?, 1);
+    Ok(())
 }
 
 #[test]
-fn dap_timeout_one_is_minimum() {
-    assert_eq!(validate_timeout(1).unwrap(), 1);
+fn dap_timeout_one_is_minimum() -> TestResult {
+    assert_eq!(validate_timeout(1)?, 1);
+    Ok(())
 }
 
 #[test]
-fn dap_timeout_default_unchanged() {
-    assert_eq!(validate_timeout(DEFAULT_TIMEOUT_MS).unwrap(), DEFAULT_TIMEOUT_MS);
+fn dap_timeout_default_unchanged() -> TestResult {
+    assert_eq!(validate_timeout(DEFAULT_TIMEOUT_MS)?, DEFAULT_TIMEOUT_MS);
+    Ok(())
 }
 
 #[test]
-fn dap_timeout_max_unchanged() {
-    assert_eq!(validate_timeout(MAX_TIMEOUT_MS).unwrap(), MAX_TIMEOUT_MS);
+fn dap_timeout_max_unchanged() -> TestResult {
+    assert_eq!(validate_timeout(MAX_TIMEOUT_MS)?, MAX_TIMEOUT_MS);
+    Ok(())
 }
 
 #[test]
@@ -540,11 +544,12 @@ fn dap_timeout_over_max_returns_error() {
 }
 
 #[test]
-fn dap_timeout_normal_values_unchanged() {
-    assert_eq!(validate_timeout(1000).unwrap(), 1000);
-    assert_eq!(validate_timeout(5000).unwrap(), 5000);
-    assert_eq!(validate_timeout(60_000).unwrap(), 60_000);
-    assert_eq!(validate_timeout(100_000).unwrap(), 100_000);
+fn dap_timeout_normal_values_unchanged() -> TestResult {
+    assert_eq!(validate_timeout(1000)?, 1000);
+    assert_eq!(validate_timeout(5000)?, 5000);
+    assert_eq!(validate_timeout(60_000)?, 60_000);
+    assert_eq!(validate_timeout(100_000)?, 100_000);
+    Ok(())
 }
 
 // ===========================================================================
