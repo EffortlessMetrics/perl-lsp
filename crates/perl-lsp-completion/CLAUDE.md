@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Generates ranked completion items from parsed ASTs, semantic symbols, and workspace indexes for the `textDocument/completion` LSP request.
 
-**Version**: 0.10.0
+**Version**: workspace (currently 0.12.2)
 
 ## Commands
 

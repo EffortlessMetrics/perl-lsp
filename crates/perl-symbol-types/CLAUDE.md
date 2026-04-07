@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 - **Tier**: 1 (leaf crate, no internal workspace dependencies)
 - **Purpose**: Single source of truth for Perl symbol classification across the perl-lsp ecosystem
-- **Version**: 0.10.0
+- **Version**: workspace (currently 0.12.2)
 
 ## Commands
 

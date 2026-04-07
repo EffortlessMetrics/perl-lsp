@@ -3,7 +3,7 @@
 ## Crate Overview
 
 - **Tier**: 1 (leaf crate, no internal workspace dependencies)
-- **Version**: 0.10.0
+- **Version**: workspace (currently 0.12.2)
 - **Purpose**: Defines stable diagnostic codes, severity levels, tags, and categories for the Perl LSP ecosystem. All codes have fixed string representations that persist across versions.
 
 ## Commands
