@@ -20,6 +20,9 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // (only triggers when Cargo.toml or publish scripts change). Adding an `if:`
     // on top of the paths filter would be redundant and defeat the purpose.
     "publish-dry-run.yml",
+    // ci-gate-self-tests.yml is path-filtered to gate scripts only.
+    // Runs only when the gate scripts or self-test scripts change.
+    "ci-gate-self-tests.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
