@@ -421,12 +421,24 @@ jobs:
             # Use --no-verify because workspace dev-dependency cycles can fail
             # verification before all crates are indexed on crates.io.
             #
-            # Each attempt = (publish + progressive index wait + sparse-index verify).
-            # If the sparse-index verify never confirms the upload, retry the
-            # whole cycle up to 3 times before failing hard. This distinguishes
-            # slow-indexing (crate IS published, just not yet visible — confirmed
-            # by the sparse-index check) from silently-dropped uploads (cargo
-            # publish returned 0 but the crate never appeared).
+            # Each attempt = (publish + inter-publish throttle sleep + progressive
+            # index wait + sparse-index verify). If the sparse-index verify never
+            # confirms the upload, retry the whole cycle up to 3 times before
+            # failing hard. This distinguishes slow-indexing (crate IS published,
+            # just not yet visible — confirmed by the sparse-index check) from
+            # silently-dropped uploads (cargo publish returned 0 but the crate
+            # never appeared).
+            #
+            # Rate-limit context (crates.io docs: https://crates.io/docs/rate-limits):
+            #   - Update existing crate: burst 30, then 1 per 12s steady-state
+            #   - Publish new crate:     burst 5,  then 1 per 60s steady-state
+            # After the burst of 30 is exhausted (which happens fast with 129
+            # crates), each publish must wait ≥ 12s before the next one is
+            # allowed. We sleep 13s after every successful publish so the whole
+            # pipeline runs at < 5 crates/min — reliably under the rate limit.
+            # With 129 crates that is ~28 minutes total, well within the 360-min
+            # job timeout. The sleep appears BEFORE the sparse-index wait, so the
+            # inter-publish gap is at least 13s (+ however long indexing takes).
             PUBLISHED=false
             for attempt in 1 2 3; do
               echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify --allow-dirty"
@@ -439,14 +451,36 @@ jobs:
                 echo "::warning::$CRATE@$VERSION already exists on crates.io index"
                 ALREADY_EXISTS=true
               fi
+
+              # Detect HTTP 429 rate-limit responses for longer back-off.
+              IS_RATE_LIMITED=false
+              if grep -qE "429|Too Many Requests" "$PUBLISH_LOG"; then
+                IS_RATE_LIMITED=true
+              fi
               rm -f "$PUBLISH_LOG"
 
               # If cargo publish hard-failed and it wasn't the "already exists"
               # benign case, back off and retry the publish.
+              # 429 rate-limit: wait 60s (burst window + margin) before retrying.
+              # Other errors: wait 30s.
               if [ "$PUBLISH_EXIT" != "0" ] && [ "$ALREADY_EXISTS" != "true" ]; then
-                echo "Publish attempt $attempt failed (exit $PUBLISH_EXIT), waiting 30s before retry..."
-                sleep 30
+                if [ "$IS_RATE_LIMITED" = "true" ]; then
+                  echo "Publish attempt $attempt hit 429 rate limit, waiting 60s before retry..."
+                  sleep 60
+                else
+                  echo "Publish attempt $attempt failed (exit $PUBLISH_EXIT), waiting 30s before retry..."
+                  sleep 30
+                fi
                 continue
+              fi
+
+              # Inter-publish throttle: sleep 13s after a successful publish call
+              # so the next crate's publish stays under the crates.io steady-state
+              # rate limit of 1 update per 12s. This does NOT apply to the
+              # "already exists" path because that path made no API call.
+              if [ "$ALREADY_EXISTS" != "true" ]; then
+                echo "Throttle: sleeping 13s to stay under crates.io rate limit (1 update/12s steady-state)..."
+                sleep 13
               fi
 
               # Progressive sparse-index wait: probe at 5s, 15s, 45s, 90s
