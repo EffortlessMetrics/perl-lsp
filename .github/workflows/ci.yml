@@ -215,3 +215,42 @@ jobs:
               description,
               target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
             });
+
+  # ── UX Tests: first-5-minutes scenario regression suite ──────────────
+  ux-tests:
+    name: UX Regression Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: pr-smoke
+    # Run on every PR push — this is the regression prevention gate.
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-ux-tests-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build perl-lsp binary
+        run: cargo build -p perl-lsp-rs
+
+      - name: Run UX regression tests
+        env:
+          PERL_LSP_BIN: target/debug/perl-lsp
+          RUST_TEST_THREADS: "1"
+        run: just ux-tests
