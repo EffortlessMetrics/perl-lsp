@@ -136,8 +136,8 @@ export class BinaryDownloader {
                     'The release asset may not exist yet for this platform. ' +
                     manualInstallNote;
                 buttons = ['Install Manually', 'View Logs'];
-            } else if (errorMsg.toLowerCase().includes('checksum')) {
-                // Corrupted or tampered download
+            } else if (errorMsg.toLowerCase().includes('checksum') || errorMsg.includes('SHA256SUMS')) {
+                // Corrupted or tampered download, or missing checksum file
                 message =
                     'perl-lsp: Checksum verification failed — download may be corrupted. ' +
                     'Please retry. If this persists, install manually. ' +

@@ -910,6 +910,20 @@ describe('ensureBinary error classification', () => {
     expect(call[0]).toMatch(/perl-lsp\.serverPath/);
   });
 
+  test('missing SHA256SUMS file routes to checksum guidance not generic error', async () => {
+    // 'Security check failed: No SHA256SUMS file found in release assets.' contains 'SHA256SUMS'
+    // but not 'checksum' (any case) — the classifier must catch it explicitly
+    setupDownloadError('Security check failed: No SHA256SUMS file found in release assets.');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/checksum|corrupt|retry/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
   test('archive extraction failure shows tar/zip guidance', async () => {
     setupDownloadError('Failed to extract archive: tar exited with code 1');
     const vscode = require('vscode');
