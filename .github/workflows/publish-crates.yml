@@ -429,10 +429,10 @@ jobs:
             # publish returned 0 but the crate never appeared).
             PUBLISHED=false
             for attempt in 1 2 3; do
-              echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify"
+              echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify --allow-dirty"
               PUBLISH_LOG="$(mktemp)"
               PUBLISH_EXIT=0
-              cargo publish -p "$CRATE" --no-verify 2>&1 | tee "$PUBLISH_LOG" || PUBLISH_EXIT=${PIPESTATUS[0]}
+              cargo publish -p "$CRATE" --no-verify --allow-dirty 2>&1 | tee "$PUBLISH_LOG" || PUBLISH_EXIT=${PIPESTATUS[0]}
 
               ALREADY_EXISTS=false
               if grep -q "crate ${CRATE}@${VERSION} already exists on crates.io index" "$PUBLISH_LOG"; then
