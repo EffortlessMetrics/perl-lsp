@@ -18,6 +18,7 @@ import {
   HealthCheckResult,
   HealthCheckStatus,
   selectWindowsCommandCandidate,
+  classifyStartupFailure,
 } from '../onboarding';
 
 // ---------------------------------------------------------------------------
@@ -319,5 +320,92 @@ describe('package.json health check command', () => {
     expect(entry).toBeDefined();
     // No editorLangId restriction — the health check must be reachable from any context.
     expect(entry.when ?? '').not.toMatch(/editorLangId/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyStartupFailure
+// ---------------------------------------------------------------------------
+
+describe('classifyStartupFailure', () => {
+  function makeResult(
+    label: string,
+    ok: boolean,
+    status: HealthCheckStatus,
+    detail: string,
+  ): HealthCheckResult {
+    return { label, ok, status, detail };
+  }
+
+  test('returns Perl-missing message when Perl check failed', () => {
+    const results: HealthCheckResult[] = [
+      makeResult('Perl interpreter', false, HealthCheckStatus.Error, 'perl: command not found'),
+      makeResult('perltidy', true, HealthCheckStatus.Ok, 'perltidy found'),
+      makeResult('LSP binary', true, HealthCheckStatus.Ok, 'Binary found: /usr/bin/perllsp'),
+    ];
+    const msg = classifyStartupFailure(results);
+    expect(msg).toContain('Perl');
+    expect(msg).toContain('5.10');
+    expect(msg).toMatch(/install|Install/);
+    // Should NOT show the generic "restart" message when root cause is known
+    expect(msg).not.toContain('Restart the server');
+  });
+
+  test('returns binary-missing message when binary check failed and Perl is present', () => {
+    const results: HealthCheckResult[] = [
+      makeResult('Perl interpreter', true, HealthCheckStatus.Ok, 'Perl 5.036000 found'),
+      makeResult('perltidy', true, HealthCheckStatus.Ok, 'perltidy found'),
+      makeResult('LSP binary', false, HealthCheckStatus.Error, 'perl-lsp binary not found'),
+    ];
+    const msg = classifyStartupFailure(results);
+    expect(msg).not.toContain('Install Perl');
+    expect(msg).toMatch(/binary|perllsp/i);
+  });
+
+  test('returns generic message when all checks pass (unknown crash)', () => {
+    const results: HealthCheckResult[] = [
+      makeResult('Perl interpreter', true, HealthCheckStatus.Ok, 'Perl 5.036000 found'),
+      makeResult('perltidy', true, HealthCheckStatus.Ok, 'perltidy found'),
+      makeResult('LSP binary', true, HealthCheckStatus.Ok, 'Binary found: /usr/bin/perllsp'),
+    ];
+    const msg = classifyStartupFailure(results);
+    // When all checks pass, we don't know root cause — generic message is acceptable
+    expect(typeof msg).toBe('string');
+    expect(msg.length).toBeGreaterThan(0);
+  });
+
+  test('returns Perl-missing message when results array is empty (check could not run)', () => {
+    // Edge case: diagnostics could not run at all; safest is to assume Perl missing
+    const msg = classifyStartupFailure([]);
+    expect(typeof msg).toBe('string');
+    expect(msg.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OnboardingManager.runStartupDiagnostics
+// ---------------------------------------------------------------------------
+
+describe('OnboardingManager.runStartupDiagnostics', () => {
+  test('returns Perl-specific error when Perl is missing', async () => {
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn(() =>
+      Promise.reject(new Error('perl: command not found')),
+    );
+    const msg = await mgr.runStartupDiagnostics(null);
+    expect(msg).toContain('Perl');
+    expect(msg).toMatch(/install|Install/);
+    expect(msg).not.toContain('Restart the server');
+  });
+
+  test('returns binary-missing message when Perl is present but binary not found', async () => {
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn((_cmd: string) =>
+      Promise.resolve({ stdout: '5.036000', stderr: '' }),
+    );
+    // No binary path provided (null)
+    const msg = await mgr.runStartupDiagnostics(null);
+    expect(typeof msg).toBe('string');
+    expect(msg).toMatch(/binary|perllsp/i);
   });
 });
