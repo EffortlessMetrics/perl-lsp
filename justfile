@@ -2019,6 +2019,15 @@ publish-release VERSION *ARGS="":
 smoke-test-release VERSION:
     @cargo xtask smoke-test-release "{{VERSION}}"
 
+# Verify a published version is installable and functional end-to-end.
+# Installs binary crates, exercises library crates in a fresh downstream project,
+# and runs tree-sitter-perl-c / perl-parser integration tests.
+# Uses a clean tempdir — no Docker required.
+#
+# Example: just smoke-test 0.12.2
+smoke-test VERSION:
+    @bash scripts/post-publish-smoke.sh "{{VERSION}}"
+
 # Release gate: full validation for release candidates (~10 min)
 # Composes: ci-gate + release-specific checks
 release-gate: ci-gate release-build sbom-verify version-check
