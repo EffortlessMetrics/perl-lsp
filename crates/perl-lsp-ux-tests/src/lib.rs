@@ -261,14 +261,27 @@ impl UxHarness {
 
     /// Drain any pending server-initiated messages (window/showMessage, etc.)
     /// and return them. Non-blocking — returns what's already buffered.
+    ///
+    /// After this call the internal event queue is empty.  Use
+    /// `peek_notifications` if you need the events to remain available for
+    /// subsequent `assert_no_crash` / `assert_message_contains` calls.
     pub fn collect_notifications(&self) -> Vec<LspEvent> {
         self.client.drain_events()
     }
 
+    /// Clone pending server-initiated messages **without** removing them from
+    /// the queue.  Safe to call multiple times or before assertion helpers.
+    pub fn peek_notifications(&self) -> Vec<LspEvent> {
+        self.client.peek_events()
+    }
+
     /// Assert that none of the buffered events contain a crash signature.
     /// Fails the test loudly if any suspicious message is found.
+    ///
+    /// Uses a non-draining peek so subsequent `assert_message_contains` /
+    /// `assert_no_message_containing` calls still see the same events.
     pub fn assert_no_crash(&self) {
-        let events = self.collect_notifications();
+        let events = self.client.peek_events();
         for ev in &events {
             let msg = format!("{:?}", ev);
             assert!(
@@ -283,8 +296,11 @@ impl UxHarness {
 
     /// Assert that at least one buffered `window/showMessage` or
     /// `window/logMessage` event contains `needle` (substring match).
+    ///
+    /// Uses a non-draining peek so the events remain available for
+    /// `assert_no_crash` or further assertions.
     pub fn assert_message_contains(&self, needle: &str) {
-        let events = self.collect_notifications();
+        let events = self.client.peek_events();
         let found = events.iter().any(|ev| {
             if let LspEvent::WindowMessage { message, .. } | LspEvent::LogMessage { message, .. } =
                 ev
@@ -312,8 +328,11 @@ impl UxHarness {
     }
 
     /// Assert that none of the messages contain `needle`.
+    ///
+    /// Uses a non-draining peek so the events remain available for other
+    /// assertion helpers called in the same test.
     pub fn assert_no_message_containing(&self, needle: &str) {
-        let events = self.collect_notifications();
+        let events = self.client.peek_events();
         for ev in &events {
             if let LspEvent::WindowMessage { message, .. } | LspEvent::LogMessage { message, .. } =
                 ev

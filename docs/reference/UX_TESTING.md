@@ -100,10 +100,11 @@ let config = ScenarioConfig { path_restriction: Some(/*...*/), ..Default::defaul
 | `completion(path, line, char)` | `textDocument/completion` → `Vec<Value>` |
 | `format_document(path)` | `textDocument/formatting` → `FormatResult` |
 | `definition(path, line, char)` | `textDocument/definition` → `Vec<Value>` |
-| `collect_notifications()` | Drain buffered server events |
-| `assert_no_crash()` | Assert no crash signatures in event log |
-| `assert_message_contains(needle)` | Assert a `window/showMessage` contains `needle` |
-| `assert_no_message_containing(needle)` | Assert no message contains `needle` |
+| `collect_notifications()` | Drain buffered server events (queue becomes empty) |
+| `peek_notifications()` | Clone buffered events without removing them |
+| `assert_no_crash()` | Assert no crash signatures — uses peek, queue intact |
+| `assert_message_contains(needle)` | Assert a message contains `needle` — uses peek |
+| `assert_no_message_containing(needle)` | Assert no message contains `needle` — uses peek |
 | `root_uri()` | The `file://` URI of the workspace root |
 
 ## LspEvent Variants

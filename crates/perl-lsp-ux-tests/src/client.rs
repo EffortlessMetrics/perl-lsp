@@ -220,10 +220,23 @@ impl UxClient {
     }
 
     /// Drain all buffered server-initiated events and decode them.
+    ///
+    /// After this call the internal queue is empty.  Use `peek_events` if you
+    /// need to inspect events without consuming them.
     pub fn drain_events(&self) -> Vec<LspEvent> {
         let raw: Vec<Value> = {
             let mut guard = self.events.lock().unwrap_or_else(|e| e.into_inner());
             guard.drain(..).collect()
+        };
+        raw.into_iter().map(decode_event).collect()
+    }
+
+    /// Clone and decode all buffered events **without** removing them from the
+    /// queue.  Safe to call before or after `drain_events` / `collect_notifications`.
+    pub fn peek_events(&self) -> Vec<LspEvent> {
+        let raw: Vec<Value> = {
+            let guard = self.events.lock().unwrap_or_else(|e| e.into_inner());
+            guard.iter().cloned().collect()
         };
         raw.into_iter().map(decode_event).collect()
     }
