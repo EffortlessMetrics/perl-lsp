@@ -66,9 +66,11 @@ export function classifyStartupFailure(results: HealthCheckResult[]): string {
 
   // LSP binary not found — Perl is present but the server binary is missing.
   if (binaryResult && binaryResult.ok === false && binaryResult.status === HealthCheckStatus.Error) {
+    const detail = binaryResult.detail.trimEnd();
+    const detailWithPeriod = detail.endsWith('.') ? detail : `${detail}.`;
     return (
       'Perl Language Server binary (perllsp) not found. ' +
-      binaryResult.detail +
+      detailWithPeriod +
       ' Check the Output panel for download details or reinstall the extension.'
     );
   }

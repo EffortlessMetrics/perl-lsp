@@ -760,6 +760,9 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     // Initialize streaming inline completion controller (config-gated)
     refreshStreamingController(client);
 
+    // Clear any stale startup diagnostic — the server started successfully so
+    // the root cause (e.g. missing Perl) no longer applies.
+    lastStartupDiagnostic = undefined;
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
 }

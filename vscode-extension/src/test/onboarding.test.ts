@@ -369,16 +369,19 @@ describe('classifyStartupFailure', () => {
       makeResult('LSP binary', true, HealthCheckStatus.Ok, 'Binary found: /usr/bin/perllsp'),
     ];
     const msg = classifyStartupFailure(results);
-    // When all checks pass, we don't know root cause — generic message is acceptable
-    expect(typeof msg).toBe('string');
-    expect(msg.length).toBeGreaterThan(0);
+    // Should point to Output panel, not blame Perl or binary
+    expect(msg).toMatch(/Output panel|output/i);
+    expect(msg).not.toContain('Install Perl');
+    expect(msg).not.toContain('perl-lsp binary not found');
   });
 
   test('returns Perl-missing message when results array is empty (check could not run)', () => {
     // Edge case: diagnostics could not run at all; safest is to assume Perl missing
     const msg = classifyStartupFailure([]);
-    expect(typeof msg).toBe('string');
-    expect(msg.length).toBeGreaterThan(0);
+    // Falls back to PERL_MISSING_MESSAGE — the most actionable default
+    expect(msg).toContain('Perl');
+    expect(msg).toMatch(/install|Install/);
+    expect(msg).toContain('5.10');
   });
 });
 
@@ -403,9 +406,10 @@ describe('OnboardingManager.runStartupDiagnostics', () => {
     mgr._execCheck = jest.fn((_cmd: string) =>
       Promise.resolve({ stdout: '5.036000', stderr: '' }),
     );
-    // No binary path provided (null)
+    // No binary path provided (null) — binary check will fail
     const msg = await mgr.runStartupDiagnostics(null);
-    expect(typeof msg).toBe('string');
     expect(msg).toMatch(/binary|perllsp/i);
+    // Perl IS installed — should NOT show the Perl install guide
+    expect(msg).not.toContain('Install Perl 5.10');
   });
 });
