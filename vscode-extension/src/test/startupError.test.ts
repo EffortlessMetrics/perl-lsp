@@ -107,4 +107,33 @@ describe('classifyStartupError', () => {
       expect(result.hint.length).toBeLessThanOrEqual(200);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Synthesised inputs from probeStartupFailure's err.code enrichment path
+  //
+  // When execFile fails with no stderr, probeStartupFailure synthesises a
+  // string from the OS error code so the classifier can return the right kind.
+  // These tests verify that the synthesised strings actually match.
+  // -------------------------------------------------------------------------
+
+  test('synthesised ENOEXEC string classifies as ExecFormatError', () => {
+    // probeStartupFailure synthesises this when err.code === 'ENOEXEC'
+    const result = classifyStartupError('cannot execute binary file: Exec format error');
+    expect(result.kind).toBe(StartupErrorKind.ExecFormatError);
+    expect(result.hint).toContain('architecture');
+  });
+
+  test('synthesised EACCES string classifies as PermissionDenied', () => {
+    // probeStartupFailure synthesises this when err.code === 'EACCES'
+    const result = classifyStartupError('Permission denied');
+    expect(result.kind).toBe(StartupErrorKind.PermissionDenied);
+    expect(result.remediation).toContain('chmod');
+  });
+
+  test('unrecognised err.code falls through to Unknown without crashing', () => {
+    // e.g. ETIMEDOUT, ENOENT — err.message used directly; should not throw
+    const result = classifyStartupError('spawn /path/perllsp ENOENT');
+    expect(result.kind).toBe(StartupErrorKind.Unknown);
+    expect(result.hint).toBeTruthy();
+  });
 });

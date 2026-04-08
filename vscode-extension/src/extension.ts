@@ -902,17 +902,36 @@ export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent)
  *
  * Runs the binary with `--version` (fast probe, 3s timeout). On failure,
  * classifies the stderr output into an actionable diagnosis.
+ *
+ * When execFile fails with no stderr (e.g., ENOEXEC for wrong-arch or EACCES
+ * for permission denied), the OS never writes to stderr — the error code lives
+ * in err.code instead.  We synthesize a recognisable string so that
+ * classifyStartupError() returns the right kind rather than Unknown.
  */
 async function probeStartupFailure(serverPath: string): Promise<StartupErrorDiagnosis> {
     return new Promise(resolve => {
         execFile(serverPath, ['--version'], { timeout: 3000 }, (err: Error | null, stdout: string, stderr: string) => {
             const combined = [stderr, stdout].filter(Boolean).join('\n').trim();
             if (err) {
-                // Prefer the exec error message as context when stderr is empty
-                const diagInput = combined || err.message;
                 outputChannel.appendLine(`[startup-probe] Binary probe failed: ${err.message}`);
                 if (combined) {
                     outputChannel.appendLine(`[startup-probe] stderr: ${combined}`);
+                }
+
+                // When stderr is empty, infer from the OS error code so the
+                // classifier returns an actionable kind instead of Unknown.
+                const errCode = (err as NodeJS.ErrnoException).code;
+                let diagInput = combined;
+                if (!diagInput) {
+                    if (errCode === 'ENOEXEC') {
+                        // Kernel refused execve — wrong ELF machine type (arch mismatch)
+                        diagInput = 'cannot execute binary file: Exec format error';
+                    } else if (errCode === 'EACCES') {
+                        // Kernel refused execve — execute bit not set
+                        diagInput = 'Permission denied';
+                    } else {
+                        diagInput = err.message;
+                    }
                 }
                 resolve(classifyStartupError(diagInput));
             } else {
