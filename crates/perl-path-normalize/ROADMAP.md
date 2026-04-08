@@ -5,13 +5,13 @@
 ## Purpose
 Secure component-wise path normalization for workspace-relative paths.
 
-## Current Status (v0.10.0)
+## Current Status (workspace version)
 - **Status:** Initial Public Alpha
 - **Integration:** Shared by workspace-bound path security crates.
 
 ## Future Milestones
 
-### v0.10.x Hardening
+### Hardening
 - Add additional platform-focused tests for path component behavior.
 - Refine error messages for invalid relative path inputs.
 

@@ -5,6 +5,6 @@
 ## Purpose
 LSP request and file-input validation helpers.
 
-## Current Status (v0.10.0)
+## Current Status (workspace version)
 - **Status:** Initial Public Alpha
 - **Integration:** Shared by `perl-lsp`.
