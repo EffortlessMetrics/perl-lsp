@@ -78,12 +78,27 @@ worktree investigation:
 - dependencies group with 3 updates (#3183)
 - npm group in vscode-extension (#3178)
 
-## [0.12.2] - 2026-04-04
+## [0.12.2] - 2026-04-08
 
 `v0.12.2` is the confidence-building release for the 0.12.x series. 89 commits
 across 59 PRs spanning new features, performance, testing, distribution, and
 documentation. The entire 0.12.x roadmap from v0.12.2 through v0.12.8 milestones
 is consolidated into this single release.
+
+The v0.12.2 publish run extended the original GitHub Release with a wave of
+quality, distribution, and CI infrastructure work needed to land the full crate
+set on crates.io. 108 of 129 crates published successfully in the first attempt;
+the remaining 21 (including `tree-sitter-perl-c`, `tree-sitter-perl-rs`,
+`perl-parser`, `perl-lsp-rs`, `perllsp`, `perl-dap`) will retry after the HTTP
+429 throttle fix lands.
+
+### New Crates (first publish)
+
+- **`tree-sitter-perl-rs`**: v3 ergonomic facade over the native parser stack,
+  published alongside `tree-sitter-perl-c` for projects that want tree-sitter
+  call ergonomics on top of the Rust-native parser (#3255)
+- **`tree-sitter-perl-c`**: conventional C-binding crate for the tree-sitter
+  grammar, now publishable on crates.io (#3234)
 
 ### Added
 
@@ -163,6 +178,58 @@ is consolidated into this single release.
 - removed 8 unused dependencies across 6 crates (#3146)
 - dependabot: insta 1.47.1, proptest, tar, toml 1.1.0, uuid 1.23.0,
   actions/deploy-pages 5, codecov/codecov-action 6
+
+### Quality (publish-run additions)
+
+- **`eprintln!` → `tracing`**: migrated all `eprintln!` / `println!` calls in
+  library code to structured `tracing` spans/events; `eprintln!` now banned in
+  non-binary crates (#3224, #3245)
+- **unwrap burn-down**: Wave 2 (`perl-dap-security`) and Wave 3 (5 crates, 9
+  eliminations) converted `unwrap()`/`expect()` calls to `?` and pattern
+  matching (#3246 area)
+- **error message actionability**: user-visible LSP/DAP error messages rewritten
+  to be actionable — what failed, why, what to do next — ahead of v0.13.0
+  launch (#3291)
+- **crates.io metadata**: `description`, `keywords`, `categories`, `repository`,
+  `documentation`, `readme` fields polished across all publishable crates (#3234)
+- **docs.rs metadata**: `[package.metadata.docs.rs]` blocks added for
+  feature-gated crates (#3234)
+- **dead build.rs files removed**: stale `build.rs` files that caused publish
+  errors removed from 3 crates (#3217, #3241)
+- **stale harness crates archived**: dead tree-sitter harness crates moved to
+  `archive/` to reduce workspace noise (#3250, #3244)
+
+### CI (publish-run additions)
+
+- **publish topological sort**: dev-dependencies now included in the publish
+  order graph so crates publish in the correct dependency order (#3236, #3242)
+- **dev-dependency stripping**: `cargo publish` now strips `[dev-dependencies]`
+  before publishing to avoid version conflicts (#3254, #3256)
+- **`--allow-dirty` for publish**: added after dev-dep strip leaves the working
+  tree dirty (#3259)
+- **HTTP 429 throttle handling**: publish workflow detects crates.io rate-limit
+  responses and retries with back-off (pending)
+- **sparse index wait replaced**: replaced fixed-duration index wait with
+  sparse-index polling for faster, more reliable publish verification (#3267)
+- **UX regression gate**: PR check that detects regressions in user-visible LSP,
+  DAP, and extension behavior on every PR touching those surfaces (#3293)
+- **post-publish smoke test**: automated verification that published crates
+  install and the binary starts correctly after each publish run (#3288)
+- **version-bump automation centralized**: `just bump-version` now handles
+  Cargo.toml, extension package.json, and docs in one command (#3289)
+- **`just doctor`**: new workspace health-check recipe that validates the full
+  workspace is in a buildable state before starting a session (#3249)
+- **`vsce publish` idempotency**: marketplace publish step no longer fails on
+  re-run when the version already exists (#3187, #3267)
+
+### UX (publish-run additions)
+
+- **Settings schema polish**: VS Code extension settings schema updated for
+  launch-readiness — correct types, descriptions, and defaults (#3278)
+- **VS Code Marketplace punch list**: README badges, Open VSX registration,
+  extension icon, and feature highlights aligned for marketplace discovery
+  (#3284)
+- **test de-flake**: `empty_timer_reports_total` race condition fixed (#3278)
 
 ## [0.12.1] - 2026-03-30
 
