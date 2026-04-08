@@ -283,9 +283,11 @@ fn smoke_perl_lexer() {
 LIB_SMOKE_CODE["perl-token"]='
 #[test]
 fn smoke_perl_token() {
-    // TokenKind is the central type; ensure it can be constructed and compared
+    // TokenKind is the central type; ensure it can be constructed and compared.
+    // Use Eof — always present and a stable variant in the public API.
     use perl_token::TokenKind;
-    let _t = TokenKind::Whitespace;
+    let kind = TokenKind::Eof;
+    assert_eq!(kind.display_name(), "end of input");
 }
 '
 
@@ -421,6 +423,11 @@ mkdir -p "$TS_PROJ"
 if [[ "$SKIP_INSTALL" != "1" ]]; then
     (cd "$TS_PROJ" && cargo add "tree-sitter-perl-c@${VERSION}" --quiet 2>&1) || \
         fail "cargo add tree-sitter-perl-c@$VERSION for integration test" || true
+    # tree-sitter is a direct dependency: the integration test uses tree_sitter::Tree
+    # and tree_sitter::Parser types directly.  tree-sitter-perl-c re-exports none of
+    # them, so the consumer project must declare it explicitly.
+    (cd "$TS_PROJ" && cargo add tree-sitter --quiet 2>&1) || \
+        fail "cargo add tree-sitter for ts_integration project" || true
 fi
 
 cat > "$TS_PROJ/src/lib.rs" <<'TSEOF'
