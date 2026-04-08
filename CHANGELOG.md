@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- To be populated before announcement -->
 
-## [0.12.3] — TBD
+## [0.12.3] - 2026-04-08
 
-<!-- DRAFT — date TBD, will match release tag -->
-<!-- This is a confidence-builder release rolling up Wave 10/11/12 improvements since 0.12.2 -->
+<!-- Pipeline rehearsal release — validates the full publish + extension + Docker cycle before v0.13.0 public alpha -->
+<!-- Rolls up publish pipeline fixes, UX P0 improvements, and CI hardening from Waves 10/11/12 -->
 
 ### Headlines
 
@@ -212,6 +212,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tree-sitter` 0.26.7 → 0.26.8 (#3182)
 - dependencies group with 3 updates (#3183)
 - npm group in vscode-extension (#3178)
+
+### Publish pipeline fixes (post-v0.12.2 publish run lessons)
+
+These fixes landed after the initial v0.12.2 publish run and directly address the
+partial-publish (108/129) and cascading-failure patterns observed in production:
+
+- **HTTP 429 throttle** (#3307): publish workflow detects crates.io rate-limit
+  responses and retries with exponential back-off; the 21 crates that failed in
+  the v0.12.2 publish run were blocked by 429s from rapid-fire publish attempts.
+
+- **Publish allowlist extended** (#3296): `perl-workspace-index-monitoring` and
+  `perl-test-generators` added to the publish allow-list after they were found
+  missing from the v0.12.2 publish set.
+
+- **LICENSE files corrected** (#3304): missing or incorrect `LICENSE` files added
+  to 4 publishable crates (`perl-lsp-ai-provider`, `perl-workspace-index`,
+  `tree-sitter-perl-rs`, `tree-sitter-perl-c`); crates.io rejects publishes with
+  license-file fields pointing to absent files.
+
+- **Duplicate `[package.metadata.docs.rs]` key** (#3315): `tree-sitter-perl-c`
+  had two `[package.metadata.docs.rs]` tables in `Cargo.toml`; the duplicate key
+  caused `cargo publish` to emit a parse warning and was silently dropped, causing
+  docs.rs to build without the intended features. Resolved by merging the two
+  tables.
+
+- **Continue-on-failure** (#3316): publish loop now tracks failures in a
+  `FAILED_CRATES` array instead of `exit 1` immediately; all topologically-ready
+  crates are attempted even when an earlier crate fails. On v0.12.2 run
+  24126423987, 19 crates were blocked by a single cascade; on run 24133403944,
+  22 crates were blocked. Re-runs safely skip already-published crates via the
+  sparse-index check.
+
+- **`tree-sitter-perl-c` polish for first publish** (#3273): vendored sources and
+  FFI bindings verified clean for crates.io submission; duplicate metadata resolved
+  (#3315 above).
+
+- **docs.rs metadata** (#3299): `[package.metadata.docs.rs]` blocks added or
+  corrected for feature-gated crates across the workspace; enables docs.rs to
+  build documentation with the correct feature flags set.
+
+- **Publish dry-run gate** (#3301): new CI check runs `cargo publish --dry-run` on
+  every PR that modifies a `Cargo.toml`, catching publish-time errors (missing
+  files, bad metadata, syntax) before they reach the release pipeline.
+
+### UX fixes (P0 launch blockers)
+
+Five actionability fixes for user-visible error paths that surfaced during the
+v0.12.2 publish run and post-publish testing:
+
+- **Actionable binary download errors** (#3306): extension now shows a specific
+  message with platform, arch, and download URL when the LSP server binary cannot
+  be fetched, instead of a generic network failure.
+
+- **LSP startup error diagnosis** (#3308): `classifyStartupError()` maps stderr
+  signatures (GLIBC version mismatch, missing shared library, Exec format error,
+  permission denied) to actionable hints and remediation steps; reorders error
+  dialog actions so "View Logs" appears before "Reinstall".
+
+- **Workspace root detection warning** (#3309): when the workspace root cannot be
+  determined, the server now emits a `window/showMessage` warning with the detected
+  state instead of failing silently. Previously users had no indication of why
+  features were degraded.
+
+- **Enterprise binary distribution note** (#3310): documentation updated to
+  explain that `perllsp` is distributed as a pre-compiled binary via `cargo
+  install`, with offline-install guidance for air-gapped enterprise environments.
+
+- **Perl interpreter missing error** (#3312): when `perl` is not found on `$PATH`,
+  the extension shows the exact binary name searched and a platform-specific
+  installation suggestion, replacing the previous "Perl not found" dead end.
+
+### CI hardening
+
+- **SHA-pinned third-party Actions** (#3294): all `uses:` references to third-party
+  GitHub Actions pinned to immutable commit SHAs with version comments (e.g.,
+  `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2`).
+  Prevents supply-chain attacks via tag mutation.
+
+- **GIT_DIR cleared in hook-tests** (#3318): xtask hook-test scaffold now runs
+  with `GIT_DIR` unset, preventing the worktree's inherited `GIT_DIR` value from
+  causing git commands inside the temp repo to resolve against the wrong object
+  store. Observed contamination: test-repo commits were silently landing in the
+  agent worktree.
+
+- **UX regression gate** (#3293): new CI check detects regressions in user-visible
+  LSP, DAP, and extension behaviour on every PR that touches those surfaces.
+  Backed by the UX test harness framework (#3297).
+
+- **UX test harness framework** (#3297): systematic framework for UX regression
+  tests with helpers for LSP, DAP, and extension surface validation.
 
 ## [0.12.2] - 2026-04-08
 
