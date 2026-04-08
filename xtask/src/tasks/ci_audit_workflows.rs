@@ -9,7 +9,13 @@ use std::fs;
 
 use crate::utils::project_root;
 
-const ALLOWED_WORKFLOWS: &[&str] = &["ci.yml", "check-ignored.yml", "ci-security.yml"];
+const ALLOWED_WORKFLOWS: &[&str] = &[
+    "ci.yml",
+    "check-ignored.yml",
+    "ci-security.yml",
+    // Path-filtered to UX-relevant crates only; runs on all PRs touching LSP/DAP/extension
+    "ux-regression-gate.yml",
+];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
 
