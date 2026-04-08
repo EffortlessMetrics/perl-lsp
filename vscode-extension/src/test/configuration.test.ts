@@ -263,6 +263,25 @@ describe('package.json contributes', () => {
       }
     });
 
+    test('all settings have a description field (plain-text fallback for non-markdown contexts)', () => {
+      for (const [key, setting] of Object.entries<any>(properties)) {
+        expect(typeof setting.description).toBe('string');
+        expect(setting.description.length).toBeGreaterThan(10);
+      }
+    });
+
+    test('all settings have a type field', () => {
+      for (const [key, setting] of Object.entries<any>(properties)) {
+        expect(setting.type).toBeTruthy();
+      }
+    });
+
+    test('all settings have a default value', () => {
+      for (const [key, setting] of Object.entries<any>(properties)) {
+        expect(setting).toHaveProperty('default');
+      }
+    });
+
     // --- Individual setting contracts ---
 
     test('defines serverPath setting', () => {
@@ -371,6 +390,47 @@ describe('package.json contributes', () => {
       expect(setting).toBeDefined();
       expect(setting.type).toBe('boolean');
       expect(setting.default).toBe(true);
+    });
+
+    test('defines updateCheckInterval setting used by background update checker', () => {
+      const setting = properties['perl-lsp.updateCheckInterval'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('number');
+      expect(setting.default).toBe(24);
+      // minimum of 0 means "disable"
+      expect(setting.minimum).toBe(0);
+    });
+
+    test('defines autoUpdate setting used by silent updater', () => {
+      const setting = properties['perl-lsp.autoUpdate'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('boolean');
+      expect(setting.default).toBe(false);
+    });
+
+    test('machine-scoped settings use scope machine', () => {
+      // Settings that store binary/system paths must be machine-scoped so
+      // remote/container environments get the correct binary path.
+      const machineScoped = ['perl-lsp.serverPath', 'perl-lsp.downloadBaseUrl', 'perl-lsp.channel', 'perl-lsp.versionTag', 'perl-lsp.autoDownload', 'perl-lsp.updateCheckInterval', 'perl-lsp.autoUpdate'];
+      for (const key of machineScoped) {
+        expect(properties[key]?.scope).toBe('machine');
+      }
+    });
+
+    test('resource-scoped settings use scope resource', () => {
+      // Per-file/workspace settings should be resource-scoped so they can be
+      // overridden in workspace and folder settings.
+      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableDiagnostics', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.enableRefactoring', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
+      for (const key of resourceScoped) {
+        expect(properties[key]?.scope).toBe('resource');
+      }
+    });
+
+    test('disabledFeatures items have an enum for VS Code settings UI picker', () => {
+      const setting = properties['perl-lsp.disabledFeatures'];
+      expect(setting.items?.enum).toBeDefined();
+      expect(Array.isArray(setting.items.enum)).toBe(true);
+      expect(setting.items.enum.length).toBeGreaterThan(0);
     });
   });
 

@@ -74,10 +74,6 @@ enum CliCommand {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Benchmark pure-Rust and C parser implementations (multi-file, timed runs).
-    BenchmarkPureRustVsC,
-    /// Run simple benchmark comparison between pure-Rust and C parser implementations.
-    BenchmarkRustVsCSimple,
     /// Compare modern, C legacy, and parser outputs across sample snippets.
     RunComparison,
     /// Run quick parser benchmarks across preselected fixture files.
@@ -219,8 +215,6 @@ fn run() -> Result<i32> {
         CliCommand::TestIterativeParser => cmd_test_iterative_parser(&repo_root)?,
         CliCommand::CheckV2BundleSync => cmd_check_v2_bundle_sync(&repo_root)?,
         CliCommand::CompareBenchmarks { args } => cmd_compare_benchmarks(&repo_root, &args)?,
-        CliCommand::BenchmarkPureRustVsC => cmd_benchmark_pure_rust_vs_c(&repo_root)?,
-        CliCommand::BenchmarkRustVsCSimple => cmd_benchmark_rust_vs_c_simple(&repo_root)?,
         CliCommand::RunComparison => cmd_run_comparison(&repo_root)?,
         CliCommand::QuickBench => cmd_quick_bench(&repo_root)?,
         CliCommand::SimpleBench => cmd_simple_bench(&repo_root)?,
@@ -745,168 +739,6 @@ fn cmd_check_v2_bundle_sync(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn cmd_benchmark_pure_rust_vs_c(repo_root: &Path) -> Result<i32> {
-    println!("=== Pure Rust (Pest) vs C Parser Benchmark ===");
-    println!("Building both implementations...");
-
-    let rust_parser =
-        repo_root.join("archive/crates/tree-sitter-perl-rs/target/release/parse-rust");
-    let c_parser = repo_root.join("crates/tree-sitter-perl-c/target/release/parse_c");
-
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-rs", "--bin", "parse-rust"],
-        &[],
-    )?;
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-c", "--bin", "parse_c"],
-        &[],
-    )?;
-
-    let workspace =
-        repo_root.join("target").join("perl-ci-hygiene").join("benchmark_pure_rust_vs_c");
-    fs::create_dir_all(&workspace).with_context(|| format!("creating {}", workspace.display()))?;
-
-    let test_simple = workspace.join("test_simple.pl");
-    let test_medium = workspace.join("test_medium.pl");
-    fs::write(&test_simple, "print \"Hello, World!\\n\";\n")?;
-    fs::write(
-        &test_medium,
-        r#"#!/usr/bin/env perl
-use strict;
-use warnings;
-
-my $scalar = "test";
-my @array = (1, 2, 3, 4, 5);
-my %hash = (a => 1, b => 2);
-
-my $ref = \$scalar;
-my $aref = \@array;
-my $href = \%hash;
-
-my $octal = 0o755;
-print "..." if $scalar;
-
-my $π = 3.14159;
-my $café = "coffee";
-
-sub process {
-    my ($x, $y) = @_;
-    return $x + $y;
-}
-
-for my $i (1..10) {
-    print "$i\\n" if $i % 2 == 0;
-}
-"#,
-    )?;
-
-    println!();
-    println!("Running benchmarks...");
-    println!("File,Pure_Rust_Time(ms),C_Time(ms),Rust/C_Ratio");
-
-    let files = vec![
-        ("test_simple.pl", test_simple),
-        ("test_medium.pl", test_medium),
-        ("examples/hello.pl", repo_root.join("examples/hello.pl")),
-    ];
-    for (name, file) in files {
-        if !file.is_file() {
-            continue;
-        }
-        let rust_ms = benchmark_average_ms(repo_root, &rust_parser, &file, 10)?;
-        let c_ms = benchmark_average_ms(repo_root, &c_parser, &file, 10)?;
-        let ratio = if c_ms > 0.0 { rust_ms / c_ms } else { f64::INFINITY };
-        println!("{},{rust_ms:.3},{c_ms:.3},{ratio:.2}", name);
-    }
-
-    Ok(0)
-}
-
-fn cmd_benchmark_rust_vs_c_simple(repo_root: &Path) -> Result<i32> {
-    println!("=== Pure Rust (Pest) vs C Parser Benchmark ===");
-    println!();
-
-    let rust_parser =
-        repo_root.join("archive/crates/tree-sitter-perl-rs/target/release/parse-rust");
-    let c_parser = repo_root.join("crates/tree-sitter-perl-c/target/release/parse_c");
-    let workspace =
-        repo_root.join("target").join("perl-ci-hygiene").join("benchmark_rust_vs_c_simple");
-    fs::create_dir_all(&workspace)?;
-
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-rs", "--bin", "parse-rust"],
-        &[],
-    )?;
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-c", "--bin", "parse_c"],
-        &[],
-    )?;
-
-    let benchmark_file = workspace.join("test_benchmark.pl");
-    fs::write(
-        &benchmark_file,
-        r#"#!/usr/bin/env perl
-use strict;
-use warnings;
-
-my $scalar = "Hello, World!";
-my @array = (1..10);
-my %hash = map { $_ => $_ * 2 } 1..5;
-
-my $sref = \$scalar;
-my $aref = \@array;
-my $href = \%hash;
-
-my $perms = 0o755;
-my $old_perms = 0755;
-
-sub todo {
-    ...
-}
-
-my $π = 3.14159;
-my $café = "coffee shop";
-sub 日本語 { return "Japanese" }
-
-for my $i (@array) {
-    print "$i\\n" if $i % 2 == 0;
-}
-
-my $text = "foo bar baz";
-$text =~ s/foo/FOO/g;
-
-1;
-"#,
-    )?;
-
-    println!("Running 5 iterations each...");
-    println!();
-    println!("Pure Rust (Pest) Parser:");
-    for i in 1..=5 {
-        let time_ms = timed_file_run_ms(repo_root, &rust_parser, &benchmark_file)?;
-        println!("  Run {i}: {:.3}s", time_ms / 1000.0);
-    }
-
-    println!();
-    println!("C Parser:");
-    for i in 1..=5 {
-        let time_ms = timed_file_run_ms(repo_root, &c_parser, &benchmark_file)?;
-        println!("  Run {i}: {:.3}s", time_ms / 1000.0);
-    }
-
-    println!();
-    println!("Note: Times include process startup overhead");
-    Ok(0)
-}
-
 fn cmd_run_comparison(repo_root: &Path) -> Result<i32> {
     println!("=== Three-Way Parser Comparison ===");
     println!("Comparing: Pure Rust vs Legacy C vs Modern Parser");
@@ -1274,20 +1106,6 @@ fn timed_file_run_ms(repo_root: &Path, parser: &Path, file: &Path) -> Result<f64
             file.display()
         ))
     }
-}
-
-fn benchmark_average_ms(
-    repo_root: &Path,
-    parser: &Path,
-    file: &Path,
-    iterations: usize,
-) -> Result<f64> {
-    let mut total_ms = 0.0;
-    for _ in 0..iterations {
-        let elapsed_ms = timed_file_run_ms(repo_root, parser, file)?;
-        total_ms += elapsed_ms;
-    }
-    Ok(total_ms / iterations as f64)
 }
 
 fn cmd_cargo_package_workspace_dry_run(repo_root: &Path, crates: &[String]) -> Result<i32> {
@@ -2017,12 +1835,6 @@ if [ "$GATE_STATUS" -ne 0 ]; then
         echo "   • Known: Windows file-lock race in ci-parser-features-check (#3202)"
         echo "     Workaround: re-run the gate, or use --no-verify if you're confident"
         echo "     your change is unrelated to xtask/parser-features."
-        HINTED=true
-    fi
-    if grep -q 'hook-tests' "$GATE_LOG" 2>/dev/null; then
-        echo "   • Known: hook-tests can scribble on real workspace files (#3203)"
-        echo "     Workaround: re-run, or skip with --no-verify if your change"
-        echo "     is unrelated to crates/perl-ci-hygiene."
         HINTED=true
     fi
     if grep -qE 'cargo (xtask )?fmt.*--check' "$GATE_LOG" 2>/dev/null && \
@@ -4230,10 +4042,6 @@ mod tests {
         // When the gate fails, the hook should hint at known issues so
         // contributors can recognize them instead of bypassing in confusion.
         assert!(hook.contains("#3202"), "hook must mention issue #3202 (Windows file-lock race)");
-        assert!(
-            hook.contains("#3203"),
-            "hook must mention issue #3203 (hook-tests isolation leak)"
-        );
         assert!(
             hook.contains("cargo xtask fmt") || hook.contains("cargo fmt"),
             "hook must suggest the fmt fix command on fmt failures"

@@ -1,0 +1,120 @@
+name: UX Bug Report
+description: Something a user sees, clicks, or gets stuck on
+title: "[ux] "
+labels: ["ux"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a UX issue. The goal is to make Perl LSP work well for every developer on first use.
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      description: Describe the behavior you expected.
+      placeholder: "I expected the extension to show completions when I typed ->"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Describe what actually happened.
+      placeholder: "Nothing appeared, and there was no error message explaining why."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Install the extension from the VSCode marketplace
+        2. Open a .pl file containing: `my $obj = Foo->new(); $obj->`
+        3. Place the cursor after `->` and wait 2 seconds
+        4. No completions appear
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - WSL (Windows Subsystem for Linux)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VSCode version
+      description: "Help > About > Version"
+      placeholder: "e.g. 1.88.0"
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      description: Found in the Extensions panel next to Perl LSP
+      placeholder: "e.g. 0.12.2"
+    validations:
+      required: true
+
+  - type: input
+    id: perl-version
+    attributes:
+      label: Perl version
+      description: Output of `perl -v`
+      placeholder: "e.g. v5.38.2 built for x86_64-linux"
+    validations:
+      required: true
+
+  - type: input
+    id: perltidy-version
+    attributes:
+      label: perltidy version (optional)
+      description: Output of `perltidy --version`, if installed
+      placeholder: "e.g. perltidy 20230309"
+
+  - type: input
+    id: perlcritic-version
+    attributes:
+      label: perlcritic version (optional)
+      description: Output of `perlcritic --version`, if installed
+      placeholder: "e.g. 1.152"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: Run "Perl LSP: Show Logs" from the VSCode command palette and paste the output here.
+      placeholder: "Run 'Perl LSP: Show Logs' from command palette and paste output here"
+      render: text
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots (optional)
+      description: Drag and drop screenshots or screen recordings here to help illustrate the issue.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity self-assessment
+      description: How did this affect your work?
+      options:
+        - "blocker — I uninstalled or gave up"
+        - "friction — annoying but I worked around it"
+        - "polish — minor, barely noticeable"
+    validations:
+      required: true

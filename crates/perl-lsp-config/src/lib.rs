@@ -408,10 +408,14 @@ pub fn load_project_config(
     let path = workspace_root.join(".perl-lsp.toml");
     match std::fs::read_to_string(&path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("Failed to read .perl-lsp.toml: {}", e)),
+        Err(e) => Err(format!(
+            "Could not read .perl-lsp.toml: {}. \
+             Check that the file is readable and not locked by another process.",
+            e
+        )),
         Ok(content) => toml::from_str::<ProjectConfig>(&content)
             .map(Some)
-            .map_err(|e| format!(".perl-lsp.toml parse error: {}", e)),
+            .map_err(|e| format!(".perl-lsp.toml has a syntax error: {}", e)),
     }
 }
 

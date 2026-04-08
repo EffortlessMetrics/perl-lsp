@@ -1,6 +1,6 @@
 [package]
 name = "perl-test-must"
-version = "0.12.2"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -9,6 +9,9 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/perl-test-must"
+keywords = ["perl", "testing", "test-helpers", "must", "assertions"]
+categories = ["development-tools::testing"]
 
 [lib]
 doctest = false

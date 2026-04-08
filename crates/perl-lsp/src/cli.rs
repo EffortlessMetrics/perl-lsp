@@ -346,7 +346,11 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
-                    eprintln!("Failed to create Tokio runtime: {e}");
+                    eprintln!(
+                        "Perl Language Server failed to start: could not initialize the async \
+                         runtime ({e}). This is usually caused by system resource limits. \
+                         Try restarting VS Code or increasing your OS thread limits."
+                    );
                     process::exit(1);
                 }
             };
@@ -380,7 +384,11 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
-                    eprintln!("Failed to create Tokio runtime: {e}");
+                    eprintln!(
+                        "Perl Language Server failed to start: could not initialize the async \
+                         runtime ({e}). This is usually caused by system resource limits. \
+                         Try restarting VS Code or increasing your OS thread limits."
+                    );
                     process::exit(1);
                 }
             };
@@ -395,7 +403,10 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
                                 port_in_use_message(port).replace("perl-lsp", &command_name)
                             );
                         } else {
-                            eprintln!("Failed to bind to {addr}: {e}");
+                            eprintln!(
+                                "Perl Language Server could not listen on {addr}: {e}. \
+                                 Try a different port with --port or check firewall settings."
+                            );
                         }
                         process::exit(1);
                     }
@@ -403,7 +414,10 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
                 let local_addr = match listener.local_addr() {
                     Ok(a) => a,
                     Err(e) => {
-                        eprintln!("Failed to get local address: {e}");
+                        eprintln!(
+                            "Perl Language Server started but could not determine its \
+                             listening address: {e}."
+                        );
                         process::exit(1);
                     }
                 };

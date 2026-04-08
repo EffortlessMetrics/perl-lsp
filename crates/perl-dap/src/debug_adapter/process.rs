@@ -169,7 +169,12 @@ impl DebugAdapter {
                     success: false,
                     command: "launch".to_string(),
                     body: None,
-                    message: Some(format!("Failed to launch debugger: {}", e)),
+                    message: Some(format!(
+                        "Cannot start Perl debugger: {}. \
+                         Check that 'perl' is on your PATH and that the file exists. \
+                         You can set a custom interpreter path in your launch.json.",
+                        e
+                    )),
                 },
             }
         } else {
@@ -179,7 +184,11 @@ impl DebugAdapter {
                 success: false,
                 command: "launch".to_string(),
                 body: None,
-                message: Some("Missing launch arguments".to_string()),
+                message: Some(
+                    "Debugger launch failed: no launch configuration was provided. \
+                     Add a launch.json with a 'program' field pointing to your Perl script."
+                        .to_string(),
+                ),
             }
         }
     }
@@ -200,7 +209,11 @@ impl DebugAdapter {
 
         // Reject empty or whitespace-only paths
         if program.is_empty() {
-            return Err("Program path cannot be empty".to_string());
+            return Err(
+                "No Perl script was specified. Set the 'program' field in your launch.json \
+                 to the path of the script you want to debug."
+                    .to_string(),
+            );
         }
 
         // Validate that the program is a regular file (not a directory, device, etc.)
@@ -212,11 +225,19 @@ impl DebugAdapter {
         match std::fs::metadata(path) {
             Ok(metadata) => {
                 if !metadata.is_file() {
-                    return Err(format!("Program path is not a regular file: {}", program));
+                    return Err(format!(
+                        "'{}' is not a file. Update the 'program' field in your launch.json \
+                         to point to a Perl script (.pl or .t).",
+                        program
+                    ));
                 }
             }
             Err(e) => {
-                return Err(format!("Could not access program file '{}': {}", program, e));
+                return Err(format!(
+                    "Cannot find '{}': {}. \
+                     Check that the 'program' path in your launch.json is correct.",
+                    program, e
+                ));
             }
         }
 
@@ -225,8 +246,14 @@ impl DebugAdapter {
         let workspace_root =
             lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root").clone();
         if let Some(root) = workspace_root.as_ref() {
-            security::validate_path(path, root)
-                .map_err(|e| format!("Security check failed: {}", e))?;
+            security::validate_path(path, root).map_err(|e| {
+                format!(
+                    "The script '{}' is outside your workspace folder. \
+                     Only scripts within the open workspace can be debugged. \
+                     Details: {}",
+                    program, e
+                )
+            })?;
         }
 
         let mut cmd = Command::new("perl");
@@ -271,7 +298,11 @@ impl DebugAdapter {
                 if let Ok(mut guard) = self.session.lock() {
                     *guard = Some(session);
                 } else {
-                    return Err("Failed to lock session".to_string());
+                    return Err(
+                        "Debugger could not be started: an internal state error occurred. \
+                         Try stopping the debug session and relaunching."
+                            .to_string(),
+                    );
                 }
 
                 // Apply any function breakpoints configured before launch.
@@ -1007,11 +1038,16 @@ impl DebugAdapter {
                         command: "attach".to_string(),
                         body: None,
                         message: Some(format!(
-                            "Failed to connect to {}:{} ({}ms timeout): {}",
+                            "Cannot attach to Perl debugger at {}:{} ({}ms timeout): {}. \
+                             Make sure the Perl process was started with \
+                             'PERLDB_OPTS=\"RemotePort={}:{}\"' \
+                             and is still running before attaching.",
                             config.host,
                             config.port,
                             config.timeout_ms.unwrap_or(30000),
-                            e
+                            e,
+                            config.host,
+                            config.port,
                         )),
                     },
                 }
@@ -1407,7 +1443,9 @@ impl DebugAdapter {
                         command: "restart".to_string(),
                         body: None,
                         message: Some(
-                            "No previous launch configuration available for restart".to_string(),
+                            "Cannot restart: no previous launch configuration found. \
+                             Start a debug session first, then use Restart."
+                                .to_string(),
                         ),
                     };
                 }

@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-rs/tests/snapshots.rs
+expression: sexp
+---
+(source_file (my_declaration (variable $ text)(heredoc_interpolated "END" "hello world")))

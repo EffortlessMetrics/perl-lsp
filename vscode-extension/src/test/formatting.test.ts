@@ -48,7 +48,7 @@ describe('handleFormattingError', () => {
         const ch = makeOutputChannel();
         handleFormattingError('perltidy not found: /usr/bin/perltidy', ch as any);
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-            expect.stringContaining('perltidy is not installed'),
+            expect.stringContaining('perltidy, which was not found on PATH'),
             'Run Health Check'
         );
     });

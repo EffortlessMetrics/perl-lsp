@@ -34,10 +34,10 @@ fn test_launch_rejects_path_traversal() -> Result<(), Box<dyn std::error::Error>
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should have failed due to path traversal/workspace escape");
             let msg = must_some(message);
-            assert!(msg.contains("Security check failed"), "Unexpected error message: {}", msg);
             assert!(
-                msg.contains("outside workspace"),
-                "Error should indicate path is outside workspace"
+                msg.contains("outside your workspace folder") || msg.contains("outside workspace"),
+                "Unexpected error message: {}",
+                msg
             );
         }
         _ => return Err("Expected Response message".into()),
@@ -73,7 +73,7 @@ fn test_launch_allows_valid_path() -> Result<(), Box<dyn std::error::Error>> {
             if !success {
                 let msg = message.clone().unwrap_or_default();
                 assert!(
-                    !msg.contains("outside workspace") && !msg.contains("Security check failed"),
+                    !msg.contains("outside workspace") && !msg.contains("outside your workspace"),
                     "Valid path rejected by security check: {msg}"
                 );
             }

@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-rs/tests/snapshots.rs
+expression: sexp
+---
+(source_file (sub foo ()(block (return (binary_+ (binary_[] (variable $ _) (number 0)) (number 1))))))

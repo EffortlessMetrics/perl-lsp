@@ -1570,7 +1570,12 @@ impl LspServer {
                         Err(e) => {
                             return Err(JsonRpcError {
                                 code: -32603,
-                                message: format!("Failed to launch debugger: {}", e),
+                                message: format!(
+                                    "Cannot start Perl debugger for '{}': {}. \
+                                     Check that 'perl' is on your PATH and that the file exists.",
+                                    resolved.display(),
+                                    e
+                                ),
                                 data: Some(json!({"file": resolved.display().to_string()})),
                             });
                         }

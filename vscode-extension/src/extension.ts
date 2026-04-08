@@ -96,13 +96,24 @@ export async function activate(context: vscode.ExtensionContext) {
     
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         if (!currentServerPath) {
-            vscode.window.showErrorMessage('Perl LSP server path is unavailable.');
+            vscode.window.showErrorMessage(
+                'Perl Language Server is not running. Restart the server or check the Output panel for startup errors.',
+                'Restart Server', 'Show Output'
+            ).then(sel => {
+                if (sel === 'Restart Server') { void vscode.commands.executeCommand('perl-lsp.restart'); }
+                if (sel === 'Show Output') { outputChannel.show(); }
+            });
             return;
         }
 
         execFile(currentServerPath, ['--version'], (error: Error | null, stdout: string) => {
             if (error) {
-                vscode.window.showErrorMessage(`Failed to get version: ${error.message}`);
+                vscode.window.showErrorMessage(
+                    `Could not get Perl LSP version: ${error.message}. The server binary may be missing or corrupt — try reinstalling.`,
+                    'Reinstall'
+                ).then(sel => {
+                    if (sel === 'Reinstall') { void vscode.commands.executeCommand('perl-lsp.reinstall'); }
+                });
                 return;
             }
 
@@ -1124,7 +1135,10 @@ async function showIncPaths(): Promise<void> {
     return new Promise(resolve => {
         execFile('perl', ['-e', 'print join("\\n", @INC)'], { timeout: 5000 }, (error, stdout) => {
             if (error) {
-                vscode.window.showErrorMessage(`Failed to get @INC: ${error.message}`).then(() => {
+                vscode.window.showErrorMessage(
+                    `Could not read Perl @INC paths: ${error.message}. ` +
+                    `Make sure 'perl' is installed and on your PATH, or set perl-lsp.includePaths in settings.`
+                ).then(() => {
                     resolve();
                 });
                 return;
@@ -1226,9 +1240,13 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
     const downloadedPath = await downloader.ensureBinary(true);
 
     if (!downloadedPath) {
-        vscode.window.showErrorMessage('Failed to reinstall perl-lsp. See output for details.', 'Show Output').then(selection => {
-            if (selection === 'Show Output') {
-                outputChannel.show();
+        vscode.window.showErrorMessage(
+            'Could not reinstall perl-lsp. Check your internet connection and proxy settings, then try again.',
+            'Show Output', 'Open Settings'
+        ).then(selection => {
+            if (selection === 'Show Output') { outputChannel.show(); }
+            if (selection === 'Open Settings') {
+                void vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
             }
         });
         return;
@@ -1237,9 +1255,13 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
     currentServerPath = downloadedPath;
     const healthOk = await runHealthCheck(downloadedPath);
     if (!healthOk) {
-        vscode.window.showErrorMessage('Downloaded perllsp failed its health check.', 'Show Output').then(selection => {
-            if (selection === 'Show Output') {
-                outputChannel.show();
+        vscode.window.showErrorMessage(
+            'The downloaded perl-lsp binary failed its health check — it may be corrupted or incompatible with your platform.',
+            'Show Output', 'Report Issue'
+        ).then(selection => {
+            if (selection === 'Show Output') { outputChannel.show(); }
+            if (selection === 'Report Issue') {
+                void vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp/issues'));
             }
         });
         return;

@@ -660,6 +660,28 @@ ci-measure:
     @echo "Measuring CI lane runtimes..."
     @cargo xtask ci-measure
 
+# ============================================================================
+# UX Regression Tests (first-5-minutes user experience)
+# ============================================================================
+
+# Run UX regression test suite (depends on crates/perl-lsp-ux-tests/ landing)
+# Categories: startup, first-open, missing-dep, bad-config, protocol-handling, error-messages
+ux-tests:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    if ! cargo metadata --no-deps --quiet 2>/dev/null | python3 -c \
+        "import json,sys; pkgs=json.load(sys.stdin)['packages']; \
+         names=[p['name'] for p in pkgs]; \
+         sys.exit(0 if 'perl-lsp-ux-tests' in names else 1)"; then
+        echo "ERROR: crates/perl-lsp-ux-tests not found in workspace"
+        echo "  The UX test harness has not yet been scaffolded."
+        echo "  Waiting for the perl-lsp-ux-tests crate to land before running UX tests."
+        exit 1
+    fi
+    echo "Running UX regression tests (perl-lsp-ux-tests)..."
+    cargo test -p perl-lsp-ux-tests --locked -- --test-threads=2
+    echo "UX regression tests passed"
+
 # Fast merge gate on MSRV (~2-5 min) - proves 1.92 compatibility
 ci-gate-msrv:
     @echo "🚪 Running fast merge gate on MSRV (Rust 1.92)..."
@@ -1950,6 +1972,41 @@ release-build:
 version-check:
     @cargo xtask check-version-sync
 
+# Bump the workspace version across every tracked site.
+#
+# Usage: just bump-version 0.13.0
+#
+# Updates in one pass (via `cargo xtask bump-version`):
+#   - [workspace.package] version in Cargo.toml
+#   - All [workspace.dependencies] version fields in Cargo.toml
+#   - vscode-extension/package.json (and package-lock.json if present)
+#   - features.toml [meta] version
+#   - Documentation version references (README.md, CLAUDE.md, ROADMAP.md)
+#
+# Crate-level Cargo.toml files use `version.workspace = true` and are
+# updated automatically through the workspace, so they are not touched.
+#
+# Does NOT commit or push. Review the diff and commit when satisfied.
+# Then tag the release and push — CI runs the publish workflow.
+bump-version VERSION:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Bumping workspace version to {{VERSION}} ..."
+    cargo xtask bump-version "{{VERSION}}"
+    echo ""
+    echo "Running cargo check to regenerate Cargo.lock ..."
+    cargo check --workspace --quiet
+    echo ""
+    echo "Version bump complete. Changed files:"
+    git diff --name-only
+    echo ""
+    echo "Next steps:"
+    echo "  1. Review the diff: git diff"
+    echo "  2. Commit: git commit -am 'chore(release): bump version to {{VERSION}}'"
+    echo "  3. Push and open PR"
+    echo "  4. After merge, tag: git tag v{{VERSION}} && git push origin v{{VERSION}}"
+    echo "  5. CI publish workflow triggers automatically on the tag"
+
 # Turnkey PR-driven release orchestrator for 0.x.y releases.
 release-turnkey VERSION *ARGS="":
     @cargo xtask release-turnkey "{{VERSION}}" {{ARGS}}
@@ -1961,6 +2018,15 @@ publish-release VERSION *ARGS="":
 # Run post-release installed-binary smoke test for a release version.
 smoke-test-release VERSION:
     @cargo xtask smoke-test-release "{{VERSION}}"
+
+# Verify a published version is installable and functional end-to-end.
+# Installs binary crates, exercises library crates in a fresh downstream project,
+# and runs tree-sitter-perl-c / perl-parser integration tests.
+# Uses a clean tempdir — no Docker required.
+#
+# Example: just smoke-test 0.12.2
+smoke-test VERSION:
+    @bash scripts/post-publish-smoke.sh "{{VERSION}}"
 
 # Release gate: full validation for release candidates (~10 min)
 # Composes: ci-gate + release-specific checks

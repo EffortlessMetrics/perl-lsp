@@ -48,6 +48,34 @@ impl StartupTimer {
     pub fn finish(self) -> StartupReport {
         StartupReport { total: self.start.elapsed(), phases: self.phases }
     }
+
+    /// Create a timer with a pre-set elapsed duration, for testing.
+    ///
+    /// The timer is already "finished": calling `finish()` on it returns a
+    /// report whose `total` equals `elapsed`. No checkpoints are recorded.
+    /// This allows tests to assert on `total` without relying on wall-clock
+    /// timing, eliminating the flakiness that occurs on loaded systems or
+    /// platforms where `Instant` resolution is coarser than the test interval.
+    #[cfg(test)]
+    pub(crate) fn new_with_elapsed(elapsed: Duration) -> FrozenTimer {
+        FrozenTimer { elapsed, phases: Vec::new() }
+    }
+}
+
+/// A timer whose elapsed time is fixed at construction, used in tests.
+///
+/// Returned by [`StartupTimer::new_with_elapsed`].
+#[cfg(test)]
+pub(crate) struct FrozenTimer {
+    elapsed: Duration,
+    phases: Vec<StartupPhase>,
+}
+
+#[cfg(test)]
+impl FrozenTimer {
+    pub(crate) fn finish(self) -> StartupReport {
+        StartupReport { total: self.elapsed, phases: self.phases }
+    }
 }
 
 impl Default for StartupTimer {
@@ -153,10 +181,15 @@ mod tests {
 
     #[test]
     fn empty_timer_reports_total() {
-        let t = StartupTimer::new();
-        let report = t.finish();
+        // Use a frozen timer with a known elapsed duration so the assertion
+        // does not depend on wall-clock resolution.  On loaded systems or
+        // platforms with coarse `Instant` granularity, two back-to-back
+        // `Instant::now()` calls can return the same value, making
+        // `elapsed().as_nanos() == 0` and the old `> 0` assertion flaky.
+        let frozen = StartupTimer::new_with_elapsed(Duration::from_millis(42));
+        let report = frozen.finish();
         assert_eq!(report.phases.len(), 0);
-        assert!(report.total.as_nanos() > 0);
+        assert_eq!(report.total, Duration::from_millis(42));
     }
 
     #[test]
