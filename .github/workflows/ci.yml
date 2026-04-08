@@ -251,6 +251,6 @@ jobs:
 
       - name: Run UX regression tests
         env:
-          PERL_LSP_BIN: target/debug/perl-lsp
+          PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
           RUST_TEST_THREADS: "1"
         run: just ux-tests
