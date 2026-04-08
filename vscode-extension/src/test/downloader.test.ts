@@ -757,3 +757,180 @@ describe('checkForUpdateSilent', () => {
     expect(ensureSpy).toHaveBeenCalledWith(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// ensureBinary error classification — actionable messages (#3274)
+// ---------------------------------------------------------------------------
+describe('ensureBinary error classification', () => {
+  let ctx: any;
+  let outputChannel: any;
+  let downloader: BinaryDownloader;
+
+  function makeFullContext(storagePath?: string): any {
+    const dir = storagePath ?? fs.mkdtempSync(path.join(os.tmpdir(), 'dl-err-'));
+    const store = new Map<string, unknown>();
+    return {
+      globalStorageUri: { fsPath: dir },
+      extensionPath: dir,
+      subscriptions: [],
+      globalState: {
+        get: jest.fn((key: string, defaultValue?: unknown) =>
+          store.has(key) ? store.get(key) : defaultValue
+        ),
+        update: jest.fn(() => Promise.resolve()),
+        _store: store,
+      },
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    ctx = makeFullContext();
+    outputChannel = { appendLine: jest.fn(), show: jest.fn(), dispose: jest.fn() };
+    downloader = new BinaryDownloader(ctx, outputChannel);
+
+    // Prevent actual download attempts
+    jest.spyOn(downloader as any, 'downloadWithProgress').mockRejectedValue(
+      new Error('placeholder')
+    );
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(ctx.globalStorageUri.fsPath, { recursive: true, force: true });
+    } catch (_e) { /* ignore */ }
+    jest.restoreAllMocks();
+  });
+
+  function setupDownloadError(errorMessage: string) {
+    jest.spyOn(downloader as any, 'downloadWithProgress').mockRejectedValue(
+      new Error(errorMessage)
+    );
+  }
+
+  test('network timeout shows message containing proxy/VPN guidance and manual install path', async () => {
+    setupDownloadError('Download timeout after 30 seconds');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      expect.stringMatching(/proxy|VPN|network/i),
+      expect.anything(),
+      expect.anything()
+    );
+    // Must mention the manual install setting
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('ETIMEDOUT shows message containing proxy/VPN guidance and manual install path', async () => {
+    setupDownloadError('connect ETIMEDOUT 140.82.121.3:443');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/proxy|VPN|network/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('ECONNREFUSED shows message containing proxy/VPN guidance and manual install path', async () => {
+    setupDownloadError('connect ECONNREFUSED 127.0.0.1:443');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('arch mismatch shows message naming the attempted target', async () => {
+    setupDownloadError('No binary found for platform: arm64-unknown-linux-gnu. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    // Must include the platform string and the manual install setting
+    expect(call[0]).toMatch(/arm64-unknown-linux-gnu/);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('HTTP 403 rate limit shows GitHub rate limit guidance', async () => {
+    setupDownloadError('Failed to download: HTTP 403');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/403|rate.?limit|GITHUB_TOKEN/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('HTTP 404 shows not-found guidance with download URL', async () => {
+    setupDownloadError('Failed to download: HTTP 404');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/404|not found/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('checksum failure shows corruption message and retry guidance', async () => {
+    setupDownloadError('Security check failed: Checksum verification failed (file may be corrupted or tampered with).');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/checksum|corrupt|retry/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('unknown error still mentions manual install path', async () => {
+    setupDownloadError('some unexpected error occurred');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('error message always offers "Install Manually" button', async () => {
+    setupDownloadError('some unexpected error occurred');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    const buttons: string[] = call.slice(1);
+    expect(buttons).toContain('Install Manually');
+  });
+
+  test('"Install Manually" button opens the manual install URL', async () => {
+    setupDownloadError('some unexpected error occurred');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue('Install Manually');
+
+    await downloader.ensureBinary();
+
+    expect(vscode.env.openExternal).toHaveBeenCalledWith(
+      expect.objectContaining({ toString: expect.any(Function) })
+    );
+    const uriArg = vscode.env.openExternal.mock.calls[0][0];
+    expect(uriArg.toString()).toMatch(/github\.com.*perl-lsp/i);
+  });
+});
