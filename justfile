@@ -58,6 +58,11 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     exit $RC
 
+# Pre-merge guard: verify a PR is not draft, has merge-ready label, and title has (#NNN)
+# Usage: just pre-merge-check 3291
+pre-merge-check NUMBER:
+    bash scripts/pre-merge-check.sh {{NUMBER}}
+
 # Tier: Merge-gate (required before merge to master ~3-5 min)
 merge-gate: _check-tools-basic pr-fast
     #!/usr/bin/env bash

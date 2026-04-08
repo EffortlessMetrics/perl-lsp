@@ -83,6 +83,49 @@ with no visibility.
 
 ---
 
+## Ops Pre-Merge Guard
+
+Hard-won lessons from the swarm pipeline. Each section is a pattern that caused real failures.
+
+## §1 — Ops pre-merge guard
+
+Before merging any PR, run the pre-merge check. It catches three failure modes that wasted CI cycles across multiple sessions:
+
+```bash
+just pre-merge-check <pr-number>
+# or: bash scripts/pre-merge-check.sh <pr-number>
+```
+
+Fails non-zero (skip this PR) if any of:
+
+- **Draft state**: `isDraft: true` — PR is still in review, not ready.
+- **Missing label**: No `merge-ready` label — must pass through reviewer → `/pr-ready`.
+- **Missing issue ref**: Title lacks `(#NNN)` — CI `validate-title` will block the merge anyway.
+
+Source: draft/label race hit 5 PRs in the 2026-04-08 session (issues #3321, feedback_pr_draft_label_race.md, feedback_validate_title_issue_ref.md).
+
+## §2 — Two-pass review is mandatory
+
+Every PR needs both reviewer (haiku, standards) and reviewer-deep (sonnet, correctness). Two-pass review caught 4 real bugs at 12-16x ROI. Never merge on `merge-ready` alone — verify `reviewed-deep` label is also present.
+
+## §3 — Merge in batches of 3
+
+Merging faster than 3 causes CI cancellation cascade — rapid merges cancel each other's CI runs. Max 3 per batch.
+
+## §4 — CARGO_TARGET_DIR isolation per worktree
+
+Each agent worktree must set `CARGO_TARGET_DIR` to a per-branch path under `/tmp/`. Shared build artifact directories cause cross-contamination between concurrent agents.
+
+## §5 — Draft/label race
+
+`isDraft` and `merge-ready` are independent signals. A PR can have `merge-ready` while still in draft. The pre-merge guard (§1) catches this before CI is even invoked.
+
+## §6 — validate-title CI check
+
+CI enforces `(#NNN)` at the end of PR titles. If a PR title lacks this, the merge will fail at CI. The pre-merge guard (§1) catches this early.
+
+---
+
 ## See Also
 
 - [`LESSONS.md`](../project/LESSONS.md) — Incident post-mortems
