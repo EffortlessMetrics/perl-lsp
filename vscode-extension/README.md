@@ -82,6 +82,14 @@ The extension automatically downloads the correct `perllsp` binary for your plat
 | **macOS** | Intel (x64), Apple Silicon (ARM64) |
 | **Linux** | x64, ARM64 (glibc and musl) |
 
+### Enterprise / offline / air-gapped deployments
+
+The extension downloads the Perl LSP server binary on first activation. If your environment blocks internet access during extension install or uses a strict proxy, see [`INTERNAL_DEPLOYMENT.md`](./INTERNAL_DEPLOYMENT.md) for:
+
+- Pre-downloading the binary and bundling it with your VSIX
+- Using `perl-lsp.serverPath` to point at a shared binary
+- Corporate proxy and certificate configuration
+
 ### Manual Installation
 
 If you prefer to manage the binary yourself:
