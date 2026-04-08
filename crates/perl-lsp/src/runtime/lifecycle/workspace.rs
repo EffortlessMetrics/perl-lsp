@@ -49,13 +49,18 @@ impl LspServer {
                 }
             }
             Err(msg) => {
-                tracing::warn!(message = msg, "Project config warning");
+                let user_msg = format!(
+                    "perl-lsp: {msg} \
+                     Fix the error in .perl-lsp.toml and reload the window \
+                     (Ctrl+Shift+P \u{2192} Developer: Reload Window) to apply your settings.",
+                );
+                tracing::warn!(message = %user_msg, "Project config warning");
                 // Emit user-visible warning so devs can fix a broken .perl-lsp.toml
                 if let Err(e) = self.notify(
                     "window/showMessage",
                     serde_json::json!({
                         "type": 2, // Warning
-                        "message": format!("perl-lsp: {}", msg)
+                        "message": user_msg
                     }),
                 ) {
                     tracing::warn!(error = %e, "Failed to send showMessage warning");
