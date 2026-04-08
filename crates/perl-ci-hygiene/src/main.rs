@@ -1839,7 +1839,8 @@ fi
 
 # --- Detect doc-only changes for the fast-path gate ---
 # A push is doc-only if every changed file matches one of:
-#   *.md, *.txt, LICENSE*, CHANGELOG*, docs/**, .github/ISSUE_TEMPLATE/**
+#   *.md, *.txt, LICENSE*, CHANGELOG*, docs/**, .github/ISSUE_TEMPLATE/**,
+#   or */LICENSE* (crate-subdir license files, e.g. crates/*/LICENSE-APACHE)
 # Doc-only pushes run a lighter gate (fmt check only) instead of the full
 # ci-gate, since the test suite is pointless for prose-only changes.
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -1859,7 +1860,7 @@ for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
     while IFS= read -r changed; do
         [ -z "$changed" ] && continue
         case "$changed" in
-            *.md|*.txt|LICENSE*|CHANGELOG*|docs/*|.github/ISSUE_TEMPLATE/*)
+            *.md|*.txt|LICENSE*|CHANGELOG*|docs/*|.github/ISSUE_TEMPLATE/*|*/LICENSE*)
                 ;;
             *)
                 DOC_ONLY=false
@@ -4156,6 +4157,19 @@ mod tests {
         assert!(
             after_doc.contains("exit 0"),
             "doc-only branch must exit 0 without invoking the full gate"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_doc_only_fast_path_matches_crate_subdir_license_files() {
+        let hook = pre_push_hook_script();
+        // Issue #3305: the doc-only case pattern must also match license files
+        // in crate subdirectories (e.g. crates/tree-sitter-perl-rs/LICENSE-APACHE).
+        // Pattern `LICENSE*` only matches root-level files; `*/LICENSE*` is required
+        // to handle files like `crates/*/LICENSE-APACHE` and `crates/*/LICENSE-MIT`.
+        assert!(
+            hook.contains("*/LICENSE*"),
+            "hook doc-only pattern must include '*/LICENSE*' to match crate-subdir license files              (e.g. crates/tree-sitter-perl-rs/LICENSE-APACHE) — see issue #3305"
         );
     }
 
