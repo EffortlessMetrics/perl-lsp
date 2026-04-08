@@ -50,16 +50,18 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: audit-${{ hashFiles('Cargo.lock') }}
           cache-on-failure: true
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
         with:
           tool: cargo-audit
 
@@ -99,16 +101,18 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: deny-${{ hashFiles('Cargo.lock') }}
           cache-on-failure: true
 
       - name: Install cargo-deny
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
         with:
           tool: cargo-deny
 
@@ -131,7 +135,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Run Trivy vulnerability scanner (filesystem mode)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -156,7 +160,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (table format for PR comments)
         if: github.event_name == 'pull_request'
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -192,7 +196,7 @@ jobs:
           docker build -t perl-lsp:${{ github.sha }} -f .docker/rust/Dockerfile .
 
       - name: Run Trivy vulnerability scanner (Docker image)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           scan-type: 'image'
           image-ref: 'perl-lsp:${{ github.sha }}'
