@@ -14,8 +14,8 @@ use std::time::Duration;
 /// Fires a `tracing::warn!` the first time workspace root is found to be undetected.
 ///
 /// Both `resolve_module_path` and `resolve_module_path_with_uri` share this sentinel
-/// because both sites indicate the same underlying problem: no workspace root marker
-/// (`.git`, `cpanfile`, `Makefile.PL`, `Build.PL`, or `dist.ini`) was found.
+/// because both sites indicate the same underlying problem: no workspace root was
+/// provided by the LSP client (single-file mode with no open folder).
 static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 
 /// Prepend `use lib` paths extracted from `doc_text` to `include_paths`.
@@ -58,8 +58,8 @@ impl LspServer {
                 WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
                     tracing::warn!(
                         "perl-lsp: workspace root not detected — module resolution disabled. \
-                         To enable: open a folder containing .git, cpanfile, Makefile.PL, \
-                         Build.PL, or dist.ini. This warning appears once per session."
+                         To enable: open the project folder in your editor (File > Open Folder) \
+                         rather than individual files. This warning appears once per server session."
                     );
                 });
                 return None;
@@ -94,8 +94,8 @@ impl LspServer {
                 WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
                     tracing::warn!(
                         "perl-lsp: workspace root not detected — module resolution disabled. \
-                         To enable: open a folder containing .git, cpanfile, Makefile.PL, \
-                         Build.PL, or dist.ini. This warning appears once per session."
+                         To enable: open the project folder in your editor (File > Open Folder) \
+                         rather than individual files. This warning appears once per server session."
                     );
                 });
                 return None;
