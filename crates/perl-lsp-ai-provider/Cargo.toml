@@ -19,9 +19,7 @@ doctest = false
 [dependencies]
 perl-lsp-inline-completion = { workspace = true }
 ureq = { version = "3", features = ["json"] }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tracing = "0.1.44"
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

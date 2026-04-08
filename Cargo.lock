@@ -578,12 +578,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diff"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
-
-[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1596,7 +1590,6 @@ dependencies = [
  "perl-parser",
  "perl-tdd-support",
  "ropey",
- "tempfile",
  "thiserror",
 ]
 
@@ -1785,7 +1778,6 @@ dependencies = [
  "memchr",
  "perl-keywords",
  "perl-position-tracking",
- "pretty_assertions",
  "proptest",
  "thiserror",
  "tracing",
@@ -1795,9 +1787,6 @@ dependencies = [
 [[package]]
 name = "perl-line-index"
 version = "0.12.2"
-dependencies = [
- "perl-tdd-support",
-]
 
 [[package]]
 name = "perl-lsp-ai-provider"
@@ -1805,9 +1794,7 @@ version = "0.12.2"
 dependencies = [
  "perl-lsp-inline-completion",
  "perl-tdd-support",
- "serde",
  "serde_json",
- "tracing",
  "ureq",
 ]
 
@@ -1860,7 +1847,6 @@ version = "0.12.2"
 dependencies = [
  "once_cell",
  "perl-position-tracking",
- "perl-tdd-support",
  "regex",
  "serde_json",
 ]
@@ -1979,7 +1965,6 @@ dependencies = [
  "perl-lsp-feature-policy",
  "perl-lsp-feature-profile",
  "perl-lsp-feature-profile-cli",
- "perl-tdd-support",
  "serde_json",
 ]
 
@@ -2070,8 +2055,6 @@ dependencies = [
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",
- "perl-tdd-support",
- "serde",
  "serde_json",
 ]
 
@@ -2081,7 +2064,6 @@ version = "0.12.2"
 dependencies = [
  "lsp-types",
  "perl-position-tracking",
- "perl-tdd-support",
  "serde",
 ]
 
@@ -2283,7 +2265,6 @@ dependencies = [
  "perl-workspace-folder",
  "perl-workspace-ignore",
  "predicates",
- "pretty_assertions",
  "proptest",
  "regex",
  "ropey",
@@ -2292,7 +2273,6 @@ dependencies = [
  "serial_test",
  "tempfile",
  "tokio",
- "toml",
  "tracing",
  "url",
  "uuid",
@@ -2527,12 +2507,10 @@ name = "perl-parser"
 version = "0.12.2"
 dependencies = [
  "anyhow",
- "assert_cmd",
  "criterion",
  "insta",
  "lsp-types",
  "nix",
- "parking_lot",
  "perl-corpus",
  "perl-dead-code",
  "perl-incremental-parsing",
@@ -2551,8 +2529,6 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
- "predicates",
- "pretty_assertions",
  "proptest",
  "regex",
  "ropey",
@@ -2563,7 +2539,6 @@ dependencies = [
  "tempfile",
  "url",
  "walkdir",
- "which",
 ]
 
 [[package]]
@@ -2653,7 +2628,6 @@ name = "perl-pragma"
 version = "0.12.2"
 dependencies = [
  "perl-ast",
- "perl-tdd-support",
 ]
 
 [[package]]
@@ -2691,7 +2665,6 @@ dependencies = [
 name = "perl-regex"
 version = "0.12.2"
 dependencies = [
- "perl-tdd-support",
  "thiserror",
 ]
 
@@ -2735,7 +2708,6 @@ name = "perl-symbol-surface"
 version = "0.12.2"
 dependencies = [
  "perl-ast",
- "perl-position-tracking",
  "perl-symbol-types",
 ]
 
@@ -3076,16 +3048,6 @@ checksum = "d0de1b847b39c8131db0467e9df1ff60e6d0562ab8e9a16e568ad0fdb372e2f2"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "pretty_assertions"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
-dependencies = [
- "diff",
- "yansi",
 ]
 
 [[package]]
@@ -4848,12 +4810,6 @@ dependencies = [
  "tree-sitter-perl-c",
  "walkdir",
 ]
-
-[[package]]
-name = "yansi"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "yoke"
