@@ -99,7 +99,7 @@ export class BinaryDownloader {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.outputChannel.appendLine(`Failed to download binary: ${errorMsg}`);
 
-            const manualInstallUrl = 'https://github.com/EffortlessMetrics/perl-lsp#quick-install';
+            const manualInstallUrl = 'https://github.com/EffortlessMetrics/perl-lsp#quick-start';
             const manualInstallNote = 'To use a manually installed binary, set the "perl-lsp.serverPath" setting to its path.';
 
             let message: string;
@@ -136,7 +136,7 @@ export class BinaryDownloader {
                     'The release asset may not exist yet for this platform. ' +
                     manualInstallNote;
                 buttons = ['Install Manually', 'View Logs'];
-            } else if (errorMsg.includes('Checksum verification failed') || errorMsg.includes('checksum')) {
+            } else if (errorMsg.toLowerCase().includes('checksum')) {
                 // Corrupted or tampered download
                 message =
                     'perl-lsp: Checksum verification failed — download may be corrupted. ' +

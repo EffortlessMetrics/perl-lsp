@@ -897,6 +897,31 @@ describe('ensureBinary error classification', () => {
     expect(call[0]).toMatch(/perl-lsp\.serverPath/);
   });
 
+  test('checksum-not-found in SHA256SUMS shows corruption message (case-insensitive match)', async () => {
+    // This error has capital-C "Checksum" — verifies the classifier uses case-insensitive matching
+    setupDownloadError('Security check failed: Checksum for perllsp-x86_64-unknown-linux-gnu.tar.gz not found in SHA256SUMS file.');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/checksum|corrupt|retry/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('archive extraction failure shows tar/zip guidance', async () => {
+    setupDownloadError('Failed to extract archive: tar exited with code 1');
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/extract|tar|zip/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
   test('unknown error still mentions manual install path', async () => {
     setupDownloadError('some unexpected error occurred');
     const vscode = require('vscode');
