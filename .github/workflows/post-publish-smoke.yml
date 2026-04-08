@@ -100,6 +100,8 @@ jobs:
 
       - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
 
       # Warm the registry cache for the exact version we're testing so that
       # `cargo add` and `cargo install` don't have to fetch the full index.
