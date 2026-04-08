@@ -380,6 +380,8 @@ jobs:
           path.write_text(new_text, encoding="utf-8")
           STRIP_SCRIPT_EOF
 
+          FAILED_CRATES=()
+          PUBLISHED_COUNT=0
           CRATES_LIST="$(mktemp)"
           echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
@@ -399,6 +401,7 @@ jobs:
             # the work that already landed.
             if check_sparse_index "$CRATE" "$VERSION"; then
               echo "::notice::$CRATE@$VERSION already present in sparse index, skipping"
+              PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
               continue
             fi
 
@@ -522,12 +525,34 @@ jobs:
 
             if [ "$PUBLISHED" != "true" ]; then
               echo "::error::Failed to publish $CRATE@$VERSION after 3 attempts — not visible in sparse index at https://index.crates.io/$(sparse_index_path "$CRATE")"
-              exit 1
+              FAILED_CRATES+=("$CRATE@$VERSION")
+              continue
             fi
+
+            PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
           done < "$CRATES_LIST"
 
+          if [ "$DRY_RUN" = "true" ]; then
+            echo ""
+            echo "DRY RUN complete: $TOTAL crates packaged (no actual publish)."
+            exit 0
+          fi
+
           echo ""
-          echo "All crates processed."
+          echo "PUBLISHED: ${PUBLISHED_COUNT}/${TOTAL}"
+          if [ "${#FAILED_CRATES[@]}" -gt 0 ]; then
+            echo ""
+            echo "FAILED CRATES (${#FAILED_CRATES[@]}):"
+            for entry in "${FAILED_CRATES[@]}"; do
+              echo "  - $entry"
+            done
+            echo ""
+            echo "NEXT STEPS: Re-trigger this workflow with the same version."
+            echo "  Already-published crates will be skipped via the sparse-index"
+            echo "  fast-path; only the failed crates above will be retried."
+            exit 1
+          fi
+          echo "All crates published successfully."
 
   # Step 3: Verify all crates are published.
   #
