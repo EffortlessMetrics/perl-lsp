@@ -1,0 +1,69 @@
+name: CI Gate Self-Tests
+
+# Runs self-tests for CI gates whenever the gate scripts themselves change.
+#
+# Background: CI gates can silently false-fail (or false-pass) if no test
+# verifies they actually catch what they claim to catch. The self-test pattern
+# feeds known-bad inputs to each gate and asserts non-zero exit, and known-good
+# inputs and asserts exit 0.
+#
+# See: docs/reference/PROCESS_LESSONS.md — "CI Gate Self-Tests"
+# Issue: #3322
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'scripts/cargo-package-workspace-dry-run.sh'
+      - 'scripts/publish-topo.py'
+      - 'scripts/tests/test-publish-dry-run-gate.sh'
+      - '.github/workflows/publish-dry-run.yml'
+      - '.github/workflows/ci-gate-self-tests.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-gate-self-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish-dry-run-self-test:
+    name: Publish dry-run gate self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+
+      - name: Run publish dry-run gate self-test
+        run: bash scripts/tests/test-publish-dry-run-gate.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## CI gate self-tests passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The publish dry-run gate correctly catches:" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Invalid TOML (duplicate keys) — cargo metadata rejects it" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Nonexistent dependencies — cargo package fails to resolve" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Clean manifests — passes without false-failing" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## CI gate self-tests FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "A gate self-test assertion failed — the gate may not be catching errors it claims to catch." >> "$GITHUB_STEP_SUMMARY"
+            echo "Check the step output above for which case failed." >> "$GITHUB_STEP_SUMMARY"
+          fi
