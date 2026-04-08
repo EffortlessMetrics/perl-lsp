@@ -7,6 +7,8 @@
  *   - missing shared library (libssl, libgcc)
  *   - wrong architecture / Exec format error
  *   - permission denied
+ *   - Windows: DLL init failure, wrong PE architecture
+ *   - macOS: dyld library not loaded, code signature invalid
  *   - unknown / fallback
  *
  * The user-visible error message must include an actionable hint (not just
@@ -135,5 +137,64 @@ describe('classifyStartupError', () => {
     const result = classifyStartupError('spawn /path/perllsp ENOENT');
     expect(result.kind).toBe(StartupErrorKind.Unknown);
     expect(result.hint).toBeTruthy();
+  });
+
+  // -------------------------------------------------------------------------
+  // Windows-specific failure signatures
+  // -------------------------------------------------------------------------
+
+  test('detects Windows DLL initialization failure', () => {
+    const stderr = 'The application failed to initialize properly (0xc0000142). DLL initialization routine failed.';
+    const result = classifyStartupError(stderr);
+    expect(result.kind).toBe(StartupErrorKind.WindowsBinaryError);
+    expect(result.hint).toContain('Windows');
+    expect(result.remediation).toContain('Reinstall');
+  });
+
+  test('detects Windows wrong architecture (not a valid Win32 application)', () => {
+    const stderr = 'C:\\Users\\user\\.vscode\\extensions\\perllsp.exe is not a valid Win32 application.';
+    const result = classifyStartupError(stderr);
+    expect(result.kind).toBe(StartupErrorKind.WindowsBinaryError);
+    expect(result.hint).toContain('Windows');
+  });
+
+  test('detects Windows missing DLL (The specified module could not be found)', () => {
+    const stderr = 'The specified module could not be found.';
+    const result = classifyStartupError(stderr);
+    expect(result.kind).toBe(StartupErrorKind.WindowsBinaryError);
+    expect(result.hint).toContain('DLL');
+  });
+
+  // -------------------------------------------------------------------------
+  // macOS-specific failure signatures
+  // -------------------------------------------------------------------------
+
+  test('detects macOS dyld Library not loaded', () => {
+    const stderr = 'dyld: Library not loaded: /usr/lib/libssl.dylib\n  Referenced from: /usr/local/bin/perllsp\n  Reason: image not found';
+    const result = classifyStartupError(stderr);
+    expect(result.kind).toBe(StartupErrorKind.MacOsDylibError);
+    expect(result.hint).toContain('macOS');
+    expect(result.remediation).toContain('xattr');
+  });
+
+  test('detects macOS code signature invalid', () => {
+    const stderr = 'perllsp: code signature invalid';
+    const result = classifyStartupError(stderr);
+    expect(result.kind).toBe(StartupErrorKind.MacOsDylibError);
+    expect(result.hint).toContain('Gatekeeper');
+  });
+
+  test('hint text ≤200 chars covers Windows and macOS cases', () => {
+    const scenarios = [
+      'DLL initialization routine failed',
+      'not a valid Win32 application',
+      'The specified module could not be found',
+      'dyld: Library not loaded: /usr/lib/libssl.dylib',
+      'code signature invalid',
+    ];
+    for (const stderr of scenarios) {
+      const result = classifyStartupError(stderr);
+      expect(result.hint.length).toBeLessThanOrEqual(200);
+    }
   });
 });

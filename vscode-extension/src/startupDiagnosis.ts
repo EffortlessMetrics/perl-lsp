@@ -11,6 +11,8 @@ export const enum StartupErrorKind {
     MissingSharedLibrary = 'MissingSharedLibrary',
     ExecFormatError = 'ExecFormatError',
     PermissionDenied = 'PermissionDenied',
+    WindowsBinaryError = 'WindowsBinaryError',
+    MacOsDylibError = 'MacOsDylibError',
     Unknown = 'Unknown',
 }
 
@@ -67,6 +69,33 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
             kind: StartupErrorKind.PermissionDenied,
             hint: 'The binary does not have execute permission.',
             remediation: 'Fix with: chmod +x <path-to-perllsp>\nOr check that your filesystem allows execute permissions.',
+        };
+    }
+
+    // Windows: DLL load failure or wrong PE architecture
+    if (
+        /DLL initialization routine failed/i.test(output) ||
+        /not a valid Win32 application/i.test(output) ||
+        /The specified module could not be found/i.test(output) ||
+        /0xc000007b/i.test(output)
+    ) {
+        return {
+            kind: StartupErrorKind.WindowsBinaryError,
+            hint: 'Windows could not load the LSP binary. The binary may be corrupt, for a different Windows architecture (x86 vs x64), or missing a required DLL.',
+            remediation: 'Reinstall the extension to get a matching binary, or build from source: cargo install perl-lsp-rs',
+        };
+    }
+
+    // macOS: dylib load failure or code signature issue
+    if (
+        /dyld[: ]+Library not loaded/i.test(output) ||
+        /code signature invalid/i.test(output) ||
+        /dyld[: ]+could not load/i.test(output)
+    ) {
+        return {
+            kind: StartupErrorKind.MacOsDylibError,
+            hint: 'macOS could not load the LSP binary. A required dylib is missing, or macOS Gatekeeper blocked execution due to a code signature issue.',
+            remediation: 'If Gatekeeper blocked the binary, run: xattr -d com.apple.quarantine <path-to-perllsp>\nOr reinstall the extension to fetch a fresh signed binary.',
         };
     }
 
