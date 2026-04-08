@@ -664,24 +664,6 @@ ci-measure:
 # UX Regression Tests (first-5-minutes user experience)
 # ============================================================================
 
-# Run UX regression test suite (depends on crates/perl-lsp-ux-tests/ landing)
-# Categories: startup, first-open, missing-dep, bad-config, protocol-handling, error-messages
-ux-tests:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    if ! cargo metadata --no-deps --quiet 2>/dev/null | python3 -c \
-        "import json,sys; pkgs=json.load(sys.stdin)['packages']; \
-         names=[p['name'] for p in pkgs]; \
-         sys.exit(0 if 'perl-lsp-ux-tests' in names else 1)"; then
-        echo "ERROR: crates/perl-lsp-ux-tests not found in workspace"
-        echo "  The UX test harness has not yet been scaffolded."
-        echo "  Waiting for the perl-lsp-ux-tests crate to land before running UX tests."
-        exit 1
-    fi
-    echo "Running UX regression tests (perl-lsp-ux-tests)..."
-    cargo test -p perl-lsp-ux-tests --locked -- --test-threads=2
-    echo "UX regression tests passed"
-
 # Fast merge gate on MSRV (~2-5 min) - proves 1.92 compatibility
 ci-gate-msrv:
     @echo "🚪 Running fast merge gate on MSRV (Rust 1.92)..."

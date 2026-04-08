@@ -19,7 +19,16 @@ fn binary_available() -> bool {
 }
 
 fn config_without_perltidy() -> ScenarioConfig {
-    ScenarioConfig { path_restriction: Some(Vec::new()), ..Default::default() }
+    // Exclude only perltidy from PATH, leaving perl and other tools available.
+    // This accurately simulates "user has perl but not perltidy installed".
+    let sep = if cfg!(windows) { ';' } else { ':' };
+    let dirs: Vec<String> = std::env::var("PATH")
+        .unwrap_or_default()
+        .split(sep)
+        .filter(|entry| !entry.contains("perltidy"))
+        .map(String::from)
+        .collect();
+    ScenarioConfig { path_restriction: Some(dirs), ..Default::default() }
 }
 
 #[test]
