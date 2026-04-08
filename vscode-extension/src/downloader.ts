@@ -98,38 +98,76 @@ export class BinaryDownloader {
         } catch (error: unknown) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.outputChannel.appendLine(`Failed to download binary: ${errorMsg}`);
-            
-            // Provide helpful error messages
+
+            const manualInstallUrl = 'https://github.com/EffortlessMetrics/perl-lsp#quick-start';
+            const manualInstallNote = 'To use a manually installed binary, set the "perl-lsp.serverPath" setting to its path.';
+
+            let message: string;
+            let buttons: string[];
+
             if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('timeout')) {
-                vscode.window.showErrorMessage(
-                    'Failed to download perl-lsp: Network connection error. ' +
-                    'Please check your internet connection and proxy settings.',
-                    'Open Settings'
-                ).then(choice => {
-                    if (choice === 'Open Settings') {
-                        vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
-                    }
-                });
-            } else if (errorMsg.includes('tar') || errorMsg.includes('unzip')) {
-                vscode.window.showErrorMessage(
-                    'Failed to extract perl-lsp: Archive extraction failed. ' +
-                    'Please ensure tar (Linux/macOS) or unzip (Windows) is installed.',
-                    'Install Manually'
-                ).then(choice => {
-                    if (choice === 'Install Manually') {
-                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp#quick-install'));
-                    }
-                });
+                // Network connectivity failure — proxy, VPN, or firewall
+                message =
+                    'perl-lsp: Binary download failed — network error ' +
+                    `(${errorMsg.split('\n')[0]}). ` +
+                    'Check your proxy/VPN settings (http.proxy in VS Code settings). ' +
+                    manualInstallNote;
+                buttons = ['Open Proxy Settings', 'Install Manually'];
+            } else if (errorMsg.includes('No binary found for platform')) {
+                // Architecture or OS not supported by the release
+                const platformMatch = /platform:\s*([^\s.]+)/.exec(errorMsg);
+                const platformStr = platformMatch ? platformMatch[1] : 'your platform';
+                message =
+                    `perl-lsp: No pre-built binary for ${platformStr}. ` +
+                    'Build from source or download a compatible binary manually. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually'];
+            } else if (errorMsg.includes('HTTP 403')) {
+                // GitHub rate limit or auth failure
+                message =
+                    'perl-lsp: Download blocked (HTTP 403 — GitHub rate limit). ' +
+                    'Wait a few minutes, or set the GITHUB_TOKEN environment variable to increase your rate limit. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
+            } else if (errorMsg.includes('HTTP 404')) {
+                // Release or asset not found
+                message =
+                    'perl-lsp: Binary not found (HTTP 404). ' +
+                    'The release asset may not exist yet for this platform. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
+            } else if (errorMsg.toLowerCase().includes('checksum') || errorMsg.includes('SHA256SUMS')) {
+                // Corrupted or tampered download, or missing checksum file
+                message =
+                    'perl-lsp: Checksum verification failed — download may be corrupted. ' +
+                    'Please retry. If this persists, install manually. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
+            } else if (errorMsg.includes('tar') || errorMsg.includes('unzip') || errorMsg.includes('extract')) {
+                // Archive extraction failure
+                message =
+                    'perl-lsp: Archive extraction failed. ' +
+                    'Ensure tar (Linux/macOS) or the built-in zip support (Windows) is working. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
             } else {
-                vscode.window.showErrorMessage(
-                    `Failed to download perl-lsp: ${errorMsg}`,
-                    'View Logs'
-                ).then(choice => {
-                    if (choice === 'View Logs') {
-                        this.outputChannel.show();
-                    }
-                });
+                // Generic fallback — always surface the manual install path
+                message =
+                    `perl-lsp: Binary download failed — ${errorMsg.split('\n')[0]}. ` +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
             }
+
+            vscode.window.showErrorMessage(message, ...buttons).then((choice: string | undefined) => {
+                if (choice === 'Install Manually') {
+                    vscode.env.openExternal(vscode.Uri.parse(manualInstallUrl));
+                } else if (choice === 'Open Proxy Settings') {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
+                } else if (choice === 'View Logs') {
+                    this.outputChannel.show();
+                }
+            });
+
             return null;
         } finally {
             statusBar.dispose();

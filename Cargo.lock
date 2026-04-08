@@ -2371,6 +2371,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-ux-tests"
+version = "0.12.2"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "tempfile",
+ "url",
+ "which",
+]
+
+[[package]]
 name = "perl-lsp-workspace-symbols"
 version = "0.12.2"
 dependencies = [

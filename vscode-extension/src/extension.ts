@@ -28,6 +28,27 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let healthWidget: HealthWidget | undefined;
 let streamingController: StreamingCompletionController | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
+/**
+ * Cached diagnostic message from the last startup failure.
+ * Set by `initializeLanguageClient` when the LSP fails to start; read by
+ * command handlers that need to surface a "server not running" message so
+ * they can report the specific root cause rather than a generic "restart" message.
+ */
+let lastStartupDiagnostic: string | undefined;
+
+/**
+ * Return the best available "server not running" message to show the user.
+ *
+ * When a startup failure has been diagnosed (i.e. `lastStartupDiagnostic` is
+ * set), that specific message is returned so the user can see the root cause
+ * (e.g. "Perl interpreter not found" rather than a generic restart prompt).
+ * Falls back to a brief actionable message for the case where the server was
+ * never started in this session.
+ */
+function serverNotRunningMessage(): string {
+    return lastStartupDiagnostic ??
+        'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
+}
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -97,11 +118,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         if (!currentServerPath) {
             vscode.window.showErrorMessage(
-                'Perl Language Server is not running. Restart the server or check the Output panel for startup errors.',
-                'Restart Server', 'Show Output'
+                serverNotRunningMessage(),
+                'Restart Server', 'Show Output', 'Run Health Check'
             ).then(sel => {
                 if (sel === 'Restart Server') { void vscode.commands.executeCommand('perl-lsp.restart'); }
                 if (sel === 'Show Output') { outputChannel.show(); }
+                if (sel === 'Run Health Check') { void vscode.commands.executeCommand('perl-lsp.runHealthCheck'); }
             });
             return;
         }
@@ -281,7 +303,7 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
         if (!client) {
-            vscode.window.showWarningMessage('Perl Language Server is not running. Restart the server and try again.');
+            vscode.window.showWarningMessage(serverNotRunningMessage());
             return;
         }
         const range = editor.selection;
@@ -327,7 +349,7 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
         if (!client) {
-            vscode.window.showWarningMessage('Perl Language Server is not running. Restart the server and try again.');
+            vscode.window.showWarningMessage(serverNotRunningMessage());
             return;
         }
         const range = editor.selection;
@@ -704,8 +726,16 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         try { void client.dispose(); } catch { /* already dead */ }
         client = undefined;
         healthWidget?.onStateChange(ClientState.Stopped);
+
+        // Run diagnostics eagerly so the user sees the specific root cause
+        // (missing Perl, missing binary, etc.) instead of a generic restart message.
+        const onboarding = new OnboardingManager(context, outputChannel);
+        const diagnosticMessage = await onboarding.runStartupDiagnostics(currentServerPath);
+        lastStartupDiagnostic = diagnosticMessage;
+        outputChannel.appendLine(`[startup] Diagnostic: ${diagnosticMessage}`);
+
         const choice = await vscode.window.showErrorMessage(
-            `Perl Language Server failed to start. The binary at '${currentServerPath}' may be corrupted or incompatible.`,
+            diagnosticMessage,
             'Show Output',
             'Reinstall',
             'Run Health Check'
@@ -730,6 +760,9 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     // Initialize streaming inline completion controller (config-gated)
     refreshStreamingController(client);
 
+    // Clear any stale startup diagnostic — the server started successfully so
+    // the root cause (e.g. missing Perl) no longer applies.
+    lastStartupDiagnostic = undefined;
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
 }
@@ -1204,7 +1237,7 @@ async function showParserAst(): Promise<void> {
     }
 
     if (!client) {
-        vscode.window.showWarningMessage('Perl Language Server is not running');
+        vscode.window.showWarningMessage(serverNotRunningMessage());
         return;
     }
 

@@ -35,6 +35,55 @@ export interface HealthCheckResult {
 }
 
 // ---------------------------------------------------------------------------
+// Startup failure classifier
+// ---------------------------------------------------------------------------
+
+/**
+ * User-facing message surfaced when Perl interpreter is not found.
+ * Shown instead of the generic "Restart the server" message so the user
+ * immediately knows the root cause and what to do.
+ */
+export const PERL_MISSING_MESSAGE =
+  'Perl interpreter not found. ' +
+  'Install Perl 5.10+ (e.g. https://www.perl.org/get.html or Strawberry Perl for Windows) ' +
+  'and reload the window. ' +
+  'Alternatively, set the `perl-lsp.perl.path` setting to an existing Perl executable.';
+
+/**
+ * Given the results of a health check, return a specific user-facing error
+ * string that names the root cause of an LSP startup failure.
+ *
+ * Priority: Perl missing > binary missing > unknown crash.
+ */
+export function classifyStartupFailure(results: HealthCheckResult[]): string {
+  const perlResult = results.find(r => r.label === 'Perl interpreter');
+  const binaryResult = results.find(r => r.label === 'LSP binary');
+
+  // Perl not found — highest priority, most actionable for the user.
+  if (!perlResult || (perlResult.ok === false && perlResult.status === HealthCheckStatus.Error)) {
+    return PERL_MISSING_MESSAGE;
+  }
+
+  // LSP binary not found — Perl is present but the server binary is missing.
+  if (binaryResult && binaryResult.ok === false && binaryResult.status === HealthCheckStatus.Error) {
+    const detail = binaryResult.detail.trimEnd();
+    const detailWithPeriod = detail.endsWith('.') ? detail : `${detail}.`;
+    return (
+      'Perl Language Server binary (perllsp) not found. ' +
+      detailWithPeriod +
+      ' Check the Output panel for download details or reinstall the extension.'
+    );
+  }
+
+  // All checks passed — unknown crash (e.g. version mismatch, system ABI issue).
+  return (
+    'Perl Language Server failed to start. ' +
+    'Check the Output panel for details. ' +
+    'You can also try reinstalling the extension or running the Health Check from the command palette.'
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Internal exec helper type
 // ---------------------------------------------------------------------------
 
@@ -227,6 +276,31 @@ export class OnboardingManager {
     }
 
     return results;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Startup diagnostics
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Run a targeted health check after an LSP startup failure and return a
+   * user-facing error string that names the specific root cause.
+   *
+   * Call this instead of surfacing the generic "restart server" message so
+   * users immediately know whether the problem is a missing Perl interpreter,
+   * a missing LSP binary, or an unknown crash.
+   *
+   * @param serverPath  Path to the LSP binary, or `null` if unavailable.
+   */
+  async runStartupDiagnostics(serverPath: string | null): Promise<string> {
+    try {
+      const results = await this.runSetupHealthCheck(serverPath);
+      return classifyStartupFailure(results);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.outputChannel.appendLine(`[onboarding] Startup diagnostics failed: ${msg}`);
+      return PERL_MISSING_MESSAGE;
+    }
   }
 
   // ---------------------------------------------------------------------------
