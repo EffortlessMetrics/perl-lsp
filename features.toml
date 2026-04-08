@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.2"
 lsp_version = "3.18"
-compliance_percent = 100  # 98/98 protocol features implemented, 53/53 advertised
+compliance_percent = 100  # 102 total features (87 LSP + 10 DAP + 5 perl-lsp extensions), 53/53 advertised
 
 # Text Document Features
 
