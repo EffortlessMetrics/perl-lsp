@@ -57,5 +57,9 @@ name = "workspace_memory_profile"
 path = "src/bin/workspace_memory_profile.rs"
 required-features = ["memory-profiling"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

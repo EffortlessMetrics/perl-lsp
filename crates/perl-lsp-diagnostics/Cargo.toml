@@ -29,5 +29,8 @@ perl-heredoc-anti-patterns = { workspace = true }
 perl-tdd-support = { workspace = true }
 perl-parser = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

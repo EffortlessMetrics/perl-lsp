@@ -22,5 +22,8 @@ doctest = false
 [dev-dependencies]
 proptest.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

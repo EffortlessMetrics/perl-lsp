@@ -19,6 +19,9 @@ doctest = false
 [dependencies]
 serde = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

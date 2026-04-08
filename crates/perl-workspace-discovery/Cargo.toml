@@ -24,5 +24,8 @@ tracing.workspace = true
 tempfile.workspace = true
 proptest.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

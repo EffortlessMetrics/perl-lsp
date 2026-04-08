@@ -20,5 +20,8 @@ path = "src/lib.rs"
 
 [dependencies]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

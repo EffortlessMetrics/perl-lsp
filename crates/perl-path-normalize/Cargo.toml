@@ -20,5 +20,8 @@ thiserror.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

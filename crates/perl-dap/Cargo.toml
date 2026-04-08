@@ -181,5 +181,9 @@ name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
 harness = false
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
