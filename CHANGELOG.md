@@ -206,11 +206,11 @@ the remaining 21 (including `tree-sitter-perl-c`, `tree-sitter-perl-rs`,
 - **dev-dependency stripping**: `cargo publish` now strips `[dev-dependencies]`
   before publishing to avoid version conflicts (#3254, #3256)
 - **`--allow-dirty` for publish**: added after dev-dep strip leaves the working
-  tree dirty (#3259)
+  tree dirty (#3300)
 - **HTTP 429 throttle handling**: publish workflow detects crates.io rate-limit
   responses and retries with back-off (pending)
 - **sparse index wait replaced**: replaced fixed-duration index wait with
-  sparse-index polling for faster, more reliable publish verification (#3267)
+  sparse-index polling for faster, more reliable publish verification
 - **UX regression gate**: PR check that detects regressions in user-visible LSP,
   DAP, and extension behavior on every PR touching those surfaces (#3293)
 - **post-publish smoke test**: automated verification that published crates
