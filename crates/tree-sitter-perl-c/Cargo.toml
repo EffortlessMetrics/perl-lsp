@@ -55,11 +55,5 @@ path = "src/bin/parse_c.rs"
 [build-dependencies]
 cc = "1.2.51"
 
-[package.metadata.docs.rs]
-# docs.rs runs on Linux with a C toolchain available, so the build succeeds.
-# Only the default features are needed for documentation.
-all-features = false
-targets = ["x86_64-unknown-linux-gnu"]
-
 [lints]
 workspace = true
