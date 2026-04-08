@@ -2019,12 +2019,6 @@ if [ "$GATE_STATUS" -ne 0 ]; then
         echo "     your change is unrelated to xtask/parser-features."
         HINTED=true
     fi
-    if grep -q 'hook-tests' "$GATE_LOG" 2>/dev/null; then
-        echo "   • Known: hook-tests can scribble on real workspace files (#3203)"
-        echo "     Workaround: re-run, or skip with --no-verify if your change"
-        echo "     is unrelated to crates/perl-ci-hygiene."
-        HINTED=true
-    fi
     if grep -qE 'cargo (xtask )?fmt.*--check' "$GATE_LOG" 2>/dev/null && \
        grep -qE 'Diff in|rustfmt' "$GATE_LOG" 2>/dev/null; then
         echo "   • Formatting drift — run \`cargo xtask fmt\` (or \`cargo fmt --all\`) to auto-fix"
@@ -4230,10 +4224,6 @@ mod tests {
         // When the gate fails, the hook should hint at known issues so
         // contributors can recognize them instead of bypassing in confusion.
         assert!(hook.contains("#3202"), "hook must mention issue #3202 (Windows file-lock race)");
-        assert!(
-            hook.contains("#3203"),
-            "hook must mention issue #3203 (hook-tests isolation leak)"
-        );
         assert!(
             hook.contains("cargo xtask fmt") || hook.contains("cargo fmt"),
             "hook must suggest the fmt fix command on fmt failures"
