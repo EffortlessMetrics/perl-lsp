@@ -11,6 +11,7 @@
 - [ ] `cargo fmt --all` — clean
 - [ ] `cargo clippy -p <crate> --tests` — clean
 - [ ] `cargo test -p <crate>` — pass
+- [ ] This PR introduces UX-visible changes. I have verified that error messages are actionable and the UX test harness still passes.
 
 ## What I considered but didn't do
 <!-- Alternative approaches, related issues found, scope decisions -->
