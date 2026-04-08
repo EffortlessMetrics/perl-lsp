@@ -1150,6 +1150,43 @@ just cpan-corpus-check        # Fails if full-corpus ratchet or known-clean subs
 | Local install directory | `target/cpan-corpus/` |
 | Sweep JSON report | `target/cpan-corpus-report.json` (when using `--output`) |
 
+## Release Commands
+
+### Bump Workspace Version
+
+All crate versions inherit from `[workspace.package] version` in `Cargo.toml`. Bump
+every tracked version site in a single command:
+
+```bash
+just bump-version 0.13.0
+```
+
+This updates: `[workspace.package]` version, all `[workspace.dependencies]` version fields,
+`vscode-extension/package.json`, `features.toml`, and documentation version references.
+Then runs `cargo check --workspace` to regenerate `Cargo.lock`.
+
+After running, review with `git diff`, commit, push, and open a PR.
+
+### Release Sequence
+
+```bash
+# 1. Verify all version sites are consistent
+just version-check
+
+# 2. Full release gate (ci-gate + release build + version check)
+just release-gate
+
+# 3. Extended check (release-gate + semver + changelog + publish dry-run)
+just release-check
+
+# 4. After merging the version-bump PR, tag and push
+git tag v0.13.0
+git push origin v0.13.0
+# GitHub Release creation triggers the crates.io publish workflow automatically
+```
+
+See [CONTRIBUTING.md](../../CONTRIBUTING.md#release-workflow) for the full release workflow.
+
 ## Common Development Tasks
 
 ### Adding a New Perl Feature

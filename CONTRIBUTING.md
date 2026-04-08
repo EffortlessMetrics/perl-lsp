@@ -218,6 +218,52 @@ If a breaking change is necessary:
 
 See [STABILITY.md](docs/reference/STABILITY.md) for our API stability policy.
 
+## Release Workflow
+
+### Version Bump
+
+All workspace crates inherit their version from `[workspace.package] version` in the root
+`Cargo.toml`. To bump the version across the entire workspace in one command:
+
+```bash
+just bump-version 0.13.0
+```
+
+This updates every tracked version site in a single pass:
+- `[workspace.package] version` in `Cargo.toml`
+- All `[workspace.dependencies]` version fields in `Cargo.toml`
+- `vscode-extension/package.json` (and `package-lock.json` if present)
+- `features.toml` `[meta] version`
+- Documentation references in `README.md`, `CLAUDE.md`, and `docs/project/ROADMAP.md`
+
+Individual crate `Cargo.toml` files use `version.workspace = true` and pick up the new
+version automatically — they are not touched by the bump script.
+
+After running, review the diff (`git diff`), commit, push, and open a PR.
+
+### Release Sequence
+
+Once the version-bump PR is merged:
+
+1. Tag the release on `master`:
+   ```bash
+   git tag v0.13.0
+   git push origin v0.13.0
+   ```
+2. Create a GitHub Release from the tag — this triggers the publish workflow automatically.
+3. The publish workflow validates that every workspace crate reports the tag version, then
+   publishes them to crates.io in topological dependency order.
+
+### Verify Version Consistency
+
+At any time, verify that all version sites agree with the workspace canonical version:
+
+```bash
+just version-check
+```
+
+This runs as part of `just release-gate` before cutting a release.
+
 ## Updating Demo GIFs
 
 The three animated GIFs shown in `README.md` live in `docs/assets/gifs/`. They

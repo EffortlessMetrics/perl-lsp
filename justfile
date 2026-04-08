@@ -1972,6 +1972,41 @@ release-build:
 version-check:
     @cargo xtask check-version-sync
 
+# Bump the workspace version across every tracked site.
+#
+# Usage: just bump-version 0.13.0
+#
+# Updates in one pass (via `cargo xtask bump-version`):
+#   - [workspace.package] version in Cargo.toml
+#   - All [workspace.dependencies] version fields in Cargo.toml
+#   - vscode-extension/package.json (and package-lock.json if present)
+#   - features.toml [meta] version
+#   - Documentation version references (README.md, CLAUDE.md, ROADMAP.md)
+#
+# Crate-level Cargo.toml files use `version.workspace = true` and are
+# updated automatically through the workspace, so they are not touched.
+#
+# Does NOT commit or push. Review the diff and commit when satisfied.
+# Then tag the release and push — CI runs the publish workflow.
+bump-version VERSION:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Bumping workspace version to {{VERSION}} ..."
+    cargo xtask bump-version "{{VERSION}}"
+    echo ""
+    echo "Running cargo check to regenerate Cargo.lock ..."
+    cargo check --workspace --quiet
+    echo ""
+    echo "Version bump complete. Changed files:"
+    git diff --name-only
+    echo ""
+    echo "Next steps:"
+    echo "  1. Review the diff: git diff"
+    echo "  2. Commit: git commit -am 'chore(release): bump version to {{VERSION}}'"
+    echo "  3. Push and open PR"
+    echo "  4. After merge, tag: git tag v{{VERSION}} && git push origin v{{VERSION}}"
+    echo "  5. CI publish workflow triggers automatically on the tag"
+
 # Turnkey PR-driven release orchestrator for 0.x.y releases.
 release-turnkey VERSION *ARGS="":
     @cargo xtask release-turnkey "{{VERSION}}" {{ARGS}}
