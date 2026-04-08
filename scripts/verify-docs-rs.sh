@@ -161,6 +161,8 @@ ALL_CRATES=(
     # Tier 7
     perl-lsp-rs
     perllsp
+    # tree-sitter facade (added in #3255, merged after this PR was cut)
+    tree-sitter-perl-rs
 )
 
 # Large crates to skip in fast mode
