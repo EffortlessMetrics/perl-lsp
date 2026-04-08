@@ -9,6 +9,9 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/perl-test-must"
+keywords = ["perl", "testing", "test-helpers", "must", "assertions"]
+categories = ["development-tools::testing"]
 
 [lib]
 doctest = false
