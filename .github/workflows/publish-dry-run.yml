@@ -22,6 +22,7 @@ on:
       - '.github/workflows/publish-dry-run.yml'
       - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/publish-topo.py'
+  workflow_dispatch: {}
 
 concurrency:
   group: publish-dry-run-${{ github.ref }}
