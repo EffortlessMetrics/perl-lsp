@@ -664,24 +664,6 @@ ci-measure:
 # UX Regression Tests (first-5-minutes user experience)
 # ============================================================================
 
-# Run UX regression test suite (depends on crates/perl-lsp-ux-tests/ landing)
-# Categories: startup, first-open, missing-dep, bad-config, protocol-handling, error-messages
-ux-tests:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    if ! cargo metadata --no-deps --quiet 2>/dev/null | python3 -c \
-        "import json,sys; pkgs=json.load(sys.stdin)['packages']; \
-         names=[p['name'] for p in pkgs]; \
-         sys.exit(0 if 'perl-lsp-ux-tests' in names else 1)"; then
-        echo "ERROR: crates/perl-lsp-ux-tests not found in workspace"
-        echo "  The UX test harness has not yet been scaffolded."
-        echo "  Waiting for the perl-lsp-ux-tests crate to land before running UX tests."
-        exit 1
-    fi
-    echo "Running UX regression tests (perl-lsp-ux-tests)..."
-    cargo test -p perl-lsp-ux-tests --locked -- --test-threads=2
-    echo "UX regression tests passed"
-
 # Fast merge gate on MSRV (~2-5 min) - proves 1.92 compatibility
 ci-gate-msrv:
     @echo "🚪 Running fast merge gate on MSRV (Rust 1.92)..."
@@ -912,6 +894,23 @@ ci-lsp-smoke-e2e:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-rs --test lsp_smoke_e2e -- --test-threads=1
     @echo "✅ LSP smoke E2E passed"
+
+# UX regression test harness — systematic first-5-minutes scenario testing.
+# Runs all 9 base scenarios (scenarios 01-09, excluding the large-file integration-test tier).
+# For the full large-file tier: just ux-tests-full
+ux-tests:
+    @echo "Running UX regression test harness (base scenarios)..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests -- --test-threads=1
+    @echo "UX tests passed"
+
+# UX regression test harness — full suite including large-file scenario.
+# Slower (~5-10 min).  Run before releases or after large LSP changes.
+ux-tests-full:
+    @echo "Running UX regression test harness (full, including large-file)..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
+    @echo "UX tests (full) passed"
 
 # LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
 ci-lsp-bdd:

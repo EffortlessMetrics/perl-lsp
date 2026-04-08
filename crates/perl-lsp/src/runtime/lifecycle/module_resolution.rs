@@ -8,7 +8,15 @@ use perl_module_resolution::{
     use_lib::{extract_use_lib_paths, resolve_use_lib_paths},
 };
 use std::path::PathBuf;
+use std::sync::Once;
 use std::time::Duration;
+
+/// Fires a `tracing::warn!` the first time workspace root is found to be undetected.
+///
+/// Both `resolve_module_path` and `resolve_module_path_with_uri` share this sentinel
+/// because both sites indicate the same underlying problem: no workspace root was
+/// provided by the LSP client (single-file mode with no open folder).
+static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 
 /// Prepend `use lib` paths extracted from `doc_text` to `include_paths`.
 ///
@@ -44,7 +52,19 @@ impl LspServer {
         module: &str,
         doc_text: Option<&str>,
     ) -> Option<PathBuf> {
-        let root = self.root_path.lock().clone()?;
+        let root = match self.root_path.lock().clone() {
+            Some(r) => r,
+            None => {
+                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
+                    tracing::warn!(
+                        "perl-lsp: workspace root not detected — module resolution disabled. \
+                         To enable: open the project folder in your editor (File > Open Folder) \
+                         rather than individual files. This warning appears once per server session."
+                    );
+                });
+                return None;
+            }
+        };
 
         let mut include_paths = {
             let config = self.workspace_config.lock();
@@ -68,7 +88,19 @@ impl LspServer {
         doc_text: Option<&str>,
         doc_uri: Option<&str>,
     ) -> Option<PathBuf> {
-        let root = self.root_path.lock().clone()?;
+        let root = match self.root_path.lock().clone() {
+            Some(r) => r,
+            None => {
+                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
+                    tracing::warn!(
+                        "perl-lsp: workspace root not detected — module resolution disabled. \
+                         To enable: open the project folder in your editor (File > Open Folder) \
+                         rather than individual files. This warning appears once per server session."
+                    );
+                });
+                return None;
+            }
+        };
 
         let mut include_paths = {
             let config = self.workspace_config.lock();
@@ -200,6 +232,53 @@ impl LspServer {
 mod tests {
     use super::*;
     use std::fs;
+
+    // --- workspace root detection warning tests ---
+
+    /// When root_path is None, resolve_module_path must return None without panicking.
+    ///
+    /// NOTE: We do not capture tracing output here because tracing-test adds a
+    /// non-trivial test dependency and the WARN_ONCE static is process-global —
+    /// capturing reliably across parallel tests would require test isolation at the
+    /// process level. The behavioral contract (None return, no panic) is verified
+    /// instead. The once-per-session warning is exercised manually via the LSP server
+    /// under normal operation.
+    #[test]
+    fn resolve_module_path_returns_none_when_root_path_unset() {
+        let server = LspServer::new();
+        // root_path is None by default — do not set it
+        let result = server.resolve_module_path("Some::Module", None);
+        assert!(
+            result.is_none(),
+            "resolve_module_path must return None when workspace root is not detected"
+        );
+    }
+
+    #[test]
+    fn resolve_module_path_with_uri_returns_none_when_root_path_unset() {
+        let server = LspServer::new();
+        // root_path is None by default — do not set it
+        let result = server.resolve_module_path_with_uri("Some::Module", None, None);
+        assert!(
+            result.is_none(),
+            "resolve_module_path_with_uri must return None when workspace root is not detected"
+        );
+    }
+
+    /// Calling the same code path multiple times must not panic or cause issues.
+    /// The WARN_ONCE guarantees the warning fires only once, but subsequent calls
+    /// still return None (behavioral invariant).
+    #[test]
+    fn resolve_module_path_returns_none_repeatedly_when_root_path_unset() {
+        let server = LspServer::new();
+        for _ in 0..3 {
+            let result = server.resolve_module_path("Repeat::Module", None);
+            assert!(
+                result.is_none(),
+                "resolve_module_path must consistently return None when workspace root unset"
+            );
+        }
+    }
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 

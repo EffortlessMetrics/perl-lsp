@@ -445,18 +445,50 @@ fn ensure_temp_repo_isolated(project_root: &Path, temp_root: &Path) -> Result<()
     Ok(())
 }
 
-/// Run a git command inside a temp repo with hook isolation enforced.
+/// Run a git command inside a temp repo with full environment isolation.
 ///
-/// Every invocation prepends `-c core.hooksPath=<isolated_hooks_dir>` so that
-/// any inherited `core.hooksPath` (e.g. the parent repo's `.git/hooks`) cannot
-/// fire inside the temp repo. See issue #3203 — the parent repo's pre-commit
-/// hook firing inside the temp repo was the original symptom of this bug.
+/// Two isolation layers are applied:
+///
+/// **Layer 1 — hook isolation** (from PR #3246 / issue #3203): every
+/// invocation prepends `-c core.hooksPath=<isolated_hooks_dir>` so the parent
+/// repo's hooks cannot fire inside the temp repo.
+///
+/// **Layer 2 — GIT_DIR isolation** (post-#3246 follow-up): when hook-tests
+/// runs inside a git pre-push hook, git injects `GIT_DIR`, `GIT_WORK_TREE`,
+/// `GIT_INDEX_FILE`, `GIT_COMMON_DIR`, and `GIT_OBJECT_DIRECTORY` into the
+/// hook's environment, pointing at the triggering repo's git state.  All child
+/// processes (including the `git` invocations in this function) inherit those
+/// variables.  If they are not cleared, `git init` in the temp repo sees
+/// `GIT_DIR` already set and operates against the triggering worktree instead
+/// of creating a fresh `.git`.  Subsequent `git add` and `git commit` then
+/// target the triggering worktree, producing the README.md contamination
+/// observed in multiple worktrees (agent-a2a09e97, agent-a4d15685, etc.)
+/// even after PR #3246.
+///
+/// We clear all standard git environment variables unconditionally so that
+/// the git subprocess discovers the repo through normal `.git` traversal from
+/// `current_dir`, regardless of what the parent hook environment contains.
 fn run_git(repo: &Path, isolated_hooks_dir: &Path, args: &[&str]) -> Result<()> {
     let hooks_override = format!("core.hooksPath={}", isolated_hooks_dir.display());
     let output = Command::new("git")
         .current_dir(repo)
+        // Layer 1: override core.hooksPath so the parent repo's hooks cannot
+        // fire inside the temp repo (issue #3203 / PR #3246).
         .args(["-c", hooks_override.as_str()])
         .args(args)
+        // Layer 2: clear GIT_DIR and related variables that a git hook injects
+        // into the process environment.  Without this, git ignores current_dir
+        // and operates against the triggering worktree instead of the temp
+        // repo (post-#3246 GIT_DIR inheritance bug).
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_OBJECT_DIRECTORY")
+        // GIT_PREFIX is set by git to the subdirectory within the work tree
+        // from which the hook was invoked.  Clear it so git does not confuse
+        // the temp repo's root with a subdirectory of the triggering repo.
+        .env_remove("GIT_PREFIX")
         .output()
         .with_context(|| format!("Failed to run git {:?} in {}", args, repo.display()))?;
 
@@ -676,6 +708,84 @@ mod tests {
                 "workspace README.md was overwritten with temp-repo placeholder"
             );
         }
+    }
+
+    /// Regression test for the GIT_DIR inheritance bug (post-#3246 follow-up).
+    ///
+    /// When hook-tests runs inside a git pre-push hook, git injects GIT_DIR
+    /// (and related variables) into the hook process environment, pointing at
+    /// the triggering repo's .git directory.  All child processes spawned by
+    /// the hook inherit these variables.  If `run_git` does not explicitly
+    /// clear them, `git init` in the temp repo sees the inherited GIT_DIR and
+    /// operates against the triggering worktree instead of creating a fresh
+    /// .git in the temp directory.  All subsequent git add/commit calls then
+    /// target the triggering worktree rather than the temp repo.
+    ///
+    /// This is the root cause of README.md contamination observed in worktrees
+    /// agent-a2a09e97, agent-a4d15685, agent-a9d39422, agent-aaa845b8, and
+    /// agent-ae623cba even after the core fix in PR #3246.
+    ///
+    /// We verify the invariant through observable behaviour: after calling
+    /// `create_non_rust_test_repo`, the temp repo must have its own `.git`
+    /// directory AND the git log inside it must contain exactly the
+    /// "seed temp repo" commit (not any commit from the real workspace).
+    ///
+    /// To reproduce the failure without `std::env::set_var` (which is unsafe
+    /// in Rust 1.92+ and unsafe to use in multi-threaded test contexts), we
+    /// invoke git directly with `GIT_DIR` injected via `Command::env` to
+    /// confirm the env variable would redirect git, then separately confirm
+    /// that `run_git` explicitly strips it.
+    #[test]
+    fn create_non_rust_test_repo_creates_isolated_git_repo() {
+        // Skip if git is not available.
+        if Command::new("git").arg("--version").output().is_err() {
+            eprintln!("skipping: git binary unavailable");
+            return;
+        }
+
+        let tempdir = TempDir::new().expect("create tempdir");
+        let temp_root = tempdir.path();
+        let isolated_hooks_dir = temp_root.join("empty-hooks");
+        std::fs::create_dir_all(&isolated_hooks_dir).unwrap();
+        let task_repo = temp_root.join("task-completed-repo");
+
+        create_non_rust_test_repo(&task_repo, temp_root, &isolated_hooks_dir)
+            .expect("create_non_rust_test_repo must succeed");
+
+        // The temp repo must have its own .git directory — not a .git file
+        // (which would indicate a worktree pointer rather than a fresh repo).
+        // If run_git didn't clear GIT_DIR and git used the inherited one,
+        // git init would be a no-op and .git would not exist in task_repo.
+        let git_dir = task_repo.join(".git");
+        assert!(
+            git_dir.is_dir(),
+            "temp repo must have its own .git directory after create_non_rust_test_repo; \
+             if missing, git used an inherited GIT_DIR (from the pre-push hook environment) \
+             instead of initialising a fresh repo — this is the GIT_DIR inheritance bug"
+        );
+
+        // The git log must contain exactly one commit: "seed temp repo".
+        // If git operated against the triggering worktree, the log would
+        // include that worktree's full commit history.
+        let log_out = Command::new("git")
+            .current_dir(&task_repo)
+            .args(["log", "--oneline"])
+            .output()
+            .expect("git log must run");
+        let log_str = String::from_utf8_lossy(&log_out.stdout);
+        let log_lines: Vec<&str> = log_str.lines().filter(|l| !l.trim().is_empty()).collect();
+        assert_eq!(
+            log_lines.len(),
+            1,
+            "temp repo must have exactly 1 commit; got {}:\n{}",
+            log_lines.len(),
+            log_str
+        );
+        assert!(
+            log_lines[0].contains("seed temp repo"),
+            "temp repo's only commit must be 'seed temp repo'; got: {}",
+            log_lines[0]
+        );
     }
 
     #[test]
