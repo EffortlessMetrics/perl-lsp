@@ -19,6 +19,8 @@ import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
 import { StreamingCompletionController } from './streamingCompletion';
+import { classifyStartupError } from './startupDiagnosis';
+import type { StartupErrorDiagnosis } from './startupDiagnosis';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -727,25 +729,31 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         client = undefined;
         healthWidget?.onStateChange(ClientState.Stopped);
 
-        // Run diagnostics eagerly so the user sees the specific root cause
-        // (missing Perl, missing binary, etc.) instead of a generic restart message.
-        const onboarding = new OnboardingManager(context, outputChannel);
-        const diagnosticMessage = await onboarding.runStartupDiagnostics(currentServerPath);
-        lastStartupDiagnostic = diagnosticMessage;
-        outputChannel.appendLine(`[startup] Diagnostic: ${diagnosticMessage}`);
+        // Probe the binary to get an actionable OS-level diagnosis (#3280).
+        // lastStartupDiagnostic is updated so that serverNotRunningMessage() in
+        // command handlers surfaces the specific root cause rather than a generic prompt.
+        const diagnosis = currentServerPath
+            ? await probeStartupFailure(currentServerPath)
+            : classifyStartupError('');
+        lastStartupDiagnostic = `${diagnosis.hint} Suggestion: ${diagnosis.remediation}`;
+        const dialogMessage =
+            `Perl Language Server failed to start.\n\n${diagnosis.hint}\n\nSuggestion: ${diagnosis.remediation}`;
 
         const choice = await vscode.window.showErrorMessage(
-            diagnosticMessage,
-            'Show Output',
+            dialogMessage,
+            'View Logs',
+            'Run Health Check',
             'Reinstall',
-            'Run Health Check'
+            'Check serverPath Setting'
         );
-        if (choice === 'Show Output') {
+        if (choice === 'View Logs') {
             outputChannel.show();
-        } else if (choice === 'Reinstall') {
-            await reinstallServerBinary(context);
         } else if (choice === 'Run Health Check') {
             await vscode.commands.executeCommand('perl-lsp.runHealthCheck', currentServerPath);
+        } else if (choice === 'Reinstall') {
+            await reinstallServerBinary(context);
+        } else if (choice === 'Check serverPath Setting') {
+            void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
         }
         return false;
     }
@@ -887,6 +895,32 @@ export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent)
     }
 
     void vscode.commands.executeCommand('editor.action.triggerSuggest');
+}
+
+/**
+ * Probe the LSP binary directly and return diagnostic information.
+ *
+ * Runs the binary with `--version` (fast probe, 3s timeout). On failure,
+ * classifies the stderr output into an actionable diagnosis.
+ */
+async function probeStartupFailure(serverPath: string): Promise<StartupErrorDiagnosis> {
+    return new Promise(resolve => {
+        execFile(serverPath, ['--version'], { timeout: 3000 }, (err: Error | null, stdout: string, stderr: string) => {
+            const combined = [stderr, stdout].filter(Boolean).join('\n').trim();
+            if (err) {
+                // Prefer the exec error message as context when stderr is empty
+                const diagInput = combined || err.message;
+                outputChannel.appendLine(`[startup-probe] Binary probe failed: ${err.message}`);
+                if (combined) {
+                    outputChannel.appendLine(`[startup-probe] stderr: ${combined}`);
+                }
+                resolve(classifyStartupError(diagInput));
+            } else {
+                // Binary responded fine — classify as unknown (client-level issue)
+                resolve(classifyStartupError(''));
+            }
+        });
+    });
 }
 
 /**
