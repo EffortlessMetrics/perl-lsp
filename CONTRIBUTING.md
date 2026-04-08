@@ -1,30 +1,62 @@
 # Contributing to Perl LSP
 
-Thank you for your interest in contributing to Perl LSP! Whether you're fixing a bug, improving the parser, or adding an LSP feature, this guide will help you get started.
+Thank you for your interest in contributing to Perl LSP! This is a **public alpha** — the core feature set is solid, but there are rough edges and plenty of room to help. Whether you are fixing a bug, improving Perl parsing coverage, or adding an LSP feature, you are welcome here.
+
+> **Public alpha means:** things move fast, APIs may change between minor versions, and your early feedback shapes the 1.0 design. See [STABILITY.md](docs/reference/STABILITY.md) for the stability policy.
+
+## Quick Start
+
+Clone, build, and run the tests in three commands:
+
+```bash
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
+cd perl-lsp
+nix develop -c just ci-gate   # Reproducible env + full local gate (~3-5 min)
+```
+
+No Nix? Install Rust via [rustup](https://rustup.rs/) (MSRV 1.92, pinned in `rust-toolchain.toml`), then:
+
+```bash
+just ci-gate
+```
 
 ## Getting Started
 
 ### Prerequisites
 
 - **Rust** toolchain (pinned via `rust-toolchain.toml`, MSRV 1.92)
-- **Nix** (recommended) for a reproducible dev environment
+- **Nix** (recommended) for a fully reproducible dev environment — `nix develop` drops you into a shell with all tools present
+- **just** — task runner used for all build/test/lint commands (`cargo install just` or via Nix)
 
 ### Setup
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-nix develop          # Recommended: reproducible environment
+nix develop          # Recommended: reproducible environment with all tools
 
-# Or without Nix -- just ensure Rust is installed:
+# Or without Nix -- just ensure Rust and just are installed:
 # curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# cargo install just
+```
+
+Install the pre-push git hook so the gate runs automatically before every push:
+
+```bash
+bash scripts/install-githooks.sh
 ```
 
 ### Build and Test
 
 ```bash
-cargo build -p perllsp --release      # Build the public LSP binary
+cargo build -p perl-lsp-rs --release  # Build the LSP server binary
 cargo test --workspace --lib          # Run all library tests
+```
+
+If something looks broken, `just doctor` diagnoses common environment issues (missing tools, stale worktrees, drift between generated files and source):
+
+```bash
+just doctor
 ```
 
 ## Project Structure
@@ -58,110 +90,110 @@ For the full crate map, key paths, and architecture details, see [CLAUDE.md](CLA
 git checkout -b feature/your-feature-name
 ```
 
-### 2. Check the environment
+### 2. Check the environment (optional but useful)
 
 ```bash
-just devex
+just devex      # Verifies that required tools are available and in a good state
+just doctor     # Deeper workspace health check — finds drift, stale files, config issues
 ```
 
 ### 3. Iterate locally
 
 ```bash
-just pr-fast
+just pr-fast    # Fastest checks: fmt + clippy + tests (~1-2 min). Run this often.
 ```
 
 ### 4. Run the canonical pre-push gate
 
+This is required before opening a PR. It runs the same checks CI runs:
+
 ```bash
-nix develop -c just ci-gate
+nix develop -c just ci-gate   # Recommended: reproducible env (~3-5 min)
 # or, without Nix:
 just ci-gate
+```
+
+The pre-push git hook runs this automatically if you installed it:
+
+```bash
+bash scripts/install-githooks.sh
 ```
 
 ### 5. Expand for larger changes or release prep
 
 ```bash
-just ci-full
+just ci-full    # Full pipeline including mutation testing, fuzzing, benchmarks (~15-30 min)
 ```
 
-### 6. Keep docs and status in sync
+### 6. Keep docs and status in sync (only needed if you changed metrics or generated files)
 
 ```bash
 just status-update
 just status-check
 ```
 
-### 7. Before a release candidate
-
-```bash
-just release-check
-```
-
-Install the pre-push hook to run the gate automatically:
-
-```bash
-bash scripts/install-githooks.sh
-```
-
-### 5. Open a Pull Request
+### 7. Open a Pull Request
 
 1. Push your branch and open a PR
-2. Give the PR a CI-safe title in the form `type(scope): summary (#1234)` so
-   the title check passes on the first run
+2. Give the PR a CI-safe title in the form `type(scope): summary (#1234)` — the title format is validated by a CI workflow, so get it right the first time
 3. Describe your changes and link related issues in the PR body
 4. All PRs run format checks, clippy, and tests automatically in CI
-5. Merge with a conventional, descriptive squash commit
-
-Once checks are green and reviews are complete, use an explicit conventional commit
-subject when squashing so history is release-friendly and changelog-friendly.
-
-```bash
-pr=<number>
-gh pr merge "$pr" --squash \
-  --subject "feat(lsp): ... " \
-  --body "PR summary:
-- ...
-```
 
 Conventional subject format:
 
 - `feat(scope): imperative summary`
 - `fix(scope): imperative summary`
+- `fix(scope)!: imperative summary` — include `!` before the colon for breaking changes
 - `chore(scope): imperative summary`
-- include `!` for breaking changes, e.g. `feat!: ...`
+- `docs(scope): imperative summary`
+- `test(scope): imperative summary`
 
-Do not rely on PR title defaults (often noisy, e.g. `(...#NNNN)`), because they
-break commit consistency for changelog generation and can fail `validate-title`.
-
-Example PR title:
+Example PR titles:
 
 ```text
-docs(parser): rewrite the upgrade guide (#3052)
+fix(parser): handle here-doc inside ternary (#3052)
+feat(lsp): add rename symbol provider (#2980)
+docs(contributing): refresh for v0.13.0 public alpha (#3200)
 ```
 
-If you are driving the work from an agent or a worktree, keep the branch scoped
-to one concern and open the PR from that isolated worktree instead of editing
-the main checkout.
+Do not rely on PR title defaults (often noisy, e.g. `Merge branch ...` or the GitHub auto-fill), because they fail `validate-title` and break changelog generation.
 
-#### CI Labels and Gates
+#### What Happens After You Open a PR
 
-The current PR smoke, merge gate, and label-gated workflows are documented in
-[docs/project/CI.md](docs/project/CI.md) and
-[docs/project/CI_TEST_LANES.md](docs/project/CI_TEST_LANES.md).
-If you change docs or generated status output, run `just status-update` and
-`just status-check` before opening the PR.
+PRs go through a two-pass review before merging:
+
+1. **Standards review** (haiku-tier) — checks formatting, clippy compliance, test coverage, and scope
+2. **Deep correctness review** (sonnet-tier) — checks logic, edge cases, and correctness for feature PRs
+
+You will see pipeline labels added to your PR:
+
+| Label | Meaning |
+|-------|---------|
+| `in-review` | A reviewer has picked up your PR |
+| `needs-deep-review` | Standards review done, awaiting deep correctness pass |
+| `reviewed-deep` | Both review passes complete |
+| `merge-ready` | Approved and ready for merge |
+
+The CI merge gate only runs on `merge-ready` PRs. This keeps the queue clean — do not worry if CI looks quiet on your draft.
+
+For more detail on the CI structure see [docs/project/CI.md](docs/project/CI.md) and [docs/project/CI_TEST_LANES.md](docs/project/CI_TEST_LANES.md).
 
 ## Coding Standards
 
+These are the rules that CI enforces. The quick version: no panics, no unwraps, no debug prints in production code. Use `?` for error propagation and `Result<()>` in tests.
+
+For full detail and rationale, see [CLAUDE.md](CLAUDE.md#coding-standards).
+
 ### Formatting and Linting
 
-- Run `cargo fmt --all` before every commit
-- Fix all `cargo clippy --workspace` warnings
+- Run `cargo fmt --all` before every commit — `just ci-gate` will catch this, but the sooner the better
+- Fix all `cargo clippy --workspace` warnings — clippy is treated as errors in CI
 - Use [conventional commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, etc.
-- For squash merges, prefer scope-qualified forms such as
-  `feat(lsp): ...`, `fix(dap): ...`, `chore(release): ...`, etc.
+- Scope-qualify commit subjects: `feat(lsp): ...`, `fix(dap): ...`, `chore(release): ...`
 
 ### Banned in Production Code
+
+These constructs cause panics or hide errors. They are checked by `ci-gate` and will fail CI:
 
 | Banned | Use Instead |
 |--------|-------------|
@@ -170,7 +202,7 @@ If you change docs or generated status output, run `just status-update` and
 | `dbg!()` | `tracing::debug!` |
 | `std::process::exit()` | Only in `bin/` and `lifecycle.rs` |
 
-In tests: use `Result<()>` returns or `perl_tdd_support::must` / `must_some` helpers.
+In tests: use `Result<()>` returns or `perl_tdd_support::must` / `must_some` helpers instead of `unwrap()`.
 
 ### Style Preferences
 
