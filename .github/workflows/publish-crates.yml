@@ -528,6 +528,12 @@ jobs:
             PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
           done < "$CRATES_LIST"
 
+          if [ "$DRY_RUN" = "true" ]; then
+            echo ""
+            echo "DRY RUN complete: $TOTAL crates packaged (no actual publish)."
+            exit 0
+          fi
+
           echo ""
           echo "PUBLISHED: ${PUBLISHED_COUNT}/${TOTAL}"
           if [ "${#FAILED_CRATES[@]}" -gt 0 ]; then
