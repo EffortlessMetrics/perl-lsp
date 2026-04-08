@@ -2020,6 +2020,18 @@ release-turnkey VERSION *ARGS="":
 publish-release VERSION *ARGS="":
     @cargo xtask publish-release "{{VERSION}}" {{ARGS}}
 
+# Manually publish the 4 new crates for v0.12.2 one at a time with 10-min gaps.
+# Use when the automated workflow is blocked by crates.io's new-crate rate limit
+# (burst=5, refill=1/10 min — separate from the update limit fixed in #3307).
+# See docs/reference/MANUAL_PUBLISH_NEW_CRATES.md for full context.
+#
+# Dry run (safe, no actual publishing):
+#   DRY_RUN=true just publish-new-crates
+# Live run:
+#   CARGO_REGISTRY_TOKEN=<token> just publish-new-crates
+publish-new-crates:
+    bash scripts/publish-new-crates-manually.sh
+
 # Dry-run publish gate: package every allowlisted crate in topological order.
 # Mirrors the dev-dep strip and packaging steps from publish-crates.yml.
 # Runs automatically in CI on every PR that touches Cargo.toml.
