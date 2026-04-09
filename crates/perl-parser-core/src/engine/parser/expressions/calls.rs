@@ -635,6 +635,9 @@ impl<'a> Parser<'a> {
                     }
                     args.push(arg);
                     s.tokens.next()?; // consume =>
+                    if s.peek_kind() == Some(TokenKind::FatArrow) {
+                        s.tokens.next()?; // consume redundant chained =>
+                    }
                     // Continue to parse more arguments (the value after =>)
                     continue;
                 }

@@ -39,6 +39,11 @@ fn test_arrow_local_method() {
 }
 
 #[test]
+fn test_arrow_word_not_method() {
+    assert_no_errors("$self->not($self->new->$method(@_));\n");
+}
+
+#[test]
 fn test_arrow_local_method_full_context() {
     let source = r#"use strict;
 use warnings;

@@ -117,7 +117,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
 
 ## Status
 
-**Current release: v0.12.2** — public alpha. The 0.12.x line is building parser corpus confidence, diagnostic hardening, and distribution coverage toward the v0.13.0 public alpha announcement. See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the milestone ladder and [docs/project/status/index.md](docs/project/status/index.md) for live metrics.
+**Current release: v0.12.3** — public alpha. The 0.12.x line is building parser corpus confidence, diagnostic hardening, and distribution coverage toward the v0.13.0 public alpha announcement. See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the milestone ladder and [docs/project/status/index.md](docs/project/status/index.md) for live metrics.
 
 ## Security
 

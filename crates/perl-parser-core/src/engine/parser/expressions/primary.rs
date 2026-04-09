@@ -634,6 +634,9 @@ impl<'a> Parser<'a> {
                             );
                         }
                         self.tokens.next()?; // consume =>
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            self.tokens.next()?; // consume redundant chained =>
+                        }
                         // The value after => may be followed by a word operator inside the list:
                         // e.g. `(key => $val or "default")`.
                         let val = self.parse_assignment_or_declaration()?;
@@ -664,6 +667,9 @@ impl<'a> Parser<'a> {
                                 }
                             }
                             self.consume_token()?; // consume =>
+                            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                                self.consume_token()?; // consume redundant chained =>
+                            }
                         }
 
                         if self.peek_kind() == Some(TokenKind::RightParen) {
@@ -682,6 +688,9 @@ impl<'a> Parser<'a> {
                                 );
                             }
                             self.consume_token()?; // consume =>
+                            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                                self.consume_token()?; // consume redundant chained =>
+                            }
                             elements.push(elem);
                             if self.peek_kind() != Some(TokenKind::RightParen) {
                                 // The value after => may be followed by a word operator.

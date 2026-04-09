@@ -62,3 +62,28 @@ fn bare_regex_at_file_start() {
 fn regex_after_not_binding_op() {
     assert_clean_parse("if ($str !~ /bad/) { 1; }");
 }
+
+#[test]
+fn bare_regex_rhs_of_word_and_in_grep_block() {
+    assert_clean_parse(
+        r#"grep {
+    substr($_, -2, 2, '') eq '::'
+    and /$RE_IDENTIFIER/o
+} keys %{"${name}::"};"#,
+    );
+}
+
+#[test]
+fn bare_regex_after_unary_not_in_grep_block() {
+    assert_clean_parse(r#"grep { ! /^\_/ } @methodlist;"#);
+}
+
+#[test]
+fn bare_regex_rhs_of_word_and_in_nested_condition() {
+    assert_clean_parse(
+        r#"grep {
+    ($opts{include_main} and /^\Q$basename\E\.orig\.tar\.$opts{extension}$/) or
+    ($opts{include_supplementary} and /^\Q$basename\E\.orig-[[:alnum:]-]+\.tar\.$opts{extension}$/)
+} readdir($dir_dh);"#,
+    );
+}

@@ -19,6 +19,11 @@ fn test_typeglob_assign_ref_to_sub() {
 }
 
 #[test]
+fn test_typeglob_assign_word_operator_name() {
+    assert_clean_parse(r#"*or = \&any;"#);
+}
+
+#[test]
 fn test_typeglob_dynamic_assign_sub() {
     assert_clean_parse(r#"*{$name} = sub { return 1 };"#);
 }
