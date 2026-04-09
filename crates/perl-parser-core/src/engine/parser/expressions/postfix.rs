@@ -945,7 +945,7 @@ impl<'a> Parser<'a> {
                                     }
                                 } else {
                                     // Parse the first argument
-                                    args.push(self.parse_ternary()?);
+                                    args.push(self.parse_assignment_or_declaration()?);
 
                                     // Special case: print/say/printf/exec/send with indirect object.
                                     // `print $fh $msg` / `send $sock $msg` — first arg is the
@@ -991,7 +991,7 @@ impl<'a> Parser<'a> {
                                             if self.is_at_statement_end() {
                                                 break;
                                             }
-                                            args.push(self.parse_ternary()?);
+                                            args.push(self.parse_assignment_or_declaration()?);
                                         }
                                     }
 
@@ -1005,7 +1005,7 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_ternary()?);
+                                        args.push(self.parse_assignment_or_declaration()?);
                                     }
                                 }
 

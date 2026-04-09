@@ -9,7 +9,7 @@
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; 58 user-visible features at 100% coverage (102/102 including plumbing protocol methods) — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
-- **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates
+- **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates, with coverage tracked against Ubuntu system Perl, the CPAN top 1000, and the repo-owned corpus
 - **Refactoring engine**: inline and move-code flows exist; broader refactoring hardening is still roadmap work
 - **Safety ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
 - **Security**: hardening exists for path traversal, command injection, DAP evaluate, and perldoc/perlcritic argument injection
@@ -33,7 +33,7 @@
 - Resume parser, corpus, and semantic hardening immediately after the `v0.13.0` tag
 
 **Next (v0.13.0 public alpha)**
-- Ratchet system-corpus and CPAN baselines as parser coverage improves
+- Keep all three parser corpus lanes current: Ubuntu system Perl, the cached CPAN top 1000 install, and the repo-owned corpus audit
 - Fold internal torture and edge-case suites into routine verification receipts
 - Publish benchmark and release-readiness receipts for the alpha burndown
 
@@ -64,5 +64,5 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-04-08 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
+*Last Updated: 2026-04-09 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
 *Canonical docs: [ROADMAP.md](../ROADMAP.md), [../../features.toml](../../features.toml)*

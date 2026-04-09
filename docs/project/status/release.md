@@ -35,18 +35,13 @@
 
 Native + Bridge preview. Harden preview flows is active work.
 
-## Parser Audit Receipts (2026-03-17)
+## Corpus Tracking Receipts
 
-- `just parser-audit` reports `91/91` repo-corpus files parse cleanly
-- `63/68` NodeKinds covered (`92.6%`)
-- `12/12` GA features covered
-- One remaining `P2` interpolation-heavy hang-risk candidate in `crates/perl-corpus/src/gen/builtins.rs`
-
-## CPAN Baseline Receipts (2026-03-20)
-
-- `.ci/cpan-corpus-baseline.json` holds the full-corpus baseline at `3717/4355` clean (`85.4%`) against the installed CPAN top 1000 distributions
+- **Ubuntu system Perl baseline (`.ci/parser-corpus-baseline.json`, 2026-04-09)**: `6866/7095` clean (`96.8%`) on Perl `5.038002`; refreshed after fixing the `unexpected_fat_arrow_expr` and `unexpected_slash_expr` corpus regressions
+- **CPAN top 1000 baseline (`.ci/cpan-corpus-baseline.json`, 2026-03-20)**: `3717/4355` clean (`85.4%`) against the installed top-1000 corpus; the install lane now reuses `target/cpan-corpus/.cpanm` so refreshes do not redownload from scratch
+- **Repo-owned corpus (`just parser-audit` / `status/parser.md`)**: `91/91` clean, `64/68` NodeKinds covered, `12/12` GA features covered across `test_corpus/` plus `crates/perl-corpus/src/gen`
 - `.ci/cpan-corpus-manifest.txt` carries `4337` modules in the strict known-clean list (expanded from the `1849` v0.12.0 snapshot via #2981)
-- Baseline is current for the 0.12.3 release: zero parser/lexer source changes have landed since the baseline was generated
+- The committed baselines now reflect two refresh cadences for the 0.12.3 release posture: Ubuntu system Perl was rerun on 2026-04-09 after parser fixes, while the CPAN top-1000 receipt remains the 2026-03-20 baseline until the full install lane is rerun
 
 ## Coverage Baseline Receipts (2026-03-17)
 
@@ -62,4 +57,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-04-08*
+*Last Updated: 2026-04-09*

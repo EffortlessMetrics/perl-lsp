@@ -396,13 +396,12 @@ where
         return Some(direct);
     }
 
-    #[cfg(windows)]
+    // Keep the production Windows-only behavior in `windows_manifest_module_path`,
+    // but allow tests to inject a converter regardless of host platform.
+    if let Some(converted) = windows_converter(path)
+        && converted.exists()
     {
-        if let Some(converted) = windows_converter(path)
-            && converted.exists()
-        {
-            return Some(converted);
-        }
+        return Some(converted);
     }
 
     None

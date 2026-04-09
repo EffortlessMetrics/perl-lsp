@@ -473,6 +473,100 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Auto-quote a bare identifier when it appears on the left side of `=>`.
+    fn autoquote_fat_arrow_key(node: &mut Node) {
+        if let NodeKind::Identifier { ref name } = node.kind {
+            *node = Node::new(
+                NodeKind::String { value: name.clone(), interpolated: false },
+                node.location,
+            );
+        }
+    }
+
+    /// Continue parsing a comma / fat-arrow separated list when the first
+    /// element was already parsed by the caller.
+    ///
+    /// This is the shared low-precedence collector used by expression parsing
+    /// after a leading element is known. It stops at hard delimiters and at
+    /// statement modifiers unless the modifier token itself is being used as an
+    /// autoquoted hash key before `=>`.
+    fn collect_comma_fat_arrow_continuation(&mut self, first: Node) -> ParseResult<Node> {
+        if self.peek_kind() != Some(TokenKind::Comma)
+            && self.peek_kind() != Some(TokenKind::FatArrow)
+        {
+            return Ok(first);
+        }
+
+        let start = first.location.start;
+        let mut expressions = vec![first];
+        let mut saw_fat_arrow = false;
+
+        if self.peek_kind() == Some(TokenKind::FatArrow) {
+            saw_fat_arrow = true;
+            if let Some(last) = expressions.last_mut() {
+                Self::autoquote_fat_arrow_key(last);
+            }
+            self.consume_token()?; // consume =>
+            expressions.push(self.parse_assignment()?);
+        }
+
+        while self.peek_kind() == Some(TokenKind::Comma)
+            || self.peek_kind() == Some(TokenKind::FatArrow)
+        {
+            let was_comma = self.peek_kind() == Some(TokenKind::Comma);
+            if was_comma {
+                self.consume_token()?; // consume comma
+            }
+
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                saw_fat_arrow = true;
+                if !was_comma {
+                    if let Some(last) = expressions.last_mut() {
+                        Self::autoquote_fat_arrow_key(last);
+                    }
+                }
+                self.consume_token()?; // consume =>
+            }
+
+            match self.peek_kind() {
+                Some(TokenKind::Semicolon)
+                | Some(TokenKind::RightParen)
+                | Some(TokenKind::RightBrace)
+                | Some(TokenKind::RightBracket) => break,
+                Some(k) if Self::is_stmt_modifier_kind(k) && !self.is_keyword_before_fat_arrow() => {
+                    break;
+                }
+                _ => {}
+            }
+
+            let mut elem = self.parse_assignment()?;
+
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                saw_fat_arrow = true;
+                Self::autoquote_fat_arrow_key(&mut elem);
+                self.consume_token()?; // consume =>
+                expressions.push(elem);
+
+                match self.peek_kind() {
+                    Some(TokenKind::Semicolon)
+                    | Some(TokenKind::RightParen)
+                    | Some(TokenKind::RightBrace)
+                    | Some(TokenKind::RightBracket) => break,
+                    Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                    _ => expressions.push(self.parse_assignment()?),
+                }
+            } else {
+                expressions.push(elem);
+            }
+        }
+
+        let end = expressions
+            .last()
+            .map(|expr| expr.location.end)
+            .unwrap_or(start);
+        Ok(Self::build_list_or_hash(expressions, saw_fat_arrow, start, end))
+    }
+
     /// Record a parse error for later retrieval
     fn record_error(&mut self, error: ParseError) {
         self.errors.push(error);
@@ -785,6 +879,17 @@ impl<'a> Parser<'a> {
     /// must NOT be a string comparison operator (`eq`, `ne`, `lt`, `gt`, etc.)
     /// or a keyword token.
     fn looks_like_bare_call(&mut self, name: &str) -> bool {
+        if self
+            .peek_kind()
+            .is_some_and(|kind| matches!(kind, TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State))
+        {
+            return !name.is_empty()
+                && (name.contains("::")
+                    || name.starts_with(|c: char| {
+                        c.is_ascii_alphabetic() || c == '_'
+                    }));
+        }
+
         // Only lowercase identifiers can be bare function calls.
         // Uppercase identifiers like `FIRST_FD` are constants.
         if name.is_empty() || !name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_') {

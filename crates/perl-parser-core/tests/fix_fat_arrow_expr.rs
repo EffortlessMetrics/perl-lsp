@@ -321,6 +321,48 @@ fn catalyst_action() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn map_block_with_builtin_call_key_expr() {
+    let source = r#"our %ENCODE_NAME_OF = map { uc $MIME_NAME_OF{$_} => $_ } keys %MIME_NAME_OF;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn map_block_with_ternary_key_expr_in_arrayref() {
+    let source = r#"my @pattern = map { [ ( ref $_ ? $_ : qr/$_/ ) => 0 ] } @values;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn readonly_style_scalar_decl_before_fat_arrow() {
+    let source = r#"if (ref eq 'SCALAR') { Scalar my $v => $$_; $_ = \$v }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn readonly_style_array_decl_before_fat_arrow() {
+    let source = r#"if (ref eq 'ARRAY') { Array my @v => @$_; $_ = \@v }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn readonly_style_hash_decl_before_fat_arrow() {
+    let source = r#"if (ref eq 'HASH') { Hash my %v => $_; $_ = \%v }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn word_or_rhs_hash_pair() {
+    let source = r#"$a or foo => 1;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn word_and_rhs_hash_pair() {
+    let source = r#"$a and foo => 1;"#;
+    assert_clean_parse(source);
+}
+
 // DBI connect with hash
 #[test]
 fn dbi_connect_hash() {

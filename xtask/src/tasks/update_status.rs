@@ -7,7 +7,7 @@
 //! Subsystem files written:
 //!   - docs/project/status/lsp.md     (LSP coverage + compliance table)
 //!   - docs/project/status/tests.md   (test counts + tracked debt)
-//!   - docs/project/status/parser.md  (corpus stats)
+//!   - docs/project/status/parser.md  (parser corpus tracking)
 //!   - docs/project/status/quality.md (mutation score, perf)
 //!
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
@@ -127,13 +127,12 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Parser subsystem ---
     if need_parser {
-        let corpus_sections = count_corpus_sections(&root);
-        let gap_files = count_gap_files(&root);
+        let parser_metrics = collect_parser_metrics(&root);
 
         let parser_path = root.join("docs/project/status/parser.md");
         let original_parser =
             fs::read_to_string(&parser_path).context("reading docs/project/status/parser.md")?;
-        let updated_parser = generate_parser_status(corpus_sections, gap_files, &original_parser)?;
+        let updated_parser = generate_parser_status(&parser_metrics, &original_parser)?;
         if updated_parser != original_parser {
             files_to_update.push(("docs/project/status/parser.md", parser_path, updated_parser));
         }
@@ -433,8 +432,30 @@ fn compute_compliance_table(root: &Path) -> Result<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Corpus counts
+// Parser corpus tracking
 // ---------------------------------------------------------------------------
+
+struct ParserMetrics {
+    syntax_sections: usize,
+    system_receipt: Option<super::parser_corpus_sweep::SweepReport>,
+    cpan_receipt: Option<super::parser_corpus_sweep::SweepReport>,
+    project_corpus: Option<super::corpus_audit::StatusSummary>,
+}
+
+fn collect_parser_metrics(root: &Path) -> ParserMetrics {
+    ParserMetrics {
+        syntax_sections: count_corpus_sections(root),
+        system_receipt: read_sweep_report(&root.join(".ci/parser-corpus-baseline.json")),
+        cpan_receipt: read_sweep_report(&root.join(".ci/cpan-corpus-baseline.json")),
+        project_corpus: super::corpus_audit::compute_status_summary(root, Duration::from_secs(5))
+            .ok(),
+    }
+}
+
+fn read_sweep_report(path: &Path) -> Option<super::parser_corpus_sweep::SweepReport> {
+    let raw = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
 
 fn count_corpus_sections(root: &Path) -> usize {
     let corpus_dir = root.join("tree-sitter-perl/test/corpus");
@@ -456,13 +477,13 @@ fn count_corpus_sections(root: &Path) -> usize {
     total
 }
 
-fn count_gap_files(root: &Path) -> usize {
-    let gap_dir = root.join("test_corpus");
-    walkdir::WalkDir::new(&gap_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "pl"))
-        .count()
+fn format_clean_rate(clean_files: usize, total_files: usize) -> String {
+    let clean_pct = 100.0 * clean_files as f64 / total_files.max(1) as f64;
+    format!("{clean_pct:.1}% clean (`{clean_files}/{total_files}`)")
+}
+
+fn short_day(timestamp: &str) -> &str {
+    timestamp.get(..10).unwrap_or(timestamp)
 }
 
 // ---------------------------------------------------------------------------
@@ -609,21 +630,82 @@ fn generate_tests_status(
     Ok(text)
 }
 
-fn generate_parser_status(
-    corpus_sections: usize,
-    gap_files: usize,
-    original: &str,
-) -> Result<String> {
-    let parser_coverage_bullet = format!(
-        "- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~{corpus_sections} sections) + `test_corpus/` ({gap_files} `.pl` files)"
+fn generate_parser_status(metrics: &ParserMetrics, original: &str) -> Result<String> {
+    let system_row = metrics.system_receipt.as_ref().map_or_else(
+        || {
+            "| **Ubuntu system Perl** | UNVERIFIED | baseline receipt unavailable | `.ci/parser-corpus-baseline.json` |".to_string()
+        },
+        |report| {
+            format!(
+                "| **Ubuntu system Perl** | {} | Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                format_clean_rate(report.clean_files, report.total_files),
+                report.perl_version,
+                report.files_unreadable,
+                report.files_with_errors,
+                short_day(&report.timestamp),
+            )
+        },
     );
 
-    replace_block(
-        original,
+    let cpan_row = metrics.cpan_receipt.as_ref().map_or_else(
+        || {
+            "| **CPAN top 1000** | UNVERIFIED | baseline receipt unavailable | `.ci/cpan-corpus-baseline.json` |".to_string()
+        },
+        |report| {
+            format!(
+                "| **CPAN top 1000** | {} | `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                format_clean_rate(report.clean_files, report.total_files),
+                report.files_unreadable,
+                report.files_with_errors,
+                short_day(&report.timestamp),
+            )
+        },
+    );
+
+    let project_row = metrics.project_corpus.as_ref().map_or_else(
+        || {
+            "| **Project corpus** | UNVERIFIED | live repo scan unavailable | `test_corpus/` + `crates/perl-corpus/src/gen` |".to_string()
+        },
+        |summary| {
+            format!(
+                "| **Project corpus** | {} | `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
+                format_clean_rate(summary.ok_files, summary.total_files),
+                summary.test_corpus_files,
+                summary.perl_corpus_files,
+                summary.error_files,
+                summary.timeout_files,
+                summary.panic_files,
+                summary.nodekind_covered,
+                summary.nodekind_total,
+                summary.ga_covered,
+                summary.ga_total,
+            )
+        },
+    );
+
+    let tracking_table = [system_row, cpan_row, project_row].join("\n");
+
+    let parser_coverage_bullets = format!(
+        "- **Tracking model**: parser coverage is measured against three targets: Ubuntu system Perl, the cached CPAN top-1000 install, and the repo-owned corpus.\n\
+         - **Fixture bank**: `tree-sitter-perl/test/corpus` contributes ~{} focused syntax sections for targeted parser cases.\n\
+         - **CPAN install hygiene**: `cargo xtask cpan-corpus install` reuses `target/cpan-corpus/.cpanm`; pass `--reset` only for a cold rebuild.",
+        metrics.syntax_sections,
+    );
+
+    let mut text = original.to_string();
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_TRACKING_TABLE -->",
+        "<!-- END: PARSER_TRACKING_TABLE -->",
+        &tracking_table,
+    )?;
+    text = replace_block(
+        &text,
         "<!-- BEGIN: PARSER_METRICS_BULLETS -->",
         "<!-- END: PARSER_METRICS_BULLETS -->",
-        &parser_coverage_bullet,
-    )
+        &parser_coverage_bullets,
+    )?;
+    Ok(text)
 }
 
 fn generate_quality_status(original: &str) -> Result<String> {
@@ -696,10 +778,12 @@ mod tests {
     }
 
     #[test]
-    fn test_gap_file_count() -> Result<()> {
+    fn test_parser_receipts_load() -> Result<()> {
         let root = project_root()?;
-        let count = count_gap_files(&root);
-        assert!(count > 0, "expected nonzero gap .pl files");
+        let metrics = collect_parser_metrics(&root);
+        assert!(metrics.system_receipt.is_some(), "expected system corpus baseline receipt");
+        assert!(metrics.cpan_receipt.is_some(), "expected CPAN corpus baseline receipt");
+        assert!(metrics.project_corpus.is_some(), "expected live repo corpus summary");
         Ok(())
     }
 
@@ -758,6 +842,10 @@ mod tests {
         );
 
         let parser = fs::read_to_string(status_dir.join("parser.md"))?;
+        assert!(
+            parser.contains("<!-- BEGIN: PARSER_TRACKING_TABLE -->"),
+            "parser.md missing PARSER_TRACKING_TABLE block"
+        );
         assert!(
             parser.contains("<!-- BEGIN: PARSER_METRICS_BULLETS -->"),
             "parser.md missing PARSER_METRICS_BULLETS block"

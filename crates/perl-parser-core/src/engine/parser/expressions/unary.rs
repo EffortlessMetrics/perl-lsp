@@ -21,6 +21,10 @@ fn is_typeglob_punct_terminator(kind: Option<TokenKind>) -> bool {
 impl<'a> Parser<'a> {
     /// Parse unary expression
     fn parse_unary(&mut self) -> ParseResult<Node> {
+        if self.peek_kind() == Some(TokenKind::Slash) {
+            self.tokens.relex_as_term();
+        }
+
         if let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Minus => {
