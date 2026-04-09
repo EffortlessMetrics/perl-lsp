@@ -5,7 +5,7 @@
 
 ## What's True Right Now
 
-- **Release posture**: the latest published GitHub release is `v0.12.2` (2026-04-07), the workspace version line is `v0.12.3`, and the active milestone is `v0.12.3` pipeline-rehearsal release prep (the last launch gate before `v0.13.0` public alpha)
+- **Release posture**: GitHub Releases plus the editor channels (VS Code Marketplace and Open VSX) are live on `v0.12.3` as of 2026-04-09, the workspace version line is `v0.12.3`, crates.io intentionally remains on `v0.12.2`, and the active milestone is the `v0.13.0` public alpha announcement
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; 58 user-visible features at 100% coverage (102/102 including plumbing protocol methods) — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
@@ -26,12 +26,12 @@
 
 ## What's Next
 
-**Now (active milestone: v0.12.3 pipeline-rehearsal release prep)**
-- Close out `#3302` demo-asset recording — the only remaining human-owned blocker before the `v0.13.0` public alpha announcement
-- Tag `v0.12.3` against the green master at `a5680401` once assets land (CHANGELOG entry already on master from #3287)
+**Now (active milestone: v0.13.0 public alpha announcement)**
+- Close out `#3302` demo-asset recording — the main remaining human-owned blocker before the `v0.13.0` public alpha announcement
+- Keep the public release split explicit: GitHub Releases, VS Code Marketplace, and Open VSX are on `v0.12.3`, while crates.io remains on `v0.12.2` until the registry window reopens
 - Keep the three parser verification lanes explicit and green: `just corpus-sweep-check`, `just cpan-corpus-check`, and `just parser-audit`, with `just common-corpus-check` covering the pinned strict-clean subset
-- Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line, the `perl-lsp-rs` VS Code package, and the crates.io publish surface
-- Resume parser, corpus, and semantic hardening immediately after the `v0.13.0` tag
+- Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line, the `perl-lsp-rs` extension package, and the delayed crates.io surface
+- Resume parser, corpus, and semantic hardening while the `v0.13.0` announcement pass stays open
 
 **Next (v0.13.0 public alpha)**
 - Keep all three parser corpus lanes current: Ubuntu system Perl, the cached CPAN top 1000 install, and the repo-owned corpus audit

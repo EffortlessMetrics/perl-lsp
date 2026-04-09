@@ -13,12 +13,13 @@ project docs when you need exact release facts, receipts, or milestone detail.
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
 - Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
-## Now (pre-announcement cleanup)
+## Now (post-v0.12.3 ship / pre-announcement cleanup)
 
-- `v0.12.2` shipped to GitHub Releases on 2026-04-04 (work consolidated 2026-04-02; v0.12.2 through v0.12.8 milestones merged into a single release)
+- `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09
+- crates.io intentionally remains on `0.12.2` while the registry window is still deferred
 - Pre-announcement plumbing: license badge fix, Docker arm64 timeout fix, dependency triage, harness archival, SRP microcrate extractions
-- Distribution channel verification across crates.io, VSCode Marketplace, Open VSX, Docker Hub, GitHub Releases
-- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (0.12.x quality tail)" for the active item list
+- Distribution channel verification across GitHub Releases, VS Code Marketplace, Open VSX, Docker Hub, and the delayed crates.io line
+- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (post-v0.12.3 / pre-v0.13.0)" for the active item list
 
 ## Next (v0.13.0 — public alpha announcement)
 
