@@ -12,6 +12,8 @@ jobs:
   auto-label-issues:
     if: github.event_name == 'issues' && github.event.action == 'opened'
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Auto-label scout reports
         if: contains(github.event.issue.labels.*.name, 'swarm-discovered')
@@ -32,6 +34,8 @@ jobs:
   auto-label-prs:
     if: github.event_name == 'pull_request' && github.event.action == 'ready_for_review'
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Label PR as in-review
         uses: actions/github-script@v8
@@ -52,6 +56,9 @@ jobs:
       (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
       (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'reviewed-deep')
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
     steps:
       - name: Label PR as merge-ready on approval
         uses: actions/github-script@v8

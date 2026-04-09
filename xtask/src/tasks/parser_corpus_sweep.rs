@@ -180,6 +180,13 @@ fn default_perl_version() -> String {
     "unknown".to_string()
 }
 
+fn portable_report_path(path: &Path) -> String {
+    match path.strip_prefix(super::cpan_corpus::workspace_root()) {
+        Ok(relative) => relative.display().to_string(),
+        Err(_) => path.display().to_string(),
+    }
+}
+
 /// Per-file result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileResult {
@@ -549,6 +556,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     for path in &pm_files {
         total_files += 1;
+        let portable_path = portable_report_path(path);
         progress.set_message(
             path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
         );
@@ -559,7 +567,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 files_unreadable += 1;
                 if config.verbose {
                     file_results.push(FileResult {
-                        path: path.display().to_string(),
+                        path: portable_path.clone(),
                         status: "unreadable".to_string(),
                         error_node_count: 0,
                         first_error: None,
@@ -580,10 +588,10 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 total_error_nodes += 1;
                 let bucket = "catastrophic_parse_failure".to_string();
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
-                files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
+                files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
                 if config.verbose {
                     file_results.push(FileResult {
-                        path: path.display().to_string(),
+                        path: portable_path.clone(),
                         status: "errors".to_string(),
                         error_node_count: 1,
                         first_error: Some(bucket),
@@ -601,7 +609,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             clean_files += 1;
             if config.verbose {
                 file_results.push(FileResult {
-                    path: path.display().to_string(),
+                    path: portable_path.clone(),
                     status: "clean".to_string(),
                     error_node_count: 0,
                     first_error: None,
@@ -613,10 +621,10 @@ pub fn run(config: SweepConfig) -> Result<()> {
             let first = summary.first_message.as_deref().unwrap_or("unknown");
             let bucket = normalize_error_bucket(first);
             *first_error_buckets.entry(bucket.clone()).or_default() += 1;
-            files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
+            files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
             if config.verbose {
                 file_results.push(FileResult {
-                    path: path.display().to_string(),
+                    path: portable_path,
                     status: "errors".to_string(),
                     error_node_count: summary.count,
                     first_error: Some(bucket),
@@ -638,9 +646,9 @@ pub fn run(config: SweepConfig) -> Result<()> {
         timestamp: chrono::Utc::now().to_rfc3339(),
         corpus_profile: corpus_profile.clone(),
         corpus_roots: if use_manifest {
-            vec![config.manifest_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default()]
+            vec![config.manifest_path.as_ref().map(|p| portable_report_path(p)).unwrap_or_default()]
         } else {
-            config.base_roots.iter().map(|p| p.display().to_string()).collect()
+            config.base_roots.iter().map(|p| portable_report_path(p)).collect()
         },
         resolved_roots_count: if use_manifest { pm_files.len() } else { config.corpus_roots.len() },
         perl_version: get_perl_version(),
@@ -1738,5 +1746,18 @@ mod tests {
         let report = SweepReport { files_by_bucket: fbb_b, ..baseline.clone() };
         let violations = enforce_ratchet(&report, &baseline);
         assert!(violations.is_empty(), "files_by_bucket changes should not affect ratchet");
+    }
+
+    #[test]
+    fn test_portable_report_path_relativizes_workspace_paths() {
+        let workspace_root = super::super::cpan_corpus::workspace_root();
+        let path = workspace_root.join("target/cpan-corpus/lib/perl5/Foo.pm");
+        assert_eq!(portable_report_path(&path), "target/cpan-corpus/lib/perl5/Foo.pm");
+    }
+
+    #[test]
+    fn test_portable_report_path_preserves_external_paths() {
+        let path = PathBuf::from("/usr/share/perl/Foo.pm");
+        assert_eq!(portable_report_path(&path), "/usr/share/perl/Foo.pm");
     }
 }

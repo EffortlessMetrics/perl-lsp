@@ -394,7 +394,12 @@ where
 {
     thread::spawn(move || {
         let mut buffer = Vec::new();
-        let _ = reader.read_to_end(&mut buffer);
+        if let Err(err) = reader.read_to_end(&mut buffer) {
+            eprintln!(
+                "Warning: failed to read cpanm process output: {err} (captured {} bytes)",
+                buffer.len()
+            );
+        }
         buffer
     })
 }
