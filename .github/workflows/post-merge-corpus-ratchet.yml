@@ -1,15 +1,18 @@
 name: Post-Merge Corpus Ratchet
 
-# Automatically runs cpan-corpus-ratchet after merges that touch parser crates.
-# This prevents the stale-baseline problem: parser fixes sit unratcheted, making
-# it look like the corpus clean rate has not improved.
+# Automatically refreshes the CPAN full-corpus baseline and ratchets the
+# known-clean CPAN manifest after merges that touch parser crates.
+# This prevents the stale-baseline problem: parser fixes sit unrecorded,
+# making it look like the corpus clean rate and strict-clean set did not improve.
 #
 # Triggers only when pushes to master touch:
 #   - crates/perl-parser/
 #   - crates/perl-parser-core/
 #   - crates/perl-parser-pest/
 #   - The justfile (ratchet recipe changes)
-#   - .ci/cpan-corpus-baseline.json (baseline file itself)
+#   - xtask corpus sweep / ratchet plumbing
+#   - .ci/cpan-corpus-baseline.json (full-corpus receipt)
+#   - .ci/cpan-corpus-manifest.txt (strict known-clean receipt)
 #
 # See issue #2026 (automate corpus ratchet after parser fix merges).
 
@@ -21,8 +24,12 @@ on:
       - 'crates/perl-parser/**'
       - 'crates/perl-parser-core/**'
       - 'crates/perl-parser-pest/**'
+      - 'xtask/src/main.rs'
+      - 'xtask/src/tasks/cpan_corpus.rs'
+      - 'xtask/src/tasks/parser_corpus_sweep.rs'
       - 'justfile'
       - '.ci/cpan-corpus-baseline.json'
+      - '.ci/cpan-corpus-manifest.txt'
 
 # Only one ratchet at a time; cancel stale runs if a new parser merge lands.
 concurrency:
@@ -34,7 +41,7 @@ permissions:
 
 jobs:
   corpus-ratchet:
-    name: Ratchet CPAN corpus baseline
+    name: Refresh CPAN corpus receipts
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -79,25 +86,33 @@ jobs:
         # from xtask's workspace-root-anchored resolution (see issue #3189).
         run: test -d "$GITHUB_WORKSPACE/target/cpan-corpus/lib/perl5"
 
+      - name: Update CPAN baseline receipt
+        run: cargo xtask cpan-corpus sweep --output .ci/cpan-corpus-baseline.json
+
       - name: Run corpus ratchet
         run: cargo xtask cpan-corpus ratchet
 
-      - name: Commit updated baseline if changed
+      - name: Verify CPAN corpus gate
+        run: cargo xtask cpan-corpus sweep --enforce
+
+      - name: Commit updated corpus receipts if changed
         # TODO(#follow-up): Switch to creating a PR instead of direct push once a
         # bot token or GitHub App is configured that can bypass branch protection.
         # For now, the push is best-effort (git push || echo warning) so CI stays green
         # even when branch protection blocks the direct-to-master push. The warning
         # annotation remains visible in the Actions UI so the failure is not silent.
         run: |
-          CHANGED_FILES=$(git diff --name-only -- .ci/cpan-corpus-baseline.json)
+          CHANGED_FILES=$(git diff --name-only -- \
+            .ci/cpan-corpus-baseline.json \
+            .ci/cpan-corpus-manifest.txt)
 
           if [ -n "$CHANGED_FILES" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .ci/cpan-corpus-baseline.json
-            git commit -m "chore(ci): ratchet CPAN corpus baseline post-merge [skip ci]"
-            git push || echo "::warning::Direct push to master blocked by branch protection rules -- corpus baseline not auto-updated. Run 'just cpan-corpus-ratchet' locally and push. See TODO above for proper fix."
-            echo "::notice::Attempted to push updated corpus baseline."
+            git add .ci/cpan-corpus-baseline.json .ci/cpan-corpus-manifest.txt
+            git commit -m "chore(ci): refresh CPAN corpus receipts post-merge [skip ci]"
+            git push || echo "::warning::Direct push to master blocked by branch protection rules -- CPAN corpus receipts not auto-updated. Run 'just cpan-corpus-baseline-update && just cpan-corpus-ratchet' locally and push. See TODO above for proper fix."
+            echo "::notice::Attempted to push updated CPAN corpus receipts."
           else
-            echo "::notice::Corpus baseline already up to date -- no new clean modules found."
+            echo "::notice::CPAN corpus receipts already up to date -- nothing to commit."
           fi

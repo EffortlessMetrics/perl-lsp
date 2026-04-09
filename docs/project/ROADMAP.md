@@ -9,10 +9,12 @@
 ## Current Framing
 
 - Workspace version line: `v0.12.3`
-- Latest published release: `v0.12.3` (tagged and shipped to GitHub Releases 2026-04-04)
-- 0.12.x milestone ladder: complete (v0.12.2 through v0.12.8 work consolidated and shipped 2026-04-02; cut as `v0.12.2` GitHub Release on 2026-04-04)
-- Active work: pre-announcement cleanup (license badge, dependency freshness, distribution channel verification), then v0.13.0 announcement
+- Latest published release: `v0.12.2` (GitHub Releases public line, shipped 2026-04-07)
+- 0.12.x public release line: currently stops at `v0.12.2`; `v0.12.3` is the active pipeline-rehearsal prep line and is not yet a published GitHub release
+- Active work: finish the `v0.12.3` readiness pass (status/docs alignment, parser baseline receipts, distribution-surface verification), then move to the `v0.13.0` public alpha announcement
 - Canonical local receipt: `nix develop -c just ci-gate`
+
+Publication discipline: milestone sections below can describe the intended `0.12.x` breakdown on the prep track, but the public GitHub release truth remains `v0.12.2` until a new tag is cut.
 
 ## How To Read This File
 
@@ -39,7 +41,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - All 7 Tier 1 parser blockers confirmed fixed via scouts (#3085, #3096)
 - 10 PRs merged total
 
-## Completed: v0.12.3 Diagnostic & Refactoring Hardening (shipped 2026-04-02)
+## Prepared Scope: v0.12.3 Diagnostic & Refactoring Hardening
 
 - Dead code highlighting with DiagnosticTag::Unnecessary (#2060, PR #3092)
 - Perlcritic integration hardened: cached analyzer, walk-up discovery (#2018, PR #3097)
@@ -51,13 +53,13 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - DAP Phase 3 test suite (#435) already complete (20 tests, all AC criteria met)
 - 12 PRs merged + 6 issues discovered already-done
 
-## Completed: v0.12.4 Diagnostics & Semantics (shipped 2026-04-02)
+## Prepared Scope: v0.12.4 Diagnostics & Semantics
 
 - Semantic framework coverage: inheritance, exports (#3077, PR #3098)
 - Cross-platform DAP continue/interrupt signal handling (#3028, PR #3117)
 - DAP attach command: stale mock stub removed, tests updated (#3025, PR #3135)
 
-## Completed: v0.12.5 Parser Confidence (shipped 2026-04-02)
+## Prepared Scope: v0.12.5 Parser Confidence
 
 - All Tier 1 parser blockers confirmed fixed
 - Incremental parser checkpoint recovery (#2080, PR #3114)
@@ -65,21 +67,21 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Corpus ratchet automation (#2026, PR #3110)
 - 90% CPAN clean rate target documented (#3076, PR #3123)
 
-## Completed: v0.12.6 Performance (shipped 2026-04-02)
+## Prepared Scope: v0.12.6 Performance
 
 - Large-workspace HashMap optimization (#2078, PR #3112)
 - Memory profiling infrastructure (#2085, PR #3125)
 - CPAN-scale benchmarks: 10K files, 500K symbols (#1664, PR #3121/3132)
 - Large-workspace testing and profiling guide (#3022, PR #3126)
 
-## Completed: v0.12.7 Distribution & Packaging (shipped 2026-04-02)
+## Prepared Scope: v0.12.7 Distribution & Packaging
 
 - Docker image with perllsp + Perl runtime (#2083, PR #3113)
 - Linux/macOS installer script (#2095, PR #3122)
 - Homebrew bump workflow + install docs (#2086, PR #3120)
 - Windows bump workflows aligned (#2596, PR #3106)
 
-## Completed: v0.12.8 Announcement Polish (shipped 2026-04-02)
+## Prepared Scope: v0.12.8 Announcement Polish
 
 - Heredoc language injection for SQL/JSON (#2059, PR #3134)
 - POD preview panel (#2062, PR #3131)
@@ -137,19 +139,17 @@ corpus confidence ratchet, and error-handling hygiene.
 
 ### v0.12.3
 
-Diagnostic and refactoring hardening: dead code highlighting, perlcritic integration,
-workspace-scoped rename, extract variable/subroutine, and Moose/Moo framework support.
+Pipeline-rehearsal release prep: status regeneration, corpus receipts, version-surface alignment,
+and readiness verification ahead of the public alpha announcement.
 
 ### v0.12.4
 
-Diagnostics and semantics: semantic framework coverage, DAP cross-platform signals,
-DAP attach command cleanup. Shipped 2026-04-02.
+Follow-on diagnostics and semantics scope retained on the prep track, not yet a separately published GitHub release.
 
 ### v0.12.5–v0.12.8
 
-Parser confidence, performance, distribution, and announcement polish.
-All shipped 2026-04-02 in a single high-throughput swarm session
-(59 PRs merged, 67 issues closed, ~70 agents).
+Parser confidence, performance, distribution, and announcement-polish scopes retained on the prep track.
+Treat these as internal milestone slices until a new public GitHub release is actually cut.
 
 ### v0.13.0
 

@@ -637,7 +637,7 @@ fn generate_parser_status(metrics: &ParserMetrics, original: &str) -> Result<Str
         },
         |report| {
             format!(
-                "| **Ubuntu system Perl** | {} | Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
                 report.files_unreadable,
@@ -653,7 +653,7 @@ fn generate_parser_status(metrics: &ParserMetrics, original: &str) -> Result<Str
         },
         |report| {
             format!(
-                "| **CPAN top 1000** | {} | `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.files_unreadable,
                 report.files_with_errors,
@@ -668,7 +668,7 @@ fn generate_parser_status(metrics: &ParserMetrics, original: &str) -> Result<Str
         },
         |summary| {
             format!(
-                "| **Project corpus** | {} | `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
+                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
                 format_clean_rate(summary.ok_files, summary.total_files),
                 summary.test_corpus_files,
                 summary.perl_corpus_files,
@@ -686,7 +686,8 @@ fn generate_parser_status(metrics: &ParserMetrics, original: &str) -> Result<Str
     let tracking_table = [system_row, cpan_row, project_row].join("\n");
 
     let parser_coverage_bullets = format!(
-        "- **Tracking model**: parser coverage is measured against three targets: Ubuntu system Perl, the cached CPAN top-1000 install, and the repo-owned corpus.\n\
+        "- **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.\n\
+         - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.\n\
          - **Fixture bank**: `tree-sitter-perl/test/corpus` contributes ~{} focused syntax sections for targeted parser cases.\n\
          - **CPAN install hygiene**: `cargo xtask cpan-corpus install` reuses `target/cpan-corpus/.cpanm`; pass `--reset` only for a cold rebuild.",
         metrics.syntax_sections,

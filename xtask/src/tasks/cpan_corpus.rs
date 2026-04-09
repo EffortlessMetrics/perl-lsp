@@ -495,6 +495,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     };
 
     let sweep_config = parser_corpus_sweep::SweepConfig {
+        corpus_profile: Some("cpan".to_string()),
         base_roots: base_roots.clone(),
         corpus_roots: corpus_roots.clone(),
         manifest_path: None,
@@ -538,6 +539,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
                 manifest_modules.len()
             );
             let manifest_sweep = parser_corpus_sweep::SweepConfig {
+                corpus_profile: Some("cpan-common".to_string()),
                 base_roots,
                 corpus_roots: corpus_roots.clone(),
                 manifest_path: Some(config.manifest.clone()),
@@ -582,6 +584,7 @@ pub fn ratchet(config: &CpanCorpusConfig) -> Result<()> {
     }
 
     let sweep_config = parser_corpus_sweep::SweepConfig {
+        corpus_profile: Some("cpan".to_string()),
         base_roots,
         corpus_roots,
         manifest_path: None,

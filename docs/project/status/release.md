@@ -37,11 +37,12 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ## Corpus Tracking Receipts
 
-- **Ubuntu system Perl baseline (`.ci/parser-corpus-baseline.json`, 2026-04-09)**: `6866/7095` clean (`96.8%`) on Perl `5.038002`; refreshed after fixing the `unexpected_fat_arrow_expr` and `unexpected_slash_expr` corpus regressions
-- **CPAN top 1000 baseline (`.ci/cpan-corpus-baseline.json`, 2026-03-20)**: `3717/4355` clean (`85.4%`) against the installed top-1000 corpus; the install lane now reuses `target/cpan-corpus/.cpanm` so refreshes do not redownload from scratch
-- **Repo-owned corpus (`just parser-audit` / `status/parser.md`)**: `91/91` clean, `64/68` NodeKinds covered, `12/12` GA features covered across `test_corpus/` plus `crates/perl-corpus/src/gen`
-- `.ci/cpan-corpus-manifest.txt` carries `4337` modules in the strict known-clean list (expanded from the `1849` v0.12.0 snapshot via #2981)
-- The committed baselines now reflect two refresh cadences for the 0.12.3 release posture: Ubuntu system Perl was rerun on 2026-04-09 after parser fixes, while the CPAN top-1000 receipt remains the 2026-03-20 baseline until the full install lane is rerun
+- **Compatibility baseline (`just corpus-sweep-check`)**: Ubuntu system Perl in `.ci/parser-corpus-baseline.json` is the "does this still parse what ships on a stock Linux box?" receipt. Current committed floor: `6890/7095` clean (`97.1%`) on Perl `5.038002`, refreshed 2026-04-09 after the parser regression fixes.
+- **Ecosystem-breadth baseline (`just cpan-corpus-check`)**: `.ci/cpan-corpus-baseline.json` tracks the cached CPAN top-1000 install as the broad ecosystem receipt. Current committed floor: `3717/4355` clean (`85.4%`), baseline dated 2026-03-20. The install lane reuses `target/cpan-corpus/.cpanm` so reruns ratchet instead of redownloading from scratch.
+- **Deterministic regression baseline (`just parser-audit`)**: the repo-owned corpus stays at `91/91` clean, `64/68` NodeKinds covered, `12/12` GA features covered across `test_corpus/` plus `crates/perl-corpus/src/gen`.
+- **Strict-clean subsets**: `just common-corpus-check` enforces the pinned common manifest, and `.ci/cpan-corpus-manifest.txt` currently carries `4337` CPAN modules that must stay clean inside `just cpan-corpus-check`.
+- **Automation discipline**: the post-merge CPAN workflow now refreshes both the full baseline receipt and the ratcheted manifest, then reruns the CPAN gate before attempting to commit either artifact.
+- **Cadence discipline**: the three baselines do not need identical refresh dates. The system-Perl receipt was rerun on 2026-04-09 after parser fixes; the CPAN top-1000 floor remains the committed 2026-03-20 snapshot until the full install lane is rerun end-to-end.
 
 ## Coverage Baseline Receipts (2026-03-17)
 

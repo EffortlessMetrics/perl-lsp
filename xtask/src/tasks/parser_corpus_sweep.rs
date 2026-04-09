@@ -116,6 +116,8 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
 /// Configuration for the corpus sweep
 #[derive(Debug, Clone)]
 pub struct SweepConfig {
+    /// Optional corpus profile override for report and receipt naming.
+    pub corpus_profile: Option<String>,
     /// High-level roots for report metadata (e.g., `/usr/share/perl`)
     pub base_roots: Vec<PathBuf>,
     /// Expanded directories to actually scan (includes versioned subdirs)
@@ -132,7 +134,7 @@ pub struct SweepConfig {
     pub enforce: bool,
     /// Include per-file details in output
     pub verbose: bool,
-    /// Write receipt JSON to target/receipts/corpus-sweep.json
+    /// Write receipt JSON to target/receipts/<profile>-corpus-sweep.json
     pub receipt: bool,
 }
 
@@ -142,7 +144,7 @@ pub struct SweepReport {
     pub schema_version: String,
     pub commit: String,
     pub timestamp: String,
-    /// Corpus profile identifier (always "system" for now)
+    /// Corpus profile identifier (for example "system", "common", or "cpan")
     #[serde(default = "default_corpus_profile")]
     pub corpus_profile: String,
     /// High-level base roots (e.g., 3 base directories)
@@ -168,6 +170,10 @@ pub struct SweepReport {
 
 fn default_corpus_profile() -> String {
     "system".to_string()
+}
+
+fn receipt_path_for_profile(profile: &str) -> PathBuf {
+    PathBuf::from(format!("target/receipts/{profile}-corpus-sweep.json"))
 }
 
 fn default_perl_version() -> String {
@@ -495,11 +501,15 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let start_time = Instant::now();
 
     // Determine corpus profile and file list
-    let (corpus_profile, pm_files) = if let Some(ref manifest) = config.manifest_path {
+    let default_profile =
+        if config.manifest_path.is_some() { "common".to_string() } else { "system".to_string() };
+    let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
+
+    let pm_files = if let Some(ref manifest) = config.manifest_path {
         let files = resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?;
-        ("common".to_string(), files)
+        files
     } else {
-        ("system".to_string(), discover_pm_files(&config.corpus_roots))
+        discover_pm_files(&config.corpus_roots)
     };
 
     let use_manifest = config.manifest_path.is_some();
@@ -660,8 +670,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     // Write receipt if requested
     if config.receipt {
-        let receipt_path =
-            PathBuf::from(format!("target/receipts/{}-corpus-sweep.json", corpus_profile));
+        let receipt_path = receipt_path_for_profile(&corpus_profile);
         if let Some(parent) = receipt_path.parent() {
             fs::create_dir_all(parent).context("Failed to create receipt directory")?;
         }
@@ -1271,6 +1280,16 @@ mod tests {
         assert_eq!(report.corpus_profile, "system");
         assert_eq!(report.resolved_roots_count, 0);
         assert_eq!(report.perl_version, "unknown");
+    }
+
+    #[test]
+    fn test_receipt_path_for_profile_uses_profile_name() {
+        assert_eq!(receipt_path_for_profile("system"), PathBuf::from("target/receipts/system-corpus-sweep.json"));
+        assert_eq!(receipt_path_for_profile("cpan"), PathBuf::from("target/receipts/cpan-corpus-sweep.json"));
+        assert_eq!(
+            receipt_path_for_profile("cpan-common"),
+            PathBuf::from("target/receipts/cpan-common-corpus-sweep.json")
+        );
     }
 
     #[test]

@@ -1311,6 +1311,7 @@ fn main() -> Result<()> {
             let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
             let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
             parser_corpus_sweep::run(parser_corpus_sweep::SweepConfig {
+                corpus_profile: None,
                 base_roots,
                 corpus_roots,
                 manifest_path: manifest,
