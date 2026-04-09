@@ -10,9 +10,11 @@ use color_eyre::eyre::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::parser_corpus_sweep;
 
@@ -32,6 +34,9 @@ const CPANM_CACHE_DIR: &str = ".cpanm";
 const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 /// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
 const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
+/// Hard timeout for a single cpanm invocation. Batch installs fall back to
+/// per-distribution retries when a distribution wedges inside configure/build.
+const CPANM_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Return the workspace root path, anchored at compile time to the xtask
 /// crate's manifest directory. This makes every relative CPAN corpus path
@@ -268,6 +273,10 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         cmd.env("PERL_CPANM_HOME", &cpanm_home);
         cmd.env("PERL_MM_USE_DEFAULT", "1");
         cmd.env("NONINTERACTIVE_TESTING", "1");
+        // Some CPAN distributions still try to prompt during configure/build.
+        // Detach stdin so batch installs stay noninteractive and fail fast
+        // instead of hanging on an inherited TTY.
+        cmd.stdin(Stdio::null());
         cmd.arg("--notest");
         cmd.arg("--local-lib");
         cmd.arg(local_lib.display().to_string());
@@ -277,9 +286,21 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
             cmd.arg(dist);
         }
 
-        let output = cmd.output().context("Failed to run cpanm")?;
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if !output.status.success() && config.verbose {
+        let output = run_command_with_timeout(cmd, CPANM_COMMAND_TIMEOUT)?;
+        let stderr = String::from_utf8_lossy(&output.output.stderr);
+        if output.timed_out {
+            println!(
+                "cpanm batch {batch_num} timed out after {}s; retrying distributions individually",
+                CPANM_COMMAND_TIMEOUT.as_secs()
+            );
+            let (batch_installed, batch_failed) =
+                install_distributions_individually(&cpanm, &cpanm_home, &local_lib, chunk, config)?;
+            installed += batch_installed;
+            failed += batch_failed;
+            continue;
+        }
+
+        if !output.output.status.success() && config.verbose {
             eprintln!("cpanm batch {batch_num} warnings:\n{stderr}");
         }
 
@@ -331,6 +352,105 @@ fn count_cpanm_failures(stderr: &str) -> usize {
                 || line.contains("No such file or directory")
         })
         .count()
+}
+
+#[derive(Debug)]
+struct TimedCommandOutput {
+    output: Output,
+    timed_out: bool,
+}
+
+fn run_command_with_timeout(mut cmd: Command, timeout: Duration) -> Result<TimedCommandOutput> {
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().context("Failed to run cpanm")?;
+    let stdout_reader = child.stdout.take().map(spawn_output_reader);
+    let stderr_reader = child.stderr.take().map(spawn_output_reader);
+
+    let deadline = Instant::now() + timeout;
+    let mut timed_out = false;
+    let status = loop {
+        match child.try_wait().context("Failed to poll cpanm process")? {
+            Some(status) => break status,
+            None if Instant::now() >= deadline => {
+                timed_out = true;
+                let _ = child.kill();
+                break child.wait().context("Failed to wait for timed-out cpanm process")?;
+            }
+            None => thread::sleep(Duration::from_millis(200)),
+        }
+    };
+
+    let stdout = join_output_reader(stdout_reader);
+    let stderr = join_output_reader(stderr_reader);
+
+    Ok(TimedCommandOutput { output: Output { status, stdout, stderr }, timed_out })
+}
+
+fn spawn_output_reader<R>(mut reader: R) -> thread::JoinHandle<Vec<u8>>
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut buffer = Vec::new();
+        let _ = reader.read_to_end(&mut buffer);
+        buffer
+    })
+}
+
+fn join_output_reader(handle: Option<thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    handle.and_then(|join| join.join().ok()).unwrap_or_default()
+}
+
+fn install_distributions_individually(
+    cpanm: &CpanmLauncher,
+    cpanm_home: &Path,
+    local_lib: &Path,
+    chunk: &[String],
+    config: &CpanCorpusConfig,
+) -> Result<(usize, usize)> {
+    let mut installed = 0usize;
+    let mut failed = 0usize;
+
+    for dist in chunk {
+        let mut cmd = cpanm.command();
+        cmd.env("PERL_CPANM_HOME", cpanm_home);
+        cmd.env("PERL_MM_USE_DEFAULT", "1");
+        cmd.env("NONINTERACTIVE_TESTING", "1");
+        cmd.stdin(Stdio::null());
+        cmd.arg("--notest");
+        cmd.arg("--local-lib");
+        cmd.arg(local_lib.display().to_string());
+        cmd.arg("--quiet");
+        cmd.arg(dist);
+
+        let output = run_command_with_timeout(cmd, CPANM_COMMAND_TIMEOUT)?;
+        let stderr = String::from_utf8_lossy(&output.output.stderr);
+        if output.timed_out {
+            failed += 1;
+            println!("  timed out after {}s: {}", CPANM_COMMAND_TIMEOUT.as_secs(), dist);
+            continue;
+        }
+
+        let failed_for_dist = if output.output.status.success() {
+            0
+        } else {
+            let explicit_failures = count_cpanm_failures(&stderr);
+            explicit_failures.max(1)
+        };
+
+        if failed_for_dist > 0 {
+            failed += failed_for_dist;
+            if config.verbose {
+                eprintln!("cpanm retry warnings for {dist}:\n{stderr}");
+            }
+        } else {
+            installed += 1;
+        }
+    }
+
+    Ok((installed, failed))
 }
 
 #[derive(Debug, Clone)]
@@ -703,7 +823,7 @@ fn path_to_module_name(file_path: &str, lib_root: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
     fn unique_test_dir(name: &str) -> PathBuf {
         let nanos =
@@ -826,6 +946,34 @@ mod tests {
 ! Failed to fetch distribution Foo\n\
 Some other line";
         assert_eq!(count_cpanm_failures(stderr), 2);
+    }
+
+    #[test]
+    fn test_run_command_with_timeout_captures_stderr() -> Result<()> {
+        let mut cmd = Command::new("perl");
+        cmd.args(["-e", "print STDERR qq(warn\\n);"]);
+
+        let result = run_command_with_timeout(cmd, Duration::from_secs(2))?;
+        assert!(!result.timed_out);
+        assert!(result.output.status.success());
+        assert_eq!(String::from_utf8_lossy(&result.output.stderr), "warn\n");
+        Ok(())
+    }
+
+    #[test]
+    fn test_run_command_with_timeout_kills_hung_process() -> Result<()> {
+        let mut cmd = Command::new("perl");
+        cmd.args(["-e", "$|=1; print STDERR qq(waiting\\n); sleep 5;"]);
+
+        let started = Instant::now();
+        let result = run_command_with_timeout(cmd, Duration::from_millis(200))?;
+        assert!(result.timed_out);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "timed command should be interrupted quickly"
+        );
+        assert!(String::from_utf8_lossy(&result.output.stderr).contains("waiting"));
+        Ok(())
     }
 
     #[test]
