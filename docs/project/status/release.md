@@ -5,20 +5,21 @@
 
 ## Current Release Call
 
-**Latest published release**: `v0.12.0`
-**Release target**: `v0.12.1` fix-forward cut
-**Ship readiness**: `master` carries the README and hook cleanup needed for a clean `v0.12.1` cut; install guidance must still stay tied to the actual GitHub release and crates.io state rather than the workspace version alone
+**Latest published release**: `v0.12.2` (2026-04-07)
+**Release target**: `v0.12.3` pipeline-rehearsal cut
+**Ship readiness**: the 11-PR launch-prep drain merged cleanly on 2026-04-08, master carries the full publish/UX/CI hardening wave, and the only remaining explicit launch gate is the `#3302` demo-assets recording before the `v0.13.0` public alpha announcement
 
 ## Active Blockers
 
-- Release-truth drift must stay closed: repo docs and runbooks must match the actual `perllsp` / `perl-lsp-rs` shipped surfaces, not stale pre-rename examples
+- `#3302` demo GIFs are the only human-owned blocker before the `v0.13.0` public alpha announcement
 - Public install guidance must stay tied to the crates.io truth at release time, not just the local workspace version line
 
-## Fix-Forward Receipts (2026-03-30)
+## 0.12.3 Pipeline-Rehearsal Receipts (2026-04-08)
 
-- `v0.12.0` is live on GitHub Releases as of 2026-03-30
-- the README and hook-fixture regressions from the first `v0.12.0` tag were fixed on `master`
-- this branch bumps the operator and version-sync surfaces to `v0.12.1`
+- `v0.12.2` is live on GitHub Releases and crates.io as of 2026-04-07, post-publish smoke test green
+- 11 launch-prep PRs merged in a controlled drain sequence on 2026-04-08 (master green at `a5680401`)
+- workspace version line bumped to `v0.12.3`; `check-version-sync` reports all 140 sites in agreement
+- `CHANGELOG.md` already carries the `[0.12.3]` entry; tagging is a `git tag` away
 
 ## Component Summary
 
@@ -41,10 +42,11 @@ Native + Bridge preview. Harden preview flows is active work.
 - `12/12` GA features covered
 - One remaining `P2` interpolation-heavy hang-risk candidate in `crates/perl-corpus/src/gen/builtins.rs`
 
-## CPAN Baseline Receipts (2026-03-17)
+## CPAN Baseline Receipts (2026-03-20)
 
-- `just cpan-corpus-check` holds the committed baseline at `3139/4355` clean (`72.1%`) for the full installed corpus
-- `1579/1579` clean for the strict known-clean manifest
+- `.ci/cpan-corpus-baseline.json` holds the full-corpus baseline at `3717/4355` clean (`85.4%`) against the installed CPAN top 1000 distributions
+- `.ci/cpan-corpus-manifest.txt` carries `4337` modules in the strict known-clean list (expanded from the `1849` v0.12.0 snapshot via #2981)
+- Baseline is current for the 0.12.3 release: zero parser/lexer source changes have landed since the baseline was generated
 
 ## Coverage Baseline Receipts (2026-03-17)
 
@@ -60,4 +62,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-03-30*
+*Last Updated: 2026-04-08*

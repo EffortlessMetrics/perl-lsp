@@ -5,10 +5,10 @@
 
 ## What's True Right Now
 
-- **Release posture**: the latest published GitHub release is `v0.12.0` as verified on 2026-03-30, the workspace version line is `v0.12.1`, and the active milestone is `v0.12.1` fix-forward release prep
+- **Release posture**: the latest published GitHub release is `v0.12.2` (2026-04-07), the workspace version line is `v0.12.3`, and the active milestone is `v0.12.3` pipeline-rehearsal release prep (the last launch gate before `v0.13.0` public alpha)
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
-- **LSP server**: `features.toml` is the canonical capability catalog; 98 features all at GA maturity — computed coverage is generated from it
-- **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `bash scripts/ignored-test-count.sh` is the tracked-test-debt source
+- **LSP server**: `features.toml` is the canonical capability catalog; 58 user-visible features at 100% coverage (102/102 including plumbing protocol methods) — computed coverage is generated from it
+- **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
 - **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates
 - **Refactoring engine**: inline and move-code flows exist; broader refactoring hardening is still roadmap work
 - **Safety ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
@@ -26,18 +26,18 @@
 
 ## What's Next
 
-**Now (active milestone: v0.12.1 fix-forward release prep)**
-- Keep `nix develop -c just ci-gate` and the release receipts green while `v0.12.1` closes the launch regressions found after the `v0.12.0` tag
-- Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line and the `perl-lsp-rs` VS Code package
-- Keep public Cargo install guidance tied to what crates.io actually serves, not just the workspace version line
-- Resume parser, corpus, and semantic hardening immediately after the fix-forward release cut
+**Now (active milestone: v0.12.3 pipeline-rehearsal release prep)**
+- Close out `#3302` demo-asset recording — the only remaining human-owned blocker before the `v0.13.0` public alpha announcement
+- Tag `v0.12.3` against the green master at `a5680401` once assets land (CHANGELOG entry already on master from #3287)
+- Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line, the `perl-lsp-rs` VS Code package, and the crates.io publish surface
+- Resume parser, corpus, and semantic hardening immediately after the `v0.13.0` tag
 
-**Next (v0.12.x hardening)**
+**Next (v0.13.0 public alpha)**
 - Ratchet system-corpus and CPAN baselines as parser coverage improves
 - Fold internal torture and edge-case suites into routine verification receipts
 - Publish benchmark and release-readiness receipts for the alpha burndown
 
-**Later (post v0.12.x)**
+**Later (post v0.13.0)**
 - DAP preview hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
 - Broader distribution packaging
@@ -64,5 +64,5 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-03-30 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
+*Last Updated: 2026-04-08 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
 *Canonical docs: [ROADMAP.md](../ROADMAP.md), [../../features.toml](../../features.toml)*
