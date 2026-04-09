@@ -1284,8 +1284,14 @@ mod tests {
 
     #[test]
     fn test_receipt_path_for_profile_uses_profile_name() {
-        assert_eq!(receipt_path_for_profile("system"), PathBuf::from("target/receipts/system-corpus-sweep.json"));
-        assert_eq!(receipt_path_for_profile("cpan"), PathBuf::from("target/receipts/cpan-corpus-sweep.json"));
+        assert_eq!(
+            receipt_path_for_profile("system"),
+            PathBuf::from("target/receipts/system-corpus-sweep.json")
+        );
+        assert_eq!(
+            receipt_path_for_profile("cpan"),
+            PathBuf::from("target/receipts/cpan-corpus-sweep.json")
+        );
         assert_eq!(
             receipt_path_for_profile("cpan-common"),
             PathBuf::from("target/receipts/cpan-common-corpus-sweep.json")
