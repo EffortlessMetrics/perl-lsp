@@ -21,9 +21,10 @@
 
 | Metric | Value | Source |
 | --- | --- | --- |
-| **Workspace version line** | `v0.12.2` | [`Cargo.toml`](../../Cargo.toml) |
-| **Latest published release** | `v0.12.2`, 2026-04-07 | GitHub Releases |
-| **Active milestone** | `v0.12.3` pipeline-rehearsal release prep | [status/index.md](status/index.md) |
+| **Workspace version line** | `v0.12.3` | [`Cargo.toml`](../../Cargo.toml) |
+| **Latest GitHub/editor release** | `v0.12.3`, 2026-04-09 | GitHub Releases, VS Code Marketplace, Open VSX |
+| **crates.io line** | `v0.12.2`, 2026-04-07 | crates.io |
+| **Active milestone** | `v0.13.0` public alpha announcement | [status/index.md](status/index.md) |
 | **Merge gate** | `nix develop -c just ci-gate` | [protocols/verification.md](protocols/verification.md) |
 | **LSP Coverage** | See [status/lsp.md](status/lsp.md) | Generated per-merge |
 | **Test counts** | See [status/tests.md](status/tests.md) | Generated per-merge |

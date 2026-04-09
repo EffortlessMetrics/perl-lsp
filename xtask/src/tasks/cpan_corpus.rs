@@ -34,9 +34,13 @@ const CPANM_CACHE_DIR: &str = ".cpanm";
 const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 /// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
 const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
-/// Hard timeout for a single cpanm invocation. Batch installs fall back to
-/// per-distribution retries when a distribution wedges inside configure/build.
-const CPANM_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
+/// Hard timeout for a batch cpanm invocation. Batch installs fall back to
+/// per-distribution retries when one distribution wedges inside configure/build.
+const CPANM_BATCH_TIMEOUT: Duration = Duration::from_secs(120);
+/// Hard timeout for a single-distribution retry. Native-heavy distributions
+/// such as `PDL` legitimately need more wall-clock time than a whole batch
+/// should get before we split it apart.
+const CPANM_SINGLE_DIST_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Return the workspace root path, anchored at compile time to the xtask
 /// crate's manifest directory. This makes every relative CPAN corpus path
@@ -286,12 +290,12 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
             cmd.arg(dist);
         }
 
-        let output = run_command_with_timeout(cmd, CPANM_COMMAND_TIMEOUT)?;
+        let output = run_command_with_timeout(cmd, CPANM_BATCH_TIMEOUT)?;
         let stderr = String::from_utf8_lossy(&output.output.stderr);
         if output.timed_out {
             println!(
                 "cpanm batch {batch_num} timed out after {}s; retrying distributions individually",
-                CPANM_COMMAND_TIMEOUT.as_secs()
+                CPANM_BATCH_TIMEOUT.as_secs()
             );
             let (batch_installed, batch_failed) =
                 install_distributions_individually(&cpanm, &cpanm_home, &local_lib, chunk, config)?;
@@ -430,11 +434,11 @@ fn install_distributions_individually(
         cmd.arg("--quiet");
         cmd.arg(dist);
 
-        let output = run_command_with_timeout(cmd, CPANM_COMMAND_TIMEOUT)?;
+        let output = run_command_with_timeout(cmd, CPANM_SINGLE_DIST_TIMEOUT)?;
         let stderr = String::from_utf8_lossy(&output.output.stderr);
         if output.timed_out {
             failed += 1;
-            println!("  timed out after {}s: {}", CPANM_COMMAND_TIMEOUT.as_secs(), dist);
+            println!("  timed out after {}s: {}", CPANM_SINGLE_DIST_TIMEOUT.as_secs(), dist);
             continue;
         }
 

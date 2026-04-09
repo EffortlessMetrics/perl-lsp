@@ -9,12 +9,12 @@
 ## Current Framing
 
 - Workspace version line: `v0.12.3`
-- Latest published release: `v0.12.2` (GitHub Releases public line, shipped 2026-04-07)
-- 0.12.x public release line: currently stops at `v0.12.2`; `v0.12.3` is the active pipeline-rehearsal prep line and is not yet a published GitHub release
-- Active work: finish the `v0.12.3` readiness pass (status/docs alignment, parser baseline receipts, distribution-surface verification), then move to the `v0.13.0` public alpha announcement
+- Latest published GitHub/editor release: `v0.12.3` (GitHub Releases, VS Code Marketplace, and Open VSX public line, shipped 2026-04-09)
+- crates.io published line: `v0.12.2` (registry line, shipped 2026-04-07)
+- Active work: finish the `v0.13.0` public alpha announcement pass (demo assets, distribution-truth cleanup, post-release docs/automation cleanup) while keeping the shipped `v0.12.3` line stable across GitHub Releases and the editor marketplaces
 - Canonical local receipt: `nix develop -c just ci-gate`
 
-Publication discipline: milestone sections below can describe the intended `0.12.x` breakdown on the prep track, but the public GitHub release truth remains `v0.12.2` until a new tag is cut.
+Publication discipline: public release truth is intentionally split right now. GitHub Releases and the editor marketplaces are on `v0.12.3`; crates.io remains on `v0.12.2` until the registry window reopens. Milestone sections below can describe the intended `0.12.x` breakdown, but they must not blur that channel split.
 
 ## How To Read This File
 
@@ -41,7 +41,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - All 7 Tier 1 parser blockers confirmed fixed via scouts (#3085, #3096)
 - 10 PRs merged total
 
-## Prepared Scope: v0.12.3 Diagnostic & Refactoring Hardening
+## Completed: v0.12.3 Diagnostic & Refactoring Hardening (GitHub/editor release shipped 2026-04-09)
 
 - Dead code highlighting with DiagnosticTag::Unnecessary (#2060, PR #3092)
 - Perlcritic integration hardened: cached analyzer, walk-up discovery (#2018, PR #3097)
@@ -90,7 +90,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - End-to-end LSP feature development guide (#3027, PR #3115)
 - GIF recording guide and asset structure (#2336, PR #3130)
 
-## Active: Quality Cleanup (0.12.x tail)
+## Active: Quality Cleanup (post-v0.12.3 / pre-v0.13.0)
 
 - Debug println removal from library code (in progress)
 - Unused dependency removal across 6 crates (in progress)
@@ -99,15 +99,16 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 
 ## Now / Next / Later
 
-### Now (0.12.x quality tail)
+### Now (post-v0.12.3 / pre-v0.13.0)
 
+- `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09; crates.io remains on `v0.12.2`
 - Pre-announcement license badge fix (PR #3193): canonical SPDX text in all 126 LICENSE files
 - Pre-announcement Docker arm64 timeout fix (#3188 → PR #3191, merged)
 - Per-release dependency triage: 7 dependabot PRs merged 2026-04-07 (#3178–#3184)
 - Code quality cleanup: debug prints (only `crates/perl-corpus/src/bin/main.rs` CLI output remains, library code clean), unused deps, remaining `unwrap()`/`expect()` audit in production code
 - Test coverage gaps and broken integration tests
 - VSCode extension lint/quality audit (eslint v10 landed in #3179)
-- AI inline completion (#3018) shipped in v0.12.2 — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
+- AI inline completion (#3018) shipped in the live 0.12.x line — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
 
 ### Next (v0.13.0 — public alpha announcement)
 
@@ -139,8 +140,8 @@ corpus confidence ratchet, and error-handling hygiene.
 
 ### v0.12.3
 
-Pipeline-rehearsal release prep: status regeneration, corpus receipts, version-surface alignment,
-and readiness verification ahead of the public alpha announcement.
+GitHub/editor release line: status regeneration, corpus receipts, version-surface alignment,
+and readiness verification shipped on 2026-04-09 ahead of the public alpha announcement.
 
 ### v0.12.4
 
@@ -149,7 +150,7 @@ Follow-on diagnostics and semantics scope retained on the prep track, not yet a 
 ### v0.12.5–v0.12.8
 
 Parser confidence, performance, distribution, and announcement-polish scopes retained on the prep track.
-Treat these as internal milestone slices until a new public GitHub release is actually cut.
+Treat these as internal milestone slices until the next public GitHub release beyond `v0.12.3` is actually cut.
 
 ### v0.13.0
 
@@ -187,9 +188,9 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Topic | Source |
 | --- | --- |
 | Workspace version line | [`../../Cargo.toml`](../../Cargo.toml) |
-| Latest published release | GitHub Releases |
+| Latest published release | GitHub Releases (`v0.12.3`) + crates.io API (`0.12.2` when channel split matters) |
 | Capability catalog | [`../../features.toml`](../../features.toml) |
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-04-07 -->
+<!-- Last Updated: 2026-04-09 -->
