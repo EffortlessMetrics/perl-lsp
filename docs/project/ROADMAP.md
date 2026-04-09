@@ -8,8 +8,8 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.12.2`
-- Latest published release: `v0.12.2` (tagged and shipped to GitHub Releases 2026-04-04)
+- Workspace version line: `v0.12.3`
+- Latest published release: `v0.12.3` (tagged and shipped to GitHub Releases 2026-04-04)
 - 0.12.x milestone ladder: complete (v0.12.2 through v0.12.8 work consolidated and shipped 2026-04-02; cut as `v0.12.2` GitHub Release on 2026-04-04)
 - Active work: pre-announcement cleanup (license badge, dependency freshness, distribution channel verification), then v0.13.0 announcement
 - Canonical local receipt: `nix develop -c just ci-gate`

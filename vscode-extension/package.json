@@ -2,7 +2,7 @@
   "name": "perl-lsp-rs",
   "displayName": "Perl Language Server (perl-lsp)",
   "description": "Native Perl 5 LSP: go-to-definition, completions, diagnostics, refactoring, debugging, 98 features. Binary auto-downloaded on first activation; set perl-lsp.serverPath for offline/enterprise use.",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "publisher": "EffortlessMetrics",
   "preview": true,
   "markdown": "github",
