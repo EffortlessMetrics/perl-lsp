@@ -225,31 +225,20 @@ fn count_tier_a_lib_tests(root: &Path) -> Option<usize> {
 }
 
 fn count_ignored_tracked(root: &Path) -> (Option<usize>, Option<usize>, Option<usize>) {
-    let output = run_cmd(root, &["bash", "scripts/ignored-test-count.sh"], Duration::from_secs(60));
-    if output.is_empty() {
+    // Call the ignored-tests counter directly as a Rust function.  The previous
+    // approach shelled out to `bash scripts/ignored-test-count.sh` and parsed
+    // the stdout, which silently returned empty output when xtask.exe forked
+    // bash on Windows (bash resolution from a native Windows process is
+    // environment-dependent).  A direct call is both faster and reliable.
+    let Ok(counts) = super::ignored_tests::compute_category_counts(root) else {
         return (None, None, None);
-    }
+    };
 
-    let total_re = Regex::new(r"TOTAL\s+(\d+)").ok();
-    let bug_re = Regex::new(r"(?m)^bug\s+(\d+)").ok();
-    let manual_re = Regex::new(r"(?m)^manual\s+(\d+)").ok();
+    let ignored_total = counts.values().sum::<usize>();
+    let bug_count = counts.get("bug").copied().unwrap_or(0);
+    let manual_count = counts.get("manual").copied().unwrap_or(0);
 
-    let ignored_total = total_re
-        .and_then(|re| re.captures(&output))
-        .and_then(|c| c.get(1))
-        .and_then(|m| m.as_str().parse::<usize>().ok());
-
-    let bug_count = bug_re
-        .and_then(|re| re.captures(&output))
-        .and_then(|c| c.get(1))
-        .and_then(|m| m.as_str().parse::<usize>().ok());
-
-    let manual_count = manual_re
-        .and_then(|re| re.captures(&output))
-        .and_then(|c| c.get(1))
-        .and_then(|m| m.as_str().parse::<usize>().ok());
-
-    (ignored_total, bug_count, manual_count)
+    (Some(ignored_total), Some(bug_count), Some(manual_count))
 }
 
 fn count_tests(root: &Path) -> TestCounts {

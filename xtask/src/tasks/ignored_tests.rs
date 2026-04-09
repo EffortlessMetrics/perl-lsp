@@ -27,7 +27,26 @@ const NC: &str = "\x1b[0m";
 const CATEGORIES: [&str; 9] =
     ["brokenpipe", "feature", "infra", "protocol", "manual", "stress", "bug", "bare", "other"];
 
-// ── Public entry point ──────────────────────────────────────────────────────
+// ── Public entry points ─────────────────────────────────────────────────────
+
+/// Compute per-category ignored test counts from the repo at `root`, without
+/// printing anything.  Used by `update_status` to avoid a fragile
+/// `bash scripts/ignored-test-count.sh` round-trip that was silently producing
+/// empty output when invoked by `xtask.exe` on Windows.
+pub fn compute_category_counts(root: &Path) -> Result<HashMap<String, usize>> {
+    let crates_root = root.join("crates");
+    let detail_matches = collect_ignored_matches(&crates_root, root)?;
+
+    let mut counts: HashMap<String, usize> =
+        CATEGORIES.iter().map(|c| ((*c).to_string(), 0)).collect();
+
+    for detail in detail_matches {
+        let category = categorize_ignore(&detail.reason, &detail.context);
+        *counts.entry(category).or_default() += 1;
+    }
+
+    Ok(counts)
+}
 
 pub fn run(update: bool, check: bool, verbose: bool) -> Result<()> {
     if update && check {
