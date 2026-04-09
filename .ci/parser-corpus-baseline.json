@@ -1,7 +1,7 @@
 {
   "schema_version": "1.2.0",
-  "commit": "9bb05526",
-  "timestamp": "2026-04-09T15:52:06.847363052+00:00",
+  "commit": "3f7ede36",
+  "timestamp": "2026-04-09T18:13:43.704986753+00:00",
   "corpus_profile": "system",
   "corpus_roots": [
     "/usr/share/perl",
@@ -12,11 +12,10 @@
   "perl_version": "5.038002",
   "total_files": 7095,
   "files_unreadable": 48,
-  "clean_files": 6866,
-  "files_with_errors": 181,
-  "total_error_nodes": 730,
+  "clean_files": 6890,
+  "files_with_errors": 157,
+  "total_error_nodes": 604,
   "first_error_buckets": {
-    "Incomplete arrow expression": 20,
     "expected_colon": 8,
     "expected_comma": 4,
     "expected_left_brace": 5,
@@ -30,37 +29,14 @@
     "unexpected_assign_expr": 12,
     "unexpected_comma_expr": 18,
     "unexpected_eq_expr": 10,
-    "unexpected_fat_arrow_expr": 2,
     "unexpected_rbrace_expr": 12,
     "unexpected_rbracket_expr": 4,
     "unexpected_rparen_expr": 2,
     "unexpected_token_in_expr": 26,
     "unexpected_word_op_and": 2,
-    "unexpected_word_op_or": 6
+    "unexpected_word_op_or": 4
   },
   "files_by_bucket": {
-    "Incomplete arrow expression": [
-      "/usr/share/perl/5.38/IO/Compress/Base/Common.pm",
-      "/usr/share/perl/5.38/IO/Compress/Base/Common.pm",
-      "/usr/share/perl/5.38.2/IO/Compress/Base/Common.pm",
-      "/usr/share/perl/5.38.2/IO/Compress/Base/Common.pm",
-      "/usr/share/perl5/Date/Manip/Base.pm",
-      "/usr/share/perl5/Date/Manip/Base.pm",
-      "/usr/share/perl5/Date/Manip/DM6.pm",
-      "/usr/share/perl5/Date/Manip/DM6.pm",
-      "/usr/share/perl5/Date/Manip/Date.pm",
-      "/usr/share/perl5/Date/Manip/Date.pm",
-      "/usr/share/perl5/Date/Manip/Recur.pm",
-      "/usr/share/perl5/Date/Manip/Recur.pm",
-      "/usr/share/perl5/Date/Manip/TZ.pm",
-      "/usr/share/perl5/Date/Manip/TZ.pm",
-      "/usr/share/perl5/XML/Twig/XPath.pm",
-      "/usr/share/perl5/XML/Twig/XPath.pm",
-      "/usr/share/perl5/XML/Twig.pm",
-      "/usr/share/perl5/XML/Twig.pm",
-      "/usr/share/perl5/XML/XPathEngine/NodeSet.pm",
-      "/usr/share/perl5/XML/XPathEngine/NodeSet.pm"
-    ],
     "expected_colon": [
       "/usr/share/perl5/IO/Socket/SSL/Intercept.pm",
       "/usr/share/perl5/IO/Socket/SSL/Intercept.pm",
@@ -194,10 +170,6 @@
       "/usr/share/perl5/Debian/AdduserLogging.pm",
       "/usr/share/perl5/Debian/AdduserLogging.pm"
     ],
-    "unexpected_fat_arrow_expr": [
-      "/usr/share/perl5/File/Find/Rule.pm",
-      "/usr/share/perl5/File/Find/Rule.pm"
-    ],
     "unexpected_rbrace_expr": [
       "/usr/lib/x86_64-linux-gnu/perl/5.38/Data/Dumper.pm",
       "/usr/lib/x86_64-linux-gnu/perl/5.38/Data/Dumper.pm",
@@ -258,10 +230,8 @@
       "/usr/share/perl/5.38/Pod/Perldoc.pm",
       "/usr/share/perl/5.38/Pod/Perldoc.pm",
       "/usr/share/perl/5.38.2/Pod/Perldoc.pm",
-      "/usr/share/perl/5.38.2/Pod/Perldoc.pm",
-      "/usr/share/perl5/DateTime/Locale/Data.pm",
-      "/usr/share/perl5/DateTime/Locale/Data.pm"
+      "/usr/share/perl/5.38.2/Pod/Perldoc.pm"
     ]
   },
-  "elapsed_secs": 4.525191371
+  "elapsed_secs": 5.267180426
 }

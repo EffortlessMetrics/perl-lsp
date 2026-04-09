@@ -183,9 +183,7 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        Some(kind)
-                            if kind == TokenKind::Identifier || Self::is_keyword_token(kind) =>
-                        {
+                        Some(kind) if Self::can_be_sub_name(kind) => {
                             // Check for ->$#* (postfix last-index dereference, Perl 5.20+).
                             // The lexer produces Identifier("$#") for `$#` when no array
                             // name follows, so we handle it here before the method-call path.
@@ -440,13 +438,17 @@ impl<'a> Parser<'a> {
                                 // In Perl, the block form does not require a comma
                                 // before the list: `grep { ... } @array`
                                 // First consume without a comma/fat arrow if present
-                                if !self.is_at_statement_end()
+                                if (if is_bare_func {
+                                    self.should_continue_bare_call_after_block()
+                                } else {
+                                    !self.is_at_statement_end()
+                                })
                                     && !matches!(
                                         self.peek_kind(),
                                         Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                     )
                                 {
-                                    args.push(self.parse_ternary()?);
+                                    args.push(self.parse_assignment_or_declaration()?);
                                 }
 
                                 // Then consume any remaining comma/fat-arrow-separated arguments
@@ -455,10 +457,14 @@ impl<'a> Parser<'a> {
                                     Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                 ) {
                                     self.consume_token()?; // consume comma or fat arrow
-                                    if self.is_at_statement_end() {
+                                    if is_bare_func {
+                                        if !self.should_continue_bare_call_after_block() {
+                                            break;
+                                        }
+                                    } else if self.is_at_statement_end() {
                                         break;
                                     }
-                                    args.push(self.parse_ternary()?);
+                                    args.push(self.parse_assignment_or_declaration()?);
                                 }
                             } else {
                                 // Other builtins - parse {} as first argument (filehandle or hash)
@@ -946,6 +952,21 @@ impl<'a> Parser<'a> {
                                 } else {
                                     // Parse the first argument
                                     args.push(self.parse_assignment_or_declaration()?);
+
+                                    // Generic bare calls can also take implicit list arguments
+                                    // after a leading block/hash argument, just like parse_args()
+                                    // does for parenthesized calls.
+                                    while matches!(
+                                        args.last(),
+                                        Some(n)
+                                            if matches!(
+                                                n.kind,
+                                                NodeKind::Block { .. } | NodeKind::HashLiteral { .. }
+                                            )
+                                    ) && self.should_continue_bare_call_after_block()
+                                    {
+                                        args.push(self.parse_assignment_or_declaration()?);
+                                    }
 
                                     // Special case: print/say/printf/exec/send with indirect object.
                                     // `print $fh $msg` / `send $sock $msg` — first arg is the

@@ -101,6 +101,29 @@ impl<'a> Parser<'a> {
         false
     }
 
+    /// After a leading block/hash argument in a bare call, decide whether the
+    /// following token should be parsed as another implicit argument.
+    ///
+    /// Perl permits `func { ... } @list` and DSL-style named args such as
+    /// `func { ... } foreach => $items` without a comma after the block. We
+    /// still stop at real statement boundaries and at postfix modifiers unless
+    /// the modifier token is being autoquoted before `=>`.
+    fn should_continue_bare_call_after_block(&mut self) -> bool {
+        match self.peek_kind() {
+            Some(TokenKind::Semicolon)
+            | Some(TokenKind::RightBrace)
+            | Some(TokenKind::RightParen)
+            | Some(TokenKind::RightBracket)
+            | Some(TokenKind::Eof)
+            | None => false,
+            Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
+                false
+            }
+            Some(kind) if Self::is_stmt_modifier_kind(kind) => self.is_keyword_before_fat_arrow(),
+            _ => true,
+        }
+    }
+
     /// Check recursion depth with optimized hot path
     #[inline(always)]
     fn check_recursion(&mut self) -> ParseResult<()> {
@@ -507,6 +530,9 @@ impl<'a> Parser<'a> {
                 Self::autoquote_fat_arrow_key(last);
             }
             self.consume_token()?; // consume =>
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                self.consume_token()?; // consume redundant chained =>
+            }
             expressions.push(self.parse_assignment()?);
         }
 

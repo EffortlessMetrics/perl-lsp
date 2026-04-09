@@ -102,9 +102,23 @@ impl<'a> Parser<'a> {
 
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
-        // Check if we have a 'not' operator first
-        if self.peek_kind() == Some(TokenKind::WordNot) {
-            return self.parse_word_not_expr();
+        if let Some(kind) = self.peek_kind() {
+            if matches!(
+                kind,
+                TokenKind::WordNot | TokenKind::WordAnd | TokenKind::WordOr | TokenKind::WordXor
+            ) && self.is_keyword_before_fat_arrow()
+            {
+                let token = self.tokens.next()?;
+                return Ok(Node::new(
+                    NodeKind::Identifier { name: token.text.to_string() },
+                    SourceLocation { start: token.start, end: token.end },
+                ));
+            }
+
+            // Check if we have a 'not' operator first
+            if kind == TokenKind::WordNot {
+                return self.parse_word_not_expr();
+            }
         }
 
         // Handle 'return' as an expression in expression context

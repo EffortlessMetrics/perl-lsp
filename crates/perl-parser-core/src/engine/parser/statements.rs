@@ -156,7 +156,11 @@ impl<'a> Parser<'a> {
             // Variable declarations
             TokenKind::My | TokenKind::Our | TokenKind::State => {
                 let decl = self.parse_variable_declaration()?;
-                Ok(self.parse_word_or_expr(decl)?)
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.finish_expression_from(decl)
+                } else {
+                    Ok(self.parse_word_or_expr(decl)?)
+                }
             }
             // `field` is a variable declarator only in Perl 5.38+ class bodies.
             // In legacy code it is commonly a regular identifier (function call,
@@ -166,7 +170,37 @@ impl<'a> Parser<'a> {
             // to expression parsing.
             TokenKind::Field if self.is_field_declaration_context() => {
                 let decl = self.parse_variable_declaration()?;
-                Ok(self.parse_word_or_expr(decl)?)
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    let variable = match decl.kind {
+                        NodeKind::VariableDeclaration { variable, .. } => *variable,
+                        _ => decl,
+                    };
+                    let call_start = variable.location.start;
+                    let mut args = vec![variable];
+
+                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                        self.consume_token()?;
+
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            self.consume_token()?;
+                        }
+
+                        if self.is_at_statement_end() {
+                            break;
+                        }
+
+                        args.push(self.parse_assignment_or_declaration()?);
+                    }
+
+                    let end = args.last().map(|arg| arg.location.end).unwrap_or(call_start);
+                    let call = Node::new(
+                        NodeKind::FunctionCall { name: "field".to_string(), args },
+                        SourceLocation { start: call_start, end },
+                    );
+                    Ok(self.parse_word_or_expr(call)?)
+                } else {
+                    Ok(self.parse_word_or_expr(decl)?)
+                }
             }
             TokenKind::Local => self.parse_local_statement(),
 
