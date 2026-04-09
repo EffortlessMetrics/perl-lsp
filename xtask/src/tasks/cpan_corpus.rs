@@ -67,6 +67,12 @@ pub struct CpanCorpusConfig {
     pub top_n: usize,
     /// Verbose output
     pub verbose: bool,
+    /// Force a full wipe of the install directory before installing.
+    /// When false (default) and the install directory already contains
+    /// `lib/perl5`, the reset is skipped and cpanm runs in incremental
+    /// mode — only modules that are missing or out-of-date get installed.
+    /// This turns re-runs into a cheap cache hit instead of a full rebuild.
+    pub force_reset: bool,
 }
 
 impl Default for CpanCorpusConfig {
@@ -81,6 +87,7 @@ impl Default for CpanCorpusConfig {
             install_dir: workspace_path(CPAN_INSTALL_DIR),
             top_n: 1000,
             verbose: false,
+            force_reset: false,
         }
     }
 }
@@ -206,12 +213,36 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
     let preserved_dist_list =
         config.dist_list.strip_prefix(&config.install_dir).ok().map(|_| config.dist_list.as_path());
 
+    // Incremental cache: skip the wipe if the install directory is already
+    // populated and the caller did not ask for a forced reset.  cpanm itself
+    // is idempotent (`--local-lib` + `--notest` skips already-installed
+    // modules), so keeping `lib/perl5` between runs turns a full rebuild
+    // into a cheap delta install.
+    let already_populated = is_install_populated(&config.install_dir);
+    let should_reset = config.force_reset || !already_populated;
+
     let cpanm = if Command::new("cpanm").arg("--version").output().is_ok() {
         let launcher = CpanmLauncher::System;
-        reset_install_dir(&config.install_dir, Some(&launcher), preserved_dist_list)?;
+        if should_reset {
+            reset_install_dir(&config.install_dir, Some(&launcher), preserved_dist_list)?;
+        } else {
+            println!(
+                "Existing install detected at {} — running incremental update (pass --reset for a full rebuild)",
+                config.install_dir.display(),
+            );
+            fs::create_dir_all(&config.install_dir)
+                .context("Failed to create install directory")?;
+        }
         launcher
-    } else {
+    } else if should_reset {
         reset_install_dir(&config.install_dir, None, preserved_dist_list)?;
+        resolve_cpanm_launcher(config)?
+    } else {
+        println!(
+            "Existing install detected at {} — running incremental update (pass --reset for a full rebuild)",
+            config.install_dir.display(),
+        );
+        fs::create_dir_all(&config.install_dir).context("Failed to create install directory")?;
         resolve_cpanm_launcher(config)?
     };
 
@@ -328,6 +359,17 @@ fn resolve_cpanm_launcher(config: &CpanCorpusConfig) -> Result<CpanmLauncher> {
 
     let script_path = bootstrap_cpanm_script(config)?;
     Ok(CpanmLauncher::Bootstrapped(script_path))
+}
+
+/// Return true if the install directory already contains a non-empty
+/// `lib/perl5` tree, meaning cpanm has previously installed modules here
+/// and another install call can run in incremental mode.
+fn is_install_populated(install_dir: &Path) -> bool {
+    let lib_perl5 = install_dir.join("lib").join("perl5");
+    let Ok(mut entries) = fs::read_dir(&lib_perl5) else {
+        return false;
+    };
+    entries.next().is_some()
 }
 
 fn bootstrap_cpanm_path(install_dir: &Path) -> PathBuf {
@@ -697,6 +739,29 @@ mod tests {
     fn test_path_to_module_name_outside_lib() {
         let lib = PathBuf::from("/opt/cpan/lib/perl5");
         assert_eq!(path_to_module_name("/some/other/path/Foo.pm", &lib), None,);
+    }
+
+    #[test]
+    fn test_is_install_populated_detects_lib_perl5() -> Result<()> {
+        let dir = unique_test_dir("cpan-populated");
+
+        // Missing directory -> not populated
+        assert!(!is_install_populated(&dir));
+
+        // Empty install dir -> not populated
+        fs::create_dir_all(&dir)?;
+        assert!(!is_install_populated(&dir));
+
+        // Empty lib/perl5 -> not populated (no entries)
+        fs::create_dir_all(dir.join("lib").join("perl5"))?;
+        assert!(!is_install_populated(&dir));
+
+        // At least one file under lib/perl5 -> populated
+        fs::write(dir.join("lib").join("perl5").join("Test.pm"), "1;\n")?;
+        assert!(is_install_populated(&dir));
+
+        fs::remove_dir_all(&dir)?;
+        Ok(())
     }
 
     #[test]
