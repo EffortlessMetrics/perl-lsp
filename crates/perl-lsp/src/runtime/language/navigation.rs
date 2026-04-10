@@ -159,6 +159,38 @@ fn find_workspace_definition_location(
 }
 
 #[cfg(feature = "workspace")]
+fn find_plack_middleware_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    module_name: &str,
+) -> Option<crate::workspace_index::Location> {
+    let expected_suffix =
+        std::path::PathBuf::from(format!("{}.pm", module_name.replace("::", "/")));
+
+    for symbol in workspace_index.all_symbols() {
+        if symbol.kind != crate::workspace_index::SymbolKind::Package {
+            continue;
+        }
+
+        let matches_name =
+            symbol.name == module_name || symbol.qualified_name.as_deref() == Some(module_name);
+        if !matches_name {
+            continue;
+        }
+
+        if let Some(fs_path) = crate::workspace_index::uri_to_fs_path(&symbol.uri) {
+            if fs_path.ends_with(&expected_suffix) {
+                return Some(crate::workspace_index::Location {
+                    uri: symbol.uri,
+                    range: symbol.range,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(feature = "workspace")]
 fn workspace_document_text(
     workspace_index: &crate::workspace_index::WorkspaceIndex,
     uri: &str,
@@ -245,6 +277,16 @@ fn find_symbol_key_definition_location(
     workspace_index: &crate::workspace_index::WorkspaceIndex,
     symbol_key: &crate::workspace_index::SymbolKey,
 ) -> Option<crate::workspace_index::Location> {
+    if symbol_key.kind == crate::workspace_index::SymKind::Pack
+        && symbol_key.pkg.starts_with("Plack::Middleware::")
+    {
+        if let Some(location) =
+            find_plack_middleware_definition_location(workspace_index, symbol_key.pkg.as_ref())
+        {
+            return Some(location);
+        }
+    }
+
     if symbol_key.kind == crate::workspace_index::SymKind::Sub && symbol_key.sigil.is_none() {
         find_workspace_definition_location(workspace_index, &symbol_key.pkg, &symbol_key.name)
             .or_else(|| {
