@@ -43,7 +43,8 @@ require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
 
 ```elisp
 ;; Emacs (eglot)
-(add-to-list 'eglot-server-programs '(perl-mode "perllsp" "--stdio"))
+(add-to-list 'eglot-server-programs
+             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
 ```text
