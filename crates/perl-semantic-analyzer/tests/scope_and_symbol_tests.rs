@@ -2483,3 +2483,117 @@ if ("hello world" =~ /world/p) {
     );
     Ok(())
 }
+
+// ===========================================================================
+// 18. $a and $b Sort Variable Recognition
+// ===========================================================================
+
+#[test]
+fn sort_a_b_no_diagnostic_in_sort_block() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my @numbers = (3, 1, 4, 1, 5);
+my @sorted = sort { $a <=> $b } @numbers;
+print @sorted;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in sort block must not be flagged as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in sort block must not be flagged as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "a"),
+        "$a in sort block must not be flagged as unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "b"),
+        "$b in sort block must not be flagged as unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_no_diagnostic_with_string_comparator() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my @words = qw(banana apple cherry);
+my @strings = sort { lc($a) cmp lc($b) } @words;
+print @strings;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in string-cmp sort block must not be undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in string-cmp sort block must not be undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_in_named_sub_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+sub by_length { length($a) <=> length($b) }
+my @words = qw(foo barbaz hi);
+my @by_len = sort by_length @words;
+print @by_len;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in named sort sub must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in named sort sub must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_no_diagnostic_without_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my @numbers = (5, 2, 8, 1);
+my @sorted = sort { $a <=> $b } @numbers;
+print @sorted;
+"#;
+    let issues = scope_issues(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "a"),
+        "$a in sort block must not be flagged as unused (no strict); issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "b"),
+        "$b in sort block must not be flagged as unused (no strict); issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn user_variable_named_a_outside_sort_is_not_undeclared() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+my $a = 42;
+"#;
+    let issues = scope_issues(code);
+    let undeclared = has_issue(&issues, IssueKind::UndeclaredVariable, "a");
+    assert!(!undeclared, "a lexically declared $a must never be flagged as undeclared");
+    Ok(())
+}
