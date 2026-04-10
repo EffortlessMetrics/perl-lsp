@@ -21,18 +21,18 @@ collector works identically on Windows and Unix sources.
 - `QuoteKind` -- enum: `Unquoted`, `Single`, `Double`, `Backtick`
 
 
-## BDD Coverage
+## Coverage
 
-The crate includes acceptance-style scenarios in
-`tests/bdd_scenarios.rs` using explicit **Given / When / Then** naming for
-core behavior:
+The crate's behavior is already covered by
+[`tests/comprehensive_unit_tests.rs`](tests/comprehensive_unit_tests.rs),
+which exercises the public API and the main heredoc edge cases:
 
 - terminated heredoc collection
 - indented heredoc stripping (`<<~`)
 - unterminated heredoc reporting
 - CRLF handling
 - FIFO behavior across multiple pending heredocs
-- exact label matching (no prefix/suffix/trailing-text matches)
+- exact label matching
 
 ## Workspace Role
 
