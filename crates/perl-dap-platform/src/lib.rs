@@ -34,6 +34,7 @@ pub(crate) fn resolve_perl_path_from_path_env(path_env: &str) -> Result<PathBuf>
 
     anyhow::bail!("perl binary not found on PATH. Please install Perl or add it to PATH.")
 }
+
 /// Resolve the Perl interpreter path, checking perlbrew and plenv before PATH.
 ///
 /// Detection order:
