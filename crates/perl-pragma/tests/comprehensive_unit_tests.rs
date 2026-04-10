@@ -61,6 +61,11 @@ fn default_state_is_all_false() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!state.strict_subs);
     assert!(!state.strict_refs);
     assert!(!state.warnings);
+    assert!(!state.utf8);
+    assert!(state.encoding.is_none());
+    assert!(!state.unicode_strings);
+    assert!(!state.locale);
+    assert!(state.locale_scope.is_none());
     Ok(())
 }
 
@@ -71,6 +76,11 @@ fn all_strict_enables_strict_but_not_warnings() -> Result<(), Box<dyn std::error
     assert!(state.strict_subs);
     assert!(state.strict_refs);
     assert!(!state.warnings, "all_strict should not enable warnings");
+    assert!(!state.utf8);
+    assert!(state.encoding.is_none());
+    assert!(!state.unicode_strings);
+    assert!(!state.locale);
+    assert!(state.locale_scope.is_none());
     Ok(())
 }
 
@@ -313,6 +323,60 @@ fn no_warnings_disables_warnings() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("warnings", &[], 0, 15), no_node("warnings", &[], 16, 30)]);
     let map = PragmaTracker::build(&ast);
     assert!(!map[1].1.warnings);
+    Ok(())
+}
+
+#[test]
+fn use_utf8_and_no_utf8_toggle_state() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("utf8", &[], 0, 9), no_node("utf8", &[], 10, 19)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 2);
+    assert!(map[0].1.utf8);
+    assert!(!map[1].1.utf8);
+    Ok(())
+}
+
+#[test]
+fn use_encoding_tracks_active_source_encoding() -> Result<(), Box<dyn std::error::Error>> {
+    let ast =
+        program(vec![use_node("encoding", &["'utf8'"], 0, 18), no_node("encoding", &[], 19, 31)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 2);
+    assert_eq!(map[0].1.encoding.as_deref(), Some("utf8"));
+    assert!(map[1].1.encoding.is_none());
+    Ok(())
+}
+
+#[test]
+fn use_locale_tracks_scope_and_clears_on_no_locale() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("locale", &["':not_characters'"], 0, 28),
+        no_node("locale", &[], 29, 39),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 2);
+    assert!(map[0].1.locale);
+    assert_eq!(map[0].1.locale_scope.as_deref(), Some(":not_characters"));
+    assert!(!map[1].1.locale);
+    assert!(map[1].1.locale_scope.is_none());
+    Ok(())
+}
+
+#[test]
+fn use_feature_unicode_strings_sets_state() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["'unicode_strings'"], 0, 30)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1);
+    assert!(map[0].1.unicode_strings);
+    Ok(())
+}
+
+#[test]
+fn use_feature_bundle_5_12_sets_unicode_strings() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["':5.12'"], 0, 22)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1);
+    assert!(map[0].1.unicode_strings);
     Ok(())
 }
 
