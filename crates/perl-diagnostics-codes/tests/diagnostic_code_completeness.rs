@@ -180,6 +180,24 @@ fn security_backtick_exec_code_exists() -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
+#[test]
+fn security_signal_handler_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::SecuritySignalHandler;
+    assert_eq!(code.as_str(), "PL602", "SecuritySignalHandler should have code PL602");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        "SecuritySignalHandler should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "SecuritySignalHandler should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL602"),
+        Some(DiagnosticCode::SecuritySignalHandler),
+        "parse_code('PL602') should return SecuritySignalHandler"
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Import diagnostic codes
 // ---------------------------------------------------------------------------
