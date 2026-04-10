@@ -342,11 +342,18 @@ struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
     line_starts: RefCell<Option<Vec<usize>>>,
+    /// Current package name, updated as `package` statements are traversed.
+    current_package: RefCell<String>,
 }
 
 impl<'a> AnalysisContext<'a> {
     fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
-        Self { code, pragma_map, line_starts: RefCell::new(None) }
+        Self {
+            code,
+            pragma_map,
+            line_starts: RefCell::new(None),
+            current_package: RefCell::new("main".to_string()),
+        }
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -483,49 +490,12 @@ impl ScopeAnalyzer {
                     is_our,
                     is_initialized,
                 ) {
-                    let line = context.get_line(variable.location.start);
-                    // Optimization: Only allocate full name string when we actually have an issue to report
-                    let full_name = extracted.as_string();
-                    // Build description first (borrows full_name), then move full_name into struct
-                    let description = match issue_kind {
-                        IssueKind::VariableShadowing => {
-                            format!("Variable '{}' shadows a variable in outer scope", full_name)
-                        }
-                        IssueKind::VariableRedeclaration => {
-                            format!("Variable '{}' is already declared in this scope", full_name)
-                        }
-                        _ => String::new(),
-                    };
-                    issues.push(ScopeIssue {
-                        kind: issue_kind,
-                        variable_name: full_name,
-                        line,
-                        range: (variable.location.start, variable.location.end),
-                        description,
-                    });
-                }
-            }
-
-            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
-                let is_our = declarator == "our";
-                let is_initialized = initializer.is_some();
-
-                // Analyze initializer first
-                if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, context);
-                }
-
-                for variable in variables {
-                    let extracted = self.extract_variable_name(variable);
-                    let (sigil, var_name_part) = extracted.parts();
-
-                    if let Some(issue_kind) = scope.declare_variable_parts(
-                        sigil,
-                        var_name_part,
-                        variable.location.start,
-                        is_our,
-                        is_initialized,
-                    ) {
+                    // `our` re-declares a package global — valid Perl idiom when switching
+                    // packages (`package Foo; our $x; package Bar; our $x;`).  Never report
+                    // VariableRedeclaration for `our` declarations.
+                    if is_our && issue_kind == IssueKind::VariableRedeclaration {
+                        // Silently accept: different-package re-use of the same bare name.
+                    } else {
                         let line = context.get_line(variable.location.start);
                         // Optimization: Only allocate full name string when we actually have an issue to report
                         let full_name = extracted.as_string();
@@ -552,6 +522,61 @@ impl ScopeAnalyzer {
                             range: (variable.location.start, variable.location.end),
                             description,
                         });
+                    }
+                }
+            }
+
+            NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+                let is_our = declarator == "our";
+                let is_initialized = initializer.is_some();
+
+                // Analyze initializer first
+                if let Some(init) = initializer {
+                    self.analyze_node(init, scope, ancestors, issues, context);
+                }
+
+                for variable in variables {
+                    let extracted = self.extract_variable_name(variable);
+                    let (sigil, var_name_part) = extracted.parts();
+
+                    if let Some(issue_kind) = scope.declare_variable_parts(
+                        sigil,
+                        var_name_part,
+                        variable.location.start,
+                        is_our,
+                        is_initialized,
+                    ) {
+                        // `our` redeclaration is always valid — see VariableDeclaration handler.
+                        if is_our && issue_kind == IssueKind::VariableRedeclaration {
+                            // Silently accept.
+                        } else {
+                            let line = context.get_line(variable.location.start);
+                            // Optimization: Only allocate full name string when we actually have an issue to report
+                            let full_name = extracted.as_string();
+                            // Build description first (borrows full_name), then move full_name into struct
+                            let description = match issue_kind {
+                                IssueKind::VariableShadowing => {
+                                    format!(
+                                        "Variable '{}' shadows a variable in outer scope",
+                                        full_name
+                                    )
+                                }
+                                IssueKind::VariableRedeclaration => {
+                                    format!(
+                                        "Variable '{}' is already declared in this scope",
+                                        full_name
+                                    )
+                                }
+                                _ => String::new(),
+                            };
+                            issues.push(ScopeIssue {
+                                kind: issue_kind,
+                                variable_name: full_name,
+                                line,
+                                range: (variable.location.start, variable.location.end),
+                                description,
+                            });
+                        }
                     }
                 }
             }
@@ -1014,6 +1039,30 @@ impl ScopeAnalyzer {
                 }
 
                 ancestors.pop();
+            }
+            NodeKind::Package { name, block, .. } => {
+                // Track the active package so that `our` variable declarations can be
+                // correctly namespaced.  Two packages that each declare `our $VAR` are
+                // declaring *different* package-global variables (`Alpha::VAR` vs
+                // `Beta::VAR`) and must not be reported as redeclarations.
+                if let Some(block_node) = block {
+                    // Block form: `package Foo { ... }` — scope is limited to the block.
+                    // Save the previous package name and restore it after the block.
+                    let saved_package = context.current_package.borrow().clone();
+                    *context.current_package.borrow_mut() = name.clone();
+
+                    let pkg_scope = Rc::new(Scope::with_parent(scope.clone()));
+                    ancestors.push(node);
+                    self.analyze_node(block_node, &pkg_scope, ancestors, issues, context);
+                    ancestors.pop();
+                    self.collect_unused_variables(&pkg_scope, issues, context);
+
+                    *context.current_package.borrow_mut() = saved_package;
+                } else {
+                    // Statement form: `package Foo;` — affects the rest of the file.
+                    // No scope boundary is created; the current scope continues.
+                    *context.current_package.borrow_mut() = name.clone();
+                }
             }
             _ => {
                 // Recursively analyze children
