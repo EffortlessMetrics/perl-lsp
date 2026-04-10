@@ -451,7 +451,7 @@ impl LspServer {
                     if let Some(module_name) =
                         self.extract_module_reference_extended(&text_around, cursor_in_text)
                     {
-                        Some((module_name, text_around.clone()))
+                        Some((module_name, doc.text.clone()))
                     } else {
                         // Also check if we're on a package name followed by ->
                         let mut package_name_result = None;
@@ -463,7 +463,7 @@ impl LspServer {
                                 if cursor_in_text >= match_start && cursor_in_text <= match_end {
                                     package_name_result = Some((
                                         package_match.as_str().to_string(),
-                                        text_around.clone(),
+                                        doc.text.clone(),
                                     ));
                                     break;
                                 }
@@ -478,8 +478,10 @@ impl LspServer {
             // Lock is released here
 
             // Now resolve module to path WITHOUT holding the document lock
-            if let Some((module_name, _text_around)) = module_lookup_info {
-                if let Some(module_path) = self.resolve_module_to_path(&module_name) {
+            if let Some((module_name, doc_text)) = module_lookup_info {
+                if let Some(module_path) =
+                    self.resolve_module_to_path_with_doc(&module_name, Some(&doc_text), Some(uri))
+                {
                     return Ok(Some(json!([{
                         "uri": module_path,
                         "range": {
