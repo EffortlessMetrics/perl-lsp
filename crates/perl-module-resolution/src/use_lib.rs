@@ -14,6 +14,18 @@ pub struct UseLibPath {
     pub from_findbin: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LibDirectiveKind {
+    Add,
+    Remove,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LibDirective {
+    kind: LibDirectiveKind,
+    path: UseLibPath,
+}
+
 /// Extract include paths from `use lib` statements in Perl source text.
 ///
 /// Handles the following patterns:
@@ -36,16 +48,43 @@ pub struct UseLibPath {
 /// assert_eq!(paths[0].path, "lib");
 /// ```
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
-    let mut paths = Vec::new();
+    extract_lib_directives(source)
+        .into_iter()
+        .filter_map(|directive| {
+            if directive.kind == LibDirectiveKind::Add { Some(directive.path) } else { None }
+        })
+        .collect()
+}
 
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = strip_use_lib_prefix(trimmed) {
-            extract_paths_from_args(rest, &mut paths);
+/// Resolve active lexical include paths from a Perl source snippet.
+///
+/// Applies `use lib` additions and `no lib` removals in source order and returns
+/// the resulting include path list in the same precedence order as Perl's `@INC`
+/// (`use lib` prepends entries).
+pub fn resolve_use_lib_paths_from_source(
+    source: &str,
+    workspace_root: &Path,
+    file_dir: Option<&Path>,
+) -> Vec<String> {
+    let mut active = Vec::new();
+
+    for directive in extract_lib_directives(source) {
+        let resolved = resolve_one_use_lib_path(&directive.path, workspace_root, file_dir);
+        if let Some(path) = resolved {
+            match directive.kind {
+                LibDirectiveKind::Add => {
+                    if !active.contains(&path) {
+                        active.insert(0, path);
+                    }
+                }
+                LibDirectiveKind::Remove => {
+                    active.retain(|entry| entry != &path);
+                }
+            }
         }
     }
 
-    paths
+    active
 }
 
 /// Resolve `use lib` paths against a workspace root and optional file directory.
@@ -73,39 +112,54 @@ pub fn resolve_use_lib_paths(
     let mut result = Vec::new();
 
     for ulp in use_lib_paths {
-        let path_str = &ulp.path;
-
-        if ulp.from_findbin {
-            let base = file_dir.unwrap_or(workspace_root);
-            let resolved = base.join(path_str);
-            if let Some(s) = path_to_relative_string(&resolved, workspace_root) {
-                if !result.contains(&s) {
-                    result.push(s);
-                }
-            }
-        } else {
-            let p = Path::new(path_str);
-            if p.is_absolute() {
-                if let Ok(rel) = p.strip_prefix(workspace_root) {
-                    let s = rel.to_string_lossy().to_string();
-                    if !result.contains(&s) {
-                        result.push(s);
-                    }
-                }
-            } else {
-                let s = path_str.to_string();
-                if !result.contains(&s) {
-                    result.push(s);
-                }
-            }
+        if let Some(s) = resolve_one_use_lib_path(ulp, workspace_root, file_dir)
+            && !result.contains(&s)
+        {
+            result.push(s);
         }
     }
 
     result
 }
 
+fn extract_lib_directives(source: &str) -> Vec<LibDirective> {
+    let mut directives = Vec::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = strip_use_lib_prefix(trimmed) {
+            let mut paths = Vec::new();
+            extract_paths_from_args(rest, &mut paths);
+            directives.extend(
+                paths.into_iter().map(|path| LibDirective { kind: LibDirectiveKind::Add, path }),
+            );
+        } else if let Some(rest) = strip_no_lib_prefix(trimmed) {
+            let mut paths = Vec::new();
+            extract_paths_from_args(rest, &mut paths);
+            directives.extend(
+                paths.into_iter().map(|path| LibDirective { kind: LibDirectiveKind::Remove, path }),
+            );
+        }
+    }
+
+    directives
+}
+
 fn strip_use_lib_prefix(trimmed: &str) -> Option<&str> {
     let rest = trimmed.strip_prefix("use")?;
+    if !rest.starts_with(|c: char| c.is_whitespace()) {
+        return None;
+    }
+    let rest = rest.trim_start();
+    let rest = rest.strip_prefix("lib")?;
+    if !rest.starts_with(|c: char| c.is_whitespace() || c == '(' || c == ';') {
+        return None;
+    }
+    Some(rest.trim_start())
+}
+
+fn strip_no_lib_prefix(trimmed: &str) -> Option<&str> {
+    let rest = trimmed.strip_prefix("no")?;
     if !rest.starts_with(|c: char| c.is_whitespace()) {
         return None;
     }
@@ -212,14 +266,25 @@ fn resolve_findbin_in_string(s: &str) -> (String, bool) {
     (s.to_string(), false)
 }
 
-fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String> {
-    if let Ok(rel) = path.strip_prefix(workspace_root) {
-        let s = normalize_relative_path_string(rel.to_string_lossy().as_ref());
-        if s.is_empty() { Some(".".to_string()) } else { Some(s) }
-    } else {
-        let s = normalize_relative_path_string(path.to_string_lossy().as_ref());
-        Some(s)
+fn resolve_one_use_lib_path(
+    use_lib_path: &UseLibPath,
+    workspace_root: &Path,
+    file_dir: Option<&Path>,
+) -> Option<String> {
+    let path_str = &use_lib_path.path;
+
+    if use_lib_path.from_findbin {
+        let base = file_dir.unwrap_or(workspace_root);
+        let resolved = base.join(path_str);
+        return Some(path_to_string(&resolved));
     }
+
+    let p = Path::new(path_str);
+    if p.is_absolute() { Some(path_to_string(p)) } else { Some(path_str.to_string()) }
+}
+
+fn path_to_string(path: &Path) -> String {
+    normalize_relative_path_string(path.to_string_lossy().as_ref())
 }
 
 fn normalize_relative_path_string(path: &str) -> String {
@@ -387,14 +452,14 @@ mod tests {
         let paths = vec![UseLibPath { path: "lib".into(), from_findbin: true }];
         let resolved =
             resolve_use_lib_paths(&paths, Path::new("/project"), Some(Path::new("/project/bin")));
-        assert_eq!(resolved, vec!["bin/lib"]);
+        assert_eq!(resolved, vec!["/project/bin/lib"]);
     }
 
     #[test]
     fn resolve_findbin_path_without_file_dir() {
         let paths = vec![UseLibPath { path: "lib".into(), from_findbin: true }];
         let resolved = resolve_use_lib_paths(&paths, Path::new("/project"), None);
-        assert_eq!(resolved, vec!["lib"]);
+        assert_eq!(resolved, vec!["/project/lib"]);
     }
 
     #[test]
@@ -404,12 +469,12 @@ mod tests {
         let paths =
             vec![UseLibPath { path: inside.to_string_lossy().to_string(), from_findbin: false }];
         let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
-        assert_eq!(resolved, vec!["lib"]);
+        assert_eq!(resolved, vec![inside.to_string_lossy().to_string()]);
         Ok(())
     }
 
     #[test]
-    fn resolve_absolute_path_outside_workspace_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    fn resolve_absolute_path_outside_workspace_honored() -> Result<(), Box<dyn std::error::Error>> {
         let workspace = tempfile::tempdir()?;
         let outside = tempfile::tempdir()?;
         let paths = vec![UseLibPath {
@@ -417,7 +482,7 @@ mod tests {
             from_findbin: false,
         }];
         let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
-        assert!(resolved.is_empty());
+        assert_eq!(resolved, vec![outside.path().join("lib").to_string_lossy().to_string()]);
         Ok(())
     }
 
@@ -428,6 +493,13 @@ mod tests {
             UseLibPath { path: "lib".into(), from_findbin: false },
         ];
         let resolved = resolve_use_lib_paths(&paths, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["lib"]);
+    }
+
+    #[test]
+    fn resolve_from_source_handles_no_lib_removal() {
+        let source = "use lib 'local';\nuse lib 'lib';\nno lib 'local';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
         assert_eq!(resolved, vec!["lib"]);
     }
 }

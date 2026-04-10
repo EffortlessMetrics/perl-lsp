@@ -5,7 +5,7 @@
 use super::super::*;
 use perl_module_resolution::{
     ModuleUriResolution, resolve_module_path as resolve_workspace_module_path, resolve_module_uri,
-    use_lib::{extract_use_lib_paths, resolve_use_lib_paths},
+    use_lib::resolve_use_lib_paths_from_source,
 };
 use std::path::PathBuf;
 use std::sync::Once;
@@ -29,13 +29,33 @@ fn prepend_use_lib_paths(
     workspace_root: &std::path::Path,
     file_dir: Option<&std::path::Path>,
 ) {
-    let extracted = extract_use_lib_paths(doc_text);
-    let dynamic = resolve_use_lib_paths(&extracted, workspace_root, file_dir);
+    let dynamic = resolve_use_lib_paths_from_source(doc_text, workspace_root, file_dir);
     for p in dynamic.into_iter().rev() {
         if !include_paths.contains(&p) {
             include_paths.insert(0, p);
         }
     }
+}
+
+fn owning_workspace_root(workspace_folders: &[String], doc_uri: Option<&str>) -> Option<PathBuf> {
+    let doc_path =
+        doc_uri.and_then(|uri| url::Url::parse(uri).ok()).and_then(|uri| uri.to_file_path().ok());
+
+    if let Some(doc_path) = doc_path {
+        for folder in workspace_folders {
+            let folder_path = url::Url::parse(folder).ok().and_then(|uri| uri.to_file_path().ok());
+            if let Some(folder_path) = folder_path
+                && doc_path.starts_with(&folder_path)
+            {
+                return Some(folder_path);
+            }
+        }
+    }
+
+    workspace_folders
+        .first()
+        .and_then(|u| url::Url::parse(u).ok())
+        .and_then(|u| u.to_file_path().ok())
 }
 
 impl LspServer {
@@ -174,15 +194,11 @@ impl LspServer {
 
         // Wire use lib paths scoped to this call
         if let Some(text) = doc_text {
-            // Use the first workspace folder as the root for relative use lib paths
-            let root_opt = workspace_folders
-                .first()
-                .and_then(|u| url::Url::parse(u).ok())
-                .and_then(|u| u.to_file_path().ok());
+            let root_opt = owning_workspace_root(&workspace_folders, doc_uri);
             if root_opt.is_none() && !workspace_folders.is_empty() {
                 tracing::trace!(
-                    "Module URI resolution failed for workspace folder: {:?}",
-                    workspace_folders.first()
+                    "Module URI resolution could not determine owning workspace for doc_uri: {:?}",
+                    doc_uri
                 );
             }
             if let Some(root) = root_opt {
@@ -518,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_module_path_use_lib_outside_workspace_ignored() -> TestResult {
+    fn test_resolve_module_path_use_lib_outside_workspace_is_honored() -> TestResult {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         fs::create_dir_all(&workspace)?;
@@ -535,21 +551,14 @@ mod tests {
             config.include_paths = vec![];
         }
 
-        // Try to escape workspace via absolute path in use lib
+        // Absolute use lib entries are honored as literal include roots.
         let outside_dir_str = outside_dir.to_string_lossy().to_string();
         let doc_text = format!("use lib '{outside_dir_str}';\n");
         let result = server
             .resolve_module_path("Evil::Hack", Some(&doc_text))
             .ok_or("resolve_module_path returned None unexpectedly")?;
 
-        // The result must NOT be the actual outside-workspace file.
-        // resolve_use_lib_paths silently drops absolute paths outside workspace,
-        // so resolution falls back to a candidate inside the workspace.
-        assert_ne!(
-            result, outside_module,
-            "absolute path outside workspace must be ignored; got: {result:?}"
-        );
-        assert!(result.starts_with(&workspace), "result must remain inside workspace: {result:?}");
+        assert_eq!(result, outside_module, "absolute path outside workspace must be honored");
         Ok(())
     }
 
@@ -590,10 +599,8 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_module_path_findbin_dotdot_traversal_blocked() -> TestResult {
-        // A FindBin path like "$FindBin::Bin/../../../etc" must not escape the workspace.
-        // Even if resolve_use_lib_paths emits an absolute path string for the out-of-workspace
-        // resolved directory, validate_workspace_path in the resolution layer must reject it.
+    fn test_resolve_module_path_findbin_dotdot_can_resolve_external_root() -> TestResult {
+        // A FindBin path may intentionally walk to an external include root.
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         let scripts_dir = workspace.join("scripts");
@@ -618,14 +625,13 @@ mod tests {
 
         let result =
             server.resolve_module_path_with_uri("Evil::Secrets", Some(doc_text), Some(&doc_uri));
-
-        // Result must be None (file doesn't exist inside workspace) or a path inside workspace.
-        if let Some(ref path) = result {
-            assert!(
-                path.starts_with(&workspace),
-                "FindBin dotdot traversal must not resolve outside workspace: {path:?}"
-            );
-        }
+        let resolved = result.ok_or("expected module resolution result")?;
+        let resolved_str = resolved.to_string_lossy();
+        assert!(
+            resolved_str.ends_with("secret/Evil/Secrets.pm")
+                || resolved_str.ends_with("secret\\Evil\\Secrets.pm"),
+            "FindBin-derived path should be honored as a literal include root: {resolved_str}"
+        );
         Ok(())
     }
 

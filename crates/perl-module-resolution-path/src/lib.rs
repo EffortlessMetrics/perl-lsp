@@ -27,18 +27,24 @@ pub fn resolve_module_path(
     let relative_path = module_name_to_path(module_name);
 
     for base in include_paths {
+        let base_path = Path::new(base);
+        if base_path.is_absolute() {
+            let candidate = base_path.join(&relative_path);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+            continue;
+        }
+
         let candidate = if base == "." {
             root.join(&relative_path)
         } else {
             root.join(base).join(&relative_path)
         };
 
-        let safe_candidate = match validate_workspace_path(&candidate, root) {
-            Ok(path) => path,
-            Err(_) => continue,
-        };
-
-        if safe_candidate.exists() {
+        if let Ok(safe_candidate) = validate_workspace_path(&candidate, root)
+            && safe_candidate.exists()
+        {
             return Some(safe_candidate);
         }
     }
@@ -111,23 +117,23 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_when_absolute_include_path_is_outside_workspace()
+    fn resolves_when_absolute_include_path_is_outside_workspace()
     -> Result<(), Box<dyn std::error::Error>> {
         let workspace = tempfile::tempdir()?;
         let outside = tempfile::tempdir()?;
         let root = workspace.path().to_path_buf();
         let outside_base = outside.path().join("lib");
-        let fallback = root.join("lib").join("Outside").join("Mod.pm");
+        let module_file = outside_base.join("Outside").join("Mod.pm");
 
-        fs::create_dir_all(fallback.parent().ok_or("no parent")?)?;
-        fs::write(&fallback, "package Outside::Mod; 1;")?;
+        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+        fs::write(&module_file, "package Outside::Mod; 1;")?;
 
         let resolved = resolve_module_path(
             &root,
             "Outside::Mod",
             &[outside_base.to_string_lossy().to_string()],
         );
-        assert_eq!(resolved, Some(fallback));
+        assert_eq!(resolved, Some(module_file));
         Ok(())
     }
 }

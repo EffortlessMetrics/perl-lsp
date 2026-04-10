@@ -251,8 +251,8 @@ impl ServerConfig {
 pub struct WorkspaceConfig {
     /// Workspace-root-relative include paths for module resolution.
     ///
-    /// Absolute entries are accepted syntactically, but still must resolve
-    /// inside the workspace boundary.
+    /// Relative entries are resolved against the workspace root. Absolute
+    /// entries are honored literally as external include roots.
     /// Default: `["lib", ".", "local/lib/perl5"]`
     pub include_paths: Vec<String>,
 
@@ -262,6 +262,14 @@ pub struct WorkspaceConfig {
 
     /// Cached system @INC paths (populated lazily when use_system_inc is true)
     system_inc_cache: Option<Vec<PathBuf>>,
+
+    /// Perl interpreter used for startup `@INC` probing.
+    ///
+    /// When unset, falls back to `perl` on `PATH`.
+    pub perl_path: Option<String>,
+
+    /// Extra arguments passed to the Perl interpreter for startup `@INC` probing.
+    pub perl_args: Vec<String>,
 
     /// Resolution timeout in milliseconds
     /// Default: 50ms
@@ -274,6 +282,8 @@ impl Default for WorkspaceConfig {
             include_paths: vec!["lib".to_string(), ".".to_string(), "local/lib/perl5".to_string()],
             use_system_inc: false,
             system_inc_cache: None,
+            perl_path: None,
+            perl_args: Vec::new(),
             resolution_timeout_ms: 50,
         }
     }
@@ -293,6 +303,21 @@ impl WorkspaceConfig {
                 }
                 self.use_system_inc = use_inc;
             }
+            if let Some(perl_path) = workspace.get("perlPath").and_then(|v| v.as_str()) {
+                let next = Some(perl_path.to_string());
+                if next != self.perl_path {
+                    self.system_inc_cache = None;
+                }
+                self.perl_path = next;
+            }
+            if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
+                let next: Vec<String> =
+                    perl_args.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
+                if next != self.perl_args {
+                    self.system_inc_cache = None;
+                }
+                self.perl_args = next;
+            }
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
             }
@@ -306,15 +331,19 @@ impl WorkspaceConfig {
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache = Some(Self::fetch_perl_inc());
+            self.system_inc_cache =
+                Some(Self::fetch_perl_inc(self.perl_path.as_deref(), &self.perl_args));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
-        let output = Command::new("perl").args(["-e", "print join(\"\\n\", @INC)"]).output();
+    fn fetch_perl_inc(perl_path: Option<&str>, perl_args: &[String]) -> Vec<PathBuf> {
+        let perl_path = perl_path.unwrap_or("perl");
+        let mut command = Command::new(perl_path);
+        command.args(perl_args);
+        let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
 
         match output {
             Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
@@ -327,7 +356,7 @@ impl WorkspaceConfig {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
+    fn fetch_perl_inc(_: Option<&str>, _: &[String]) -> Vec<PathBuf> {
         Vec::new()
     }
 }
@@ -363,8 +392,7 @@ pub struct ProjectPerlConfig {
     /// Additional include paths for module resolution.
     ///
     /// Relative entries are resolved against the workspace root. Absolute
-    /// entries are accepted syntactically, but still must resolve inside the
-    /// workspace boundary.
+    /// entries are honored literally as external include roots.
     pub include_paths: Vec<String>,
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.
@@ -639,6 +667,8 @@ mod tests {
         let config = WorkspaceConfig::default();
         assert_eq!(config.include_paths, vec!["lib", ".", "local/lib/perl5"]);
         assert!(!config.use_system_inc);
+        assert!(config.perl_path.is_none());
+        assert!(config.perl_args.is_empty());
         assert_eq!(config.resolution_timeout_ms, 50);
     }
 
@@ -660,6 +690,19 @@ mod tests {
             "workspace": { "resolutionTimeout": 100 }
         }));
         assert_eq!(config.resolution_timeout_ms, 100);
+    }
+
+    #[test]
+    fn workspace_config_updates_perl_probe_settings() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&json!({
+            "workspace": {
+                "perlPath": "/opt/custom/perl",
+                "perlArgs": ["-I", "/tmp/custom/lib"]
+            }
+        }));
+        assert_eq!(config.perl_path.as_deref(), Some("/opt/custom/perl"));
+        assert_eq!(config.perl_args, vec!["-I", "/tmp/custom/lib"]);
     }
 
     #[test]
