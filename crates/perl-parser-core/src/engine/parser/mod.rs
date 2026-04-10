@@ -61,7 +61,7 @@ use crate::{
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -99,6 +99,10 @@ pub struct Parser<'a> {
     at_stmt_start: bool,
     /// FIFO queue of pending heredoc declarations awaiting content collection
     pending_heredocs: VecDeque<PendingHeredoc>,
+    /// Custom attributes registered by Attribute::Handlers declarations in this file.
+    custom_attribute_handlers: HashSet<String>,
+    /// Whether `use Attribute::Handlers;` has been seen in this file.
+    attribute_handlers_enabled: bool,
     /// Source bytes for heredoc content collection (shared with token stream)
     src_bytes: &'a [u8],
     /// Byte cursor tracking position for heredoc content collection
@@ -149,6 +153,8 @@ impl<'a> Parser<'a> {
             in_class_body: 0,
             at_stmt_start: true,
             pending_heredocs: VecDeque::new(),
+            custom_attribute_handlers: HashSet::new(),
+            attribute_handlers_enabled: false,
             src_bytes: input.as_bytes(),
             byte_cursor: 0,
             heredoc_start_time: None,
@@ -233,6 +239,8 @@ impl<'a> Parser<'a> {
             in_class_body: 0,
             at_stmt_start: true,
             pending_heredocs: VecDeque::new(),
+            custom_attribute_handlers: HashSet::new(),
+            attribute_handlers_enabled: false,
             src_bytes: source.as_bytes(),
             byte_cursor: 0,
             heredoc_start_time: None,
