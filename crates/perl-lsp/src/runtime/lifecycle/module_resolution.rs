@@ -5,7 +5,7 @@
 use super::super::*;
 use perl_module_resolution::{
     ModuleUriResolution, resolve_module_path as resolve_workspace_module_path, resolve_module_uri,
-    use_lib::resolve_use_lib_paths_from_source,
+    use_lib::{apply_use_lib_deltas, extract_use_lib_deltas},
 };
 use std::path::PathBuf;
 use std::sync::Once;
@@ -23,40 +23,39 @@ static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 /// The extra paths are scoped to this resolution pass only and are searched
 /// ahead of the configured workspace paths.
 /// Paths are scoped to this call only — `workspace_config.include_paths` is never mutated.
-fn prepend_use_lib_paths(
+fn apply_doc_use_lib_deltas(
     include_paths: &mut Vec<String>,
     doc_text: &str,
     workspace_root: &std::path::Path,
     file_dir: Option<&std::path::Path>,
 ) {
-    let dynamic = resolve_use_lib_paths_from_source(doc_text, workspace_root, file_dir);
-    for p in dynamic.into_iter().rev() {
-        if !include_paths.contains(&p) {
-            include_paths.insert(0, p);
-        }
-    }
+    let deltas = extract_use_lib_deltas(doc_text);
+    apply_use_lib_deltas(include_paths, &deltas, workspace_root, file_dir);
 }
 
-fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -> Option<PathBuf> {
+fn workspace_root_for_doc(
+    workspace_folders: &[String],
+    doc_uri: Option<&str>,
+) -> Option<std::path::PathBuf> {
+    let workspace_paths: Vec<std::path::PathBuf> = workspace_folders
+        .iter()
+        .filter_map(|u| url::Url::parse(u).ok())
+        .filter_map(|u| u.to_file_path().ok())
+        .collect();
+
     let doc_path =
         doc_uri.and_then(|u| url::Url::parse(u).ok()).and_then(|u| u.to_file_path().ok());
 
     if let Some(doc_path) = doc_path {
-        for folder in workspace_folders {
-            let Some(candidate) = url::Url::parse(folder).ok().and_then(|u| u.to_file_path().ok())
-            else {
-                continue;
-            };
-            if doc_path.starts_with(&candidate) {
-                return Some(candidate);
-            }
-        }
+        return workspace_paths
+            .iter()
+            .filter(|workspace| doc_path.starts_with(workspace))
+            .max_by_key(|workspace| workspace.components().count())
+            .cloned()
+            .or_else(|| workspace_paths.first().cloned());
     }
 
-    workspace_folders
-        .first()
-        .and_then(|u| url::Url::parse(u).ok())
-        .and_then(|u| u.to_file_path().ok())
+    workspace_paths.first().cloned()
 }
 
 impl LspServer {
@@ -96,7 +95,7 @@ impl LspServer {
         };
 
         if let Some(text) = doc_text {
-            prepend_use_lib_paths(&mut include_paths, text, &root, None);
+            apply_doc_use_lib_deltas(&mut include_paths, text, &root, None);
         }
 
         resolve_workspace_module_path(&root, module, &include_paths)
@@ -142,7 +141,7 @@ impl LspServer {
             if file_dir.is_none() && doc_uri.is_some() {
                 tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
             }
-            prepend_use_lib_paths(&mut include_paths, text, &root, file_dir.as_deref());
+            apply_doc_use_lib_deltas(&mut include_paths, text, &root, file_dir.as_deref());
         }
 
         resolve_workspace_module_path(&root, module, &include_paths)
@@ -223,7 +222,7 @@ impl LspServer {
                 if file_dir.is_none() && doc_uri.is_some() {
                     tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
                 }
-                prepend_use_lib_paths(&mut include_paths, text, &root, file_dir.as_deref());
+                apply_doc_use_lib_deltas(&mut include_paths, text, &root, file_dir.as_deref());
             }
         }
 
@@ -330,13 +329,11 @@ mod tests {
             config.include_paths = vec!["..".to_string()];
         }
 
-        let resolved = server
-            .resolve_module_path("escaped::Target", None)
-            .ok_or("expected resolve_module_path result")?;
-
-        // Traversal include paths must not resolve to files outside workspace.
-        assert!(resolved.starts_with(&workspace));
-        assert_ne!(resolved, escaped_file);
+        let resolved = server.resolve_module_path("escaped::Target", None);
+        assert!(
+            resolved.is_none(),
+            "traversal include paths must not resolve to files outside workspace"
+        );
         Ok(())
     }
 
@@ -542,15 +539,11 @@ mod tests {
             "doc A result should use 'custom' path from use lib: {found_str}"
         );
 
-        // Doc B (no use lib) must resolve to a different path — no global state pollution.
-        // resolve_module_path always returns Some (a candidate), but must not use "custom".
-        let doc_b_result = server
-            .resolve_module_path("Transient::Mod", None)
-            .ok_or("resolve_module_path with None doc_text returned None unexpectedly")?;
-        let doc_b_str = doc_b_result.to_string_lossy();
+        // Doc B (no use lib) must not inherit doc A include paths.
+        let doc_b_result = server.resolve_module_path("Transient::Mod", None);
         assert!(
-            !doc_b_str.contains("custom"),
-            "doc B (no use lib) must not include 'custom' path — global state pollution detected: {doc_b_str}"
+            doc_b_result.is_none(),
+            "doc B (no use lib) should not inherit include path state from doc A"
         );
         Ok(())
     }
@@ -579,7 +572,7 @@ mod tests {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         fs::create_dir_all(&workspace)?;
-        // Place a module OUTSIDE the workspace and verify absolute use lib can find it.
+        // Place a module OUTSIDE the workspace and verify absolute roots are honored.
         let outside_dir = temp.path().join("outside");
         let outside_module = outside_dir.join("Evil").join("Hack.pm");
         fs::create_dir_all(outside_module.parent().ok_or("no parent")?)?;
@@ -592,15 +585,16 @@ mod tests {
             config.include_paths = vec![];
         }
 
-        // Absolute paths in use lib should be honored literally.
+        // Use an absolute include root outside the workspace.
         let outside_dir_str = outside_dir.to_string_lossy().to_string();
         let doc_text = format!("use lib '{outside_dir_str}';\n");
         let result = server
             .resolve_module_path("Evil::Hack", Some(&doc_text))
             .ok_or("resolve_module_path returned None unexpectedly")?;
+
         assert_eq!(
             result, outside_module,
-            "absolute path outside workspace should resolve directly: {result:?}"
+            "absolute path outside workspace should be honored as an external root"
         );
         Ok(())
     }

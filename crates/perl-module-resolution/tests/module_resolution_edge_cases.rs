@@ -73,17 +73,16 @@ fn path_resolves_module_with_underscores_and_numbers() -> Result<(), Box<dyn std
 }
 
 // ---------------------------------------------------------------------------
-// resolve_module_path: empty module name returns lib fallback path
+// resolve_module_path: empty module name returns None
 // ---------------------------------------------------------------------------
 
 #[test]
-fn path_empty_module_name_returns_fallback() -> Result<(), Box<dyn std::error::Error>> {
+fn path_empty_module_name_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path().to_path_buf();
 
     let resolved = resolve_module_path(&root, "", &[]);
-    // Empty name should still produce a path (the lib fallback) without panicking
-    assert!(resolved.is_some());
+    assert_eq!(resolved, None);
     Ok(())
 }
 

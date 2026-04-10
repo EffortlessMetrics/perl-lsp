@@ -1,7 +1,7 @@
 //! Deterministic Perl module URI resolution helpers.
 //!
-//! This microcrate extracts the URI-first, timeout-bounded resolution policy from
-//! the broader `perl-module-resolution` crate so it can evolve independently.
+//! This microcrate extracts timeout-bounded URI resolution policy from the
+//! broader `perl-module-resolution` crate.
 
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
@@ -26,15 +26,19 @@ pub enum ModuleUriResolution {
     TimedOut,
 }
 
+#[derive(Debug, Clone)]
+struct IncEntry {
+    base: PathBuf,
+    workspace_root: Option<PathBuf>,
+}
+
 /// Resolve a module name to a `file://` URI using deterministic precedence.
 ///
 /// Search order:
 /// 1. Open document URIs (`ends_with` match on relative module path)
-/// 2. Workspace folders + `include_paths` (path-safe filesystem checks)
+/// 2. Workspace folders + `include_paths` (relative entries scoped to workspace,
+///    absolute entries honored literally)
 /// 3. System `@INC` paths (when `use_system_inc` is true)
-///
-/// The search observes `timeout` and returns [`ModuleUriResolution::TimedOut`] if
-/// the budget is exhausted.
 #[must_use]
 pub fn resolve_module_uri(
     module_name: &str,
@@ -54,56 +58,53 @@ pub fn resolve_module_uri(
         }
     }
 
+    let mut inc_entries = Vec::new();
     for workspace_folder in workspace_folders {
         if start_time.elapsed() > timeout {
             return ModuleUriResolution::TimedOut;
         }
 
         let workspace_path = workspace_folder_to_path(workspace_folder);
-
         for include_path in include_paths {
-            if start_time.elapsed() > timeout {
-                return ModuleUriResolution::TimedOut;
-            }
-
-            let include_base = Path::new(include_path);
-            let full_path = if include_base.is_absolute() {
-                include_base.join(&relative_path)
-            } else if include_path == "." {
-                workspace_path.join(&relative_path)
+            let include = Path::new(include_path);
+            if include.is_absolute() {
+                inc_entries.push(IncEntry { base: include.to_path_buf(), workspace_root: None });
             } else {
-                workspace_path.join(include_path).join(&relative_path)
-            };
-
-            let full_path = if include_base.is_absolute() {
-                full_path
-            } else {
-                match validate_workspace_path(&full_path, &workspace_path) {
-                    Ok(path) => path,
-                    Err(_) => continue,
-                }
-            };
-
-            if full_path.is_file()
-                && let Ok(url) = Url::from_file_path(&full_path)
-            {
-                return ModuleUriResolution::Resolved(url.to_string());
+                let base = if include_path == "." {
+                    workspace_path.clone()
+                } else {
+                    workspace_path.join(include_path)
+                };
+                inc_entries.push(IncEntry { base, workspace_root: Some(workspace_path.clone()) });
             }
         }
     }
 
     if use_system_inc {
         for inc_path in system_inc {
-            if start_time.elapsed() > timeout {
-                return ModuleUriResolution::TimedOut;
-            }
+            inc_entries.push(IncEntry { base: inc_path.clone(), workspace_root: None });
+        }
+    }
 
-            let full_path = inc_path.join(&relative_path);
-            if full_path.is_file()
-                && let Ok(url) = Url::from_file_path(&full_path)
-            {
-                return ModuleUriResolution::Resolved(url.to_string());
+    for entry in inc_entries {
+        if start_time.elapsed() > timeout {
+            return ModuleUriResolution::TimedOut;
+        }
+
+        let full_path = entry.base.join(&relative_path);
+        let full_path = if let Some(workspace_root) = entry.workspace_root {
+            match validate_workspace_path(&full_path, &workspace_root) {
+                Ok(path) => path,
+                Err(_) => continue,
             }
+        } else {
+            full_path
+        };
+
+        if full_path.is_file()
+            && let Ok(url) = Url::from_file_path(&full_path)
+        {
+            return ModuleUriResolution::Resolved(url.to_string());
         }
     }
 

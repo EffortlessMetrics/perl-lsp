@@ -459,8 +459,7 @@ mod graceful_error_handling {
         let root = PathBuf::from("/nonexistent/workspace/root");
         let result = resolve_module_path(&root, "Some::Module", &["lib".to_string()]);
 
-        // Should return Some (the fallback path), not panic
-        assert!(result.is_some());
+        assert_eq!(result, None);
     }
 
     #[test]

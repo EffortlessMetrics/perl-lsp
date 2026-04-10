@@ -45,36 +45,34 @@ mod resolve_path {
     }
 
     #[test]
-    fn falls_back_to_lib_when_include_paths_empty() -> Result<(), Box<dyn std::error::Error>> {
+    fn returns_none_when_include_paths_empty() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
 
         let result = resolve_module_path(root, "Some::Module", &[]);
-        // With no include paths, falls back to root/lib/<module>.pm
-        assert_eq!(result, Some(root.join("lib").join("Some/Module.pm")));
+        assert_eq!(result, None);
         Ok(())
     }
 
     #[test]
-    fn falls_back_to_lib_when_module_not_on_disk() -> Result<(), Box<dyn std::error::Error>> {
+    fn returns_none_when_module_not_on_disk() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
 
         std::fs::create_dir_all(root.join("lib"))?;
 
         let result = resolve_module_path(root, "Missing::Mod", &["lib".to_string()]);
-        // Module doesn't exist on disk, so lib fallback is returned
-        assert_eq!(result, Some(root.join("lib").join("Missing/Mod.pm")));
+        assert_eq!(result, None);
         Ok(())
     }
 
     #[test]
-    fn skips_traversal_include_path_and_falls_back() -> Result<(), Box<dyn std::error::Error>> {
+    fn skips_traversal_include_path() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
 
         let result = resolve_module_path(root, "Secret::Data", &["../outside".to_string()]);
-        assert_eq!(result, Some(root.join("lib").join("Secret/Data.pm")));
+        assert_eq!(result, None);
         Ok(())
     }
 
@@ -140,13 +138,12 @@ mod resolve_path {
     }
 
     #[test]
-    fn empty_module_name_produces_some_path() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_module_name_returns_none() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
 
         let result = resolve_module_path(root, "", &["lib".to_string()]);
-        // Should not panic; returns a path (the fallback)
-        assert!(result.is_some());
+        assert_eq!(result, None);
         Ok(())
     }
 
@@ -160,8 +157,7 @@ mod resolve_path {
             "Foo::Bar",
             &["..".to_string(), "../../etc".to_string(), "../sibling".to_string()],
         );
-        // All traversal paths rejected, falls back to lib
-        assert_eq!(result, Some(root.join("lib").join("Foo/Bar.pm")));
+        assert_eq!(result, None);
         Ok(())
     }
 }
@@ -442,6 +438,38 @@ mod uri_workspace {
         match result {
             ModuleUriResolution::Resolved(uri) => {
                 assert!(uri.ends_with("Local/Mod.pm"), "unexpected URI: {uri}");
+            }
+            other => return Err(format!("expected Resolved, got {other:?}").into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn absolute_include_path_is_honored() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let ws = temp.path().join("ws");
+        let external = temp.path().join("external").join("lib");
+        let target = external.join("Outside").join("Tool.pm");
+
+        std::fs::create_dir_all(target.parent().ok_or("no parent")?)?;
+        std::fs::write(&target, "package Outside::Tool; 1;")?;
+        std::fs::create_dir_all(&ws)?;
+
+        let ws_uri = url::Url::from_file_path(&ws).map_err(|()| "bad URI")?.to_string();
+
+        let result = resolve_module_uri(
+            "Outside::Tool",
+            &[],
+            &[ws_uri],
+            &[external.to_string_lossy().to_string()],
+            false,
+            &[],
+            Duration::from_millis(200),
+        );
+
+        match result {
+            ModuleUriResolution::Resolved(uri) => {
+                assert!(uri.contains("external/lib/Outside/Tool.pm"), "unexpected URI: {uri}");
             }
             other => return Err(format!("expected Resolved, got {other:?}").into()),
         }

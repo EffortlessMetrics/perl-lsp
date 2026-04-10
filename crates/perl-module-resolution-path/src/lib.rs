@@ -1,7 +1,8 @@
 //! Workspace-aware Perl module path resolution.
 //!
-//! This microcrate has a narrow responsibility: convert a Perl module name into a
-//! canonical filesystem path candidate under a workspace root.
+//! This microcrate resolves Perl module names to filesystem paths using an
+//! ordered include path list. Relative entries are workspace-scoped; absolute
+//! entries are treated as literal external roots.
 
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
@@ -13,13 +14,12 @@ use std::path::{Path, PathBuf};
 use perl_module_path::module_name_to_path;
 use perl_path_security::validate_workspace_path;
 
-/// Resolve a Perl module name to a workspace-relative filesystem path candidate.
+/// Resolve a Perl module name to an existing filesystem path.
 ///
-/// The search order is:
-/// 1. Each configured include path in order:
-///    - Relative paths are resolved under `root` and validated against traversal.
-///    - Absolute paths are treated as literal external roots.
-/// 2. Fallback to `root/lib/<module>.pm`.
+/// Search order is the order of `include_paths`:
+/// - Relative include paths are resolved under `root` and must stay inside the
+///   workspace boundary.
+/// - Absolute include paths are probed literally as external roots.
 #[must_use]
 pub fn resolve_module_path(
     root: &Path,
@@ -38,7 +38,7 @@ pub fn resolve_module_path(
             root.join(base).join(&relative_path)
         };
 
-        let safe_candidate = if base_path.is_absolute() {
+        let checked_candidate = if base_path.is_absolute() {
             candidate
         } else {
             match validate_workspace_path(&candidate, root) {
@@ -47,12 +47,12 @@ pub fn resolve_module_path(
             }
         };
 
-        if safe_candidate.exists() {
-            return Some(safe_candidate);
+        if checked_candidate.is_file() {
+            return Some(checked_candidate);
         }
     }
 
-    Some(root.join("lib").join(relative_path))
+    None
 }
 
 #[cfg(test)]
@@ -77,12 +77,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_traversal_candidate_and_falls_back_to_lib() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn rejects_traversal_candidate() -> Result<(), Box<dyn std::error::Error>> {
         let root = tempfile::tempdir()?.path().to_path_buf();
         let resolved = resolve_module_path(&root, "Escaped::Target", &["..".to_string()]);
 
-        assert_eq!(resolved, Some(root.join("lib").join("Escaped/Target.pm")));
+        assert_eq!(resolved, None);
         Ok(())
     }
 
@@ -101,42 +100,22 @@ mod tests {
     }
 
     #[test]
-    fn accepts_absolute_include_path_inside_workspace() -> Result<(), Box<dyn std::error::Error>> {
-        let temp = tempfile::tempdir()?;
-        let root = temp.path().to_path_buf();
-        let absolute_base = root.join("vendor").join("lib");
-        let module_file = absolute_base.join("Vendor").join("Tool.pm");
-
-        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
-        fs::write(&module_file, "package Vendor::Tool; 1;")?;
-
-        let resolved = resolve_module_path(
-            &root,
-            "Vendor::Tool",
-            &[absolute_base.to_string_lossy().to_string()],
-        );
-        assert_eq!(resolved, Some(module_file));
-        Ok(())
-    }
-
-    #[test]
-    fn resolves_absolute_include_path_outside_workspace() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn accepts_absolute_include_path_outside_workspace() -> Result<(), Box<dyn std::error::Error>> {
         let workspace = tempfile::tempdir()?;
         let outside = tempfile::tempdir()?;
         let root = workspace.path().to_path_buf();
         let outside_base = outside.path().join("lib");
-        let module = outside_base.join("Outside").join("Mod.pm");
+        let module_file = outside_base.join("Outside").join("Mod.pm");
 
-        fs::create_dir_all(module.parent().ok_or("no parent")?)?;
-        fs::write(&module, "package Outside::Mod; 1;")?;
+        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+        fs::write(&module_file, "package Outside::Mod; 1;")?;
 
         let resolved = resolve_module_path(
             &root,
             "Outside::Mod",
             &[outside_base.to_string_lossy().to_string()],
         );
-        assert_eq!(resolved, Some(module));
+        assert_eq!(resolved, Some(module_file));
         Ok(())
     }
 }
