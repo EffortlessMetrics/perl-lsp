@@ -5,6 +5,8 @@ import { BinaryDownloader } from './downloader';
 
 const SERVER_DEBUG_TEST_COMMAND = 'perl.debugTest';
 export const VSCODE_DEBUG_TEST_COMMAND = 'perl-lsp.debugTest';
+const DEBUGGING_GUIDE_URL =
+    'https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/tutorials/DAP_USER_GUIDE.md';
 
 export interface DebugTestLaunchTarget {
     label: string;
@@ -364,13 +366,16 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
 
         if (!dapPath) {
             vscode.window.showErrorMessage(
-                'Perl Debug Adapter (perl-dap) not found. ' +
+                'Perl Debug Adapter (perl-dap) not found. Debugging requires perl-dap. ' +
                 'Use "Perl LSP: Reinstall" from the Command Palette to re-download it, ' +
-                'or install it manually with: cargo install perl-dap',
-                'Reinstall'
+                'or install it manually with: cargo install perl-dap.',
+                'Reinstall',
+                'Open Debugging Guide'
             ).then(sel => {
                 if (sel === 'Reinstall') {
                     void vscode.commands.executeCommand('perl-lsp.reinstall');
+                } else if (sel === 'Open Debugging Guide') {
+                    void vscode.env.openExternal(vscode.Uri.parse(DEBUGGING_GUIDE_URL));
                 }
             });
             return undefined;

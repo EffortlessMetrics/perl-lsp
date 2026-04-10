@@ -29,6 +29,8 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let healthWidget: HealthWidget | undefined;
 let streamingController: StreamingCompletionController | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
+const COEXISTENCE_GUIDE_URL =
+    'https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/README.md#extension-coexistence';
 /**
  * Cached diagnostic message from the last startup failure.
  * Set by `initializeLanguageClient` when the LSP fails to start; read by
@@ -513,6 +515,10 @@ export async function activate(context: vscode.ExtensionContext) {
             refreshStreamingController(client);
         }
 
+        if (event.affectsConfiguration('perl-lsp.includePaths')) {
+            await validateIncludePaths(context);
+        }
+
         if (requiresClientRefresh(event)) {
             await promptForClientRefresh(context);
         }
@@ -586,6 +592,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize debug adapter
     activateDebugger(context);
     await initializeLanguageClient(context);
+    await validateIncludePaths(context);
+    await warnAboutPerlExtensionConflicts(context);
 
     // Background update check — fire-and-forget after startup completes.
     // Runs at most once per updateCheckInterval hours; no-ops when serverPath
@@ -1170,6 +1178,146 @@ async function runCheckSyntax(): Promise<void> {
             }
         });
     });
+}
+
+/**
+ * Validate configured include paths for each workspace folder and warn once
+ * per workspace when a path does not exist.
+ */
+export async function validateIncludePaths(context: vscode.ExtensionContext): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return;
+    }
+
+    for (const folder of workspaceFolders) {
+        const cacheKey = `perl-lsp.includePathsWarning.${encodeURIComponent(folder.uri.toString())}`;
+        if (context.globalState.get<boolean>(cacheKey, false)) {
+            continue;
+        }
+
+        const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
+        const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+        const missingPaths = includePaths.filter(includePath => {
+            const resolved = path.resolve(folder.uri.fsPath, includePath);
+            return !fs.existsSync(resolved);
+        });
+
+        if (missingPaths.length === 0) {
+            continue;
+        }
+
+        const firstMissing = missingPaths[0];
+        const relativeNote = path.isAbsolute(firstMissing)
+            ? 'absolute path'
+            : 'relative to the workspace';
+        const suffix =
+            missingPaths.length > 1
+                ? ` ${missingPaths.length} include paths are missing.`
+                : '';
+
+        const choice = await vscode.window.showWarningMessage(
+            `Perl LSP: include path "${firstMissing}" (${relativeNote}) does not exist.${suffix}`,
+            'Open Settings'
+        );
+
+        if (choice === 'Open Settings') {
+            void vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                '@ext:EffortlessMetrics.perl-lsp-rs perl-lsp.includePaths'
+            );
+        }
+
+        await context.globalState.update(cacheKey, true);
+    }
+}
+
+type ExtensionPackage = {
+    publisher?: string;
+    name?: string;
+    version?: string;
+    displayName?: string;
+    description?: string;
+    keywords?: string[];
+    contributes?: {
+        languages?: Array<{ id?: string }>;
+    };
+};
+
+type InstalledExtension = {
+    id?: string;
+    packageJSON?: ExtensionPackage;
+};
+
+function isPerlLanguageExtension(extension: InstalledExtension): boolean {
+    const packageJSON = extension.packageJSON;
+    if (!packageJSON) {
+        return false;
+    }
+
+    if ((packageJSON.contributes?.languages ?? []).some(language => language.id === 'perl')) {
+        return true;
+    }
+
+    const haystack = [
+        extension.id,
+        packageJSON.publisher && packageJSON.name
+            ? `${packageJSON.publisher}.${packageJSON.name}`
+            : undefined,
+        packageJSON.displayName,
+        packageJSON.name,
+        packageJSON.description,
+        ...(packageJSON.keywords ?? []),
+    ]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .join(' ')
+        .toLowerCase();
+
+    return /\bperl(?:\b|[-:]|navigator|critic|tidy|lsp)/i.test(haystack);
+}
+
+/**
+ * Warn once per major version when conflicting Perl extensions are installed.
+ */
+export async function warnAboutPerlExtensionConflicts(
+    context: vscode.ExtensionContext
+): Promise<void> {
+    const packageJSON = context.extension.packageJSON as ExtensionPackage;
+    const currentMajor = String(packageJSON.version ?? '0').split('.')[0] ?? '0';
+    const warnedMajor = context.globalState.get<string>('perl-lsp.conflictWarningMajorVersion');
+    if (warnedMajor === currentMajor) {
+        return;
+    }
+
+    const selfId = `${packageJSON.publisher ?? 'EffortlessMetrics'}.${packageJSON.name ?? 'perl-lsp-rs'}`;
+    const conflicts = (vscode.extensions.all as unknown as InstalledExtension[]).filter(extension => {
+        if (!extension || extension.id === selfId) {
+            return false;
+        }
+        return isPerlLanguageExtension(extension);
+    });
+
+    if (conflicts.length === 0) {
+        return;
+    }
+
+    const names = conflicts
+        .map(extension => extension.packageJSON?.displayName ?? extension.id ?? 'unknown extension')
+        .slice(0, 3);
+    const label = names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    const extra = conflicts.length > names.length ? ` (+${conflicts.length - names.length} more)` : '';
+    const choice = await vscode.window.showWarningMessage(
+        `Perl LSP detected ${conflicts.length} other Perl extension${conflicts.length === 1 ? '' : 's'}: ${label}${extra}. These can conflict with completion, hover, diagnostics, or formatting. See the coexistence guide for details.`,
+        'Open Coexistence Guide'
+    );
+
+    if (choice === 'Open Coexistence Guide') {
+        await vscode.env.openExternal(vscode.Uri.parse(COEXISTENCE_GUIDE_URL));
+    }
+
+    await context.globalState.update('perl-lsp.conflictWarningMajorVersion', currentMajor);
 }
 
 async function runProveTask(name: string, args: string[], cwd?: string): Promise<void> {

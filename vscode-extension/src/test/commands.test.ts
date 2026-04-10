@@ -114,6 +114,12 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
   });
 
   describe('activation events', () => {
+    test('every contributed command has an activation event', () => {
+      for (const command of pkg.contributes.commands) {
+        expect(pkg.activationEvents).toContain(`onCommand:${command.command}`);
+      }
+    });
+
     for (const id of NEW_COMMAND_IDS) {
       test(`activates on ${id} command`, () => {
         expect(pkg.activationEvents).toContain(`onCommand:${id}`);

@@ -54,7 +54,31 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:perl",
-    "onWalkthrough:perl-lsp.gettingStarted"
+    "onWalkthrough:perl-lsp.gettingStarted",
+    "onCommand:perl-lsp.restart",
+    "onCommand:perl-lsp.showVersion",
+    "onCommand:perl-lsp.showOutput",
+    "onCommand:perl-lsp.showStatusMenu",
+    "onCommand:perl-lsp.reinstall",
+    "onCommand:perl-lsp.checkForUpdate",
+    "onCommand:perl-lsp.organizeImports",
+    "onCommand:perl-lsp.runTests",
+    "onCommand:perl-lsp.extractVariable",
+    "onCommand:perl-lsp.extractMethod",
+    "onCommand:perl-lsp.showRefactoringOptions",
+    "onCommand:perl-lsp.showWhatsNew",
+    "onCommand:perl-lsp.createDebugConfig",
+    "onCommand:perl-lsp.runHealthCheck",
+    "onCommand:perl-lsp.checkSyntax",
+    "onCommand:perl-lsp.runCurrentTest",
+    "onCommand:perl-lsp.runAllTests",
+    "onCommand:perl-lsp.formatDocument",
+    "onCommand:perl-lsp.showIncPaths",
+    "onCommand:perl-lsp.openModule",
+    "onCommand:perl-lsp.showParserAst",
+    "onCommand:perl-lsp.openConfigurationGuide",
+    "onCommand:perl-lsp.reportIssue",
+    "onCommand:perl-lsp.previewPod"
   ],
   "contributes": {
     "languages": [
@@ -831,8 +855,8 @@
           },
           {
             "id": "debug-first-script",
-            "title": "Debug Your First Script",
-            "description": "Create a debug configuration with the Create Debug Configuration command.",
+            "title": "Debug Your First Script (Optional)",
+            "description": "Create a debug configuration with the Create Debug Configuration command. Debugging requires `perl-dap`; see the [debugging guide](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/tutorials/DAP_USER_GUIDE.md) for setup steps.",
             "media": {
               "image": "media/walkthrough/debug-first-script.svg",
               "altText": "Debug Script"

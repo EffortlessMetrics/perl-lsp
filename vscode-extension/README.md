@@ -46,10 +46,22 @@ A fast, native Perl 5 language server extension. Written in Rust for speed and r
 - **Variable Inspection** -- View variables, watch expressions, and call stack
 - **Attach to Process** -- Debug running Perl processes by PID or TCP
 
+Debugging is optional and uses `perl-dap` as a separate adapter. See the
+[debugging guide](../docs/tutorials/DAP_USER_GUIDE.md) for setup steps and
+the required launch configuration.
+
 ### Test Explorer
 - **Test Discovery** -- Automatic discovery of `.t` test files
 - **Run Tests** -- Run individual tests or entire files from the Testing panel (`Shift+Alt+T`)
 - **TAP Support** -- Native Test Anything Protocol result parsing
+
+### Extension Coexistence
+
+If VS Code warns that other Perl extensions are installed, keep one provider
+for navigation, diagnostics, and formatting where possible. Perl Navigator,
+Perl::Critic, and PerlTidy can overlap with perl-lsp features. If you see
+duplicate hover, completion, or formatting results, disable the competing
+feature in one extension and keep the other as the source of truth.
 
 ### Walkthrough Previews
 

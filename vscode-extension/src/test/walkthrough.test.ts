@@ -88,6 +88,14 @@ describe('package.json walkthrough contribution', () => {
     }
   });
 
+  test('debug step clearly marks debugging as optional and mentions perl-dap', () => {
+    const wt = pkg.contributes.walkthroughs[0];
+    const debugStep = wt.steps.find((step: any) => step.id === 'debug-first-script');
+    expect(debugStep).toBeDefined();
+    expect(debugStep.title).toMatch(/optional/i);
+    expect(debugStep.description).toMatch(/perl-dap/i);
+  });
+
   test('walkthrough activationEvents includes onWalkthrough', () => {
     // VSCode requires walkthroughs to be listed in activationEvents
     // with onWalkthrough:<id> so that the extension activates when
