@@ -1057,6 +1057,71 @@ $arr[0];
 }
 
 #[test]
+fn unused_variable_used_via_coderef_and_glob_dereference_forms()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $cb = sub { 1 };
+&$cb();
+
+my $gref = *STDOUT{IO};
+print *$gref;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("cb")
+        }),
+        "$cb used via coderef invocation should not be flagged: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("gref")
+        }),
+        "$gref used via glob dereference should not be flagged: {:?}",
+        issues
+    );
+
+    Ok(())
+}
+
+#[test]
+fn unused_variable_used_via_dynamic_method_deref_forms() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $obj = bless {}, 'Foo';
+my $method = 'method';
+$obj->${method}();
+$obj->${\'method'}();
+$obj->$method();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("obj")
+        }),
+        "$obj used via dynamic method deref should not be flagged: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("method")
+        }),
+        "$method used via dynamic method selection should not be flagged: {:?}",
+        issues
+    );
+
+    Ok(())
+}
+
+#[test]
 fn unused_underscore_prefix_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     // Variables prefixed with underscore should NOT be flagged as unused.
     let code = r#"

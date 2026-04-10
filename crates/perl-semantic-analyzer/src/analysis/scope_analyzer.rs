@@ -612,40 +612,84 @@ impl ScopeAnalyzer {
                 // Normalize explicit dereference/container syntax before lookup so that
                 // `@$ref` resolves to `$ref`, while direct subscripting keeps using the
                 // container sigil that the syntax implies.
-                let (lookup_sigil, lookup_name) =
-                    self.resolve_variable_use_target(node, ancestors).unwrap_or((sigil, name));
+                let (lookup_sigil, lookup_name) = self
+                    .resolve_variable_use_target(node, ancestors, context)
+                    .unwrap_or((sigil, name));
                 let (variable_used, is_initialized) =
                     scope.use_variable_parts(lookup_sigil, lookup_name);
 
                 // Variable not found - check if we should report it
                 if !variable_used {
                     if strict_vars_mode {
-                        let full_name = format!("{}{}", sigil, name);
-                        issues.push(ScopeIssue {
-                            kind: IssueKind::UndeclaredVariable,
-                            variable_name: full_name.clone(),
-                            line: context.get_line(node.location.start),
-                            range: (node.location.start, node.location.end),
-                            description: format!(
-                                "Variable '{}' is used but not declared",
-                                full_name
-                            ),
-                        });
+                        self.push_undeclared_variable_issue(issues, context, node, sigil, name);
                     }
                 } else if !is_initialized {
-                    // Variable found but used before initialization
-                    let full_name = format!("{}{}", sigil, name);
-                    issues.push(ScopeIssue {
-                        kind: IssueKind::UninitializedVariable,
-                        variable_name: full_name.clone(),
-                        line: context.get_line(node.location.start),
-                        range: (node.location.start, node.location.end),
-                        description: format!(
-                            "Variable '{}' is used before being initialized",
-                            full_name
-                        ),
-                    });
+                    self.push_uninitialized_variable_issue(issues, context, node, sigil, name);
                 }
+            }
+            NodeKind::Typeglob { name } => {
+                let (sigil, var_name) = split_variable_name(name);
+                if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
+                    self.record_variable_use(
+                        scope,
+                        strict_vars_mode,
+                        context,
+                        issues,
+                        node,
+                        sigil,
+                        var_name,
+                    );
+                }
+            }
+            NodeKind::FunctionCall { name, args } => {
+                if let Some((sigil, var_name)) = self.extract_name_like_variable(name) {
+                    self.record_variable_use(
+                        scope,
+                        strict_vars_mode,
+                        context,
+                        issues,
+                        node,
+                        sigil,
+                        var_name,
+                    );
+                }
+
+                // Handle function arguments, which may contain complex variable patterns.
+                // Some builtins consume declaration-capable filehandle arguments directly,
+                // e.g. `open my $fh, ...` or `pipe my $r, my $w;`. Those declarations should
+                // count as used and initialized by the builtin itself.
+                ancestors.push(node);
+                for arg in args {
+                    self.analyze_node(arg, scope, ancestors, issues, context);
+                    if is_declaration_capable_builtin(name) {
+                        self.mark_builtin_declaration_arg_consumed(arg, scope);
+                    }
+                }
+                ancestors.pop();
+            }
+            NodeKind::MethodCall { object, method, args } => {
+                ancestors.push(node);
+                self.analyze_node(object, scope, ancestors, issues, context);
+                if let Some((sigil, var_name)) = self.extract_method_name_variable(method) {
+                    self.record_variable_use(
+                        scope,
+                        strict_vars_mode,
+                        context,
+                        issues,
+                        node,
+                        sigil,
+                        var_name,
+                    );
+                }
+                for arg in args {
+                    self.analyze_node(arg, scope, ancestors, issues, context);
+                }
+                ancestors.pop();
+            }
+            NodeKind::Unary { op: _, operand } => {
+                ancestors.push(node);
+                self.analyze_node(operand, scope, ancestors, issues, context);
+                ancestors.pop();
             }
             NodeKind::String { value, interpolated } => {
                 if *interpolated
@@ -971,25 +1015,6 @@ impl ScopeAnalyzer {
 
                 ancestors.pop();
             }
-
-            NodeKind::FunctionCall { name, args } => {
-                // Handle function arguments, which may contain complex variable patterns.
-                // Some builtins consume declaration-capable arguments directly, but the
-                // eligible positions are builtin-specific:
-                //   - `open my $fh, ...`      — position 0 is the declaration
-                //   - `read $fh, my $buf, ...` — position 1 is the declaration
-                // Use the position-aware helper to avoid marking the wrong argument.
-                let decl_positions = builtin_declaration_arg_positions(name);
-                ancestors.push(node);
-                for (idx, arg) in args.iter().enumerate() {
-                    self.analyze_node(arg, scope, ancestors, issues, context);
-                    if decl_positions.contains(&idx) {
-                        self.mark_builtin_declaration_arg_consumed(arg, scope);
-                    }
-                }
-                ancestors.pop();
-            }
-
             _ => {
                 // Recursively analyze children
                 ancestors.push(node);
@@ -1012,6 +1037,7 @@ impl ScopeAnalyzer {
         &self,
         node: &'a Node,
         ancestors: &[&'a Node],
+        context: &AnalysisContext<'_>,
     ) -> Option<(&'a str, &'a str)> {
         let NodeKind::Variable { sigil, name } = &node.kind else {
             return None;
@@ -1024,17 +1050,149 @@ impl ScopeAnalyzer {
 
         if sigil == "$"
             && let Some(parent) = ancestors.last()
-            && let NodeKind::Binary { op, left, .. } = &parent.kind
+            && let NodeKind::Binary { op, left, right } = &parent.kind
             && std::ptr::eq(left.as_ref(), node)
         {
             match op.as_str() {
                 "[]" => return Some(("@", name)),
+                "->[]" | "->{}" => return Some(("$", name)),
+                "{}" if self.is_dynamic_method_deref_rhs(right)
+                    || self.is_dynamic_method_deref_context(parent, ancestors)
+                    || self.is_braced_dynamic_method_call(parent, context) =>
+                {
+                    return Some(("$", name));
+                }
                 "{}" => return Some(("%", name)),
                 _ => {}
             }
         }
 
         Some((sigil, name))
+    }
+
+    fn extract_name_like_variable<'a>(&self, name: &'a str) -> Option<(&'a str, &'a str)> {
+        let (sigil, var_name) = split_variable_name(name);
+        if sigil.is_empty()
+            || var_name.is_empty()
+            || var_name.contains("::")
+            || !self.looks_like_variable_name(var_name)
+        {
+            return None;
+        }
+        Some((sigil, var_name))
+    }
+
+    fn extract_method_name_variable<'a>(&self, method: &'a str) -> Option<(&'a str, &'a str)> {
+        self.extract_name_like_variable(method).or_else(|| {
+            let inner = method.strip_prefix("${")?.strip_suffix('}')?;
+            if inner.contains("::") || !self.looks_like_variable_name(inner) {
+                return None;
+            }
+            Some(("$", inner))
+        })
+    }
+
+    fn looks_like_variable_name(&self, name: &str) -> bool {
+        matches!(
+            name.chars().next(),
+            Some('A'..='Z' | 'a'..='z' | '_' | '$' | '@' | '%' | '&' | '*' | '^' | '#' | '!' | '?')
+        )
+    }
+
+    fn is_dynamic_method_deref_rhs(&self, node: &Node) -> bool {
+        matches!(
+            &node.kind,
+            NodeKind::Unary { op, operand }
+                if op == "\\"
+                    && matches!(
+                        &operand.kind,
+                        NodeKind::String { .. } | NodeKind::Identifier { .. }
+                    )
+        )
+    }
+
+    fn is_dynamic_method_deref_context<'a>(&self, node: &'a Node, ancestors: &[&'a Node]) -> bool {
+        let Some(grandparent) = ancestors.iter().rev().nth(1).copied() else {
+            return false;
+        };
+
+        match &grandparent.kind {
+            NodeKind::MethodCall { object, .. } => std::ptr::eq(object.as_ref(), node),
+            NodeKind::FunctionCall { name, args } if name == "->()" => {
+                args.first().is_some_and(|arg| std::ptr::eq(arg, node))
+            }
+            _ => false,
+        }
+    }
+
+    fn is_braced_dynamic_method_call(&self, node: &Node, context: &AnalysisContext<'_>) -> bool {
+        let Some(selector_text) = context.code.get(node.location.start..node.location.end) else {
+            return false;
+        };
+        if !selector_text.contains("->${") {
+            return false;
+        }
+
+        let Some(suffix) = context.code.get(node.location.end..) else {
+            return false;
+        };
+        suffix.trim_start().starts_with("()")
+    }
+
+    fn record_variable_use(
+        &self,
+        scope: &Rc<Scope>,
+        strict_vars_mode: bool,
+        context: &AnalysisContext<'_>,
+        issues: &mut Vec<ScopeIssue>,
+        node: &Node,
+        sigil: &str,
+        name: &str,
+    ) {
+        let (variable_used, is_initialized) = scope.use_variable_parts(sigil, name);
+        if !variable_used {
+            if strict_vars_mode {
+                self.push_undeclared_variable_issue(issues, context, node, sigil, name);
+            }
+        } else if !is_initialized {
+            self.push_uninitialized_variable_issue(issues, context, node, sigil, name);
+        }
+    }
+
+    fn push_undeclared_variable_issue(
+        &self,
+        issues: &mut Vec<ScopeIssue>,
+        context: &AnalysisContext<'_>,
+        node: &Node,
+        sigil: &str,
+        name: &str,
+    ) {
+        let full_name = format!("{}{}", sigil, name);
+        issues.push(ScopeIssue {
+            kind: IssueKind::UndeclaredVariable,
+            variable_name: full_name.clone(),
+            line: context.get_line(node.location.start),
+            range: (node.location.start, node.location.end),
+            description: format!("Variable '{}' is used but not declared", full_name),
+        });
+    }
+
+    fn push_uninitialized_variable_issue(
+        &self,
+        issues: &mut Vec<ScopeIssue>,
+        context: &AnalysisContext<'_>,
+        node: &Node,
+        sigil: &str,
+        name: &str,
+    ) {
+        let full_name = format!("{}{}", sigil, name);
+        issues.push(ScopeIssue {
+            kind: IssueKind::UninitializedVariable,
+            variable_name: full_name.clone(),
+            line: context.get_line(node.location.start),
+            range: (node.location.start, node.location.end),
+            description: format!("Variable '{}' is used before being initialized", full_name),
+        });
     }
 
     /// Marks variables as initialized when they appear on the left-hand side of an assignment.
@@ -1476,6 +1634,10 @@ fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
         "socketpair" => &[0, 1],
         _ => &[],
     }
+}
+
+fn is_declaration_capable_builtin(name: &str) -> bool {
+    !builtin_declaration_arg_positions(name).is_empty()
 }
 
 /// Check if an identifier is a known filehandle
