@@ -27,18 +27,40 @@ impl PerlVersion {
 pub struct PragmaState {
     /// Whether strict vars is enabled
     pub strict_vars: bool,
-    /// Whether strict subs is enabled  
+    /// Whether strict subs is enabled
     pub strict_subs: bool,
     /// Whether strict refs is enabled
     pub strict_refs: bool,
     /// Whether warnings are enabled
     pub warnings: bool,
+    /// Language features implicitly enabled by a `use vX.Y` version declaration.
+    ///
+    /// Populated by [`features_enabled_by_version`] when a version pragma is
+    /// encountered. Entries are static string slices from the known feature
+    /// table. `use feature` declarations are **not** tracked here — only
+    /// version-bundle implications.
+    pub features: Vec<&'static str>,
 }
 
 impl PragmaState {
     /// Create a new pragma state with all strict modes enabled
     pub fn all_strict() -> Self {
-        Self { strict_vars: true, strict_subs: true, strict_refs: true, warnings: false }
+        Self {
+            strict_vars: true,
+            strict_subs: true,
+            strict_refs: true,
+            warnings: false,
+            features: Vec::new(),
+        }
+    }
+
+    /// Returns `true` if the given feature name is in the version-implied feature set.
+    ///
+    /// This only reflects features implied by `use vX.Y` version declarations.
+    /// Explicit `use feature 'X'` calls are not tracked here.
+    #[must_use]
+    pub fn has_feature(&self, feature: &str) -> bool {
+        self.features.contains(&feature)
     }
 }
 
@@ -81,26 +103,59 @@ pub fn version_implies_warnings(version: PerlVersion) -> bool {
 }
 
 /// Returns the language features implicitly enabled by declaring `use VERSION`.
+///
+/// Mirrors the Perl `feature` pragma bundle semantics: each `use vX.Y`
+/// declaration implicitly enables the same features as `use feature ':X.Y'`.
+/// Features that were removed from a bundle (e.g. `switch` removed in v5.38)
+/// are **not** included for that version and above.
+///
+/// Reference: <https://perldoc.perl.org/feature#FEATURE-BUNDLES>
 #[must_use]
 pub fn features_enabled_by_version(version: PerlVersion) -> Vec<&'static str> {
     let mut features = Vec::new();
+
+    // v5.10 bundle: say, state, switch (given/when)
     if version >= PerlVersion::new(5, 10) {
-        // say, state, switch (given/when/default)
         features.extend_from_slice(&["say", "state", "switch"]);
     }
+
+    // v5.14 bundle adds: unicode_strings
+    if version >= PerlVersion::new(5, 14) {
+        features.push("unicode_strings");
+    }
+
+    // v5.16 bundle adds: unicode_eval, evalbytes, current_sub, fc
+    if version >= PerlVersion::new(5, 16) {
+        features.extend_from_slice(&["unicode_eval", "evalbytes", "current_sub", "fc"]);
+    }
+
+    // v5.20 bundle adds: postfix_deref (experimental; stable-bundled at v5.26)
+    // We track it from v5.20 so explicit `use feature 'postfix_deref'` on v5.20 works.
     if version >= PerlVersion::new(5, 20) {
         features.push("postfix_deref");
     }
+
+    // v5.34 bundle adds: try (experimental)
     if version >= PerlVersion::new(5, 34) {
         features.push("try");
     }
+
+    // v5.36 bundle adds: signatures (stable), defer, isa
     if version >= PerlVersion::new(5, 36) {
-        // signatures stable-bundled at 5.36; defer experimental since 5.36
-        features.extend_from_slice(&["signatures", "defer"]);
+        features.extend_from_slice(&["signatures", "defer", "isa"]);
     }
+
+    // v5.38 bundle adds: class, field, method; removes: switch (given/when deprecated)
     if version >= PerlVersion::new(5, 38) {
         features.extend_from_slice(&["class", "field", "method"]);
+        features.retain(|&f| f != "switch");
     }
+
+    // v5.40 bundle adds: builtin
+    if version >= PerlVersion::new(5, 40) {
+        features.push("builtin");
+    }
+
     features
 }
 
@@ -113,6 +168,9 @@ fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVers
     if version_implies_warnings(version) {
         state.warnings = true;
     }
+    // Populate the version-implied feature set.
+    // Replace (not merge) so the highest `use vX.Y` wins if multiple appear.
+    state.features = features_enabled_by_version(version);
 }
 
 /// Tracks pragma state throughout a Perl file

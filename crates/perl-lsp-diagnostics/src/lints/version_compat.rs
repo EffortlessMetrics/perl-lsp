@@ -117,8 +117,17 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             }
 
-            // `given` / `when` / `default` — deprecated in v5.38 and removed in v5.42.
+            // `given` / `when` / `default` need the `switch` feature (v5.10+),
+            // are deprecated in v5.38, and removed in v5.42.
             NodeKind::Given { .. } | NodeKind::When { .. } | NodeKind::Default { .. } => {
+                let construct = if matches!(&n.kind, NodeKind::Given { .. }) {
+                    "given"
+                } else if matches!(&n.kind, NodeKind::When { .. }) {
+                    "when"
+                } else {
+                    "default"
+                };
+
                 if declared_version >= GIVEN_WHEN_REMOVAL_VERSION {
                     diagnostics.push(make_given_when_default_diagnostic(
                         n,
@@ -131,6 +140,9 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                         declared_version,
                         DiagnosticSeverity::Warning,
                     ));
+                } else if !effective_features.contains(&"switch") {
+                    let min = feature_min_version("switch");
+                    diagnostics.push(make_diagnostic(n, construct, declared_version, min));
                 }
             }
 
@@ -158,30 +170,6 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 if !effective_features.contains(&"defer") {
                     let min = feature_min_version("defer");
                     diagnostics.push(make_diagnostic(n, "defer", declared_version, min));
-                }
-            }
-
-            // `given ($x) { ... }` — requires v5.10 (`use feature 'switch'`)
-            NodeKind::Given { .. } => {
-                if !effective_features.contains(&"switch") {
-                    let min = feature_min_version("switch");
-                    diagnostics.push(make_diagnostic(n, "given", declared_version, min));
-                }
-            }
-
-            // `when ($pat) { ... }` — requires v5.10 (`use feature 'switch'`)
-            NodeKind::When { .. } => {
-                if !effective_features.contains(&"switch") {
-                    let min = feature_min_version("switch");
-                    diagnostics.push(make_diagnostic(n, "when", declared_version, min));
-                }
-            }
-
-            // `default { ... }` — requires v5.10 (`use feature 'switch'`)
-            NodeKind::Default { .. } => {
-                if !effective_features.contains(&"switch") {
-                    let min = feature_min_version("switch");
-                    diagnostics.push(make_diagnostic(n, "default", declared_version, min));
                 }
             }
 
