@@ -801,6 +801,23 @@ fn issue_3344_default_node() -> Node {
     Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(20, 40))
 }
 
+fn smartmatch_node() -> Node {
+    Node::new(
+        NodeKind::Binary {
+            op: "~~".to_string(),
+            left: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+                loc(20, 26),
+            )),
+            right: Box::new(Node::new(
+                NodeKind::String { value: "pattern".to_string(), interpolated: false },
+                loc(30, 39),
+            )),
+        },
+        loc(20, 39),
+    )
+}
+
 fn defer_call() -> Node {
     // `defer { }` is now parsed as NodeKind::Defer (Perl 5.36+ experimental, stable in 5.40).
     Node::new(
@@ -952,6 +969,104 @@ fn test_given_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Err
     assert!(
         no_compat_warnings(&diagnostics),
         "Expected no PL900 warning when 'use feature 'switch'' is present on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Tests for smartmatch (`~~`) (#3396)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_smartmatch_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for smartmatch in v5.8, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(
+        msg.message.contains("smartmatch") || msg.message.contains("~~"),
+        "Message should mention smartmatch: {}",
+        msg.message
+    );
+    assert!(
+        msg.message.contains("v5.10") || msg.message.contains("5.10"),
+        "Message should mention minimum version v5.10: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.10"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for smartmatch in v5.10, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for smartmatch in v5.38, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(
+        msg.message.contains("deprecated") || msg.message.contains("v5.38"),
+        "Message should mention deprecation: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.42"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 error for smartmatch in v5.42, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(
+        msg.message.contains("removed") || msg.message.contains("v5.42"),
+        "Message should mention removal: {}",
+        msg.message
+    );
+    assert_eq!(msg.severity, DiagnosticSeverity::Error, "Expected removal severity to be an error");
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), use_feature("switch"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning when 'use feature \\'switch\\'' is present on v5.8, got: {:?}",
         diagnostics
     );
     Ok(())
