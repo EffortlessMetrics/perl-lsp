@@ -806,6 +806,10 @@ push @{$arrayref}, 2;
 my $hashref;
 $hashref->{k};
 
+my $value = 1;
+my $scalarref = \$value;
+$$scalarref;
+
 my @arr = (1, 2, 3);
 $arr[0];
 "#;
@@ -822,6 +826,12 @@ $arr[0];
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hashref"))
         .count();
     assert_eq!(unused_hashref, 0, "$hashref used via arrow dereference should not be unused");
+
+    let unused_scalarref = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("scalarref"))
+        .count();
+    assert_eq!(unused_scalarref, 0, "$scalarref used via scalar dereference should not be unused");
 
     let unused_arr = issues
         .iter()
@@ -1044,6 +1054,34 @@ print FOO;
             .iter()
             .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
         "use v5.40 should enable strict subs"
+    );
+    Ok(())
+}
+
+#[test]
+fn scalar_reference_dereference_uses_declared_scalar_under_strict()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $value = 1;
+my $ref = \$value;
+print $$ref;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$$ref"),
+        "$$ref should resolve through declared $ref: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UnusedVariable) && i.variable_name.contains("ref")),
+        "$ref used via $$ref should not be unused: {:?}",
+        issues
     );
     Ok(())
 }

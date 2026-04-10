@@ -931,7 +931,8 @@ impl ScopeAnalyzer {
             return None;
         };
 
-        if (sigil == "@" || sigil == "%") && name.starts_with('$') && name.len() > 1 {
+        if (sigil == "@" || sigil == "%" || sigil == "$") && name.starts_with('$') && name.len() > 1
+        {
             return Some(("$", &name[1..]));
         }
 
