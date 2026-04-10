@@ -1380,6 +1380,33 @@ my $val   = $$sref;
     Ok(())
 }
 
+/// Regression test for issue #3445: scalar ref declarations used through arrayref
+/// dereference syntax (e.g. `push @$arrayref`) must not emit UnusedVariable.
+#[test]
+fn issue_3445_arrayref_deref_marks_scalar_declaration_used()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+
+my $arrayref = [];
+push @$arrayref, 'item';
+print $arrayref->[0];
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UndeclaredVariable)
+                && i.variable_name.contains("arrayref")
+        }),
+        "issue #3445: $arrayref used via @$arrayref and $arrayref->[0] should not be flagged: {:?}",
+        issues
+    );
+
+    Ok(())
+}
+
 #[test]
 fn unused_variable_used_via_coderef_and_glob_dereference_forms()
 -> Result<(), Box<dyn std::error::Error>> {
