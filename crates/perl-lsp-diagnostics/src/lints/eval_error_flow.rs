@@ -12,52 +12,58 @@ use perl_parser_core::ast::{Node, NodeKind};
 
 /// Warn on stale or context-free reads of `$@` / `$EVAL_ERROR`.
 pub fn check_eval_error_flow(root: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    visit_node(root, diagnostics);
+    visit_node(root, diagnostics, FlowState::default());
 }
 
-fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+#[derive(Clone, Copy, Default)]
+struct FlowState {
+    source_seen: bool,
+    immediate_after_source: bool,
+}
+
+fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, state: FlowState) {
     match &node.kind {
         NodeKind::Program { statements } | NodeKind::Block { statements } => {
-            check_statement_list(statements, diagnostics);
+            check_statement_list(statements, diagnostics, state);
         }
         NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
-            visit_node(body, diagnostics);
+            visit_node(body, diagnostics, FlowState::default());
         }
         NodeKind::Class { body, .. } => {
-            visit_node(body, diagnostics);
+            visit_node(body, diagnostics, FlowState::default());
         }
         NodeKind::Package { block: Some(block), .. } => {
-            visit_node(block, diagnostics);
+            visit_node(block, diagnostics, FlowState::default());
         }
         NodeKind::PhaseBlock { block, .. } => {
-            visit_node(block, diagnostics);
+            visit_node(block, diagnostics, FlowState::default());
         }
         NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
-            visit_node(then_branch, diagnostics);
+            visit_node(then_branch, diagnostics, state);
             for (_, branch) in elsif_branches {
-                visit_node(branch, diagnostics);
+                visit_node(branch, diagnostics, FlowState::default());
             }
             if let Some(branch) = else_branch {
-                visit_node(branch, diagnostics);
+                visit_node(branch, diagnostics, FlowState::default());
             }
         }
         NodeKind::While { body, continue_block, .. } => {
-            visit_node(body, diagnostics);
+            visit_node(body, diagnostics, state);
             if let Some(block) = continue_block {
-                visit_node(block, diagnostics);
+                visit_node(block, diagnostics, state);
             }
         }
         NodeKind::For { body, .. } | NodeKind::Foreach { body, .. } => {
-            visit_node(body, diagnostics);
+            visit_node(body, diagnostics, FlowState::default());
         }
         NodeKind::Given { body, .. } | NodeKind::When { body, .. } | NodeKind::Default { body } => {
-            visit_node(body, diagnostics);
+            visit_node(body, diagnostics, FlowState::default());
         }
         NodeKind::Do { block } => {
-            visit_node(block, diagnostics);
+            visit_node(block, diagnostics, FlowState::default());
         }
         NodeKind::LabeledStatement { statement, .. } => {
-            visit_node(statement, diagnostics);
+            visit_node(statement, diagnostics, state);
         }
         // `eval` and `try` are statement-level sources; their nested blocks are
         // intentionally not walked in this conservative pass.
@@ -66,28 +72,37 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
-fn check_statement_list(statements: &[Node], diagnostics: &mut Vec<Diagnostic>) {
-    let mut last_exception_source: Option<usize> = None;
-
-    for (idx, statement) in statements.iter().enumerate() {
+fn check_statement_list(
+    statements: &[Node],
+    diagnostics: &mut Vec<Diagnostic>,
+    mut state: FlowState,
+) {
+    for statement in statements {
+        let entry_state = state;
         let facts = inspect_statement(statement);
-        let immediate_after_source =
-            last_exception_source == Some(idx.saturating_sub(1)) && idx > 0;
+        let is_handler_block =
+            matches!(&statement.kind, NodeKind::If { .. } | NodeKind::While { .. })
+                && facts.reads_error_var;
 
-        if facts.reads_error_var && !facts.has_source && !immediate_after_source {
-            diagnostics.push(make_diagnostic(statement, last_exception_source.is_some()));
+        if facts.reads_error_var && !facts.has_source && !entry_state.immediate_after_source {
+            diagnostics.push(make_diagnostic(statement, entry_state.source_seen));
         }
 
         if facts.has_source {
-            last_exception_source = Some(idx);
+            state.source_seen = true;
+            state.immediate_after_source = true;
+        } else {
+            state.immediate_after_source = false;
         }
 
-        // If this statement already reads `$@` / `$EVAL_ERROR`, treat it as the
-        // current exception check/handler and do not immediately recurse into its
-        // nested blocks as fresh scopes. That keeps `if ($@) { warn $@; }`
-        // from warning on the handler body one statement later.
-        if !facts.reads_error_var {
-            visit_node(statement, diagnostics);
+        // Handler blocks need the outer exception-flow state so the body can
+        // still report stale reads after an intervening statement.
+        if is_handler_block {
+            visit_node(statement, diagnostics, entry_state);
+        } else if !facts.reads_error_var
+            || matches!(&statement.kind, NodeKind::LabeledStatement { .. })
+        {
+            visit_node(statement, diagnostics, entry_state);
         }
     }
 }
@@ -111,6 +126,10 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         }
         NodeKind::Variable { sigil, name } if is_error_variable(sigil, name) => {
             facts.reads_error_var = true;
+        }
+        NodeKind::StatementModifier { statement, condition, .. } => {
+            inspect_node(statement, facts);
+            inspect_node(condition, facts);
         }
         NodeKind::Program { .. }
         | NodeKind::Block { .. }
@@ -141,7 +160,9 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
             inspect_node(else_expr, facts);
         }
         NodeKind::Assignment { lhs, rhs, .. } => {
-            inspect_node(lhs, facts);
+            if !matches!(lhs.kind, NodeKind::Variable { .. }) {
+                inspect_node(lhs, facts);
+            }
             inspect_node(rhs, facts);
         }
         NodeKind::FunctionCall { args, .. } | NodeKind::MethodCall { args, .. } => {
@@ -158,16 +179,12 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         NodeKind::ExpressionStatement { expression } => {
             inspect_node(expression, facts);
         }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            inspect_node(variable, facts);
+        NodeKind::VariableDeclaration { initializer, .. } => {
             if let Some(init) = initializer {
                 inspect_node(init, facts);
             }
         }
-        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
-            for variable in variables {
-                inspect_node(variable, facts);
-            }
+        NodeKind::VariableListDeclaration { initializer, .. } => {
             if let Some(init) = initializer {
                 inspect_node(init, facts);
             }

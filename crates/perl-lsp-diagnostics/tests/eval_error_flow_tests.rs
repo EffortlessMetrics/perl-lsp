@@ -52,3 +52,40 @@ fn immediate_check_after_try_is_allowed_for_eval_error() {
     let messages = pl407_messages(source);
     assert!(messages.is_empty(), "immediate check after try should not warn, got: {messages:?}");
 }
+
+#[test]
+fn localizing_error_variable_is_not_treated_as_a_read() {
+    let source = "use v5.40;\nlocal $@ = undef;\nlocal $EVAL_ERROR = undef;\n";
+    let messages = pl407_messages(source);
+    assert!(messages.is_empty(), "localizing $@ / $EVAL_ERROR should not warn, got: {messages:?}");
+}
+
+#[test]
+fn assignment_targets_do_not_count_as_reads() {
+    let source = "use v5.40;\n($@, $EVAL_ERROR) = (1, 2);\n";
+    let messages = pl407_messages(source);
+    assert!(
+        messages.is_empty(),
+        "assignment targets for $@ / $EVAL_ERROR should not warn, got: {messages:?}"
+    );
+}
+
+#[test]
+fn statement_modifier_reads_are_visible() {
+    let source = "use v5.40;\nwarn $@ if $@;\n";
+    let messages = pl407_messages(source);
+    assert!(
+        messages.iter().any(|m| m.contains("without a preceding `eval` or `try`")),
+        "expected PL407 for a statement-modifier read, got: {messages:?}"
+    );
+}
+
+#[test]
+fn stale_read_inside_handler_body_is_reported() {
+    let source = "use v5.40;\neval { risky() };\nif ($@) {\n    my $marker = 1;\n    warn $@;\n}\n";
+    let messages = pl407_messages(source);
+    assert!(
+        messages.iter().any(|m| m.contains("after an intervening statement")),
+        "expected PL407 for a stale read inside the handler body, got: {messages:?}"
+    );
+}
