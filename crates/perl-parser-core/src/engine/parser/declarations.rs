@@ -76,6 +76,23 @@ impl<'a> Parser<'a> {
         Self::BUILTIN_SUB_ATTRIBUTES.contains(&name)
     }
 
+    /// Return `true` if `Attribute::Handlers` has been enabled in this file.
+    fn has_attribute_handlers_support(&self) -> bool {
+        self.attribute_handlers_enabled
+    }
+
+    /// Register a custom attribute handler for later `:MyAttr` uses.
+    fn register_custom_attribute_handler(&mut self, handler: &str) {
+        if self.has_attribute_handlers_support() {
+            self.custom_attribute_handlers.insert(handler.to_string());
+        }
+    }
+
+    /// Return `true` if `name` was registered as a custom Attribute::Handlers attribute.
+    fn is_custom_attribute_handler(&self, name: &str) -> bool {
+        self.has_attribute_handlers_support() && self.custom_attribute_handlers.contains(name)
+    }
+
     /// Parse declaration attributes like `:lvalue` or `:prototype($)`.
     ///
     /// `extra_known` lists additional attribute names that should not trigger the
@@ -141,7 +158,9 @@ impl<'a> Parser<'a> {
                 // Custom attributes are valid when `attributes` or a framework hook is
                 // in scope, so a warning is the correct diagnostic level.
                 let is_known = Self::is_builtin_sub_attribute(&base_name)
-                    || extra_known.contains(&base_name.as_str());
+                    || extra_known.contains(&base_name.as_str())
+                    || self.is_custom_attribute_handler(&base_name)
+                    || (self.has_attribute_handlers_support() && base_name == "ATTR");
                 if !is_known {
                     self.errors.push(ParseError::syntax(
                         format!(
@@ -210,6 +229,12 @@ impl<'a> Parser<'a> {
         // Perl allows both `sub foo :lvalue ($)` and `sub foo ($) :lvalue`,
         // so we collect attributes on both sides and merge them.
         let mut attributes = self.parse_declaration_attributes()?;
+
+        if let Some(handler_name) = name.as_deref() {
+            if attributes.iter().any(|attr| attr.starts_with("ATTR(") || attr == "ATTR") {
+                self.register_custom_attribute_handler(handler_name);
+            }
+        }
 
         // Parse optional prototype or signature after leading attributes.
         let (prototype, signature) = if self.peek_kind() == Some(TokenKind::LeftParen) {
@@ -541,6 +566,10 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Number) {
             module.push(' ');
             module.push_str(&self.consume_token()?.text);
+        }
+
+        if module.split_whitespace().next() == Some("Attribute::Handlers") {
+            self.attribute_handlers_enabled = true;
         }
 
         // `use if CONDITION, MODULE [, ARGS]` and `use unless ...` are special:
