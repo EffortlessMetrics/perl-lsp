@@ -31,8 +31,15 @@ pub struct PragmaState {
     pub strict_subs: bool,
     /// Whether strict refs is enabled
     pub strict_refs: bool,
-    /// Whether warnings are enabled
+    /// Whether warnings are enabled (globally)
     pub warnings: bool,
+    /// Warning categories explicitly disabled via `no warnings 'CATEGORY'`.
+    ///
+    /// When `no warnings` is used with specific category arguments (e.g.
+    /// `no warnings 'uninitialized'`), the global `warnings` flag stays `true`
+    /// and the disabled categories are recorded here.  Only bare `no warnings`
+    /// (no arguments) clears the global `warnings` flag.
+    pub disabled_warning_categories: Vec<String>,
     /// Language features implicitly enabled by a `use vX.Y` version declaration.
     ///
     /// Populated by [`features_enabled_by_version`] when a version pragma is
@@ -50,8 +57,23 @@ impl PragmaState {
             strict_subs: true,
             strict_refs: true,
             warnings: false,
+            disabled_warning_categories: Vec::new(),
             features: Vec::new(),
         }
+    }
+
+    /// Returns `true` if warnings are active for the given category.
+    ///
+    /// Warnings for a category are active when:
+    /// - The global `warnings` flag is `true`, **and**
+    /// - The category is not listed in `disabled_warning_categories`.
+    ///
+    /// If the global `warnings` flag is `false` (i.e. `no warnings` with no
+    /// arguments was used), all categories are considered inactive regardless of
+    /// the `disabled_warning_categories` list.
+    #[must_use]
+    pub fn is_warning_active(&self, category: &str) -> bool {
+        self.warnings && !self.disabled_warning_categories.iter().any(|c| c == category)
     }
 
     /// Returns `true` if the given feature name is in the version-implied feature set.
@@ -244,6 +266,9 @@ impl PragmaTracker {
                     }
                     "warnings" => {
                         current_state.warnings = true;
+                        // `use warnings` re-enables all warnings; clear any previously
+                        // disabled categories so they are active again.
+                        current_state.disabled_warning_categories.clear();
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
@@ -290,7 +315,29 @@ impl PragmaTracker {
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "warnings" => {
-                        current_state.warnings = false;
+                        if args.is_empty() {
+                            // `no warnings;` — disable all warnings globally
+                            current_state.warnings = false;
+                            current_state.disabled_warning_categories.clear();
+                        } else {
+                            // `no warnings 'CATEGORY'` — disable only the named
+                            // categories; the global flag stays true so that other
+                            // categories remain active.
+                            for arg in args {
+                                // Strip any surrounding single or double quotes that
+                                // the parser may have left on the argument.
+                                let category = arg.trim_matches('\'').trim_matches('"');
+                                if !current_state
+                                    .disabled_warning_categories
+                                    .iter()
+                                    .any(|c| c == category)
+                                {
+                                    current_state
+                                        .disabled_warning_categories
+                                        .push(category.to_string());
+                                }
+                            }
+                        }
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }

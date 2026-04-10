@@ -616,13 +616,128 @@ fn warnings_with_args_still_records() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn no_warnings_with_args_still_disables() -> Result<(), Box<dyn std::error::Error>> {
+fn no_warnings_with_category_arg_keeps_warnings_flag_true() -> Result<(), Box<dyn std::error::Error>>
+{
+    // `no warnings 'uninitialized'` should NOT disable the global warnings flag.
+    // Only the specific category is suppressed; other warnings remain active.
     let ast = program(vec![
         use_node("warnings", &[], 0, 15),
         no_node("warnings", &["uninitialized"], 16, 40),
     ]);
     let map = PragmaTracker::build(&ast);
-    assert!(!map[1].1.warnings);
+    assert!(
+        map[1].1.warnings,
+        "global warnings flag must stay true after `no warnings 'uninitialized'`"
+    );
+    Ok(())
+}
+
+#[test]
+fn no_warnings_with_category_disables_only_that_category() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["uninitialized"], 16, 40),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    // The disabled category must be recorded
+    assert!(
+        state.disabled_warning_categories.contains(&"uninitialized".to_string()),
+        "disabled_warning_categories must contain 'uninitialized'"
+    );
+    // Other categories are still active
+    assert!(state.is_warning_active("deprecated"), "category 'deprecated' must still be active");
+    assert!(!state.is_warning_active("uninitialized"), "category 'uninitialized' must be inactive");
+    Ok(())
+}
+
+#[test]
+fn no_warnings_bare_disables_all_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    // `no warnings;` (no args) must still disable the global warnings flag.
+    let ast = program(vec![use_node("warnings", &[], 0, 15), no_node("warnings", &[], 16, 28)]);
+    let map = PragmaTracker::build(&ast);
+    assert!(!map[1].1.warnings, "bare `no warnings` must clear the global warnings flag");
+    Ok(())
+}
+
+#[test]
+fn no_warnings_multiple_categories_all_recorded() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["uninitialized", "redefine"], 16, 50),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.warnings, "global warnings flag must stay true");
+    assert!(
+        state.disabled_warning_categories.contains(&"uninitialized".to_string()),
+        "must contain 'uninitialized'"
+    );
+    assert!(
+        state.disabled_warning_categories.contains(&"redefine".to_string()),
+        "must contain 'redefine'"
+    );
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("redefine"));
+    assert!(state.is_warning_active("deprecated"));
+    Ok(())
+}
+
+#[test]
+fn use_warnings_after_no_warnings_category_resets_disabled_list()
+-> Result<(), Box<dyn std::error::Error>> {
+    // use warnings; no warnings 'X'; use warnings;
+    // The second `use warnings` should clear the disabled categories list.
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["uninitialized"], 16, 40),
+        use_node("warnings", &[], 41, 56),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[2].1;
+    assert!(state.warnings, "warnings must be re-enabled");
+    assert!(
+        state.disabled_warning_categories.is_empty(),
+        "disabled categories must be cleared by `use warnings`"
+    );
+    assert!(state.is_warning_active("uninitialized"), "uninitialized must be active again");
+    Ok(())
+}
+
+#[test]
+fn no_warnings_quoted_category_strips_quotes() -> Result<(), Box<dyn std::error::Error>> {
+    // Parser may leave quotes on args; confirm they are stripped
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 15),
+        no_node("warnings", &["'uninitialized'"], 16, 45),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(
+        state.disabled_warning_categories.contains(&"uninitialized".to_string()),
+        "single-quoted category must be stripped and recorded as 'uninitialized'"
+    );
+    assert!(!state.is_warning_active("uninitialized"));
+    Ok(())
+}
+
+#[test]
+fn is_warning_active_false_when_global_warnings_off() -> Result<(), Box<dyn std::error::Error>> {
+    // When warnings are globally off, no category is active
+    let state = PragmaState { warnings: false, ..PragmaState::default() };
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("deprecated"));
+    assert!(!state.is_warning_active("all"));
+    Ok(())
+}
+
+#[test]
+fn is_warning_active_true_when_warnings_on_and_no_disabled()
+-> Result<(), Box<dyn std::error::Error>> {
+    let state = PragmaState { warnings: true, ..PragmaState::default() };
+    assert!(state.is_warning_active("uninitialized"));
+    assert!(state.is_warning_active("deprecated"));
     Ok(())
 }
 
