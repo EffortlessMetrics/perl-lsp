@@ -248,6 +248,31 @@ mod tests {
     }
 
     #[test]
+    fn v5_36_suppresses_both_strict_and_warnings_diagnostics() {
+        // use v5.36 enables both strict and warnings via the feature bundle.
+        // Neither PL100 (missing-strict) nor PL101 (missing-warnings) should fire.
+        let diags = strict_warnings_diags("use v5.36;\nsub foo ($x) { my $y = $x; }\n");
+        let has_strict_warn =
+            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(
+            !has_strict_warn,
+            "use v5.36 should suppress both missing-strict and missing-warnings diagnostics"
+        );
+    }
+
+    #[test]
+    fn v5_36_numeric_form_suppresses_both_strict_and_warnings() {
+        // use 5.036 is the numeric form of use v5.36.
+        let diags = strict_warnings_diags("use 5.036;\nmy $x = 1;\n");
+        let has_strict_warn =
+            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(
+            !has_strict_warn,
+            "use 5.036 should suppress both missing-strict and missing-warnings diagnostics"
+        );
+    }
+
+    #[test]
     fn v5_12_suppresses_strict_but_not_missing_warnings() {
         let diags = strict_warnings_diags("use v5.12;\nmy $x = 1;\n");
         assert!(
