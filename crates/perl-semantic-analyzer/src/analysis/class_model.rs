@@ -73,6 +73,29 @@ pub struct Attribute {
     pub trigger: bool,
 }
 
+/// An Object::Pad field declaration.
+#[derive(Debug, Clone)]
+pub struct FieldInfo {
+    /// Field name (e.g., `name` from `field $name :param`)
+    pub name: String,
+    /// Source location of the field declaration
+    pub location: SourceLocation,
+    /// Raw field traits such as `param`, `reader`, and `writer`
+    pub attributes: Vec<String>,
+    /// Whether `:param` is present
+    pub param: bool,
+    /// Explicit or synthesized reader method name
+    pub reader: Option<String>,
+    /// Explicit or synthesized writer method name
+    pub writer: Option<String>,
+    /// Explicit or synthesized accessor method name
+    pub accessor: Option<String>,
+    /// Explicit or synthesized mutator method name
+    pub mutator: Option<String>,
+    /// Optional initializer expression summary
+    pub default: Option<String>,
+}
+
 /// Information about a method modifier (`before`, `after`, `around`, `override`, `augment`).
 #[derive(Debug, Clone)]
 pub struct MethodModifier {
@@ -148,8 +171,12 @@ pub struct ClassModel {
     pub framework: Framework,
     /// Attributes declared via `has`
     pub attributes: Vec<Attribute>,
+    /// Fields declared via Object::Pad `field`
+    pub fields: Vec<FieldInfo>,
     /// Methods declared via `sub`
     pub methods: Vec<MethodInfo>,
+    /// Object::Pad `ADJUST` blocks
+    pub adjusts: Vec<MethodInfo>,
     /// Parent classes from `extends 'Parent'`, `use parent`, `use base`, or `@ISA`
     pub parents: Vec<String>,
     /// Roles consumed via `with 'Role'`
@@ -175,7 +202,9 @@ pub struct ClassModelBuilder {
     current_package: String,
     current_framework: Framework,
     current_attributes: Vec<Attribute>,
+    current_fields: Vec<FieldInfo>,
     current_methods: Vec<MethodInfo>,
+    current_adjusts: Vec<MethodInfo>,
     current_parents: Vec<String>,
     current_roles: Vec<String>,
     current_modifiers: Vec<MethodModifier>,
@@ -200,7 +229,9 @@ impl ClassModelBuilder {
             current_package: "main".to_string(),
             current_framework: Framework::None,
             current_attributes: Vec::new(),
+            current_fields: Vec::new(),
             current_methods: Vec::new(),
+            current_adjusts: Vec::new(),
             current_parents: Vec::new(),
             current_roles: Vec::new(),
             current_modifiers: Vec::new(),
@@ -224,7 +255,9 @@ impl ClassModelBuilder {
         // Produce a ClassModel if the package uses a framework, has attributes, or has parents
         let has_oo_indicator = framework != Framework::None
             || !self.current_attributes.is_empty()
+            || !self.current_fields.is_empty()
             || !self.current_parents.is_empty()
+            || !self.current_adjusts.is_empty()
             || !self.current_exports.is_empty()
             || !self.current_export_ok.is_empty();
         if has_oo_indicator {
@@ -232,7 +265,9 @@ impl ClassModelBuilder {
                 name: self.current_package.clone(),
                 framework,
                 attributes: std::mem::take(&mut self.current_attributes),
+                fields: std::mem::take(&mut self.current_fields),
                 methods: std::mem::take(&mut self.current_methods),
+                adjusts: std::mem::take(&mut self.current_adjusts),
                 parents: std::mem::take(&mut self.current_parents),
                 roles: std::mem::take(&mut self.current_roles),
                 modifiers: std::mem::take(&mut self.current_modifiers),
@@ -244,7 +279,9 @@ impl ClassModelBuilder {
         } else {
             // Reset accumulators even if we don't produce a model
             self.current_attributes.clear();
+            self.current_fields.clear();
             self.current_methods.clear();
+            self.current_adjusts.clear();
             self.current_parents.clear();
             self.current_roles.clear();
             self.current_modifiers.clear();
@@ -359,8 +396,12 @@ impl ClassModelBuilder {
             NodeKind::Class { name, body } => {
                 self.flush_current_package();
                 self.current_package = name.clone();
-                self.current_framework = Framework::NativeClass;
-                self.framework_map.insert(name.clone(), Framework::NativeClass);
+                self.current_framework = if self.current_framework == Framework::ObjectPad {
+                    Framework::ObjectPad
+                } else {
+                    Framework::NativeClass
+                };
+                self.framework_map.insert(name.clone(), self.current_framework);
                 self.current_package_aliases.clear();
                 self.visit_node(body);
             }
@@ -368,6 +409,12 @@ impl ClassModelBuilder {
             NodeKind::Method { name, body, .. } => {
                 self.current_methods.push(MethodInfo::new(name.clone(), node.location));
                 self.visit_node(body);
+            }
+
+            NodeKind::Error { partial, .. } => {
+                if let Some(partial) = partial {
+                    self.visit_node(partial);
+                }
             }
 
             _ => {
@@ -409,6 +456,12 @@ impl ClassModelBuilder {
             let is_framework_package = self.current_framework != Framework::None;
 
             if is_framework_package {
+                if self.current_framework == Framework::ObjectPad
+                    && let Some(consumed) = self.try_extract_object_pad_constructs(statements, idx)
+                {
+                    idx += consumed;
+                    continue;
+                }
                 if self.current_framework == Framework::ClassAccessor
                     && let Some(consumed) = self.try_extract_class_accessor_methods(statements, idx)
                 {
@@ -850,6 +903,157 @@ impl ClassModelBuilder {
         Some(1)
     }
 
+    /// Extract Object::Pad field declarations and `ADJUST` blocks.
+    fn try_extract_object_pad_constructs(
+        &mut self,
+        statements: &[Node],
+        idx: usize,
+    ) -> Option<usize> {
+        let statement = &statements[idx];
+
+        if let Some(field) = Self::object_pad_field_from_statement(statement) {
+            let location = field.location;
+            let field_name = field.name.clone();
+            let traits = field.attributes.clone();
+
+            self.current_fields.push(field);
+
+            if let Some(reader) = Self::object_pad_reader_name(&field_name, &traits) {
+                self.current_methods.push(MethodInfo::synthetic(reader, location, None));
+            }
+            if let Some(writer) = Self::object_pad_writer_name(&field_name, &traits) {
+                self.current_methods.push(MethodInfo::synthetic(writer, location, None));
+            }
+            if let Some(accessor) = Self::object_pad_accessor_name(&field_name, &traits) {
+                self.current_methods.push(MethodInfo::synthetic(accessor, location, None));
+            }
+            if let Some(mutator) = Self::object_pad_mutator_name(&field_name, &traits) {
+                self.current_methods.push(MethodInfo::synthetic(mutator, location, None));
+            }
+
+            return Some(1);
+        }
+
+        match &statement.kind {
+            NodeKind::Method { name, body, .. } if name == "ADJUST" => {
+                self.current_adjusts.push(MethodInfo::synthetic(
+                    "ADJUST".to_string(),
+                    statement.location,
+                    None,
+                ));
+                self.visit_node(body);
+                return Some(1);
+            }
+            NodeKind::Subroutine { name, body, .. } if name.as_deref() == Some("ADJUST") => {
+                self.current_adjusts.push(MethodInfo::synthetic(
+                    "ADJUST".to_string(),
+                    statement.location,
+                    None,
+                ));
+                self.visit_node(body);
+                return Some(1);
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                if matches!(&expression.kind, NodeKind::Identifier { name } if name == "ADJUST") {
+                    self.current_adjusts.push(MethodInfo::synthetic(
+                        "ADJUST".to_string(),
+                        statement.location,
+                        None,
+                    ));
+                    if idx + 1 < statements.len()
+                        && matches!(&statements[idx + 1].kind, NodeKind::Block { .. })
+                    {
+                        self.visit_node(&statements[idx + 1]);
+                        return Some(2);
+                    }
+                    return Some(1);
+                }
+            }
+            _ => {}
+        }
+
+        None
+    }
+
+    fn object_pad_field_from_statement(statement: &Node) -> Option<FieldInfo> {
+        let NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } =
+            &statement.kind
+        else {
+            return None;
+        };
+        if declarator != "field" {
+            return None;
+        }
+
+        let NodeKind::Variable { sigil, name } = &variable.kind else {
+            return None;
+        };
+        if sigil != "$" {
+            return None;
+        }
+
+        let mut param = false;
+        let mut traits = Vec::new();
+        for attr in attributes {
+            let attr_name = attr.trim().to_string();
+            if attr_name == "param" {
+                param = true;
+            }
+            traits.push(attr_name);
+        }
+
+        let mut field = FieldInfo {
+            name: name.clone(),
+            location: statement.location,
+            attributes: traits,
+            param,
+            reader: None,
+            writer: None,
+            accessor: None,
+            mutator: None,
+            default: initializer.as_ref().map(|node| Self::value_summary(node)),
+        };
+
+        field.reader = Self::object_pad_reader_name(&field.name, &field.attributes);
+        field.writer = Self::object_pad_writer_name(&field.name, &field.attributes);
+        field.accessor = Self::object_pad_accessor_name(&field.name, &field.attributes);
+        field.mutator = Self::object_pad_mutator_name(&field.name, &field.attributes);
+
+        Some(field)
+    }
+
+    fn object_pad_reader_name(field_name: &str, traits: &[String]) -> Option<String> {
+        if traits.iter().any(|trait_name| trait_name == "reader") {
+            Some(field_name.to_string())
+        } else {
+            None
+        }
+    }
+
+    fn object_pad_writer_name(field_name: &str, traits: &[String]) -> Option<String> {
+        if traits.iter().any(|trait_name| trait_name == "writer") {
+            Some(format!("set_{field_name}"))
+        } else {
+            None
+        }
+    }
+
+    fn object_pad_accessor_name(field_name: &str, traits: &[String]) -> Option<String> {
+        if traits.iter().any(|trait_name| trait_name == "accessor") {
+            Some(field_name.to_string())
+        } else {
+            None
+        }
+    }
+
+    fn object_pad_mutator_name(field_name: &str, traits: &[String]) -> Option<String> {
+        if traits.iter().any(|trait_name| trait_name == "mutator") {
+            Some(format!("set_{field_name}"))
+        } else {
+            None
+        }
+    }
+
     /// Return true when a `Class::Accessor` call targets the current package.
     fn class_accessor_target_matches_current_package(&self, object: &Node) -> bool {
         match &object.kind {
@@ -888,6 +1092,19 @@ impl ClassModelBuilder {
                 normalize_symbol_name(value).is_some_and(|name| name == self.current_package)
             }
             _ => false,
+        }
+    }
+
+    fn value_summary(node: &Node) -> String {
+        match &node.kind {
+            NodeKind::String { value, .. } => {
+                normalize_symbol_name(value).unwrap_or_else(|| value.clone())
+            }
+            NodeKind::Identifier { name } => name.clone(),
+            NodeKind::Number { value } => value.clone(),
+            NodeKind::Undef => "undef".to_string(),
+            NodeKind::Variable { sigil, name } => format!("{sigil}{name}"),
+            _ => "expr".to_string(),
         }
     }
 }
@@ -1532,6 +1749,44 @@ has 'name' => (is => 'ro');
         assert!(moo.is_some(), "expected Moo::User model");
         let moo = moo.unwrap();
         assert_eq!(moo.framework, Framework::Moo);
+    }
+
+    #[test]
+    fn object_pad_fields_and_accessors_are_tracked() {
+        let models = build_models(
+            r#"
+use Object::Pad;
+
+class Point {
+    field $x :param :reader = 0;
+    field $y :param :writer = 1;
+
+    method move { }
+}
+"#,
+        );
+
+        assert!(
+            !models.is_empty(),
+            "expected at least one model, got {:?}",
+            models.iter().map(|m| (&m.name, m.framework)).collect::<Vec<_>>()
+        );
+        let model = find_model(&models, "Point").expect("Point model");
+        assert_eq!(model.framework, Framework::ObjectPad);
+        assert_eq!(model.fields.len(), 2);
+        assert!(has_method(model, "x", true, None));
+        assert!(has_method(model, "set_y", true, None));
+        assert!(has_method(model, "move", false, None));
+
+        let x = model.fields.iter().find(|field| field.name == "x").unwrap();
+        assert!(x.param);
+        assert_eq!(x.reader.as_deref(), Some("x"));
+        assert_eq!(x.default.as_deref(), Some("0"));
+
+        let y = model.fields.iter().find(|field| field.name == "y").unwrap();
+        assert!(y.param);
+        assert_eq!(y.writer.as_deref(), Some("set_y"));
+        assert_eq!(y.default.as_deref(), Some("1"));
     }
 
     #[test]
