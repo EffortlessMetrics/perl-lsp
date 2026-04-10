@@ -1475,18 +1475,23 @@ print "Hello, world!\n";
     let (line, col) = find_position(script, "print");
 
     // We send a request directly to test empty definition for builtin
-    let response = harness.request_with_timeout(
-        "textDocument/definition",
-        json!({
-            "textDocument": { "uri": uri },
-            "position": { "line": line, "character": col }
-        }),
-        std::time::Duration::from_millis(1000)
-    ).unwrap_or(serde_json::Value::Null);
+    let response = harness
+        .request_with_timeout(
+            "textDocument/definition",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": col }
+            }),
+            std::time::Duration::from_millis(1000),
+        )
+        .unwrap_or(serde_json::Value::Null);
 
     scenario.then("no definition should be returned (or it should be empty) because built-ins have no source location");
-    assert!(response.is_null() || (response.is_array() && response.as_array().unwrap().is_empty()),
-        "Expected empty or null definition for built-in function, got: {:?}", response);
+    assert!(
+        response.is_null() || (response.is_array() && response.as_array().unwrap().is_empty()),
+        "Expected empty or null definition for built-in function, got: {:?}",
+        response
+    );
 
     Ok(())
 }
@@ -1523,7 +1528,7 @@ print $x;
         line_inner,
         col_inner + 6, // +6 for "print "
         &uri,
-        std::time::Duration::from_secs(5)
+        std::time::Duration::from_secs(5),
     )?;
 
     scenario.then("the definition should resolve to the inner declaration");
@@ -1546,7 +1551,7 @@ print $x;
         line_outer,
         col_outer,
         &uri,
-        std::time::Duration::from_secs(5)
+        std::time::Duration::from_secs(5),
     )?;
 
     scenario.then("the definition should resolve to the outer declaration");
@@ -1601,14 +1606,16 @@ Foo::do_foo();
     scenario.when("requesting hover on the module name");
     let (line, col) = find_position(main, "use Foo;");
 
-    let response = harness.request_with_timeout(
-        "textDocument/hover",
-        json!({
-            "textDocument": { "uri": main_uri },
-            "position": { "line": line, "character": col + 4 } // offset for "use "
-        }),
-        std::time::Duration::from_millis(1000)
-    ).unwrap_or(serde_json::Value::Null);
+    let response = harness
+        .request_with_timeout(
+            "textDocument/hover",
+            json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": line, "character": col + 4 } // offset for "use "
+            }),
+            std::time::Duration::from_millis(1000),
+        )
+        .unwrap_or(serde_json::Value::Null);
 
     scenario.then("the hover response should contain the module links and MetaCPAN reference");
     assert!(!response.is_null(), "Hover response should not be null");
