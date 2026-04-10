@@ -985,7 +985,7 @@ impl ScopeAnalyzer {
                 // Declare the loop variable and immediately mark it initialized — the list
                 // provides its value at runtime so there is no uninitialized window.
                 self.analyze_node(variable, &loop_scope, ancestors, issues, context);
-                self.mark_initialized(variable, &loop_scope);
+                self.mark_initialized(variable, &loop_scope, context);
                 self.analyze_node(list, &loop_scope, ancestors, issues, context);
                 self.analyze_node(body, &loop_scope, ancestors, issues, context);
                 if let Some(cb) = continue_block {
