@@ -63,16 +63,15 @@ Perl::Critic, and PerlTidy can overlap with perl-lsp features. If you see
 duplicate hover, completion, or formatting results, disable the competing
 feature in one extension and keep the other as the source of truth.
 
-### Walkthrough Previews
+### Walkthrough Media
 
-These storyboard SVGs are preview assets for the walkthrough flow. They are not
-the final recorded GIFs.
+The extension includes a "Get Started" walkthrough in VS Code. Walkthrough
+media assets and recording notes live in:
 
-- [Install, auto-download, and health check storyboard](media/walkthrough/install-health.svg)
-- [Go to definition and find references storyboard](media/walkthrough/find-references.svg)
-- [Extract variable code action storyboard](media/walkthrough/extract-variable.svg)
-
-See [media/walkthrough/README.md](media/walkthrough/README.md) for the capture plan, recommended render inputs, and GIF size checks.
+- [media/walkthrough/README.md](media/walkthrough/README.md)
+- [media/walkthrough/install-health.svg](media/walkthrough/install-health.svg)
+- [media/walkthrough/find-references.svg](media/walkthrough/find-references.svg)
+- [media/walkthrough/extract-variable.svg](media/walkthrough/extract-variable.svg)
 
 ## Installation
 
@@ -218,6 +217,17 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 **Diagnostics too noisy?**
 - Set `perl-lsp.enableDiagnostics` to `false` to disable
 - File an issue if you see false positives
+
+## Known Issues
+
+- Variable/watch rendering in debugger sessions is still evolving; complex Perl
+  structures may appear with placeholder values in some scenarios.
+- The `Format Document` shortcut (`Shift+Alt+F`) is provided by VS Code's
+  built-in formatter binding. perl-lsp participates through the registered
+  formatting provider when `perl-lsp.enableFormatting` is enabled.
+- On first activation, environments with strict proxies or blocked outbound
+  traffic may fail auto-download. Use `perl-lsp.serverPath` or
+  `perl-lsp.downloadBaseUrl` for managed/internal deployment.
 
 ## Resources
 
