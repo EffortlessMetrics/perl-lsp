@@ -2921,3 +2921,74 @@ fn phase_block_symbol_in_global_scope() -> Result<(), Box<dyn std::error::Error>
     assert_eq!(begin_sym.scope_id, 0, "BEGIN symbol must be in global scope");
     Ok(())
 }
+
+// ---- Issue #3503: variables in print comma-separated args must be marked used ----
+
+#[test]
+fn scope_many_variables_in_print_comma_args() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for #3503: print $a, $b, $c, $d, $e — all five variables
+    // should be considered used. $a and $b are Perl sort globals; locally declared
+    // `my $a`/`my $b` must NOT be skipped by the is_builtin_global guard.
+    let code = r#"
+my $a = 1;
+my $b = 2;
+my $c = 3;
+my $d = 4;
+my $e = 5;
+print $a, $b, $c, $d, $e;
+"#;
+    let issues = scope_issues(code);
+    let unused = count_issues(&issues, IssueKind::UnusedVariable);
+    assert_eq!(
+        unused,
+        0,
+        "all variables used in print comma-separated args should not be unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn print_comma_args_strict_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Under `use strict`, variables used in print comma list must not be reported unused.
+    let code = r#"
+use strict;
+my $name = "world";
+my $greeting = "hello";
+print $greeting, " ", $name, "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "name"),
+        "$name used in print comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "greeting"),
+        "$greeting used in print comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn say_comma_args_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // say with comma-separated args must also mark all variables as used.
+    let code = r#"
+my $x = "foo";
+my $y = "bar";
+say $x, " ", $y;
+"#;
+    let issues = scope_issues(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "x"),
+        "$x used in say comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "y"),
+        "$y used in say comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
