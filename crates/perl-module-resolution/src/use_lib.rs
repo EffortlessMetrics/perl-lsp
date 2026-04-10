@@ -153,10 +153,10 @@ pub fn resolve_use_lib_paths_from_source(
     for op in extract_use_lib_operations(source) {
         match op {
             UseLibAction::Add(paths) => {
-                for path in resolve_use_lib_paths(&paths, workspace_root, file_dir) {
-                    if !resolved.contains(&path) {
-                        resolved.push(path);
-                    }
+                let statement_paths = resolve_use_lib_paths(&paths, workspace_root, file_dir);
+                for path in statement_paths.into_iter().rev() {
+                    resolved.retain(|existing| existing != &path);
+                    resolved.insert(0, path);
                 }
             }
             UseLibAction::Remove(paths) => {
@@ -522,5 +522,12 @@ mod tests {
         let source = "use lib 'lib';\nuse lib 't/lib';\nno lib 'lib';\n";
         let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
         assert_eq!(resolved, vec!["t/lib"]);
+    }
+
+    #[test]
+    fn repeated_use_lib_reinserts_to_front() {
+        let source = "use lib 'a';\nuse lib 'b';\nuse lib 'a';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["a", "b"]);
     }
 }

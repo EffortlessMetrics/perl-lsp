@@ -31,9 +31,8 @@ fn prepend_use_lib_paths(
 ) {
     let dynamic = resolve_use_lib_paths_from_source(doc_text, workspace_root, file_dir);
     for p in dynamic.into_iter().rev() {
-        if !include_paths.contains(&p) {
-            include_paths.insert(0, p);
-        }
+        include_paths.retain(|existing| existing != &p);
+        include_paths.insert(0, p);
     }
 }
 
@@ -483,6 +482,32 @@ mod tests {
             resolved, module_file,
             "no lib should remove prior use lib path from lexical overlay"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_repeated_use_lib_reinserts_to_front() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let first_file = workspace.join("a").join("Reorder").join("Case.pm");
+        let second_file = workspace.join("b").join("Reorder").join("Case.pm");
+        fs::create_dir_all(first_file.parent().ok_or("no parent")?)?;
+        fs::create_dir_all(second_file.parent().ok_or("no parent")?)?;
+        fs::write(&first_file, "package Reorder::Case; 'a';")?;
+        fs::write(&second_file, "package Reorder::Case; 'b';")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace);
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        let doc_text = "use lib 'a';\nuse lib 'b';\nuse lib 'a';\n";
+        let resolved = server
+            .resolve_module_path("Reorder::Case", Some(doc_text))
+            .ok_or("expected candidate path")?;
+        assert_eq!(resolved, first_file, "re-added path should return to highest precedence");
         Ok(())
     }
 
