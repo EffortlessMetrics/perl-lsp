@@ -157,6 +157,8 @@ pub enum DiagnosticCode {
     UnreachableCode,
     /// `$@` / `$EVAL_ERROR` reads that are not paired with a nearby `eval`/`try`
     EvalErrorFlow,
+    /// Duplicate key in a hash literal or hash reference constructor
+    DuplicateHashKey,
 
     // Deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -243,6 +245,7 @@ impl DiagnosticCode {
             DiagnosticCode::PrintfFormatMismatch => "PL405",
             DiagnosticCode::UnreachableCode => "PL406",
             DiagnosticCode::EvalErrorFlow => "PL407",
+            DiagnosticCode::DuplicateHashKey => "PL408",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::SecurityStringEval => "PL600",
@@ -303,6 +306,7 @@ impl DiagnosticCode {
             "PL405" => "https://docs.perl-lsp.org/errors/PL405",
             "PL406" => "https://docs.perl-lsp.org/errors/PL406",
             "PL407" => "https://docs.perl-lsp.org/errors/PL407",
+            "PL408" => "https://docs.perl-lsp.org/errors/PL408",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
@@ -354,6 +358,7 @@ impl DiagnosticCode {
             | DiagnosticCode::AssignmentInCondition
             | DiagnosticCode::NumericComparisonWithUndef
             | DiagnosticCode::PrintfFormatMismatch
+            | DiagnosticCode::DuplicateHashKey
             | DiagnosticCode::DeprecatedDefined
             | DiagnosticCode::DeprecatedArrayBase
             | DiagnosticCode::SecurityStringEval
@@ -481,6 +486,10 @@ impl DiagnosticCode {
             DiagnosticCode::UnreachableCode => Some(
                 "This statement cannot be executed because a preceding statement \
                 unconditionally exits (return, die, exit, croak). Remove or relocate it.",
+            ),
+            DiagnosticCode::DuplicateHashKey => Some(
+                "This hash key appears more than once in the same literal. \
+                Only the last value will be used; the earlier assignment is silently discarded.",
             ),
             DiagnosticCode::PrintfFormatMismatch => Some(
                 "The number of format specifiers does not match the number of arguments. \
@@ -643,6 +652,8 @@ impl DiagnosticCode {
             "PL404" => Some(DiagnosticCode::NumericComparisonWithUndef),
             "PL405" => Some(DiagnosticCode::PrintfFormatMismatch),
             "PL406" => Some(DiagnosticCode::UnreachableCode),
+            "PL407" => Some(DiagnosticCode::EvalErrorFlow),
+            "PL408" => Some(DiagnosticCode::DuplicateHashKey),
             "PL500" => Some(DiagnosticCode::DeprecatedDefined),
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
@@ -736,7 +747,8 @@ impl DiagnosticCode {
             | DiagnosticCode::NumericComparisonWithUndef
             | DiagnosticCode::PrintfFormatMismatch
             | DiagnosticCode::UnreachableCode
-            | DiagnosticCode::EvalErrorFlow => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::EvalErrorFlow
+            | DiagnosticCode::DuplicateHashKey => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 DiagnosticCategory::Deprecated
