@@ -1455,3 +1455,204 @@ print $value;
 
     Ok(())
 }
+#[test]
+fn bdd_goto_definition_with_multiple_declarations() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Go-to-definition with multiple declarations in scope");
+    scenario.given("a script with multiple variables of the same name in different scopes");
+
+    let script = r#"use strict;
+use warnings;
+
+my $x = 10;
+{
+    my $x = 20;
+    print $x;
+}
+print $x;
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("script.pl", script)])?;
+    let uri = workspace.uri("script.pl");
+    harness.open(&uri, script)?;
+    harness.wait_for_symbol("x", Some(&uri), std::time::Duration::from_secs(5)).ok();
+    harness.barrier();
+
+    scenario.when("requesting definition on the inner variable usage");
+    let (line_inner, col_inner) = find_position(script, "print $x;");
+
+    // wait for definition to actually resolve
+    let response_inner = wait_for_definition_uri(
+        &mut harness,
+        &uri,
+        line_inner,
+        col_inner + 6, // +6 for "print "
+        &uri,
+        std::time::Duration::from_secs(5),
+    )?;
+
+    scenario.then("the definition should resolve to the inner declaration");
+    let empty_vec = vec![];
+    let locations = response_inner.as_array().unwrap_or(&empty_vec);
+    assert_eq!(locations.len(), 1);
+    let inner_def_line = location_start_line(&locations[0]).unwrap();
+    assert_eq!(inner_def_line, 5, "Expected inner $x declaration at line 5 (0-indexed)");
+
+    scenario.when("requesting definition on the outer variable usage");
+    // find the *last* instance of "print $x;"
+    let last_print_idx = script.rfind("print $x;").unwrap();
+    let prefix = &script[..last_print_idx];
+    let line_outer = prefix.chars().filter(|&c| c == '\n').count() as u32;
+    let col_outer = prefix.chars().rev().take_while(|&c| c != '\n').count() as u32 + 6; // offset for "print "
+
+    let response_outer = wait_for_definition_uri(
+        &mut harness,
+        &uri,
+        line_outer,
+        col_outer,
+        &uri,
+        std::time::Duration::from_secs(5),
+    )?;
+
+    scenario.then("the definition should resolve to the outer declaration");
+    let empty_vec_outer = vec![];
+    let locations_outer = response_outer.as_array().unwrap_or(&empty_vec_outer);
+    assert_eq!(locations_outer.len(), 1);
+    let outer_def_line = location_start_line(&locations_outer[0]).unwrap();
+    assert_eq!(outer_def_line, 3, "Expected outer $x declaration at line 3 (0-indexed)");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_hover_displays_module_documentation() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Hover displays module links");
+    scenario.given("a workspace with a module and a script that uses it");
+
+    let module = r#"package Foo;
+use strict;
+use warnings;
+
+=head1 NAME
+
+Foo - A module for fooing
+
+=cut
+
+sub do_foo {
+    return 1;
+}
+
+1;
+"#;
+
+    let main = r#"use strict;
+use warnings;
+use lib './lib';
+use Foo;
+
+Foo::do_foo();
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("lib/Foo.pm", module), ("main.pl", main)])?;
+    let module_uri = workspace.uri("lib/Foo.pm");
+    let main_uri = workspace.uri("main.pl");
+
+    harness.open(&module_uri, module)?;
+    harness.open(&main_uri, main)?;
+    harness.wait_for_symbol("do_foo", Some(&module_uri), std::time::Duration::from_secs(5)).ok();
+    harness.barrier();
+
+    scenario.when("requesting hover on the module name");
+    let (line, col) = find_position(main, "use Foo;");
+
+    let response = harness
+        .request_with_timeout(
+            "textDocument/hover",
+            json!({
+                "textDocument": { "uri": main_uri },
+                "position": { "line": line, "character": col + 4 } // offset for "use "
+            }),
+            std::time::Duration::from_millis(1000),
+        )
+        .unwrap_or(serde_json::Value::Null);
+
+    scenario.then("the hover response should contain the module links and MetaCPAN reference");
+    assert!(!response.is_null(), "Hover response should not be null");
+
+    let hover_text = hover_text(&response);
+    assert!(
+        hover_text.contains("**Foo**"),
+        "Hover should contain module name, got: {}",
+        hover_text
+    );
+    assert!(
+        hover_text.contains("View on MetaCPAN"),
+        "Hover should contain MetaCPAN link, got: {}",
+        hover_text
+    );
+
+    Ok(())
+}
+
+#[test]
+fn bdd_document_symbols_handles_nested_packages() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Document symbols handles nested packages");
+    scenario.given("a script with multiple nested package declarations");
+
+    let script = r#"package Outer;
+
+sub outer_func {}
+
+package Outer::Inner;
+
+sub inner_func {}
+
+package main;
+
+sub main_func {}
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("script.pl", script)])?;
+    let uri = workspace.uri("script.pl");
+    harness.open(&uri, script)?;
+    harness.barrier();
+
+    scenario.when("requesting document symbols");
+    let response = harness
+        .request_with_timeout(
+            "textDocument/documentSymbol",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+            std::time::Duration::from_millis(1000),
+        )
+        .unwrap_or(serde_json::Value::Null);
+
+    scenario.then("the document symbols should include all packages and their subroutines");
+    let empty_vec = vec![];
+    let symbols = response.as_array().unwrap_or(&empty_vec);
+
+    // Helper to search recursively
+    fn find_symbol(nodes: &[serde_json::Value], name: &str) -> bool {
+        for node in nodes {
+            if node["name"].as_str().unwrap_or_default() == name {
+                return true;
+            }
+            if let Some(children) = node["children"].as_array() {
+                if find_symbol(children, name) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    assert!(find_symbol(symbols, "Outer"), "Expected Outer package");
+    assert!(find_symbol(symbols, "outer_func"), "Expected outer_func");
+    assert!(find_symbol(symbols, "Outer::Inner"), "Expected Outer::Inner package");
+    assert!(find_symbol(symbols, "inner_func"), "Expected inner_func");
+    assert!(find_symbol(symbols, "main"), "Expected main package");
+    assert!(find_symbol(symbols, "main_func"), "Expected main_func");
+
+    Ok(())
+}
