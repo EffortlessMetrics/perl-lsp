@@ -320,6 +320,61 @@ try {
     Ok(())
 }
 
+#[test]
+fn scope_dbmopen_initializes_hash_at_position_0() -> Result<(), Box<dyn std::error::Error>> {
+    // `dbmopen %hash, $file, $mode` ties %hash to a DBM file.
+    // The hash at position 0 is initialized by the builtin and must not be
+    // flagged as undeclared or uninitialized when used afterwards.
+    let code = r#"
+use strict;
+dbmopen my %db, 'mydb', 0644;
+print $db{key};
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "%db"
+        }),
+        "dbmopen should declare, initialize, and consume %db (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_shmread_initializes_buffer_at_position_1() -> Result<(), Box<dyn std::error::Error>> {
+    // `shmread $id, my $buffer, $pos, $size` reads shared memory into $buffer.
+    // The buffer at position 1 is initialized by the builtin and must not be
+    // flagged as undeclared or uninitialized when used afterwards.
+    let code = r#"
+use strict;
+my $id = 1;
+shmread $id, my $buffer, 0, 1024;
+print $buffer;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "$buffer"
+        }),
+        "shmread should declare, initialize, and consume $buffer (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Variable Scope Resolution — our
 // ===========================================================================

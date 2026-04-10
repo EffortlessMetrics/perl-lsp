@@ -1455,8 +1455,7 @@ fn is_known_function(name: &str) -> bool {
     }
 }
 
-/// Returns the argument positions (0-based) at which a builtin can accept a declaration
-/// (`my $var`) that the builtin itself initializes.
+/// Builtins whose declaration-capable arguments are all consumed by the builtin itself.
 ///
 /// Keep this list explicit and conservative. Only include builtins where the parser already
 /// emits declaration nodes for the relevant argument, and where treating that declaration as
@@ -1468,9 +1467,9 @@ fn is_known_function(name: &str) -> bool {
 fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
     match name {
         // Position 0: the first argument is the new handle/socket
-        "open" | "opendir" | "sysopen" | "socket" | "accept" => &[0],
+        "open" | "opendir" | "sysopen" | "socket" | "accept" | "dbmopen" => &[0],
         // Position 1: the second argument is the buffer (first is an existing handle)
-        "read" | "sysread" | "recv" => &[1],
+        "read" | "sysread" | "recv" | "shmread" => &[1],
         // pipe: both first arguments are new handles
         "pipe" => &[0, 1],
         // socketpair: both first arguments are new sockets
