@@ -249,7 +249,10 @@ impl ServerConfig {
 /// Perl module files across the workspace.
 #[derive(Debug, Clone)]
 pub struct WorkspaceConfig {
-    /// Custom include paths for module resolution (relative to workspace root)
+    /// Workspace-root-relative include paths for module resolution.
+    ///
+    /// Absolute entries are only honored when they still resolve inside the
+    /// workspace boundary.
     /// Default: `["lib", ".", "local/lib/perl5"]`
     pub include_paths: Vec<String>,
 
@@ -357,7 +360,10 @@ pub struct ProjectConfig {
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct ProjectPerlConfig {
-    /// Additional include paths for module resolution (relative to workspace root).
+    /// Additional include paths for module resolution.
+    ///
+    /// Relative entries are resolved against the workspace root. Absolute
+    /// entries are still subject to workspace boundary validation.
     pub include_paths: Vec<String>,
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.
