@@ -851,9 +851,10 @@ impl ScopeAnalyzer {
                     let _ = scope.use_variable_parts("$", "_");
                 }
                 ancestors.push(node);
-                for arg in args {
+                let declaration_arg_positions = builtin_declaration_arg_positions(name);
+                for (arg_index, arg) in args.iter().enumerate() {
                     self.analyze_node(arg, scope, ancestors, issues, context);
-                    if is_declaration_capable_builtin(name) {
+                    if declaration_arg_positions.contains(&arg_index) {
                         self.mark_builtin_declaration_arg_consumed(arg, scope, context);
                     }
                 }
@@ -1946,10 +1947,6 @@ fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
         "socketpair" => &[0, 1],
         _ => &[],
     }
-}
-
-fn is_declaration_capable_builtin(name: &str) -> bool {
-    !builtin_declaration_arg_positions(name).is_empty()
 }
 
 /// Builtins that operate on `$_` by default when called with zero arguments.
