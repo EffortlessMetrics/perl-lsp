@@ -891,13 +891,16 @@ impl ScopeAnalyzer {
 
             NodeKind::FunctionCall { name, args } => {
                 // Handle function arguments, which may contain complex variable patterns.
-                // Some builtins consume declaration-capable filehandle arguments directly,
-                // e.g. `open my $fh, ...` or `pipe my $r, my $w;`. Those declarations should
-                // count as used and initialized by the builtin itself.
+                // Some builtins consume declaration-capable arguments directly, but the
+                // eligible positions are builtin-specific:
+                //   - `open my $fh, ...`      — position 0 is the declaration
+                //   - `read $fh, my $buf, ...` — position 1 is the declaration
+                // Use the position-aware helper to avoid marking the wrong argument.
+                let decl_positions = builtin_declaration_arg_positions(name);
                 ancestors.push(node);
-                for arg in args {
+                for (idx, arg) in args.iter().enumerate() {
                     self.analyze_node(arg, scope, ancestors, issues, context);
-                    if is_declaration_capable_builtin(name) {
+                    if decl_positions.contains(&idx) {
                         self.mark_builtin_declaration_arg_consumed(arg, scope);
                     }
                 }
@@ -1350,13 +1353,28 @@ fn is_known_function(name: &str) -> bool {
     }
 }
 
-/// Builtins whose declaration-capable filehandle arguments are consumed by the builtin itself.
+/// Returns the argument positions (0-based) at which a builtin can accept a declaration
+/// (`my $var`) that the builtin itself initializes.
 ///
 /// Keep this list explicit and conservative. Only include builtins where the parser already
-/// emits declaration nodes for the handle argument, and where treating that declaration as
+/// emits declaration nodes for the relevant argument, and where treating that declaration as
 /// used avoids false diagnostics after the call.
-fn is_declaration_capable_builtin(name: &str) -> bool {
-    matches!(name, "open" | "opendir" | "sysopen" | "pipe" | "socket" | "accept")
+///
+/// Position semantics:
+/// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `socketpair`
+/// - Position 1: `read`, `sysread`, `recv`, `socketpair` (second handle)
+fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
+    match name {
+        // Position 0: the first argument is the new handle/socket
+        "open" | "opendir" | "sysopen" | "socket" | "accept" => &[0],
+        // Position 1: the second argument is the buffer (first is an existing handle)
+        "read" | "sysread" | "recv" => &[1],
+        // pipe: both first arguments are new handles
+        "pipe" => &[0, 1],
+        // socketpair: both first arguments are new sockets
+        "socketpair" => &[0, 1],
+        _ => &[],
+    }
 }
 
 /// Check if an identifier is a known filehandle
