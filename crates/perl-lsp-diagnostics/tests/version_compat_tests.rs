@@ -117,6 +117,10 @@ fn default_node() -> Node {
     Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(50, 70))
 }
 
+fn default_with_class_node() -> Node {
+    Node::new(NodeKind::Default { body: Box::new(block(vec![class_node("Nested")])) }, loc(50, 90))
+}
+
 fn sub_with_signature() -> Node {
     let sig = Node::new(
         NodeKind::Signature {
@@ -341,14 +345,26 @@ fn test_default_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
         "Expected warning severity for deprecated default on v5.38, got: {:?}",
         diag
     );
-    assert!(
-        diag.message.contains("default"),
-        "Message should mention default: {}",
-        diag.message
-    );
+    assert!(diag.message.contains("default"), "Message should mention default: {}", diag.message);
     assert!(
         diag.message.contains("deprecated"),
         "Message should mention deprecation: {}",
+        diag.message
+    );
+    Ok(())
+}
+
+#[test]
+fn test_when_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38"), when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+    assert!(
+        diag.message.contains("given/when/default"),
+        "Message should mention given/when/default: {}",
         diag.message
     );
     Ok(())
@@ -398,16 +414,8 @@ fn test_default_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
         "Expected error severity for removed default on v5.42, got: {:?}",
         diag
     );
-    assert!(
-        diag.message.contains("default"),
-        "Message should mention default: {}",
-        diag.message
-    );
-    assert!(
-        diag.message.contains("removed"),
-        "Message should mention removal: {}",
-        diag.message
-    );
+    assert!(diag.message.contains("default"), "Message should mention default: {}", diag.message);
+    assert!(diag.message.contains("removed"), "Message should mention removal: {}", diag.message);
     assert!(
         diag.suggestion
             .as_deref()
@@ -522,6 +530,36 @@ fn test_say_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
         "Expected no PL900 warning for 'say' in v5.10, got: {:?}",
         diagnostics
     );
+    Ok(())
+}
+
+#[test]
+fn test_say_inside_given_when_is_reached_by_walker() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), given_when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900") && d.message.contains("say")),
+    );
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+    Ok(())
+}
+
+#[test]
+fn test_class_inside_default_is_reached_by_walker() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), default_with_class_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900") && d.message.contains("class")),
+    );
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
     Ok(())
 }
 
