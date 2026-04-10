@@ -13,6 +13,7 @@ use crate::protocol::invalid_params;
 use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
+use perl_source_file::is_binary_content;
 
 impl LspServer {
     /// Handle textDocument/didOpen notification.
@@ -95,9 +96,9 @@ impl LspServer {
                 return Ok(());
             }
 
-            // Binary content guard: skip parsing for files containing null bytes
-            // (binary files that arrive via didOpen as valid UTF-8 strings)
-            if text.contains('\0') {
+            // Binary content guard: skip parsing for binary files.
+            // Detection is centralized in `perl_source_file::is_binary_content`.
+            if is_binary_content(text) {
                 tracing::warn!(
                     "Skipping parse for {} (binary content detected: null bytes present)",
                     uri
@@ -558,8 +559,9 @@ impl LspServer {
                     return Ok(());
                 }
 
-                // Binary content guard: skip parsing for files containing null bytes
-                if text.contains('\0') {
+                // Binary content guard: skip parsing for binary files.
+                // Detection is centralized in `perl_source_file::is_binary_content`.
+                if is_binary_content(&text) {
                     tracing::warn!(
                         "Skipping parse for {} (binary content detected via didChange)",
                         uri
