@@ -512,6 +512,32 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_module_path_use_lib_reorders_existing_include_path() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let preferred = workspace.join("a").join("Prefer").join("Me.pm");
+        let fallback = workspace.join("b").join("Prefer").join("Me.pm");
+        fs::create_dir_all(preferred.parent().ok_or("no parent")?)?;
+        fs::create_dir_all(fallback.parent().ok_or("no parent")?)?;
+        fs::write(&preferred, "package Prefer::Me; 'a';")?;
+        fs::write(&fallback, "package Prefer::Me; 'b';")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace);
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["b".to_string(), "a".to_string()];
+        }
+
+        let doc_text = "use lib 'a';\n";
+        let resolved = server
+            .resolve_module_path("Prefer::Me", Some(doc_text))
+            .ok_or("expected candidate path")?;
+        assert_eq!(resolved, preferred, "use lib should move existing include path to front");
+        Ok(())
+    }
+
+    #[test]
     fn test_resolve_module_path_no_doc_text_unchanged() -> TestResult {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
