@@ -848,7 +848,11 @@ impl ScopeAnalyzer {
                 // read (and in some cases modify) $_. Mark it as used so that any lexically-
                 // scoped `my $_` in scope is not reported as unused or uninitialized.
                 if args.is_empty() && is_topic_defaulting_builtin(name) {
-                    let _ = scope.use_variable_parts("$", "_");
+                    if is_topic_modifying_builtin(name) {
+                        let _ = scope.initialize_and_use_variable_parts("$", "_");
+                    } else {
+                        let _ = scope.use_variable_parts("$", "_");
+                    }
                 }
                 ancestors.push(node);
                 let declaration_arg_positions = builtin_declaration_arg_positions(name);
@@ -1989,6 +1993,11 @@ fn is_topic_defaulting_builtin(name: &str) -> bool {
             | "print"
             | "say"
     )
+}
+
+/// Topic-defaulting builtins that also modify `$_` when called without args.
+fn is_topic_modifying_builtin(name: &str) -> bool {
+    matches!(name, "chomp" | "chop")
 }
 
 /// Check if an identifier is a known filehandle
