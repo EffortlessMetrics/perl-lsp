@@ -1,4 +1,4 @@
-use perl_pod::{extract_pod, extract_pod_from_file};
+use perl_pod::{extract_pod, extract_pod_from_file, render_pod_to_markdown};
 use std::path::Path;
 
 #[test]
@@ -369,4 +369,178 @@ sub run { }
     let doc = extract_pod(source);
     assert_eq!(doc.name.as_deref(), Some("Multi - Multiple POD blocks"));
     assert!(doc.methods.contains_key("run"));
+}
+
+// ===================== render_pod_to_markdown tests =====================
+
+#[test]
+fn markdown_bold_b_code() {
+    let result = render_pod_to_markdown("B<bold text>");
+    assert_eq!(result, "**bold text**");
+}
+
+#[test]
+fn markdown_italic_i_code() {
+    let result = render_pod_to_markdown("I<italic text>");
+    assert_eq!(result, "_italic text_");
+}
+
+#[test]
+fn markdown_code_c_code() {
+    let result = render_pod_to_markdown("C<my $var>");
+    assert_eq!(result, "`my $var`");
+}
+
+#[test]
+fn markdown_link_simple() {
+    let result = render_pod_to_markdown("L<Module::Name>");
+    assert_eq!(result, "[Module::Name](Module::Name)");
+}
+
+#[test]
+fn markdown_link_with_display_text() {
+    let result = render_pod_to_markdown("L<click here|Module::Name>");
+    assert_eq!(result, "[click here](Module::Name)");
+}
+
+#[test]
+fn markdown_link_with_section() {
+    let result = render_pod_to_markdown("L<Module::Name/method>");
+    assert_eq!(result, "[Module::Name](Module::Name/method)");
+}
+
+#[test]
+fn markdown_filename_f_code() {
+    let result = render_pod_to_markdown("F<config.yml>");
+    assert_eq!(result, "`config.yml`");
+}
+
+#[test]
+fn markdown_entity_e_code_lt() {
+    let result = render_pod_to_markdown("E<lt>");
+    assert_eq!(result, "<");
+}
+
+#[test]
+fn markdown_entity_e_code_gt() {
+    let result = render_pod_to_markdown("E<gt>");
+    assert_eq!(result, ">");
+}
+
+#[test]
+fn markdown_entity_e_code_amp() {
+    let result = render_pod_to_markdown("E<amp>");
+    assert_eq!(result, "&");
+}
+
+#[test]
+fn markdown_entity_e_code_verbar() {
+    let result = render_pod_to_markdown("E<verbar>");
+    assert_eq!(result, "|");
+}
+
+#[test]
+fn markdown_entity_e_code_sol() {
+    let result = render_pod_to_markdown("E<sol>");
+    assert_eq!(result, "/");
+}
+
+#[test]
+fn markdown_entity_e_code_unknown_passthrough() {
+    // Unknown entity names are left as-is
+    let result = render_pod_to_markdown("E<unknown>");
+    assert_eq!(result, "E<unknown>");
+}
+
+#[test]
+fn markdown_nested_b_i() {
+    // B<I<text>> → **_text_**
+    let result = render_pod_to_markdown("B<I<text>>");
+    assert_eq!(result, "**_text_**");
+}
+
+#[test]
+fn markdown_mixed_inline() {
+    let result = render_pod_to_markdown("Use B<new> to create a C<Foo> object");
+    assert_eq!(result, "Use **new** to create a `Foo` object");
+}
+
+#[test]
+fn markdown_plain_text_passthrough() {
+    let result = render_pod_to_markdown("plain text here");
+    assert_eq!(result, "plain text here");
+}
+
+#[test]
+fn markdown_head1_to_h2() {
+    let source = "=head1 NAME\n\nFoo - example\n\n=cut\n";
+    let result = render_pod_to_markdown(source);
+    assert!(result.contains("## NAME"), "head1 should become ## heading");
+    assert!(result.contains("Foo - example"));
+}
+
+#[test]
+fn markdown_head2_to_h3() {
+    let source = "=head2 new\n\nCreates a new instance.\n\n=cut\n";
+    let result = render_pod_to_markdown(source);
+    assert!(result.contains("### new"), "head2 should become ### heading");
+    assert!(result.contains("Creates a new instance."));
+}
+
+#[test]
+fn markdown_over_item_back_to_list() {
+    let source =
+        "=over 4\n\n=item B<verbose>\n\nEnable verbose.\n\n=item B<quiet>\n\nSuppress.\n\n=back\n";
+    let result = render_pod_to_markdown(source);
+    assert!(
+        result.contains("- **verbose**"),
+        "items should become markdown bullets with formatting"
+    );
+    assert!(result.contains("- **quiet**"));
+}
+
+#[test]
+fn markdown_verbatim_code_block() {
+    // Lines indented with whitespace are verbatim (code) blocks
+    let source = "=head1 SYNOPSIS\n\n    use Foo;\n    my $obj = Foo->new();\n\n=cut\n";
+    let result = render_pod_to_markdown(source);
+    assert!(result.contains("```"), "verbatim blocks should become fenced code blocks");
+    assert!(result.contains("use Foo;"));
+}
+
+#[test]
+fn markdown_full_pod_document() {
+    let source = r#"=head1 NAME
+
+DateTime::Format::Custom - Parse and format dates
+
+=head1 SYNOPSIS
+
+    use DateTime::Format::Custom;
+    my $dt = DateTime::Format::Custom->parse("2024-01-01");
+
+=head1 DESCRIPTION
+
+This module provides custom date parsing.
+
+=head2 parse
+
+Parses a date string and returns a L<DateTime> object.
+
+=head2 format
+
+Formats a B<DateTime> object as a string.
+
+=cut
+"#;
+    let result = render_pod_to_markdown(source);
+    assert!(result.contains("## NAME"));
+    assert!(result.contains("DateTime::Format::Custom - Parse and format dates"));
+    assert!(result.contains("## SYNOPSIS"));
+    assert!(result.contains("```"));
+    assert!(result.contains("## DESCRIPTION"));
+    assert!(result.contains("### parse"));
+    assert!(result.contains("[DateTime](DateTime)"));
+    assert!(result.contains("### format"));
+    assert!(result.contains("**DateTime**"));
 }
