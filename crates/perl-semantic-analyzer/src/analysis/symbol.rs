@@ -30,6 +30,8 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
+const UNIVERSAL_METHODS: [&str; 4] = ["can", "isa", "DOES", "VERSION"];
+
 // Re-export the unified symbol types from perl-symbol-types
 /// Symbol kind enums used during Index/Analyze workflows.
 pub use perl_symbol_types::{SymbolKind, VarKind};
@@ -202,6 +204,11 @@ pub struct SymbolTable {
     next_scope_id: ScopeId,
     /// Current package context for symbol qualification
     current_package: String,
+}
+
+/// Return `true` if the method is one of Perl's always-available `UNIVERSAL` methods.
+pub fn is_universal_method(method_name: &str) -> bool {
+    UNIVERSAL_METHODS.contains(&method_name)
 }
 
 impl SymbolTable {

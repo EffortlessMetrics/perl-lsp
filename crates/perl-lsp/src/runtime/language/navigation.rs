@@ -679,6 +679,13 @@ fn lookup_workspace_definition(
 
     if let Some(def_location) = find_workspace_definition_location(workspace_index, pkg, name)
         .or_else(|| inherited_method_definition_location(workspace_index, pkg, name))
+        .or_else(|| {
+            if is_universal_method(name) {
+                find_workspace_definition_location(workspace_index, "UNIVERSAL", name)
+            } else {
+                None
+            }
+        })
     {
         if let Some(lsp_location) =
             crate::workspace_index::lsp_adapter::to_lsp_location(&def_location)
@@ -688,6 +695,12 @@ fn lookup_workspace_definition(
     }
 
     None
+}
+
+const UNIVERSAL_METHODS: [&str; 4] = ["can", "isa", "DOES", "VERSION"];
+
+fn is_universal_method(name: &str) -> bool {
+    UNIVERSAL_METHODS.contains(&name)
 }
 
 impl LspServer {
@@ -1081,6 +1094,15 @@ impl LspServer {
                                 ) {
                                     return Ok(Some(result));
                                 }
+                                if is_universal_method(method_name)
+                                    && let Some(result) = lookup_workspace_definition(
+                                        self.coordinator(),
+                                        "UNIVERSAL",
+                                        method_name,
+                                    )
+                                {
+                                    return Ok(Some(result));
+                                }
                                 // Partial/None: fall through to same-file resolution
                                 break;
                             }
@@ -1116,6 +1138,15 @@ impl LspServer {
                                             return Ok(Some(result));
                                         }
                                     }
+                                }
+                                if is_universal_method(method_name)
+                                    && let Some(result) = lookup_workspace_definition(
+                                        self.coordinator(),
+                                        "UNIVERSAL",
+                                        method_name,
+                                    )
+                                {
+                                    return Ok(Some(result));
                                 }
                                 // Fall through for non-self variables
                                 break;
