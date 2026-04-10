@@ -312,16 +312,18 @@ mod tests {
     fn parse_git_output_recognizes_all_perl_extensions() {
         let root = Path::new("/tmp/workspace");
         let payload =
-            b"lib/Foo.pm\0scripts/run.pl\0t/basic.t\0app/main.psgi\0ext/native.xs\0templates/page.html.ep\0";
+            b"lib/Foo.pm\0scripts/run.pl\0t/basic.t\0app/main.psgi\0ext/native.xs\0templates/page.html.ep\0templates/page.tt\0templates/layout.tt2\0";
         let (files, excluded_count) = parse_git_ls_files_output(root, payload);
 
-        assert_eq!(files.len(), 6);
+        assert_eq!(files.len(), 8);
         assert!(files.iter().any(|p| p.ends_with("Foo.pm")));
         assert!(files.iter().any(|p| p.ends_with("run.pl")));
         assert!(files.iter().any(|p| p.ends_with("basic.t")));
         assert!(files.iter().any(|p| p.ends_with("main.psgi")));
         assert!(files.iter().any(|p| p.ends_with("native.xs")));
         assert!(files.iter().any(|p| p.ends_with("page.html.ep")));
+        assert!(files.iter().any(|p| p.ends_with("page.tt")));
+        assert!(files.iter().any(|p| p.ends_with("layout.tt2")));
         assert_eq!(excluded_count, 0);
     }
 
@@ -438,10 +440,14 @@ mod tests {
         create_file(root, "app/main.psgi")?;
         create_file(root, "xs/native.xs")?;
         create_file(root, "templates/page.html.ep")?;
+        create_file(root, "templates/page.tt")?;
+        create_file(root, "templates/layout.tt2")?;
 
         let result = walk_discovery(root, Instant::now());
-        assert_eq!(result.files.len(), 6);
+        assert_eq!(result.files.len(), 8);
         assert!(result.files.iter().any(|p| p.ends_with("page.html.ep")));
+        assert!(result.files.iter().any(|p| p.ends_with("page.tt")));
+        assert!(result.files.iter().any(|p| p.ends_with("layout.tt2")));
 
         Ok(())
     }
