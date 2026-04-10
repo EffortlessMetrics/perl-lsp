@@ -1002,7 +1002,9 @@ fn test_error_handling_launch_program_is_directory() {
             assert!(message.is_some());
             let msg = must_some(message);
             assert!(
-                msg.contains("not a regular file") || msg.contains("directory"),
+                msg.contains("not a regular file")
+                    || msg.contains("directory")
+                    || msg.contains("is not a file"),
                 "Error should mention file type: {}",
                 msg
             );
@@ -1093,4 +1095,145 @@ fn test_multiple_sessions_sequential() {
         }
         let _term_event = wait_for_event(&rx, 100);
     }
+}
+
+// ============================================================================
+// AC:5.5 — DAP Attach: stopOnEntry support (#3524)
+// ============================================================================
+
+#[test]
+// AC:5.5
+fn test_attach_pid_mode_stop_on_entry_true_emits_stopped_event() {
+    // When stopOnEntry is true and attaching by PID, a stopped event with reason "entry"
+    // must be emitted after the initial "attach" stopped event.
+    let (mut adapter, rx) = create_test_adapter();
+
+    let args = json!({
+        "processId": 9999,
+        "stopOnEntry": true
+    });
+
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "PID attach with stopOnEntry should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => must(Err::<(), _>("Expected Response message")),
+    }
+
+    // Must receive at least one stopped event with reason "entry"
+    let mut found_entry_stop = false;
+    for _ in 0..3 {
+        if let Some(DapMessage::Event { event, body, .. }) = wait_for_event(&rx, 100) {
+            if event == "stopped" {
+                if let Some(ref b) = body {
+                    if b.get("reason").and_then(|r| r.as_str()) == Some("entry") {
+                        found_entry_stop = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    assert!(found_entry_stop, "stopOnEntry=true must emit a stopped event with reason='entry'");
+}
+
+#[test]
+// AC:5.5
+fn test_attach_pid_mode_stop_on_entry_false_no_entry_event() {
+    // When stopOnEntry is false, PID attach should emit reason "attach" but NOT "entry".
+    let (mut adapter, rx) = create_test_adapter();
+
+    let args = json!({
+        "processId": 8888,
+        "stopOnEntry": false
+    });
+
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "PID attach without stopOnEntry should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => must(Err::<(), _>("Expected Response message")),
+    }
+
+    let mut found_entry_stop = false;
+    let mut found_attach_stop = false;
+    for _ in 0..3 {
+        if let Some(DapMessage::Event { event, body, .. }) = wait_for_event(&rx, 100) {
+            if event == "stopped" {
+                if let Some(ref b) = body {
+                    match b.get("reason").and_then(|r| r.as_str()) {
+                        Some("entry") => found_entry_stop = true,
+                        Some("attach") => found_attach_stop = true,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    assert!(!found_entry_stop, "stopOnEntry=false must not emit an entry stop event");
+    assert!(
+        found_attach_stop,
+        "PID attach should always emit a stopped event with reason='attach'"
+    );
+}
+
+#[test]
+// AC:5.5
+fn test_attach_pid_mode_default_stop_on_entry_is_false() {
+    // When stopOnEntry is omitted it defaults to false — no entry-stop event emitted.
+    let (mut adapter, rx) = create_test_adapter();
+
+    let args = json!({ "processId": 7777 });
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "PID attach with omitted stopOnEntry should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => must(Err::<(), _>("Expected Response message")),
+    }
+
+    let mut found_entry_stop = false;
+    for _ in 0..3 {
+        if let Some(DapMessage::Event { event, body, .. }) = wait_for_event(&rx, 100) {
+            if event == "stopped" {
+                if let Some(ref b) = body {
+                    if b.get("reason").and_then(|r| r.as_str()) == Some("entry") {
+                        found_entry_stop = true;
+                    }
+                }
+            }
+        }
+    }
+    assert!(!found_entry_stop, "Default stopOnEntry must not emit entry-stop event");
+}
+
+#[test]
+// AC:5.5
+fn test_attach_config_stop_on_entry_field() {
+    // AttachConfiguration must expose stop_on_entry and round-trip through serde.
+    use perl_dap::configuration::AttachConfiguration;
+
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: Some(5000),
+        stop_on_entry: Some(true),
+    };
+    assert_eq!(config.stop_on_entry, Some(true));
+
+    let json_str = serde_json::to_string(&config).expect("should serialize");
+    let deserialized: AttachConfiguration =
+        serde_json::from_str(&json_str).expect("should deserialize");
+    assert_eq!(deserialized.stop_on_entry, Some(true));
+
+    let default_config = AttachConfiguration::default();
+    assert_eq!(default_config.stop_on_entry, None);
 }

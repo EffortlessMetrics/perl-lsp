@@ -327,6 +327,9 @@ pub struct AttachRequestArguments {
     /// Connection timeout in milliseconds
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u32>,
+    /// If true, pause at the first available program location after attaching.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_on_entry: Option<bool>,
 }
 
 // ============================================================================
