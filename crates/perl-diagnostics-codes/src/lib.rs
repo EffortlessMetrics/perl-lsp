@@ -121,6 +121,8 @@ pub enum DiagnosticCode {
     UninitializedVariable,
     /// Pragma name appears to be misspelled
     MisspelledPragma,
+    /// Capture variable ($1, $2, etc.) used without a preceding regex match in scope
+    CaptureVarWithoutRegexMatch,
 
     // Package/module (PL200-PL299)
     /// Missing package declaration
@@ -230,6 +232,7 @@ impl DiagnosticCode {
             DiagnosticCode::UnquotedBareword => "PL109",
             DiagnosticCode::UninitializedVariable => "PL110",
             DiagnosticCode::MisspelledPragma => "PL111",
+            DiagnosticCode::CaptureVarWithoutRegexMatch => "PL112",
             DiagnosticCode::MissingPackageDeclaration => "PL200",
             DiagnosticCode::DuplicatePackage => "PL201",
             DiagnosticCode::DuplicateSubroutine => "PL300",
@@ -290,6 +293,7 @@ impl DiagnosticCode {
             "PL109" => "https://docs.perl-lsp.org/errors/PL109",
             "PL110" => "https://docs.perl-lsp.org/errors/PL110",
             "PL111" => "https://docs.perl-lsp.org/errors/PL111",
+            "PL112" => "https://docs.perl-lsp.org/errors/PL112",
             "PL200" => "https://docs.perl-lsp.org/errors/PL200",
             "PL201" => "https://docs.perl-lsp.org/errors/PL201",
             "PL300" => "https://docs.perl-lsp.org/errors/PL300",
@@ -366,7 +370,8 @@ impl DiagnosticCode {
             | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
 
             // Information
-            DiagnosticCode::HeredocInFormat
+            DiagnosticCode::CaptureVarWithoutRegexMatch
+            | DiagnosticCode::HeredocInFormat
             | DiagnosticCode::HeredocInBegin
             | DiagnosticCode::HeredocDynamicDelimiter
             | DiagnosticCode::HeredocInSourceFilter
@@ -518,6 +523,10 @@ impl DiagnosticCode {
                 "This pragma name appears to be misspelled. \
                 Check the spelling and ensure the module is installed.",
             ),
+            DiagnosticCode::CaptureVarWithoutRegexMatch => Some(
+                "Capture variables ($1, $2, etc.) are only meaningful after a successful regex match. \
+                Perform a regex match with =~ /.../ before using $1 or $2.",
+            ),
             DiagnosticCode::DeprecatedDefined => Some(
                 "`defined(@array)` and `defined(%hash)` are deprecated since Perl 5.6. \
                 Use `@array` or `%hash` directly in boolean context instead.",
@@ -631,6 +640,7 @@ impl DiagnosticCode {
             "PL109" => Some(DiagnosticCode::UnquotedBareword),
             "PL110" => Some(DiagnosticCode::UninitializedVariable),
             "PL111" => Some(DiagnosticCode::MisspelledPragma),
+            "PL112" => Some(DiagnosticCode::CaptureVarWithoutRegexMatch),
             "PL200" => Some(DiagnosticCode::MissingPackageDeclaration),
             "PL201" => Some(DiagnosticCode::DuplicatePackage),
             "PL300" => Some(DiagnosticCode::DuplicateSubroutine),
@@ -719,7 +729,8 @@ impl DiagnosticCode {
             | DiagnosticCode::UnusedParameter
             | DiagnosticCode::UnquotedBareword
             | DiagnosticCode::UninitializedVariable
-            | DiagnosticCode::MisspelledPragma => DiagnosticCategory::StrictWarnings,
+            | DiagnosticCode::MisspelledPragma
+            | DiagnosticCode::CaptureVarWithoutRegexMatch => DiagnosticCategory::StrictWarnings,
 
             DiagnosticCode::MissingPackageDeclaration | DiagnosticCode::DuplicatePackage => {
                 DiagnosticCategory::PackageModule
