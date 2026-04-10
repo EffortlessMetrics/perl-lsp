@@ -1088,16 +1088,12 @@ fn parser_category_codes_are_all_errors() {
 }
 
 #[test]
-fn no_information_severity_codes_exist() {
-    // Current API has no Information-level codes
-    for code in ALL_CODES {
-        assert_ne!(
-            code.severity(),
-            DiagnosticSeverity::Information,
-            "no codes should be Information severity currently: {}",
-            code.as_str()
-        );
-    }
+fn information_severity_codes_are_explicitly_tracked() {
+    let info_codes: Vec<_> = ALL_CODES
+        .iter()
+        .filter(|code| code.severity() == DiagnosticSeverity::Information)
+        .collect();
+    assert_eq!(info_codes, vec![&DiagnosticCode::CaptureVarWithoutRegexMatch]);
 }
 
 #[test]
