@@ -1,5 +1,6 @@
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
+use perl_parser_core::NodeKind;
 
 // --- VString version directives in `use` ---
 
@@ -100,6 +101,36 @@ use warnings;
 1;
 "#,
     );
+}
+
+#[test]
+fn test_use_vstring_preserves_full_version_segment() {
+    let ast = parse("use v5.38;");
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 1);
+        if let NodeKind::Use { module, .. } = &statements[0].kind {
+            assert_eq!(module, "v5.38");
+        } else {
+            panic!("expected top-level Use node");
+        }
+    } else {
+        panic!("expected Program node");
+    }
+}
+
+#[test]
+fn test_use_vstring_three_part_preserves_patch_segment() {
+    let ast = parse("use v5.12.0;");
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 1);
+        if let NodeKind::Use { module, .. } = &statements[0].kind {
+            assert_eq!(module, "v5.12.0");
+        } else {
+            panic!("expected top-level Use node");
+        }
+    } else {
+        panic!("expected Program node");
+    }
 }
 
 #[test]

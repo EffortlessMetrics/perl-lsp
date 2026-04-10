@@ -509,8 +509,7 @@ impl<'a> Parser<'a> {
                     if let Ok(dot_token) = self.tokens.peek() {
                         if dot_token.text.as_ref() == "." {
                             self.consume_token()?; // consume dot
-                            if self.peek_kind() != /* ~ changed by cargo-mutants ~ */ Some(TokenKind::Number)
-                            {
+                            if self.peek_kind() == Some(TokenKind::Number) {
                                 let num = self.consume_token()?;
                                 version.push('.');
                                 version.push_str(&num.text);
