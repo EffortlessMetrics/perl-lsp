@@ -93,6 +93,8 @@ pub struct Parser<'a> {
     last_end_position: usize,
     /// Context flag for disambiguating for-loop initialization syntax
     in_for_loop_init: bool,
+    /// Depth of nested class bodies for context-sensitive class-body constructs
+    in_class_body: usize,
     /// Statement boundary tracking for indirect object syntax detection
     at_stmt_start: bool,
     /// FIFO queue of pending heredoc declarations awaiting content collection
@@ -144,6 +146,7 @@ impl<'a> Parser<'a> {
             recursion_depth: 0,
             last_end_position: 0,
             in_for_loop_init: false,
+            in_class_body: 0,
             at_stmt_start: true,
             pending_heredocs: VecDeque::new(),
             src_bytes: input.as_bytes(),
@@ -227,6 +230,7 @@ impl<'a> Parser<'a> {
             recursion_depth: 0,
             last_end_position: 0,
             in_for_loop_init: false,
+            in_class_body: 0,
             at_stmt_start: true,
             pending_heredocs: VecDeque::new(),
             src_bytes: source.as_bytes(),

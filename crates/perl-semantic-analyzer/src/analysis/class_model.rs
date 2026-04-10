@@ -943,43 +943,23 @@ impl ClassModelBuilder {
 
         match &statement.kind {
             NodeKind::Method { name, body, .. } if name == "ADJUST" => {
-                self.current_adjusts.push(MethodInfo::synthetic(
-                    "ADJUST".to_string(),
-                    statement.location,
-                    None,
-                ));
+                self.record_object_pad_adjust(statement.location);
                 self.visit_node(body);
                 return Some(1);
             }
             NodeKind::Subroutine { name, body, .. } if name.as_deref() == Some("ADJUST") => {
-                self.current_adjusts.push(MethodInfo::synthetic(
-                    "ADJUST".to_string(),
-                    statement.location,
-                    None,
-                ));
+                self.record_object_pad_adjust(statement.location);
                 self.visit_node(body);
                 return Some(1);
-            }
-            NodeKind::ExpressionStatement { expression } => {
-                if matches!(&expression.kind, NodeKind::Identifier { name } if name == "ADJUST") {
-                    self.current_adjusts.push(MethodInfo::synthetic(
-                        "ADJUST".to_string(),
-                        statement.location,
-                        None,
-                    ));
-                    if idx + 1 < statements.len()
-                        && matches!(&statements[idx + 1].kind, NodeKind::Block { .. })
-                    {
-                        self.visit_node(&statements[idx + 1]);
-                        return Some(2);
-                    }
-                    return Some(1);
-                }
             }
             _ => {}
         }
 
         None
+    }
+
+    fn record_object_pad_adjust(&mut self, location: SourceLocation) {
+        self.current_adjusts.push(MethodInfo::synthetic("ADJUST".to_string(), location, None));
     }
 
     fn object_pad_field_from_statement(statement: &Node) -> Option<FieldInfo> {
@@ -1801,6 +1781,27 @@ class Point {
 
         let param_names: Vec<_> = model.object_pad_param_field_names().collect();
         assert_eq!(param_names, vec!["x", "y"]);
+    }
+
+    #[test]
+    fn object_pad_adjust_blocks_are_tracked() {
+        let models = build_models(
+            r#"
+use Object::Pad;
+
+class Config {
+    ADJUST {
+        my $tmp = 1;
+    }
+}
+"#,
+        );
+
+        let model = find_model(&models, "Config").expect("Config model");
+        assert_eq!(model.framework, Framework::ObjectPad);
+        assert_eq!(model.adjusts.len(), 1, "expected one ADJUST block");
+        assert_eq!(model.adjusts[0].name, "ADJUST");
+        assert!(model.adjusts[0].synthetic, "ADJUST should be modeled as synthetic");
     }
 
     #[test]
