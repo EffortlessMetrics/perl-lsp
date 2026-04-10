@@ -2568,7 +2568,12 @@ print $buffer;
     assert!(
         !issues.iter().any(|i| {
             i.variable_name == "$buffer"
-                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                )
         }),
         "read position-1 buffer declaration should still be consumed (issues: {:?})",
         issues
