@@ -15,7 +15,12 @@
  * "corrupted or incompatible") and a specific remediation step.
  */
 
-import { classifyStartupError, StartupErrorKind, selectBestDiagnosis } from '../startupDiagnosis';
+import {
+  classifyStartupError,
+  formatStartupFailureDialog,
+  StartupErrorKind,
+  selectBestDiagnosis,
+} from '../startupDiagnosis';
 
 // ---------------------------------------------------------------------------
 // classifyStartupError — pure classification of stderr/stdout text
@@ -240,5 +245,32 @@ describe('selectBestDiagnosis', () => {
     const probe = classifyStartupError('');  // Unknown
     const result = selectBestDiagnosis(probe, '');
     expect(result.kind).toBe(StartupErrorKind.Unknown);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatStartupFailureDialog — exact dialog text surfaced on startup failure
+// ---------------------------------------------------------------------------
+
+describe('formatStartupFailureDialog', () => {
+  test('surfaces onboarding guidance verbatim when probe is Unknown and health message exists', () => {
+    const probe = classifyStartupError('');
+    const healthMsg =
+      'Perl interpreter not found. Install Perl 5.10+ and reload the window. ' +
+      'Alternatively, set the `perl-lsp.perl.path` setting to an existing Perl executable.';
+
+    expect(formatStartupFailureDialog(probe, healthMsg)).toBe(healthMsg);
+  });
+
+  test('keeps the generic startup wrapper for classified probe failures', () => {
+    const probe = classifyStartupError(
+      '/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.35` not found',
+    );
+
+    const message = formatStartupFailureDialog(probe, 'Perl interpreter not found...');
+
+    expect(message).toContain('Perl Language Server failed to start.');
+    expect(message).toContain('glibc');
+    expect(message).not.toContain('Perl interpreter not found...');
   });
 });
