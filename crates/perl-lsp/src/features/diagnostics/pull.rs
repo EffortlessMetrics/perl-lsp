@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::state::DocumentState;
 use crate::util::uri::parse_uri;
 use perl_diagnostics_codes::DiagnosticCode;
+use perl_lsp_diagnostics::{parse_error_code, parse_error_severity};
 use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
@@ -308,10 +309,11 @@ impl PullDiagnosticsProvider {
         let end_offset = offset.saturating_add(1).min(text.len());
         let range = lsp_range_from_offsets(text, offset, end_offset);
 
-        let code_str = DiagnosticCode::ParseError.as_str();
+        let code = parse_error_code(error);
+        let code_str = code.as_str();
         let data = serde_json::to_value(DiagnosticData {
             code: code_str.to_string(),
-            category: format!("{:?}", DiagnosticCode::ParseError.category()),
+            category: format!("{:?}", code.category()),
             fixable: is_fixable_diagnostic(code_str),
             tags: vec![],
         })
@@ -322,7 +324,7 @@ impl PullDiagnosticsProvider {
 
         LspDiagnostic {
             range,
-            severity: Some(LspDiagnosticSeverity::ERROR),
+            severity: Some(to_lsp_severity(parse_error_severity(error))),
             code: Some(NumberOrString::String(code_str.to_string())),
             code_description: None,
             source: Some("perl-lsp".to_string()),
@@ -534,6 +536,48 @@ mod tests {
                 assert!(data["tags"].is_array());
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_prototype_syntax_error_maps_to_pl302_warning()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let diagnostic = provider.parse_error_to_diagnostic(
+            &uri,
+            "sub foo (XYZ) {}",
+            &ParseError::SyntaxError {
+                location: 8,
+                message: "Invalid prototype character(s) 'X'".to_string(),
+            },
+        );
+
+        assert_eq!(diagnostic.code, Some(NumberOrString::String("PL302".to_string())));
+        assert_eq!(diagnostic.severity, Some(LspDiagnosticSeverity::WARNING));
+        let data = diagnostic.data.as_ref().ok_or("data should be populated")?;
+        assert_eq!(data["code"], "PL302");
+        Ok(())
+    }
+
+    #[test]
+    fn unknown_subroutine_attribute_syntax_error_stays_warning()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let diagnostic = provider.parse_error_to_diagnostic(
+            &uri,
+            "sub foo :wat {}",
+            &ParseError::SyntaxError {
+                location: 8,
+                message: "unknown subroutine attribute ':wat'".to_string(),
+            },
+        );
+
+        assert_eq!(diagnostic.code, Some(NumberOrString::String("PL002".to_string())));
+        assert_eq!(diagnostic.severity, Some(LspDiagnosticSeverity::WARNING));
+        let data = diagnostic.data.as_ref().ok_or("data should be populated")?;
+        assert_eq!(data["code"], "PL002");
         Ok(())
     }
 }

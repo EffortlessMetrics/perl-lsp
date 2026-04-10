@@ -1700,6 +1700,66 @@ print FOO;
 }
 
 #[test]
+fn version_pragma_does_not_import_builtin_short_names() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use v5.40;
+print floor;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "use v5.40 should not lexically import builtin short names"
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_pragma_imports_are_lexical_only() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use builtin 'true';
+print floor;
+print true;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "importing `true` must not suppress unrelated builtin names"
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "true"
+        }),
+        "lexically imported builtin short name `true` should be allowed"
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_pragma_imports_allow_the_imported_name() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use builtin 'floor';
+print floor;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "lexically imported builtin short name `floor` should not be flagged"
+    );
+    Ok(())
+}
+
+#[test]
 fn v5_36_auto_strict_flags_undeclared_variable_in_signature_sub()
 -> Result<(), Box<dyn std::error::Error>> {
     // use v5.36 enables strict automatically via feature bundle.
@@ -1716,6 +1776,29 @@ sub foo ($x) { $z = 1; }
         "use v5.36 auto-enables strict: $z inside a signature sub should be flagged as undeclared"
     );
     // The parameter $x should NOT be flagged as undeclared.
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
+        "signature parameter $x should not be flagged as undeclared"
+    );
+    Ok(())
+}
+
+#[test]
+fn feature_signatures_auto_strict_flags_undeclared_variable_in_signature_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    // `use feature 'signatures'` should enable strict semantics automatically.
+    // An undeclared variable $z inside a signature sub should be flagged even
+    // without explicit `use strict`.
+    let code = r#"
+use feature 'signatures';
+sub foo ($x) { $z = 1; }
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
+        "use feature 'signatures' should auto-enable strict: $z should be flagged as undeclared"
+    );
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
         "signature parameter $x should not be flagged as undeclared"
@@ -2547,6 +2630,36 @@ print $buffer;
 }
 
 #[test]
+fn read_position_zero_declaration_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
+    // Position 0 for `read` must not be treated as a declaration-capable output slot.
+    // If a declaration appears there, it should still be analyzed like a normal lexical
+    // declaration (and therefore may be reported as unused/uninitialized).
+    let code = r#"
+use strict;
+read my $fh, my $buffer, 1024;
+print $buffer;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            i.variable_name == "$fh"
+                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+        }),
+        "read position-0 declaration should not be auto-consumed (issues: {:?})",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            i.variable_name == "$buffer"
+                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+        }),
+        "read position-1 buffer declaration should still be consumed (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn socketpair_both_positions_declared() -> Result<(), Box<dyn std::error::Error>> {
     // `socketpair my $a, my $b, ...` — positions 0 and 1 are both declarations.
     let code = r#"
@@ -2571,6 +2684,28 @@ print $b;
             issues
         );
     }
+    Ok(())
+}
+
+#[test]
+fn socketpair_non_handle_positions_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
+    // `socketpair` only consumes declaration-capable handles at positions 0 and 1.
+    // Declarations in later positions must remain ordinary lexicals.
+    let code = r#"
+use strict;
+socketpair my $a, my $b, my $domain, 1, 0;
+print $a;
+print $b;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            i.variable_name == "$domain"
+                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+        }),
+        "socketpair position-2 declaration should not be auto-consumed (issues: {:?})",
+        issues
+    );
     Ok(())
 }
 
@@ -2853,5 +2988,359 @@ my $a = 42;
     let issues = scope_issues(code);
     let undeclared = has_issue(&issues, IssueKind::UndeclaredVariable, "a");
     assert!(!undeclared, "a lexically declared $a must never be flagged as undeclared");
+    Ok(())
+}
+
+// ===========================================================================
+// Phase block (BEGIN/END/CHECK/INIT/UNITCHECK) symbol extraction (#3464)
+// ===========================================================================
+
+#[test]
+fn phase_block_begin_extracted_as_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { require Config; }";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "BEGIN", SymbolKind::Subroutine),
+        "BEGIN block must appear in symbol table as Subroutine; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn phase_block_end_extracted_as_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "END { cleanup(); }";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "END", SymbolKind::Subroutine),
+        "END block must appear in symbol table; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn phase_block_all_five_extracted() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { 1; }\nEND { 1; }\nCHECK { 1; }\nINIT { 1; }\nUNITCHECK { 1; }\n";
+    let table = parse_and_extract(code);
+    for phase in &["BEGIN", "END", "CHECK", "INIT", "UNITCHECK"] {
+        assert!(
+            has_symbol(&table, phase, SymbolKind::Subroutine),
+            "{} must appear in symbol table; symbols: {:?}",
+            phase,
+            table.symbols.keys().collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn phase_block_symbol_location_within_source() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { my $x = 1; }";
+    let table = parse_and_extract(code);
+    let syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
+    let sym = syms.first().ok_or("no symbols for BEGIN")?;
+    assert!(sym.location.start <= code.len(), "start offset must be within source");
+    assert!(sym.location.end <= code.len(), "end offset must be within source");
+    assert!(sym.location.start < sym.location.end, "start must be before end");
+    Ok(())
+}
+
+#[test]
+fn phase_block_symbol_in_global_scope() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { my $x = 42; }";
+    let table = parse_and_extract(code);
+    let begin_syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
+    let begin_sym = begin_syms.first().ok_or("no BEGIN symbol")?;
+    assert_eq!(begin_sym.scope_id, 0, "BEGIN symbol must be in global scope");
+    Ok(())
+}
+
+// ---- Issue #3503: variables in print comma-separated args must be marked used ----
+
+#[test]
+fn scope_many_variables_in_print_comma_args() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for #3503: print $a, $b, $c, $d, $e — all five variables
+    // should be considered used. $a and $b are Perl sort globals; locally declared
+    // `my $a`/`my $b` must NOT be skipped by the is_builtin_global guard.
+    let code = r#"
+my $a = 1;
+my $b = 2;
+my $c = 3;
+my $d = 4;
+my $e = 5;
+print $a, $b, $c, $d, $e;
+"#;
+    let issues = scope_issues(code);
+    let unused = count_issues(&issues, IssueKind::UnusedVariable);
+    assert_eq!(
+        unused,
+        0,
+        "all variables used in print comma-separated args should not be unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn print_comma_args_strict_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Under `use strict`, variables used in print comma list must not be reported unused.
+    let code = r#"
+use strict;
+my $name = "world";
+my $greeting = "hello";
+print $greeting, " ", $name, "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "name"),
+        "$name used in print comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "greeting"),
+        "$greeting used in print comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn say_comma_args_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // say with comma-separated args must also mark all variables as used.
+    let code = r#"
+my $x = "foo";
+my $y = "bar";
+say $x, " ", $y;
+"#;
+    let issues = scope_issues(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "x"),
+        "$x used in say comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "y"),
+        "$y used in say comma list must not be flagged as unused; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Try/catch variable binding — extended coverage (#3541)
+// ===========================================================================
+
+/// The issue example uses $err, not $e.  Both must be handled identically.
+#[test]
+fn scope_try_catch_err_variable_is_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($err) {
+    print $err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$err"),
+        "catch variable $err must not be reported as undeclared: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$err"),
+        "used catch variable $err must not be reported as unused: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// use v5.34 enables try/catch without an explicit use feature 'try'.
+/// The scope analyzer must bind the catch variable in both cases.
+#[test]
+fn scope_try_catch_v534_pragma_binds_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use v5.34;
+try {
+    die "error";
+} catch ($err) {
+    print $err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$err"),
+        "catch variable must be bound when enabled via use v5.34: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Multiple catch blocks must each bind their own variable independently.
+#[test]
+fn scope_try_multiple_catch_blocks_each_bind_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($first_err) {
+    print $first_err;
+} catch ($second_err) {
+    print $second_err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$first_err"),
+        "first catch variable must not be undeclared: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$second_err"),
+        "second catch variable must not be undeclared: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Each catch block's variable must be invisible in the other's block.
+#[test]
+fn scope_try_catch_variables_do_not_cross_contaminate() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($first_err) {
+    print $first_err;
+} catch ($second_err) {
+    print $first_err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$first_err"),
+        "$first_err used in second catch block should be undeclared: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Bare catch (no variable) must not crash and must not emit any diagnostic.
+#[test]
+fn scope_try_bare_catch_no_variable_no_crash() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch {
+    print "caught";
+}
+"#;
+    // Must not panic; must not produce any undeclared-variable issue
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable),
+        "bare catch should not produce undeclared diagnostics: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// The finally block must run in the outer scope, not the catch scope.
+/// Variables declared inside a catch must not bleed into finally.
+#[test]
+fn scope_try_catch_variable_not_visible_in_finally() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($e) {
+    print $e;
+} finally {
+    print $e;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$e"),
+        "catch variable $e must not be visible in finally block: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Nested try/catch: the inner catch variable must be visible only within the
+/// inner catch block, and the outer catch variable within its own block.
+#[test]
+fn scope_nested_try_catch_inner_shadows_outer() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    try {
+        die "inner";
+    } catch ($inner) {
+        print $inner;
+    }
+} catch ($outer) {
+    print $outer;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$inner"),
+        "inner catch variable must be declared in inner catch scope: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$outer"),
+        "outer catch variable must be declared in outer catch scope: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// The catch variable range must point into the source at the catch parameter,
+/// not at an arbitrary offset, so that LSP diagnostics display correctly.
+#[test]
+fn scope_try_catch_variable_range_points_to_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($exception) {
+    print "handled";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$exception")
+        .ok_or("expected unused catch-variable diagnostic for $exception")?;
+    assert_eq!(
+        &code[unused.range.0..unused.range.1],
+        "$exception",
+        "the diagnostic range must span exactly the catch parameter text"
+    );
     Ok(())
 }

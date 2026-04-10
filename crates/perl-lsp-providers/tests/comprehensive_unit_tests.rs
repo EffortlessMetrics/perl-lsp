@@ -1494,61 +1494,51 @@ mod ide_module_tests {
     use super::*;
 
     #[test]
-    #[allow(deprecated)]
-    fn lsp_compat_code_actions_reexport() {
-        let provider = perl_lsp_providers::ide::lsp_compat::code_actions::CodeActionsProvider::new(
-            "my $x = 1;".to_string(),
-        );
+    fn top_level_code_actions_reexport() {
+        let provider =
+            perl_lsp_providers::code_actions::CodeActionsProvider::new("my $x = 1;".to_string());
         let _ = provider;
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn lsp_compat_completion_reexport() -> Result<(), ParseError> {
+    fn top_level_completion_reexport() -> Result<(), ParseError> {
+        let ast = parse("my $x = 1;")?;
+        let provider = perl_lsp_providers::completion::CompletionProvider::new(&ast);
+        let _ = provider;
+        Ok(())
+    }
+
+    #[test]
+    fn top_level_diagnostics_reexport() -> Result<(), ParseError> {
+        let ast = parse("my $x = 1;")?;
+        let provider = perl_lsp_providers::diagnostics::DiagnosticsProvider::new(
+            &ast,
+            "my $x = 1;".to_string(),
+        );
+        let _ = provider;
+        Ok(())
+    }
+
+    #[test]
+    fn top_level_rename_reexport() -> Result<(), ParseError> {
         let ast = parse("my $x = 1;")?;
         let provider =
-            perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider::new(&ast);
+            perl_lsp_providers::rename::RenameProvider::new(&ast, "my $x = 1;".to_string());
         let _ = provider;
         Ok(())
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn lsp_compat_diagnostics_reexport() -> Result<(), ParseError> {
-        let ast = parse("my $x = 1;")?;
-        let provider = perl_lsp_providers::ide::lsp_compat::diagnostics::DiagnosticsProvider::new(
-            &ast,
-            "my $x = 1;".to_string(),
-        );
-        let _ = provider;
-        Ok(())
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn lsp_compat_rename_reexport() -> Result<(), ParseError> {
-        let ast = parse("my $x = 1;")?;
-        let provider = perl_lsp_providers::ide::lsp_compat::rename::RenameProvider::new(
-            &ast,
-            "my $x = 1;".to_string(),
-        );
-        let _ = provider;
-        Ok(())
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn lsp_compat_inlay_hints_reexport() {
-        let provider = perl_lsp_providers::ide::lsp_compat::inlay_hints::InlayHintsProvider::new();
+    fn top_level_inlay_hints_reexport() {
+        let provider = perl_lsp_providers::inlay_hints::InlayHintsProvider::new();
         let _ = provider;
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn lsp_compat_formatting_reexport() {
-        let range = perl_lsp_providers::ide::lsp_compat::formatting::FormatRange::new(
-            perl_lsp_providers::ide::lsp_compat::formatting::FormatPosition::new(0, 0),
-            perl_lsp_providers::ide::lsp_compat::formatting::FormatPosition::new(0, 5),
+    fn top_level_formatting_reexport() {
+        let range = perl_lsp_providers::formatting::FormatRange::new(
+            perl_lsp_providers::formatting::FormatPosition::new(0, 0),
+            perl_lsp_providers::formatting::FormatPosition::new(0, 5),
         );
         let _ = range;
     }

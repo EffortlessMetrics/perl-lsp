@@ -8,9 +8,21 @@
 //! |------|----------|-------------|
 //! | `syntax-error` | Error | Generic syntax error from the parser |
 
+use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::error::ParseError;
 
 use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
+
+/// Derive the canonical diagnostic code for a parser error.
+pub fn parse_error_code(error: &ParseError) -> DiagnosticCode {
+    match error {
+        ParseError::UnexpectedEof => DiagnosticCode::UnexpectedEof,
+        ParseError::SyntaxError { message, .. } => {
+            DiagnosticCode::from_message(message).unwrap_or(DiagnosticCode::SyntaxError)
+        }
+        _ => DiagnosticCode::ParseError,
+    }
+}
 
 /// Convert a parse error to a diagnostic with actionable suggestions.
 ///
@@ -80,8 +92,8 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
 
     Diagnostic {
         range: (location, location + 1),
-        severity: parse_error_severity(error, &message),
-        code: Some("syntax-error".to_string()),
+        severity: parse_error_severity(error),
+        code: Some(parse_error_code(error).as_str().to_string()),
         message,
         related_information: Vec::new(),
         tags: Vec::new(),
@@ -89,14 +101,20 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
     }
 }
 
-pub(crate) fn parse_error_severity(error: &ParseError, message: &str) -> DiagnosticSeverity {
+/// Derive the user-facing severity for a parser error.
+pub fn parse_error_severity(error: &ParseError) -> DiagnosticSeverity {
     if matches!(error, ParseError::SyntaxError { .. })
-        && is_unknown_subroutine_attribute_warning(message)
+        && (matches!(parse_error_code(error), DiagnosticCode::InvalidPrototype)
+            || matches!(
+                error,
+                ParseError::SyntaxError { message, .. }
+                    if is_unknown_subroutine_attribute_warning(message)
+            ))
     {
-        DiagnosticSeverity::Warning
-    } else {
-        DiagnosticSeverity::Error
+        return DiagnosticSeverity::Warning;
     }
+
+    DiagnosticSeverity::Error
 }
 
 fn is_unknown_subroutine_attribute_warning(message: &str) -> bool {

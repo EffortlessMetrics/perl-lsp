@@ -4,7 +4,6 @@
 
 use std::path::Path;
 
-use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
@@ -14,17 +13,19 @@ use perl_semantic_analyzer::symbol::SymbolExtractor;
 use crate::dedup::deduplicate_diagnostics;
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
+use crate::lints::duplicate_hash_keys::check_duplicate_hash_keys;
 use crate::lints::eval_error_flow::check_eval_error_flow;
 use crate::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
 use crate::lints::printf_format::check_printf_format;
+use crate::lints::role_conflicts::check_role_conflicts;
 use crate::lints::security::check_security;
 use crate::lints::strict_warnings::check_strict_warnings;
 use crate::lints::unreachable_code::check_unreachable_code;
 use crate::lints::unused_imports::check_unused_imports;
 use crate::lints::version_compat::check_version_compat;
-use crate::parse_errors::parse_error_severity;
+use crate::parse_errors::{parse_error_code, parse_error_severity};
 use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export diagnostic types from the shared SRP microcrate.
@@ -107,15 +108,11 @@ impl DiagnosticsProvider {
                 })
                 .unwrap_or_default();
 
-            let code = match error {
-                ParseError::UnexpectedEof => DiagnosticCode::UnexpectedEof,
-                ParseError::SyntaxError { .. } => DiagnosticCode::SyntaxError,
-                _ => DiagnosticCode::ParseError,
-            };
+            let code = parse_error_code(error);
 
             diagnostics.push(Diagnostic {
                 range: (range_start, range_end),
-                severity: parse_error_severity(error, &message),
+                severity: parse_error_severity(error),
                 code: Some(code.as_str().to_string()),
                 message,
                 related_information,
@@ -146,6 +143,9 @@ impl DiagnosticsProvider {
         check_duplicate_package(ast, &mut diagnostics);
         check_duplicate_subroutine(ast, &mut diagnostics);
 
+        // Moo/Moose role conflict diagnostics (same-file only)
+        check_role_conflicts(ast, &symbol_table, &mut diagnostics);
+
         // Security anti-pattern detection (string eval, two-arg open, backtick exec)
         check_security(ast, &mut diagnostics);
         check_eval_error_flow(ast, &mut diagnostics);
@@ -158,6 +158,9 @@ impl DiagnosticsProvider {
 
         // Unreachable code detection (PL406)
         check_unreachable_code(ast, &mut diagnostics);
+
+        // Duplicate hash key detection (PL408)
+        check_duplicate_hash_keys(ast, &mut diagnostics);
 
         // Missing module lint (PL701) — only when a resolver is provided
         if let Some(resolver) = module_resolver {

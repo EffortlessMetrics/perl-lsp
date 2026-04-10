@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "perl-lsp: watch tests with bacon",
+      "type": "shell",
+      "command": "just dev-watch-tests",
+      "group": "test",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "perl-lsp: nextest local-fast",
+      "type": "shell",
+      "command": "cargo nextest run --profile local-fast --workspace",
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

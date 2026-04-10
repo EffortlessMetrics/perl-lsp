@@ -35,6 +35,11 @@ use perl_symbol_types::{SymbolKind, VarKind};
 ///   `class`).
 /// - `container` — unqualified name of the enclosing package, `None` at
 ///   the top level
+/// - `declarator` — the scope keyword used to declare variables (`"my"`,
+///   `"our"`, `"local"`, `"state"`), or `None` for non-variable declarations
+///   such as subroutines, packages, and constants.  `"our"` variables are
+///   package-scoped and visible across files; `"my"` variables are
+///   lexically-scoped and file-local.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolDecl {
     /// Symbol classification.
@@ -49,6 +54,14 @@ pub struct SymbolDecl {
     pub anchor_span: Option<(usize, usize)>,
     /// Enclosing package name, if the declaration is inside a `package`.
     pub container: Option<String>,
+    /// Scope declarator for variable declarations: `"my"`, `"our"`, `"local"`,
+    /// or `"state"`.  `None` for non-variable declarations (subroutines,
+    /// packages, constants, classes).
+    ///
+    /// `"our"` variables are package-scoped and reachable from other files in
+    /// the same package.  `"my"` variables are lexically-scoped and invisible
+    /// outside their enclosing block.
+    pub declarator: Option<String>,
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -114,6 +127,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: anchor,
                 container,
+                declarator: None,
             });
 
             // If the package has a block, descend with package context scoped
@@ -131,7 +145,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // ── Class ──────────────────────────────────────────────────────────
-        NodeKind::Class { name, body } => {
+        NodeKind::Class { name, body, .. } => {
             let container = ctx.current_package.clone();
             out.push(SymbolDecl {
                 kind: SymbolKind::Class,
@@ -140,6 +154,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: None, // Class has no name_span in current AST
                 container,
+                declarator: None,
             });
 
             // Walk class body with the class name as the package context.
@@ -160,6 +175,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: anchor,
                 container,
+                declarator: None,
             });
             // Walk the body — may contain nested subs or closures.
             walk(body, ctx, out);
@@ -181,13 +197,14 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 full_span: (node.location.start, node.location.end),
                 anchor_span: None, // Method has no name_span in current AST
                 container,
+                declarator: None,
             });
             walk(body, ctx, out);
         }
 
         // ── Variable declarations ──────────────────────────────────────────
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            if let Some(decl) = variable_decl_from_node(variable, node, ctx) {
+        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+            if let Some(decl) = variable_decl_from_node(variable, node, ctx, declarator) {
                 out.push(decl);
             }
             // Walk initializer for nested declarations (e.g. `my $x = sub { }`)
@@ -196,9 +213,9 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
             }
         }
 
-        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
             for var in variables {
-                if let Some(decl) = variable_decl_from_node(var, node, ctx) {
+                if let Some(decl) = variable_decl_from_node(var, node, ctx, declarator) {
                     out.push(decl);
                 }
             }
@@ -223,6 +240,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                         full_span: (node.location.start, node.location.end),
                         anchor_span: None, // No precise span available from Use node
                         container,
+                        declarator: None,
                     });
                 }
             }
@@ -252,9 +270,18 @@ fn walk_statements(statements: &[Node], ctx: &mut WalkCtx, out: &mut Vec<SymbolD
 
 /// Extract a `SymbolDecl` from a `Variable` node inside a `VariableDeclaration`.
 ///
+/// `declarator` is the scope keyword (`"my"`, `"our"`, `"local"`, `"state"`)
+/// from the enclosing declaration node; it is stored on the returned `SymbolDecl`
+/// so consumers can distinguish package-scoped (`our`) from lexical (`my`) symbols.
+///
 /// Returns `None` for non-`Variable` children (e.g. `VariableWithAttributes`
 /// wrapping — in that case the caller should unwrap further).
-fn variable_decl_from_node(var_node: &Node, decl_node: &Node, ctx: &WalkCtx) -> Option<SymbolDecl> {
+fn variable_decl_from_node(
+    var_node: &Node,
+    decl_node: &Node,
+    ctx: &WalkCtx,
+    declarator: &str,
+) -> Option<SymbolDecl> {
     match &var_node.kind {
         NodeKind::Variable { sigil, name } => {
             let kind = sigil_to_symbol_kind(sigil);
@@ -267,10 +294,11 @@ fn variable_decl_from_node(var_node: &Node, decl_node: &Node, ctx: &WalkCtx) -> 
                 full_span: (decl_node.location.start, decl_node.location.end),
                 anchor_span,
                 container,
+                declarator: Some(declarator.to_owned()),
             })
         }
         NodeKind::VariableWithAttributes { variable, .. } => {
-            variable_decl_from_node(variable, decl_node, ctx)
+            variable_decl_from_node(variable, decl_node, ctx, declarator)
         }
         _ => None,
     }

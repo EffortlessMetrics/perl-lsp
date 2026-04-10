@@ -128,6 +128,24 @@ fn numeric_comparison_with_undef_code_exists() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
+#[test]
+fn duplicate_hash_key_code_exists() -> Result<(), Box<dyn std::error::Error>> {
+    let code = DiagnosticCode::DuplicateHashKey;
+    assert_eq!(code.as_str(), "PL408", "DuplicateHashKey should have code PL408");
+    assert_eq!(
+        code.severity(),
+        perl_diagnostics_codes::DiagnosticSeverity::Warning,
+        "DuplicateHashKey should have Warning severity"
+    );
+    assert!(code.context_hint().is_some(), "DuplicateHashKey should have a context hint");
+    assert_eq!(
+        DiagnosticCode::parse_code("PL408"),
+        Some(DiagnosticCode::DuplicateHashKey),
+        "parse_code('PL408') should return DuplicateHashKey"
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Deprecated syntax codes (PL5xx range)
 // ---------------------------------------------------------------------------

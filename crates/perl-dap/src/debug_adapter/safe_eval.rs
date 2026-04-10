@@ -1,7 +1,8 @@
-//! Safe expression evaluation validation.
+//! Safe expression policy validation for debugger evaluation.
 //!
-//! Validates that expressions sent to the Perl debugger for evaluation
-//! do not contain dangerous operations (mutations, I/O, system calls).
+//! Validates that expressions sent to the Perl debugger for evaluation do not
+//! contain dangerous operations when safe evaluation mode is active.
+//! This is admission control, not a sandboxed interpreter boundary.
 
 use super::*;
 
@@ -164,7 +165,10 @@ pub(super) fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
     !is_core_qualified(s, op_start)
 }
 
-/// Validate that an expression is safe for evaluation (non-mutating)
+/// Validate that an expression is safe for evaluation in the policy sense.
+///
+/// This rejects dangerous operations when `allowSideEffects` is false, but it
+/// does not provide interpreter isolation or OS sandboxing.
 ///
 /// AC10.2: Safe evaluation mode validates expressions don't have side effects
 ///

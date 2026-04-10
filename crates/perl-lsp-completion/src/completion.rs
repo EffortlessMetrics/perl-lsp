@@ -113,6 +113,7 @@ pub use self::test_more::get_test_more_documentation;
 
 use perl_parser_core::ast::Node;
 use perl_parser_core::ast::NodeKind;
+use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
@@ -125,6 +126,37 @@ use std::sync::Arc;
 /// - Entry with EMPTY set: `use Module qw()` (explicit empty qw import) — nothing in namespace.
 /// - Entry with non-empty set: `use Module qw(a b)` — only those symbols are imported.
 type ImportMap = HashMap<String, HashSet<String>>;
+
+const MOOSE_TYPE_CANDIDATES: &[&str] = &[
+    "Any",
+    "Item",
+    "Undef",
+    "Defined",
+    "Value",
+    "Bool",
+    "Str",
+    "Num",
+    "Int",
+    "ClassName",
+    "RoleName",
+    "Ref",
+    "ScalarRef",
+    "ArrayRef",
+    "HashRef",
+    "CodeRef",
+    "RegexpRef",
+    "GlobRef",
+    "FileHandle",
+    "Object",
+    "Maybe",
+    "InstanceOf",
+    "ConsumerOf",
+    "HasMethods",
+    "Dict",
+    "Tuple",
+    "Map",
+    "Enum",
+];
 
 /// Completion provider
 pub struct CompletionProvider {
@@ -223,6 +255,48 @@ impl CompletionProvider {
     fn extract_import_map(ast: &Node) -> ImportMap {
         let mut map: ImportMap = HashMap::new();
 
+        fn collect_import_symbols(arg: &str, symbols: &mut HashSet<String>) -> bool {
+            let trimmed = arg.trim();
+            if trimmed.is_empty() {
+                return false;
+            }
+            if matches!(trimmed, "=>" | "," | "(" | ")" | "[" | "]" | "{" | "}") {
+                return false;
+            }
+
+            let mut content = trimmed;
+            if let Some(inner) = content.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                content = inner.trim();
+            }
+
+            if content.starts_with("qw") {
+                content = content
+                    .trim_start_matches("qw")
+                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                    .trim_end_matches(|c: char| ")]}/|!>".contains(c))
+                    .trim();
+
+                for word in content.split_whitespace() {
+                    if !word.is_empty() {
+                        symbols.insert(word.to_string());
+                    }
+                }
+                return !content.is_empty();
+            }
+
+            let cleaned = content.trim_matches(|c: char| c == '\'' || c == '"');
+            if cleaned.is_empty() {
+                return false;
+            }
+
+            for word in cleaned.split_whitespace() {
+                if !word.is_empty() {
+                    symbols.insert(word.to_string());
+                }
+            }
+            true
+        }
+
         fn collect(node: &Node, map: &mut ImportMap) {
             match &node.kind {
                 NodeKind::Use { module, args, .. } => {
@@ -250,29 +324,8 @@ impl CompletionProvider {
                         if arg.starts_with('-') {
                             continue;
                         }
-                        // Skip hash-ref style args
-                        if arg.starts_with('{') {
-                            continue;
-                        }
-
-                        if arg.starts_with("qw") {
-                            let content = arg
-                                .trim_start_matches("qw")
-                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            for word in content.split_whitespace() {
-                                if !word.is_empty() {
-                                    symbols.insert(word.to_string());
-                                    has_symbol_args = true;
-                                }
-                            }
-                        } else {
-                            // Bare string arg (possibly quoted): 'func' or "func"
-                            let cleaned = arg.trim_matches(|c: char| c == '\'' || c == '"');
-                            if !cleaned.is_empty() {
-                                symbols.insert(cleaned.to_string());
-                                has_symbol_args = true;
-                            }
+                        if collect_import_symbols(arg, &mut symbols) {
+                            has_symbol_args = true;
                         }
                     }
 
@@ -513,6 +566,8 @@ impl CompletionProvider {
                 &context,
                 &self.workspace_index,
             );
+        } else if self.is_has_type_value_context(source, position) {
+            self.add_has_type_completions(&mut completions, &context);
         } else if self.is_has_options_key_context(source, position) {
             self.add_has_option_completions(&mut completions, &context);
         } else if (context.trigger_character == Some('>') || context.trigger_character == Some('-'))
@@ -1058,6 +1113,133 @@ impl CompletionProvider {
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch.is_ascii_whitespace())
     }
 
+    /// Check whether the cursor is inside the value position of a Moo/Moose `isa => ...`
+    /// attribute inside a `has(...)` declaration.
+    fn is_has_type_value_context(&self, source: &str, position: usize) -> bool {
+        self.has_option_value_prefix(source, position, "isa").is_some()
+    }
+
+    /// Return the current value prefix for a `has(...)` option if the cursor is in that
+    /// option's value position.
+    fn has_option_value_prefix(
+        &self,
+        source: &str,
+        position: usize,
+        option_name: &str,
+    ) -> Option<String> {
+        if position > source.len() {
+            return None;
+        }
+
+        let prefix = &source[..position];
+        let statement_start = prefix.rfind(';').map(|idx| idx + 1).unwrap_or(0);
+        let statement = &prefix[statement_start..];
+
+        let has_idx = Self::find_keyword(statement, "has")?;
+        let after_has = &statement[has_idx + 3..];
+
+        let arrow_idx = after_has.find("=>")?;
+        let after_arrow = &after_has[arrow_idx + 2..];
+
+        let open_idx = after_arrow.find('(')?;
+        let options_text = &after_arrow[open_idx + 1..];
+
+        // Must still be inside the `(` ... `)` option list.
+        let mut paren_depth = 1i32;
+        for ch in options_text.chars() {
+            if ch == '(' {
+                paren_depth += 1;
+            } else if ch == ')' {
+                paren_depth -= 1;
+                if paren_depth <= 0 {
+                    return None;
+                }
+            }
+        }
+
+        // Find the current top-level option segment (after last comma).
+        let mut depth = 1i32;
+        let mut segment_start = 0usize;
+        for (idx, ch) in options_text.char_indices() {
+            if ch == '(' {
+                depth += 1;
+            } else if ch == ')' {
+                depth -= 1;
+            } else if ch == ',' && depth == 1 {
+                segment_start = idx + 1;
+            }
+        }
+
+        let segment = options_text[segment_start..].trim_start();
+        let option_prefix = segment.strip_prefix(option_name)?;
+        let option_prefix = option_prefix.trim_start().strip_prefix("=>")?;
+
+        Some(option_prefix.trim_start().to_string())
+    }
+
+    /// Add completions for Moo/Moose type constraint values inside `isa => ...`.
+    fn add_has_type_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
+        let prefix = context.prefix.trim();
+        let mut seen: HashSet<String> = completions.iter().map(|item| item.label.clone()).collect();
+
+        let mut push_completion =
+            |label: &str, detail: String, documentation: String, kind: CompletionItemKind| {
+                if !seen.insert(label.to_string()) {
+                    return;
+                }
+
+                completions.push(CompletionItem {
+                    label: label.to_string(),
+                    kind,
+                    detail: Some(detail),
+                    documentation: Some(documentation),
+                    insert_text: Some(label.to_string()),
+                    sort_text: Some(format!("0_{label}")),
+                    filter_text: Some(label.to_string()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: None,
+                });
+            };
+
+        for type_name in MOOSE_TYPE_CANDIDATES {
+            if !prefix.is_empty() && !type_name.starts_with(prefix) {
+                continue;
+            }
+
+            if let Some(doc) = get_moose_type_documentation(type_name) {
+                push_completion(
+                    type_name,
+                    "Built-in Moose type".to_string(),
+                    Self::format_type_documentation(&doc),
+                    CompletionItemKind::Module,
+                );
+            }
+        }
+
+        for (module_name, symbols) in &self.import_map {
+            for symbol in symbols {
+                if !Self::looks_like_type_name(symbol) {
+                    continue;
+                }
+                if !prefix.is_empty() && !symbol.starts_with(prefix) {
+                    continue;
+                }
+
+                push_completion(
+                    symbol,
+                    format!("Imported type from {module_name}"),
+                    format!("Imported from `{module_name}`."),
+                    CompletionItemKind::Module,
+                );
+            }
+        }
+    }
+
     /// Find a keyword in source text using ASCII identifier boundaries.
     fn find_keyword(text: &str, keyword: &str) -> Option<usize> {
         let mut start = 0usize;
@@ -1075,6 +1257,16 @@ impl CompletionProvider {
             start = idx + keyword.len();
         }
         None
+    }
+
+    /// Convert Moose type documentation into a concise completion tooltip.
+    fn format_type_documentation(doc: &BuiltinDoc) -> String {
+        format!("{}\n\n{}", doc.signature, doc.description)
+    }
+
+    /// Return `true` when the label looks like a type name rather than a function.
+    fn looks_like_type_name(label: &str) -> bool {
+        label.chars().next().is_some_and(|c| c.is_ascii_uppercase()) || label.contains("::")
     }
 
     /// Add common Moo/Moose `has` option-key completions.
@@ -1675,6 +1867,38 @@ has 'name' => (re
         assert!(
             completions.iter().any(|item| item.label == "reader"),
             "expected `reader` option completion inside has(...) context"
+        );
+    }
+
+    #[test]
+    fn test_moo_isa_type_completion_includes_builtins_and_imports() {
+        let code = r#"
+use MyApp::Types qw(UserID PositiveInt);
+use Moose;
+
+has 'id' => (
+    is => 'ro',
+    isa => 
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "Str"),
+            "expected built-in Moose type `Str` in isa completion, got: {:?}",
+            completions.iter().map(|item| &item.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|item| item.label == "ArrayRef"),
+            "expected built-in Moose type `ArrayRef` in isa completion"
+        );
+        assert!(
+            completions.iter().any(|item| item.label == "UserID"),
+            "expected imported custom type `UserID` in isa completion"
         );
     }
 

@@ -110,6 +110,11 @@ fn invalid_proto_bare_mixed() {
     assert_has_prototype_warning("sub mixed_proto (XY) { }");
 }
 
+#[test]
+fn typed_signature_type_constraint_does_not_warn() {
+    assert_no_prototype_warning("sub typed_sig (Type $x) { }");
+}
+
 // --- Structural check: invalid prototype still parses as a subroutine ---
 
 #[test]

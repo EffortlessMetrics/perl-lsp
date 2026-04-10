@@ -199,8 +199,10 @@ fn test_use_constant_produces_symbol_decl() {
 fn test_class_produces_symbol_decl() {
     // class Point { }
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(12, 15));
-    let class_node =
-        Node::new(NodeKind::Class { name: "Point".to_string(), body: Box::new(body) }, loc(0, 15));
+    let class_node = Node::new(
+        NodeKind::Class { name: "Point".to_string(), parents: vec![], body: Box::new(body) },
+        loc(0, 15),
+    );
     let program = Node::new(NodeKind::Program { statements: vec![class_node] }, loc(0, 15));
 
     let decls = extract_symbol_decls(&program, None);
@@ -298,6 +300,210 @@ fn test_subroutine_inside_package_block() -> Result<(), String> {
     Ok(())
 }
 
+// ── Declarator tracking ───────────────────────────────────────────────────────
+
+#[test]
+fn test_our_variable_has_declarator() {
+    // our $VERSION = '1.0';
+    let var = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "VERSION".to_string() },
+        loc(4, 12),
+    );
+    let decl_node = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "our".to_string(),
+            variable: Box::new(var),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 12),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 12));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].declarator.as_deref(), Some("our"));
+}
+
+#[test]
+fn test_my_variable_has_declarator() {
+    // my $x = 42;
+    let var =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(3, 5));
+    let decl_node = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(var),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 5),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 5));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].declarator.as_deref(), Some("my"));
+}
+
+#[test]
+fn test_state_variable_has_declarator() {
+    // state $count = 0;
+    let var = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "count".to_string() },
+        loc(6, 12),
+    );
+    let decl_node = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "state".to_string(),
+            variable: Box::new(var),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 12),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 12));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].declarator.as_deref(), Some("state"));
+}
+
+#[test]
+fn test_local_variable_has_declarator() {
+    // local $x = 1;
+    let var =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(6, 8));
+    let decl_node = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "local".to_string(),
+            variable: Box::new(var),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 8),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 8));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].declarator.as_deref(), Some("local"));
+}
+
+#[test]
+fn test_our_vs_my_declarations_are_distinguished() -> Result<(), String> {
+    // our $GLOBAL = 1; my $local = 2;
+    let var_our = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "GLOBAL".to_string() },
+        loc(4, 11),
+    );
+    let decl_our = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "our".to_string(),
+            variable: Box::new(var_our),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 11),
+    );
+
+    let var_my = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "local".to_string() },
+        loc(16, 22),
+    );
+    let decl_my = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(var_my),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(13, 22),
+    );
+
+    let program = Node::new(NodeKind::Program { statements: vec![decl_our, decl_my] }, loc(0, 22));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 2);
+
+    let our_decl = decls.iter().find(|d| d.name == "GLOBAL").ok_or("expected GLOBAL decl")?;
+    assert_eq!(our_decl.declarator.as_deref(), Some("our"), "GLOBAL should have 'our' declarator");
+
+    let my_decl = decls.iter().find(|d| d.name == "local").ok_or("expected local decl")?;
+    assert_eq!(my_decl.declarator.as_deref(), Some("my"), "local should have 'my' declarator");
+
+    Ok(())
+}
+
+#[test]
+fn test_our_variables_in_list_declaration_have_declarator() -> Result<(), String> {
+    // our ($FOO, $BAR);
+    let var_foo = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "FOO".to_string() },
+        loc(5, 9),
+    );
+    let var_bar = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "BAR".to_string() },
+        loc(11, 15),
+    );
+    let decl_node = Node::new(
+        NodeKind::VariableListDeclaration {
+            declarator: "our".to_string(),
+            variables: vec![var_foo, var_bar],
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 16),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 16));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 2);
+    for d in &decls {
+        assert_eq!(
+            d.declarator.as_deref(),
+            Some("our"),
+            "expected 'our' declarator for {} but got {:?}",
+            d.name,
+            d.declarator
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn test_non_variable_decls_have_no_declarator() {
+    // sub greet { }
+    let body = Node::new(NodeKind::Block { statements: vec![] }, loc(10, 13));
+    let sub_node = Node::new(
+        NodeKind::Subroutine {
+            name: Some("greet".to_string()),
+            name_span: Some(loc(4, 9)),
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(body),
+        },
+        loc(0, 13),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![sub_node] }, loc(0, 13));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    assert!(
+        decls[0].declarator.is_none(),
+        "subroutines should have no declarator, got {:?}",
+        decls[0].declarator
+    );
+}
+
 // ── SymbolDecl structural properties ─────────────────────────────────────────
 
 #[test]
@@ -309,6 +515,7 @@ fn test_symbol_decl_derives() {
         full_span: (0, 10),
         anchor_span: Some((4, 7)),
         container: Some("Foo".to_string()),
+        declarator: None,
     };
     // Must be Clone, Debug, PartialEq
     let d2 = d.clone();

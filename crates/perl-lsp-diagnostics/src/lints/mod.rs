@@ -83,6 +83,7 @@
 //! | `PL200` | Warning | File has no package declaration |
 //! | `PL201` | Warning | Package name declared more than once |
 //! | `PL300` | Warning | Subroutine name defined more than once |
+//! | `PL303` | Warning | Same-file Moo/Moose roles provide conflicting methods |
 //!
 //! ## Dead code (`dead_code.rs`)
 //!
@@ -98,6 +99,12 @@
 //! | Code | Severity | Description |
 //! |------|----------|-------------|
 //! | `PL406` | Hint | Statement cannot be reached due to preceding unconditional exit |
+//!
+//! ## Duplicate hash keys (`duplicate_hash_keys.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL408` | Warning | Hash key appears more than once in the same literal |
 //!
 //! # Severity Levels
 //!
@@ -118,14 +125,18 @@
 
 pub mod common_mistakes;
 pub mod deprecated;
+/// Duplicate hash key detection (PL408)
+pub mod duplicate_hash_keys;
 /// Conservative `$@` / `$EVAL_ERROR` flow checks after `eval` / `try`
 pub mod eval_error_flow;
 /// Missing module detection (PL701)
 pub mod missing_module;
-/// Package and subroutine diagnostics (PL200, PL201, PL300)
+/// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)
 pub mod package_subroutine;
 /// printf/sprintf format specifier arity validation (PL405)
 pub mod printf_format;
+/// Same-file Moo/Moose role conflict detection (PL303)
+pub mod role_conflicts;
 pub mod security;
 pub mod strict_warnings;
 /// Unreachable code detection (PL406)

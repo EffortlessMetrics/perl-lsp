@@ -482,6 +482,8 @@ cargo nextest run --profile local-fast --workspace
 
 **Purpose**: Rapid iteration during development with balanced parallelization.
 
+For a practical editor/watch walkthrough, see [Continuous Testing](../how-to/CONTINUOUS_TESTING.md).
+
 ---
 
 ## Known Flaky Tests

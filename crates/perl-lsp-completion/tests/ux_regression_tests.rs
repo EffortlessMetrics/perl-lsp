@@ -224,6 +224,10 @@ fn use_uppercase_prefix_suggests_workspace_module() -> Result<(), Box<dyn std::e
         Url::parse("file:///lib/Strings/Utils.pm")?,
         "package Strings::Utils;\nsub trim { }\n1;\n".to_string(),
     )?;
+    index.index_file(
+        Url::parse("file:///lib/Config/Loader.pm")?,
+        "package Config::Loader;\nsub load { }\n1;\n".to_string(),
+    )?;
 
     let code = "use Str";
     let items = completions_with_index(code, code.len(), index);
@@ -231,6 +235,11 @@ fn use_uppercase_prefix_suggests_workspace_module() -> Result<(), Box<dyn std::e
     assert!(
         items.iter().any(|i| i.label.starts_with("Str") && i.kind == CompletionItemKind::Module),
         "typing 'use Str' (uppercase) must suggest matching workspace modules; got: {:?}",
+        labels(&items)
+    );
+    assert!(
+        !has_label(&items, "Config::Loader"),
+        "typing 'use Str' must not suggest unrelated workspace modules; got: {:?}",
         labels(&items)
     );
     Ok(())
@@ -346,6 +355,20 @@ fn no_builtin_completions_inside_double_quoted_string() {
     assert!(
         !has_label(&items, "printf"),
         "'printf' must not be suggested inside a string literal; got: {:?}",
+        labels(&items)
+    );
+}
+
+#[test]
+fn no_completions_inside_single_quoted_string() {
+    // Single-quoted strings do not interpolate, so the engine should suppress
+    // the usual completion categories entirely.
+    let code = "my $x = 'pri";
+    let items = completions_at_end(code);
+
+    assert!(
+        items.is_empty(),
+        "no completions should appear inside a single-quoted string; got: {:?}",
         labels(&items)
     );
 }

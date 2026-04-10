@@ -231,7 +231,7 @@ impl FoldingRangeExtractor {
                 self.visit_node(block);
             }
 
-            NodeKind::Class { name: _, body } => {
+            NodeKind::Class { body, .. } => {
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
             }

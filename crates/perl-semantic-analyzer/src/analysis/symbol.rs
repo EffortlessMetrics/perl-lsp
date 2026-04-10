@@ -340,6 +340,29 @@ pub enum WebFrameworkKind {
     MojoliciousLite,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Async framework variant detected via `use` statements during Parse/Analyze workflows.
+pub enum AsyncFrameworkKind {
+    /// `use AnyEvent;`
+    AnyEvent,
+    /// `use Future;`
+    Future,
+    /// `use Future::XS;`
+    FutureXS,
+    /// `use Promise;`
+    Promise,
+    /// `use Promise::XS;`
+    PromiseXS,
+    /// `use POE;`
+    POE,
+    /// `use IO::Async;`
+    IOAsync,
+    /// `use Mojo::Redis;`
+    MojoRedis,
+    /// `use Mojo::Pg;`
+    MojoPg,
+}
+
 #[derive(Debug, Clone, Default)]
 /// Per-package framework detection flags used in Parse/Analyze workflows.
 pub struct FrameworkFlags {
@@ -351,6 +374,8 @@ pub struct FrameworkFlags {
     pub kind: Option<FrameworkKind>,
     /// Web framework variant, if any (Dancer2, Mojolicious::Lite).
     pub web_framework: Option<WebFrameworkKind>,
+    /// Async framework variant, if any (IO::Async).
+    pub async_framework: Option<AsyncFrameworkKind>,
 }
 
 /// Extract symbols from an AST for Parse/Index workflows.
@@ -650,6 +675,7 @@ impl SymbolExtractor {
                     is_write: false,
                 });
 
+                self.synthesize_async_framework_class_symbol(object);
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -711,9 +737,24 @@ impl SymbolExtractor {
                 // We don't currently track framework deactivation via `no`.
             }
 
-            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
-                // BEGIN, END, CHECK, INIT blocks
+            NodeKind::PhaseBlock { phase, phase_span: _, block } => {
+                // BEGIN, END, CHECK, INIT, UNITCHECK blocks — expose as named symbols
+                // so they appear in document outline / Outline View (#3464).
+                let symbol = Symbol {
+                    name: phase.clone(),
+                    qualified_name: format!("{}::{}", self.table.current_package, phase),
+                    kind: SymbolKind::Subroutine,
+                    location: node.location,
+                    scope_id: self.table.current_scope(),
+                    declaration: None,
+                    documentation: None,
+                    attributes: vec![],
+                };
+                self.table.add_symbol(symbol);
+
+                self.table.push_scope(ScopeKind::Block, node.location);
                 self.visit_node(block);
+                self.table.pop_scope();
             }
 
             NodeKind::StatementModifier { statement, modifier: _, condition } => {
@@ -749,7 +790,7 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 let symbol = Symbol {
                     name: name.clone(),
@@ -1572,6 +1613,69 @@ impl SymbolExtractor {
         true
     }
 
+    /// Synthesize class symbols for async framework namespaces used in method-call form.
+    fn synthesize_async_framework_class_symbol(&mut self, object: &Node) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+
+        let (module_name, framework_name, exact_match) = match flags.async_framework {
+            Some(AsyncFrameworkKind::AnyEvent) => ("AnyEvent", "AnyEvent", false),
+            Some(AsyncFrameworkKind::Future) => ("Future", "Future", true),
+            Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
+            Some(AsyncFrameworkKind::Promise) => ("Promise", "Promise", true),
+            Some(AsyncFrameworkKind::PromiseXS) => ("Promise::XS", "Promise::XS", true),
+            Some(AsyncFrameworkKind::POE) => ("POE", "POE", false),
+            Some(AsyncFrameworkKind::IOAsync) => ("IO::Async", "IO::Async", false),
+            Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis", true),
+            Some(AsyncFrameworkKind::MojoPg) => ("Mojo::Pg", "Mojo::Pg", true),
+            None => return false,
+        };
+
+        let Some(name) = Self::single_symbol_name(object) else {
+            return false;
+        };
+        if flags.async_framework == Some(AsyncFrameworkKind::AnyEvent) {
+            if !matches!(
+                name.as_str(),
+                "AnyEvent" | "AnyEvent::CondVar" | "AnyEvent::Timer" | "AnyEvent::IO"
+            ) {
+                return false;
+            }
+        } else if exact_match {
+            if name != module_name {
+                return false;
+            }
+        } else if !name.starts_with(&format!("{module_name}::")) {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(&name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Class
+                    && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        let framework_attr = format!("framework={framework_name}");
+
+        self.table.add_symbol(Symbol {
+            name: name.clone(),
+            qualified_name: name.clone(),
+            kind: SymbolKind::Class,
+            location: object.location,
+            scope_id: self.table.current_scope(),
+            declaration: Some(framework_attr.clone()),
+            documentation: Some(format!("Synthetic {framework_name} class")),
+            attributes: vec![framework_attr],
+        });
+
+        true
+    }
+
     /// Update framework detection state from `use` statements.
     fn update_framework_context(&mut self, module: &str, args: &[String]) {
         let pkg = self.table.current_package.clone();
@@ -1603,6 +1707,60 @@ impl SymbolExtractor {
         };
         if let Some(kind) = web_kind {
             self.framework_flags.entry(pkg).or_default().web_framework = Some(kind);
+            return;
+        }
+
+        if module == "IO::Async" || module.starts_with("IO::Async::") {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::IOAsync);
+            return;
+        }
+
+        if module == "AnyEvent" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::AnyEvent);
+            return;
+        }
+
+        if module == "Future" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::Future);
+            return;
+        }
+
+        if module == "Future::XS" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::FutureXS);
+            return;
+        }
+
+        if module == "Promise" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::Promise);
+            return;
+        }
+
+        if module == "Promise::XS" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::PromiseXS);
+            return;
+        }
+
+        if module == "POE" || module.starts_with("POE::") {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::POE);
+            return;
+        }
+
+        if module == "Mojo::Redis" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoRedis);
+            return;
+        }
+
+        if module == "Mojo::Pg" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoPg);
             return;
         }
 

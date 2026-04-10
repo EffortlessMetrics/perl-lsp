@@ -9,8 +9,10 @@ Choose the path that matches what you are trying to do:
 | I want to... | Read this first |
 |---|---|
 | Install the language server | [Installation Guide](how-to/INSTALLATION.md) |
+| Integrate perl-lsp into GitHub Actions | [GitHub Actions Integration](how-to/GITHUB_ACTIONS.md) |
 | Upgrade an existing installation | [Upgrading](how-to/UPGRADING.md) |
 | Get a working editor setup quickly | [Getting Started](tutorials/GETTING_STARTED.md) |
+| Set up continuous testing and watch loops | [Continuous Testing](how-to/CONTINUOUS_TESTING.md) |
 | Configure editor or workspace settings | [Configuration Reference](reference/CONFIG.md) |
 | Share project settings with my team | [Project Configuration File (.perl-lsp.toml)](reference/CONFIG.md#project-configuration-file-perl-lsptoml) |
 | Troubleshoot startup, indexing, or editor issues | [Troubleshooting](how-to/TROUBLESHOOTING.md) |
@@ -35,9 +37,11 @@ Hands-on guides for learning the system by doing.
 Task-focused instructions for common operational and development workflows.
 
 - [Installation Guide](how-to/INSTALLATION.md)
+- [GitHub Actions Integration](how-to/GITHUB_ACTIONS.md)
 - [Upgrading](how-to/UPGRADING.md)
 - [Editor Setup](how-to/EDITOR_SETUP.md)
 - [Troubleshooting](how-to/TROUBLESHOOTING.md)
+- [Continuous Testing](how-to/CONTINUOUS_TESTING.md)
 - [Contributing LSP Features](how-to/CONTRIBUTING_LSP.md)
 - [Threading Configuration Guide](how-to/THREADING_CONFIGURATION_GUIDE.md)
 - [Performance Tuning](how-to/PERFORMANCE_TUNING.md)

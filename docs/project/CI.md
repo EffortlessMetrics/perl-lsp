@@ -24,6 +24,27 @@ gate.
 - `just gates`
 - receipt upload and status reporting
 
+## GitLab CI Template
+
+Use [`templates/ci/gitlab/.gitlab-ci.yml`](../../templates/ci/gitlab/.gitlab-ci.yml)
+as the starting point for GitLab-hosted repos or self-managed runners.
+
+The template keeps the GitLab jobs intentionally small:
+
+- `fmt`, `clippy`, and `test` run as separate jobs in the same stage so GitLab
+  can schedule them in parallel.
+- Cargo state is cached under `.cargo/` and `target/`, keyed by `Cargo.lock`.
+- The default image is the stock Rust image, but you can swap in a GitLab
+  Container Registry image if you want to preinstall toolchains or share a
+  custom CI environment.
+
+Example registry image override:
+
+```yaml
+default:
+  image: $CI_REGISTRY_IMAGE/ci/rust:1.92-bookworm
+```
+
 ## Local Equivalents
 
 Use these commands in the same order when iterating locally:

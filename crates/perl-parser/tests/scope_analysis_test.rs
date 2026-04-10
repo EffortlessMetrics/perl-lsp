@@ -24,7 +24,15 @@ fn analyze_strict(code: &str) -> Vec<ScopeIssue> {
     // Create a pragma map with strict enabled for the whole file
     let pragma_map = vec![(
         0..code.len(),
-        PragmaState { strict_refs: true, strict_subs: true, strict_vars: true, warnings: true },
+        PragmaState {
+            strict_refs: true,
+            strict_subs: true,
+            strict_vars: true,
+            warnings: true,
+            disabled_warning_categories: Vec::new(),
+            features: Vec::new(),
+            builtin_imports: Vec::new(),
+        },
     )];
 
     analyzer.analyze(&ast, code, &pragma_map)

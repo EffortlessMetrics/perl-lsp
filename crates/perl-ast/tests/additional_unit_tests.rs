@@ -428,7 +428,11 @@ fn for_each_child_mut_visits_phase_block() {
 #[test]
 fn for_each_child_mut_visits_class() {
     let mut node = Node::new(
-        NodeKind::Class { name: "Point".to_string(), body: Box::new(block_node(vec![])) },
+        NodeKind::Class {
+            name: "Point".to_string(),
+            parents: vec![],
+            body: Box::new(block_node(vec![])),
+        },
         loc(0, 15),
     );
     let mut count = 0;

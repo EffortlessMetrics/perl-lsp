@@ -638,6 +638,7 @@ just dev-watch-tests      # core test loop
 ```
 
 The watch recipes use `bacon.toml` with project-tuned jobs for faster local feedback loops.
+For a walkthrough and editor task example, see [Continuous Testing](../how-to/CONTINUOUS_TESTING.md).
 
 ## Dual-Scanner Corpus Comparison (*Diataxis: How-to Guide* - Testing procedures)
 

@@ -1,14 +1,27 @@
-use serde_json::json;
+use serde_json::{Value, json};
 use std::time::Duration;
 
 mod common;
 use common::{
-    completion_items, initialize_lsp, send_notification, send_request, shutdown_and_exit,
-    start_lsp_server,
+    completion_items, drain_until_quiet, initialize_lsp, send_notification, send_request,
+    short_timeout, shutdown_and_exit, start_lsp_server,
 };
 
 /// Test suite for error recovery scenarios
 /// Ensures the LSP server can recover from various error states
+
+fn hover_text(result: &Value) -> Option<String> {
+    let contents = result.get("contents")?;
+    if let Some(text) = contents.as_str() {
+        return Some(text.to_string());
+    }
+
+    if let Some(obj) = contents.as_object() {
+        return obj.get("value").and_then(|v| v.as_str()).map(|s| s.to_string());
+    }
+
+    None
+}
 
 #[test]
 fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
@@ -432,6 +445,124 @@ sub broken {
 
     // Should suggest "print" despite earlier error
     assert!(items.iter().any(|item| item["label"] == "print"));
+    shutdown_and_exit(&server);
+    Ok(())
+}
+
+#[test]
+fn test_partial_ast_and_features_survive_syntax_error() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///partial_after_error.pl";
+    let content = "\
+my $broken = ;  # Syntax error above valid code
+sub usable_feature {
+    my $value = 42;
+    return $value;
+}
+
+my $result = usable_feature();
+pri
+";
+
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": content
+                }
+            }
+        }),
+    );
+
+    drain_until_quiet(&server, short_timeout(), Duration::from_secs(2));
+
+    let symbol_response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/documentSymbol",
+            "params": {
+                "textDocument": {
+                    "uri": uri
+                }
+            }
+        }),
+    );
+    let symbols =
+        symbol_response["result"].as_array().ok_or("documentSymbol should return an array")?;
+    assert!(
+        symbols.iter().any(|symbol| symbol["name"] == "usable_feature"),
+        "partial AST should still include the valid subroutine after the syntax error: {symbols:?}"
+    );
+
+    let hover_response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/hover",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 1, "character": 5 }
+            }
+        }),
+    );
+    let hover_text = hover_text(&hover_response["result"])
+        .ok_or("hover should return contents for usable_feature")?;
+    assert!(
+        hover_text.contains("usable_feature"),
+        "hover on the valid subroutine after the syntax error should mention the symbol, got: {hover_text}"
+    );
+
+    let completion_response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 7, "character": 3 }
+            }
+        }),
+    );
+    let items = completion_items(&completion_response);
+    let labels: Vec<String> =
+        items.iter().filter_map(|item| item["label"].as_str().map(|s| s.to_string())).collect();
+    assert!(
+        labels.iter().any(|label| label == "print"),
+        "completion after the syntax error should still suggest valid keywords, got: {labels:?}"
+    );
+
+    let definition_response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/definition",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 6, "character": 14 }
+            }
+        }),
+    );
+    let definitions = definition_response["result"]
+        .as_array()
+        .ok_or("definition should return a location array")?;
+    assert!(
+        !definitions.is_empty(),
+        "go-to-definition should still resolve the valid call after the syntax error"
+    );
+    assert!(
+        definitions[0]["uri"].as_str().is_some_and(|actual| actual == uri),
+        "definition should point back to the same file, got: {definitions:?}"
+    );
+
     shutdown_and_exit(&server);
     Ok(())
 }

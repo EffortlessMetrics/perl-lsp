@@ -19,7 +19,10 @@ pub use sandbox::{SafeExecutor, Sandbox, SandboxConfig, SandboxResult};
 /// Security configuration for the LSP server
 #[derive(Debug, Clone)]
 pub struct SecurityConfig {
-    /// Maximum file size for parsing (bytes)
+    /// Maximum file size for parsing (bytes).
+    ///
+    /// Defaults to the value from [`perl_lsp_limits::LspLimits`] (1MB).
+    /// Adjust via `perl.limits.maxFileSizeBytes` in LSP settings.
     pub max_file_size: usize,
     /// Maximum path length
     pub max_path_length: usize,
@@ -34,7 +37,7 @@ pub struct SecurityConfig {
 impl Default for SecurityConfig {
     fn default() -> Self {
         Self {
-            max_file_size: 10 * 1024 * 1024, // 10MB
+            max_file_size: perl_lsp_limits::max_file_size_bytes(),
             max_path_length: 4096,
             allowed_extensions: vec![
                 "pl".to_string(),
@@ -113,7 +116,9 @@ mod tests {
     #[test]
     fn test_security_config_default() {
         let config = SecurityConfig::default();
-        assert_eq!(config.max_file_size, 10 * 1024 * 1024);
+        // max_file_size must match the single source of truth in perl-lsp-limits
+        assert_eq!(config.max_file_size, perl_lsp_limits::max_file_size_bytes());
+        assert_eq!(config.max_file_size, 1_024 * 1_024, "default must be 1MB from LspLimits");
         assert_eq!(config.max_path_length, 4096);
         assert!(config.strict_mode);
         assert_eq!(config.allowed_extensions.len(), 4);

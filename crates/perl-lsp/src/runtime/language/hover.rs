@@ -85,11 +85,17 @@ impl LspServer {
 
                         // Check for `use Module` at this offset first
                         if let Some(module_name) = Self::find_use_module_at_offset(ast, offset) {
-                            HoverExtracted::UseModule(
-                                module_name,
-                                doc.text.clone(),
-                                uri.to_string(),
-                            )
+                            // If the module is a known pragma, return pragma docs immediately
+                            // without doing module file resolution.
+                            if let Some(pragma_hover) = Self::build_pragma_hover(&module_name) {
+                                HoverExtracted::Complete(pragma_hover)
+                            } else {
+                                HoverExtracted::UseModule(
+                                    module_name,
+                                    doc.text.clone(),
+                                    uri.to_string(),
+                                )
+                            }
                         } else if let Some(module_name) =
                             Self::find_with_module_at_offset(ast, offset)
                         {
@@ -139,20 +145,15 @@ impl LspServer {
 
         if let Some(symbol_info) = analyzer.find_definition(offset) {
             // Detect Moo/Moose attribute accessors (declaration == "has") early and
-            // render a dedicated card that shows the isa type and accessor mode clearly,
+            // render a dedicated card that shows the attribute metadata clearly,
             // instead of the generic "Subroutine" label which is misleading for accessors.
             if symbol_info.declaration.as_deref() == Some("has") {
                 let accessor_name = &symbol_info.name;
-                let doc = symbol_info
-                    .documentation
-                    .as_deref()
-                    .unwrap_or("Generated accessor from Moo/Moose `has`");
+                let doc = Self::format_moo_accessor_hover(accessor_name, &symbol_info.attributes);
                 return HoverExtracted::Complete(json!({
                     "contents": {
                         "kind": "markdown",
-                        "value": format!(
-                            "**Moo/Moose Attribute Accessor**\n\n`{accessor_name}` — {doc}"
-                        ),
+                        "value": doc,
                     },
                 }));
             }
@@ -403,6 +404,130 @@ impl LspServer {
         }
 
         HoverExtracted::None
+    }
+
+    fn format_moo_accessor_hover(name: &str, attributes: &[String]) -> String {
+        let isa = Self::moo_attribute_value(attributes, "isa");
+        let access = Self::moo_attribute_value(attributes, "is").map(Self::describe_access_mode);
+        let required = Self::moo_attribute_value(attributes, "required").map(Self::describe_truthy);
+        let predicate = Self::moo_accessor_method_name(name, attributes, "predicate", "has_");
+        let builder = Self::moo_accessor_method_name(name, attributes, "builder", "_build_");
+        let clearer = Self::moo_accessor_method_name(name, attributes, "clearer", "clear_");
+        let reader = Self::moo_attribute_value(attributes, "reader");
+        let writer = Self::moo_attribute_value(attributes, "writer");
+        let accessor = Self::moo_attribute_value(attributes, "accessor");
+        let lazy = Self::moo_attribute_value(attributes, "lazy").map(Self::describe_truthy);
+        let default = Self::moo_attribute_value(attributes, "default");
+
+        let mut lines = vec!["**Moo/Moose Attribute Accessor**".to_string(), String::new()];
+        lines.push(format!("**Attribute**: `{name}`"));
+
+        if let Some(isa) = isa {
+            lines.push(format!("**Type**: `{isa}`"));
+        }
+        if let Some(access) = access {
+            lines.push(format!("**Access**: {access}"));
+        }
+        if let Some(required) = required {
+            lines.push(format!("**Required**: {required}"));
+        }
+        if let Some(predicate) = predicate {
+            lines.push(format!("**Predicate**: `{predicate}`"));
+        }
+        if let Some(builder) = builder {
+            lines.push(format!("**Builder**: `{builder}`"));
+        }
+        if let Some(clearer) = clearer {
+            lines.push(format!("**Clearer**: `{clearer}`"));
+        }
+        if let Some(reader) = reader {
+            lines.push(format!("**Reader**: `{reader}`"));
+        }
+        if let Some(writer) = writer {
+            lines.push(format!("**Writer**: `{writer}`"));
+        }
+        if let Some(accessor) = accessor {
+            lines.push(format!("**Accessor**: `{accessor}`"));
+        }
+        if let Some(lazy) = lazy {
+            lines.push(format!("**Lazy**: {lazy}"));
+        }
+        if let Some(default) = default {
+            lines.push(format!("**Default**: `{default}`"));
+        }
+
+        let extras: Vec<String> = attributes
+            .iter()
+            .filter_map(|attr| {
+                let (key, _) = attr.split_once('=')?;
+                if matches!(
+                    key,
+                    "isa"
+                        | "is"
+                        | "required"
+                        | "predicate"
+                        | "builder"
+                        | "clearer"
+                        | "reader"
+                        | "writer"
+                        | "accessor"
+                        | "lazy"
+                        | "default"
+                ) {
+                    None
+                } else {
+                    Some(attr.clone())
+                }
+            })
+            .collect();
+        if !extras.is_empty() {
+            lines.push(format!("**Options**: {}", extras.join(", ")));
+        }
+
+        lines.join("\n")
+    }
+
+    fn moo_attribute_value<'a>(attributes: &'a [String], key: &str) -> Option<&'a str> {
+        attributes.iter().find_map(|attr| {
+            let (attr_key, value) = attr.split_once('=')?;
+            if attr_key == key { Some(value) } else { None }
+        })
+    }
+
+    fn describe_access_mode(value: &str) -> String {
+        match value {
+            "ro" => "read-only".to_string(),
+            "rw" => "read-write".to_string(),
+            "rwp" => "read-write private".to_string(),
+            "lazy" => "lazy".to_string(),
+            other => other.to_string(),
+        }
+    }
+
+    fn describe_truthy(value: &str) -> String {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" => "yes".to_string(),
+            "0" | "false" | "no" => "no".to_string(),
+            other => other.to_string(),
+        }
+    }
+
+    fn moo_accessor_method_name(
+        name: &str,
+        attributes: &[String],
+        key: &str,
+        default_prefix: &str,
+    ) -> Option<String> {
+        let value = Self::moo_attribute_value(attributes, key)?;
+        if Self::is_truthy(value) {
+            Some(format!("{default_prefix}{name}"))
+        } else {
+            Some(value.to_string())
+        }
+    }
+
+    fn is_truthy(value: &str) -> bool {
+        matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
     }
 
     /// Extract the receiver token immediately before `->` at `offset`.
@@ -675,6 +800,31 @@ impl LspServer {
                 ),
             },
         })
+    }
+
+    /// Build a hover response for a known Perl pragma (e.g. `strict`, `warnings`).
+    ///
+    /// Returns `Some(Value)` when `module_name` is a recognized pragma with inline
+    /// documentation, or `None` when it should fall through to regular module resolution.
+    fn build_pragma_hover(module_name: &str) -> Option<Value> {
+        let doc = crate::semantic::get_pragma_documentation(module_name)?;
+
+        let version_line =
+            doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
+
+        let perldoc_link =
+            format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**Pragma: `{module_name}`**\n\n_{summary}_\n\n{description}{version_line}\n\n{perldoc_link}",
+                    summary = doc.summary,
+                    description = doc.description,
+                ),
+            },
+        }))
     }
 
     /// Extract POD documentation from a module file and format it for hover display.

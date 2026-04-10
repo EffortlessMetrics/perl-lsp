@@ -1,0 +1,299 @@
+# Composite action for installing perl-lsp in consumer CI workflows.
+# Usage:
+#   - uses: EffortlessMetrics/perl-lsp/.github/actions/setup-perl-lsp@master
+#     with:
+#       version: '0.12.3'  # or 'latest'
+#       cache: true
+#       build-from-source: false
+
+name: 'Setup Perl LSP'
+description: 'Installs the perllsp binary from a GitHub release or source build'
+
+inputs:
+  version:
+    description: 'Release version to install (use latest for the newest published release)'
+    required: false
+    default: 'latest'
+  cache:
+    description: 'Cache the installed binary directory between workflow runs'
+    required: false
+    default: 'true'
+  install-dir:
+    description: 'Directory where perllsp should be installed'
+    required: false
+    default: ''
+  build-from-source:
+    description: 'Build perllsp from source instead of downloading a release asset'
+    required: false
+    default: 'false'
+
+outputs:
+  version:
+    description: 'Resolved version number without the v prefix'
+    value: ${{ steps.resolve.outputs.version }}
+  install-dir:
+    description: 'Directory containing the installed perllsp binary'
+    value: ${{ steps.resolve.outputs.install_dir }}
+  binary-path:
+    description: 'Full path to the installed perllsp binary'
+    value: ${{ steps.resolve.outputs.binary_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve version and platform
+      id: resolve
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_INSTALL_DIR: ${{ inputs.install-dir }}
+        INPUT_BUILD_FROM_SOURCE: ${{ inputs.build-from-source }}
+      run: |
+        set -euo pipefail
+
+        repo="EffortlessMetrics/perl-lsp"
+        version_input="${INPUT_VERSION:-latest}"
+
+        if [ "$version_input" = "latest" ]; then
+          tag="$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" | python -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
+        else
+          tag="$version_input"
+          case "$tag" in
+            v*) ;;
+            *) tag="v$tag" ;;
+          esac
+        fi
+
+        version="${tag#v}"
+        install_dir="${INPUT_INSTALL_DIR:-$RUNNER_TEMP/perl-lsp/bin}"
+        mode="release"
+
+        case "$RUNNER_OS" in
+          Linux)
+            case "$RUNNER_ARCH" in
+              X64) target="x86_64-unknown-linux-gnu" ;;
+              ARM64) target="aarch64-unknown-linux-gnu" ;;
+              *)
+                if [ "${INPUT_BUILD_FROM_SOURCE:-false}" = "true" ]; then
+                  mode="source"
+                  target="source"
+                else
+                  echo "::error::Unsupported Linux architecture: $RUNNER_ARCH"
+                  exit 1
+                fi
+                ;;
+            esac
+            ;;
+          macOS)
+            case "$RUNNER_ARCH" in
+              X64) target="x86_64-apple-darwin" ;;
+              ARM64) target="aarch64-apple-darwin" ;;
+              *)
+                if [ "${INPUT_BUILD_FROM_SOURCE:-false}" = "true" ]; then
+                  mode="source"
+                  target="source"
+                else
+                  echo "::error::Unsupported macOS architecture: $RUNNER_ARCH"
+                  exit 1
+                fi
+                ;;
+            esac
+            ;;
+          Windows)
+            case "$RUNNER_ARCH" in
+              X64) target="x86_64-pc-windows-msvc" ;;
+              *)
+                if [ "${INPUT_BUILD_FROM_SOURCE:-false}" = "true" ]; then
+                  mode="source"
+                  target="source"
+                else
+                  echo "::error::Unsupported Windows architecture: $RUNNER_ARCH"
+                  exit 1
+                fi
+                ;;
+            esac
+            ;;
+          *)
+            echo "::error::Unsupported runner OS: $RUNNER_OS"
+            exit 1
+            ;;
+        esac
+
+        case "$RUNNER_OS" in
+          Windows) binary_name="perllsp.exe" ;;
+          *) binary_name="perllsp" ;;
+        esac
+
+        mkdir -p "$install_dir"
+
+        if [ "$mode" = "release" ]; then
+          asset_ext="tar.gz"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            asset_ext="zip"
+          fi
+          asset_name="perllsp-${version}-${target}.${asset_ext}"
+        else
+          asset_ext="source"
+          asset_name="source-build"
+        fi
+
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "target=$target" >> "$GITHUB_OUTPUT"
+        echo "mode=$mode" >> "$GITHUB_OUTPUT"
+        echo "asset_ext=$asset_ext" >> "$GITHUB_OUTPUT"
+        echo "asset_name=$asset_name" >> "$GITHUB_OUTPUT"
+        echo "install_dir=$install_dir" >> "$GITHUB_OUTPUT"
+        echo "binary_name=$binary_name" >> "$GITHUB_OUTPUT"
+        echo "binary_path=$install_dir/$binary_name" >> "$GITHUB_OUTPUT"
+
+    - name: Restore cached installation
+      id: cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.resolve.outputs.install_dir }}
+        key: perl-lsp-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.version }}-${{ steps.resolve.outputs.mode }}
+
+    - name: Checkout perl-lsp source
+      if: steps.cache.outputs.cache-hit != 'true' && steps.resolve.outputs.mode == 'source'
+      uses: actions/checkout@v4
+      with:
+        repository: EffortlessMetrics/perl-lsp
+        ref: ${{ steps.resolve.outputs.tag }}
+        path: ${{ runner.temp }}/perl-lsp-source
+
+    - name: Install release binary
+      if: steps.cache.outputs.cache-hit != 'true' && steps.resolve.outputs.mode == 'release'
+      shell: bash
+      env:
+        REPO: EffortlessMetrics/perl-lsp
+        TAG: ${{ steps.resolve.outputs.tag }}
+        VERSION: ${{ steps.resolve.outputs.version }}
+        TARGET: ${{ steps.resolve.outputs.target }}
+        ASSET_EXT: ${{ steps.resolve.outputs.asset_ext }}
+        ASSET_NAME: ${{ steps.resolve.outputs.asset_name }}
+        INSTALL_DIR: ${{ steps.resolve.outputs.install_dir }}
+        BINARY_NAME: ${{ steps.resolve.outputs.binary_name }}
+      run: |
+        set -euo pipefail
+
+        workdir="$(mktemp -d)"
+        archive="$workdir/$ASSET_NAME"
+        sums="$workdir/SHA256SUMS"
+        extract_dir="$workdir/extract"
+        mkdir -p "$extract_dir"
+
+        curl -fsSL "https://github.com/${REPO}/releases/download/${TAG}/${ASSET_NAME}" -o "$archive"
+        curl -fsSL "https://github.com/${REPO}/releases/download/${TAG}/SHA256SUMS" -o "$sums"
+
+        python - "$archive" "$sums" "$ASSET_NAME" <<'PY'
+        import hashlib
+        import pathlib
+        import sys
+
+        archive = pathlib.Path(sys.argv[1])
+        sums = pathlib.Path(sys.argv[2]).read_text().splitlines()
+        asset_name = sys.argv[3]
+
+        expected = None
+        for line in sums:
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].rstrip("*") == asset_name:
+                expected = parts[0]
+                break
+
+        if expected is None:
+            raise SystemExit(f"Missing checksum entry for {asset_name}")
+
+        actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+        if actual != expected:
+            raise SystemExit(f"Checksum mismatch for {asset_name}: expected {expected}, got {actual}")
+        PY
+
+        case "$ASSET_EXT" in
+          zip)
+            python -m zipfile -e "$archive" "$extract_dir"
+            ;;
+          tar.gz)
+            tar -xzf "$archive" -C "$extract_dir"
+            ;;
+          *)
+            echo "::error::Unsupported archive type: $ASSET_EXT"
+            exit 1
+            ;;
+        esac
+
+        binary_path="$(find "$extract_dir" -type f -name "$BINARY_NAME" | head -n 1)"
+        if [ -z "$binary_path" ]; then
+          echo "::error::Installed binary not found in extracted archive"
+          exit 1
+        fi
+
+        cp "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
+        chmod +x "$INSTALL_DIR/$BINARY_NAME"
+
+        dap_name="perl-dap"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          dap_name="perl-dap.exe"
+        fi
+        dap_path="$(find "$extract_dir" -type f -name "$dap_name" | head -n 1 || true)"
+        if [ -n "$dap_path" ]; then
+          cp "$dap_path" "$INSTALL_DIR/$dap_name"
+          chmod +x "$INSTALL_DIR/$dap_name"
+        fi
+
+    - name: Build perl-lsp from source
+      if: steps.cache.outputs.cache-hit != 'true' && steps.resolve.outputs.mode == 'source'
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Build perl-lsp from source
+      if: steps.cache.outputs.cache-hit != 'true' && steps.resolve.outputs.mode == 'source'
+      shell: bash
+      env:
+        INSTALL_DIR: ${{ steps.resolve.outputs.install_dir }}
+        BINARY_NAME: ${{ steps.resolve.outputs.binary_name }}
+        SOURCE_DIR: ${{ runner.temp }}/perl-lsp-source
+      run: |
+        set -euo pipefail
+
+        cd "$SOURCE_DIR"
+
+        cargo build --locked --release -p perllsp --bin perllsp
+        cargo build --locked --release -p perl-dap --bin perl-dap
+
+        built_binary="target/release/perllsp"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          built_binary="target/release/perllsp.exe"
+        fi
+
+        if [ ! -f "$built_binary" ]; then
+          echo "::error::Built binary not found at $built_binary"
+          exit 1
+        fi
+
+        cp "$built_binary" "$INSTALL_DIR/$BINARY_NAME"
+        chmod +x "$INSTALL_DIR/$BINARY_NAME"
+
+        dap_binary="target/release/perl-dap"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          dap_binary="target/release/perl-dap.exe"
+        fi
+        if [ -f "$dap_binary" ]; then
+          cp "$dap_binary" "$INSTALL_DIR/$dap_binary"
+          chmod +x "$INSTALL_DIR/$dap_binary"
+        fi
+
+    - name: Add perl-lsp to PATH
+      shell: bash
+      env:
+        INSTALL_DIR: ${{ steps.resolve.outputs.install_dir }}
+      run: |
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+
+    - name: Verify installation
+      shell: bash
+      run: |
+        perllsp --version
