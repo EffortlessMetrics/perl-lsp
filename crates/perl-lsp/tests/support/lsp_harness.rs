@@ -1146,7 +1146,7 @@ impl LspHarness {
             Duration::from_millis((base_timeout.as_millis() as f64 * multiplier) as u64)
         };
 
-        let final_timeout = if is_windows && !std::env::var("PERL_LSP_PERFORMANCE_TEST").is_ok() {
+        let final_timeout = if is_windows && std::env::var("PERL_LSP_PERFORMANCE_TEST").is_err() {
             final_timeout.max(Duration::from_millis(1200))
         } else {
             final_timeout
