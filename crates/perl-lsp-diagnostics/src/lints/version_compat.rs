@@ -43,6 +43,9 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("defer", 5, 36),
     ("class", 5, 38),
     ("field", 5, 38),
+    // isa: experimental in v5.32, stable-bundled at v5.36.
+    // `$obj isa 'ClassName'` — infix operator for class membership testing.
+    ("isa", 5, 36),
     ("builtin", 5, 40),
 ];
 
@@ -220,6 +223,14 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                         declared_version,
                         min,
                     ));
+                }
+            }
+
+            // `$obj isa 'ClassName'` — infix operator; stable at v5.36
+            NodeKind::Binary { op, .. } if op == "isa" => {
+                if !effective_features.contains(&"isa") {
+                    let min = feature_min_version("isa");
+                    diagnostics.push(make_diagnostic(n, "isa", declared_version, min));
                 }
             }
 
