@@ -4,7 +4,8 @@
 
 use super::super::*;
 use perl_module_resolution::{
-    ModuleUriResolution, resolve_module_path as resolve_workspace_module_path, resolve_module_uri,
+    IncRoot, IncRootKind, ModuleUriResolution,
+    resolve_module_path as resolve_workspace_module_path, resolve_module_uri_with_effective_inc,
     use_lib::resolve_use_lib_paths_from_source,
 };
 use std::path::PathBuf;
@@ -64,6 +65,59 @@ fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -
         .first()
         .and_then(|u| url::Url::parse(u).ok())
         .and_then(|u| u.to_file_path().ok())
+}
+
+fn build_effective_inc_roots(
+    include_paths: &[String],
+    lexical_paths: &[String],
+    system_paths: &[PathBuf],
+) -> Vec<IncRoot> {
+    let mut roots = Vec::new();
+    let mut precedence = 0usize;
+
+    for path in lexical_paths {
+        let path_buf = PathBuf::from(path);
+        let kind = if path_buf.is_absolute() {
+            IncRootKind::ExternalAbsolute
+        } else {
+            IncRootKind::FileLocalLexical
+        };
+        roots.push(IncRoot {
+            kind,
+            path: path_buf,
+            precedence,
+            source: "use-lib-lexical".to_string(),
+        });
+        precedence += 1;
+    }
+
+    for path in include_paths {
+        let path_buf = PathBuf::from(path);
+        let kind = if path_buf.is_absolute() {
+            IncRootKind::ExternalAbsolute
+        } else {
+            IncRootKind::WorkspaceRelative
+        };
+        roots.push(IncRoot {
+            kind,
+            path: path_buf,
+            precedence,
+            source: "workspace-include-paths".to_string(),
+        });
+        precedence += 1;
+    }
+
+    for path in system_paths {
+        roots.push(IncRoot {
+            kind: IncRootKind::InterpreterStartup,
+            path: path.clone(),
+            precedence,
+            source: "interpreter-startup-inc".to_string(),
+        });
+        precedence += 1;
+    }
+
+    roots
 }
 
 impl LspServer {
@@ -230,7 +284,7 @@ impl LspServer {
         doc_text: Option<&str>,
         doc_uri: Option<&str>,
     ) -> Option<String> {
-        let (mut include_paths, timeout_ms, use_system_inc) = {
+        let (include_paths, timeout_ms, use_system_inc) = {
             let config = self.workspace_config.lock();
             let perl5lib_paths = std::env::var("PERL5LIB")
                 .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
@@ -246,6 +300,7 @@ impl LspServer {
         let workspace_folders = self.workspace_folders.lock().clone();
 
         // Wire use lib paths scoped to this call
+        let mut lexical_paths = Vec::new();
         if let Some(text) = doc_text {
             let root_opt = workspace_root_for_doc(&workspace_folders, doc_uri);
             if root_opt.is_none() && !workspace_folders.is_empty() {
@@ -262,7 +317,7 @@ impl LspServer {
                 if file_dir.is_none() && doc_uri.is_some() {
                     tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
                 }
-                prepend_use_lib_paths(&mut include_paths, text, &root, file_dir.as_deref());
+                lexical_paths = resolve_use_lib_paths_from_source(text, &root, file_dir.as_deref());
             }
         }
 
@@ -280,13 +335,14 @@ impl LspServer {
             Vec::new()
         };
 
-        match resolve_module_uri(
+        let effective_inc =
+            build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+
+        match resolve_module_uri_with_effective_inc(
             module_name,
             &open_document_uris,
             &workspace_folders,
-            &include_paths,
-            use_system_inc,
-            &system_paths,
+            &effective_inc,
             timeout,
         ) {
             ModuleUriResolution::Resolved(uri) => Some(uri),

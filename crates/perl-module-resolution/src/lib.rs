@@ -10,4 +10,7 @@
 pub mod use_lib;
 
 pub use perl_module_resolution_path::resolve_module_path;
-pub use perl_module_resolution_uri::{ModuleUriResolution, resolve_module_uri};
+pub use perl_module_resolution_uri::{
+    IncRoot, IncRootKind, ModuleUriResolution, resolve_module_uri,
+    resolve_module_uri_with_effective_inc,
+};
