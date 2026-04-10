@@ -132,6 +132,29 @@ fn test_severity_parse_errors_are_error_level() -> Result<(), Box<dyn std::error
 }
 
 #[test]
+fn test_unknown_subroutine_attribute_is_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "sub foo :Private { }\n";
+    let output = Parser::new(source).parse_with_recovery();
+    let ast = Arc::new(output.ast);
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diags = provider.get_diagnostics(&ast, &output.diagnostics, source, None);
+
+    let unknown_attr: Vec<_> = diags
+        .iter()
+        .filter(|d| d.message.contains("unknown subroutine attribute ':Private'"))
+        .collect();
+
+    assert_eq!(
+        unknown_attr.len(),
+        1,
+        "expected exactly one unknown-attribute diagnostic, got: {diags:?}"
+    );
+    assert_eq!(unknown_attr[0].severity, DiagnosticSeverity::Warning);
+    assert_eq!(unknown_attr[0].code.as_deref(), Some("PL002"));
+    Ok(())
+}
+
+#[test]
 fn test_severity_missing_strict_is_information() -> Result<(), Box<dyn std::error::Error>> {
     // A program with no strict/warnings should get Information-level diagnostics
     let source = "my $x = 1;\n";
