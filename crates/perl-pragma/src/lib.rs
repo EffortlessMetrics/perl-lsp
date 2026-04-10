@@ -49,17 +49,23 @@ impl PragmaState {
 /// - `v5.36.0`
 /// - `5.036`
 /// - `5.10`
+/// - developer releases like `5.012_001`
 pub fn parse_perl_version(module: &str) -> Option<PerlVersion> {
     let s = module.strip_prefix('v').unwrap_or(module);
 
     let parts: Vec<&str> = s.splitn(3, '.').collect();
-    let major: u32 = parts.first()?.parse().ok()?;
+    let major: u32 = parse_version_component(parts.first()?)?;
     let minor: u32 = match parts.get(1) {
-        Some(part) => part.parse().ok()?,
+        Some(part) => parse_version_component(part)?,
         None => 0,
     };
 
     Some(PerlVersion { major, minor })
+}
+
+fn parse_version_component(component: &str) -> Option<u32> {
+    let component = component.split_once('_').map_or(component, |(head, _)| head);
+    component.parse().ok()
 }
 
 /// Whether `use VERSION` implies `strict` for this version.

@@ -166,6 +166,24 @@ fn test_class_ok_on_v5_40() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
+// Test 2a: class in v5.38_001 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_class_ok_on_v5_38_dev_release() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38_001"), class_node("Foo")]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'class' in v5.38_001, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 3: `use feature 'class'` overrides an old version declaration -> no warn
 // ---------------------------------------------------------------------------
 //

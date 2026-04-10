@@ -240,6 +240,14 @@ mod tests {
     }
 
     #[test]
+    fn developer_version_pragma_suppresses_strict_warnings_diagnostic() {
+        let diags = strict_warnings_diags("use 5.040_001;\nmy $x = 1;\n");
+        let has_strict_warn =
+            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(!has_strict_warn, "use 5.040_001 should suppress strict/warnings diagnostics");
+    }
+
+    #[test]
     fn v5_12_suppresses_strict_but_not_missing_warnings() {
         let diags = strict_warnings_diags("use v5.12;\nmy $x = 1;\n");
         assert!(

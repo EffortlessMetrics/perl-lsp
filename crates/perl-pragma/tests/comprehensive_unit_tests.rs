@@ -271,6 +271,18 @@ fn use_numeric_version_enables_effective_strict_and_warnings()
 }
 
 #[test]
+fn use_developer_version_enables_effective_strict_only() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("5.012_001", &[], 0, 16)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    assert!(!state.warnings, "5.012_001 should not imply warnings");
+    Ok(())
+}
+
+#[test]
 fn no_warnings_disables_warnings() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("warnings", &[], 0, 15), no_node("warnings", &[], 16, 30)]);
     let map = PragmaTracker::build(&ast);
