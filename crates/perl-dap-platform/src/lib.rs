@@ -66,16 +66,8 @@ pub fn detect_perlbrew_perl() -> Option<PathBuf> {
         return None;
     }
     let root = perlbrew_root();
-    let perl_bin = root
-        .join("perls")
-        .join(&version)
-        .join("bin")
-        .join(PERL_EXECUTABLE);
-    if perl_bin.exists() && perl_bin.is_file() {
-        Some(perl_bin)
-    } else {
-        None
-    }
+    let perl_bin = root.join("perls").join(&version).join("bin").join(PERL_EXECUTABLE);
+    if perl_bin.exists() && perl_bin.is_file() { Some(perl_bin) } else { None }
 }
 
 /// Detect the active Perl interpreter managed by plenv.
@@ -90,16 +82,8 @@ pub fn detect_plenv_perl() -> Option<PathBuf> {
         return None;
     }
     let root = plenv_root();
-    let perl_bin = root
-        .join("versions")
-        .join(&version)
-        .join("bin")
-        .join(PERL_EXECUTABLE);
-    if perl_bin.exists() && perl_bin.is_file() {
-        Some(perl_bin)
-    } else {
-        None
-    }
+    let perl_bin = root.join("versions").join(&version).join("bin").join(PERL_EXECUTABLE);
+    if perl_bin.exists() && perl_bin.is_file() { Some(perl_bin) } else { None }
 }
 
 /// Return the perlbrew root directory (`PERLBREW_ROOT` or `~/perl5/perlbrew`).

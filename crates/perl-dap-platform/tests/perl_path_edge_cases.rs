@@ -451,10 +451,7 @@ fn resolve_perl_path_with_toolchain_prefers_plenv_over_path() -> TestResult {
         std::env::remove_var("PLENV_ROOT");
     }
     let path = result.expect("should succeed with plenv perl");
-    assert!(
-        path.to_string_lossy().contains("5.36.0"),
-        "should use plenv perl, got: {path:?}"
-    );
+    assert!(path.to_string_lossy().contains("5.36.0"), "should use plenv perl, got: {path:?}");
     Ok(())
 }
 
