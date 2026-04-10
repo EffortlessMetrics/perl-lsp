@@ -1,9 +1,8 @@
 //! Tests for quick fixes added in issue #3469
 //!
-//! Covers the 7 new diagnostic quick fixes:
+//! Covers the 6 new diagnostic quick fixes:
 //! - PL200: MissingPackageDeclaration — add `package main;`
 //! - PL105: VariableRedeclaration     — remove duplicate `my`
-//! - PL110: UninitializedVariable     — add `= undef` or `= ""`
 //! - PL111: MisspelledPragma          — fix pragma spelling
 //! - PL406: UnreachableCode           — remove unreachable statement
 //! - PL300: DuplicateSubroutine       — rename second definition
@@ -107,10 +106,10 @@ fn missing_package_declaration_fix_inserts_at_top_without_shebang() {
 #[test]
 fn variable_redeclaration_fix_removes_my_keyword() {
     let src = "my $x = 1;\nmy $x = 2;\n";
-    let second_my_start = src.find("my $x = 2").unwrap_or(0);
+    let second_var_start = src.rfind("$x").unwrap_or(0);
     let diags = [make_diag(
-        second_my_start,
-        second_my_start + 10,
+        second_var_start,
+        second_var_start + 2,
         "PL105",
         "Variable '$x' is declared again in the same scope -- remove the duplicate 'my'",
     )];
@@ -126,11 +125,11 @@ fn variable_redeclaration_fix_removes_my_keyword() {
 #[test]
 fn variable_redeclaration_fix_deletes_my_prefix() {
     let src = "my $x = 1;\nmy $x = 2;\n";
-    // "my $x = 1;\n" is 11 chars, so second "my $x" starts at 11
-    let second_my_start = 11;
+    let second_my_start = src.find("my $x = 2").unwrap_or(0);
+    let second_var_start = second_my_start + 3;
     let diags = [make_diag(
-        second_my_start,
-        second_my_start + 10,
+        second_var_start,
+        second_var_start + 2,
         "PL105",
         "Variable '$x' is declared again in the same scope -- remove the duplicate 'my'",
     )];
@@ -141,6 +140,7 @@ fn variable_redeclaration_fix_deletes_my_prefix() {
 
     let edit = &action.unwrap().edit.changes[0];
     assert_eq!(edit.new_text, "", "Edit should delete 'my '");
+    assert_eq!(edit.location.start, second_my_start, "Edit should start at the duplicate 'my'");
     assert_eq!(
         edit.location.end - edit.location.start,
         3,
@@ -151,10 +151,10 @@ fn variable_redeclaration_fix_deletes_my_prefix() {
 #[test]
 fn variable_redeclaration_fix_is_preferred() {
     let src = "my $y = 1;\nmy $y = 2;\n";
-    let second_my_start = 11;
+    let second_var_start = src.rfind("$y").unwrap_or(0);
     let diags = [make_diag(
-        second_my_start,
-        second_my_start + 10,
+        second_var_start,
+        second_var_start + 2,
         "PL105",
         "Variable '$y' is declared again in the same scope",
     )];
@@ -163,62 +163,6 @@ fn variable_redeclaration_fix_is_preferred() {
     let action = find_action(&actions, "Remove duplicate");
     assert!(action.is_some(), "Expected remove duplicate action");
     assert!(action.unwrap().is_preferred, "Remove duplicate 'my' should be the preferred action");
-}
-
-// ===========================================================================
-// PL110 — UninitializedVariable
-// ===========================================================================
-
-#[test]
-fn uninitialized_variable_fix_offers_undef_initialization() {
-    let src = "my $x;\nprint $x;\n";
-    let diags = [make_diag(3, 5, "PL110", "Variable '$x' is used before being initialized")];
-    let actions = parse_and_get_actions(src, &diags);
-
-    assert!(
-        has_action_with_title(&actions, "undef"),
-        "Expected action to initialize with undef, got: {:?}",
-        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn uninitialized_variable_fix_offers_empty_string_initialization() {
-    let src = "my $name;\nprint $name;\n";
-    let diags = [make_diag(3, 8, "PL110", "Variable '$name' is used before being initialized")];
-    let actions = parse_and_get_actions(src, &diags);
-
-    assert!(
-        has_action_with_title(&actions, "empty string"),
-        "Expected action to initialize with empty string, got: {:?}",
-        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn uninitialized_variable_fix_undef_is_preferred() {
-    let src = "my $val;\nprint $val;\n";
-    let diags = [make_diag(3, 7, "PL110", "Variable '$val' is used before being initialized")];
-    let actions = parse_and_get_actions(src, &diags);
-
-    let undef_action = actions.iter().find(|a| a.title.contains("undef") && a.is_preferred);
-    assert!(undef_action.is_some(), "undef initialization should be the preferred action");
-}
-
-#[test]
-fn uninitialized_variable_fix_inserts_at_range_end() {
-    let src = "my $x;\nprint $x;\n";
-    // Range covers "$x" at position 3..5
-    let diags = [make_diag(3, 5, "PL110", "Variable '$x' is used before being initialized")];
-    let actions = parse_and_get_actions(src, &diags);
-
-    let undef_action = find_action(&actions, "undef");
-    assert!(undef_action.is_some(), "Expected undef action");
-
-    let edit = &undef_action.unwrap().edit.changes[0];
-    assert_eq!(edit.location.start, 5, "Should insert at end of diagnostic range");
-    assert_eq!(edit.location.start, edit.location.end, "Should be an insertion (start == end)");
-    assert!(edit.new_text.contains("undef"), "Inserted text should contain 'undef'");
 }
 
 // ===========================================================================

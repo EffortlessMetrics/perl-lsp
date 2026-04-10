@@ -184,10 +184,6 @@ impl CodeActionsProvider {
                             &qf_diag,
                         ));
                     }
-                    // PL110: Uninitialized variable
-                    c if c == DiagnosticCode::UninitializedVariable.as_str() => {
-                        actions.extend(quick_fixes::fix_uninitialized_variable(&qf_diag));
-                    }
                     // PL111: Misspelled pragma
                     c if c == DiagnosticCode::MisspelledPragma.as_str() => {
                         actions.extend(quick_fixes::fix_misspelled_pragma(&self.source, &qf_diag));
