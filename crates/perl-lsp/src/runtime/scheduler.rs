@@ -612,6 +612,27 @@ mod tests {
         assert_eq!(classify("textDocument/didOpen"), RequestClass::Mutation);
         assert_eq!(classify("textDocument/didChange"), RequestClass::Mutation);
         assert_eq!(classify("textDocument/didClose"), RequestClass::Mutation);
+        assert_eq!(classify("textDocument/didSave"), RequestClass::Mutation);
+        assert_eq!(classify("textDocument/willSave"), RequestClass::Mutation);
+        assert_eq!(classify("textDocument/willSaveWaitUntil"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didChangeConfiguration"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didCreateFiles"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didDeleteFiles"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didRenameFiles"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didChangeWorkspaceFolders"), RequestClass::Mutation);
+    }
+
+    #[test]
+    fn notebook_mutation_methods() {
+        assert_eq!(classify("notebookDocument/didOpen"), RequestClass::Mutation);
+        assert_eq!(classify("notebookDocument/didChange"), RequestClass::Mutation);
+        assert_eq!(classify("notebookDocument/didSave"), RequestClass::Mutation);
+        assert_eq!(classify("notebookDocument/didClose"), RequestClass::Mutation);
+    }
+
+    #[test]
+    fn set_trace_is_lifecycle() {
+        assert_eq!(classify("$/setTrace"), RequestClass::Lifecycle);
     }
 
     #[test]
@@ -764,6 +785,39 @@ mod tests {
         let params = serde_json::json!({
             "textDocument": { "uri": "file:///test.pl" }
             // no "position"
+        });
+        let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
+        assert!(key.is_none());
+    }
+
+    #[test]
+    fn dedup_key_is_supported_for_references_priority() {
+        let params = serde_json::json!({
+            "textDocument": { "uri": "file:///refs.pl" },
+            "position": { "line": 12, "character": 4 }
+        });
+        let key = extract_dedup_key(
+            "textDocument/references",
+            Some(&params),
+            RequestPriority::References,
+        );
+
+        assert_eq!(
+            key,
+            Some(RequestDedupKey {
+                method: "textDocument/references".to_string(),
+                uri: "file:///refs.pl".to_string(),
+                line: 12,
+                character: 4,
+            })
+        );
+    }
+
+    #[test]
+    fn dedup_key_none_for_non_numeric_position_fields() {
+        let params = serde_json::json!({
+            "textDocument": { "uri": "file:///bad-pos.pl" },
+            "position": { "line": "12", "character": "4" }
         });
         let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
         assert!(key.is_none());
