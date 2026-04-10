@@ -830,7 +830,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "die",
             BuiltinSignature {
                 signatures: vec!["die LIST", "die"],
-                documentation: "Raises an exception. Prefer Carp::croak in modules. Exception lands in $@ after eval.",
+                documentation: "Raises an exception. Prefer Carp::croak in modules. Exception lands in $@ after eval",
             },
         );
 
@@ -838,7 +838,7 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "warn",
             BuiltinSignature {
                 signatures: vec!["warn LIST", "warn"],
-                documentation: "Prints warning to STDERR. Prefer Carp::carp in modules.",
+                documentation: "Prints warning to STDERR. Prefer Carp::carp in modules",
             },
         );
 
