@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 ## Crate Overview
 
 - **Name**: `perl-error`
-- **Version**: workspace (currently 0.12.2)
+- **Version**: workspace (currently 0.12.3)
 - **Tier**: Tier 1 leaf crate (depends on `perl-ast`, `perl-regex`, `perl-position-tracking`, `perl-lexer`)
 - **Purpose**: Unified error types, budget tracking, error classification, and recovery traits for the Perl parser ecosystem.
 

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Validates breakpoint locations against parsed Perl source to ensure breakpoints land on executable lines, rejecting comments, blank lines, heredoc interiors, and out-of-range lines.
 
-**Version**: workspace (currently 0.12.2)
+**Version**: workspace (currently 0.12.3)
 
 ## Commands
 

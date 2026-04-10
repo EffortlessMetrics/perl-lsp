@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Centralise generic AST and source-text helper logic (e.g., `find_node_at_range`, `find_statement_start`, `find_function_insert_position`, `get_indent_at`) so multiple LSP feature crates can reuse them without duplicating code.
 
-**Version**: workspace (currently 0.12.2)
+**Version**: workspace (currently 0.12.3)
 
 ## Commands
 
