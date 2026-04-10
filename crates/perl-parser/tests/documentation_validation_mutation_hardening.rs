@@ -193,8 +193,8 @@ mod mock_doc_analysis {
     /// Enhanced cross-reference validation with comprehensive pattern detection
     pub fn find_invalid_cross_references_hardened(lines: &[&str]) -> Vec<String> {
         let mut invalid_refs = Vec::new();
-        let mut known_functions = HashMap::new();
-        let mut reference_map = HashMap::new();
+        let mut known_functions: HashMap<String, usize> = HashMap::new();
+        let mut reference_map: HashMap<String, Vec<usize>> = HashMap::new();
 
         // First pass: collect function definitions
         for (line_num, line) in lines.iter().enumerate() {
@@ -255,7 +255,7 @@ mod mock_doc_analysis {
                     }
 
                     // Track circular references
-                    reference_map.entry(ref_text.clone()).or_insert_with(Vec::new).push(line_num);
+                    reference_map.entry(ref_text.clone()).or_default().push(line_num);
                 }
             }
         }
