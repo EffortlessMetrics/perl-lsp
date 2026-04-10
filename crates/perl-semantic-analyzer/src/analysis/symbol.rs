@@ -340,6 +340,13 @@ pub enum WebFrameworkKind {
     MojoliciousLite,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Async framework variant detected via `use` statements during Parse/Analyze workflows.
+pub enum AsyncFrameworkKind {
+    /// `use IO::Async;`
+    IOAsync,
+}
+
 #[derive(Debug, Clone, Default)]
 /// Per-package framework detection flags used in Parse/Analyze workflows.
 pub struct FrameworkFlags {
@@ -351,6 +358,8 @@ pub struct FrameworkFlags {
     pub kind: Option<FrameworkKind>,
     /// Web framework variant, if any (Dancer2, Mojolicious::Lite).
     pub web_framework: Option<WebFrameworkKind>,
+    /// Async framework variant, if any (IO::Async).
+    pub async_framework: Option<AsyncFrameworkKind>,
 }
 
 /// Extract symbols from an AST for Parse/Index workflows.
@@ -650,6 +659,7 @@ impl SymbolExtractor {
                     is_write: false,
                 });
 
+                self.synthesize_io_async_class_symbol(object);
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -1587,6 +1597,46 @@ impl SymbolExtractor {
         true
     }
 
+    /// Synthesize class symbols for IO::Async namespaces used in method-call form.
+    fn synthesize_io_async_class_symbol(&mut self, object: &Node) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+        if !matches!(flags.async_framework, Some(AsyncFrameworkKind::IOAsync)) {
+            return false;
+        }
+
+        let Some(name) = Self::single_symbol_name(object) else {
+            return false;
+        };
+        if !name.starts_with("IO::Async::") {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(&name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Class
+                    && symbol.declaration.as_deref() == Some("framework=IO::Async")
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: name.clone(),
+            qualified_name: name.clone(),
+            kind: SymbolKind::Class,
+            location: object.location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("framework=IO::Async".to_string()),
+            documentation: Some("Synthetic IO::Async class".to_string()),
+            attributes: vec!["framework=IO::Async".to_string()],
+        });
+
+        true
+    }
+
     /// Update framework detection state from `use` statements.
     fn update_framework_context(&mut self, module: &str, args: &[String]) {
         let pkg = self.table.current_package.clone();
@@ -1618,6 +1668,12 @@ impl SymbolExtractor {
         };
         if let Some(kind) = web_kind {
             self.framework_flags.entry(pkg).or_default().web_framework = Some(kind);
+            return;
+        }
+
+        if module == "IO::Async" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::IOAsync);
             return;
         }
 
