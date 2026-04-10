@@ -54,6 +54,7 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:perl",
+    "onLanguage:gherkin",
     "onWalkthrough:perl-lsp.gettingStarted",
     "onCommand:perl-lsp.restart",
     "onCommand:perl-lsp.showVersion",

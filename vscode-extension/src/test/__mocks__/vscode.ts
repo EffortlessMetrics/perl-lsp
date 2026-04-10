@@ -46,6 +46,35 @@ export class Range {
   ) {}
 }
 
+export enum SymbolKind {
+  File = 0,
+  Module = 1,
+  Namespace = 2,
+  Package = 3,
+  Class = 4,
+  Method = 5,
+  Property = 6,
+  Field = 7,
+  Constructor = 8,
+  Enum = 9,
+  Interface = 10,
+  Function = 11,
+  Variable = 12,
+  Constant = 13,
+  String = 15,
+  Number = 16,
+  Boolean = 17,
+  Array = 18,
+  Object = 19,
+  Key = 20,
+  Null = 21,
+  EnumMember = 22,
+  Struct = 23,
+  Event = 24,
+  Operator = 25,
+  TypeParameter = 26,
+}
+
 export class TestMessage {
   constructor(public message: string) {}
 }
@@ -205,4 +234,6 @@ export enum ConfigurationTarget {
 export const languages = {
   onDidChangeDiagnostics: jest.fn(() => ({ dispose: jest.fn() })),
   getDiagnostics: jest.fn(() => [] as Array<[any, any[]]>),
+  registerDocumentSymbolProvider: jest.fn(() => ({ dispose: jest.fn() })),
+  registerFoldingRangeProvider: jest.fn(() => ({ dispose: jest.fn() })),
 };
