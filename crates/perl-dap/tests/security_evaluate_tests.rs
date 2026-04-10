@@ -81,6 +81,34 @@ fn test_evaluate_detects_unsafe_qx() -> TestResult {
 }
 
 #[test]
+fn test_evaluate_defaults_to_safe_mode_without_side_effects_flag() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+
+    let args = json!({
+        "expression": "system('ls')"
+    });
+
+    let response = adapter.handle_request(1, "evaluate", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(
+                !success,
+                "Evaluate should fail for dangerous ops when allowSideEffects is omitted"
+            );
+            let msg = message.ok_or("Should have error message")?;
+            assert!(
+                msg.contains("Safe evaluation mode"),
+                "Should use the safe-mode validator by default"
+            );
+        }
+        _ => return Err("Expected Response".into()),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_evaluate_rejects_carriage_returns() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
@@ -203,7 +231,7 @@ fn test_evaluate_allows_dangerous_ops_with_side_effects_enabled() -> TestResult 
 
     // These should NOT be blocked when allowSideEffects is true
     // (they may still fail for other reasons like not being in a debug session)
-    let ops_to_test = ["eval('1')", "print 'test'"];
+    let ops_to_test = ["eval('1')", "print 'test'", "system('ls')"];
 
     for expression in ops_to_test {
         let args = json!({
