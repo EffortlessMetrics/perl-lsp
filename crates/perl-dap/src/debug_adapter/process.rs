@@ -260,7 +260,7 @@ impl DebugAdapter {
         // debugger.  This catches syntax errors early and surfaces a clear,
         // actionable message to the user instead of a generic "Cannot start
         // Perl debugger" failure after `perl -d` exits immediately.
-        Self::check_syntax(program)?;
+        Self::check_syntax(program, &env_overrides)?;
 
         let mut cmd = Command::new("perl");
         cmd.arg("-d");
@@ -333,11 +333,15 @@ impl DebugAdapter {
     /// If `perl` cannot be found or spawned, the check is silently skipped
     /// and `Ok(())` is returned so that the subsequent `perl -d` launch
     /// produces the correct "perl not on PATH" error to the user.
-    pub(super) fn check_syntax(program: &str) -> Result<(), String> {
+    pub(super) fn check_syntax(
+        program: &str,
+        env_overrides: &HashMap<String, String>,
+    ) -> Result<(), String> {
         let output = match Command::new("perl")
             .arg("-c")
             .arg("--")
             .arg(program)
+            .envs(env_overrides)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()

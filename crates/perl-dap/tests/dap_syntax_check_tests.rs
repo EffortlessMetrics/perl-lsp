@@ -187,3 +187,49 @@ fn test_syntax_error_message_contains_line_number() -> Result<(), Box<dyn std::e
     }
     Ok(())
 }
+
+#[test]
+fn test_launch_syntax_check_honors_perl5lib_env_override() -> Result<(), Box<dyn std::error::Error>>
+{
+    let mut adapter = DebugAdapter::new();
+    let tmp = tempfile::tempdir()?;
+    let lib_dir = tmp.path().join("lib");
+    fs::create_dir_all(lib_dir.join("Local"))?;
+
+    fs::write(
+        lib_dir.join("Local").join("Helper.pm"),
+        "package Local::Helper;\nsub ok { 1 }\n1;\n",
+    )?;
+
+    let script = write_script(
+        &tmp,
+        "needs_perl5lib.pl",
+        "use strict;\nuse warnings;\nuse Local::Helper;\nprint Local::Helper::ok();\n",
+    );
+
+    let args = json!({
+        "program": must_some(script.to_str()),
+        "cwd": must_some(tmp.path().to_str()),
+        "args": [],
+        "env": {
+            "PERL5LIB": must_some(lib_dir.to_str())
+        }
+    });
+
+    let response = adapter.handle_request(1, "launch", Some(args));
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            if !success {
+                let msg = message.unwrap_or_default();
+                assert!(
+                    !msg.contains("Local/Helper.pm")
+                        && !msg.contains("Can't locate Local/Helper.pm"),
+                    "Launch should honor PERL5LIB during syntax check, got: {msg}"
+                );
+            }
+        }
+        _ => return Err("Expected a Response message".into()),
+    }
+    Ok(())
+}
