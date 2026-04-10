@@ -209,7 +209,7 @@ fn make_diagnostic(node: &Node, has_prior_source: bool) -> Diagnostic {
         }],
         tags: Vec::new(),
         suggestion: Some(
-            "Check `$@` or `$EVAL_ERROR` immediately after the `eval` or `try` statement."
+            "Move the exception check immediately after the `eval` or `try` block."
                 .to_string(),
         ),
     }
