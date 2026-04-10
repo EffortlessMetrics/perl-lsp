@@ -368,6 +368,26 @@ impl<'a> AnalysisContext<'a> {
             Err(idx) => idx,
         }
     }
+
+    fn find_catch_variable_range(
+        &self,
+        catch_body_start: usize,
+        full_name: &str,
+    ) -> Option<(usize, usize)> {
+        if full_name.is_empty() || catch_body_start == 0 || catch_body_start > self.code.len() {
+            return None;
+        }
+
+        let window_start = catch_body_start.saturating_sub(256);
+        let window = self.code.get(window_start..catch_body_start)?;
+        let catch_start = window.rfind("catch")?;
+        let search_start = catch_start + "catch".len();
+        let var_offset = window[search_start..].rfind(full_name)? + search_start;
+        let start = window_start + var_offset;
+        let end = start + full_name.len();
+
+        Some((start, end))
+    }
 }
 
 impl<'a> ExtractedName<'a> {
@@ -889,6 +909,69 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&sub_scope, issues, context);
             }
 
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                ancestors.push(node);
+                self.analyze_node(body, scope, ancestors, issues, context);
+
+                for (catch_var, catch_body) in catch_blocks {
+                    let catch_scope = Rc::new(Scope::with_parent(scope.clone()));
+
+                    if let Some(full_name) = catch_var.as_deref() {
+                        let catch_var_range = context
+                            .find_catch_variable_range(catch_body.location.start, full_name)
+                            .unwrap_or((catch_body.location.start, catch_body.location.start));
+                        let (sigil, name) = split_variable_name(full_name);
+                        if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
+                            if let Some(issue_kind) = catch_scope.declare_variable_parts(
+                                sigil,
+                                name,
+                                catch_var_range.0,
+                                false,
+                                true,
+                            ) {
+                                let description = match issue_kind {
+                                    IssueKind::VariableShadowing => {
+                                        format!(
+                                            "Variable '{}' shadows a variable in outer scope",
+                                            full_name
+                                        )
+                                    }
+                                    IssueKind::VariableRedeclaration => {
+                                        format!(
+                                            "Variable '{}' is already declared in this scope",
+                                            full_name
+                                        )
+                                    }
+                                    _ => String::new(),
+                                };
+                                issues.push(ScopeIssue {
+                                    kind: issue_kind,
+                                    variable_name: full_name.to_string(),
+                                    line: context.get_line(catch_var_range.0),
+                                    range: catch_var_range,
+                                    description,
+                                });
+                            }
+                        }
+                    }
+
+                    self.analyze_block_with_scope(
+                        catch_body,
+                        &catch_scope,
+                        ancestors,
+                        issues,
+                        context,
+                    );
+                    self.collect_unused_variables(&catch_scope, issues, context);
+                }
+
+                if let Some(finally) = finally_block {
+                    self.analyze_node(finally, scope, ancestors, issues, context);
+                }
+
+                ancestors.pop();
+            }
+
             NodeKind::FunctionCall { name, args } => {
                 // Handle function arguments, which may contain complex variable patterns.
                 // Some builtins consume declaration-capable arguments directly, but the
@@ -970,6 +1053,25 @@ impl ScopeAnalyzer {
                     self.mark_initialized(child, scope);
                 }
             }
+        }
+    }
+
+    fn analyze_block_with_scope<'a>(
+        &self,
+        node: &'a Node,
+        scope: &Rc<Scope>,
+        ancestors: &mut Vec<&'a Node>,
+        issues: &mut Vec<ScopeIssue>,
+        context: &AnalysisContext<'a>,
+    ) {
+        if let NodeKind::Block { statements } = &node.kind {
+            ancestors.push(node);
+            for stmt in statements {
+                self.analyze_node(stmt, scope, ancestors, issues, context);
+            }
+            ancestors.pop();
+        } else {
+            self.analyze_node(node, scope, ancestors, issues, context);
         }
     }
 

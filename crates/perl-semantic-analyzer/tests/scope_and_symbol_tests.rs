@@ -176,6 +176,150 @@ print $client;
     Ok(())
 }
 
+#[test]
+fn scope_try_catch_binds_catch_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        "catch variable should be declared inside catch block: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        "used catch variable should not be reported as unused: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_shadowing_is_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+my $e = 1;
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    let shadowing = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::VariableShadowing && i.variable_name == "$e")
+        .ok_or("expected catch-variable shadowing issue")?;
+    assert!(
+        has_issue(&issues, IssueKind::VariableShadowing, "e"),
+        "catch variable should report shadowing against outer scope: {:?}",
+        issues
+    );
+    assert_eq!(
+        &code[shadowing.range.0..shadowing.range.1],
+        "$e",
+        "catch-variable shadowing range should target the catch parameter"
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        "shadowed catch variable should still be bound in catch scope: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_variable_does_not_escape() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+print $e;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$e"),
+        "catch variable should not be visible after the catch block: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_unused_variable_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print "handled";
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e")
+        .ok_or("expected unused catch-variable issue")?;
+    assert!(
+        issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        "unused catch variable should be reported: {:?}",
+        issues
+    );
+    assert_eq!(
+        &code[unused.range.0..unused.range.1],
+        "$e",
+        "unused catch-variable range should target the catch parameter"
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_inner_redeclaration_stays_same_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    my $e = "inner";
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name == "$e"),
+        "inner catch declaration should be a same-scope redeclaration: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::VariableShadowing && i.variable_name == "$e"),
+        "inner catch declaration should not be treated as nested shadowing: {:?}",
+        issues
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Variable Scope Resolution — our
 // ===========================================================================

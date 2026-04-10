@@ -174,6 +174,90 @@ fn test_severity_unused_variable_is_warning() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
+fn test_try_catch_variable_is_declared_inside_catch() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let diags = diagnostics_for(source);
+    let catch_var_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| {
+            matches!(d.code.as_deref(), Some("PL102") | Some("PL103") | Some("PL110"))
+                && d.message.contains("$e")
+        })
+        .collect();
+
+    assert!(
+        catch_var_diags.is_empty(),
+        "catch variable should not produce scope diagnostics inside catch: {:?}",
+        catch_var_diags
+    );
+    Ok(())
+}
+
+#[test]
+fn test_try_catch_variable_does_not_escape_into_outer_scope()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+print $e;
+"#;
+
+    let diags = diagnostics_for(source);
+    let undeclared: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL103") && d.message.contains("$e"))
+        .collect();
+
+    assert!(
+        !undeclared.is_empty(),
+        "catch variable should remain undeclared outside the catch block"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_try_catch_variable_diagnostic_range_targets_parameter()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+use strict;
+use feature 'try';
+my $e = 1;
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let diags = diagnostics_for(source);
+    let shadowing = diags
+        .iter()
+        .find(|d| d.message.contains("shadows") && d.message.contains("$e"))
+        .ok_or("expected catch-variable shadowing diagnostic")?;
+
+    assert_eq!(
+        &source[shadowing.range.0..shadowing.range.1],
+        "$e",
+        "catch-variable diagnostic range should target the catch parameter"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_severity_ordering_is_consistent() -> Result<(), Box<dyn std::error::Error>> {
     // Error (1) < Warning (2) < Information (3) < Hint (4)
     assert!(DiagnosticSeverity::Error < DiagnosticSeverity::Warning);
