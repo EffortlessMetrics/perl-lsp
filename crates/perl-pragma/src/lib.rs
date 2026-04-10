@@ -85,7 +85,8 @@ pub fn version_implies_warnings(version: PerlVersion) -> bool {
 pub fn features_enabled_by_version(version: PerlVersion) -> Vec<&'static str> {
     let mut features = Vec::new();
     if version >= PerlVersion::new(5, 10) {
-        features.extend_from_slice(&["say", "state"]);
+        // say, state, switch (given/when/default)
+        features.extend_from_slice(&["say", "state", "switch"]);
     }
     if version >= PerlVersion::new(5, 20) {
         features.push("postfix_deref");
@@ -94,7 +95,8 @@ pub fn features_enabled_by_version(version: PerlVersion) -> Vec<&'static str> {
         features.push("try");
     }
     if version >= PerlVersion::new(5, 36) {
-        features.push("signatures");
+        // signatures stable-bundled at 5.36; defer experimental since 5.36
+        features.extend_from_slice(&["signatures", "defer"]);
     }
     if version >= PerlVersion::new(5, 38) {
         features.extend_from_slice(&["class", "field", "method"]);

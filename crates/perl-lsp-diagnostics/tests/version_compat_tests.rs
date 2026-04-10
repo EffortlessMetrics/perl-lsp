@@ -766,3 +766,274 @@ fn test_say_in_return_value_detected() -> Result<(), Box<dyn std::error::Error>>
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Tests for given/when/default (#3344) and defer (#3350)
+// ---------------------------------------------------------------------------
+
+fn given_node() -> Node {
+    Node::new(
+        NodeKind::Given {
+            expr: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                loc(26, 28),
+            )),
+            body: Box::new(block(vec![])),
+        },
+        loc(20, 50),
+    )
+}
+
+fn when_node() -> Node {
+    Node::new(
+        NodeKind::When {
+            condition: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                loc(26, 28),
+            )),
+            body: Box::new(block(vec![])),
+        },
+        loc(20, 50),
+    )
+}
+
+fn default_node() -> Node {
+    Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(20, 40))
+}
+
+fn defer_call() -> Node {
+    // `defer` is currently parsed as a FunctionCall with a single block
+    // argument (the lexer has no Defer keyword token yet).
+    Node::new(
+        NodeKind::FunctionCall {
+            name: "defer".to_string(),
+            args: vec![Node::new(NodeKind::Block { statements: vec![] }, loc(26, 40))],
+        },
+        loc(20, 41),
+    )
+}
+
+fn defer_helper_call() -> Node {
+    Node::new(
+        NodeKind::FunctionCall {
+            name: "defer".to_string(),
+            args: vec![Node::new(
+                NodeKind::String { value: "cleanup".to_string(), interpolated: false },
+                loc(26, 35),
+            )],
+        },
+        loc(20, 36),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Test 16: given in v5.8 -> warns (requires v5.10+)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_given_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), given_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'given' in v5.8, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("given"), "Message should mention 'given': {}", msg.message);
+    assert!(
+        msg.message.contains("v5.10") || msg.message.contains("5.10"),
+        "Message should mention minimum version v5.10: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 17: when in v5.8 -> warns
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_when_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'when' in v5.8, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("when"), "Message should mention 'when': {}", msg.message);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 18: default in v5.8 -> warns
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_default_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'default' in v5.8, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("default"), "Message should mention 'default': {}", msg.message);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 19: given/when/default in v5.10 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_given_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.10"), given_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'given' in v5.10, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_when_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.10"), when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'when' in v5.10, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_default_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.10"), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'default' in v5.10, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 20: explicit `use feature 'switch'` suppresses given/when warning
+// ---------------------------------------------------------------------------
+//
+// In Perl, given/when/default are enabled by `use feature 'switch'`.  An
+// explicit `use feature 'switch'` on an old-version file must suppress
+// the PL900 warning.
+
+#[test]
+fn test_given_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), use_feature("switch"), given_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning when 'use feature 'switch'' is present on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 21: defer (as FunctionCall) in v5.34 -> warns (requires v5.36+)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_defer_warns_on_v5_34() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.34"), defer_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'defer' in v5.34, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("defer"), "Message should mention 'defer': {}", msg.message);
+    assert!(
+        msg.message.contains("v5.36") || msg.message.contains("5.36"),
+        "Message should mention minimum version v5.36: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 22: defer in v5.36 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_defer_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), defer_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'defer' in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 23: explicit `use feature 'defer'` suppresses warning on old version
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_defer_ok_with_use_feature_defer() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.34"), use_feature("defer"), defer_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning when 'use feature 'defer'' is present on v5.34, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 24: ordinary helper call named defer is not treated as the feature
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_defer_helper_call_is_not_version_feature() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.34"), defer_helper_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for ordinary helper call named 'defer', got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
