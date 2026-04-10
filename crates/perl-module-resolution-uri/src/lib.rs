@@ -66,13 +66,16 @@ pub fn resolve_module_uri(
                 return ModuleUriResolution::TimedOut;
             }
 
-            let full_path = if include_path == "." {
-                workspace_path.join(&relative_path)
+            let base_path = PathBuf::from(include_path);
+            let (full_path, safe_root) = if base_path.is_absolute() {
+                (base_path.join(&relative_path), base_path)
+            } else if include_path == "." {
+                (workspace_path.join(&relative_path), workspace_path.clone())
             } else {
-                workspace_path.join(include_path).join(&relative_path)
+                (workspace_path.join(&base_path).join(&relative_path), workspace_path.clone())
             };
 
-            let full_path = match validate_workspace_path(&full_path, &workspace_path) {
+            let full_path = match validate_workspace_path(&full_path, &safe_root) {
                 Ok(path) => path,
                 Err(_) => continue,
             };

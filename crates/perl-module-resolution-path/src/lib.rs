@@ -26,14 +26,18 @@ pub fn resolve_module_path(
 ) -> Option<PathBuf> {
     let relative_path = module_name_to_path(module_name);
 
-    for base in include_paths {
-        let candidate = if base == "." {
-            root.join(&relative_path)
+    for base_str in include_paths {
+        let base_path = Path::new(base_str);
+
+        let (candidate, safe_root) = if base_path.is_absolute() {
+            (base_path.join(&relative_path), base_path)
+        } else if base_str == "." {
+            (root.join(&relative_path), root)
         } else {
-            root.join(base).join(&relative_path)
+            (root.join(base_path).join(&relative_path), root)
         };
 
-        let safe_candidate = match validate_workspace_path(&candidate, root) {
+        let safe_candidate = match validate_workspace_path(&candidate, safe_root) {
             Ok(path) => path,
             Err(_) => continue,
         };
