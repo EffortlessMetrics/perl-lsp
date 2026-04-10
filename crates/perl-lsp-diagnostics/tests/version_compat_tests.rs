@@ -1074,6 +1074,10 @@ fn use_builtin_import(import: &str) -> Node {
     )
 }
 
+fn use_builtin_qw_import(imports: &str) -> Node {
+    use_builtin_import(&format!("qw({})", imports))
+}
+
 fn isa_node() -> Node {
     Node::new(
         NodeKind::Binary {
@@ -1239,6 +1243,37 @@ fn test_builtin_imports_have_distinct_minimum_versions() -> Result<(), Box<dyn s
             diagnostics_have_code(&diagnostics, "PL900"),
             should_warn,
             "Unexpected builtin import compatibility result for {import} on {version}: {:?}",
+            diagnostics
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_builtin_qw_imports_have_distinct_minimum_versions() -> Result<(), Box<dyn std::error::Error>>
+{
+    let cases = [
+        ("floor", "v5.36", false),
+        ("is_tainted", "v5.36", true),
+        ("is_tainted", "v5.38", false),
+        ("export_lexically", "v5.36", true),
+        ("export_lexically", "v5.38", false),
+        ("load_module", "v5.38", true),
+        ("load_module", "v5.40", false),
+        (":5.40", "v5.38", true),
+        (":5.40", "v5.40", false),
+    ];
+
+    for (imports, version, should_warn) in cases {
+        let ast = program(vec![use_node(version), use_builtin_qw_import(imports)]);
+        let mut diagnostics = vec![];
+        check_version_compat(&ast, &mut diagnostics);
+
+        assert_eq!(
+            diagnostics_have_code(&diagnostics, "PL900"),
+            should_warn,
+            "Unexpected builtin qw import compatibility result for {imports} on {version}: {:?}",
             diagnostics
         );
     }
