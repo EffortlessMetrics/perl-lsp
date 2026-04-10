@@ -126,6 +126,7 @@ describe('package.json contributes', () => {
       expect(exts).toContain('.psgi');
       expect(exts).toContain('.mason');
       expect(exts).toContain('.mas');
+      expect(exts).toContain('.ep');
       expect(exts).not.toContain('.m');
       expect(exts).toContain('.xs');
     });
