@@ -392,8 +392,7 @@ impl LspServer {
         let hover_text = {
             // The normal tokenizer only captures `[$@%]` + alphanumeric/underscore,
             // so it misses punctuation variables handled above.
-            let token = Self::get_token_at_position_static(text, offset);
-            token
+            Self::get_token_at_position_static(text, offset)
         };
 
         if !hover_text.is_empty() {
