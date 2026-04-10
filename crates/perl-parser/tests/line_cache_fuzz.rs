@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod fuzz {
     use perl_parser::position::LineStartsCache;
-
-    // Quick property test without proptest dependency for now
-    // Can upgrade to proptest later if desired
+    use proptest::prelude::*;
 
     /// Slow reference implementation for testing
     /// This matches the actual cache behavior: \r counts as a column before CRLF
@@ -40,6 +38,68 @@ mod fuzz {
         }
 
         (line, col_utf16)
+    }
+
+    fn newline_or_text_segment_strategy() -> impl Strategy<Value = String> {
+        let ascii_segment = proptest::collection::vec(proptest::char::range(' ', '~'), 0..12)
+            .prop_map(|chars| chars.into_iter().collect::<String>());
+        let latin_extended_segment =
+            proptest::collection::vec(proptest::char::range('\u{00A0}', '\u{02AF}'), 0..6)
+                .prop_map(|chars| chars.into_iter().collect::<String>());
+        let emoji_segment =
+            proptest::collection::vec(proptest::char::range('\u{1F300}', '\u{1FAFF}'), 0..4)
+                .prop_map(|chars| chars.into_iter().collect::<String>());
+
+        prop_oneof![
+            Just("\n".to_string()),
+            Just("\r".to_string()),
+            Just("\r\n".to_string()),
+            ascii_segment,
+            latin_extended_segment,
+            emoji_segment,
+        ]
+    }
+
+    fn mixed_content_strategy() -> impl Strategy<Value = String> {
+        proptest::collection::vec(newline_or_text_segment_strategy(), 0..80)
+            .prop_map(|segments| segments.concat())
+    }
+
+    fn char_boundary_offsets(content: &str) -> Vec<usize> {
+        let mut offsets = Vec::with_capacity(content.len().min(256));
+        offsets.push(0);
+        for (offset, _) in content.char_indices() {
+            offsets.push(offset);
+        }
+        offsets.push(content.len());
+        offsets.sort_unstable();
+        offsets.dedup();
+        offsets
+    }
+
+    proptest! {
+        #[test]
+        fn prop_cache_matches_slow_for_generated_content(content in mixed_content_strategy()) {
+            let cache = LineStartsCache::new(&content);
+
+            for offset in char_boundary_offsets(&content) {
+                let cached = cache.offset_to_position(&content, offset);
+                let slow = slow_offset_to_position(&content, offset);
+                prop_assert_eq!(cached, slow, "offset={}, preview={:?}", offset, content.chars().take(60).collect::<String>());
+
+                // Preserve known CRLF ambiguity where multiple offsets can map to same position.
+                let is_crlf_r = content.as_bytes().get(offset) == Some(&b'\r')
+                    && content.as_bytes().get(offset + 1) == Some(&b'\n');
+                let is_crlf_n = offset > 0
+                    && content.as_bytes().get(offset - 1) == Some(&b'\r')
+                    && content.as_bytes().get(offset) == Some(&b'\n');
+
+                if !is_crlf_r && !is_crlf_n {
+                    let rt_offset = cache.position_to_offset(&content, cached.0, cached.1);
+                    prop_assert_eq!(rt_offset, offset, "roundtrip offset={}, preview={:?}", offset, content.chars().take(60).collect::<String>());
+                }
+            }
+        }
     }
 
     #[test]
