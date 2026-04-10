@@ -388,10 +388,13 @@ impl WorkspaceConfig {
                 self.use_perl5lib = use_p5l;
             }
             if let Some(prec) = workspace.get("perl5libPrecedence").and_then(|v| v.as_str()) {
-                self.perl5lib_precedence = match prec {
-                    "append" => Perl5LibPrecedence::Append,
-                    _ => Perl5LibPrecedence::Prepend,
-                };
+                // Only update on recognised values; leave the current setting unchanged for
+                // unknown strings so a typo does not silently reset an explicitly-set Append.
+                match prec {
+                    "append" => self.perl5lib_precedence = Perl5LibPrecedence::Append,
+                    "prepend" => self.perl5lib_precedence = Perl5LibPrecedence::Prepend,
+                    _ => {} // unknown value — leave current setting intact
+                }
             }
         }
     }
