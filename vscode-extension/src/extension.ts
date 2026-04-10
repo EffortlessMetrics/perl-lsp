@@ -13,6 +13,7 @@ import { generateBoilerplate } from './fileCreation';
 import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
+import { registerGherkinProviders } from './gherkinProviders';
 import { StreamingCompletionController } from './streamingCompletion';
 import {
     classifyStartupError,
@@ -850,6 +851,7 @@ export async function activate(context: vscode.ExtensionContext) {
         configurationWatcher,
         fileCreationWatcher,
         arrowCompletionWatcher,
+        ...registerGherkinProviders(),
         ...registerPodPreview(context),
     );
 

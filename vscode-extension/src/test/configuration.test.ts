@@ -198,6 +198,10 @@ describe('package.json contributes', () => {
       expect(pkg.activationEvents).toContain('onLanguage:perl');
     });
 
+    test('activates on gherkin language', () => {
+      expect(pkg.activationEvents).toContain('onLanguage:gherkin');
+    });
+
     test('activates on restart command', () => {
       expect(pkg.activationEvents).toContain('onCommand:perl-lsp.restart');
     });
