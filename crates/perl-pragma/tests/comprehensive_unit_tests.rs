@@ -747,12 +747,12 @@ fn v5_40_enables_builtin() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn v5_12_does_not_have_switch() -> Result<(), Box<dyn std::error::Error>> {
-    // switch was removed/deprecated in v5.38
+fn v5_12_retains_switch_from_v5_10() -> Result<(), Box<dyn std::error::Error>> {
+    // switch was inherited from v5.10 and not removed until v5.38
     let features_v12 = features_enabled_by_version(PerlVersion::new(5, 12));
     assert!(
         features_v12.contains(&"switch"),
-        "v5.12 should include 'switch' (inherited from v5.10)"
+        "v5.12 should include 'switch' (inherited from v5.10, removed at v5.38)"
     );
     Ok(())
 }
