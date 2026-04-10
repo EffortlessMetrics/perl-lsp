@@ -118,6 +118,7 @@ use perl_parser_core::ast::NodeKind;
 use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};
 use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -165,6 +166,7 @@ const MOOSE_TYPE_CANDIDATES: &[&str] = &[
 pub struct CompletionProvider {
     symbol_table: SymbolTable,
     class_models: Vec<ClassModel>,
+    type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
 }
@@ -248,9 +250,14 @@ impl CompletionProvider {
     ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
+        let type_engine = workspace_index.as_ref().map(|_| {
+            let mut type_engine = TypeInferenceEngine::new();
+            let _ = type_engine.infer(ast);
+            type_engine
+        });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, workspace_index, import_map }
+        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -590,6 +597,7 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 source,
+                self.type_engine.as_ref(),
                 &self.workspace_index,
             );
         } else if context.prefix.starts_with('$') && context.prefix.contains("::") {

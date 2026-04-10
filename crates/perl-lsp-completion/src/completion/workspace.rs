@@ -9,6 +9,7 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
+use perl_semantic_analyzer::type_inference::{PerlType, TypeInferenceEngine};
 use perl_workspace_index::workspace_index::{SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -389,6 +390,24 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
     None
 }
 
+fn infer_receiver_package_from_type_engine(
+    context: &CompletionContext,
+    type_engine: Option<&TypeInferenceEngine>,
+) -> Option<String> {
+    let arrow_prefix = context.prefix.trim_end_matches("->");
+    let var_name = arrow_prefix.strip_prefix('$')?;
+    let ty = type_engine?.get_type_at(var_name)?;
+
+    match ty {
+        PerlType::Object(class) => Some(class),
+        PerlType::Reference(inner) => match inner.as_ref() {
+            PerlType::Object(class) => Some(class.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// Add method completions from the workspace index for `->` expressions.
 ///
 /// When the user types `$obj->` or `Package->`, queries the workspace index for
@@ -399,6 +418,7 @@ pub fn add_workspace_method_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     source: &str,
+    type_engine: Option<&TypeInferenceEngine>,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
 ) {
     let Some(index) = workspace_index else {
@@ -409,7 +429,10 @@ pub fn add_workspace_method_completions(
         return;
     }
 
-    let Some(package_name) = infer_receiver_package(context, source) else {
+    let package_name = infer_receiver_package_from_type_engine(context, type_engine)
+        .or_else(|| infer_receiver_package(context, source));
+
+    let Some(package_name) = package_name else {
         return;
     };
 
