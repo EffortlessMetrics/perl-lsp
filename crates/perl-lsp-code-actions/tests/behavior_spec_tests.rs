@@ -351,6 +351,32 @@ fn when_numeric_undef_range_has_no_equality_operator_skips_defined_or_fallback()
     assert!(!has_action(&actions, "defined-or operator"));
 }
 
+#[test]
+fn when_general_parse_error_mentions_missing_semicolon_offers_semicolon_fix() {
+    let source = "my $x = 1\nprint $x;";
+    let diagnostics = [diag(0, 9, "PL001", "Missing semicolon before next statement")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(
+        has_action(&actions, "Add missing semicolon"),
+        "should map PL001 missing-semicolon diagnostics to semicolon fix, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn when_general_parse_error_is_heredoc_context_no_semicolon_fix_is_offered() {
+    let source = "<<EOF\nhello\nEOF\n";
+    let diagnostics = [diag(0, 2, "PL001", "Missing semicolon near heredoc")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(
+        !has_action(&actions, "Add missing semicolon"),
+        "should skip semicolon quickfix in heredoc context, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
 // ===========================================================================
 // Quick-fix scenarios: bareword
 // ===========================================================================
@@ -407,6 +433,48 @@ fn when_lowercase_bareword_does_not_offer_filehandle_declaration() {
     );
 }
 
+#[test]
+fn when_diagnostic_is_bareword_filehandle_offers_lexical_replacement() {
+    let source = "open FILE, '<', 'data.txt';";
+    let diagnostics = [diag(5, 9, "PL400", "Bareword filehandle 'FILE'")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(
+        has_action(&actions, "Replace bareword filehandle 'FILE' with lexical '$file_fh'"),
+        "should offer lexical filehandle replacement, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn when_diagnostic_is_two_arg_open_offers_three_arg_open_fix() {
+    let source = "open($fh, $filename);";
+    let diagnostics = [diag(0, source.len(), "PL401", "Two-argument open is unsafe")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(
+        has_action(&actions, "Convert to three-argument open() for safety"),
+        "should offer safer three-argument open conversion, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn when_range_starts_after_first_line_hardcoded_shebang_fix_is_not_reported() {
+    let source = "#!/usr/local/bin/perl -w\nmy $x = 1;\nprint 'ok';\n";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+    let provider = CodeActionsProvider::new(source.to_string());
+    let range_start = source.find("print").unwrap_or(0);
+    let actions = provider.get_code_actions(&ast, (range_start, source.len()), &[]);
+
+    assert!(
+        !actions.iter().any(|a| a.title.contains("portable shebang")),
+        "shebang fix should only be offered when the first line is in range, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
 // ===========================================================================
 // Quick-fix scenarios: unused parameter
 // ===========================================================================
@@ -442,6 +510,19 @@ fn when_variable_shadows_outer_scope_offers_rename_suggestions() {
     assert!(
         has_action(&actions, "Rename to '$x_local'"),
         "should suggest _local suffix, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn when_missing_return_in_subroutine_offers_explicit_return_fix() {
+    let source = "sub compute {\n    my $x = 1;\n}\n";
+    let diagnostics = [diag(0, source.len() - 2, "PL301", "Subroutine may not return a value")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(
+        has_action(&actions, "Add explicit 'return' statement"),
+        "should offer adding explicit return for PL301, got: {:?}",
         actions.iter().map(|a| &a.title).collect::<Vec<_>>()
     );
 }
