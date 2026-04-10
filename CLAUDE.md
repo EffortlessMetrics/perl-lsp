@@ -228,6 +228,8 @@ Invoke `/coding-standards` for full detail.
   - Use `?`, `.ok_or_else()`, pattern matching, `Result`/`Option` instead
   - `std::process::exit()` only in `bin/` and `lifecycle.rs`
   - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+  - Exception: `bin/` targets may use `#[allow(clippy::expect_used)]` for profiling / CLI entry points, including `crates/perl-workspace-index/src/bin/workspace_memory_profile.rs`
+  - Exception: static `LazyLock<Regex>` initializers may use `unreachable!()`/`expect()` for known-good patterns, including `crates/perl-heredoc-anti-patterns/src/lib.rs`
   - Tests: `Result<()>` returns or `perl_tdd_support::must`/`must_some`
 - **Prefer**: `.first()` over `.get(0)`, `.push(char)` over `.push_str("x")`, `or_default()` over `or_insert_with(Vec::new)`
 - **Avoid**: unnecessary `.clone()` on Copy types
