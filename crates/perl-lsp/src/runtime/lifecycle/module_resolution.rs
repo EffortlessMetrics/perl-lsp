@@ -471,13 +471,15 @@ mod tests {
         }
 
         let doc_text = "use lib 'custom';\nno lib 'custom';\nuse Gone::Soon;\n";
-        let resolved = server
-            .resolve_module_path("Gone::Soon", Some(doc_text))
-            .ok_or("expected candidate path")?;
-        assert_ne!(
-            resolved, module_file,
-            "no lib should remove prior use lib path from lexical overlay"
-        );
+        let resolved = server.resolve_module_path("Gone::Soon", Some(doc_text));
+        // After `no lib 'custom'` removes the overlay, there are no include paths left so
+        // the module is not found (None) — or if found, it must not be in custom/.
+        if let Some(ref path) = resolved {
+            assert_ne!(
+                path, &module_file,
+                "no lib should remove prior use lib path from lexical overlay"
+            );
+        }
         Ok(())
     }
 
