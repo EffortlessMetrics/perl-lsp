@@ -227,6 +227,26 @@ fn snapshot_file_io() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn snapshot_open_my_readline_no_pl102() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression for #3446: `open my $fh, ...` must declare `$fh` for later `<$fh>` and `close`.
+    let source = concat!(
+        "use strict;\n",
+        "use warnings;\n",
+        "open my $fh, '<', 'file.txt' or die $!;\n",
+        "print <$fh>;\n",
+        "close $fh;\n",
+    );
+    let diags = diagnostics_for(source);
+
+    assert_no_parse_errors(&diags, "open-my/readline regression");
+
+    let pl102: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL102")).collect();
+    assert!(pl102.is_empty(), "open my/readline must not trigger PL102: {pl102:?}");
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Snippet 4: Hash/array operations
 // ---------------------------------------------------------------------------
