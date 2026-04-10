@@ -1656,3 +1656,151 @@ sub main_func {}
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_references_respect_include_declaration_flag() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("References respect includeDeclaration flag");
+    scenario.given("a module with one declaration and multiple call sites");
+
+    let module = r#"package RefFlag;
+use strict;
+use warnings;
+
+sub ping {
+    return 1;
+}
+
+1;
+"#;
+
+    let script = r#"use strict;
+use warnings;
+use lib './lib';
+use RefFlag;
+
+my $first = RefFlag::ping();
+my $second = ping();
+"#;
+
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/RefFlag.pm", module), ("main.pl", script)])?;
+    let module_uri = workspace.uri("lib/RefFlag.pm");
+    let script_uri = workspace.uri("main.pl");
+
+    harness.open(&module_uri, module)?;
+    harness.open(&script_uri, script)?;
+    harness.wait_for_symbol("ping", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    let (decl_line, decl_col) = find_position(module, "sub ping");
+
+    scenario.when("requesting references with includeDeclaration=true");
+    let with_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": module_uri },
+            "position": { "line": decl_line, "character": decl_col + 4 },
+            "context": { "includeDeclaration": true }
+        }),
+    )?;
+
+    scenario.then("the response includes declaration and call sites");
+    let with_decl_items = with_decl.as_array().cloned().unwrap_or_default();
+    assert!(
+        with_decl_items.len() >= 3,
+        "expected declaration + two calls when includeDeclaration=true, got {with_decl_items:?}"
+    );
+    let with_decl_uris = ref_uris(&with_decl);
+    assert!(
+        uri_set_contains(&with_decl_uris, &module_uri),
+        "references should include declaration file when includeDeclaration=true"
+    );
+    assert!(
+        uri_set_contains(&with_decl_uris, &script_uri),
+        "references should include script call sites when includeDeclaration=true"
+    );
+
+    scenario.when("requesting references with includeDeclaration=false");
+    let without_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": module_uri },
+            "position": { "line": decl_line, "character": decl_col + 4 },
+            "context": { "includeDeclaration": false }
+        }),
+    )?;
+
+    scenario.then("the response still includes call sites and remains internally consistent");
+    let without_decl_items = without_decl.as_array().cloned().unwrap_or_default();
+    assert!(
+        without_decl_items.len() >= 2,
+        "expected at least the script call sites when includeDeclaration=false; got {without_decl_items:?}"
+    );
+    let without_decl_uris = ref_uris(&without_decl);
+    assert!(
+        uri_set_contains(&without_decl_uris, &script_uri),
+        "references should keep script call sites when includeDeclaration=false"
+    );
+    assert!(
+        without_decl_items.len() <= with_decl_items.len(),
+        "includeDeclaration=false should not expand result cardinality (without={}, with={})",
+        without_decl_items.len(),
+        with_decl_items.len()
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_workspace_symbol_query_matches_package_and_subroutine()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Workspace symbol query matches package and subroutine");
+    scenario.given("a workspace with package and subroutine symbols");
+
+    let module = r#"package SymbolHub;
+use strict;
+use warnings;
+
+sub collect_metrics {
+    return 1;
+}
+
+1;
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("lib/SymbolHub.pm", module)])?;
+    let module_uri = workspace.uri("lib/SymbolHub.pm");
+    harness.open(&module_uri, module)?;
+    harness.wait_for_symbol("collect_metrics", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("searching workspace symbols using a package-oriented query");
+    let result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "SymbolHub"
+        }),
+    )?;
+
+    scenario.then("the symbol list includes both package and subroutine entries");
+    let items = result.as_array().cloned().unwrap_or_default();
+    assert!(!items.is_empty(), "workspace/symbol should return entries for SymbolHub query");
+
+    let names: Vec<String> = items
+        .iter()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+
+    assert!(
+        names.iter().any(|name| name == "SymbolHub"),
+        "workspace symbols should include package name SymbolHub; got {names:?}"
+    );
+    assert!(
+        names.iter().any(|name| name == "collect_metrics" || name.ends_with("collect_metrics")),
+        "workspace symbols should include collect_metrics; got {names:?}"
+    );
+
+    Ok(())
+}
