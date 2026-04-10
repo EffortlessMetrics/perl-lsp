@@ -9,12 +9,15 @@ surfaces. Each GIF is produced from a manual screen-recording session using the
 | Filename | Feature | Max Size | Duration |
 |----------|---------|---------|---------|
 | `install-health.gif` | VS Code install, extension auto-download, `perllsp --health` output | 3 MB | 15 s |
-| `goto-definition.gif` | Ctrl+Click go to definition, Find All References panel | 3 MB | 15 s |
+| `find-references.gif` | Ctrl+Click go to definition, Find All References panel | 3 MB | 15 s |
 | `extract-variable.gif` | Select expression, light-bulb, Extract Variable code action | 3 MB | 12 s |
 
 None of these files can be created by an automated agent because each requires a
 live editor session with a running LSP server. See the [recording guide](#recording-guide)
 below for instructions.
+
+The canonical P0 tracker lives in [`../demo-asset-plan.toml`](../demo-asset-plan.toml)
+and the reporting helper is [`../../../scripts/marketing/check-demo-assets.py`](../../../scripts/marketing/check-demo-assets.py).
 
 ## Storyboard Reference
 
@@ -25,7 +28,7 @@ Use them to rehearse the flow before recording.
 | GIF | Storyboard |
 |-----|-----------|
 | `install-health.gif` | [`install-health.svg`](../../../vscode-extension/media/walkthrough/install-health.svg) |
-| `goto-definition.gif` | [`find-references.svg`](../../../vscode-extension/media/walkthrough/find-references.svg) |
+| `find-references.gif` | [`find-references.svg`](../../../vscode-extension/media/walkthrough/find-references.svg) |
 | `extract-variable.gif` | [`extract-variable.svg`](../../../vscode-extension/media/walkthrough/extract-variable.svg) |
 
 ## Demo Workspace
@@ -95,7 +98,7 @@ Steps to record:
 
 Keep the terminal text large enough to read in the final GIF.
 
-### GIF #2 — Go to Definition and Find References (`goto-definition.gif`)
+### GIF #2 — Go to Definition and Find References (`find-references.gif`)
 
 Goal: show instant cross-file navigation.
 
@@ -140,8 +143,8 @@ Trim dead time at the start or end with `--start` and `--duration`:
 
 ```bash
 python scripts/marketing/render-walkthrough-gif.py \
-  --input recordings/goto-definition.mp4 \
-  --output docs/assets/gifs/goto-definition.gif \
+  --input recordings/find-references.mp4 \
+  --output docs/assets/gifs/find-references.gif \
   --start 00:00:01.5 \
   --duration 00:00:14.0 \
   --fps 12 \
@@ -169,18 +172,18 @@ between the "Why Teams Pick It" and "Quick Start" sections:
 
 | Install and Health Check | Go to Definition | Extract Variable |
 |:---:|:---:|:---:|
-| ![Install](docs/assets/gifs/install-health.gif) | ![Go to Def](docs/assets/gifs/goto-definition.gif) | ![Extract](docs/assets/gifs/extract-variable.gif) |
+| ![Install](docs/assets/gifs/install-health.gif) | ![Go to Def](docs/assets/gifs/find-references.gif) | ![Extract](docs/assets/gifs/extract-variable.gif) |
 ```
 
 GitHub renders GIFs inline in Markdown so no special hosting is required.
 
 ## File Naming and Versioning
 
-- Name GIF files after the feature, not the version: `goto-definition.gif` not
-  `goto-def-v1.gif`.
+- Name GIF files after the feature, not the version: `find-references.gif` not
+  `find-references-v1.gif`.
 - When a workflow changes enough to require a re-record, replace the file in
   place and commit with a message like:
-  `docs: re-record goto-definition gif for v0.13 navigation changes`
+  `docs: re-record find-references gif for v0.13 navigation changes`
 - Raw recordings are large and should not be committed. Add them to
   `docs/assets/recordings/` which is gitignored.
 

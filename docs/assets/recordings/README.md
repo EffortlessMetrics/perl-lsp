@@ -12,7 +12,7 @@ Expected files:
 | File | Produces |
 |------|---------|
 | `install-health.mp4` | `docs/assets/gifs/install-health.gif` |
-| `goto-definition.mp4` | `docs/assets/gifs/goto-definition.gif` |
+| `find-references.mp4` | `docs/assets/gifs/find-references.gif` |
 | `extract-variable.mp4` | `docs/assets/gifs/extract-variable.gif` |
 
 See [`../gifs/README.md`](../gifs/README.md) for the full recording guide.
