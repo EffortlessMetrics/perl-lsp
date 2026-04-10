@@ -33,10 +33,10 @@ pub use model::SemanticModel;
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;
-use crate::analysis::class_model::{ClassModel, ClassModelBuilder};
+use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResolutionOrder};
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolExtractor, SymbolTable};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 /// Semantic analyzer providing comprehensive IDE features for Perl code.
@@ -269,64 +269,232 @@ impl SemanticAnalyzer {
         receiver_class: &str,
         method_name: &str,
     ) -> Option<HoverInfo> {
-        let mut visited: Vec<String> = Vec::new();
-        let mut queue: Vec<String> = vec![receiver_class.to_string()];
+        self.resolve_inherited_method_hover_ordered(receiver_class, method_name)
+    }
 
-        while !queue.is_empty() {
-            let current = queue.remove(0);
-            if visited.contains(&current) {
-                continue;
+    /// Resolve the source location of a method inherited from the current class.
+    ///
+    /// This skips the receiver class itself and searches its ancestors in the
+    /// package's configured method-resolution order.
+    pub fn resolve_inherited_method_location(
+        &self,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<SourceLocation> {
+        let models_by_name: HashMap<&str, &ClassModel> =
+            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+
+        let receiver_model = models_by_name.get(receiver_class).copied()?;
+        let ancestor_order = match receiver_model.mro {
+            MethodResolutionOrder::Dfs => self.dfs_ancestor_order(receiver_class, &models_by_name),
+            MethodResolutionOrder::C3 => self.c3_ancestor_order(receiver_class, &models_by_name),
+        };
+
+        for ancestor in ancestor_order {
+            if let Some(model) = models_by_name.get(ancestor.as_str()).copied()
+                && let Some(location) = self.method_location_in_model(model, method_name)
+            {
+                return Some(location);
             }
-            visited.push(current.clone());
+        }
 
-            // Check class model first (has method list + parent chain)
-            if let Some(model) = self.class_models.iter().find(|m| m.name == current) {
-                if model.methods.iter().any(|m| m.name == method_name) {
-                    let is_direct = current == receiver_class;
-                    let details = if is_direct {
-                        vec![format!("Defined in {}", current)]
-                    } else {
-                        vec![format!("Inherited from {}", current)]
-                    };
-                    return Some(HoverInfo {
-                        signature: format!("sub {}::{}", current, method_name),
-                        documentation: None,
-                        details,
-                    });
+        None
+    }
+
+    fn resolve_inherited_method_hover_ordered(
+        &self,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<HoverInfo> {
+        let models_by_name: HashMap<&str, &ClassModel> =
+            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+
+        let Some(receiver_model) = models_by_name.get(receiver_class).copied() else {
+            return self.resolve_plain_package_method_hover(receiver_class, method_name);
+        };
+
+        if let Some(hover) =
+            self.hover_for_model_method(receiver_model, receiver_class, method_name)
+        {
+            return Some(hover);
+        }
+
+        let ancestor_order = match receiver_model.mro {
+            MethodResolutionOrder::Dfs => self.dfs_ancestor_order(receiver_class, &models_by_name),
+            MethodResolutionOrder::C3 => self.c3_ancestor_order(receiver_class, &models_by_name),
+        };
+
+        for ancestor in ancestor_order {
+            if let Some(model) = models_by_name.get(ancestor.as_str()).copied() {
+                if let Some(hover) = self.hover_for_model_method(model, receiver_class, method_name)
+                {
+                    return Some(hover);
                 }
-                for parent in &model.parents {
-                    if !visited.contains(parent) {
-                        queue.push(parent.clone());
-                    }
-                }
+            } else if let Some(hover) =
+                self.resolve_plain_package_method_hover(&ancestor, method_name)
+            {
+                return Some(hover);
+            }
+        }
+
+        None
+    }
+
+    fn hover_for_model_method(
+        &self,
+        model: &ClassModel,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<HoverInfo> {
+        if model.methods.iter().any(|m| m.name == method_name) {
+            let is_direct = model.name == receiver_class;
+            let details = if is_direct {
+                vec![format!("Defined in {}", model.name)]
             } else {
-                // Plain package not in class_models — check the symbol table
-                // for a sub with qualified_name == "PackageName::method_name"
-                let qualified = format!("{}::{}", current, method_name);
-                let found_in_table =
-                    self.symbol_table.symbols.get(method_name).is_some_and(|syms| {
-                        syms.iter().any(|s| {
-                            matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
-                                && s.qualified_name == qualified
-                        })
-                    }) || self.symbol_table.symbols.contains_key(&qualified);
+                vec![format!("Inherited from {}", model.name)]
+            };
+            return Some(HoverInfo {
+                signature: format!("sub {}::{}", model.name, method_name),
+                documentation: None,
+                details,
+            });
+        }
+        None
+    }
 
-                if found_in_table {
-                    let is_direct = current == receiver_class;
-                    let details = if is_direct {
-                        vec![format!("Defined in {}", current)]
-                    } else {
-                        vec![format!("Inherited from {}", current)]
-                    };
-                    return Some(HoverInfo {
-                        signature: format!("sub {}::{}", current, method_name),
-                        documentation: None,
-                        details,
-                    });
+    fn method_location_in_model(
+        &self,
+        model: &ClassModel,
+        method_name: &str,
+    ) -> Option<SourceLocation> {
+        model.methods.iter().find(|method| method.name == method_name).map(|method| method.location)
+    }
+
+    fn resolve_plain_package_method_hover(
+        &self,
+        package_name: &str,
+        method_name: &str,
+    ) -> Option<HoverInfo> {
+        let qualified = format!("{}::{}", package_name, method_name);
+        let found_in_table = self.symbol_table.symbols.get(method_name).is_some_and(|syms| {
+            syms.iter().any(|s| {
+                matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
+                    && s.qualified_name == qualified
+            })
+        }) || self.symbol_table.symbols.contains_key(&qualified);
+
+        if found_in_table {
+            return Some(HoverInfo {
+                signature: format!("sub {}::{}", package_name, method_name),
+                documentation: None,
+                details: vec![format!("Inherited from {}", package_name)],
+            });
+        }
+
+        None
+    }
+
+    fn dfs_ancestor_order(
+        &self,
+        package: &str,
+        models_by_name: &HashMap<&str, &ClassModel>,
+    ) -> Vec<String> {
+        fn walk(
+            package: &str,
+            models_by_name: &HashMap<&str, &ClassModel>,
+            seen: &mut HashSet<String>,
+            out: &mut Vec<String>,
+        ) {
+            let Some(model) = models_by_name.get(package).copied() else {
+                return;
+            };
+
+            for parent in &model.parents {
+                if seen.insert(parent.clone()) {
+                    out.push(parent.clone());
+                    walk(parent, models_by_name, seen, out);
                 }
             }
         }
-        None
+
+        let mut seen = HashSet::from([package.to_string()]);
+        let mut out = Vec::new();
+        walk(package, models_by_name, &mut seen, &mut out);
+        out
+    }
+
+    fn c3_ancestor_order(
+        &self,
+        package: &str,
+        models_by_name: &HashMap<&str, &ClassModel>,
+    ) -> Vec<String> {
+        fn linearize(
+            package: &str,
+            models_by_name: &HashMap<&str, &ClassModel>,
+            visited: &mut HashSet<String>,
+        ) -> Vec<String> {
+            if !visited.insert(package.to_string()) {
+                return vec![];
+            }
+
+            let Some(model) = models_by_name.get(package).copied() else {
+                return vec![package.to_string()];
+            };
+
+            let parents = model.parents.clone();
+            if parents.is_empty() {
+                return vec![package.to_string()];
+            }
+
+            let mut parent_mros: Vec<Vec<String>> = parents
+                .iter()
+                .map(|parent| linearize(parent, models_by_name, &mut visited.clone()))
+                .collect();
+            parent_mros.push(parents.clone());
+
+            let mut result = vec![package.to_string()];
+            loop {
+                parent_mros.retain(|list| !list.is_empty());
+                if parent_mros.is_empty() {
+                    break;
+                }
+
+                let chosen = parent_mros.iter().find_map(|list| {
+                    let candidate = list.first()?;
+                    let in_tail = parent_mros
+                        .iter()
+                        .any(|other| other.iter().skip(1).any(|name| name == candidate));
+                    if in_tail { None } else { Some(candidate.clone()) }
+                });
+
+                match chosen {
+                    Some(name) => {
+                        if !result.contains(&name) {
+                            result.push(name.clone());
+                        }
+                        for list in &mut parent_mros {
+                            if list.first().is_some_and(|head| head == &name) {
+                                list.remove(0);
+                            }
+                        }
+                    }
+                    None => {
+                        for list in parent_mros {
+                            if let Some(head) = list.first()
+                                && !result.contains(head)
+                            {
+                                result.push(head.clone());
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            result
+        }
+
+        linearize(package, models_by_name, &mut HashSet::new()).into_iter().skip(1).collect()
     }
 }
 

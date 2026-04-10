@@ -44,6 +44,21 @@ pub enum AccessorType {
     Bare,
 }
 
+/// Method-resolution order for inherited method lookup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MethodResolutionOrder {
+    /// Default Perl depth-first resolution order.
+    Dfs,
+    /// C3 linearization enabled via `use mro 'c3';`.
+    C3,
+}
+
+impl Default for MethodResolutionOrder {
+    fn default() -> Self {
+        Self::Dfs
+    }
+}
+
 /// A Moose/Moo attribute declared via `has`.
 #[derive(Debug, Clone)]
 pub struct Attribute {
@@ -179,6 +194,8 @@ pub struct ClassModel {
     pub adjusts: Vec<MethodInfo>,
     /// Parent classes from `extends 'Parent'`, `use parent`, `use base`, or `@ISA`
     pub parents: Vec<String>,
+    /// Method-resolution order for inherited method lookup.
+    pub mro: MethodResolutionOrder,
     /// Roles consumed via `with 'Role'`
     pub roles: Vec<String>,
     /// Method modifiers (before/after/around/override/augment)
@@ -211,6 +228,7 @@ pub struct ClassModelBuilder {
     current_methods: Vec<MethodInfo>,
     current_adjusts: Vec<MethodInfo>,
     current_parents: Vec<String>,
+    current_mro: MethodResolutionOrder,
     current_roles: Vec<String>,
     current_modifiers: Vec<MethodModifier>,
     current_exports: Vec<String>,
@@ -238,6 +256,7 @@ impl ClassModelBuilder {
             current_methods: Vec::new(),
             current_adjusts: Vec::new(),
             current_parents: Vec::new(),
+            current_mro: MethodResolutionOrder::Dfs,
             current_roles: Vec::new(),
             current_modifiers: Vec::new(),
             current_exports: Vec::new(),
@@ -274,6 +293,7 @@ impl ClassModelBuilder {
                 methods: std::mem::take(&mut self.current_methods),
                 adjusts: std::mem::take(&mut self.current_adjusts),
                 parents: std::mem::take(&mut self.current_parents),
+                mro: self.current_mro,
                 roles: std::mem::take(&mut self.current_roles),
                 modifiers: std::mem::take(&mut self.current_modifiers),
                 exports: std::mem::take(&mut self.current_exports),
@@ -288,6 +308,7 @@ impl ClassModelBuilder {
             self.current_methods.clear();
             self.current_adjusts.clear();
             self.current_parents.clear();
+            self.current_mro = MethodResolutionOrder::Dfs;
             self.current_roles.clear();
             self.current_modifiers.clear();
             self.current_exports.clear();
@@ -309,6 +330,7 @@ impl ClassModelBuilder {
                 self.current_package = name.clone();
                 self.current_framework =
                     self.framework_map.get(name).copied().unwrap_or(Framework::None);
+                self.current_mro = MethodResolutionOrder::Dfs;
 
                 if let Some(block) = block {
                     self.visit_node(block);
@@ -328,6 +350,10 @@ impl ClassModelBuilder {
 
             NodeKind::Use { module, args, .. } => {
                 self.detect_framework(module, args);
+            }
+
+            NodeKind::No { module, .. } if module == "mro" => {
+                self.current_mro = MethodResolutionOrder::Dfs;
             }
 
             // `our @ISA = qw(Parent1 Parent2);` / `our @EXPORT = qw(...);` / `our @EXPORT_OK = qw(...);`
@@ -406,6 +432,7 @@ impl ClassModelBuilder {
                 } else {
                     Framework::NativeClass
                 };
+                self.current_mro = MethodResolutionOrder::Dfs;
                 self.framework_map.insert(name.clone(), self.current_framework);
                 self.current_package_aliases.clear();
                 // Populate parent classes from `:isa(Parent)` attributes
@@ -455,6 +482,7 @@ impl ClassModelBuilder {
         while idx < statements.len() {
             // First, check for `use` declarations to detect frameworks
             if let NodeKind::Use { module, args, .. } = &statements[idx].kind {
+                self.detect_mro(module, args);
                 self.detect_framework(module, args);
                 idx += 1;
                 continue;
@@ -549,6 +577,33 @@ impl ClassModelBuilder {
 
         self.current_framework = framework;
         self.framework_map.insert(self.current_package.clone(), framework);
+    }
+
+    /// Detect `use mro 'c3'` / `use mro 'dfs'` for the current package.
+    fn detect_mro(&mut self, module: &str, args: &[String]) {
+        if module != "mro" {
+            return;
+        }
+
+        if args.is_empty() {
+            self.current_mro = MethodResolutionOrder::Dfs;
+            return;
+        }
+
+        for arg in args {
+            let trimmed = arg.trim().trim_matches('\'').trim_matches('"');
+            match trimmed {
+                "c3" => {
+                    self.current_mro = MethodResolutionOrder::C3;
+                    return;
+                }
+                "dfs" => {
+                    self.current_mro = MethodResolutionOrder::Dfs;
+                    return;
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Extract Moo/Moose `has` declarations.
@@ -1329,6 +1384,30 @@ has 'level' => (is => 'ro');
         assert!(model.parents.contains(&"MyApp::User".to_string()));
         assert_eq!(model.roles, vec!["MyApp::Printable", "MyApp::Serializable"]);
         assert_eq!(model.attributes.len(), 1);
+    }
+
+    #[test]
+    fn mro_pragma_tracks_c3_and_reset() {
+        let models = build_models(
+            r#"
+package Example::Child;
+use parent 'Example::Base';
+use mro 'c3';
+sub greet { }
+
+package Example::Sibling;
+use parent 'Example::Base';
+no mro;
+sub greet { }
+"#,
+        );
+
+        let child = find_model(&models, "Example::Child").expect("expected ClassModel for Child");
+        assert_eq!(child.mro, MethodResolutionOrder::C3);
+
+        let sibling =
+            find_model(&models, "Example::Sibling").expect("expected ClassModel for Sibling");
+        assert_eq!(sibling.mro, MethodResolutionOrder::Dfs);
     }
 
     #[test]
