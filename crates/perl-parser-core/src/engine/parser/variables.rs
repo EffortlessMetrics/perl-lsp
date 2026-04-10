@@ -662,7 +662,70 @@ impl<'a> Parser<'a> {
         }
 
         self.expect(TokenKind::RightParen)?; // consume )
+        self.validate_signature_ordering(&params);
         Ok(params)
+    }
+
+    /// Validate ordering rules for a collected list of signature parameters.
+    ///
+    /// Emits diagnostics (without aborting the parse) for:
+    /// - A slurpy (`@` or `%`) parameter that is not the last parameter.
+    /// - Both an `@` and a `%` slurpy parameter present in the same signature.
+    /// - A mandatory parameter appearing after an optional parameter.
+    fn validate_signature_ordering(&mut self, params: &[Node]) {
+        let mut seen_slurpy_at = false; // saw @array slurpy
+        let mut seen_slurpy_pct = false; // saw %hash slurpy
+        let mut seen_optional = false;
+
+        for (idx, param) in params.iter().enumerate() {
+            let is_last = idx == params.len() - 1;
+
+            match &param.kind {
+                NodeKind::SlurpyParameter { variable } => {
+                    let sigil = match &variable.kind {
+                        NodeKind::Variable { sigil, .. } => sigil.as_str(),
+                        _ => "",
+                    };
+
+                    if sigil == "@" {
+                        if seen_slurpy_pct {
+                            self.errors.push(ParseError::syntax(
+                                "Signature cannot have both @ and % slurpy parameters",
+                                param.location.start,
+                            ));
+                        }
+                        seen_slurpy_at = true;
+                    } else if sigil == "%" {
+                        if seen_slurpy_at {
+                            self.errors.push(ParseError::syntax(
+                                "Signature cannot have both @ and % slurpy parameters",
+                                param.location.start,
+                            ));
+                        }
+                        seen_slurpy_pct = true;
+                    }
+
+                    if !is_last {
+                        self.errors.push(ParseError::syntax(
+                            "Slurpy parameter must be the last parameter in the signature",
+                            param.location.start,
+                        ));
+                    }
+                }
+                NodeKind::OptionalParameter { .. } => {
+                    seen_optional = true;
+                }
+                NodeKind::MandatoryParameter { .. } => {
+                    if seen_optional {
+                        self.errors.push(ParseError::syntax(
+                            "Mandatory parameter cannot follow an optional parameter in signature",
+                            param.location.start,
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Parse a single signature parameter
