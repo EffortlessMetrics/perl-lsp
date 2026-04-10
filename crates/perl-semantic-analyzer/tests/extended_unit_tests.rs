@@ -30,6 +30,7 @@ use perl_semantic_analyzer::analysis::type_inference::{
 use perl_semantic_analyzer::symbol::{
     ScopeKind, SymbolExtractor, SymbolKind, SymbolTable, VarKind,
 };
+use perl_semantic_analyzer::workspace_index::SymKind;
 use perl_tdd_support::{must, must_some};
 use std::sync::Arc;
 
@@ -152,6 +153,36 @@ fn symbol_at_cursor_on_function_call() -> Result<(), Box<dyn std::error::Error>>
     if let Some(key) = sym {
         assert_eq!(key.name.as_ref(), "print");
     }
+    Ok(())
+}
+
+#[test]
+fn symbol_at_cursor_resolves_posix_tag_import_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "use POSIX qw(:sys_wait_h);\nif (WIFEXITED()) { WEXITSTATUS(); }";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+
+    let wifexited_offset = code.find("WIFEXITED").ok_or("missing WIFEXITED in fixture")?;
+    let sym = symbol_at_cursor(&ast, wifexited_offset, "main").ok_or("no symbol resolved")?;
+
+    assert_eq!(sym.pkg.as_ref(), "POSIX");
+    assert_eq!(sym.name.as_ref(), "WIFEXITED");
+    assert_eq!(sym.kind, SymKind::Sub);
+    Ok(())
+}
+
+#[test]
+fn symbol_at_cursor_resolves_fcntl_tag_import_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "use Fcntl qw(:seek);\nmy $x = SEEK_SET();";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+
+    let seek_set_offset = code.find("SEEK_SET").ok_or("missing SEEK_SET in fixture")?;
+    let sym = symbol_at_cursor(&ast, seek_set_offset, "main").ok_or("no symbol resolved")?;
+
+    assert_eq!(sym.pkg.as_ref(), "Fcntl");
+    assert_eq!(sym.name.as_ref(), "SEEK_SET");
+    assert_eq!(sym.kind, SymKind::Sub);
     Ok(())
 }
 

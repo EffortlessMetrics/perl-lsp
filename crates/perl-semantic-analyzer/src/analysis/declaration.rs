@@ -1245,22 +1245,79 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
     }
 
+    fn exported_symbols_for_tag(module: &str, tag: &str) -> &'static [&'static str] {
+        match (module, tag) {
+            ("POSIX", "sys_wait_h") => &[
+                "WEXITSTATUS",
+                "WIFEXITED",
+                "WIFSIGNALED",
+                "WIFSTOPPED",
+                "WNOHANG",
+                "WSTOPSIG",
+                "WTERMSIG",
+            ],
+            ("POSIX", "fcntl_h") => {
+                &["F_DUPFD", "F_GETFD", "F_GETFL", "F_SETFD", "F_SETFL", "FD_CLOEXEC"]
+            }
+            ("POSIX", "termios_h") => &["B0", "B9600", "CS8", "ECHO", "ICANON", "ISIG", "TCSANOW"],
+            ("File::Find", "find") => &["find", "finddepth"],
+            ("Fcntl", "seek") => &["SEEK_SET", "SEEK_CUR", "SEEK_END"],
+            ("Fcntl", "lock") => &["LOCK_SH", "LOCK_EX", "LOCK_NB", "LOCK_UN"],
+            ("Encode", "fallback") => &[
+                "FB_DEFAULT",
+                "FB_CROAK",
+                "FB_QUIET",
+                "FB_WARN",
+                "FB_PERLQQ",
+                "FB_HTMLCREF",
+                "FB_XMLCREF",
+            ],
+            _ => &[],
+        }
+    }
+
+    fn parse_qw_words(arg: &str) -> Option<Vec<&str>> {
+        if !arg.starts_with("qw") {
+            return None;
+        }
+
+        let content = arg
+            .trim_start_matches("qw")
+            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+
+        Some(content.split_whitespace().collect())
+    }
+
+    fn module_imports_symbol(module: &str, args: &[String], symbol_name: &str) -> bool {
+        for arg in args {
+            if arg == symbol_name {
+                return true;
+            }
+
+            if let Some(words) = parse_qw_words(arg) {
+                for word in words {
+                    if word == symbol_name {
+                        return true;
+                    }
+
+                    if let Some(tag) = word.strip_prefix(':')
+                        && exported_symbols_for_tag(module, tag).contains(&symbol_name)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
         fn find(node: &Node, name: &str) -> Option<String> {
             if let NodeKind::Use { module, args, .. } = &node.kind {
-                for arg in args {
-                    if arg == name {
-                        return Some(module.clone());
-                    }
-                    if arg.starts_with("qw") {
-                        let content = arg
-                            .trim_start_matches("qw")
-                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                        if content.split_whitespace().any(|w| w == name) {
-                            return Some(module.clone());
-                        }
-                    }
+                if module_imports_symbol(module, args, name) {
+                    return Some(module.clone());
                 }
             }
 
