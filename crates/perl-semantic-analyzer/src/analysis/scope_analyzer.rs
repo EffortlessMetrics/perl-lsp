@@ -1000,6 +1000,14 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&block_scope, issues, context);
             }
 
+            NodeKind::PhaseBlock { block, .. } => {
+                let phase_scope = Rc::new(Scope::with_parent(scope.clone()));
+                ancestors.push(node);
+                self.analyze_node(block, &phase_scope, ancestors, issues, context);
+                ancestors.pop();
+                self.collect_unused_variables(&phase_scope, issues, context);
+            }
+
             NodeKind::For { init, condition, update, body, .. } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 

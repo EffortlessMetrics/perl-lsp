@@ -3083,6 +3083,50 @@ fn phase_block_symbol_in_global_scope() -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
+#[test]
+fn phase_block_local_lexical_does_not_leak_outside() -> Result<(), Box<dyn std::error::Error>> {
+    for phase in ["BEGIN", "CHECK", "INIT", "UNITCHECK", "END"] {
+        let code = format!(
+            r#"
+use strict;
+{phase} {{
+    my $inner = 1;
+}}
+print $inner;
+"#
+        );
+        let issues = scope_issues_strict(&code);
+        assert!(
+            has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
+            "{} block lexical must not leak to outer scope; issues: {:?}",
+            phase,
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn phase_block_local_lexical_does_not_leak_to_sibling_phase()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+BEGIN {
+    my $inner = 1;
+}
+CHECK {
+    print $inner;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
+        "BEGIN lexical must not leak into sibling phaser; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
 // ---- Issue #3503: variables in print comma-separated args must be marked used ----
 
 #[test]
