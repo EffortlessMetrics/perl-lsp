@@ -354,10 +354,9 @@ fn f_format_code_for_filenames() {
 }
 
 #[test]
-fn e_format_code_passthrough() {
-    // E<lt> E<gt> etc. — we just strip the code, leaving the entity name
-    let doc = extract_pod("=head1 NAME\n\nE<lt>\n\n=cut\n");
-    assert_eq!(doc.name.as_deref(), Some("lt"));
+fn e_format_code_decodes_common_entities() {
+    let doc = extract_pod("=head1 NAME\n\nE<lt> E<gt> E<amp> E<quot> E<apos>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("< > & \" '"));
 }
 
 #[test]

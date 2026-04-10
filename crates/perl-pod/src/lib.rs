@@ -210,7 +210,8 @@ fn first_paragraph(text: &str) -> String {
     result
 }
 
-/// Strip POD inline formatting codes: `B<bold>`, `I<italic>`, `C<code>`, `L<link>`.
+/// Strip POD inline formatting codes: `B<bold>`, `I<italic>`, `C<code>`, `L<link>`,
+/// and decode common `E<>` entities.
 ///
 /// Handles simple (non-nested) formatting codes. Nested codes like `B<I<text>>`
 /// are handled by stripping outer codes first.
@@ -246,12 +247,10 @@ fn strip_pod_formatting(text: &str) -> String {
             let inner = &chars[start..i];
             let inner_str: String = inner.iter().collect();
 
-            // For L<> links, extract display text
-            let display = if code_char == 'L' {
-                extract_link_display(&inner_str)
-            } else {
-                // Recursively strip formatting from inner content
-                strip_pod_formatting(&inner_str)
+            let display = match code_char {
+                'L' => extract_link_display(&inner_str),
+                'E' => decode_pod_entity(&inner_str),
+                _ => strip_pod_formatting(&inner_str),
             };
 
             result.push_str(&display);
@@ -284,6 +283,17 @@ fn extract_link_display(link: &str) -> String {
         return strip_pod_formatting(&link[..slash_pos]);
     }
     strip_pod_formatting(link)
+}
+
+fn decode_pod_entity(entity: &str) -> String {
+    match entity {
+        "lt" => "<".to_string(),
+        "gt" => ">".to_string(),
+        "amp" => "&".to_string(),
+        "quot" => "\"".to_string(),
+        "apos" => "'".to_string(),
+        _ => entity.to_string(),
+    }
 }
 
 fn is_pod_format_code(c: char) -> bool {
