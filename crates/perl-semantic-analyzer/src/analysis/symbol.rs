@@ -380,6 +380,8 @@ pub struct FrameworkFlags {
     pub web_framework: Option<WebFrameworkKind>,
     /// Async framework variant, if any (IO::Async).
     pub async_framework: Option<AsyncFrameworkKind>,
+    /// Catalyst controller/package marker used for action synthesis.
+    pub catalyst_controller: bool,
 }
 
 /// Extract symbols from an AST for Parse/Index workflows.
@@ -522,6 +524,37 @@ impl SymbolExtractor {
 
                 if name.is_some() {
                     let documentation = self.extract_leading_comment(node.location.start);
+                    let mut symbol_attributes = attributes.clone();
+                    let documentation = if self.current_package_is_catalyst_controller()
+                        && let Some((action_kind, action_details)) =
+                            Self::catalyst_action_metadata(attributes)
+                    {
+                        symbol_attributes.push("framework=Catalyst".to_string());
+                        symbol_attributes.push("catalyst_controller=true".to_string());
+                        symbol_attributes.push("catalyst_action=true".to_string());
+                        symbol_attributes.push(format!("catalyst_action_kind={action_kind}"));
+                        if !action_details.is_empty() {
+                            symbol_attributes.push(format!(
+                                "catalyst_action_attributes={}",
+                                action_details.join(", ")
+                            ));
+                        }
+
+                        let action_doc = if action_details.is_empty() {
+                            format!("Catalyst action ({action_kind})")
+                        } else {
+                            format!(
+                                "Catalyst action ({action_kind}; {})",
+                                action_details.join(", ")
+                            )
+                        };
+                        match documentation {
+                            Some(doc) => Some(format!("{doc}\n{action_doc}")),
+                            None => Some(action_doc),
+                        }
+                    } else {
+                        documentation
+                    };
                     let symbol = Symbol {
                         name: sub_name.clone(),
                         qualified_name: format!("{}::{}", self.table.current_package, sub_name),
@@ -530,7 +563,7 @@ impl SymbolExtractor {
                         scope_id: self.table.current_scope(),
                         declaration: None,
                         documentation,
-                        attributes: attributes.clone(),
+                        attributes: symbol_attributes,
                     };
 
                     self.table.add_symbol(symbol);
@@ -552,6 +585,9 @@ impl SymbolExtractor {
             NodeKind::Package { name, block, name_span: _ } => {
                 let old_package = self.table.current_package.clone();
                 self.table.current_package = name.clone();
+                if Self::is_catalyst_controller_package_name(name) {
+                    self.mark_catalyst_controller_package(name);
+                }
 
                 let documentation = self.extract_package_documentation(name, node.location);
                 let symbol = Symbol {
@@ -801,8 +837,13 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Class { name, body, .. } => {
+            NodeKind::Class { name, parents, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
+                if Self::is_catalyst_controller_package_name(name)
+                    || parents.iter().any(|parent| parent == "Catalyst::Controller")
+                {
+                    self.mark_catalyst_controller_package(name);
+                }
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: name.clone(),
@@ -1222,6 +1263,10 @@ impl SymbolExtractor {
             let keyword = name.as_str();
             let names: Vec<String> = args.iter().flat_map(Self::collect_symbol_names).collect();
             if !names.is_empty() {
+                if names.iter().any(|name| name == "Catalyst::Controller") {
+                    let package = self.table.current_package.clone();
+                    self.mark_catalyst_controller_package(&package);
+                }
                 let ref_kind =
                     if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
                 for ref_name in names {
@@ -1262,6 +1307,11 @@ impl SymbolExtractor {
         let names = Self::collect_symbol_names(expression);
         if names.is_empty() {
             return None;
+        }
+
+        if names.iter().any(|name| name == "Catalyst::Controller") {
+            let package = self.table.current_package.clone();
+            self.mark_catalyst_controller_package(&package);
         }
 
         let ref_location = SourceLocation { start: first.location.start, end: second.location.end };
@@ -1994,14 +2044,14 @@ impl SymbolExtractor {
         };
 
         if let Some(kind) = framework_kind {
-            let flags = self.framework_flags.entry(pkg).or_default();
+            let flags = self.framework_flags.entry(pkg.clone()).or_default();
             flags.moo = true;
             flags.kind = Some(kind);
             return;
         }
 
         if module == "Class::Accessor" {
-            self.framework_flags.entry(pkg).or_default().class_accessor = true;
+            self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
             return;
         }
 
@@ -2012,66 +2062,66 @@ impl SymbolExtractor {
             _ => None,
         };
         if let Some(kind) = web_kind {
-            self.framework_flags.entry(pkg).or_default().web_framework = Some(kind);
+            self.framework_flags.entry(pkg.clone()).or_default().web_framework = Some(kind);
             return;
         }
 
         if module == "IO::Async" || module.starts_with("IO::Async::") {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::IOAsync);
             return;
         }
 
         if module == "AnyEvent" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::AnyEvent);
             return;
         }
 
         if module == "EV" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::EV);
             return;
         }
 
         if module == "Future" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::Future);
             return;
         }
 
         if module == "Future::XS" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::FutureXS);
             return;
         }
 
         if module == "Promise" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::Promise);
             return;
         }
 
         if module == "Promise::XS" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::PromiseXS);
             return;
         }
 
         if module == "POE" || module.starts_with("POE::") {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::POE);
             return;
         }
 
         if module == "Mojo::Redis" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::MojoRedis);
             return;
         }
 
         if module == "Mojo::Pg" {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::MojoPg);
             return;
         }
@@ -2082,9 +2132,82 @@ impl SymbolExtractor {
                 .filter_map(|arg| Self::normalize_symbol_name(arg))
                 .any(|arg| arg == "Class::Accessor");
             if has_class_accessor_parent {
-                self.framework_flags.entry(pkg).or_default().class_accessor = true;
+                self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
+            }
+            let has_catalyst_controller_parent = args
+                .iter()
+                .filter_map(|arg| Self::normalize_symbol_name(arg))
+                .any(|arg| arg == "Catalyst::Controller");
+            if has_catalyst_controller_parent {
+                self.mark_catalyst_controller_package(&pkg);
             }
         }
+    }
+
+    fn mark_catalyst_controller_package(&mut self, package: &str) {
+        self.framework_flags.entry(package.to_string()).or_default().catalyst_controller = true;
+    }
+
+    fn current_package_is_catalyst_controller(&self) -> bool {
+        self.framework_flags
+            .get(&self.table.current_package)
+            .is_some_and(|flags| flags.catalyst_controller)
+            || Self::is_catalyst_controller_package_name(&self.table.current_package)
+    }
+
+    fn is_catalyst_controller_package_name(package: &str) -> bool {
+        package.contains("::Controller::") || package.ends_with("::Controller")
+    }
+
+    fn catalyst_action_metadata(attributes: &[String]) -> Option<(String, Vec<String>)> {
+        let mut kind = None;
+        let mut details = Vec::new();
+        let mut seen = HashSet::new();
+
+        for attr in attributes {
+            let attr_name = Self::attribute_base_name(attr);
+            if !Self::is_catalyst_action_attribute(&attr_name) {
+                continue;
+            }
+
+            if kind.is_none()
+                || matches!(kind.as_deref(), Some("Args" | "CaptureArgs" | "PathPart"))
+            {
+                if matches!(attr_name.as_str(), "Path" | "Local" | "Global" | "Regex" | "Chained") {
+                    kind = Some(attr_name.clone());
+                } else if kind.is_none() {
+                    kind = Some(attr_name.clone());
+                }
+            }
+
+            if seen.insert(attr.clone()) {
+                details.push(attr.clone());
+            }
+        }
+
+        if kind
+            .as_deref()
+            .is_some_and(|kind| matches!(kind, "Path" | "Local" | "Global" | "Regex" | "Chained"))
+        {
+            details.retain(|attr| Self::attribute_base_name(attr) != kind.as_deref().unwrap());
+        }
+
+        kind.map(|kind| (kind, details))
+    }
+
+    fn is_catalyst_action_attribute(attr_name: &str) -> bool {
+        matches!(
+            attr_name,
+            "Path" | "Local" | "Global" | "Regex" | "Chained" | "PathPart" | "Args" | "CaptureArgs"
+        )
+    }
+
+    fn attribute_base_name(attr: &str) -> String {
+        attr.trim_start_matches(':')
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == ':'))
+            .next()
+            .unwrap_or("")
+            .to_string()
     }
 
     /// Parse attribute metadata from Moo/Moose option hashes.
