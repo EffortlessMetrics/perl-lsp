@@ -20,6 +20,20 @@ collector works identically on Windows and Unix sources.
 - `CollectionResult` -- all collected contents, terminator-found flags, next byte offset
 - `QuoteKind` -- enum: `Unquoted`, `Single`, `Double`, `Backtick`
 
+
+## BDD Coverage
+
+The crate includes acceptance-style scenarios in
+`tests/bdd_scenarios.rs` using explicit **Given / When / Then** naming for
+core behavior:
+
+- terminated heredoc collection
+- indented heredoc stripping (`<<~`)
+- unterminated heredoc reporting
+- CRLF handling
+- FIFO behavior across multiple pending heredocs
+- exact label matching (no prefix/suffix/trailing-text matches)
+
 ## Workspace Role
 
 Internal Tier 1 leaf crate in the
