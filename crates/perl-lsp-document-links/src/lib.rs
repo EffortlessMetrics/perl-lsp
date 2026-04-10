@@ -39,8 +39,13 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
                     }
                 }
                 ModuleImportKind::Require => {
-                    if !import.token.starts_with('"')
-                        && !import.token.starts_with('\'')
+                    let is_quoted_require = import.token_start > 0
+                        && matches!(
+                            line.as_bytes().get(import.token_start - 1),
+                            Some(b'\'' | b'"')
+                        );
+
+                    if !is_quoted_require
                         && import.token.contains("::")
                         && !is_pragma(import.token)
                         && let Some(link) = make_deferred_module_link(
