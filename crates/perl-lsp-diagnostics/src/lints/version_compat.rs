@@ -81,6 +81,8 @@ const BUILTIN_FUNCTION_VERSIONS: &[(&str, u32, u32)] = &[
 
 const GIVEN_WHEN_DEPRECATION_VERSION: PerlVersion = PerlVersion::new(5, 38);
 const GIVEN_WHEN_REMOVAL_VERSION: PerlVersion = PerlVersion::new(5, 42);
+const SMARTMATCH_DEPRECATION_VERSION: PerlVersion = PerlVersion::new(5, 38);
+const SMARTMATCH_REMOVAL_VERSION: PerlVersion = PerlVersion::new(5, 42);
 
 /// Check for Perl version compatibility issues.
 ///
@@ -311,6 +313,26 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             }
 
+            // Smartmatch operator `~~` — enabled by `use feature 'switch'` in v5.10+,
+            // deprecated in v5.38, and removed in v5.42.
+            NodeKind::Binary { op, .. } if op == "~~" => {
+                if declared_version >= SMARTMATCH_REMOVAL_VERSION {
+                    diagnostics.push(make_smartmatch_diagnostic(
+                        n,
+                        declared_version,
+                        DiagnosticSeverity::Error,
+                    ));
+                } else if declared_version >= SMARTMATCH_DEPRECATION_VERSION {
+                    diagnostics.push(make_smartmatch_diagnostic(
+                        n,
+                        declared_version,
+                        DiagnosticSeverity::Warning,
+                    ));
+                } else if !effective_features.contains(&"switch") {
+                    diagnostics.push(make_smartmatch_feature_diagnostic(n, declared_version));
+                }
+            }
+
             _ => {}
         }
     });
@@ -412,6 +434,58 @@ fn make_given_when_default_diagnostic(
             min_version.1
         )),
     }
+}
+
+fn make_smartmatch_diagnostic(
+    node: &Node,
+    declared_version: PerlVersion,
+    severity: DiagnosticSeverity,
+) -> Diagnostic {
+    let (message, min_version) = match severity {
+        DiagnosticSeverity::Error => (
+            format!(
+                "smartmatch operator `~~` was removed in Perl v5.42; declared version is v{}.{}",
+                declared_version.major, declared_version.minor
+            ),
+            (5, 42),
+        ),
+        _ => (
+            format!(
+                "smartmatch operator `~~` is deprecated starting in Perl v5.38; declared version is v{}.{}",
+                declared_version.major, declared_version.minor
+            ),
+            (5, 38),
+        ),
+    };
+
+    Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity,
+        code: Some(DiagnosticCode::VersionIncompatFeature.as_str().to_string()),
+        message,
+        related_information: vec![],
+        tags: vec![],
+        suggestion: Some(format!(
+            "Replace smartmatch `~~` with `if` / `elsif`, `grep`, or `any` from List::Util; this operator is {} in v{}.{}.",
+            if severity == DiagnosticSeverity::Error { "removed" } else { "deprecated" },
+            min_version.0,
+            min_version.1
+        )),
+    }
+}
+
+fn make_smartmatch_feature_diagnostic(node: &Node, declared_version: PerlVersion) -> Diagnostic {
+    make_diagnostic_with_details(
+        node,
+        "smartmatch operator `~~`",
+        declared_version,
+        (5, 10),
+        DiagnosticSeverity::Warning,
+        Some(format!(
+            "Update 'use v{}.{}' to 'use v5.10' or add 'use feature \"switch\";'",
+            declared_version.major, declared_version.minor
+        )),
+    )
 }
 
 fn make_diagnostic_with_details(
