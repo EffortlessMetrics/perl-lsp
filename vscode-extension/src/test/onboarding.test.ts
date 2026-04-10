@@ -262,10 +262,11 @@ describe('OnboardingManager.runSetupHealthCheck', () => {
     fs.writeFileSync(binPath, '#!/bin/sh\necho ok');
 
     const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
-    // Simulate both perl and perltidy available
+    // Simulate perl, perltidy, and perlcritic available
     mgr._execCheck = jest.fn((cmd: string, _args: string[]) => {
       if (cmd === 'perl') return Promise.resolve({ stdout: '5.036000', stderr: '' });
       if (cmd === 'perltidy') return Promise.resolve({ stdout: 'perltidy, v20230309', stderr: '' });
+      if (cmd === 'perlcritic') return Promise.resolve({ stdout: '1.156', stderr: '' });
       return Promise.reject(new Error('unknown'));
     });
     const results: HealthCheckResult[] = await mgr.runSetupHealthCheck(binPath);

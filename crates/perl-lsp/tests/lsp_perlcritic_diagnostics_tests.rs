@@ -68,21 +68,21 @@ fn test_a_violations_appear_in_pull_diagnostics_when_enabled() {
     let result = pull_diagnostics(&server, uri, "print 'hello';\n");
 
     // There must be at least one diagnostic with code
-    // "PC:TestingAndDebugging::RequireUseStrict" and severity 2 (Warning).
+    // "TestingAndDebugging::RequireUseStrict" and severity 2 (Warning).
     //
     // The pull-diagnostics response has the shape:
     //   { "kind": "full", "items": [ { "code": "...", "severity": N, ... } ], "resultId": "..." }
     let diags = result["items"].as_array().cloned().unwrap_or_default();
 
     let found = diags.iter().any(|d| {
-        d["code"].as_str() == Some("PC:TestingAndDebugging::RequireUseStrict")
+        d["code"].as_str() == Some("TestingAndDebugging::RequireUseStrict")
             && d["severity"].as_u64() == Some(2)
     });
 
     assert!(
         found,
         "Expected a Warning diagnostic with code \
-         PC:TestingAndDebugging::RequireUseStrict in the pull response; \
+         TestingAndDebugging::RequireUseStrict in the pull response; \
          got: {result}"
     );
 }
@@ -118,7 +118,7 @@ fn test_b_no_subprocess_invocation_when_perlcritic_disabled() {
 // ── Test C ────────────────────────────────────────────────────────────────────
 
 /// When the `perlcritic` binary is absent from PATH, diagnostics are empty and
-/// no error is surfaced.
+/// no subprocess is attempted.
 ///
 /// This test is skipped when perlcritic *is* installed because there is no
 /// portable way to temporarily hide a binary from PATH in a single test.
@@ -145,10 +145,8 @@ fn test_c_graceful_skip_when_perlcritic_not_installed() {
     let result = pull_diagnostics(&server, uri, "use strict;\n");
 
     let diags = result["items"].as_array().cloned().unwrap_or_default();
-    let perlcritic_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d["code"].as_str().map(|c| c.starts_with("PC:")).unwrap_or(false))
-        .collect();
+    let perlcritic_diags: Vec<_> =
+        diags.iter().filter(|d| d["source"].as_str() == Some("perlcritic")).collect();
 
     assert_eq!(
         perlcritic_diags.len(),
@@ -161,6 +159,41 @@ fn test_c_graceful_skip_when_perlcritic_not_installed() {
         0,
         "Mock runtime must not be called when perlcritic binary is absent"
     );
+}
+
+/// Severity mapping must follow Perl::Critic semantics:
+/// 5 -> Error (1), 1 -> Hint (4).
+#[test]
+fn test_e_perlcritic_severity_maps_to_lsp_levels() {
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 1, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let mock_lines = b"test.pl:5:1:5:ValuesAndExpressions::ProhibitMagicNumbers:magic number\n\
+test.pl:6:1:1:TestingAndDebugging::ProhibitNoWarnings:low severity\n";
+    runtime.add_response(MockResponse::success(mock_lines.to_vec()));
+    server.test_install_mock_critic_runtime(runtime);
+    server.test_bypass_perlcritic_command_check();
+
+    #[cfg(windows)]
+    let uri = "file:///C:/tmp/test_severity_map.pl";
+    #[cfg(not(windows))]
+    let uri = "file:///tmp/test_severity_map.pl";
+
+    let result = pull_diagnostics(&server, uri, "print 42;\n");
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+
+    let has_error = diags.iter().any(|d| {
+        d["code"].as_str() == Some("ValuesAndExpressions::ProhibitMagicNumbers")
+            && d["severity"].as_u64() == Some(1)
+    });
+    let has_hint = diags.iter().any(|d| {
+        d["code"].as_str() == Some("TestingAndDebugging::ProhibitNoWarnings")
+            && d["severity"].as_u64() == Some(4)
+    });
+
+    assert!(has_error, "expected severity-5 violation mapped to Error; got: {result}");
+    assert!(has_hint, "expected severity-1 violation mapped to Hint; got: {result}");
 }
 
 // ── Test D ────────────────────────────────────────────────────────────────────

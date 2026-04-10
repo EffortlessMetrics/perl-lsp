@@ -272,6 +272,32 @@
             "order": 50,
             "description": "Enable semantic syntax highlighting. When disabled, the editor falls back to TextMate grammar coloring only.",
             "markdownDescription": "Enable semantic syntax highlighting. When disabled, the editor falls back to TextMate grammar coloring only."
+          },
+          "perl.perlcritic.enabled": {
+            "type": "boolean",
+            "default": false,
+            "scope": "resource",
+            "order": 60,
+            "description": "Enable external Perl::Critic diagnostics (requires perlcritic installed).",
+            "markdownDescription": "Enable external `Perl::Critic` diagnostics (requires `perlcritic` on PATH)."
+          },
+          "perl.perlcritic.severity": {
+            "type": "number",
+            "default": 3,
+            "minimum": 1,
+            "maximum": 5,
+            "scope": "resource",
+            "order": 61,
+            "description": "Minimum Perl::Critic severity to report (1 reports everything, 5 reports only the most severe violations).",
+            "markdownDescription": "Minimum `Perl::Critic` severity to report (`1` reports everything, `5` reports only the most severe violations)."
+          },
+          "perl.perlcritic.profile": {
+            "type": "string",
+            "default": "",
+            "scope": "resource",
+            "order": 62,
+            "description": "Path to a .perlcriticrc profile. Leave empty to use Perl::Critic auto-discovery.",
+            "markdownDescription": "Path to a `.perlcriticrc` profile. Leave empty to use `Perl::Critic` auto-discovery."
           }
         }
       },

@@ -273,6 +273,16 @@ pub struct LspServer {
     /// Initialized to `false`; only the test helper methods flip this.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_perlcritic_command_check: AtomicBool,
+    /// Emits a one-time warning when external `perlcritic` is enabled but the
+    /// binary is unavailable on PATH.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) perlcritic_missing_tool_warned: AtomicBool,
+    /// Emits a one-time warning when a configured perlcritic profile path is invalid.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) perlcritic_missing_profile_warned: AtomicBool,
+    /// Emits a one-time warning when external perlcritic execution fails.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) perlcritic_runtime_error_warned: AtomicBool,
     /// Optional AI inline-completion backend.
     ///
     /// When `Some`, the `handle_inline_completion` handler will attempt

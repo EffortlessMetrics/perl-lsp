@@ -754,8 +754,8 @@ impl LspServer {
     /// Checks the `perlcritic_enabled` config flag and whether `perlcritic` is
     /// installed on the system. If both conditions are met, runs perlcritic on
     /// the file and appends violations with severity mapped from Perl::Critic's
-    /// 1-5 scale to LSP severity levels (Brutal/Cruel -> Error, Harsh ->
-    /// Warning, Stern/Gentle -> Information).
+    /// 1-5 scale to LSP severity levels (5 -> Error, 4/3 -> Warning,
+    /// 2 -> Information, 1 -> Hint).
     ///
     /// The `CriticAnalyzer` is reused across calls via `self.critic_analyzer`
     /// so that the per-file violation cache survives between `didChange` events.
@@ -763,7 +763,9 @@ impl LspServer {
     /// analyzer is reset to `None` from `didChangeConfiguration` whenever any
     /// critic-related setting changes.
     ///
-    /// Silently skips if perlcritic is not installed or the URI is not a file.
+    /// Skips if URI is not a file. Emits one-time workspace warnings when
+    /// perlcritic is enabled but unavailable, configured profile is missing,
+    /// or external execution fails.
     /// The `doc_text` parameter is used to convert perlcritic's line/column
     /// positions into byte offsets for the internal diagnostic range.
     #[cfg(not(target_arch = "wasm32"))]
@@ -797,7 +799,7 @@ impl LspServer {
             }
         };
 
-        // Silently skip if perlcritic is not installed.
+        // Warn once and skip if perlcritic is not installed.
         // The `skip_perlcritic_command_check` flag is always `false` in production
         // and is only set to `true` through the test helper
         // `LspServer::test_bypass_perlcritic_command_check`, enabling mock-runtime
@@ -805,6 +807,13 @@ impl LspServer {
         let skip_check =
             self.skip_perlcritic_command_check.load(std::sync::atomic::Ordering::Relaxed);
         if !skip_check && !crate::execute_command::command_exists("perlcritic") {
+            if !self.perlcritic_missing_tool_warned.swap(true, std::sync::atomic::Ordering::Relaxed)
+            {
+                let _ = self.show_message(
+                    crate::runtime::MessageType::Warning,
+                    "Perl::Critic is enabled, but `perlcritic` was not found on PATH. Install Perl::Critic to enable external lint diagnostics.",
+                );
+            }
             return;
         }
 
@@ -822,7 +831,7 @@ impl LspServer {
                 // workspace root looking for `.perlcriticrc`.  Ensures that a
                 // repo-root config is found even when the file lives in a
                 // sub-directory.  Only runs when the analyzer needs (re-)init.
-                let resolved_profile = profile.or_else(|| {
+                let resolved_profile = profile.clone().or_else(|| {
                     let workspace_root = self.root_path.lock().clone();
                     let mut dir = file_path.parent().map(|p| p.to_path_buf());
                     while let Some(current) = dir {
@@ -840,6 +849,21 @@ impl LspServer {
                     }
                     None
                 });
+                if let Some(profile_path) = profile.as_deref() {
+                    let profile_exists = std::path::Path::new(profile_path).exists();
+                    if !profile_exists
+                        && !self
+                            .perlcritic_missing_profile_warned
+                            .swap(true, std::sync::atomic::Ordering::Relaxed)
+                    {
+                        let _ = self.show_message(
+                            crate::runtime::MessageType::Warning,
+                            &format!(
+                                "Perl::Critic profile not found: {profile_path}. Check perl.perlcritic.profile or workspace .perlcriticrc."
+                            ),
+                        );
+                    }
+                }
                 let critic_config = crate::perl_critic::CriticConfig {
                     severity,
                     profile: resolved_profile,
@@ -873,16 +897,17 @@ impl LspServer {
             Some(Ok(violations)) => {
                 for v in violations {
                     // Map Perl::Critic severity (1-5) to LSP DiagnosticSeverity:
-                    // Brutal(1)/Cruel(2) -> Error, Harsh(3) -> Warning,
-                    // Stern(4)/Gentle(5) -> Information
+                    // 5 -> Error, 4/3 -> Warning, 2 -> Information, 1 -> Hint.
                     let internal_severity = match v.severity {
-                        crate::perl_critic::Severity::Brutal
-                        | crate::perl_critic::Severity::Cruel => InternalDiagnosticSeverity::Error,
-                        crate::perl_critic::Severity::Harsh => InternalDiagnosticSeverity::Warning,
+                        crate::perl_critic::Severity::Gentle => InternalDiagnosticSeverity::Error,
                         crate::perl_critic::Severity::Stern
-                        | crate::perl_critic::Severity::Gentle => {
+                        | crate::perl_critic::Severity::Harsh => {
+                            InternalDiagnosticSeverity::Warning
+                        }
+                        crate::perl_critic::Severity::Cruel => {
                             InternalDiagnosticSeverity::Information
                         }
+                        crate::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
                     };
 
                     // Convert 0-indexed line/column from CriticAnalyzer to byte offsets.
@@ -896,7 +921,7 @@ impl LspServer {
                     diagnostics.push(InternalDiagnostic {
                         range: (start_byte, end_byte),
                         severity: internal_severity,
-                        code: Some(format!("PC:{}", v.policy)),
+                        code: Some(v.policy),
                         message: v.description,
                         related_information: Vec::new(),
                         tags: Vec::new(),
@@ -906,6 +931,15 @@ impl LspServer {
             }
             Some(Err(e)) => {
                 tracing::warn!(uri, error = %e, "perlcritic failed");
+                if !self
+                    .perlcritic_runtime_error_warned
+                    .swap(true, std::sync::atomic::Ordering::Relaxed)
+                {
+                    let _ = self.show_message(
+                        crate::runtime::MessageType::Warning,
+                        &format!("Perl::Critic failed to run for workspace diagnostics: {e}"),
+                    );
+                }
             }
             None => {}
         }

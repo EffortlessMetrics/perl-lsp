@@ -6,6 +6,81 @@
 use super::super::*;
 use crate::protocol::{req_range, req_uri};
 
+fn pragma_insert_byte(text: &str) -> usize {
+    if let Some(pos) = text.find("package ")
+        && let Some(newline) = text[pos..].find('\n')
+    {
+        return pos + newline + 1;
+    }
+    0
+}
+
+fn external_perlcritic_quick_fixes(params: &Value, uri: &str, doc_text: &str) -> Vec<Value> {
+    let mut actions = Vec::new();
+    let diagnostics = params
+        .get("context")
+        .and_then(|context| context.get("diagnostics"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if diagnostics.is_empty() {
+        return actions;
+    }
+
+    let insert_at = pragma_insert_byte(doc_text);
+    let (insert_line, insert_char) = {
+        let prefix = &doc_text[..insert_at.min(doc_text.len())];
+        let line = prefix.bytes().filter(|b| *b == b'\n').count() as u32;
+        (line, 0_u32)
+    };
+
+    let has_strict = doc_text.contains("use strict;");
+    let has_warnings = doc_text.contains("use warnings;");
+
+    for diag in diagnostics {
+        let Some(code) = diag.get("code").and_then(Value::as_str) else {
+            continue;
+        };
+        if code == "TestingAndDebugging::RequireUseStrict" && !has_strict {
+            actions.push(json!({
+                "title": "Add use strict; (Perl::Critic)",
+                "kind": "quickfix",
+                "diagnostics": [diag.clone()],
+                "edit": {
+                    "changes": {
+                        uri: [{
+                            "range": {
+                                "start": { "line": insert_line, "character": insert_char },
+                                "end": { "line": insert_line, "character": insert_char }
+                            },
+                            "newText": "use strict;\n"
+                        }]
+                    }
+                }
+            }));
+        } else if code == "TestingAndDebugging::RequireUseWarnings" && !has_warnings {
+            actions.push(json!({
+                "title": "Add use warnings; (Perl::Critic)",
+                "kind": "quickfix",
+                "diagnostics": [diag.clone()],
+                "edit": {
+                    "changes": {
+                        uri: [{
+                            "range": {
+                                "start": { "line": insert_line, "character": insert_char },
+                                "end": { "line": insert_line, "character": insert_char }
+                            },
+                            "newText": "use warnings;\n"
+                        }]
+                    }
+                }
+            }));
+        }
+    }
+
+    actions
+}
+
 fn requested_code_action_kinds(params: &Value) -> Vec<&str> {
     params
         .get("context")
@@ -76,6 +151,7 @@ impl LspServer {
 
             // Get code actions from both providers
             let mut code_actions: Vec<Value> = Vec::new();
+            code_actions.extend(external_perlcritic_quick_fixes(&params, uri, &doc.text));
 
             // Add Perl::Critic quick fixes
             let builtin_analyzer = BuiltInAnalyzer::new();
@@ -107,10 +183,11 @@ impl LspServer {
                                 "end": {"line": end_line, "character": end_char},
                             },
                             "severity": match violation.severity {
-                                crate::perl_critic::Severity::Brutal |
-                                crate::perl_critic::Severity::Cruel => 1, // Error
+                                crate::perl_critic::Severity::Gentle => 1, // Error
+                                crate::perl_critic::Severity::Stern |
                                 crate::perl_critic::Severity::Harsh => 2, // Warning
-                                _ => 3, // Information
+                                crate::perl_critic::Severity::Cruel => 3, // Information
+                                crate::perl_critic::Severity::Brutal => 4, // Hint
                             },
                             "code": violation.policy.clone(),
                             "source": "Perl::Critic",
