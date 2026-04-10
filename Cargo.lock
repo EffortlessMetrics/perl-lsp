@@ -1917,7 +1917,6 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
- "tempfile",
 ]
 
 [[package]]
