@@ -149,14 +149,18 @@ pub fn resolve_use_lib_paths_from_source(
     workspace_root: &Path,
     file_dir: Option<&Path>,
 ) -> Vec<String> {
+    // Highest-precedence path first, matching lexical `use lib` behavior.
     let mut resolved = Vec::new();
     for op in extract_use_lib_operations(source) {
         match op {
             UseLibAction::Add(paths) => {
-                for path in resolve_use_lib_paths(&paths, workspace_root, file_dir) {
-                    if !resolved.contains(&path) {
-                        resolved.push(path);
-                    }
+                // `use lib` unshifts list entries in order, so process from back-to-front.
+                // Re-adding an existing path must move it back to the front.
+                for path in
+                    resolve_use_lib_paths(&paths, workspace_root, file_dir).into_iter().rev()
+                {
+                    resolved.retain(|existing| existing != &path);
+                    resolved.insert(0, path);
                 }
             }
             UseLibAction::Remove(paths) => {
@@ -522,5 +526,26 @@ mod tests {
         let source = "use lib 'lib';\nuse lib 't/lib';\nno lib 'lib';\n";
         let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
         assert_eq!(resolved, vec!["t/lib"]);
+    }
+
+    #[test]
+    fn latest_use_lib_takes_precedence() {
+        let source = "use lib 'a';\nuse lib 'b';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["b", "a"]);
+    }
+
+    #[test]
+    fn repeated_use_lib_reinserts_at_front() {
+        let source = "use lib 'a';\nuse lib 'b';\nuse lib 'a';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn no_lib_then_use_lib_reintroduces_at_front() {
+        let source = "use lib 'a';\nuse lib 'b';\nno lib 'a';\nuse lib 'a';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["a", "b"]);
     }
 }
