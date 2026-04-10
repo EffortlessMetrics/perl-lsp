@@ -60,6 +60,10 @@ fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
     table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
+fn byte_offset_to_line(code: &str, offset: usize) -> usize {
+    code[..offset].bytes().filter(|b| *b == b'\n').count()
+}
+
 // ===========================================================================
 // 1. Declaration provider utility functions
 // ===========================================================================
@@ -336,6 +340,56 @@ fn declaration_provider_matching_version_returns_result() -> Result<(), Box<dyn 
         result.is_some(),
         "matching-version provider must still return a result for a declared variable"
     );
+    Ok(())
+}
+
+#[test]
+fn declaration_provider_resolves_signature_parameters() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "sub add ($x, $y = 1, @rest) {\n    return $x + $y + scalar @rest;\n}\n\npackage Demo;\nmethod greet ($self, $name) {\n    return $name;\n}\n";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let ast_arc = Arc::new(ast);
+
+    let mut parent_map = ParentMap::default();
+    DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
+
+    let provider =
+        DeclarationProvider::new(ast_arc, code.to_string(), "file:///test.pl".to_string())
+            .with_parent_map(&parent_map);
+
+    let x_usage = must_some(code.match_indices("$x").nth(1)).0 + 1;
+    let x_links = provider
+        .find_declaration(x_usage, 0)
+        .ok_or("expected declaration for signature parameter $x")?;
+    let x_link = x_links.first().ok_or("expected a declaration link for $x")?;
+    assert_eq!(
+        byte_offset_to_line(code, x_link.target_selection_range.0),
+        0,
+        "signature parameter $x should resolve to the subroutine signature"
+    );
+    assert_eq!(
+        &code[x_link.target_selection_range.0..x_link.target_selection_range.1],
+        "$x",
+        "signature parameter $x should resolve to its declaration span"
+    );
+
+    let name_usage = must_some(code.match_indices("$name").nth(1)).0 + 1;
+    let name_links = provider
+        .find_declaration(name_usage, 0)
+        .ok_or("expected declaration for method signature parameter $name")?;
+    let name_link =
+        name_links.first().ok_or("expected a declaration link for method parameter $name")?;
+    assert_eq!(
+        byte_offset_to_line(code, name_link.target_selection_range.0),
+        5,
+        "signature parameter $name should resolve to the method signature"
+    );
+    assert_eq!(
+        &code[name_link.target_selection_range.0..name_link.target_selection_range.1],
+        "$name",
+        "signature parameter $name should resolve to its declaration span"
+    );
+
     Ok(())
 }
 

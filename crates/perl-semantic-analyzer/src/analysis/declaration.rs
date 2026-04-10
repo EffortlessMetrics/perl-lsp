@@ -373,6 +373,14 @@ impl<'a> DeclarationProvider<'a> {
                 break;
             };
 
+            if matches!(parent.kind, NodeKind::Subroutine { .. } | NodeKind::Method { .. }) {
+                if let Some(links) =
+                    self.find_signature_parameter_declaration(parent, usage, var_name)
+                {
+                    return Some(links);
+                }
+            }
+
             // Check siblings before this node in the current scope
             for child in self.get_children(parent) {
                 // Stop when we reach or pass the usage node
@@ -418,6 +426,48 @@ impl<'a> DeclarationProvider<'a> {
             }
 
             current_ptr = parent_ptr;
+        }
+
+        None
+    }
+
+    fn find_signature_parameter_declaration(
+        &self,
+        declaration_site: &Node,
+        usage: &Node,
+        var_name: &str,
+    ) -> Option<Vec<LocationLink>> {
+        let signature = match &declaration_site.kind {
+            NodeKind::Subroutine { signature, .. } | NodeKind::Method { signature, .. } => {
+                signature.as_deref()?
+            }
+            _ => return None,
+        };
+
+        let NodeKind::Signature { parameters } = &signature.kind else {
+            return None;
+        };
+
+        for parameter in parameters {
+            let variable = match &parameter.kind {
+                NodeKind::MandatoryParameter { variable }
+                | NodeKind::OptionalParameter { variable, .. }
+                | NodeKind::SlurpyParameter { variable }
+                | NodeKind::NamedParameter { variable } => variable.as_ref(),
+                _ => continue,
+            };
+
+            let NodeKind::Variable { name, .. } = &variable.kind else {
+                continue;
+            };
+
+            if name == var_name {
+                return Some(vec![self.create_location_link(
+                    usage,
+                    parameter,
+                    (variable.location.start, variable.location.end),
+                )]);
+            }
         }
 
         None
@@ -1070,10 +1120,24 @@ impl<'a> DeclarationProvider<'a> {
             }
             NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
             NodeKind::Unary { operand, .. } => vec![operand.as_ref()],
+            NodeKind::Return { value } => {
+                if let Some(value) = value {
+                    vec![value.as_ref()]
+                } else {
+                    vec![]
+                }
+            }
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 let mut children = vec![variable.as_ref()];
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
+                }
+                children
+            }
+            NodeKind::Method { signature, body, .. } => {
+                let mut children = vec![body.as_ref()];
+                if let Some(sig) = signature {
+                    children.push(sig.as_ref());
                 }
                 children
             }

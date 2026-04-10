@@ -44,6 +44,25 @@ fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
     table.symbols.get(name).is_some_and(|syms| syms.iter().any(|s| s.kind == kind))
 }
 
+fn has_symbol_with_declaration(
+    table: &SymbolTable,
+    name: &str,
+    kind: SymbolKind,
+    declaration: &str,
+    source: &str,
+    expected_text: &str,
+) -> bool {
+    table.symbols.get(name).is_some_and(|symbols| {
+        symbols.iter().any(|symbol| {
+            symbol.kind == kind
+                && symbol.declaration.as_deref() == Some(declaration)
+                && source
+                    .get(symbol.location.start..symbol.location.end)
+                    .is_some_and(|text| text == expected_text)
+        })
+    })
+}
+
 fn has_issue(issues: &[ScopeIssue], kind: IssueKind, var_name: &str) -> bool {
     issues.iter().any(|i| i.kind == kind && i.variable_name.contains(var_name))
 }
@@ -1830,6 +1849,45 @@ sub foo ($x) { $z = 1; }
         !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
         "signature parameter $x should not be flagged as undeclared"
     );
+    Ok(())
+}
+
+#[test]
+fn signature_parameters_are_registered_as_symbols() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+sub add ($x, $y = 1, @rest) {
+    return $x + $y + scalar @rest;
+}
+
+package Demo;
+method greet ($self, $name) {
+    return $name;
+}
+"#;
+
+    let table = parse_and_extract(code);
+
+    assert!(
+        has_symbol_with_declaration(&table, "x", SymbolKind::scalar(), "my", code, "$x"),
+        "signature parameter $x should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "y", SymbolKind::scalar(), "my", code, "$y"),
+        "optional signature parameter $y should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "rest", SymbolKind::array(), "my", code, "@rest"),
+        "slurpy signature parameter @rest should be recorded as an array symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "self", SymbolKind::scalar(), "my", code, "$self"),
+        "method signature parameter $self should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "name", SymbolKind::scalar(), "my", code, "$name"),
+        "method signature parameter $name should be recorded as a lexical symbol"
+    );
+
     Ok(())
 }
 
