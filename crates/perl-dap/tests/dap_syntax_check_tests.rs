@@ -233,3 +233,47 @@ fn test_launch_syntax_check_honors_perl5lib_env_override() -> Result<(), Box<dyn
     }
     Ok(())
 }
+
+#[test]
+fn test_launch_reports_missing_module_with_install_hint() -> Result<(), Box<dyn std::error::Error>>
+{
+    let mut adapter = DebugAdapter::new();
+    let tmp = tempfile::tempdir()?;
+
+    for module_name in ["Some::Missing::Module", "Optional::Dep", "Tied::Hash::With::Spaces"] {
+        let script = write_script(
+            &tmp,
+            "missing_module.pl",
+            &format!("use strict;\nuse warnings;\nuse {module_name};\n"),
+        );
+
+        let args = json!({
+            "program": must_some(script.to_str()),
+            "cwd": must_some(tmp.path().to_str()),
+            "args": []
+        });
+
+        let response = adapter.handle_request(1, "launch", Some(args));
+
+        match response {
+            DapMessage::Response { success, message, .. } => {
+                assert!(!success, "Launch should fail for missing module {module_name}");
+                let msg = must_some(message);
+                assert!(
+                    msg.contains(&format!("Module {module_name} not found")),
+                    "Launch error should name the missing module, got: {msg}"
+                );
+                assert!(
+                    msg.contains(&format!("cpan {module_name}")),
+                    "Launch error should suggest cpan install, got: {msg}"
+                );
+                assert!(
+                    msg.contains(&format!("metacpan.org/pod/{module_name}")),
+                    "Launch error should link to MetaCPAN, got: {msg}"
+                );
+            }
+            _ => return Err("Expected a Response message".into()),
+        }
+    }
+    Ok(())
+}

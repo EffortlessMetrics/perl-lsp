@@ -327,8 +327,8 @@ impl DebugAdapter {
     /// or `Err(message)` with a user-friendly error describing the problem.
     ///
     /// `perl -c` exits with status 0 when the script compiles successfully
-    /// (printing "syntax OK" to stderr).  Any non-zero exit is a syntax
-    /// failure; the error detail is on stderr.
+    /// (printing "syntax OK" to stderr).  Any non-zero exit indicates a
+    /// syntax or dependency failure; the error detail is on stderr.
     ///
     /// If `perl` cannot be found or spawned, the check is silently skipped
     /// and `Ok(())` is returned so that the subsequent `perl -d` launch
@@ -381,10 +381,31 @@ impl DebugAdapter {
             error_lines.join("\n")
         };
 
+        if let Some(module_name) = Self::missing_module_name(&detail) {
+            return Err(Self::format_missing_module_error(&module_name));
+        }
+
         Err(format!(
             "Syntax error in '{}' — fix the error below before debugging:\n{}",
             program, detail
         ))
+    }
+
+    fn missing_module_name(detail: &str) -> Option<String> {
+        detail.lines().find_map(|line| {
+            let trimmed = line.trim();
+            let rest = trimmed.strip_prefix("Can't locate ")?;
+            let module_path = rest.split(" in @INC").next()?.trim_end_matches('.');
+            let module_name = module_path_to_name(module_path);
+            (!module_name.is_empty()).then_some(module_name)
+        })
+    }
+
+    fn format_missing_module_error(module_name: &str) -> String {
+        format!(
+            "Module {module_name} not found. Install with: cpan {module_name}. \
+             View on MetaCPAN: https://metacpan.org/pod/{module_name}"
+        )
     }
 
     /// Start thread to read debugger output with enhanced error recovery
@@ -1566,5 +1587,46 @@ impl DebugAdapter {
 
         self.clear_active_session_state();
         self.handle_launch(seq, request_seq, Some(launch_args))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DebugAdapter;
+
+    #[test]
+    fn missing_module_name_parses_standard_module_path() {
+        let detail = "Can't locate Some/Missing/Module.pm in @INC (you may need to install the Some::Missing::Module module)";
+
+        let module = DebugAdapter::missing_module_name(detail);
+
+        assert_eq!(module.as_deref(), Some("Some::Missing::Module"));
+    }
+
+    #[test]
+    fn missing_module_name_parses_optional_dependency_path() {
+        let detail = "Can't locate Optional/Dep.pm in @INC (you may need to install the Optional::Dep module)";
+
+        let module = DebugAdapter::missing_module_name(detail);
+
+        assert_eq!(module.as_deref(), Some("Optional::Dep"));
+    }
+
+    #[test]
+    fn missing_module_name_parses_nested_module_path_with_spaces() {
+        let detail = "Can't locate Tied/Hash/With/Spaces.pm in @INC (you may need to install the Tied::Hash::With::Spaces module)";
+
+        let module = DebugAdapter::missing_module_name(detail);
+
+        assert_eq!(module.as_deref(), Some("Tied::Hash::With::Spaces"));
+    }
+
+    #[test]
+    fn missing_module_error_includes_install_hint_and_metacpan_link() {
+        let message = DebugAdapter::format_missing_module_error("Some::Missing::Module");
+
+        assert!(message.contains("Module Some::Missing::Module not found"));
+        assert!(message.contains("cpan Some::Missing::Module"));
+        assert!(message.contains("metacpan.org/pod/Some::Missing::Module"));
     }
 }
