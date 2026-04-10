@@ -6,9 +6,13 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 use perl_dap_platform::resolve_perl_path_with_toolchain;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
+
+mod native_build_hints;
+
+pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 
 /// Server configuration
 ///
@@ -288,6 +292,12 @@ pub struct WorkspaceConfig {
     /// Extra arguments passed to the Perl interpreter for startup `@INC` probing.
     pub perl_args: Vec<String>,
 
+    /// Native build hints derived from workspace-root `Makefile.PL` / `Build.PL`.
+    ///
+    /// These are cached once at workspace initialization and kept separate from
+    /// Perl module search paths.
+    pub native_build_hints: NativeBuildHints,
+
     /// Resolution timeout in milliseconds
     /// Default: 50ms
     pub resolution_timeout_ms: u64,
@@ -309,6 +319,7 @@ impl Default for WorkspaceConfig {
             system_inc_cache: None,
             perl_path: None,
             perl_args: Vec::new(),
+            native_build_hints: NativeBuildHints::default(),
             resolution_timeout_ms: 50,
             use_perl5lib: true,
             perl5lib_precedence: Perl5LibPrecedence::Prepend,
@@ -351,6 +362,14 @@ impl WorkspaceConfig {
                 result
             }
         }
+    }
+
+    /// Refresh workspace-native build hints from the selected workspace root.
+    ///
+    /// This is a workspace-initialization cache step only; it does not mutate
+    /// module-resolution include paths.
+    pub fn refresh_native_build_hints(&mut self, workspace_root: &Path) {
+        self.native_build_hints = detect_native_build_hints(workspace_root);
     }
 
     /// Update workspace configuration from LSP settings.

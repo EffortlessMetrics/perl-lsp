@@ -173,6 +173,12 @@ fn workspace_config_resolution_timeout_defaults_to_50ms() {
     assert_eq!(cfg.resolution_timeout_ms, 50);
 }
 
+#[test]
+fn workspace_config_native_build_hints_default_empty() {
+    let cfg = WorkspaceConfig::default();
+    assert!(cfg.native_build_hints.include_dirs.is_empty());
+}
+
 // ---------------------------------------------------------------------------
 // WorkspaceConfig: system_inc_cache invalidation
 // ---------------------------------------------------------------------------
