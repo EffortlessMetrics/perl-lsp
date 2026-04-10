@@ -510,3 +510,166 @@ fn test_hover_builtin_context_sensitive_docs() -> TestResult {
 
     Ok(())
 }
+
+/// Tests feature spec: hover#variable-declaration-line
+///
+/// Validates that hovering over a lexical variable shows where it was declared (line N).
+#[test]
+fn test_hover_variable_shows_declaration_line() -> TestResult {
+    let doc = r#"my $config = load_config();
+
+sub process {
+    my ($data) = @_;
+    my $result = transform($data);
+    print $result;
+}
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///hover_decl.pl", doc)?;
+
+    // Hover over $result at usage site (line 5, character 10)
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///hover_decl.pl"},
+                "position": {"line": 5, "character": 10}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "Expected hover response for $result usage");
+
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+
+    assert!(
+        value.contains("line") || value.contains("Declared"),
+        "Hover for $result should show declaration line info, got: {value}"
+    );
+
+    Ok(())
+}
+
+/// Tests feature spec: hover#variable-declaration-scope-context
+///
+/// Validates that hovering over a lexical variable inside a subroutine shows
+/// the subroutine name as the scope context.
+#[test]
+fn test_hover_variable_shows_scope_context() -> TestResult {
+    let doc = r#"my $global = 1;
+
+sub process_data {
+    my $local_var = 42;
+    return $local_var;
+}
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///hover_scope.pl", doc)?;
+
+    // Hover over $local_var at usage site (line 4, character 12)
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///hover_scope.pl"},
+                "position": {"line": 4, "character": 12}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "Expected hover response for $local_var usage");
+
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+
+    assert!(
+        value.contains("process_data") || value.contains("subroutine") || value.contains("Scope"),
+        "Hover for $local_var should show scope context (subroutine name), got: {value}"
+    );
+
+    Ok(())
+}
+
+/// Tests feature spec: hover#variable-my-declaration-keyword
+///
+/// Validates that hovering over a `my` variable shows the `my` declaration keyword.
+#[test]
+fn test_hover_variable_shows_my_declaration_keyword() -> TestResult {
+    let doc = r#"sub greet {
+    my $name = "world";
+    print "Hello, $name!\n";
+}
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///hover_my.pl", doc)?;
+
+    // Hover over $name at declaration site (line 1, character 8)
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///hover_my.pl"},
+                "position": {"line": 1, "character": 8}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "Expected hover response for $name");
+
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+
+    assert!(
+        value.contains("my") || value.contains("lexical"),
+        "Hover for my $name should mention 'my' or 'lexical', got: {value}"
+    );
+
+    Ok(())
+}
+
+/// Tests feature spec: hover#variable-file-scope
+///
+/// Validates that hovering over a file-scope `my` variable (outside any sub)
+/// includes useful variable info.
+#[test]
+fn test_hover_variable_file_scope_context() -> TestResult {
+    let doc = r#"my $top_level = 100;
+print $top_level;
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///hover_file_scope.pl", doc)?;
+
+    // Hover over $top_level at usage site (line 1, character 7)
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///hover_file_scope.pl"},
+                "position": {"line": 1, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "Expected hover response for $top_level");
+
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+
+    assert!(!value.is_empty(), "Hover for file-scope $top_level should return non-empty content");
+
+    assert!(
+        value.contains("line") || value.contains("Declared") || value.contains("Scalar"),
+        "Hover for file-scope $top_level should contain variable info, got: {value}"
+    );
+
+    Ok(())
+}

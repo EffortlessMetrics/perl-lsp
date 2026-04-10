@@ -275,6 +275,17 @@ impl LspServer {
                 .map(|d| format!("\n**Declaration**: `{}`", d))
                 .unwrap_or_default();
 
+            // For variables, show declaration line and scope context.
+            let (decl_line_info, scope_context_info) = if symbol_info.kind.is_variable() {
+                let decl_offset = symbol_info.location.start;
+                let (line_0based, _col) = byte_to_line_col(text, decl_offset);
+                let decl_line = format!("\n**Declared at**: line {}", line_0based + 1);
+                let scope_ctx = Self::build_variable_scope_context(&analyzer, symbol_info);
+                (decl_line, scope_ctx)
+            } else {
+                (String::new(), String::new())
+            };
+
             // Check if this variable is tied — scan AST for a matching Tie node.
             let tied_info = if symbol_info.kind.is_variable() {
                 let sigil = symbol_info.kind.sigil().unwrap_or("");
@@ -320,10 +331,12 @@ impl LspServer {
             return HoverExtracted::Complete(json!({
                 "contents": {
                     "kind": "markdown",
-                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}{}",
+                    "value": format!("**{}**\n\n`{}`{}{}{}{}{}{}{}{}",
                         kind_str,
                         display_name,
                         decl_info,
+                        decl_line_info,
+                        scope_context_info,
                         type_info,
                         tied_info,
                         attrs_info,
@@ -435,6 +448,44 @@ impl LspServer {
         }
 
         HoverExtracted::None
+    }
+
+    /// Build a scope context string for a variable hover card.
+    ///
+    /// Finds the innermost subroutine whose byte span contains the variable's
+    /// declaration offset, and returns a formatted string like
+    /// `\n**Scope**: lexical in subroutine `foo`` or `\n**Scope**: file scope`.
+    fn build_variable_scope_context(
+        analyzer: &crate::semantic::SemanticAnalyzer,
+        symbol: &crate::symbol::Symbol,
+    ) -> String {
+        let decl_offset = symbol.location.start;
+        let table = analyzer.symbol_table();
+
+        // Find the innermost (smallest span) subroutine that contains decl_offset.
+        let mut best_sub_name: Option<String> = None;
+        let mut best_span = usize::MAX;
+
+        for syms in table.symbols.values() {
+            for sym in syms {
+                if sym.kind == crate::symbol::SymbolKind::Subroutine
+                    && sym.location.start < decl_offset
+                    && sym.location.end > decl_offset
+                {
+                    let span = sym.location.end - sym.location.start;
+                    if span < best_span {
+                        best_sub_name = Some(sym.name.clone());
+                        best_span = span;
+                    }
+                }
+            }
+        }
+
+        if let Some(sub_name) = best_sub_name {
+            format!("\n**Scope**: lexical in subroutine `{sub_name}`")
+        } else {
+            "\n**Scope**: file scope".to_string()
+        }
     }
 
     fn format_moo_accessor_hover(name: &str, attributes: &[String]) -> String {
