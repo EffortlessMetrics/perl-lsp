@@ -478,6 +478,41 @@ my $promise = Promise->new(sub { return 1 });
 }
 
 #[test]
+fn promise_use_synthesizes_common_chain_methods() {
+    let code = r#"
+use Promise;
+
+my $promise = Promise->new(sub { return 1 });
+my $next = $promise->then(sub { return Promise->resolve(1) });
+$promise->catch(sub { return Promise->reject("boom") });
+$promise->finally(sub { });
+$promise->resolve(1);
+$promise->reject("boom");
+Promise->all($promise);
+Promise->race($promise);
+Promise->any($promise);
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in ["new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic Promise API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=Promise"),
+            "expected `framework=Promise` on `{name}`, got {attrs:?}"
+        );
+        assert!(
+            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            "expected `future_api={name}` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
 fn promise_xs_use_synthesizes_class_symbol_for_method_calls() {
     let code = r#"
 use Promise::XS;
@@ -496,6 +531,41 @@ my $promise = Promise::XS->new(sub { return 1 });
         attrs.iter().any(|attr| attr == "framework=Promise::XS"),
         "expected `framework=Promise::XS` on Promise::XS, got {attrs:?}"
     );
+}
+
+#[test]
+fn promise_xs_use_synthesizes_common_chain_methods() {
+    let code = r#"
+use Promise::XS;
+
+my $promise = Promise::XS->new(sub { return 1 });
+my $next = $promise->then(sub { return Promise::XS->resolve(1) });
+$promise->catch(sub { return Promise::XS->reject("boom") });
+$promise->finally(sub { });
+$promise->resolve(1);
+$promise->reject("boom");
+Promise::XS->all($promise);
+Promise::XS->race($promise);
+Promise::XS->any($promise);
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in ["new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic Promise::XS API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=Promise::XS"),
+            "expected `framework=Promise::XS` on `{name}`, got {attrs:?}"
+        );
+        assert!(
+            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            "expected `future_api={name}` on `{name}`, got {attrs:?}"
+        );
+    }
 }
 
 #[test]
