@@ -81,6 +81,63 @@ my $loop = IO::Async::Loop->new;
 }
 
 #[test]
+fn anyevent_use_synthesizes_core_class_symbols_for_method_calls() {
+    let code = r#"
+use AnyEvent;
+
+my $cv = AnyEvent->condvar;
+my $timer = AnyEvent::Timer->new;
+my $io = AnyEvent::IO->new;
+my $other = AnyEvent::CondVar->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in ["AnyEvent", "AnyEvent::CondVar", "AnyEvent::Timer", "AnyEvent::IO"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Class),
+            "expected synthetic AnyEvent class symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Class);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=AnyEvent"),
+            "expected `framework=AnyEvent` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
+fn anyevent_core_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $cv = AnyEvent->condvar;
+my $timer = AnyEvent::Timer->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "AnyEvent", SymbolKind::Class),
+        "did not expect AnyEvent class synthesis without `use AnyEvent`"
+    );
+}
+
+#[test]
+fn anyevent_http_names_are_not_synthesized_as_core_support() {
+    let code = r#"
+use AnyEvent;
+
+my $http = AnyEvent::HTTP->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "AnyEvent::HTTP", SymbolKind::Class),
+        "did not expect AnyEvent::HTTP synthesis in the core-only MVP"
+    );
+}
+
+#[test]
 fn mojo_redis_use_synthesizes_framework_class_symbol() {
     let code = r#"
 use Mojo::Redis;

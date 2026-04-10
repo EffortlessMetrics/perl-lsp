@@ -343,6 +343,8 @@ pub enum WebFrameworkKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Async framework variant detected via `use` statements during Parse/Analyze workflows.
 pub enum AsyncFrameworkKind {
+    /// `use AnyEvent;`
+    AnyEvent,
     /// `use Future;`
     Future,
     /// `use Future::XS;`
@@ -1616,6 +1618,7 @@ impl SymbolExtractor {
         };
 
         let (module_name, framework_name, exact_match) = match flags.async_framework {
+            Some(AsyncFrameworkKind::AnyEvent) => ("AnyEvent", "AnyEvent", false),
             Some(AsyncFrameworkKind::Future) => ("Future", "Future", true),
             Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
             Some(AsyncFrameworkKind::Promise) => ("Promise", "Promise", true),
@@ -1629,7 +1632,14 @@ impl SymbolExtractor {
         let Some(name) = Self::single_symbol_name(object) else {
             return false;
         };
-        if exact_match {
+        if flags.async_framework == Some(AsyncFrameworkKind::AnyEvent) {
+            if !matches!(
+                name.as_str(),
+                "AnyEvent" | "AnyEvent::CondVar" | "AnyEvent::Timer" | "AnyEvent::IO"
+            ) {
+                return false;
+            }
+        } else if exact_match {
             if name != module_name {
                 return false;
             }
@@ -1700,6 +1710,12 @@ impl SymbolExtractor {
         if module == "IO::Async" || module.starts_with("IO::Async::") {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::IOAsync);
+            return;
+        }
+
+        if module == "AnyEvent" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::AnyEvent);
             return;
         }
 
