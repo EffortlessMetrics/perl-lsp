@@ -111,7 +111,7 @@ pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
 pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
-pub use self::xs_api::{get_xs_api_documentation, is_xs_source};
+pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
 use perl_parser_core::ast::Node;
 use perl_parser_core::ast::NodeKind;

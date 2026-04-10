@@ -23,8 +23,7 @@ fn hover_shows_xs_api_docs_in_xs_sources() -> TestResult {
         "#include \"XSUB.h\"\n",
         "MODULE = My::Module PACKAGE = My::Module\n",
         "PPCODE:\n",
-        "    newSVpv\n",
-        "\0"
+        "    newSVpv\n"
     );
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
@@ -45,6 +44,49 @@ fn hover_shows_xs_api_docs_in_xs_sources() -> TestResult {
     assert!(
         val.contains("newSVpv(pv, len)"),
         "hover should include the XS API signature, got: {val}"
+    );
+    Ok(())
+}
+
+#[test]
+fn completion_offers_xs_api_docs_in_astless_xs_sources() -> TestResult {
+    let doc = concat!(
+        "#include \"EXTERN.h\"\n",
+        "#include \"perl.h\"\n",
+        "#include \"XSUB.h\"\n",
+        "MODULE = My::Module PACKAGE = My::Module\n",
+        "PPCODE:\n",
+        "    newS\n"
+    );
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///example.xs", doc)?;
+
+    let result = harness
+        .request(
+            "textDocument/completion",
+            json!({
+                "textDocument": {"uri": "file:///example.xs"},
+                "position": {"line": 5, "character": 8}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    let labels: Vec<&str> = result
+        .get("items")
+        .and_then(|items| items.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("label").and_then(|label| label.as_str()))
+        .collect();
+
+    assert!(
+        labels.contains(&"newSVpv"),
+        "AST-less XS completion should offer newSVpv, got: {labels:?}"
+    );
+    assert!(
+        labels.contains(&"newSViv"),
+        "AST-less XS completion should offer newSViv, got: {labels:?}"
     );
     Ok(())
 }

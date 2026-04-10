@@ -190,12 +190,31 @@ pub fn add_xs_api_completions(
     source: &str,
     filepath: Option<&str>,
 ) {
+    add_xs_api_completions_for_prefix(
+        completions,
+        &context.prefix,
+        context.prefix_start,
+        context.position,
+        source,
+        filepath,
+    );
+}
+
+/// Add XS / Perl C API completions using a raw textual prefix.
+pub fn add_xs_api_completions_for_prefix(
+    completions: &mut Vec<CompletionItem>,
+    prefix: &str,
+    prefix_start: usize,
+    position: usize,
+    source: &str,
+    filepath: Option<&str>,
+) {
     if !source_is_xs(source, filepath) {
         return;
     }
 
     for entry in XS_API_ENTRIES {
-        if context.prefix.is_empty() || entry.name.starts_with(&context.prefix) {
+        if prefix.is_empty() || entry.name.starts_with(prefix) {
             completions.push(CompletionItem {
                 label: entry.name.to_string(),
                 kind: entry.kind,
@@ -205,7 +224,7 @@ pub fn add_xs_api_completions(
                 sort_text: Some(format!("2_xs_{}", entry.name)),
                 filter_text: Some(entry.name.to_string()),
                 additional_edits: vec![],
-                text_edit_range: Some((context.prefix_start, context.position)),
+                text_edit_range: Some((prefix_start, position)),
                 commit_characters: None,
             });
         }

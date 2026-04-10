@@ -142,6 +142,10 @@ impl LspServer {
         text: &str,
         offset: usize,
     ) -> HoverExtracted {
+        if let Some(xs_hover) = Self::extract_xs_api_hover(uri, text, offset) {
+            return HoverExtracted::Complete(xs_hover);
+        }
+
         let analyzer = self.get_or_build_analyzer(uri, text, ast);
 
         if let Some(symbol_info) =
@@ -412,18 +416,8 @@ impl LspServer {
                 }));
             }
 
-            if crate::completion::is_xs_source(text, Some(uri))
-                && let Some((sig, desc)) = crate::completion::get_xs_api_documentation(bare)
-            {
-                return HoverExtracted::Complete(json!({
-                    "contents": {
-                        "kind": "markdown",
-                        "value": format!(
-                            "**XS / Perl C API**\n\n```c\n{}\n```\n\n{}",
-                            sig, desc
-                        ),
-                    },
-                }));
+            if let Some(xs_hover) = Self::extract_xs_api_hover(uri, text, offset) {
+                return HoverExtracted::Complete(xs_hover);
             }
 
             // Check Test::More/Test2 function hover when source imports a test framework
@@ -661,6 +655,29 @@ impl LspServer {
         }
 
         chars[start..end].iter().collect()
+    }
+
+    fn extract_xs_api_hover(uri: &str, text: &str, offset: usize) -> Option<Value> {
+        if !crate::completion::is_xs_source(text, Some(uri)) {
+            return None;
+        }
+
+        let token = Self::get_token_at_position_static(text, offset);
+        if token.is_empty() {
+            return None;
+        }
+
+        let bare = token.trim_start_matches(['$', '@', '%']);
+        let (sig, desc) = crate::completion::get_xs_api_documentation(bare)?;
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**XS / Perl C API**\n\n```c\n{}\n```\n\n{}",
+                    sig, desc
+                ),
+            },
+        }))
     }
 
     /// Extract the receiver token immediately before `->` at `offset`.
