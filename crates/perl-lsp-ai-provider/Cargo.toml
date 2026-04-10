@@ -2,7 +2,7 @@
 name = "perl-lsp-ai-provider"
 version.workspace = true
 edition = "2024"
-rust-version = "1.92"
+rust-version.workspace = true
 authors.workspace = true
 description = "AI completion providers (OpenAI-compatible streaming) for perl-lsp"
 license = "MIT OR Apache-2.0"
