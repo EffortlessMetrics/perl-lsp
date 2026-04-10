@@ -42,6 +42,15 @@ pub struct FormatRange {
     pub end: FormatPosition,
 }
 
+/// Count the number of UTF-16 code units in `s`.
+///
+/// LSP positions use UTF-16 code units (see Language Server Protocol spec §3.1).
+/// Characters in the Basic Multilingual Plane (U+0000–U+FFFF) count as 1 unit;
+/// supplementary-plane characters (U+10000 and above) count as 2 units.
+fn utf16_len(s: &str) -> usize {
+    s.chars().map(|c| if c as u32 >= 0x10000 { 2 } else { 1 }).sum()
+}
+
 impl FormatRange {
     /// Create a range covering the entire document.
     pub fn whole_document(content: &str) -> Self {
@@ -52,7 +61,10 @@ impl FormatRange {
             start: FormatPosition { line: 0, character: 0 },
             end: FormatPosition {
                 line: last_line,
-                character: lines.get(last_line as usize).map(|line| line.len() as u32).unwrap_or(0),
+                character: lines
+                    .get(last_line as usize)
+                    .map(|line| utf16_len(line) as u32)
+                    .unwrap_or(0),
             },
         }
     }
