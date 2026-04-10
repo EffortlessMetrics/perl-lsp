@@ -22,6 +22,7 @@ Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CU
 | --- | --- |
 | get working fast | [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md) |
 | install or upgrade | [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/UPGRADING.md](how-to/UPGRADING.md) |
+| use the pre-commit framework | [how-to/PRE_COMMIT.md](how-to/PRE_COMMIT.md) |
 | configure an editor | [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md) |
 | troubleshoot a broken setup | [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md) |
 | see what is true now | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) |

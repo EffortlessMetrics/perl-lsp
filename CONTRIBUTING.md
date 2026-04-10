@@ -46,6 +46,9 @@ Install the pre-push git hook so the gate runs automatically before every push:
 bash scripts/install-githooks.sh
 ```
 
+If you prefer the [pre-commit framework](docs/how-to/PRE_COMMIT.md) in a downstream repo,
+use the root-level `.pre-commit-hooks.yaml` manifest and pin the repo by tag.
+
 ### Build and Test
 
 ```bash

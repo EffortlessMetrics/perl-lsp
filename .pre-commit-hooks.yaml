@@ -1,0 +1,23 @@
+- id: perl-lsp-fmt
+  name: perl-lsp format check
+  description: Run the repository format gate.
+  entry: cargo xtask fmt --check
+  language: system
+  pass_filenames: false
+  files: '(\.rs$|\.toml$|^Cargo\.lock$|^justfile$|^rust-toolchain\.toml$)'
+
+- id: perl-lsp-clippy
+  name: perl-lsp clippy check
+  description: Run the repository clippy gate for the fast PR path.
+  entry: cargo clippy -p perl-parser -p perl-lexer --locked -- -D warnings -A missing_docs
+  language: system
+  pass_filenames: false
+  files: '(\.rs$|\.toml$|^Cargo\.lock$|^justfile$|^rust-toolchain\.toml$)'
+
+- id: perl-lsp-test
+  name: perl-lsp fast test check
+  description: Run the repository fast library test gate.
+  entry: cargo test -p perl-parser -p perl-lexer --lib --locked
+  language: system
+  pass_filenames: false
+  files: '(\.rs$|\.toml$|^Cargo\.lock$|^justfile$|^rust-toolchain\.toml$)'
