@@ -182,6 +182,11 @@ path = "tests/dap_step_through_tests.rs"
 # AC:3535 Comprehensive step-through debugging tests: stepIn, stepOut, stepOver, continue, pause, gotoTargets, cancel
 
 [[test]]
+name = "dap_bdd_workflows"
+path = "tests/dap_bdd_workflows.rs"
+# BDD scenarios for core request/response workflows in the native adapter
+
+[[test]]
 name = "dap_syntax_check_tests"
 path = "tests/dap_syntax_check_tests.rs"
 # AC:3477 Pre-launch syntax check using perl -c, clear error messages before debug start
