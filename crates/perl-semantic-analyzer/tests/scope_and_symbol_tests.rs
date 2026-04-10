@@ -2673,6 +2673,70 @@ if ("hello world" =~ /world/p) {
 }
 
 // ===========================================================================
+// Topic variable $_ in map/grep block contexts (#3457)
+// ===========================================================================
+
+#[test]
+fn topic_var_in_map_block_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ is the implicit topic variable set by map; it must never be flagged
+    // as undeclared under `use strict`.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @doubled = map { $_ * 2 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
+        "$_ in map block should not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn topic_var_in_grep_block_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ is the implicit topic variable set by grep; it must never be flagged
+    // as undeclared under `use strict`.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @evens = grep { $_ % 2 == 0 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
+        "$_ in grep block should not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn topic_var_chained_map_grep_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ used across both map and grep in the same file should produce zero
+    // UndeclaredVariable diagnostics.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @doubled = map { $_ * 2 } @nums;
+my @evens = grep { $_ % 2 == 0 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    let undeclared: Vec<_> =
+        issues.iter().filter(|i| i.kind == IssueKind::UndeclaredVariable).collect();
+    assert!(
+        undeclared.is_empty(),
+        "no UndeclaredVariable diagnostics expected for $_ in map/grep contexts; got: {:?}",
+        undeclared.iter().map(|i| &i.variable_name).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
 // 18. $a and $b Sort Variable Recognition
 // ===========================================================================
 
