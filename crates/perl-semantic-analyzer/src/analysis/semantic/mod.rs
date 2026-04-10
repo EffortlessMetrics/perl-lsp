@@ -199,7 +199,7 @@ impl SemanticAnalyzer {
                 if reference.location.start <= position && reference.location.end >= position {
                     let symbols = self.resolve_reference_to_symbols(reference);
                     if let Some(first_symbol) = symbols.first() {
-                        return Some(first_symbol);
+                        return Some(self.resolve_definition_target(first_symbol));
                     }
                 }
             }
@@ -207,6 +207,34 @@ impl SemanticAnalyzer {
 
         // If no reference found, check if we're on a definition itself
         self.symbol_at(SourceLocation { start: position, end: position })
+            .map(|symbol| self.resolve_definition_target(symbol))
+    }
+
+    /// Redirect method modifier definitions to the underlying method they modify.
+    ///
+    /// Method modifiers (`before`, `after`, `around`) are modeled as synthetic
+    /// subroutine symbols so hover/navigation can describe them, but go-to-definition
+    /// should land on the real method declaration when it exists.
+    fn resolve_definition_target<'a>(&'a self, symbol: &'a Symbol) -> &'a Symbol {
+        if let Some(target) = self.resolve_method_modifier_target(symbol) { target } else { symbol }
+    }
+
+    /// If `symbol` is a method modifier target, find the underlying method symbol.
+    fn resolve_method_modifier_target<'a>(&'a self, symbol: &'a Symbol) -> Option<&'a Symbol> {
+        if !matches!(symbol.declaration.as_deref(), Some("before" | "after" | "around")) {
+            return None;
+        }
+
+        self.symbol_table
+            .find_symbol(&symbol.name, symbol.scope_id, crate::symbol::SymbolKind::Subroutine)
+            .into_iter()
+            .find(|candidate| {
+                candidate.location != symbol.location
+                    && !matches!(
+                        candidate.declaration.as_deref(),
+                        Some("before" | "after" | "around")
+                    )
+            })
     }
 
     /// Check if an operator is a file test operator.
@@ -1379,6 +1407,44 @@ my %config = (key => "value");
             "native method should have SymbolKind::Method, got {:?}",
             sym.kind
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_find_definition_redirects_method_modifier_to_target_method()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code =
+            include_str!("../../../../perl-lsp/tests/fixtures/frameworks/moo_method_modifiers.pl");
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        // The method definition is line 3; the modifier targets are on lines 8, 13, and 18.
+        for target_line in [8, 13, 18] {
+            let line = code.lines().nth(target_line).ok_or("missing modifier line")?;
+            let col = line.find("save").ok_or("modifier target not found")?;
+            let mut offset = 0;
+            for line in code.lines().take(target_line) {
+                offset += line.len() + 1;
+            }
+            offset += col;
+
+            let sym = analyzer
+                .find_definition(offset)
+                .ok_or("no symbol found at method modifier target")?;
+            assert_eq!(sym.name, "save", "modifier target should resolve to save");
+            let method_start = code.find("sub save").ok_or("method declaration not found")?;
+            assert_eq!(
+                sym.location.start, method_start,
+                "modifier target should resolve to the underlying method declaration"
+            );
+            assert_eq!(
+                sym.declaration, None,
+                "definition should land on the real method, not the synthetic modifier"
+            );
+        }
+
         Ok(())
     }
 }
