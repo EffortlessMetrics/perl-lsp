@@ -20,6 +20,9 @@ perl-lsp-feature-contracts = { workspace = true }
 perl-lsp-feature-profile = { workspace = true }
 perl-lsp-feature-flags = { workspace = true }
 
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
 [features]
 lsp-ga-lock = [
     "perl-lsp-feature-contracts/lsp-ga-lock",
