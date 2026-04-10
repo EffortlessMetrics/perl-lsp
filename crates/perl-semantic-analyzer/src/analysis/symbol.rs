@@ -353,6 +353,8 @@ pub enum AsyncFrameworkKind {
     Promise,
     /// `use Promise::XS;`
     PromiseXS,
+    /// `use POE;`
+    POE,
     /// `use IO::Async;`
     IOAsync,
     /// `use Mojo::Redis;`
@@ -1623,6 +1625,7 @@ impl SymbolExtractor {
             Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
             Some(AsyncFrameworkKind::Promise) => ("Promise", "Promise", true),
             Some(AsyncFrameworkKind::PromiseXS) => ("Promise::XS", "Promise::XS", true),
+            Some(AsyncFrameworkKind::POE) => ("POE", "POE", false),
             Some(AsyncFrameworkKind::IOAsync) => ("IO::Async", "IO::Async", false),
             Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis", true),
             Some(AsyncFrameworkKind::MojoPg) => ("Mojo::Pg", "Mojo::Pg", true),
@@ -1740,6 +1743,12 @@ impl SymbolExtractor {
         if module == "Promise::XS" {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::PromiseXS);
+            return;
+        }
+
+        if module == "POE" || module.starts_with("POE::") {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::POE);
             return;
         }
 
