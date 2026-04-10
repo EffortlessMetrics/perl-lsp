@@ -542,11 +542,8 @@ sub process {
 
     assert!(!result.is_null(), "Expected hover response for $result usage");
 
-    let value = result
-        .get("contents")
-        .and_then(|c| c.get("value"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
 
     assert!(
         value.contains("line") || value.contains("Declared"),
@@ -587,11 +584,8 @@ sub process_data {
 
     assert!(!result.is_null(), "Expected hover response for $local_var usage");
 
-    let value = result
-        .get("contents")
-        .and_then(|c| c.get("value"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
 
     assert!(
         value.contains("process_data") || value.contains("subroutine") || value.contains("Scope"),
@@ -629,11 +623,8 @@ fn test_hover_variable_shows_my_declaration_keyword() -> TestResult {
 
     assert!(!result.is_null(), "Expected hover response for $name");
 
-    let value = result
-        .get("contents")
-        .and_then(|c| c.get("value"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
 
     assert!(
         value.contains("my") || value.contains("lexical"),
@@ -670,16 +661,10 @@ print $top_level;
 
     assert!(!result.is_null(), "Expected hover response for $top_level");
 
-    let value = result
-        .get("contents")
-        .and_then(|c| c.get("value"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
 
-    assert!(
-        !value.is_empty(),
-        "Hover for file-scope $top_level should return non-empty content"
-    );
+    assert!(!value.is_empty(), "Hover for file-scope $top_level should return non-empty content");
 
     assert!(
         value.contains("line") || value.contains("Declared") || value.contains("Scalar"),
