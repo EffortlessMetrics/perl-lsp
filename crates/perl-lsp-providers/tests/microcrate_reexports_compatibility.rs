@@ -46,30 +46,23 @@ fn top_level_microcrate_reexports_are_usable() -> Result<(), ParseError> {
 }
 
 #[test]
-#[allow(deprecated)]
-fn legacy_lsp_compat_reexports_are_still_usable() -> Result<(), ParseError> {
-    let source = "my $x = 1;\n$x++;";
+fn top_level_microcrate_reexports_all_usable() -> Result<(), ParseError> {
+    let source = "my $x = 1;
+$x++;";
     let ast = parse_minimal_ast(source)?;
 
-    let _completion_provider =
-        perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider::new(&ast);
+    let _completion_provider = perl_lsp_providers::completion::CompletionProvider::new(&ast);
     let _diagnostics_provider =
-        perl_lsp_providers::ide::lsp_compat::diagnostics::DiagnosticsProvider::new(
-            &ast,
-            source.to_string(),
-        );
+        perl_lsp_providers::diagnostics::DiagnosticsProvider::new(&ast, source.to_string());
     let _code_actions_provider =
-        perl_lsp_providers::ide::lsp_compat::code_actions::CodeActionsProvider::new(
-            source.to_string(),
-        );
-    let _inlay_hints_provider =
-        perl_lsp_providers::ide::lsp_compat::inlay_hints::InlayHintsProvider::new();
+        perl_lsp_providers::code_actions::CodeActionsProvider::new(source.to_string());
+    let _inlay_hints_provider = perl_lsp_providers::inlay_hints::InlayHintsProvider::new();
     let _rename_provider =
-        perl_lsp_providers::ide::lsp_compat::rename::RenameProvider::new(&ast, source.to_string());
+        perl_lsp_providers::rename::RenameProvider::new(&ast, source.to_string());
 
-    let _range = perl_lsp_providers::ide::lsp_compat::formatting::FormatRange::new(
-        perl_lsp_providers::ide::lsp_compat::formatting::FormatPosition::new(0, 0),
-        perl_lsp_providers::ide::lsp_compat::formatting::FormatPosition::new(0, 5),
+    let _range = perl_lsp_providers::formatting::FormatRange::new(
+        perl_lsp_providers::formatting::FormatPosition::new(0, 0),
+        perl_lsp_providers::formatting::FormatPosition::new(0, 5),
     );
     Ok(())
 }
