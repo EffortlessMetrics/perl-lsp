@@ -13,6 +13,7 @@ use perl_semantic_analyzer::symbol::SymbolExtractor;
 use crate::dedup::deduplicate_diagnostics;
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
+use crate::lints::duplicate_hash_keys::check_duplicate_hash_keys;
 use crate::lints::eval_error_flow::check_eval_error_flow;
 use crate::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
@@ -153,6 +154,9 @@ impl DiagnosticsProvider {
 
         // Unreachable code detection (PL406)
         check_unreachable_code(ast, &mut diagnostics);
+
+        // Duplicate hash key detection (PL408)
+        check_duplicate_hash_keys(ast, &mut diagnostics);
 
         // Missing module lint (PL701) — only when a resolver is provided
         if let Some(resolver) = module_resolver {
