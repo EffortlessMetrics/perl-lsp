@@ -280,6 +280,140 @@ sub modify_it {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// 3b. local with builtin special variables — issue #3502
+// ---------------------------------------------------------------------------
+
+#[test]
+fn local_input_record_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` (slurp mode) must not produce a false UnusedVariable diagnostic.
+    let code = "use strict;\nlocal $/ = undef;\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ should produce no false UnusedVariable or UndeclaredVariable; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_output_field_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $,` (output field separator) must not produce a false UnusedVariable diagnostic.
+    let code = "use strict;\nlocal $, = \", \";\nprint \"a\", \"b\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$,"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $, should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_output_record_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $\` (output record separator) must not produce false diagnostics.
+    let code = "use strict;\nlocal $\\ = \"\\n\";\nprint \"hello\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$\\"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $\\ should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_list_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $"` (list separator) must not produce false diagnostics.
+    let code = "use strict;\nlocal $\" = \"-\";\nmy @arr = (1, 2);\nprint \"@arr\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$\""
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $\" should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_special_var_in_block_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` without an initializer in a block must not produce false diagnostics.
+    let code = "use strict;\n{\n    local $/;\n    my $data = <STDIN>;\n    print $data;\n}\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ (no initializer) should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_special_var_in_sub_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` inside a subroutine must not produce false diagnostics.
+    let code = r#"use strict;
+use warnings;
+sub slurp {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or die $!;
+    local $/ = undef;
+    my $content = <$fh>;
+    close($fh);
+    return $content;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ inside sub should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 4. Variable Scope Resolution — state
 // ===========================================================================

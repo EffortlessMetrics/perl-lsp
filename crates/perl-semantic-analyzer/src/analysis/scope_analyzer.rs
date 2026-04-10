@@ -448,6 +448,25 @@ impl ScopeAnalyzer {
                 let is_our = declarator == "our";
                 let is_initialized = initializer.is_some();
 
+                // `local` of a builtin special variable (e.g. `local $/`, `local $,`) temporarily
+                // modifies the global; it does not create a new lexical binding.  Declaring it in
+                // the lexical scope would cause a spurious UnusedVariable diagnostic because all
+                // later uses of `$/` etc. are recognised by is_builtin_global and never counted as
+                // uses of the scope entry.  Skip the declaration entirely and only analyse any
+                // initialiser expression that may be present.
+                if declarator == "local" && is_builtin_global(sigil, var_name_part) {
+                    // For `local $special = expr`, the parser embeds the assignment inside
+                    // `variable` as an Assignment node rather than in `initializer`.  Walk the
+                    // variable node's children to pick up any RHS expressions.
+                    if let Some(init) = initializer {
+                        self.analyze_node(init, scope, ancestors, issues, context);
+                    }
+                    if let NodeKind::Assignment { rhs, .. } = &variable.kind {
+                        self.analyze_node(rhs, scope, ancestors, issues, context);
+                    }
+                    return;
+                }
+
                 // If checking initializer first (e.g. my $x = $x), we need to analyze initializer in
                 // current scope BEFORE declaring the variable (standard Perl behavior)
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
