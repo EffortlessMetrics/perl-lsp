@@ -12,3 +12,6 @@ async
 modification
 documentation
 defaultLibrary
+scalarVariable
+arrayVariable
+hashVariable
