@@ -19,6 +19,7 @@ Choose the path that matches what you are trying to do:
 | Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
 | Work on LSP features as a contributor | [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) |
 | Run builds, tests, and CI commands | [Commands Reference](reference/COMMANDS_REFERENCE.md) |
+| Add or audit public API documentation | [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md) |
 | Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
 | Read the historical analyses and launch material | [Articles and Research Notes](articles/README.md) |
 
@@ -54,6 +55,8 @@ Authoritative descriptions of configuration, architecture, commands, and feature
 - [Configuration Reference](reference/CONFIG.md)
 - [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md)
 - [LSP Features](reference/LSP_FEATURES.md)
+- [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md)
+- [API Documentation Standards](reference/API_DOCUMENTATION_STANDARDS.md)
 - [FAQ](reference/FAQ.md)
 - [Parser Feature Matrix](reference/PARSER_FEATURE_MATRIX.md)
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md)
