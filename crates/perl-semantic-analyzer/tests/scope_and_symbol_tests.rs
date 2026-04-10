@@ -227,6 +227,15 @@ CHECK {
 
     let issues = scope_issues_strict(code);
     assert!(
+        !issues.iter().any(|i| {
+            i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 5
+        }),
+        "lexical should be valid inside its own phase block: {:?}",
+        issues
+    );
+    assert!(
         issues.iter().any(|i| {
             i.kind == IssueKind::UndeclaredVariable
                 && i.variable_name == "$phase_local"
