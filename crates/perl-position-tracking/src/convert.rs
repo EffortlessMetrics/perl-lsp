@@ -61,3 +61,48 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
     }
     text.len()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{offset_to_utf16_line_col, utf16_line_col_to_offset};
+
+    #[test]
+    fn offset_to_utf16_handles_multibyte_and_surrogate_pairs() {
+        let text = "aé💖z";
+
+        assert_eq!(offset_to_utf16_line_col(text, 0), (0, 0));
+        assert_eq!(offset_to_utf16_line_col(text, 1), (0, 1));
+        assert_eq!(offset_to_utf16_line_col(text, 3), (0, 2));
+        assert_eq!(offset_to_utf16_line_col(text, 7), (0, 4));
+        assert_eq!(offset_to_utf16_line_col(text, text.len()), (0, 5));
+    }
+
+    #[test]
+    fn offset_to_utf16_clamps_out_of_bounds_to_last_position() {
+        let text = "alpha\nbeta";
+        assert_eq!(offset_to_utf16_line_col(text, text.len() + 25), (1, 4));
+    }
+
+    #[test]
+    fn offset_to_utf16_reports_new_empty_line_for_terminal_newline() {
+        let text = "one\ntwo\n";
+        assert_eq!(offset_to_utf16_line_col(text, text.len()), (2, 0));
+    }
+
+    #[test]
+    fn utf16_line_col_to_offset_handles_split_surrogate_column() {
+        let text = "x💖y";
+        assert_eq!(utf16_line_col_to_offset(text, 0, 0), 0);
+        assert_eq!(utf16_line_col_to_offset(text, 0, 1), 1);
+        assert_eq!(utf16_line_col_to_offset(text, 0, 2), 1);
+        assert_eq!(utf16_line_col_to_offset(text, 0, 3), 5);
+        assert_eq!(utf16_line_col_to_offset(text, 0, 4), 6);
+    }
+
+    #[test]
+    fn utf16_line_col_to_offset_clamps_when_column_or_line_is_too_large() {
+        let text = "abc\nw💡";
+        assert_eq!(utf16_line_col_to_offset(text, 1, 99), text.len());
+        assert_eq!(utf16_line_col_to_offset(text, 99, 0), text.len());
+    }
+}
