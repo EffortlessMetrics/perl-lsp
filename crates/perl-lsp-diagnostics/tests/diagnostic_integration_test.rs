@@ -485,6 +485,23 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
     Ok(())
 }
 
+#[test]
+fn test_version_pragma_suppresses_missing_strict_warnings() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = "use v5.40;\nmy $x = 1;\n";
+    let diags = diagnostics_for(source);
+    let lint_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")))
+        .collect();
+
+    assert!(
+        lint_diags.is_empty(),
+        "use v5.40 should suppress missing strict/warnings diagnostics: {lint_diags:?}"
+    );
+    Ok(())
+}
+
 // =========================================================================
 // 6. Suggestion field populated for actionable diagnostics
 // =========================================================================
