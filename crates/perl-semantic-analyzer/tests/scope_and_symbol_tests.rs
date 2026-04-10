@@ -1614,3 +1614,25 @@ print $b;
     }
     Ok(())
 }
+
+#[test]
+fn read_fewer_args_than_decl_position_no_panic() -> Result<(), Box<dyn std::error::Error>> {
+    // `read $fh` — only 1 arg, position 1 never reached.
+    // The position-aware loop must not panic or suppress any diagnostics.
+    // $undeclared_fh should still be flagged; no spurious initialization of pos-1 vars.
+    let code = r#"
+use strict;
+my $fh = \*STDIN;
+read $fh;
+"#;
+    // Should not panic; diagnostics should be clean (fh is declared)
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            i.variable_name.contains("fh") && matches!(i.kind, IssueKind::UndeclaredVariable)
+        }),
+        "short-arg read must not panic or falsely flag $fh (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
