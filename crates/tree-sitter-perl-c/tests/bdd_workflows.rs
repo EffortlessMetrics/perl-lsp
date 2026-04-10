@@ -162,6 +162,48 @@ fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<d
 }
 
 #[test]
+fn bdd_injections_query_matches_inline_c_heredoc_content() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("injections query matches inline c heredoc content");
+    let source = "use Inline C => <<'END_C';\n#include <math.h>\ndouble calc(double x) { return sqrt(x); }\nEND_C\n";
+    let injections_query = include_str!("../../../tree-sitter-perl/queries/injections.scm");
+
+    scenario.given("an Inline::C heredoc snippet");
+    scenario.when("the upstream injections query is executed");
+    let tree = parse_perl_code(source)?;
+    let query = Query::new(&language(), injections_query)?;
+    let mut cursor = QueryCursor::new();
+
+    let mut saw_inline_package = false;
+    let mut saw_inline_language = false;
+    let mut saw_injection_content = false;
+
+    let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            let capture_name =
+                query.capture_names().get(capture.index as usize).copied().unwrap_or_default();
+            let text = capture.node.utf8_text(source.as_bytes()).unwrap_or_default();
+
+            match capture_name {
+                "inline.package" => saw_inline_package = text == "Inline",
+                "inline.language" => saw_inline_language = text == "C",
+                "injection.content" => {
+                    saw_injection_content = capture.node.kind() == "heredoc_content"
+                        && text.contains("#include <math.h>");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    scenario.then("all expected captures should be present");
+    assert!(saw_inline_package, "expected inline.package capture");
+    assert!(saw_inline_language, "expected inline.language capture");
+    assert!(saw_injection_content, "expected injection.content capture");
+    Ok(())
+}
+
+#[test]
 fn bdd_scanner_configuration_is_stable() {
     let scenario = Scenario::new("scanner configuration is stable");
 
