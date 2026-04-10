@@ -1863,6 +1863,10 @@ package Demo;
 method greet ($self, $name) {
     return $name;
 }
+
+sub annotate (:$tag) {
+    return $tag;
+}
 "#;
 
     let table = parse_and_extract(code);
@@ -1886,6 +1890,10 @@ method greet ($self, $name) {
     assert!(
         has_symbol_with_declaration(&table, "name", SymbolKind::scalar(), "my", code, "$name"),
         "method signature parameter $name should be recorded as a lexical symbol"
+    );
+    assert!(
+        has_symbol_with_declaration(&table, "tag", SymbolKind::scalar(), "my", code, "$tag"),
+        "named signature parameter $tag should be recorded as a lexical symbol"
     );
 
     Ok(())
