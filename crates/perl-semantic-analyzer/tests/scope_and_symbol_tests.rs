@@ -2913,6 +2913,7 @@ fn phase_block_symbol_location_within_source() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn phase_block_symbol_in_global_scope() -> Result<(), Box<dyn std::error::Error>> {
+    // The BEGIN symbol itself should be in global scope (id=0).
     let code = "BEGIN { my $x = 42; }";
     let table = parse_and_extract(code);
     let begin_syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
