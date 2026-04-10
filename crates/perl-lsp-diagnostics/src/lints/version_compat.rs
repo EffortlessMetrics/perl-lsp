@@ -28,13 +28,19 @@ use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("say", 5, 10),
     ("state", 5, 10),
+    // switch: the feature bundle name for given/when/default constructs (Perl 5.10+)
+    ("switch", 5, 10),
     ("postfix_deref", 5, 20),
+    ("try", 5, 34),
     // signatures: experimental since v5.20 but only stable-bundled at v5.36.
     // We use 5.36 as the effective minimum to match features_enabled_by_version,
     // preventing false-positive warnings on `use v5.20` files that rely on the
     // experimental pragma (`use feature 'signatures'`).
     ("signatures", 5, 36),
-    ("try", 5, 34),
+    // defer block: experimental since v5.36.
+    // Currently detected via FunctionCall { name: "defer" } as the lexer/parser
+    // do not yet have a dedicated Defer keyword token.
+    ("defer", 5, 36),
     ("class", 5, 38),
     ("field", 5, 38),
 ];
@@ -121,6 +127,40 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 if !effective_features.contains(&"say") {
                     let min = feature_min_version("say");
                     diagnostics.push(make_diagnostic(n, "say", declared_version, min));
+                }
+            }
+
+            // `defer { }` block — requires v5.36 (`use feature 'defer'`).
+            // The lexer does not yet have a Defer keyword token so defer is
+            // currently parsed as a function call.  Gate on name == "defer".
+            NodeKind::FunctionCall { name, .. } if name == "defer" => {
+                if !effective_features.contains(&"defer") {
+                    let min = feature_min_version("defer");
+                    diagnostics.push(make_diagnostic(n, "defer", declared_version, min));
+                }
+            }
+
+            // `given ($x) { ... }` — requires v5.10 (`use feature 'switch'`)
+            NodeKind::Given { .. } => {
+                if !effective_features.contains(&"switch") {
+                    let min = feature_min_version("switch");
+                    diagnostics.push(make_diagnostic(n, "given", declared_version, min));
+                }
+            }
+
+            // `when ($pat) { ... }` — requires v5.10 (`use feature 'switch'`)
+            NodeKind::When { .. } => {
+                if !effective_features.contains(&"switch") {
+                    let min = feature_min_version("switch");
+                    diagnostics.push(make_diagnostic(n, "when", declared_version, min));
+                }
+            }
+
+            // `default { ... }` — requires v5.10 (`use feature 'switch'`)
+            NodeKind::Default { .. } => {
+                if !effective_features.contains(&"switch") {
+                    let min = feature_min_version("switch");
+                    diagnostics.push(make_diagnostic(n, "default", declared_version, min));
                 }
             }
 
