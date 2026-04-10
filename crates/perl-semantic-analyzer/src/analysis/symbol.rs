@@ -347,6 +347,10 @@ pub enum AsyncFrameworkKind {
     Future,
     /// `use Future::XS;`
     FutureXS,
+    /// `use Promise;`
+    Promise,
+    /// `use Promise::XS;`
+    PromiseXS,
     /// `use IO::Async;`
     IOAsync,
     /// `use Mojo::Redis;`
@@ -1614,6 +1618,8 @@ impl SymbolExtractor {
         let (module_name, framework_name, exact_match) = match flags.async_framework {
             Some(AsyncFrameworkKind::Future) => ("Future", "Future", true),
             Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
+            Some(AsyncFrameworkKind::Promise) => ("Promise", "Promise", true),
+            Some(AsyncFrameworkKind::PromiseXS) => ("Promise::XS", "Promise::XS", true),
             Some(AsyncFrameworkKind::IOAsync) => ("IO::Async", "IO::Async", false),
             Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis", true),
             Some(AsyncFrameworkKind::MojoPg) => ("Mojo::Pg", "Mojo::Pg", true),
@@ -1706,6 +1712,18 @@ impl SymbolExtractor {
         if module == "Future::XS" {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::FutureXS);
+            return;
+        }
+
+        if module == "Promise" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::Promise);
+            return;
+        }
+
+        if module == "Promise::XS" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::PromiseXS);
             return;
         }
 
