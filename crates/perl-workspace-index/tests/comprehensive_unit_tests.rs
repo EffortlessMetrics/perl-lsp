@@ -171,6 +171,29 @@ fn test_remove_file_url() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn test_remove_file_clears_references() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/refs.pl")?;
+    let code = "package Refs;\nsub keep_me { 1 }\nkeep_me();\nRefs::keep_me();\n";
+    index.index_file(uri.clone(), code.to_string())?;
+
+    assert!(!index.find_references("Refs::keep_me").is_empty());
+    assert!(!index.find_references("keep_me").is_empty());
+
+    index.remove_file(&uri.to_string());
+
+    assert!(
+        index.find_references("Refs::keep_me").is_empty(),
+        "qualified references should be removed after file deletion"
+    );
+    assert!(
+        index.find_references("keep_me").is_empty(),
+        "bare references should be removed after file deletion"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_clear_index() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/c.pl")?;
