@@ -345,6 +345,8 @@ pub enum WebFrameworkKind {
 pub enum AsyncFrameworkKind {
     /// `use IO::Async;`
     IOAsync,
+    /// `use Mojo::Redis;`
+    MojoRedis,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -659,7 +661,7 @@ impl SymbolExtractor {
                     is_write: false,
                 });
 
-                self.synthesize_io_async_class_symbol(object);
+                self.synthesize_async_framework_class_symbol(object);
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -1597,31 +1599,36 @@ impl SymbolExtractor {
         true
     }
 
-    /// Synthesize class symbols for IO::Async namespaces used in method-call form.
-    fn synthesize_io_async_class_symbol(&mut self, object: &Node) -> bool {
+    /// Synthesize class symbols for async framework namespaces used in method-call form.
+    fn synthesize_async_framework_class_symbol(&mut self, object: &Node) -> bool {
         let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
             return false;
         };
-        if !matches!(flags.async_framework, Some(AsyncFrameworkKind::IOAsync)) {
-            return false;
-        }
+
+        let (module_prefix, framework_name) = match flags.async_framework {
+            Some(AsyncFrameworkKind::IOAsync) => ("IO::Async::", "IO::Async"),
+            Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis"),
+            None => return false,
+        };
 
         let Some(name) = Self::single_symbol_name(object) else {
             return false;
         };
-        if !name.starts_with("IO::Async::") {
+        if !name.starts_with(module_prefix) {
             return false;
         }
 
         let already_synthesized = self.table.symbols.get(&name).is_some_and(|symbols| {
             symbols.iter().any(|symbol| {
                 symbol.kind == SymbolKind::Class
-                    && symbol.declaration.as_deref() == Some("framework=IO::Async")
+                    && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
             })
         });
         if already_synthesized {
             return true;
         }
+
+        let framework_attr = format!("framework={framework_name}");
 
         self.table.add_symbol(Symbol {
             name: name.clone(),
@@ -1629,9 +1636,9 @@ impl SymbolExtractor {
             kind: SymbolKind::Class,
             location: object.location,
             scope_id: self.table.current_scope(),
-            declaration: Some("framework=IO::Async".to_string()),
-            documentation: Some("Synthetic IO::Async class".to_string()),
-            attributes: vec!["framework=IO::Async".to_string()],
+            declaration: Some(framework_attr.clone()),
+            documentation: Some(format!("Synthetic {framework_name} class")),
+            attributes: vec![framework_attr],
         });
 
         true
@@ -1674,6 +1681,12 @@ impl SymbolExtractor {
         if module == "IO::Async" || module.starts_with("IO::Async::") {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::IOAsync);
+            return;
+        }
+
+        if module == "Mojo::Redis" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoRedis);
             return;
         }
 
