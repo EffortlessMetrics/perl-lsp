@@ -111,16 +111,16 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             }
 
-            // `given` / `when` — deprecated in v5.38 and removed in v5.42.
-            NodeKind::Given { .. } => {
+            // `given` / `when` / `default` — deprecated in v5.38 and removed in v5.42.
+            NodeKind::Given { .. } | NodeKind::When { .. } | NodeKind::Default { .. } => {
                 if declared_version >= GIVEN_WHEN_REMOVAL_VERSION {
-                    diagnostics.push(make_given_when_diagnostic(
+                    diagnostics.push(make_given_when_default_diagnostic(
                         n,
                         declared_version,
                         DiagnosticSeverity::Error,
                     ));
                 } else if declared_version >= GIVEN_WHEN_DEPRECATION_VERSION {
-                    diagnostics.push(make_given_when_diagnostic(
+                    diagnostics.push(make_given_when_default_diagnostic(
                         n,
                         declared_version,
                         DiagnosticSeverity::Warning,
@@ -209,7 +209,7 @@ fn make_diagnostic(
     )
 }
 
-fn make_given_when_diagnostic(
+fn make_given_when_default_diagnostic(
     node: &Node,
     declared_version: PerlVersion,
     severity: DiagnosticSeverity,
@@ -217,14 +217,14 @@ fn make_given_when_diagnostic(
     let (message, min_version) = match severity {
         DiagnosticSeverity::Error => (
             format!(
-                "'given/when' was removed in Perl v5.42; declared version is v{}.{}",
+                "'given/when/default' was removed in Perl v5.42; declared version is v{}.{}",
                 declared_version.major, declared_version.minor
             ),
             (5, 42),
         ),
         _ => (
             format!(
-                "'given/when' is deprecated starting in Perl v5.38; declared version is v{}.{}",
+                "'given/when/default' is deprecated starting in Perl v5.38; declared version is v{}.{}",
                 declared_version.major, declared_version.minor
             ),
             (5, 38),
@@ -239,8 +239,10 @@ fn make_given_when_diagnostic(
         related_information: vec![],
         tags: vec![],
         suggestion: Some(format!(
-            "Refactor `given` / `when` to `if` / `elsif` or another supported control-flow form before targeting Perl v{}.{}",
-            min_version.0, min_version.1
+            "Refactor `given` / `when` / `default` to `if` / `elsif` or another supported control-flow form; this feature is {} in v{}.{}.",
+            if severity == DiagnosticSeverity::Error { "removed" } else { "deprecated" },
+            min_version.0,
+            min_version.1
         )),
     }
 }

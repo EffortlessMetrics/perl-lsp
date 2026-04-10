@@ -325,6 +325,36 @@ fn test_given_when_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
+// Test 5bb: default warns on v5.38 (deprecated)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_default_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38"), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(
+        diag.severity,
+        perl_lsp_diagnostic_types::DiagnosticSeverity::Warning,
+        "Expected warning severity for deprecated default on v5.38, got: {:?}",
+        diag
+    );
+    assert!(
+        diag.message.contains("default"),
+        "Message should mention default: {}",
+        diag.message
+    );
+    assert!(
+        diag.message.contains("deprecated"),
+        "Message should mention deprecation: {}",
+        diag.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 5c: given/when errors on v5.42 (removed)
 // ---------------------------------------------------------------------------
 
@@ -346,6 +376,43 @@ fn test_given_when_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
             .as_deref()
             .is_some_and(|suggestion| suggestion.contains("if") && suggestion.contains("elsif")),
         "Expected migration suggestion for given/when removal, got: {:?}",
+        diag.suggestion
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5cb: default errors on v5.42 (removed)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_default_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.42"), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(
+        diag.severity,
+        perl_lsp_diagnostic_types::DiagnosticSeverity::Error,
+        "Expected error severity for removed default on v5.42, got: {:?}",
+        diag
+    );
+    assert!(
+        diag.message.contains("default"),
+        "Message should mention default: {}",
+        diag.message
+    );
+    assert!(
+        diag.message.contains("removed"),
+        "Message should mention removal: {}",
+        diag.message
+    );
+    assert!(
+        diag.suggestion
+            .as_deref()
+            .is_some_and(|suggestion| suggestion.contains("if") && suggestion.contains("elsif")),
+        "Expected migration suggestion for default removal, got: {:?}",
         diag.suggestion
     );
     Ok(())
