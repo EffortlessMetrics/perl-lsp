@@ -1656,3 +1656,104 @@ sub main_func {}
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_selection_ranges_expand_from_identifier_to_enclosing_constructs()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario =
+        BddScenario::new("Selection ranges expand from identifier to enclosing constructs");
+
+    let script = r#"use strict;
+use warnings;
+
+sub calculate_total {
+    my ($left, $right) = @_;
+    return ($left + $right) * 2;
+}
+"#;
+
+    scenario.given("a Perl file with a nested arithmetic expression");
+    let (mut harness, workspace) = setup_workspace(&[("selection.pl", script)])?;
+    let uri = workspace.uri("selection.pl");
+    harness.open(&uri, script)?;
+
+    scenario.when("requesting selection ranges from inside an identifier");
+    let (line, character) = find_position(script, "$left +");
+    let selection_ranges = harness.request(
+        "textDocument/selectionRange",
+        json!({
+            "textDocument": { "uri": uri },
+            "positions": [{ "line": line, "character": character + 1 }]
+        }),
+    )?;
+
+    scenario.then("the server returns a parent chain for incremental selection expansion");
+    let ranges = selection_ranges.as_array().ok_or("selectionRange response should be an array")?;
+    let first = ranges.first().ok_or("selectionRange response should contain at least one item")?;
+    assert!(
+        selection_range_depth(first) >= 3,
+        "expected at least 3 nested selection levels, got: {first:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_references_respect_include_declaration_toggle() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("References respect includeDeclaration toggle");
+
+    let script = r#"use strict;
+use warnings;
+
+sub helper {
+    return 1;
+}
+
+my $x = helper();
+my $y = helper();
+"#;
+
+    scenario.given("a Perl file with one function declaration and multiple call sites");
+    let (mut harness, workspace) = setup_workspace(&[("refs.pl", script)])?;
+    let uri = workspace.uri("refs.pl");
+    harness.open(&uri, script)?;
+    harness.wait_for_symbol("helper", Some(&uri), Duration::from_secs(5)).ok();
+
+    let (line, character) = find_position(script, "helper()");
+
+    scenario.when("requesting references without declarations");
+    let without_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character },
+            "context": { "includeDeclaration": false }
+        }),
+    )?;
+
+    scenario.when("requesting references including declarations");
+    let with_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character },
+            "context": { "includeDeclaration": true }
+        }),
+    )?;
+
+    scenario.then("including declarations adds at least one extra location");
+    let without = without_decl.as_array().map_or(0, Vec::len);
+    let with = with_decl.as_array().map_or(0, Vec::len);
+    assert!(
+        with >= without,
+        "includeDeclaration=true should not reduce matches (without={without}, with={with})"
+    );
+    assert!(
+        with > without,
+        "expected declaration-inclusive references to add declaration (without={without}, with={with})"
+    );
+
+    Ok(())
+}
