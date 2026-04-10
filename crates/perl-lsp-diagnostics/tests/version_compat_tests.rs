@@ -1276,3 +1276,88 @@ fn test_defer_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Helper: build an `isa` binary operator node
+// ---------------------------------------------------------------------------
+
+fn isa_node() -> Node {
+    Node::new(
+        NodeKind::Binary {
+            op: "isa".to_string(),
+            left: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "obj".to_string() },
+                loc(24, 28),
+            )),
+            right: Box::new(Node::new(
+                NodeKind::String { value: "MyClass".to_string(), interpolated: false },
+                loc(29, 38),
+            )),
+        },
+        loc(20, 38),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Test 30: `isa` operator in v5.30 -> warns (requires v5.36)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_isa_warns_on_v5_30() -> Result<(), Box<dyn std::error::Error>> {
+    // `$obj isa 'MyClass'` with `use v5.30` should produce a PL900 warning
+    let ast = program(vec![use_node("v5.30"), isa_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'isa' operator in v5.30, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("isa"), "Message should mention 'isa': {}", msg.message);
+    assert!(
+        msg.message.contains("v5.36") || msg.message.contains("5.36"),
+        "Message should mention minimum version v5.36: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 31: `isa` operator in v5.36 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_isa_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    // `$obj isa 'MyClass'` with `use v5.36` should NOT produce a warning
+    let ast = program(vec![use_node("v5.36"), isa_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'isa' operator in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 32: `isa` operator with `use feature 'isa'` on old version -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_isa_ok_with_use_feature_isa() -> Result<(), Box<dyn std::error::Error>> {
+    // Explicit `use feature 'isa'` on v5.10 should suppress PL900
+    let ast = program(vec![use_node("v5.10"), use_feature("isa"), isa_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning when 'use feature 'isa'' is present on v5.10, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
