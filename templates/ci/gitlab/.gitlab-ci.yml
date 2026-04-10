@@ -1,0 +1,45 @@
+# Minimal GitLab CI/CD template for perl-lsp.
+#
+# This template keeps the default jobs small and parallel. If you publish a
+# custom runner image to the GitLab Container Registry, replace `image:` with
+# `$CI_REGISTRY_IMAGE/...` and keep the cache paths below.
+
+default:
+  image: rust:1.92-bookworm
+  cache:
+    key:
+      files:
+        - Cargo.lock
+    paths:
+      - target/
+      - .cargo/bin/
+      - .cargo/git/db/
+      - .cargo/registry/cache/
+      - .cargo/registry/index/
+  before_script:
+    - rustc --version
+    - cargo --version
+    - rustup component add rustfmt clippy
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
+  CARGO_TERM_COLOR: "always"
+
+stages:
+  - check
+
+fmt:
+  stage: check
+  script:
+    - cargo fmt --all --check
+
+clippy:
+  stage: check
+  script:
+    - cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+test:
+  stage: check
+  script:
+    - cargo test --workspace --all-features --locked
