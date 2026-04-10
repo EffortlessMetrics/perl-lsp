@@ -936,10 +936,11 @@ impl LspServer {
         }
 
         // Not found — show search paths and MetaCPAN link
-        let include_paths = {
-            let config = self.workspace_config.lock();
-            config.include_paths.join(", ")
-        };
+        let include_paths = self
+            .config_for_doc(doc_uri)
+            .unwrap_or_else(|| self.workspace_config.lock().clone())
+            .include_paths
+            .join(", ");
 
         json!({
             "contents": {
