@@ -199,6 +199,192 @@ Demo::Worker::run();
 }
 
 // ---------------------------------------------------------------------------
+// Test 3: XS bootstrap calls navigate to native `.xs` entry points
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_xsloader_load_navigates_to_boot_symbol() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let server = perl_lsp::LspServer::new();
+
+    let module_pm = r#"package My::Module;
+use strict;
+use warnings;
+use XSLoader;
+our $VERSION = '0.01';
+XSLoader::load(__PACKAGE__, $VERSION);
+1;
+"#;
+    let module_xs = r#"#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+EXTERN_C void
+boot_My__Module(pTHX_ CV* cv)
+{
+}
+"#;
+
+    workspace.write("lib/My/Module.pm", module_pm)?;
+    workspace.write("Module.xs", module_xs)?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(&workspace.uri("lib/My/Module.pm"), module_pm)?;
+    harness.barrier();
+
+    let cursor = module_pm.find("load").ok_or("missing XSLoader::load")?;
+    let (line, character) = server.offset_to_position(module_pm, cursor);
+    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/My/Module.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("expected uri")?;
+    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(u64::from(boot_line)),
+        "expected goto-definition to land on boot_My__Module",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_bootstrap_keyword_navigates_to_boot_symbol() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let server = perl_lsp::LspServer::new();
+
+    let loader_pm = r#"package My::Module;
+use strict;
+use warnings;
+require DynaLoader;
+our @ISA = qw(DynaLoader);
+our $VERSION = '0.01';
+bootstrap My::Module $VERSION;
+1;
+"#;
+    let module_xs = r#"#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+EXTERN_C void
+boot_My__Module(pTHX_ CV* cv)
+{
+}
+"#;
+
+    workspace.write("lib/My/Module.pm", loader_pm)?;
+    workspace.write("Module.xs", module_xs)?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(&workspace.uri("lib/My/Module.pm"), loader_pm)?;
+    harness.barrier();
+
+    let cursor = loader_pm.find("bootstrap").ok_or("missing bootstrap keyword")?;
+    let (line, character) = server.offset_to_position(loader_pm, cursor);
+    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/My/Module.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("expected uri")?;
+    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(u64::from(boot_line)),
+        "expected goto-definition to land on boot_My__Module",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_dynaloader_bootstrap_navigates_to_boot_symbol() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let server = perl_lsp::LspServer::new();
+
+    let loader_pm = r#"package My::Module;
+use strict;
+use warnings;
+require DynaLoader;
+our @ISA = qw(DynaLoader);
+our $VERSION = '0.01';
+DynaLoader::bootstrap(__PACKAGE__, $VERSION);
+1;
+"#;
+    let module_xs = r#"#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+EXTERN_C void
+boot_My__Module(pTHX_ CV* cv)
+{
+}
+"#;
+
+    workspace.write("lib/My/Module.pm", loader_pm)?;
+    workspace.write("Module.xs", module_xs)?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(&workspace.uri("lib/My/Module.pm"), loader_pm)?;
+    harness.barrier();
+
+    let cursor = loader_pm.find("DynaLoader::bootstrap").ok_or("missing DynaLoader::bootstrap")?;
+    let (line, character) = server.offset_to_position(loader_pm, cursor);
+    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/My/Module.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("expected uri")?;
+    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(u64::from(boot_line)),
+        "expected goto-definition to land on boot_My__Module",
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 3: $self->method() navigates to the method definition
 // ---------------------------------------------------------------------------
 

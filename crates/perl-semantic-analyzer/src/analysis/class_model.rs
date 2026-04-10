@@ -45,18 +45,13 @@ pub enum AccessorType {
 }
 
 /// Method-resolution order for inherited method lookup.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MethodResolutionOrder {
     /// Default Perl depth-first resolution order.
+    #[default]
     Dfs,
     /// C3 linearization enabled via `use mro 'c3';`.
     C3,
-}
-
-impl Default for MethodResolutionOrder {
-    fn default() -> Self {
-        Self::Dfs
-    }
 }
 
 /// A Moose/Moo attribute declared via `has`.

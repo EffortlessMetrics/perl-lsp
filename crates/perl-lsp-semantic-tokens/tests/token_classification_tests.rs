@@ -1159,9 +1159,35 @@ fn test_special_variable_at_underscore_has_default_library_modifier() {
     assert!(
         !special_tokens.is_empty(),
         "@_ should produce at least one variable token with defaultLibrary modifier, \
-         got variable tokens: {:?}",
+        got variable tokens: {:?}",
         tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn test_internal_pl_sv_variables_have_default_library_modifier() {
+    let code = "sub f { return $PL_sv_yes; return $PL_sv_no; return $PL_sv_undef; }";
+    let tokens = tokens_for(code);
+    let var_idx = type_idx("variable");
+    let positions = absolute_positions(&tokens);
+
+    for needle in ["$PL_sv_yes", "$PL_sv_no", "$PL_sv_undef"] {
+        let offset = code.find(needle).expect("needle should exist");
+        let expected_position = line_col_mapper(code)(offset);
+        let token = tokens
+            .iter()
+            .zip(positions.iter())
+            .find(|(tok, pos)| {
+                tok[3] == var_idx && has_default_library_modifier(tok) && **pos == expected_position
+            })
+            .map(|(tok, _)| *tok);
+
+        assert!(
+            token.is_some(),
+            "{needle} should produce a variable token with defaultLibrary modifier, got: {:?}",
+            tokens.iter().filter(|t| t[3] == var_idx).collect::<Vec<_>>()
+        );
+    }
 }
 
 #[test]

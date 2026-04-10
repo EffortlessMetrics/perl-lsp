@@ -161,6 +161,7 @@ For environments without internet access, set `perl-lsp.downloadBaseUrl` to an i
 - Smart match operator (`~~`)
 - Indirect object syntax
 - Built-in function signatures with parameter documentation
+- XS interface files (`.xs` and `.i`) are associated with Perl for bundled syntax highlighting
 
 ## Commands
 
