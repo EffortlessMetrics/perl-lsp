@@ -61,8 +61,9 @@ fn pl302_absent_for_valid_prototype() {
 fn pl302_has_warning_severity() -> Result<(), Box<dyn std::error::Error>> {
     let source = "sub foo (XYZ) { }\n";
     let diags = diagnostics_for(source);
-    let pl302 = find_code(&diags, "PL302")
-        .ok_or_else(|| format!("Expected PL302 in diagnostics for 'sub foo (XYZ)'. Got: {diags:?}"))?;
+    let pl302 = find_code(&diags, "PL302").ok_or_else(|| {
+        format!("Expected PL302 in diagnostics for 'sub foo (XYZ)'. Got: {diags:?}")
+    })?;
     assert_eq!(
         pl302.severity,
         DiagnosticSeverity::Warning,
