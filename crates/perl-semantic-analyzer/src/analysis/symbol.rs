@@ -817,8 +817,13 @@ impl SymbolExtractor {
 
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 self.visit_node(body);
-                for (_, catch_block) in catch_blocks {
+                for (catch_var, catch_block) in catch_blocks {
+                    self.table.push_scope(ScopeKind::Block, catch_block.location);
+                    if let Some(full_name) = catch_var.as_deref() {
+                        self.register_catch_variable(full_name, catch_block.location);
+                    }
                     self.visit_node(catch_block);
+                    self.table.pop_scope();
                 }
                 if let Some(finally) = finally_block {
                     self.visit_node(finally);
@@ -2725,6 +2730,61 @@ impl SymbolExtractor {
         }
     }
 
+    fn register_catch_variable(&mut self, full_name: &str, catch_block_location: SourceLocation) {
+        let (sigil, name) = split_variable_name(full_name);
+        let kind = match sigil {
+            "$" => SymbolKind::scalar(),
+            "@" => SymbolKind::array(),
+            "%" => SymbolKind::hash(),
+            _ => return,
+        };
+        if name.is_empty() || name.contains("::") {
+            return;
+        }
+
+        let location = self
+            .find_catch_variable_location(catch_block_location.start, full_name)
+            .unwrap_or(SourceLocation {
+                start: catch_block_location.start,
+                end: catch_block_location.start,
+            });
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("my".to_string()),
+            documentation: Some("Exception variable bound by catch".to_string()),
+            attributes: vec![],
+        });
+    }
+
+    fn find_catch_variable_location(
+        &self,
+        catch_body_start: usize,
+        full_name: &str,
+    ) -> Option<SourceLocation> {
+        if self.source.is_empty()
+            || full_name.is_empty()
+            || catch_body_start == 0
+            || catch_body_start > self.source.len()
+        {
+            return None;
+        }
+
+        let window_start = catch_body_start.saturating_sub(256);
+        let window = self.source.get(window_start..catch_body_start)?;
+        let catch_start = window.rfind("catch")?;
+        let search_start = catch_start + "catch".len();
+        let var_offset = window[search_start..].rfind(full_name)? + search_start;
+        let start = window_start + var_offset;
+        let end = start + full_name.len();
+
+        Some(SourceLocation { start, end })
+    }
+
     /// Mark a node as a write reference (used in assignments)
     fn mark_write_reference(&mut self, node: &Node) {
         // This is a simplified version - in practice we'd need to handle
@@ -2779,6 +2839,14 @@ impl SymbolExtractor {
             }
         }
     }
+}
+
+fn split_variable_name(full_name: &str) -> (&str, &str) {
+    full_name
+        .char_indices()
+        .next()
+        .map(|(idx, ch)| (&full_name[idx..idx + ch.len_utf8()], &full_name[idx + ch.len_utf8()..]))
+        .unwrap_or(("", ""))
 }
 
 #[cfg(test)]

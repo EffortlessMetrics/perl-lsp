@@ -362,6 +362,33 @@ try {
 }
 
 #[test]
+fn symbol_try_catch_variable_is_resolvable_inside_catch_scope()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($err) {
+    print $err;
+}
+"#;
+
+    let table = parse_and_extract(code);
+    let refs = table.references.get("err").ok_or("expected catch variable reference")?;
+    let usage = refs
+        .iter()
+        .find(|reference| &code[reference.location.start..reference.location.end] == "$err")
+        .ok_or("expected usage reference for $err inside catch block")?;
+    let defs = table.find_symbol("err", usage.scope_id, SymbolKind::scalar());
+    let def = defs.first().ok_or("expected catch variable definition in symbol table")?;
+
+    assert_eq!(def.declaration.as_deref(), Some("my"));
+    assert_eq!(&code[def.location.start..def.location.end], "$err");
+    Ok(())
+}
+
+#[test]
 fn scope_try_catch_inner_redeclaration_stays_same_scope() -> Result<(), Box<dyn std::error::Error>>
 {
     let code = r#"
