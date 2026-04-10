@@ -368,6 +368,26 @@ impl<'a> AnalysisContext<'a> {
             Err(idx) => idx,
         }
     }
+
+    fn find_catch_variable_range(
+        &self,
+        catch_body_start: usize,
+        full_name: &str,
+    ) -> Option<(usize, usize)> {
+        if full_name.is_empty() || catch_body_start == 0 || catch_body_start > self.code.len() {
+            return None;
+        }
+
+        let window_start = catch_body_start.saturating_sub(256);
+        let window = self.code.get(window_start..catch_body_start)?;
+        let catch_start = window.rfind("catch")?;
+        let search_start = catch_start + "catch".len();
+        let var_offset = window[search_start..].rfind(full_name)? + search_start;
+        let start = window_start + var_offset;
+        let end = start + full_name.len();
+
+        Some((start, end))
+    }
 }
 
 impl<'a> ExtractedName<'a> {
@@ -897,12 +917,15 @@ impl ScopeAnalyzer {
                     let catch_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                     if let Some(full_name) = catch_var.as_deref() {
+                        let catch_var_range = context
+                            .find_catch_variable_range(catch_body.location.start, full_name)
+                            .unwrap_or((catch_body.location.start, catch_body.location.start));
                         let (sigil, name) = split_variable_name(full_name);
                         if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
                             if let Some(issue_kind) = catch_scope.declare_variable_parts(
                                 sigil,
                                 name,
-                                catch_body.location.start,
+                                catch_var_range.0,
                                 false,
                                 true,
                             ) {
@@ -924,8 +947,8 @@ impl ScopeAnalyzer {
                                 issues.push(ScopeIssue {
                                     kind: issue_kind,
                                     variable_name: full_name.to_string(),
-                                    line: context.get_line(catch_body.location.start),
-                                    range: (catch_body.location.start, catch_body.location.start),
+                                    line: context.get_line(catch_var_range.0),
+                                    range: catch_var_range,
                                     description,
                                 });
                             }

@@ -230,6 +230,34 @@ print $e;
 }
 
 #[test]
+fn test_try_catch_variable_diagnostic_range_targets_parameter()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+use strict;
+use feature 'try';
+my $e = 1;
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let diags = diagnostics_for(source);
+    let shadowing = diags
+        .iter()
+        .find(|d| d.message.contains("shadows") && d.message.contains("$e"))
+        .ok_or("expected catch-variable shadowing diagnostic")?;
+
+    assert_eq!(
+        &source[shadowing.range.0..shadowing.range.1],
+        "$e",
+        "catch-variable diagnostic range should target the catch parameter"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_severity_ordering_is_consistent() -> Result<(), Box<dyn std::error::Error>> {
     // Error (1) < Warning (2) < Information (3) < Hint (4)
     assert!(DiagnosticSeverity::Error < DiagnosticSeverity::Warning);
