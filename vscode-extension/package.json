@@ -104,11 +104,22 @@
           ".tt",
           ".tt2",
           ".ep",
-          ".xs",
           ".i"
         ],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "gherkin",
+        "aliases": [
+          "Gherkin",
+          "gherkin",
+          "Cucumber"
+        ],
+        "extensions": [
+          ".feature"
+        ],
+        "configuration": "./gherkin-language-configuration.json"
       }
     ],
     "grammars": [
@@ -120,6 +131,11 @@
           "meta.embedded.block.c.perl": "c",
           "meta.embedded.block.perl.perl": "perl"
         }
+      },
+      {
+        "language": "gherkin",
+        "scopeName": "source.gherkin",
+        "path": "./syntaxes/gherkin.tmLanguage.json"
       }
     ],
     "breakpoints": [

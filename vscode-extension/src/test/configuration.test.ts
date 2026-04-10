@@ -98,6 +98,32 @@ describe('language-configuration.json', () => {
   });
 });
 
+describe('gherkin-language-configuration.json', () => {
+  let langConfig: any;
+
+  beforeAll(() => {
+    langConfig = readJson('gherkin-language-configuration.json');
+  });
+
+  test('has line comment set to #', () => {
+    expect(langConfig.comments.lineComment).toBe('#');
+  });
+
+  test('defines .feature editing bracket pairs', () => {
+    const brackets: [string, string][] = langConfig.brackets;
+    const pairs = brackets.map(([o, c]) => `${o}${c}`);
+    expect(pairs).toContain('{}');
+    expect(pairs).toContain('[]');
+    expect(pairs).toContain('()');
+  });
+
+  test('has quote auto-closing pairs', () => {
+    const opens = (langConfig.autoClosingPairs as any[]).map((p: any) => p.open);
+    expect(opens).toContain('"');
+    expect(opens).toContain("'");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // package.json contributes
 // ---------------------------------------------------------------------------
@@ -114,6 +140,16 @@ describe('package.json contributes', () => {
       expect(langs).toBeDefined();
       const perl = langs.find((l: any) => l.id === 'perl');
       expect(perl).toBeDefined();
+    });
+
+    test('registers gherkin language for feature files', () => {
+      const langs = pkg.contributes.languages;
+      const gherkin = langs.find((l: any) => l.id === 'gherkin');
+      expect(gherkin).toBeDefined();
+      expect(gherkin.aliases).toContain('Gherkin');
+      expect(gherkin.aliases).toContain('Cucumber');
+      expect(gherkin.extensions).toContain('.feature');
+      expect(gherkin.configuration).toBe('./gherkin-language-configuration.json');
     });
 
     test('perl language has expected file extensions', () => {
@@ -641,10 +677,24 @@ describe('package.json contributes', () => {
       expect(perl.scopeName).toBe('source.perl');
     });
 
+    test('registers source.gherkin scope', () => {
+      const grammars = pkg.contributes.grammars;
+      const gherkin = grammars.find((g: any) => g.language === 'gherkin');
+      expect(gherkin).toBeDefined();
+      expect(gherkin.scopeName).toBe('source.gherkin');
+    });
+
     test('grammar file exists', () => {
       const grammars = pkg.contributes.grammars;
       const perl = grammars.find((g: any) => g.language === 'perl');
       const grammarPath = path.join(EXT_ROOT, perl.path);
+      expect(fs.existsSync(grammarPath)).toBe(true);
+    });
+
+    test('gherkin grammar file exists', () => {
+      const grammars = pkg.contributes.grammars;
+      const gherkin = grammars.find((g: any) => g.language === 'gherkin');
+      const grammarPath = path.join(EXT_ROOT, gherkin.path);
       expect(fs.existsSync(grammarPath)).toBe(true);
     });
 
@@ -679,6 +729,37 @@ describe('package.json contributes', () => {
       const grammar = pkg.contributes.grammars.find((g: any) => g.language === 'perl');
       expect(grammar.embeddedLanguages['meta.embedded.block.c.perl']).toBe('c');
       expect(grammar.embeddedLanguages['meta.embedded.block.perl.perl']).toBe('perl');
+    });
+
+    test('gherkin grammar highlights core keywords and step lines', () => {
+      const grammar = readJson('syntaxes/gherkin.tmLanguage.json');
+      const headerPattern = grammar.repository.headers.patterns
+        .map((entry: any) => entry.match)
+        .find((match: string) =>
+          typeof match === 'string' &&
+          match.includes('Scenario') &&
+          match.includes('Outline')
+        );
+      const stepPattern = grammar.repository.steps.patterns
+        .map((entry: any) => entry.match)
+        .find((match: string) =>
+          typeof match === 'string' &&
+          match.includes('Given') &&
+          match.includes('When') &&
+          match.includes('Then')
+        );
+
+      expect(headerPattern).toBeDefined();
+      expect(stepPattern).toBeDefined();
+    });
+
+    test('gherkin grammar highlights tags and tables', () => {
+      const grammar = readJson('syntaxes/gherkin.tmLanguage.json');
+      const tagPattern = grammar.repository.tags.patterns[0]?.match;
+      const tablePattern = grammar.repository.tables.patterns[0]?.match;
+
+      expect(tagPattern).toContain('@');
+      expect(tablePattern).toContain('\\|');
     });
   });
 });
