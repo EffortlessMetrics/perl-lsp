@@ -105,4 +105,14 @@ mod tests {
         assert_eq!(utf16_line_col_to_offset(text, 1, 99), text.len());
         assert_eq!(utf16_line_col_to_offset(text, 99, 0), text.len());
     }
+
+    #[test]
+    fn utf16_helpers_handle_crlf_and_surrogates_together() {
+        let text = "a\r\nb💖c\r\n";
+
+        assert_eq!(offset_to_utf16_line_col(text, 3), (1, 0));
+        assert_eq!(offset_to_utf16_line_col(text, 8), (1, 3));
+        assert_eq!(utf16_line_col_to_offset(text, 1, 2), 4);
+        assert_eq!(utf16_line_col_to_offset(text, 1, 3), 8);
+    }
 }

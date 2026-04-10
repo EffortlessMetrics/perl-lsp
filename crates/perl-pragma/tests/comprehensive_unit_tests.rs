@@ -294,6 +294,17 @@ fn use_v5_40_enables_effective_strict_and_warnings() -> Result<(), Box<dyn std::
 }
 
 #[test]
+fn use_v5_40_1_enables_builtin_and_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40.1", &[], 0, 14)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.warnings);
+    assert!(state.has_feature("builtin"));
+    Ok(())
+}
+
+#[test]
 fn use_numeric_version_enables_effective_strict_and_warnings()
 -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("5.040", &[], 0, 12)]);

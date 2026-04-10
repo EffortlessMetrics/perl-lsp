@@ -227,6 +227,59 @@ fn test_use_constant_hash_ref_style_produces_all_symbol_decls() {
     assert_eq!(decls[2].name, "BAZ");
 }
 
+#[test]
+fn test_use_constant_qw_style_deduplicates_names() {
+    // use constant qw(ONE TWO ONE);
+    let use_node = Node::new(
+        NodeKind::Use {
+            module: "constant".to_string(),
+            args: vec!["qw(ONE TWO ONE)".to_string()],
+            has_filter_risk: false,
+        },
+        loc(0, 28),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 28));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 2);
+    assert_eq!(decls[0].kind, SymbolKind::Constant);
+    assert_eq!(decls[0].name, "ONE");
+    assert_eq!(decls[1].kind, SymbolKind::Constant);
+    assert_eq!(decls[1].name, "TWO");
+}
+
+#[test]
+fn test_variable_declaration_with_attributes_is_unwrapped() {
+    // my $count :shared;
+    let inner = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "count".to_string() },
+        loc(3, 9),
+    );
+    let wrapped = Node::new(
+        NodeKind::VariableWithAttributes { variable: Box::new(inner), attributes: vec![] },
+        loc(3, 9),
+    );
+    let decl_node = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(wrapped),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(0, 9),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl_node] }, loc(0, 9));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let decl = &decls[0];
+    assert_eq!(decl.kind, SymbolKind::Variable(VarKind::Scalar));
+    assert_eq!(decl.name, "count");
+    assert_eq!(decl.anchor_span, Some((3, 9)));
+}
+
 // ── Class (Perl 5.38+) ────────────────────────────────────────────────────────
 
 #[test]

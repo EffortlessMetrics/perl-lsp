@@ -1178,6 +1178,35 @@ fn test_index_coordinator_check_limits_none_when_ok() {
 }
 
 #[test]
+fn test_index_coordinator_check_limits_prefers_file_count_over_symbol_count()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_workspace_index::workspace::workspace_index::{
+        DegradationReason as IxDegradationReason, IndexPerformanceCaps,
+        ResourceKind as IxResourceKind,
+    };
+
+    let limits = IndexResourceLimits {
+        max_files: 1,
+        max_total_symbols: 1,
+        ..IndexResourceLimits::default()
+    };
+    let coord = IndexCoordinator::with_limits_and_caps(limits, IndexPerformanceCaps::default());
+    coord.transition_to_ready(0, 0);
+
+    for i in 0..2 {
+        let uri = Url::parse(&format!("file:///limit_priority_{}.pl", i))?;
+        coord.index().index_file(uri, format!("sub f{} {{ 1 }}", i))?;
+    }
+
+    let reason = coord.check_limits().expect("limits should be exceeded");
+    assert!(matches!(
+        reason,
+        IxDegradationReason::ResourceLimit { kind: IxResourceKind::MaxFiles }
+    ));
+    Ok(())
+}
+
+#[test]
 fn test_index_coordinator_phase_transitions() {
     let coord = IndexCoordinator::new();
     coord.transition_to_scanning();
