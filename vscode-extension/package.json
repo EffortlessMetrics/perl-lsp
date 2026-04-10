@@ -72,7 +72,8 @@
           ".t",
           ".psgi",
           ".mason",
-          ".mas"
+          ".mas",
+          ".xs"
         ],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"

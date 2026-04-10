@@ -101,7 +101,7 @@ fn discover_perl_files_all_returned_paths_are_perl_sources() -> TestResult {
     create_file(root, "Cargo.toml")?;
 
     let result = discover_perl_files(root);
-    let valid_extensions: HashSet<&str> = ["pl", "pm", "t", "psgi"].iter().copied().collect();
+    let valid_extensions: HashSet<&str> = ["pl", "pm", "t", "psgi", "xs"].iter().copied().collect();
 
     for path in &result.files {
         let ext = path
@@ -464,10 +464,10 @@ fn discover_perl_files_handles_spaces_in_paths() -> TestResult {
     Ok(())
 }
 
-// --- All four Perl extensions in one workspace ---
+// --- All five Perl extensions in one workspace ---
 
 #[test]
-fn discover_perl_files_finds_all_four_perl_extensions() -> TestResult {
+fn discover_perl_files_finds_all_five_perl_extensions() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -475,9 +475,10 @@ fn discover_perl_files_finds_all_four_perl_extensions() -> TestResult {
     create_file(root, "Module.pm")?;
     create_file(root, "test.t")?;
     create_file(root, "app.psgi")?;
+    create_file(root, "native.xs")?;
 
     let result = discover_perl_files(root);
-    assert_eq!(result.files.len(), 4);
+    assert_eq!(result.files.len(), 5);
 
     let extensions: HashSet<String> = result
         .files
@@ -489,5 +490,6 @@ fn discover_perl_files_finds_all_four_perl_extensions() -> TestResult {
     assert!(extensions.contains("pm"));
     assert!(extensions.contains("t"));
     assert!(extensions.contains("psgi"));
+    assert!(extensions.contains("xs"));
     Ok(())
 }
