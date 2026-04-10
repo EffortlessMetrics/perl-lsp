@@ -1066,6 +1066,38 @@ fn use_builtin_node() -> Node {
     )
 }
 
+fn scalar_var(name: &str) -> Node {
+    Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: name.to_string() },
+        loc(20, 22),
+    )
+}
+
+fn given_node() -> Node {
+    Node::new(
+        NodeKind::Given { expr: Box::new(scalar_var("x")), body: Box::new(block(vec![])) },
+        loc(20, 40),
+    )
+}
+
+fn when_node() -> Node {
+    Node::new(
+        NodeKind::When {
+            condition: Box::new(scalar_var("x")),
+            body: Box::new(block(vec![])),
+        },
+        loc(20, 40),
+    )
+}
+
+fn default_node() -> Node {
+    Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(20, 35))
+}
+
+fn defer_call() -> Node {
+    Node::new(NodeKind::FunctionCall { name: "defer".to_string(), args: vec![] }, loc(20, 27))
+}
+
 // ---------------------------------------------------------------------------
 // Test 25: builtin::floor in v5.36 -> warns (requires v5.40+)
 // ---------------------------------------------------------------------------
@@ -1162,6 +1194,90 @@ fn test_use_builtin_suppresses_qualified_call_warning() -> Result<(), Box<dyn st
         pl900_count <= 1,
         "Expected at most one PL900 for 'use builtin' + 'builtin::floor' on v5.36, got {} warnings: {:?}",
         pl900_count,
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 21: switch-family nodes in v5.8 -> each warns (requires v5.10+)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_switch_family_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), given_node(), when_node(), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let pl900: Vec<_> = diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL900")).collect();
+    assert_eq!(
+        pl900.len(),
+        3,
+        "Expected three PL900 warnings for given/when/default in v5.8, got: {:?}",
+        diagnostics
+    );
+    assert!(pl900.iter().any(|d| d.message.contains("given")));
+    assert!(pl900.iter().any(|d| d.message.contains("when")));
+    assert!(pl900.iter().any(|d| d.message.contains("default")));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 22: switch-family nodes in v5.10 -> no warnings
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_switch_family_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.10"), given_node(), when_node(), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warnings for given/when/default in v5.10, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 23: defer in v5.34 -> warns (requires v5.36+)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_defer_warns_on_v5_34() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.34"), defer_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for defer in v5.34, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("defer"), "Message should mention 'defer': {}", msg.message);
+    assert!(
+        msg.message.contains("v5.36") || msg.message.contains("5.36"),
+        "Message should mention minimum version v5.36: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 24: defer in v5.36 -> no warnings
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_defer_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), defer_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for defer in v5.36, got: {:?}",
         diagnostics
     );
     Ok(())
