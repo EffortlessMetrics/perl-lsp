@@ -31,9 +31,8 @@ fn prepend_use_lib_paths(
 ) {
     let dynamic = resolve_use_lib_paths_from_source(doc_text, workspace_root, file_dir);
     for p in dynamic.into_iter().rev() {
-        if !include_paths.contains(&p) {
-            include_paths.insert(0, p);
-        }
+        include_paths.retain(|existing| existing != &p);
+        include_paths.insert(0, p);
     }
 }
 
@@ -573,6 +572,34 @@ mod tests {
             resolved, module_file,
             "no lib should remove prior use lib path from lexical overlay"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_repeated_use_lib_reorders_precedence() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+
+        let a_mod = workspace.join("a").join("Dup").join("Winner.pm");
+        let b_mod = workspace.join("b").join("Dup").join("Winner.pm");
+        fs::create_dir_all(a_mod.parent().ok_or("no parent")?)?;
+        fs::create_dir_all(b_mod.parent().ok_or("no parent")?)?;
+        fs::write(&a_mod, "package Dup::Winner; 1;")?;
+        fs::write(&b_mod, "package Dup::Winner; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        let doc_text = "use lib 'a';\nuse lib 'b';\nuse lib 'a';\n";
+        let resolved = server
+            .resolve_module_path("Dup::Winner", Some(doc_text))
+            .ok_or("expected resolve_module_path to find Dup::Winner via repeated use lib")?;
+
+        assert_eq!(resolved, a_mod, "re-adding a path should move it to front");
         Ok(())
     }
 
