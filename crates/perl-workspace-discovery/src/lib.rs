@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn skipped_component_allows_safe_directories() {
-        let safe = ["lib", "src", "bin", "t", "scripts", "blib"];
+        let safe = ["lib", "src", "bin", "t", "scripts"];
         for dir in safe {
             let path_str = format!("{dir}/Module.pm");
             assert!(
@@ -385,6 +385,11 @@ mod tests {
                 "expected {dir} to be allowed"
             );
         }
+    }
+
+    #[test]
+    fn skipped_component_rejects_blib_directory() {
+        assert!(path_contains_skipped_component(Path::new("blib/Module.pm")));
     }
 
     #[test]
