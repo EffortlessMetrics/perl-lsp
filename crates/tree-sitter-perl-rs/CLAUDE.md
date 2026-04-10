@@ -73,7 +73,7 @@ cargo clippy -p tree-sitter-perl-rs         # Lint
 cargo doc -p tree-sitter-perl-rs --open     # View documentation
 ```
 
-## Phase 2 follow-ups
+## Backlog follow-ups
 
 - Tree cursor / walk API
 - Edit/incremental parsing API

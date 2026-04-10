@@ -74,9 +74,9 @@ This means you can pipe any Perl source through this parser and rely on getting 
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
 - `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::to_sexp()` for grammar-canonical output.
 
-## Phase 2 roadmap
+## Backlog roadmap
 
-The following features are planned but not yet implemented:
+The following APIs are not yet implemented and remain on the backlog:
 
 - Tree cursor / walk API (streaming traversal without per-call allocation)
 - Edit / incremental parsing API
