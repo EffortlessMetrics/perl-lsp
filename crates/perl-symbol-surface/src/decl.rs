@@ -145,7 +145,7 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // ── Class ──────────────────────────────────────────────────────────
-        NodeKind::Class { name, body } => {
+        NodeKind::Class { name, body, .. } => {
             let container = ctx.current_package.clone();
             out.push(SymbolDecl {
                 kind: SymbolKind::Class,

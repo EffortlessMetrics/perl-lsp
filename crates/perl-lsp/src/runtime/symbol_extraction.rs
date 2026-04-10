@@ -106,7 +106,7 @@ impl LspServer {
             }
 
             // Perl 5.38+ native class declaration
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                 let (end_line, end_char) = byte_to_line_col(source, node.location.end);
 
@@ -231,7 +231,7 @@ impl LspServer {
             }
 
             // Perl 5.38+ native class declaration
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 if name.to_lowercase().contains(&query_lower) {
                     let (start_line, start_char) = byte_to_line_col(source, node.location.start);
                     let (end_line, end_char) = byte_to_line_col(source, node.location.end);

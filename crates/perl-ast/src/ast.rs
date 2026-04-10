@@ -765,8 +765,12 @@ impl Node {
                 }
             }
 
-            NodeKind::Class { name, body } => {
-                format!("(class {} {})", name, body.to_sexp())
+            NodeKind::Class { name, parents, body } => {
+                if parents.is_empty() {
+                    format!("(class {} {})", name, body.to_sexp())
+                } else {
+                    format!("(class {} :isa({}) {})", name, parents.join(","), body.to_sexp())
+                }
             }
 
             NodeKind::Format { name, body } => {
@@ -2008,6 +2012,8 @@ pub enum NodeKind {
     Class {
         /// Class name
         name: String,
+        /// Parent class names from `:isa(Parent)` attributes
+        parents: Vec<String>,
         /// Class body containing methods and attributes
         body: Box<Node>,
     },
@@ -2586,7 +2592,7 @@ mod tests {
                 block: Box::new(dummy_node()),
             },
             NodeKind::DataSection { marker: String::new(), body: None },
-            NodeKind::Class { name: String::new(), body: Box::new(dummy_node()) },
+            NodeKind::Class { name: String::new(), parents: vec![], body: Box::new(dummy_node()) },
             NodeKind::Format { name: String::new(), body: String::new() },
             NodeKind::Identifier { name: String::new() },
             NodeKind::Error {

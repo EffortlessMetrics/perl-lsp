@@ -199,8 +199,10 @@ fn test_use_constant_produces_symbol_decl() {
 fn test_class_produces_symbol_decl() {
     // class Point { }
     let body = Node::new(NodeKind::Block { statements: vec![] }, loc(12, 15));
-    let class_node =
-        Node::new(NodeKind::Class { name: "Point".to_string(), body: Box::new(body) }, loc(0, 15));
+    let class_node = Node::new(
+        NodeKind::Class { name: "Point".to_string(), parents: vec![], body: Box::new(body) },
+        loc(0, 15),
+    );
     let program = Node::new(NodeKind::Program { statements: vec![class_node] }, loc(0, 15));
 
     let decls = extract_symbol_decls(&program, None);

@@ -393,7 +393,7 @@ impl ClassModelBuilder {
                 self.visit_node(expression);
             }
 
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, parents, body } => {
                 self.flush_current_package();
                 self.current_package = name.clone();
                 self.current_framework = if self.current_framework == Framework::ObjectPad {
@@ -403,6 +403,8 @@ impl ClassModelBuilder {
                 };
                 self.framework_map.insert(name.clone(), self.current_framework);
                 self.current_package_aliases.clear();
+                // Populate parent classes from `:isa(Parent)` attributes
+                self.current_parents.extend(parents.iter().cloned());
                 self.visit_node(body);
             }
 
@@ -1958,6 +1960,92 @@ has 'level' => (is => 'ro');
         assert!(
             model.parents.contains(&"Extra".to_string()),
             "push @ISA parent must still be captured"
+        );
+    }
+
+    // ── Issue #3540: Native Perl 5.38 class :isa(Parent) inheritance ──────────
+
+    #[test]
+    fn native_class_with_isa_has_correct_parent() {
+        let models = build_models(
+            r#"
+class Point3D :isa(Point) {
+    field $z :param = 0;
+    method get_z { return $z; }
+}
+"#,
+        );
+        assert_eq!(models.len(), 1, "expected one ClassModel for Point3D");
+        let model = &models[0];
+        assert_eq!(model.name, "Point3D");
+        assert_eq!(model.framework, Framework::NativeClass);
+        assert!(
+            model.parents.contains(&"Point".to_string()),
+            "native class :isa(Point) must populate parents, got {:?}",
+            model.parents
+        );
+    }
+
+    #[test]
+    fn native_class_with_multiple_isa_has_all_parents() {
+        let models = build_models(
+            r#"
+class Shape3D :isa(Shape) :isa(Printable) {
+    field $z :param = 0;
+}
+"#,
+        );
+        assert_eq!(models.len(), 1, "expected one ClassModel for Shape3D");
+        let model = &models[0];
+        assert_eq!(model.framework, Framework::NativeClass);
+        assert!(
+            model.parents.contains(&"Shape".to_string()),
+            "expected 'Shape' in parents, got {:?}",
+            model.parents
+        );
+        assert!(
+            model.parents.contains(&"Printable".to_string()),
+            "expected 'Printable' in parents, got {:?}",
+            model.parents
+        );
+    }
+
+    #[test]
+    fn native_class_without_isa_has_no_parents() {
+        let models = build_models(
+            r#"
+class Point {
+    field $x :param = 0;
+    field $y :param = 0;
+}
+"#,
+        );
+        assert_eq!(models.len(), 1);
+        let model = &models[0];
+        assert_eq!(model.framework, Framework::NativeClass);
+        assert!(
+            model.parents.is_empty(),
+            "class without :isa must have no parents, got {:?}",
+            model.parents
+        );
+    }
+
+    #[test]
+    fn native_class_with_qualified_isa_has_qualified_parent() {
+        let models = build_models(
+            r#"
+class MyApp::Point3D :isa(MyApp::Point) {
+    field $z :param = 0;
+}
+"#,
+        );
+        assert_eq!(models.len(), 1);
+        let model = &models[0];
+        assert_eq!(model.name, "MyApp::Point3D");
+        assert!(
+            model.parents.contains(&"MyApp::Point".to_string()),
+            "qualified :isa must preserve qualified name, got {:?}",
+            model.parents
         );
     }
 }

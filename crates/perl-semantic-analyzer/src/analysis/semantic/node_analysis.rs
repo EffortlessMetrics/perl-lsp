@@ -731,7 +731,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 self.semantic_tokens.push(SemanticToken {
                     location: SourceLocation {
                         start: node.location.start,
