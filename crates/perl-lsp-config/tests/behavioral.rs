@@ -219,7 +219,7 @@ mod perl_interpreter_detection_tests {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::{Mutex, MutexGuard, OnceLock};
 
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -246,11 +246,10 @@ mod perl_interpreter_detection_tests {
         EnvSnapshot(keys.iter().map(|key| (*key, std::env::var_os(key))).collect())
     }
 
-    fn env_lock() -> TestResult {
+    fn env_lock() -> Result<MutexGuard<'static, ()>, Box<dyn std::error::Error>> {
         ENV_LOCK
             .get_or_init(|| Mutex::new(()))
             .lock()
-            .map(|_| ())
             .map_err(|_| std::io::Error::other("environment lock poisoned").into())
     }
 
@@ -277,7 +276,7 @@ mod perl_interpreter_detection_tests {
 
     #[test]
     fn workspace_config_get_system_inc_prefers_perlbrew_over_path() -> TestResult {
-        env_lock()?;
+        let _env_guard = env_lock()?;
         let _snapshot = snapshot_env(&[
             "PATH",
             "PERLBREW_ROOT",
@@ -314,7 +313,7 @@ mod perl_interpreter_detection_tests {
 
     #[test]
     fn workspace_config_get_system_inc_falls_back_to_plenv_when_perlbrew_unset() -> TestResult {
-        env_lock()?;
+        let _env_guard = env_lock()?;
         let _snapshot = snapshot_env(&[
             "PATH",
             "PERLBREW_ROOT",
@@ -351,7 +350,7 @@ mod perl_interpreter_detection_tests {
 
     #[test]
     fn workspace_config_explicit_perl_path_wins_over_toolchain_detection() -> TestResult {
-        env_lock()?;
+        let _env_guard = env_lock()?;
         let _snapshot = snapshot_env(&[
             "PATH",
             "PERLBREW_ROOT",
