@@ -1192,10 +1192,6 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
 
     for (const folder of workspaceFolders) {
         const cacheKey = `perl-lsp.includePathsWarning.${encodeURIComponent(folder.uri.toString())}`;
-        if (context.globalState.get<boolean>(cacheKey, false)) {
-            continue;
-        }
-
         const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
         const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
         const missingPaths = includePaths.filter(includePath => {
@@ -1204,6 +1200,13 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
         });
 
         if (missingPaths.length === 0) {
+            await context.globalState.update(cacheKey, undefined);
+            continue;
+        }
+
+        const missingSignature = missingPaths.join('\n');
+        const warnedSignature = context.globalState.get<string | undefined>(cacheKey);
+        if (warnedSignature === missingSignature) {
             continue;
         }
 
@@ -1228,7 +1231,7 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             );
         }
 
-        await context.globalState.update(cacheKey, true);
+        await context.globalState.update(cacheKey, missingSignature);
     }
 }
 

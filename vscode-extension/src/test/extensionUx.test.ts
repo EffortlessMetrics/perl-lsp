@@ -59,11 +59,12 @@ describe('extension UX warnings', () => {
     fs.mkdirSync(path.join(workspaceDir, 'lib'), { recursive: true });
 
     const context = makeContext();
-    let warned = false;
+    let warnedSignature: string | undefined;
+    let includePaths = ['lib', 'src/libx'];
     const globalState = {
-      get: jest.fn(() => warned),
-      update: jest.fn(async (_key: string, value: boolean) => {
-        warned = value;
+      get: jest.fn(() => warnedSignature),
+      update: jest.fn(async (_key: string, value: string | undefined) => {
+        warnedSignature = value;
       }),
     };
     context.globalState = globalState;
@@ -73,7 +74,7 @@ describe('extension UX warnings', () => {
 
     const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
     getConfiguration.mockImplementation(() => ({
-      get: jest.fn(() => ['lib', 'src/libx']),
+      get: jest.fn(() => includePaths),
     }));
 
     (vscode.workspace as any).workspaceFolders = [
@@ -94,12 +95,19 @@ describe('extension UX warnings', () => {
     );
     expect(globalState.update).toHaveBeenCalledWith(
       expect.stringContaining('perl-lsp.includePathsWarning.'),
-      true
+      'src/libx'
     );
 
     showWarningMessage.mockClear();
     await validateIncludePaths(context);
     expect(showWarningMessage).not.toHaveBeenCalled();
+
+    includePaths = ['lib', 'vendorx'];
+    await validateIncludePaths(context);
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('vendorx'),
+      'Open Settings'
+    );
   });
 
   test('warns once per major version when conflicting Perl extensions are installed', async () => {
