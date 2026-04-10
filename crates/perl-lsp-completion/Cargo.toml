@@ -23,6 +23,7 @@ perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-keywords = { workspace = true }
+perl-module-import = { workspace = true }
 url.workspace = true
 
 [features]
