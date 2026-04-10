@@ -111,7 +111,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_absolute_include_path_outside_workspace() -> Result<(), Box<dyn std::error::Error>> {
+    fn falls_back_when_absolute_include_path_is_outside_workspace()
+    -> Result<(), Box<dyn std::error::Error>> {
         let workspace = tempfile::tempdir()?;
         let outside = tempfile::tempdir()?;
         let root = workspace.path().to_path_buf();
