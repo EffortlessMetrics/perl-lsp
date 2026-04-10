@@ -1409,6 +1409,53 @@ print FOO;
 }
 
 #[test]
+fn v5_36_auto_strict_flags_undeclared_variable_in_signature_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    // use v5.36 enables strict automatically via feature bundle.
+    // An undeclared variable $z inside a signature sub should be flagged
+    // even without an explicit 'use strict'.
+    let code = r#"
+use v5.36;
+sub foo ($x) { $z = 1; }
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
+        "use v5.36 auto-enables strict: $z inside a signature sub should be flagged as undeclared"
+    );
+    // The parameter $x should NOT be flagged as undeclared.
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
+        "signature parameter $x should not be flagged as undeclared"
+    );
+    Ok(())
+}
+
+#[test]
+fn v5_36_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.36 enables both strict vars (undeclared vars) and strict subs (barewords).
+    let code = r#"
+use v5.36;
+print $unknown_var;
+print FOO;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
+        "use v5.36 should enable strict vars — $unknown_var should be flagged"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
+        "use v5.36 should enable strict subs — bareword FOO should be flagged"
+    );
+    Ok(())
+}
+
+#[test]
 fn scalar_reference_dereference_uses_declared_scalar_under_strict()
 -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
