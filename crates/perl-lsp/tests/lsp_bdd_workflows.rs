@@ -405,6 +405,12 @@ fn inlay_labels(response: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn line_span(range: &Value) -> Option<(u64, u64)> {
+    let start = range.pointer("/range/start/line").and_then(Value::as_u64)?;
+    let end = range.pointer("/range/end/line").and_then(Value::as_u64)?;
+    Some((start, end))
+}
+
 fn setup_workspace(files: &[(&str, &str)]) -> Result<(LspHarness, TempWorkspace), String> {
     let (mut harness, workspace) = LspHarness::with_workspace(files)?;
 
@@ -2065,6 +2071,110 @@ sub render {
             "expected substr-style parameter hints in {labels:?}"
         );
     }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_selection_ranges_expand_progressively() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Selection ranges expand progressively");
+
+    let code = r#"use strict;
+use warnings;
+
+sub compute_total {
+    my ($a, $b) = @_;
+    my $sum = $a + $b;
+    return $sum;
+}
+"#;
+
+    scenario.given("a Perl file with a function body and nested expressions");
+    let (mut harness, workspace) = setup_workspace(&[("selection.pl", code)])?;
+    let uri = workspace.uri("selection.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    let (line, character) = find_position(code, "$sum");
+
+    scenario.when("requesting selection ranges on a symbol inside the function body");
+    let response = harness.request(
+        "textDocument/selectionRange",
+        json!({
+            "textDocument": { "uri": uri },
+            "positions": [{ "line": line, "character": character + 1 }]
+        }),
+    )?;
+
+    scenario.then("the server returns nested parent ranges to allow expansion");
+    let ranges = response.as_array().ok_or("selectionRange response should be an array")?;
+    let first = ranges.first().ok_or("selectionRange response should contain one item")?;
+    let depth = selection_range_depth(first);
+    assert!(
+        depth >= 2,
+        "selection range should provide at least one parent expansion; got depth {depth}"
+    );
+    let child_span = line_span(first).ok_or("selection range should include child line span")?;
+    let parent = first.get("parent").ok_or("selection range should include parent")?;
+    let parent_span = line_span(parent).ok_or("selection range parent should include line span")?;
+    assert!(
+        parent_span.0 <= child_span.0 && parent_span.1 >= child_span.1,
+        "parent range should enclose child range (child={child_span:?}, parent={parent_span:?})"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_workspace_symbol_query_matches_package_and_subroutine()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Workspace symbol query matches package and subroutine");
+    scenario.given("a workspace with package and subroutine symbols");
+
+    let module = r#"package SymbolHub;
+use strict;
+use warnings;
+
+sub collect_metrics {
+    return 1;
+}
+
+1;
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("lib/SymbolHub.pm", module)])?;
+    let module_uri = workspace.uri("lib/SymbolHub.pm");
+    harness.open(&module_uri, module)?;
+    harness.wait_for_symbol("collect_metrics", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("searching workspace symbols using a package-oriented query");
+    let result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "SymbolHub"
+        }),
+    )?;
+
+    scenario.then("the symbol list includes both package and subroutine entries");
+    let items = result.as_array().cloned().unwrap_or_default();
+    assert!(!items.is_empty(), "workspace/symbol should return entries for SymbolHub query");
+
+    let names: Vec<String> = items
+        .iter()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+
+    assert!(
+        names.iter().any(|name| name == "SymbolHub"),
+        "workspace symbols should include package name SymbolHub; got {names:?}"
+    );
+    assert!(
+        names.iter().any(|name| name == "collect_metrics" || name.ends_with("collect_metrics")),
+        "workspace symbols should include collect_metrics; got {names:?}"
+    );
 
     Ok(())
 }
