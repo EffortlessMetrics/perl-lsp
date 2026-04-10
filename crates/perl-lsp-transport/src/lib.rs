@@ -14,6 +14,11 @@
 //! - [`write_notification`] - Write an LSP notification with proper framing
 //! - [`log_response`] - Debug logging for outgoing responses
 //!
+//! Incoming request bodies are decoded lossily when they contain malformed
+//! UTF-8. Invalid byte sequences are replaced with U+FFFD, logged, and the
+//! resulting JSON text is still parsed so transient transport corruption does
+//! not necessarily drop the whole message.
+//!
 //! # Example
 //!
 //! ```no_run
