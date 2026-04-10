@@ -24,9 +24,9 @@ mod tokens;
 
 // Public re-exports — downstream consumers see exactly the same surface.
 pub use builtins::{
-    BuiltinDoc, ExceptionContext, get_attribute_documentation, get_builtin_documentation,
-    get_exception_context, get_moose_type_documentation, get_operator_documentation,
-    is_exception_function,
+    BuiltinDoc, ExceptionContext, PragmaDoc, get_attribute_documentation,
+    get_builtin_documentation, get_exception_context, get_moose_type_documentation,
+    get_operator_documentation, get_pragma_documentation, is_exception_function,
 };
 pub use hover::HoverInfo;
 pub use model::SemanticModel;

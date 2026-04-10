@@ -1375,4 +1375,111 @@ with 'MyApp::Printable', 'MyApp::Serializable';
         );
         Ok(())
     }
+
+    // ── Pragma hover documentation tests ────────────────────────────────────
+
+    /// Hovering over `strict` in `use strict;` should show pragma documentation.
+    #[test]
+    fn test_hover_use_strict_shows_pragma_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use strict;\nuse warnings;\nmy $x = 1;\n";
+        let resp = hover_at(code, "file:///pragma_strict.pl", "strict", 0)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for use strict")?;
+        assert!(
+            content.contains("strict") || content.contains("Pragma"),
+            "hover on use strict should show pragma documentation, got: {content}"
+        );
+        assert!(
+            content.contains("variable")
+                || content.contains("strict")
+                || content.contains("Pragma"),
+            "hover on use strict should mention strict checking, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over `warnings` in `use warnings;` should show pragma documentation.
+    #[test]
+    fn test_hover_use_warnings_shows_pragma_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use strict;\nuse warnings;\nmy $x = 1;\n";
+        let resp = hover_at(code, "file:///pragma_warnings.pl", "warnings", 1)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for use warnings")?;
+        assert!(
+            content.contains("warning") || content.contains("Pragma"),
+            "hover on use warnings should show pragma documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over `utf8` in `use utf8;` should show pragma documentation.
+    #[test]
+    fn test_hover_use_utf8_shows_pragma_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use utf8;\nmy $greeting = 'hello';\n";
+        let resp = hover_at(code, "file:///pragma_utf8.pl", "utf8", 0)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for use utf8")?;
+        assert!(
+            content.contains("UTF") || content.contains("Unicode") || content.contains("Pragma"),
+            "hover on use utf8 should describe encoding, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over `feature` in `use feature 'say';` should show pragma documentation.
+    #[test]
+    fn test_hover_use_feature_shows_pragma_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use feature 'say';\nsay 'hello';\n";
+        let resp = hover_at(code, "file:///pragma_feature.pl", "feature", 0)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for use feature")?;
+        assert!(
+            content.contains("feature") || content.contains("Pragma"),
+            "hover on use feature should show pragma documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over `constant` in `use constant PI => 3.14;` should show pragma docs.
+    #[test]
+    fn test_hover_use_constant_pragma_shows_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use constant PI => 3.14159;\nprint PI;\n";
+        let resp = hover_at(code, "file:///pragma_constant.pl", "constant", 0)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for use constant")?;
+        assert!(
+            content.contains("constant") || content.contains("Pragma"),
+            "hover on use constant should show pragma documentation, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Hovering over `autodie` in `use autodie;` should show pragma documentation.
+    #[test]
+    fn test_hover_use_autodie_shows_pragma_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "use autodie;\nopen my $fh, '<', 'file.txt';\n";
+        let resp = hover_at(code, "file:///pragma_autodie.pl", "autodie", 0)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for use autodie")?;
+        assert!(
+            content.contains("die") || content.contains("exception") || content.contains("Pragma"),
+            "hover on use autodie should describe exception behavior, got: {content}"
+        );
+        Ok(())
+    }
+
+    /// Pragma hover must NOT fall through to the "Not found in workspace" module hover.
+    #[test]
+    fn test_hover_pragma_does_not_show_not_found_message() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = "use strict;\n";
+        let resp = hover_at(code, "file:///pragma_not_found.pl", "strict", 0)?;
+
+        let content = hover_content(&resp).ok_or("expected hover content for use strict")?;
+        assert!(
+            !content.contains("Not found in workspace"),
+            "pragma hover must NOT show 'Not found in workspace', got: {content}"
+        );
+        Ok(())
+    }
 }
