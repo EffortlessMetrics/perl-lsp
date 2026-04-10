@@ -4,6 +4,15 @@ pub use perl_lsp_formatting_types::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingOptions,
 };
 
+/// Count the number of UTF-16 code units in `s`.
+///
+/// LSP positions use UTF-16 code units (see Language Server Protocol spec §3.1).
+/// Characters in the Basic Multilingual Plane (U+0000–U+FFFF) count as 1 unit;
+/// supplementary-plane characters (U+10000 and above) count as 2 units.
+fn utf16_len(s: &str) -> usize {
+    s.chars().map(|c| if c as u32 >= 0x10000 { 2 } else { 1 }).sum()
+}
+
 /// Formatting error.
 #[derive(Debug, thiserror::Error)]
 pub enum FormattingError {
@@ -110,7 +119,7 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         }
 
         let start_char = 0;
-        let end_char = lines[end_line].len() as u32;
+        let end_char = utf16_len(lines[end_line]) as u32;
 
         Ok(FormattedDocument {
             text: content.to_string(),

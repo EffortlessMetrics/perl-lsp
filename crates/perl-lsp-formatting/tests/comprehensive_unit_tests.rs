@@ -776,3 +776,82 @@ fn test_format_document_large_content() -> Result<(), Box<dyn std::error::Error>
     assert_eq!(doc.edits.len(), 1);
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// UTF-8 / UTF-16 position encoding correctness
+// ---------------------------------------------------------------------------
+
+/// LSP positions use UTF-16 code units. A line ending with a multi-byte
+/// character like 'é' (U+00E9, 2 UTF-8 bytes, 1 UTF-16 code unit) must
+/// produce `end.character == 19` for the line, not 20 (byte length).
+#[test]
+fn test_format_range_utf8_end_character_is_utf16_count() -> Result<(), Box<dyn std::error::Error>> {
+    // Line 1: "my $café = \"hello\";"
+    // U+00E9 LATIN SMALL LETTER E WITH ACUTE: 2 UTF-8 bytes, 1 UTF-16 code unit
+    // chars().count() = 19, UTF-16 units = 19, UTF-8 bytes = 20
+    let source = "use strict;\nmy $caf\u{e9} = \"hello\";";
+    let runtime = MockSubprocessRuntime::new();
+    runtime.add_response(MockResponse::success(b"CHANGED".to_vec()));
+    let provider = make_provider(runtime);
+
+    let range = FormatRange::new(FormatPosition::new(0, 0), FormatPosition::new(1, 0));
+    let doc = must(provider.format_range(source, &range, &default_options()));
+
+    assert_eq!(doc.edits.len(), 1);
+    // 19 UTF-16 units (é is BMP, 1 unit) — not 20 (byte length)
+    assert_eq!(
+        doc.edits[0].range.end.character, 19,
+        "end.character must be UTF-16 code unit count (19), not byte length (20)"
+    );
+    Ok(())
+}
+
+/// Characters above U+FFFF (supplementary plane) count as 2 UTF-16 code
+/// units (surrogate pair). Verify the character position reflects that count,
+/// not the Rust char count (1) or byte length (4).
+#[test]
+fn test_format_range_supplementary_plane_char_is_two_utf16_units()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Line 1: "my $x = \"😀\";"
+    // U+1F600 GRINNING FACE: 4 UTF-8 bytes, 2 UTF-16 units, 1 Rust char
+    // chars().count() = 12, UTF-16 units = 13, UTF-8 bytes = 15
+    let source = "use strict;\nmy $x = \"\u{1F600}\";";
+    let runtime = MockSubprocessRuntime::new();
+    runtime.add_response(MockResponse::success(b"CHANGED".to_vec()));
+    let provider = make_provider(runtime);
+
+    let range = FormatRange::new(FormatPosition::new(0, 0), FormatPosition::new(1, 0));
+    let doc = must(provider.format_range(source, &range, &default_options()));
+
+    assert_eq!(doc.edits.len(), 1);
+    // 13 UTF-16 units: 11 BMP chars + 2 for the emoji surrogate pair
+    assert_eq!(
+        doc.edits[0].range.end.character, 13,
+        "supplementary plane char must count as 2 UTF-16 units (13 total), not 12 (char count) or 15 (bytes)"
+    );
+    Ok(())
+}
+
+/// `format_document` uses `FormatRange::whole_document` internally. The last
+/// line of a document containing multi-byte characters must produce a
+/// `end.character` that is a UTF-16 unit count, not a byte length.
+#[test]
+fn test_format_document_whole_document_range_utf16_end_char()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Last line: "café" — U+00E9 is 2 UTF-8 bytes but 1 UTF-16 unit
+    // chars().count() = 4, UTF-16 units = 4, UTF-8 bytes = 5
+    let source = "use strict;\ncaf\u{e9}";
+    let runtime = MockSubprocessRuntime::new();
+    runtime.add_response(MockResponse::success(b"CHANGED".to_vec()));
+    let provider = make_provider(runtime);
+
+    let doc = must(provider.format_document(source, &default_options()));
+
+    assert_eq!(doc.edits.len(), 1);
+    // "café": 4 UTF-16 units — not 5 (byte length)
+    assert_eq!(
+        doc.edits[0].range.end.character, 4,
+        "whole-document end.character must be UTF-16 code unit count (4), not byte length (5)"
+    );
+    Ok(())
+}
