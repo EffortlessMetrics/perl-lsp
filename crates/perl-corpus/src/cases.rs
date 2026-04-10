@@ -24,7 +24,7 @@ pub struct ComplexDataStructureCase {
     pub source: &'static str,
 }
 
-static EDGE_CASES: [EdgeCase; 101] = [
+static EDGE_CASES: [EdgeCase; 102] = [
     EdgeCase {
         id: "heredoc.basic",
         description: "Basic quoted heredoc with multiple lines.",
@@ -942,6 +942,24 @@ int add(int x, int y) {
 END_C
 
 my $sum = add(1, 2);
+"#,
+    },
+    EdgeCase {
+        id: "inline.cpp",
+        description: "Inline::CPP heredoc embedding C++ source.",
+        tags: &["inline", "xs", "ffi", "edge-case"],
+        source: r#"use Inline CPP => <<'END_CPP';
+#include <string>
+
+class Greet {
+public:
+    std::string hello(const char* name) {
+        return std::string("Hello, ") + name;
+    }
+};
+END_CPP
+
+my $g = Greet->new();
 "#,
     },
     EdgeCase {
