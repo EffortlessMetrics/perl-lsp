@@ -6,7 +6,7 @@
 use std::path::Path;
 
 /// Canonical Perl source file extensions.
-pub const PERL_SOURCE_EXTENSIONS: [&str; 4] = ["pl", "pm", "t", "psgi"];
+pub const PERL_SOURCE_EXTENSIONS: [&str; 5] = ["pl", "pm", "t", "psgi", "cgi"];
 
 /// Returns `true` if `extension` is a recognized Perl source extension.
 ///
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn exposes_expected_extension_set() {
-        assert_eq!(PERL_SOURCE_EXTENSIONS, ["pl", "pm", "t", "psgi"]);
+        assert_eq!(PERL_SOURCE_EXTENSIONS, ["pl", "pm", "t", "psgi", "cgi"]);
     }
 
     #[test]
@@ -55,6 +55,8 @@ mod tests {
         assert!(is_perl_source_extension(".pm"));
         assert!(is_perl_source_extension("T"));
         assert!(is_perl_source_extension("PsGi"));
+        assert!(is_perl_source_extension("cgi"));
+        assert!(is_perl_source_extension(".CGI"));
         assert!(!is_perl_source_extension("txt"));
     }
 
@@ -63,6 +65,8 @@ mod tests {
         assert!(is_perl_source_path(Path::new("/workspace/script.pl")));
         assert!(is_perl_source_path(Path::new("/workspace/lib/Foo/Bar.PM")));
         assert!(is_perl_source_path(Path::new("/workspace/app.psgi")));
+        assert!(is_perl_source_path(Path::new("/var/www/cgi-bin/form.cgi")));
+        assert!(is_perl_source_path(Path::new("/var/www/cgi-bin/upload.CGI")));
         assert!(!is_perl_source_path(Path::new("/workspace/README.md")));
         assert!(!is_perl_source_path(Path::new("/workspace/no_extension")));
     }
@@ -73,7 +77,28 @@ mod tests {
         assert!(is_perl_source_uri("file:///workspace/lib/Foo/Bar.pm"));
         assert!(is_perl_source_uri("file:///workspace/app.psgi"));
         assert!(is_perl_source_uri("file:///workspace/app.psgi?version=1#section"));
+        assert!(is_perl_source_uri("file:///var/www/cgi-bin/form.cgi"));
+        assert!(is_perl_source_uri("file:///var/www/cgi-bin/search.cgi?q=perl#results"));
         assert!(!is_perl_source_uri("file:///workspace/README.md"));
+    }
+
+    #[test]
+    fn cgi_and_psgi_are_recognized() {
+        // CGI scripts (.cgi) — web projects, Apache/Nginx CGI handlers
+        assert!(is_perl_source_extension("cgi"));
+        assert!(is_perl_source_extension("CGI"));
+        assert!(is_perl_source_path(Path::new("/var/www/cgi-bin/form.cgi")));
+        assert!(is_perl_source_uri("file:///var/www/cgi-bin/form.cgi"));
+
+        // PSGI apps (.psgi) — Plack/PSGI applications
+        assert!(is_perl_source_extension("psgi"));
+        assert!(is_perl_source_extension("PSGI"));
+        assert!(is_perl_source_path(Path::new("/workspace/app.psgi")));
+        assert!(is_perl_source_uri("file:///workspace/app.psgi"));
+
+        // Non-Perl extensions remain unrecognized
+        assert!(!is_perl_source_extension("sh"));
+        assert!(!is_perl_source_extension("py"));
     }
 
     #[test]
