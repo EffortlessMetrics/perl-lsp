@@ -1464,8 +1464,8 @@ impl LspServer {
             // Add workspace folders (deduplicate against already added paths)
             {
                 let folders = self.workspace_folders.lock();
-                for uri in folders.iter() {
-                    if let Ok(parsed) = url::Url::parse(uri) {
+                for folder in folders.iter() {
+                    if let Ok(parsed) = url::Url::parse(&folder.uri) {
                         if let Ok(path) = parsed.to_file_path() {
                             if !workspace_roots.contains(&path) {
                                 workspace_roots.push(path);
@@ -1690,8 +1690,8 @@ impl LspServer {
 
         {
             let folders = self.workspace_folders.lock();
-            for uri in folders.iter() {
-                if let Ok(parsed) = url::Url::parse(uri) {
+            for folder in folders.iter() {
+                if let Ok(parsed) = url::Url::parse(&folder.uri) {
                     if !results.contains(&parsed) {
                         results.push(parsed);
                     }

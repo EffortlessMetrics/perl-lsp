@@ -10,7 +10,7 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 use crate::state::workspace_symbol_cap;
 use perl_module_path::file_path_to_module_name;
 use perl_module_rename::plan_module_rename_edits;
@@ -832,11 +832,11 @@ impl LspServer {
                     // qualified function calls). These are known gaps tracked in
                     // docs/reference/KNOWN_LIMITATIONS.md.
                     if !old_module.is_empty() {
-                        let updated_uris: std::collections::HashSet<&str> =
-                            workspace_edit["changes"]
-                                .as_object()
-                                .map(|m| m.keys().map(|k| k.as_str()).collect())
-                                .unwrap_or_default();
+                        let updated_uris: std::collections::HashSet<&str> = workspace_edit
+                            ["changes"]
+                            .as_object()
+                            .map(|m| m.keys().map(|k| k.as_str()).collect())
+                            .unwrap_or_default();
                         // Build a word-boundary pattern so "Base" does not match "Database".
                         // Perl module names consist of \w and ::, so we check that any match
                         // of old_module in the document text is not immediately preceded or
@@ -1123,15 +1123,27 @@ impl LspServer {
                     let mut workspace_folders = self.workspace_folders.lock();
                     for uri in &change.added {
                         tracing::debug!(uri, "Added workspace folder");
-                        workspace_folders.push(uri.to_string());
+                        let mut folder_state =
+                            super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+
+                        // Resolve the folder path
+                        if let Ok(url) = Url::parse(uri) {
+                            if let Ok(path) = url.to_file_path() {
+                                folder_state = folder_state.with_path(path);
+                            }
+                        }
+
+                        workspace_folders.push(folder_state);
                     }
                 }
 
                 if !change.removed.is_empty() {
                     let mut workspace_folders = self.workspace_folders.lock();
+                    let removed_uris: std::collections::HashSet<String> =
+                        change.removed.iter().cloned().collect();
+
                     for uri in &change.removed {
                         tracing::debug!(uri, "Removed workspace folder");
-                        workspace_folders.retain(|f| f.as_str() != uri);
 
                         // Also remove documents from the removed workspace
                         let mut documents = self.documents.lock();
@@ -1144,6 +1156,25 @@ impl LspServer {
                         for doc_uri in docs_to_remove {
                             tracing::debug!(uri = %doc_uri, "Removing document from removed workspace");
                             documents.remove(&doc_uri);
+                        }
+                    }
+
+                    // Retain only folders that are not in the removed list
+                    workspace_folders.retain(|f| !removed_uris.contains(&f.uri));
+                }
+
+                // Load config for all folders after changes
+                self.load_and_apply_project_config();
+
+                // Update workspace index with new folder list
+                #[cfg(feature = "workspace")]
+                {
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.index().set_workspace_folders(self.workspace_folder_uris());
+
+                        // Remove files from removed folders
+                        for removed_uri in &change.removed {
+                            coordinator.index().remove_folder(removed_uri);
                         }
                     }
                 }
@@ -1184,6 +1215,11 @@ impl LspServer {
         let Some(coordinator) = self.coordinator().map(Arc::clone) else {
             return;
         };
+
+        // Ensure workspace folders are set in the index before indexing starts
+        let workspace_folder_uris = self.workspace_folder_uris();
+        coordinator.index().set_workspace_folders(workspace_folder_uris.clone());
+
         let workspace_folders = self.workspace_folders.lock().clone();
         if workspace_folders.is_empty() {
             return;
@@ -1211,8 +1247,8 @@ impl LspServer {
             let mut files: Vec<std::path::PathBuf> = Vec::new();
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
 
-            'scan: for folder_uri in workspace_folders {
-                let Some(root) = uri_to_fs_path(&folder_uri) else {
+            'scan: for folder_state in workspace_folders {
+                let Some(root) = uri_to_fs_path(&folder_state.uri) else {
                     continue;
                 };
 

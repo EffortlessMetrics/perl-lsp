@@ -3,6 +3,8 @@
 //! This module provides a complete Language Server Protocol implementation
 //! that can be used with any LSP-compatible editor.
 
+use crate::runtime::workspace_folder::WorkspaceFolderState;
+
 mod client_requests;
 mod constructors;
 pub(crate) mod diagnostic_debounce;
@@ -29,6 +31,7 @@ mod test_runners;
 mod text_sync;
 mod window;
 mod workspace;
+mod workspace_folder;
 
 // Re-export protocol types for backward compatibility
 // Tests and external code import these from perl_lsp::
@@ -181,8 +184,12 @@ pub struct LspServer {
     client_capabilities: Mutex<ClientCapabilities>,
     /// Cancelled request IDs
     cancelled: Arc<Mutex<HashSet<Value>>>,
-    /// Workspace folders
-    workspace_folders: Arc<Mutex<Vec<String>>>,
+    /// Workspace folders with full state representation
+    ///
+    /// This replaces the previous `Vec<String>` approach to support multi-root
+    /// workspaces with per-folder configuration. The old string-based approach
+    /// is maintained via `workspace_folder_uris()` for backward compatibility.
+    workspace_folders: Arc<Mutex<Vec<WorkspaceFolderState>>>,
     /// Root path for module resolution
     root_path: Arc<Mutex<Option<PathBuf>>>,
     /// Advertised server capabilities
@@ -391,6 +398,186 @@ impl LspServer {
     /// Access the stream session manager for progressive inline completion.
     pub(crate) fn stream_sessions(&self) -> &stream_session::StreamSessionManager {
         &self.stream_session_manager
+    }
+
+    // =========================================================================
+    // Workspace folder helpers
+    // =========================================================================
+
+    /// Find the workspace folder containing a document URI.
+    ///
+    /// Returns the first workspace folder whose URI is a prefix of the document URI.
+    /// Returns `None` if no workspace folder contains the document.
+    #[must_use]
+    pub fn folder_for_doc_uri(&self, doc_uri: &str) -> Option<WorkspaceFolderState> {
+        self.workspace_folders
+            .lock()
+            .iter()
+            .find(|folder| doc_uri.starts_with(&folder.uri))
+            .cloned()
+    }
+
+    /// Get the effective workspace config for a document's folder.
+    ///
+    /// Returns the effective workspace configuration for the folder containing
+    /// the document, or `None` if the document is not in any workspace folder.
+    #[must_use]
+    pub fn config_for_doc(&self, doc_uri: &str) -> Option<perl_lsp_config::WorkspaceConfig> {
+        self.workspace_folders
+            .lock()
+            .iter()
+            .find(|folder| doc_uri.starts_with(&folder.uri))
+            .map(|folder| folder.effective_workspace_config.clone())
+    }
+
+    /// Get all include paths for a document (from its folder and others).
+    ///
+    /// Returns a vector of include paths from all workspace folders, with the
+    /// current folder's paths first. This ordering is useful for module resolution
+    /// where the current folder should take precedence.
+    #[must_use]
+    pub fn include_paths_for_doc(&self, doc_uri: &str) -> Vec<std::path::PathBuf> {
+        let mut paths = Vec::new();
+        let folders = self.workspace_folders.lock();
+        
+        // Add current folder's include paths first
+        if let Some(current_folder) = folders.iter().find(|folder| doc_uri.starts_with(&folder.uri)) {
+            for include_path in &current_folder.effective_workspace_config.include_paths {
+                // Resolve relative paths against the folder path
+                let resolved = if let Some(folder_path) = &current_folder.path {
+                    if std::path::Path::new(include_path).is_absolute() {
+                        std::path::PathBuf::from(include_path)
+                    } else {
+                        folder_path.join(include_path)
+                    }
+                } else {
+                    std::path::PathBuf::from(include_path)
+                };
+                
+                if !paths.contains(&resolved) {
+                    paths.push(resolved);
+                }
+            }
+        }
+        
+        // Add other folders' include paths
+        for folder in folders.iter() {
+            if !doc_uri.starts_with(&folder.uri) {
+                for include_path in &folder.effective_workspace_config.include_paths {
+                    let resolved = if let Some(folder_path) = &folder.path {
+                        if std::path::Path::new(include_path).is_absolute() {
+                            std::path::PathBuf::from(include_path)
+                        } else {
+                            folder_path.join(include_path)
+                        }
+                    } else {
+                        std::path::PathBuf::from(include_path)
+                    };
+                    
+                    if !paths.contains(&resolved) {
+                        paths.push(resolved);
+                    }
+                }
+            }
+        }
+        
+        paths
+    }
+
+    /// Get ordered search scopes for a document (current folder first, then others).
+    ///
+    /// Returns a vector of workspace folders ordered by relevance:
+    /// 1. The folder containing the document (if any)
+    /// 2. All other workspace folders
+    ///
+    /// This ordering is useful for module resolution and symbol search operations
+    /// where the current folder should take precedence.
+    #[must_use]
+    pub fn search_scopes_for_doc(&self, doc_uri: &str) -> Vec<WorkspaceFolderState> {
+        let folders = self.workspace_folders.lock();
+        if let Some(current_folder) = folders.iter().find(|folder| doc_uri.starts_with(&folder.uri)) {
+            let mut scopes = vec![current_folder.clone()];
+            for folder in folders.iter() {
+                if folder.uri != current_folder.uri {
+                    scopes.push(folder.clone());
+                }
+            }
+            scopes
+        } else {
+            folders.iter().cloned().collect()
+        }
+    }
+
+    /// Build resolution context for a document.
+    ///
+    /// Creates a unified resolution context with ordered search scopes:
+    /// 1. Current document's workspace folder (first)
+    /// 2. Other workspace folders, in registration order
+    ///
+    /// If no document URI is provided, uses all folders in registration order.
+    #[must_use]
+    pub fn build_resolution_context(&self, doc_uri: Option<&str>) -> crate::runtime::lifecycle::module_resolution::ResolutionContext {
+        use crate::runtime::lifecycle::module_resolution::{ResolutionContext, ResolutionScope};
+        
+        let mut search_scopes = Vec::new();
+        
+        if let Some(uri) = doc_uri {
+            // Get ordered search scopes for this document
+            let folder_scopes = self.search_scopes_for_doc(uri);
+            
+            for folder in folder_scopes {
+                let scope = ResolutionScope {
+                    folder_uri: folder.uri.clone(),
+                    include_paths: folder.effective_workspace_config.include_paths.clone(),
+                    use_system_inc: folder.effective_workspace_config.use_system_inc,
+                };
+                search_scopes.push(scope);
+            }
+        } else {
+            // No document context - use all folders in registration order
+            let folders = self.workspace_folders.lock();
+            for folder in folders.iter() {
+                let scope = ResolutionScope {
+                    folder_uri: folder.uri.clone(),
+                    include_paths: folder.effective_workspace_config.include_paths.clone(),
+                    use_system_inc: folder.effective_workspace_config.use_system_inc,
+                };
+                search_scopes.push(scope);
+            }
+        }
+        
+        ResolutionContext {
+            doc_uri: doc_uri.map(|u| u.to_string()),
+            search_scopes,
+        }
+    }
+
+    /// Get all workspace folder URIs (for backward compatibility).
+    ///
+    /// This method provides compatibility with code that expects a simple list
+    /// of URI strings rather than the full `WorkspaceFolderState` objects.
+    #[must_use]
+    pub fn workspace_folder_uris(&self) -> Vec<String> {
+        self.workspace_folders
+            .lock()
+            .iter()
+            .map(|f| f.uri.clone())
+            .collect()
+    }
+
+    /// Get all workspace folders as a cloned vector.
+    ///
+    /// This is useful for operations that need to work with all folders
+    /// without holding the lock for an extended period.
+    #[must_use]
+    pub fn all_workspace_folders(&self) -> Vec<WorkspaceFolderState> {
+        self.workspace_folders.lock().clone()
+    }
+
+    /// Get the number of workspace folders.
+    #[must_use]
+    pub fn workspace_folder_count(&self) -> usize {
+        self.workspace_folders.lock().len()
     }
 
     /// Send a notification to the client via the outbound channel

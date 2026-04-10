@@ -12,6 +12,32 @@ use std::path::PathBuf;
 use std::sync::Once;
 use std::time::Duration;
 
+/// A single resolution scope representing a workspace folder's search context.
+///
+/// Each workspace folder contributes its own include paths and system @INC
+/// configuration to module resolution.
+#[derive(Debug, Clone)]
+pub struct ResolutionScope {
+    /// The URI of workspace folder for this scope
+    pub folder_uri: String,
+    /// Include paths configured for this folder
+    pub include_paths: Vec<String>,
+    /// Whether to search system @INC for this scope
+    pub use_system_inc: bool,
+}
+
+/// Unified resolution context for module resolution operations.
+///
+/// Provides ordered search scopes for consistent module resolution across
+/// all LSP features (navigation, hover, completion, etc.).
+#[derive(Debug, Clone)]
+pub struct ResolutionContext {
+    /// The document URI being resolved (if any)
+    pub doc_uri: Option<String>,
+    /// Ordered search scopes (current folder first, then others)
+    pub search_scopes: Vec<ResolutionScope>,
+}
+
 /// Fires a `tracing::warn!` the first time workspace root is found to be undetected.
 ///
 /// Both `resolve_module_path` and `resolve_module_path_with_uri` share this sentinel
@@ -298,11 +324,12 @@ impl LspServer {
         let timeout = Duration::from_millis(timeout_ms);
 
         let workspace_folders = self.workspace_folders.lock().clone();
+        let workspace_folder_uris: Vec<String> = workspace_folders.iter().map(|f| f.uri.clone()).collect();
 
         // Wire use lib paths scoped to this call
         let mut lexical_paths = Vec::new();
         if let Some(text) = doc_text {
-            let root_opt = workspace_root_for_doc(&workspace_folders, doc_uri);
+            let root_opt = workspace_root_for_doc(&workspace_folder_uris, doc_uri);
             if root_opt.is_none() && !workspace_folders.is_empty() {
                 tracing::trace!(
                     "Module URI resolution failed for workspace folders: {:?}",
@@ -341,7 +368,7 @@ impl LspServer {
         match resolve_module_uri_with_effective_inc(
             module_name,
             &open_document_uris,
-            &workspace_folders,
+            &workspace_folder_uris,
             &effective_inc,
             timeout,
         ) {
@@ -451,7 +478,10 @@ mod tests {
         let server = LspServer::new();
         let workspace_uri =
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
-        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        *server.workspace_folders.lock() = vec![
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
+                .with_path(workspace.clone())
+        ];
         {
             let mut config = server.workspace_config.lock();
             config.include_paths = vec!["..".to_string()];
@@ -478,7 +508,10 @@ mod tests {
         let server = LspServer::new();
         let workspace_uri =
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
-        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        *server.workspace_folders.lock() = vec![
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
+                .with_path(workspace.clone())
+        ];
         {
             let mut config = server.workspace_config.lock();
             config.include_paths = vec!["lib".to_string()];
@@ -550,7 +583,10 @@ mod tests {
         *server.root_path.lock() = Some(workspace.clone());
         let workspace_uri =
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
-        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        *server.workspace_folders.lock() = vec![
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
+                .with_path(workspace.clone())
+        ];
         {
             let mut config = server.workspace_config.lock();
             config.include_paths = vec!["lib".to_string()];
@@ -579,7 +615,10 @@ mod tests {
         *server.root_path.lock() = Some(workspace.clone());
         let workspace_uri =
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
-        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        *server.workspace_folders.lock() = vec![
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
+                .with_path(workspace.clone())
+        ];
         {
             let mut config = server.workspace_config.lock();
             config.include_paths = vec!["lib".to_string()];

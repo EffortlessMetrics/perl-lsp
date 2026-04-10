@@ -672,11 +672,37 @@ fn lookup_workspace_definition(
     coordinator: Option<&std::sync::Arc<crate::workspace_index::IndexCoordinator>>,
     pkg: &str,
     name: &str,
+    doc_uri: Option<&str>,
 ) -> Option<Value> {
     let coord = coordinator?;
 
     let workspace_index = coord.index();
 
+    // Search for symbols with folder-aware ranking if we have document context
+    let ranked_symbols = if let Some(uri) = doc_uri {
+        workspace_index.search_symbols_ranked(name, uri)
+    } else {
+        workspace_index.search_symbols(name)
+    };
+
+    // Find the first matching symbol that matches the package
+    for symbol in ranked_symbols {
+        // Check if this symbol matches our package
+        if symbol.container_name.as_deref() == Some(pkg)
+            || symbol.qualified_name.as_ref().map(|q| q.starts_with(pkg)).unwrap_or(false)
+        {
+            if let Some(lsp_location) =
+                crate::workspace_index::lsp_adapter::to_lsp_location(&crate::workspace_index::Location {
+                    uri: symbol.uri.clone(),
+                    range: symbol.range,
+                })
+            {
+                return Some(json!([lsp_location]));
+            }
+        }
+    }
+
+    // Fallback to original lookup methods for backward compatibility
     if let Some(def_location) = find_workspace_definition_location(workspace_index, pkg, name)
         .or_else(|| inherited_method_definition_location(workspace_index, pkg, name))
         .or_else(|| {
@@ -1065,7 +1091,7 @@ impl LspServer {
                                     let pkg = parts[..parts.len() - 1].join("::");
 
                                     if let Some(result) =
-                                        lookup_workspace_definition(self.coordinator(), &pkg, name)
+                                        lookup_workspace_definition(self.coordinator(), &pkg, name, Some(uri))
                                     {
                                         return Ok(Some(result));
                                     }
@@ -1091,6 +1117,7 @@ impl LspServer {
                                     self.coordinator(),
                                     package_name,
                                     method_name,
+                                    Some(uri),
                                 ) {
                                     return Ok(Some(result));
                                 }
@@ -1099,6 +1126,7 @@ impl LspServer {
                                         self.coordinator(),
                                         "UNIVERSAL",
                                         method_name,
+                                        Some(uri),
                                     )
                                 {
                                     return Ok(Some(result));
@@ -1134,6 +1162,7 @@ impl LspServer {
                                             self.coordinator(),
                                             current_package,
                                             method_name,
+                                            Some(uri),
                                         ) {
                                             return Ok(Some(result));
                                         }
@@ -1144,6 +1173,7 @@ impl LspServer {
                                         self.coordinator(),
                                         "UNIVERSAL",
                                         method_name,
+                                        Some(uri),
                                     )
                                 {
                                     return Ok(Some(result));

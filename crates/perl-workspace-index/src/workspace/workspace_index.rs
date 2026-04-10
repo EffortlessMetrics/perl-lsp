@@ -1009,6 +1009,8 @@ pub struct WorkspaceSymbol {
     /// Whether this symbol has a body (false for forward declarations)
     #[serde(default = "default_has_body")]
     pub has_body: bool,
+    /// Workspace folder URI this symbol belongs to (for multi-root workspace support)
+    pub workspace_folder_uri: Option<String>,
 }
 
 fn default_has_body() -> bool {
@@ -1086,8 +1088,8 @@ impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
 }
 
 /// File-level index data
-#[derive(Default)]
-struct FileIndex {
+#[derive(Default, Clone)]
+pub struct FileIndex {
     /// Symbols defined in this file
     symbols: Vec<WorkspaceSymbol>,
     /// References in this file (symbol name -> references)
@@ -1096,6 +1098,8 @@ struct FileIndex {
     dependencies: HashSet<String>,
     /// Content hash for early-exit optimization
     content_hash: u64,
+    /// Workspace folder URI this file belongs to (for multi-root workspace support)
+    folder_uri: Option<String>,
 }
 
 /// Thread-safe workspace index
@@ -1111,6 +1115,11 @@ pub struct WorkspaceIndex {
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
+    /// Workspace folder URIs for multi-root workspace support
+    ///
+    /// Used to determine which workspace folder a file belongs to for
+    /// proper folder attribution in multi-root workspaces.
+    workspace_folders: Arc<RwLock<Vec<String>>>,
 }
 
 impl WorkspaceIndex {
@@ -1176,6 +1185,51 @@ impl WorkspaceIndex {
         }
     }
 
+    /// Determine the workspace folder URI for a given file URI.
+    ///
+    /// Returns the workspace folder URI that contains the given file URI.
+    /// This is used for multi-root workspace support to properly attribute
+    /// files and symbols to their originating workspace folder.
+    ///
+    /// # Arguments
+    ///
+    /// * `file_uri` - The file URI to find the containing workspace folder for
+    ///
+    /// # Returns
+    ///
+    /// `Some(folder_uri)` if the file is within a workspace folder, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// index.set_workspace_folders(vec![
+    ///     "file:///project1".to_string(),
+    ///     "file:///project2".to_string(),
+    /// ]);
+    ///
+    /// let folder = index.determine_folder_uri("file:///project1/src/main.pl");
+    /// assert_eq!(folder, Some("file:///project1".to_string()));
+    /// ```
+    fn determine_folder_uri(&self, file_uri: &str) -> Option<String> {
+        let folders = self.workspace_folders.read();
+        for folder_uri in folders.iter() {
+            // Check if the file URI starts with the folder URI
+            // We need to ensure proper URI matching (with or without trailing slash)
+            let folder_with_slash = if folder_uri.ends_with('/') {
+                folder_uri.clone()
+            } else {
+                format!("{}/", folder_uri)
+            };
+            if file_uri.starts_with(&folder_with_slash) || file_uri == folder_uri {
+                return Some(folder_uri.clone());
+            }
+        }
+        None
+    }
+
     fn find_definition_in_files(
         files: &HashMap<String, FileIndex>,
         symbol_name: &str,
@@ -1223,6 +1277,7 @@ impl WorkspaceIndex {
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
+            workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -1260,7 +1315,43 @@ impl WorkspaceIndex {
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             document_store: DocumentStore::new(),
+            workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    /// Set the workspace folder URIs for multi-root workspace support.
+    ///
+    /// This method updates the list of workspace folders that the index
+    /// uses to determine folder attribution for files and symbols.
+    ///
+    /// # Arguments
+    ///
+    /// * `folders` - A vector of workspace folder URIs
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// index.set_workspace_folders(vec![
+    ///     "file:///project1".to_string(),
+    ///     "file:///project2".to_string(),
+    /// ]);
+    /// ```
+    pub fn set_workspace_folders(&self, folders: Vec<String>) {
+        let mut workspace_folders = self.workspace_folders.write();
+        *workspace_folders = folders;
+    }
+
+    /// Get the current workspace folder URIs.
+    ///
+    /// # Returns
+    ///
+    /// A vector of workspace folder URIs.
+    #[must_use]
+    pub fn workspace_folders(&self) -> Vec<String> {
+        self.workspace_folders.read().clone()
     }
 
     /// Normalize a URI to a consistent form using proper URI handling
@@ -1354,9 +1445,16 @@ impl WorkspaceIndex {
         // Get the document for line index
         let mut doc = self.document_store.get(&uri_str).ok_or("Document not found")?;
 
+        // Determine workspace folder URI from the file URI
+        let folder_uri = self.determine_folder_uri(&uri_str);
+
         // Extract symbols and references
-        let mut file_index = FileIndex { content_hash, ..Default::default() };
-        let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
+        let mut file_index = FileIndex {
+            content_hash,
+            folder_uri: folder_uri.clone(),
+            ..Default::default()
+        };
+        let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
 
         // Update the index, refresh the global symbol cache, and replace this file's
@@ -1522,6 +1620,52 @@ impl WorkspaceIndex {
         self.clear_file(uri.as_str())
     }
 
+    /// Remove all files from a specific workspace folder.
+    ///
+    /// This method removes all indexed files that belong to the given
+    /// workspace folder URI. This is useful when a workspace folder is
+    /// removed from the multi-root workspace.
+    ///
+    /// # Arguments
+    ///
+    /// * `folder_uri` - The workspace folder URI to remove files from
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// // Index files from multiple folders...
+    /// index.remove_folder("file:///project1");
+    /// ```
+    pub fn remove_folder(&self, folder_uri: &str) {
+        let mut files_to_remove = Vec::new();
+        let files = self.files.read();
+        
+        // Collect all files that belong to this folder
+        for (key, file_index) in files.iter() {
+            if file_index.folder_uri.as_deref() == Some(folder_uri) {
+                files_to_remove.push(key.clone());
+            }
+        }
+        drop(files);
+        
+        // Remove each file
+        for key in files_to_remove {
+            let mut files = self.files.write();
+            if let Some(file_index) = files.remove(&key) {
+                // Incrementally remove symbols
+                let mut symbols = self.symbols.write();
+                Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
+                
+                // Remove from global reference index
+                let mut global_refs = self.global_references.write();
+                Self::remove_file_global_refs(&mut global_refs, &file_index, &key);
+            }
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     /// Index a file from a URI string for the Index/Analyze workflow.
     ///
@@ -1626,8 +1770,15 @@ impl WorkspaceIndex {
                 }
             };
 
-            let mut file_index = FileIndex { content_hash, ..Default::default() };
-            let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
+            // Determine workspace folder URI from the file URI
+            let folder_uri = self.determine_folder_uri(&uri_str);
+
+            let mut file_index = FileIndex {
+                content_hash,
+                folder_uri: folder_uri.clone(),
+                ..Default::default()
+            };
+            let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
             visitor.visit(&ast, &mut file_index);
 
             parsed.push((key, uri_str, file_index));
@@ -1872,6 +2023,40 @@ impl WorkspaceIndex {
         files.values().map(|file_index| file_index.symbols.len()).sum()
     }
 
+    /// Get all files in a specific workspace folder
+    ///
+    /// # Arguments
+    ///
+    /// * `folder_uri` - Workspace folder URI to filter by
+    ///
+    /// # Returns
+    ///
+    /// A vector of file indices belonging to the specified folder
+    pub fn files_in_folder(&self, folder_uri: &str) -> Vec<FileIndex> {
+        let files = self.files.read();
+        files.values()
+            .filter(|f| f.folder_uri.as_deref() == Some(folder_uri))
+            .cloned()
+            .collect()
+    }
+
+    /// Get all symbols in a specific workspace folder
+    ///
+    /// # Arguments
+    ///
+    /// * `folder_uri` - Workspace folder URI to filter by
+    ///
+    /// # Returns
+    ///
+    /// A vector of symbols belonging to the specified folder
+    pub fn symbols_in_folder(&self, folder_uri: &str) -> Vec<WorkspaceSymbol> {
+        let files = self.files.read();
+        files.values()
+            .filter(|f| f.folder_uri.as_deref() == Some(folder_uri))
+            .flat_map(|f| f.symbols.iter().cloned())
+            .collect()
+    }
+
     /// Capture a point-in-time memory estimate of the index.
     ///
     /// Acquires read locks on all index components and walks their contents
@@ -2028,6 +2213,141 @@ impl WorkspaceIndex {
     /// ```
     pub fn find_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         self.search_symbols(query)
+    }
+
+    /// Rank symbols by folder proximity to a document
+    ///
+    /// Returns symbols sorted by: same folder > other folders
+    ///
+    /// # Arguments
+    ///
+    /// * `symbols` - Symbols to rank
+    /// * `doc_uri` - Document URI to determine folder context
+    ///
+    /// # Returns
+    ///
+    /// Symbols ranked by folder proximity (same folder first)
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let symbols = index.search_symbols("example");
+    /// let ranked = index.rank_symbols_by_folder(symbols, "file:///project1/src/main.pl");
+    /// ```
+    pub fn rank_symbols_by_folder(
+        &self,
+        symbols: Vec<WorkspaceSymbol>,
+        doc_uri: &str,
+    ) -> Vec<WorkspaceSymbol> {
+        let doc_folder = self.determine_folder_uri(doc_uri);
+
+        let mut ranked: Vec<(WorkspaceSymbol, i32)> = symbols
+            .into_iter()
+            .map(|symbol| {
+                let rank = if let Some(ref doc_folder_uri) = doc_folder {
+                    if symbol.workspace_folder_uri.as_ref() == Some(doc_folder_uri) {
+                        0 // Same folder - highest priority
+                    } else {
+                        1 // Different folder - lower priority
+                    }
+                } else {
+                    1 // No document context - treat as different folder
+                };
+                (symbol, rank)
+            })
+            .collect();
+
+        // Sort by rank (lower is better), then by name for stability
+        ranked.sort_by(|a, b| {
+            a.1.cmp(&b.1)
+                .then_with(|| a.0.name.cmp(&b.0.name))
+        });
+
+        ranked.into_iter().map(|(symbol, _)| symbol).collect()
+    }
+
+    /// Search for symbols with folder-aware ranking
+    ///
+    /// Combines symbol search with folder proximity ranking
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Symbol name to search for
+    /// * `doc_uri` - Document URI for ranking context
+    ///
+    /// # Returns
+    ///
+    /// Ranked symbols with same-folder results first
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let ranked = index.search_symbols_ranked("example", "file:///project1/src/main.pl");
+    /// ```
+    pub fn search_symbols_ranked(
+        &self,
+        name: &str,
+        doc_uri: &str,
+    ) -> Vec<WorkspaceSymbol> {
+        let symbols = self.search_symbols(name);
+        self.rank_symbols_by_folder(symbols, doc_uri)
+    }
+
+    /// Determine if two symbols are in the same package
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol_a` - First symbol
+    /// * `symbol_b` - Second symbol
+    ///
+    /// # Returns
+    ///
+    /// `true` if both symbols are in the same package
+    #[allow(dead_code)]
+    pub fn same_package(&self, symbol_a: &WorkspaceSymbol, symbol_b: &WorkspaceSymbol) -> bool {
+        let package_a = self.extract_package_name(&symbol_a.name);
+        let package_b = self.extract_package_name(&symbol_b.name);
+        package_a == package_b
+    }
+
+    /// Determine if two package names are the same (helper for testing)
+    ///
+    /// # Arguments
+    ///
+    /// * `package_a` - First package name
+    /// * `package_b` - Second package name
+    ///
+    /// # Returns
+    ///
+    /// `true` if both package names are equal
+    #[allow(dead_code)]
+    pub fn same_package_by_container(&self, package_a: &str, package_b: &str) -> bool {
+        package_a == package_b
+    }
+
+    /// Extract package name from a symbol name
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol_name` - Symbol name (e.g., "Foo::Bar::baz" or "baz")
+    ///
+    /// # Returns
+    ///
+    /// Package name (e.g., "Foo::Bar") or None for main package
+    #[allow(dead_code)]
+    pub fn extract_package_name(&self, symbol_name: &str) -> Option<String> {
+        let parts: Vec<&str> = symbol_name.split("::").collect();
+        if parts.len() > 1 {
+            Some(parts[..parts.len() - 1].join("::"))
+        } else {
+            None
+        }
     }
 
     /// Get symbols in a specific file
@@ -2338,6 +2658,7 @@ struct IndexVisitor {
     document: Document,
     uri: String,
     current_package: Option<String>,
+    workspace_folder_uri: Option<String>,
 }
 
 fn is_interpolated_var_start(byte: u8) -> bool {
@@ -2378,8 +2699,13 @@ fn strip_matching_quote_delimiters(raw_content: &str) -> &str {
 }
 
 impl IndexVisitor {
-    fn new(document: &mut Document, uri: String) -> Self {
-        Self { document: document.clone(), uri, current_package: Some("main".to_string()) }
+    fn new(document: &mut Document, uri: String, workspace_folder_uri: Option<String>) -> Self {
+        Self {
+            document: document.clone(),
+            uri,
+            current_package: Some("main".to_string()),
+            workspace_folder_uri,
+        }
     }
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
@@ -2463,6 +2789,7 @@ impl IndexVisitor {
                     documentation: None,
                     container_name: None,
                     has_body: true,
+                    workspace_folder_uri: self.workspace_folder_uri.clone(),
                 });
             }
 
@@ -2493,6 +2820,7 @@ impl IndexVisitor {
                             documentation: None,
                             container_name: self.current_package.clone(),
                             has_body: true, // Subroutine node always has body
+                            workspace_folder_uri: self.workspace_folder_uri.clone(),
                         });
                     }
 
@@ -2523,6 +2851,7 @@ impl IndexVisitor {
                         documentation: None,
                         container_name: self.current_package.clone(),
                         has_body: true, // Variables always have body
+                        workspace_folder_uri: self.workspace_folder_uri.clone(),
                     });
 
                     // Mark as definition
@@ -2556,6 +2885,7 @@ impl IndexVisitor {
                             documentation: None,
                             container_name: self.current_package.clone(),
                             has_body: true,
+                            workspace_folder_uri: self.workspace_folder_uri.clone(),
                         });
 
                         // Mark as definition
@@ -2779,6 +3109,7 @@ impl IndexVisitor {
                     documentation: None,
                     container_name: None,
                     has_body: true,
+                    workspace_folder_uri: self.workspace_folder_uri.clone(),
                 });
             }
 
@@ -2799,6 +3130,7 @@ impl IndexVisitor {
                     documentation: None,
                     container_name: self.current_package.clone(),
                     has_body: true,
+                    workspace_folder_uri: self.workspace_folder_uri.clone(),
                 });
 
                 // Visit params
@@ -4278,6 +4610,151 @@ Utils::process_data();
         assert!(
             index.find_definition("B::shared_fn").is_some(),
             "qualified 'B::shared_fn' must remain after A.pm deletion"
+        );
+    }
+
+    #[test]
+    fn test_folder_context_in_file_index() {
+        let index = WorkspaceIndex::new();
+        
+        // Set up workspace folders
+        index.set_workspace_folders(vec![
+            "file:///project1".to_string(),
+            "file:///project2".to_string(),
+        ]);
+        
+        let uri1 = "file:///project1/lib/Module.pm";
+        let code1 = r#"
+package Module;
+
+sub test_sub {
+    return 1;
+}
+"#;
+        must(index.index_file(must(url::Url::parse(uri1)), code1.to_string()));
+        
+        let uri2 = "file:///project2/lib/Other.pm";
+        let code2 = r#"
+package Other;
+
+sub other_sub {
+    return 2;
+}
+"#;
+        must(index.index_file(must(url::Url::parse(uri2)), code2.to_string()));
+        
+        // Verify folder context is set correctly
+        let symbols1 = index.file_symbols(uri1);
+        assert_eq!(symbols1.len(), 2, "Should have 2 symbols in Module.pm");
+        for symbol in &symbols1 {
+            assert_eq!(symbol.uri, uri1, "Symbol URI should match file URI");
+        }
+        
+        let symbols2 = index.file_symbols(uri2);
+        assert_eq!(symbols2.len(), 2, "Should have 2 symbols in Other.pm");
+        for symbol in &symbols2 {
+            assert_eq!(symbol.uri, uri2, "Symbol URI should match file URI");
+        }
+        
+        // Verify folder attribution
+        let files = index.files.read();
+        let file_index1 = must_some(files.get(&DocumentStore::uri_key(uri1)));
+        assert_eq!(
+            file_index1.folder_uri,
+            Some("file:///project1".to_string()),
+            "File should be attributed to correct workspace folder"
+        );
+        
+        let file_index2 = must_some(files.get(&DocumentStore::uri_key(uri2)));
+        assert_eq!(
+            file_index2.folder_uri,
+            Some("file:///project2".to_string()),
+            "File should be attributed to correct workspace folder"
+        );
+    }
+
+    #[test]
+    fn test_determine_folder_uri() {
+        let index = WorkspaceIndex::new();
+        
+        // Set up workspace folders
+        index.set_workspace_folders(vec![
+            "file:///project1".to_string(),
+            "file:///project2".to_string(),
+        ]);
+        
+        // Test file in project1
+        let folder1 = index.determine_folder_uri("file:///project1/lib/Module.pm");
+        assert_eq!(
+            folder1,
+            Some("file:///project1".to_string()),
+            "Should determine folder for file in project1"
+        );
+        
+        // Test file in project2
+        let folder2 = index.determine_folder_uri("file:///project2/lib/Other.pm");
+        assert_eq!(
+            folder2,
+            Some("file:///project2".to_string()),
+            "Should determine folder for file in project2"
+        );
+        
+        // Test file not in any workspace folder
+        let folder_none = index.determine_folder_uri("file:///other/project/Module.pm");
+        assert_eq!(
+            folder_none,
+            None,
+            "Should return None for file outside workspace folders"
+        );
+    }
+
+    #[test]
+    fn test_remove_folder() {
+        let index = WorkspaceIndex::new();
+        
+        // Set up workspace folders
+        index.set_workspace_folders(vec![
+            "file:///project1".to_string(),
+            "file:///project2".to_string(),
+        ]);
+        
+        // Index files from both folders
+        let uri1 = "file:///project1/lib/Module.pm";
+        let code1 = r#"
+package Module;
+
+sub test_sub {
+    return 1;
+}
+"#;
+        must(index.index_file(must(url::Url::parse(uri1)), code1.to_string()));
+        
+        let uri2 = "file:///project2/lib/Other.pm";
+        let code2 = r#"
+package Other;
+
+sub other_sub {
+    return 2;
+}
+"#;
+        must(index.index_file(must(url::Url::parse(uri2)), code2.to_string()));
+        
+        // Verify both files are indexed
+        assert_eq!(index.file_count(), 2, "Should have 2 files indexed");
+        
+        // Remove project1 folder
+        index.remove_folder("file:///project1");
+        
+        // Verify only project2 file remains
+        assert_eq!(index.file_count(), 1, "Should have 1 file after removing folder");
+        assert!(
+            index.file_symbols(uri1).is_empty(),
+            "File from removed folder should be gone"
+        );
+        assert_eq!(
+            index.file_symbols(uri2).len(),
+            2,
+            "File from remaining folder should still be present"
         );
     }
 }
