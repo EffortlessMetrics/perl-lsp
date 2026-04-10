@@ -2102,4 +2102,26 @@ class MyApp::Point3D :isa(MyApp::Point) {
             model.parents
         );
     }
+
+    #[test]
+    fn second_class_without_isa_does_not_inherit_first_class_parents() {
+        // Regression guard: parents from the first class must not bleed into the second.
+        // flush_current_package() uses mem::take so current_parents is reset between classes.
+        let models = build_models(
+            r#"
+class Point3D :isa(Point) {
+    field $z :param = 0;
+}
+class Standalone {
+    field $x :param = 0;
+}
+"#,
+        );
+        let standalone = models.iter().find(|m| m.name == "Standalone").expect("Standalone model");
+        assert!(
+            standalone.parents.is_empty(),
+            "Standalone class must have no parents, but got {:?}",
+            standalone.parents
+        );
+    }
 }
