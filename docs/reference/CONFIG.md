@@ -177,8 +177,12 @@ Controls module resolution and workspace scanning behaviour.
 | Default | `["lib", ".", "local/lib/perl5"]` |
 | Key | `includePaths` |
 
-Directories to search for Perl modules, relative to the workspace root. Appended
-to the internal `@INC` used for go-to-definition and hover documentation.
+Directories to search for Perl modules. Relative entries are resolved against
+the workspace root. Absolute entries are honored as provided only when they
+still stay inside the workspace boundary. These paths are searched by
+`perl-lsp` and are not appended to Perl's runtime `@INC`.
+
+Use `useSystemInc` to opt in to system `@INC` lookup.
 
 ```json
 {

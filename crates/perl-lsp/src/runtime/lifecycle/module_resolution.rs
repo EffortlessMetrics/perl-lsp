@@ -20,7 +20,8 @@ static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 
 /// Prepend `use lib` paths extracted from `doc_text` to `include_paths`.
 ///
-/// Mirrors Perl's runtime behaviour: `use lib` prepends to `@INC`.
+/// The extra paths are scoped to this resolution pass only and are searched
+/// ahead of the configured workspace paths.
 /// Paths are scoped to this call only — `workspace_config.include_paths` is never mutated.
 fn prepend_use_lib_paths(
     include_paths: &mut Vec<String>,
@@ -41,8 +42,7 @@ impl LspServer {
     /// Enhanced module path resolver using workspace configuration and optional document text.
     ///
     /// When `doc_text` is provided, `use lib` paths extracted from it are prepended to the
-    /// include path list for this call only (no global state mutation). Mirrors Perl's
-    /// runtime `@INC` prepend behaviour.
+    /// include path list for this call only (no global state mutation).
     ///
     /// Use `resolve_module_path_with_uri` when a document URI is available so that
     /// `FindBin`-relative paths are resolved against the document's directory.

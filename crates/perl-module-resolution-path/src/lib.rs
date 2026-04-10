@@ -90,4 +90,44 @@ mod tests {
         assert_eq!(resolved, Some(root.join("Local/Only.pm")));
         Ok(())
     }
+
+    #[test]
+    fn accepts_absolute_include_path_inside_workspace() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().to_path_buf();
+        let absolute_base = root.join("vendor").join("lib");
+        let module_file = absolute_base.join("Vendor").join("Tool.pm");
+
+        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+        fs::write(&module_file, "package Vendor::Tool; 1;")?;
+
+        let resolved = resolve_module_path(
+            &root,
+            "Vendor::Tool",
+            &[absolute_base.to_string_lossy().to_string()],
+        );
+        assert_eq!(resolved, Some(module_file));
+        Ok(())
+    }
+
+    #[test]
+    fn falls_back_when_absolute_include_path_is_outside_workspace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let outside = tempfile::tempdir()?;
+        let root = workspace.path().to_path_buf();
+        let outside_base = outside.path().join("lib");
+        let fallback = root.join("lib").join("Outside").join("Mod.pm");
+
+        fs::create_dir_all(fallback.parent().ok_or("no parent")?)?;
+        fs::write(&fallback, "package Outside::Mod; 1;")?;
+
+        let resolved = resolve_module_path(
+            &root,
+            "Outside::Mod",
+            &[outside_base.to_string_lossy().to_string()],
+        );
+        assert_eq!(resolved, Some(fallback));
+        Ok(())
+    }
 }
