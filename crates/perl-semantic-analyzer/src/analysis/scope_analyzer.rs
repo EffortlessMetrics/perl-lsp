@@ -1830,7 +1830,9 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
             "EVAL_ERROR" | "ERRNO" | "EXTENDED_OS_ERROR" | "CHILD_ERROR" |
             "PROCESS_ID" | "PROGRAM_NAME" |
             // Perl version variables
-            "PERL_VERSION" | "OLD_PERL_VERSION" => true,
+            "PERL_VERSION" | "OLD_PERL_VERSION" |
+            // Perl internal special values (perlguts/perlapi) — used in XS and introspection code
+            "PL_sv_yes" | "PL_sv_no" | "PL_sv_undef" => true,
             _ => {
                 // Check patterns
                 // $^X (single-char) control variables — lexer produces name `^X`.
