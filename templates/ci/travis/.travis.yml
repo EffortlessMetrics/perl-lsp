@@ -1,0 +1,24 @@
+# Travis CI is legacy support for consumer repositories that still need it.
+# Prefer GitHub Actions for new projects and keep Travis as a migration bridge.
+
+language: rust
+
+rust:
+  - stable
+  - beta
+  - nightly
+
+cache: cargo
+
+before_script:
+  - rustup component add rustfmt clippy
+
+script:
+  - cargo fmt --all --check
+  - cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+  - cargo test --workspace --all-features --locked
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - rust: nightly
