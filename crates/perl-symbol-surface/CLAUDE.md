@@ -75,6 +75,7 @@ The walker tracks the innermost `package` declaration in statement order:
 | `full_span` | `(usize, usize)` | Byte range of the full declaration node |
 | `anchor_span` | `Option<(usize, usize)>` | Byte range of the name token; `None` when AST lacks `name_span` |
 | `container` | `Option<String>` | Enclosing package name; `None` at top level |
+| `declarator` | `Option<String>` | Variable scope keyword: `"my"`, `"our"`, `"local"`, `"state"`; `None` for non-variable declarations. `"our"` means package-scoped (cross-file visible). |
 
 ### Future Phases
 
