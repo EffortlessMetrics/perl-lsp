@@ -2178,3 +2178,171 @@ sub collect_metrics {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_folding_ranges_cover_package_and_subroutine_blocks() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Folding ranges cover package and subroutine blocks");
+    scenario.given("a Perl module with multiline package and subroutine bodies");
+
+    let module = r#"package Fold::Demo;
+use strict;
+use warnings;
+
+sub alpha {
+    my ($value) = @_;
+    if ($value > 0) {
+        return $value;
+    }
+    return 0;
+}
+
+sub beta {
+    my ($left, $right) = @_;
+    return $left + $right;
+}
+
+1;
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("lib/Fold/Demo.pm", module)])?;
+    let uri = workspace.uri("lib/Fold/Demo.pm");
+    harness.open(&uri, module)?;
+    harness.barrier();
+
+    scenario.when("requesting folding ranges for the module document");
+    let response = harness.request(
+        "textDocument/foldingRange",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("the server returns multiline folding regions for major code blocks");
+    let ranges = response.as_array().ok_or("foldingRange should return an array")?;
+    assert!(!ranges.is_empty(), "expected at least one folding range");
+    assert!(
+        ranges.iter().any(|range| {
+            let start = range.get("startLine").and_then(Value::as_u64);
+            let end = range.get("endLine").and_then(Value::as_u64);
+            matches!((start, end), (Some(start), Some(end)) if end > start)
+        }),
+        "expected at least one multiline folding range; got {ranges:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_code_lens_surfaces_test_execution_workflow() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Code lens surfaces test execution workflow");
+    scenario.given("a test file with runnable test-style subroutines");
+
+    let test_file = r#"use strict;
+use warnings;
+use Test::More;
+
+sub test_addition {
+    is(1 + 1, 2, "addition works");
+}
+
+sub t_subtraction {
+    is(4 - 1, 3, "subtraction works");
+}
+
+done_testing();
+"#;
+
+    let (mut harness, workspace) = setup_workspace(&[("t/math.t", test_file)])?;
+    let uri = workspace.uri("t/math.t");
+    harness.open(&uri, test_file)?;
+    harness.barrier();
+
+    scenario.when("requesting code lenses for the test file");
+    let response = harness.request(
+        "textDocument/codeLens",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("code lenses include runnable test actions with valid ranges");
+    let lenses = response.as_array().ok_or("codeLens should return an array")?;
+    assert!(!lenses.is_empty(), "expected code lenses for test subroutines");
+    assert!(
+        lenses.iter().all(has_lsp_range),
+        "all code lenses should include a valid range; got {lenses:?}"
+    );
+    assert!(
+        lenses.iter().any(|lens| {
+            lens.get("command")
+                .and_then(|command| command.get("title"))
+                .and_then(Value::as_str)
+                .is_some_and(|title| title.contains("Run Test"))
+        }),
+        "expected at least one Run Test code lens; got {lenses:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_references_respect_include_declaration_toggle() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("References respect includeDeclaration toggle");
+
+    let script = r#"use strict;
+use warnings;
+
+sub helper {
+    return 1;
+}
+
+my $x = helper();
+my $y = helper();
+"#;
+
+    scenario.given("a Perl file with one function declaration and multiple call sites");
+    let (mut harness, workspace) = setup_workspace(&[("refs.pl", script)])?;
+    let uri = workspace.uri("refs.pl");
+    harness.open(&uri, script)?;
+    harness.wait_for_symbol("helper", Some(&uri), Duration::from_secs(5)).ok();
+
+    let (line, character) = find_position(script, "helper()");
+
+    scenario.when("requesting references without declarations");
+    let without_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character },
+            "context": { "includeDeclaration": false }
+        }),
+    )?;
+
+    scenario.when("requesting references including declarations");
+    let with_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character },
+            "context": { "includeDeclaration": true }
+        }),
+    )?;
+
+    scenario.then("including declarations adds at least one extra location");
+    let without = without_decl.as_array().map_or(0, Vec::len);
+    let with = with_decl.as_array().map_or(0, Vec::len);
+    assert!(
+        with >= without,
+        "includeDeclaration=true should not reduce matches (without={without}, with={with})"
+    );
+    assert!(
+        with > without,
+        "expected declaration-inclusive references to add declaration (without={without}, with={with})"
+    );
+
+    Ok(())
+}
