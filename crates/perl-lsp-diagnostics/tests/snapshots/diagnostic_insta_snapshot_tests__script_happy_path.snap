@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-diagnostics/tests/diagnostic_insta_snapshot_tests.rs
+expression: snapshot
+---
+PL200 | Warning | (0, 0) | This file has no package declaration. Add 'package MyModule;' to declare the package namespace. | Add 'package MyModule;' at the top of the file

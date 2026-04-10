@@ -1910,6 +1910,7 @@ version = "0.12.3"
 name = "perl-lsp-diagnostics"
 version = "0.12.3"
 dependencies = [
+ "insta",
  "perl-diagnostics-codes",
  "perl-heredoc-anti-patterns",
  "perl-lsp-diagnostic-types",
