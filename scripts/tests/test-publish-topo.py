@@ -477,6 +477,35 @@ class TestAllowlistDriftCheck(unittest.TestCase):
         self.assertIn("c", missing)
         self.assertIn("b", extra)
 
+    def test_null_metadata_no_crash(self) -> None:
+        """check_allowlist_drift must not crash when cargo metadata returns null for
+        the metadata field (workspace with no [workspace.metadata] section)."""
+        packages = [_pkg("a"), _pkg("b")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": None,  # cargo metadata returns null for workspaces without [workspace.metadata]
+        }
+        # Should NOT raise AttributeError — both crates appear as 'missing' since
+        # the allowlist cannot be read (treated as empty).
+        missing, extra = publish_topo.check_allowlist_drift(meta)
+        self.assertIn("a", missing)
+        self.assertIn("b", missing)
+        self.assertEqual(extra, set())
+
+    def test_null_metadata_legacy_allowlist_mode_hard_fails(self) -> None:
+        """compute_publish_order (legacy allowlist mode) must exit 1 with a clear
+        error when metadata is null — not crash with AttributeError."""
+        packages = [_pkg("a"), _pkg("b")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": None,
+        }
+        with self.assertRaises(SystemExit) as ctx:
+            compute_publish_order(meta, from_metadata=False)
+        self.assertEqual(ctx.exception.code, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

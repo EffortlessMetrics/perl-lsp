@@ -118,7 +118,9 @@ def check_allowlist_drift(meta: dict) -> tuple[set[str], set[str]]:
     Both sets are empty when there is no drift.
     """
     derived = set(derive_publish_list(meta))
-    allowlist_raw = meta.get("metadata", {}).get("publish", {}).get("allow", [])
+    workspace_meta = meta.get("metadata") or {}
+    publish_meta = workspace_meta.get("publish") or {}
+    allowlist_raw = publish_meta.get("allow", [])
     if not isinstance(allowlist_raw, list):
         allowlist_raw = []
     allowlist = {str(c) for c in allowlist_raw if isinstance(c, str)}
@@ -224,7 +226,9 @@ def compute_publish_order(
             )
             sys.exit(1)
     else:
-        allowlist = meta.get("metadata", {}).get("publish", {}).get("allow", [])
+        workspace_meta = meta.get("metadata") or {}
+        publish_meta = workspace_meta.get("publish") or {}
+        allowlist = publish_meta.get("allow", [])
         if not isinstance(allowlist, list):
             print(
                 "ERROR: Workspace publish allowlist must be a list at "
