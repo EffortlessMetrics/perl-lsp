@@ -153,10 +153,10 @@ pub fn resolve_use_lib_paths_from_source(
     for op in extract_use_lib_operations(source) {
         match op {
             UseLibAction::Add(paths) => {
-                for path in resolve_use_lib_paths(&paths, workspace_root, file_dir) {
-                    if !resolved.contains(&path) {
-                        resolved.push(path);
-                    }
+                let add_paths = resolve_use_lib_paths(&paths, workspace_root, file_dir);
+                for path in add_paths.into_iter().rev() {
+                    resolved.retain(|existing| existing != &path);
+                    resolved.insert(0, path);
                 }
             }
             UseLibAction::Remove(paths) => {
@@ -522,5 +522,26 @@ mod tests {
         let source = "use lib 'lib';\nuse lib 't/lib';\nno lib 'lib';\n";
         let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
         assert_eq!(resolved, vec!["t/lib"]);
+    }
+
+    #[test]
+    fn resolves_use_lib_later_statements_first() {
+        let source = "use lib 'a';\nuse lib 'b';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["b", "a"]);
+    }
+
+    #[test]
+    fn resolves_readding_path_moves_to_front() {
+        let source = "use lib 'a';\nuse lib 'b';\nuse lib 'a';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn resolves_no_lib_then_readd_restores_precedence() {
+        let source = "use lib 'a';\nuse lib 'b';\nno lib 'a';\nuse lib 'a';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["a", "b"]);
     }
 }
