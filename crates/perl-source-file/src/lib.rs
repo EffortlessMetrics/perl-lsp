@@ -30,7 +30,12 @@ pub fn is_binary_content(text: &str) -> bool {
 }
 
 /// Canonical Perl source file extensions.
-pub const PERL_SOURCE_EXTENSIONS: [&str; 5] = ["pl", "pm", "t", "psgi", "cgi"];
+///
+/// Includes core Perl script and module extensions as well as common embedded
+/// Perl template formats: `.ep` (Mojolicious), `.tt`/`.tt2` (Template Toolkit),
+/// and `.mason` (Mason/HTML::Mason).
+pub const PERL_SOURCE_EXTENSIONS: [&str; 9] =
+    ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason"];
 
 /// Returns `true` if `extension` is a recognized Perl source extension.
 ///
@@ -71,7 +76,10 @@ mod tests {
 
     #[test]
     fn exposes_expected_extension_set() {
-        assert_eq!(PERL_SOURCE_EXTENSIONS, ["pl", "pm", "t", "psgi", "cgi"]);
+        assert_eq!(
+            PERL_SOURCE_EXTENSIONS,
+            ["pl", "pm", "t", "psgi", "cgi", "ep", "tt", "tt2", "mason"]
+        );
     }
 
     #[test]
@@ -124,6 +132,37 @@ mod tests {
         // Non-Perl extensions remain unrecognized
         assert!(!is_perl_source_extension("sh"));
         assert!(!is_perl_source_extension("py"));
+    }
+
+    #[test]
+    fn template_extensions_are_recognized() {
+        // .ep — Mojolicious embedded Perl templates
+        assert!(is_perl_source_extension("ep"));
+        assert!(is_perl_source_extension("EP"));
+        assert!(is_perl_source_path(Path::new("/app/templates/index.html.ep")));
+        assert!(is_perl_source_uri("file:///app/templates/index.html.ep"));
+
+        // .tt — Template Toolkit templates (version 2 default)
+        assert!(is_perl_source_extension("tt"));
+        assert!(is_perl_source_extension("TT"));
+        assert!(is_perl_source_path(Path::new("/app/templates/page.tt")));
+        assert!(is_perl_source_uri("file:///app/templates/page.tt"));
+
+        // .tt2 — Template Toolkit 2 explicit extension
+        assert!(is_perl_source_extension("tt2"));
+        assert!(is_perl_source_extension("TT2"));
+        assert!(is_perl_source_path(Path::new("/app/templates/layout.tt2")));
+        assert!(is_perl_source_uri("file:///app/templates/layout.tt2"));
+
+        // .mason — HTML::Mason / Mason2 templates
+        assert!(is_perl_source_extension("mason"));
+        assert!(is_perl_source_extension("MASON"));
+        assert!(is_perl_source_path(Path::new("/app/comp/header.mason")));
+        assert!(is_perl_source_uri("file:///app/comp/header.mason"));
+
+        // Non-template extensions remain unrecognized
+        assert!(!is_perl_source_extension("html"));
+        assert!(!is_perl_source_extension("tmpl"));
     }
 
     #[test]
