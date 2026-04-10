@@ -64,7 +64,7 @@ impl LspServer {
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]
-            perlcritic_missing_warning_shown: AtomicBool::new(false),
+            critic_workspace_warnings_sent: Mutex::new(HashSet::new()),
             ai_inline_backend: Mutex::new(None),
         }
     }
@@ -169,7 +169,7 @@ impl LspServer {
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]
-            perlcritic_missing_warning_shown: AtomicBool::new(false),
+            critic_workspace_warnings_sent: Mutex::new(HashSet::new()),
             ai_inline_backend: Mutex::new(None),
         }
     }
@@ -237,7 +237,7 @@ impl LspServer {
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]
-            perlcritic_missing_warning_shown: AtomicBool::new(false),
+            critic_workspace_warnings_sent: Mutex::new(HashSet::new()),
             ai_inline_backend: Mutex::new(None),
         }
     }

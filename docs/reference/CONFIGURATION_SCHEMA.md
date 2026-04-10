@@ -212,7 +212,7 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
         },
         "severity": {
           "type": "integer",
-          "description": "Minimum severity to report: 1 (most severe) to 5 (everything)",
+          "description": "Minimum severity to report: 1 (least severe, reports everything) to 5 (most severe, reports less)",
           "minimum": 1,
           "maximum": 5,
           "default": 3
