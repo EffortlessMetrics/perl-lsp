@@ -20,6 +20,13 @@ fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
     table.symbols.get(name).is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
 }
 
+fn has_reference(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
+    table
+        .references
+        .get(name)
+        .is_some_and(|references| references.iter().any(|reference| reference.kind == kind))
+}
+
 fn symbol_doc(table: &SymbolTable, name: &str, kind: SymbolKind) -> Option<String> {
     table
         .symbols
@@ -244,6 +251,42 @@ any '/multi' => sub { return 'multi' };
     assert!(
         has_symbol(&table, "/multi", SymbolKind::Subroutine),
         "expected route symbol `/multi` from `any` route"
+    );
+}
+
+#[test]
+fn dancer_route_target_string_adds_subroutine_reference() {
+    let code = r#"
+use Dancer;
+
+get '/about' => 'show_about';
+
+sub show_about {
+    return 'About';
+}
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_reference(&table, "show_about", SymbolKind::Subroutine),
+        "expected route target string `show_about` to be recorded as a Subroutine reference"
+    );
+}
+
+#[test]
+fn dancer2_route_target_string_adds_subroutine_reference() {
+    let code = r#"
+use Dancer2;
+
+get '/status' => 'show_status';
+
+sub show_status {
+    return 'ok';
+}
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_reference(&table, "show_status", SymbolKind::Subroutine),
+        "expected route target string `show_status` to be recorded as a Subroutine reference"
     );
 }
 
