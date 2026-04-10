@@ -1419,6 +1419,60 @@ $obj->$method();
 }
 
 #[test]
+fn subscript_access_marks_array_parent_used() -> Result<(), Box<dyn std::error::Error>> {
+    // $arr[0] passed to a function should mark @arr as used — no unused-variable diagnostic.
+    let code = r#"
+my @arr = (1, 2, 3);
+print $arr[0];
+"#;
+    let issues = scope_issues(code);
+    let unused_arr = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arr"))
+        .count();
+    assert_eq!(unused_arr, 0, "@arr should not be flagged as unused when accessed via $arr[0]");
+    Ok(())
+}
+
+#[test]
+fn subscript_access_marks_hash_parent_used() -> Result<(), Box<dyn std::error::Error>> {
+    // $hash{key} passed to a function should mark %hash as used — no unused-variable diagnostic.
+    let code = r#"
+my %hash = (a => 1);
+print $hash{a};
+"#;
+    let issues = scope_issues(code);
+    let unused_hash = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hash"))
+        .count();
+    assert_eq!(
+        unused_hash, 0,
+        "%hash should not be flagged as unused when accessed via $hash{{a}}"
+    );
+    Ok(())
+}
+
+#[test]
+fn subscript_access_does_not_suppress_truly_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // A %hash or @array that is truly never accessed should still be flagged as unused.
+    let code = r#"
+my %unused_hash = (a => 1);
+my @unused_arr = (1, 2, 3);
+"#;
+    let issues = scope_issues(code);
+    let unused_hash = issues
+        .iter()
+        .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("unused_hash"));
+    let unused_arr = issues
+        .iter()
+        .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("unused_arr"));
+    assert!(unused_hash, "%unused_hash with no subscripts should still be flagged as unused");
+    assert!(unused_arr, "@unused_arr with no subscripts should still be flagged as unused");
+    Ok(())
+}
+
+#[test]
 fn unused_underscore_prefix_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     // Variables prefixed with underscore should NOT be flagged as unused.
     let code = r#"
