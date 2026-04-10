@@ -1043,7 +1043,7 @@ impl LspServer {
                                         ast, &doc.text,
                                     );
                                 if let Some(location) = analyzer.resolve_inherited_method_location(
-                                    &current_package,
+                                    current_package,
                                     method_match.as_str(),
                                 ) {
                                     let lsp_start = self.offset_to_pos16(doc, location.start);
@@ -1063,7 +1063,7 @@ impl LspServer {
                                 if let Some(coordinator) = self.coordinator()
                                     && let Some(def_location) = inherited_method_definition_location(
                                         coordinator.index(),
-                                        &current_package,
+                                        current_package,
                                         method_match.as_str(),
                                     )
                                     && let Some(lsp_location) =
