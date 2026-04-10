@@ -46,6 +46,7 @@ mod walker;
 
 pub use diagnostics::DiagnosticsProvider;
 pub use heredoc_antipatterns::detect_heredoc_antipatterns;
+pub use parse_errors::{parse_error_code, parse_error_severity};
 pub use perl_lsp_diagnostic_types::{
     Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
 };
