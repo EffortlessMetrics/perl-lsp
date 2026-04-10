@@ -207,6 +207,9 @@ pub struct SymbolTable {
 }
 
 /// Return `true` if the method is one of Perl's always-available `UNIVERSAL` methods.
+///
+/// Used in analyze/index workflow stages to keep method lookup behavior
+/// consistent across parser and LSP navigation flows.
 pub fn is_universal_method(method_name: &str) -> bool {
     UNIVERSAL_METHODS.contains(&method_name)
 }
