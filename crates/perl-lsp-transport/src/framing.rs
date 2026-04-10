@@ -7,6 +7,30 @@ use std::io::{self, BufRead, Read, Write};
 
 const LOG_PREVIEW_MAX_BYTES: usize = 160;
 
+/// Sanitize a message body for JSON parsing.
+///
+/// If `body` is valid UTF-8, returns the bytes unchanged via `Cow::Borrowed`
+/// (zero-copy fast path). If it contains invalid UTF-8 sequences, replaces
+/// them with U+FFFD, logs a warning, and returns the sanitized bytes as
+/// `Cow::Owned`.
+///
+/// This makes the transport resilient to clients that send Latin-1/ISO-8859-1
+/// encoded text or other non-UTF-8 byte sequences inside LSP message payloads.
+fn sanitize_body(body: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    // `from_utf8_lossy` borrows when valid, owns (with replacements) when not.
+    // Detect which case we're in to avoid double-allocation on the fast path.
+    match String::from_utf8_lossy(body) {
+        std::borrow::Cow::Borrowed(_) => std::borrow::Cow::Borrowed(body),
+        std::borrow::Cow::Owned(sanitized) => {
+            tracing::warn!(
+                payload_bytes = body.len(),
+                "invalid UTF-8 in LSP message body; replacing with U+FFFD"
+            );
+            std::borrow::Cow::Owned(sanitized.into_bytes())
+        }
+    }
+}
+
 fn body_preview(body: &[u8]) -> String {
     let truncated_len = body.len().min(LOG_PREVIEW_MAX_BYTES);
     let mut preview = String::from_utf8_lossy(&body[..truncated_len]).to_string();
@@ -49,18 +73,21 @@ impl ContentLengthMessageReader {
 
         loop {
             match self.framer.try_next() {
-                Ok(Some(body)) => match serde_json::from_slice::<JsonRpcRequest>(&body) {
-                    Ok(request) => return Ok(Some(request)),
-                    Err(error) => {
-                        tracing::warn!(
-                            payload_bytes = body.len(),
-                            preview = %body_preview(&body),
-                            %error,
-                            "incoming JSON parse error"
-                        );
-                        continue;
+                Ok(Some(body)) => {
+                    let body = sanitize_body(&body);
+                    match serde_json::from_slice::<JsonRpcRequest>(&body) {
+                        Ok(request) => return Ok(Some(request)),
+                        Err(error) => {
+                            tracing::warn!(
+                                payload_bytes = body.len(),
+                                preview = %body_preview(&body),
+                                %error,
+                                "incoming JSON parse error"
+                            );
+                            continue;
+                        }
                     }
-                },
+                }
                 Ok(None) => {}
                 Err(error) => {
                     tracing::warn!(%error, "frame parse error");
@@ -125,6 +152,7 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
         return Err(error);
     }
 
+    let body = sanitize_body(&body);
     match serde_json::from_slice::<JsonRpcRequest>(&body) {
         Ok(request) => Ok(Some(request)),
         Err(error) => {
@@ -354,6 +382,69 @@ mod tests {
         let req = read_message(&mut reader)?
             .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
         assert_eq!(req.method, "test");
+        Ok(())
+    }
+
+    // ── lossy UTF-8 ────────────────────────────────────────────────
+
+    /// Build a frame whose body contains the given raw bytes (bypasses String encoding).
+    fn framed_raw_body(raw_body: &[u8]) -> Vec<u8> {
+        let mut frame = format!("Content-Length: {}\r\n\r\n", raw_body.len()).into_bytes();
+        frame.extend_from_slice(raw_body);
+        frame
+    }
+
+    #[test]
+    fn read_message_with_invalid_utf8_in_params_is_processed_lossily() -> io::Result<()> {
+        // Construct a JSON body with invalid UTF-8 bytes inside a string value.
+        // The byte sequence \xc3\x28 is an invalid 2-byte UTF-8 sequence.
+        // The frame looks like: {"jsonrpc":"2.0","id":1,"method":"test","params":{"text":"<bad>"}}
+        let prefix = br#"{"jsonrpc":"2.0","id":1,"method":"test","params":{"text":""#;
+        let bad_bytes: &[u8] = &[0xc3, 0x28]; // invalid UTF-8: overlong/bad continuation
+        let suffix = br#""}}"#;
+        let mut body = Vec::new();
+        body.extend_from_slice(prefix);
+        body.extend_from_slice(bad_bytes);
+        body.extend_from_slice(suffix);
+
+        let frame = framed_raw_body(&body);
+        let mut reader = BufReader::new(Cursor::new(frame));
+
+        // Should parse successfully (lossy decoding replaces bad bytes with U+FFFD)
+        let req = read_message(&mut reader)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "test");
+        assert_eq!(req.id, Some(serde_json::json!(1)));
+        // The param value should contain U+FFFD replacement characters
+        let params = req
+            .params
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+        let text = params["text"].as_str().unwrap_or("");
+        assert!(text.contains('\u{FFFD}'), "expected U+FFFD in lossy-decoded param, got: {text:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_with_invalid_utf8_in_body_is_processed_lossily() -> io::Result<()> {
+        // Same scenario but via ContentLengthMessageReader
+        let prefix =
+            br#"{"jsonrpc":"2.0","id":2,"method":"textDocument/didOpen","params":{"note":""#;
+        let bad_bytes: &[u8] = &[0xff, 0xfe]; // invalid UTF-8 bytes
+        let suffix = br#""}}"#;
+        let mut body = Vec::new();
+        body.extend_from_slice(prefix);
+        body.extend_from_slice(bad_bytes);
+        body.extend_from_slice(suffix);
+
+        let frame = framed_raw_body(&body);
+        let mut cursor = Cursor::new(frame);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let req = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected request after lossy decode")
+        })?;
+        assert_eq!(req.method, "textDocument/didOpen");
+        assert_eq!(req.id, Some(serde_json::json!(2)));
         Ok(())
     }
 
