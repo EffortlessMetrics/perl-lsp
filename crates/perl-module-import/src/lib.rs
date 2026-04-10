@@ -67,6 +67,15 @@ pub enum ImportListForm {
     Explicit,
 }
 
+/// Parsed item from a `use Module ...` import list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UseImportItem<'a> {
+    /// A tag import item such as `:sys_wait_h`.
+    Tag(&'a str),
+    /// A plain symbol import item such as `WIFEXITED`.
+    Symbol(&'a str),
+}
+
 /// Distinguishes the two syntactic forms of `require`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RequireForm {
@@ -187,6 +196,56 @@ pub fn parse_module_import_head(line: &str) -> Option<ModuleImportHead<'_>> {
     None
 }
 
+/// Parse import items from a `use Module ...;` line.
+///
+/// Returns an empty vector for `use Module;` and `use Module ();`.
+/// Returns `None` when the line does not parse as a `use` statement head.
+#[must_use]
+pub fn parse_use_import_items(line: &str) -> Option<Vec<UseImportItem<'_>>> {
+    let head = parse_module_import_head(line)?;
+    if head.kind == ModuleImportKind::Require {
+        return None;
+    }
+
+    let mut rest = line[head.token_end..].trim_start();
+    if rest.is_empty() || rest.starts_with(';') {
+        return Some(Vec::new());
+    }
+
+    // Normalize the common `qw(...)` / `qw/.../` family into inner content.
+    if let Some((inner, _consumed)) = parse_qw_literal(rest) {
+        return Some(classify_import_tokens(inner.split_whitespace()));
+    }
+
+    // Parenthesized import list: use Module (...);
+    if rest.starts_with('(')
+        && let Some(close_idx) = rest.find(')')
+    {
+        rest = &rest[1..close_idx];
+    }
+
+    Some(classify_import_tokens(
+        rest.split(|ch: char| ch.is_whitespace() || matches!(ch, ',' | ';' | '(' | ')')),
+    ))
+}
+
+/// Expand well-known import tags for common modules.
+///
+/// This is a static bootstrap map intended for editor resolution fallback.
+#[must_use]
+pub fn expand_known_import_tag(module: &str, tag: &str) -> &'static [&'static str] {
+    match (module, tag) {
+        ("POSIX", ":sys_wait_h") => &["WIFEXITED", "WEXITSTATUS", "WIFSIGNALED", "WTERMSIG"],
+        ("POSIX", ":fcntl_h") => &["O_RDONLY", "O_WRONLY", "O_RDWR", "O_CREAT", "O_TRUNC"],
+        ("POSIX", ":termios_h") => &["B9600", "CS8", "CLOCAL", "CREAD"],
+        ("File::Find", ":find") => &["find", "finddepth"],
+        ("Fcntl", ":seek") => &["SEEK_SET", "SEEK_CUR", "SEEK_END"],
+        ("Fcntl", ":lock") => &["LOCK_SH", "LOCK_EX", "LOCK_NB", "LOCK_UN"],
+        ("Encode", ":fallback") => &["FB_DEFAULT", "FB_CROAK", "FB_QUIET", "FB_PERLQQ"],
+        _ => &[],
+    }
+}
+
 /// Parse a `require` statement, handling both bare module names and quoted file paths.
 fn parse_require_head(line: &str) -> Option<ModuleImportHead<'_>> {
     let trimmed = line.trim_start();
@@ -261,6 +320,62 @@ fn classify_use_import_list(rest: &str) -> ImportListForm {
     ImportListForm::Explicit
 }
 
+fn parse_qw_literal(input: &str) -> Option<(&str, usize)> {
+    let trimmed = input.trim_start();
+    let ws = input.len().saturating_sub(trimmed.len());
+    let body = trimmed.strip_prefix("qw")?;
+    let mut chars = body.char_indices();
+    let (delim_pos, open) = chars.next()?;
+    if open.is_alphanumeric() || open.is_whitespace() {
+        return None;
+    }
+    let open_abs = ws + 2 + delim_pos;
+    let after_open_abs = open_abs + open.len_utf8();
+    let close = matching_qw_delimiter(open);
+
+    let search = &input[after_open_abs..];
+    let close_rel = search.find(close)?;
+    let close_abs = after_open_abs + close_rel;
+    Some((&input[after_open_abs..close_abs], close_abs + close.len_utf8()))
+}
+
+fn matching_qw_delimiter(open: char) -> char {
+    match open {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        _ => open,
+    }
+}
+
+fn classify_import_tokens<'a>(tokens: impl Iterator<Item = &'a str>) -> Vec<UseImportItem<'a>> {
+    let mut items = Vec::new();
+    for token in tokens {
+        let cleaned = strip_outer_quotes(token.trim());
+        if cleaned.is_empty() || cleaned == "qw" {
+            continue;
+        }
+        if cleaned.starts_with(':') {
+            items.push(UseImportItem::Tag(cleaned));
+        } else if !cleaned.starts_with('-') {
+            items.push(UseImportItem::Symbol(cleaned));
+        }
+    }
+    items
+}
+
+fn strip_outer_quotes(token: &str) -> &str {
+    if token.len() >= 2 {
+        let first = token.as_bytes()[0] as char;
+        let last = token.as_bytes()[token.len() - 1] as char;
+        if (first == '\'' && last == '\'') || (first == '"' && last == '"') {
+            return &token[1..token.len() - 1];
+        }
+    }
+    token
+}
+
 fn parse_statement_head<'a>(line: &'a str, keyword: &str) -> Option<(&'a str, usize, usize)> {
     let trimmed = line.trim_start();
     let leading = line.len().saturating_sub(trimmed.len());
@@ -312,7 +427,10 @@ fn is_token_delimiter(ch: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ModuleImportKind, parse_module_import_head};
+    use super::{
+        ModuleImportKind, UseImportItem, expand_known_import_tag, parse_module_import_head,
+        parse_use_import_items,
+    };
 
     #[test]
     fn parses_use_statement_head() {
@@ -368,5 +486,39 @@ mod tests {
     fn rejects_missing_tokens() {
         assert!(parse_module_import_head("use ;").is_none());
         assert!(parse_module_import_head("require").is_none());
+    }
+
+    #[test]
+    fn parses_tag_imports_from_qw_list() {
+        let items = parse_use_import_items("use POSIX qw(:sys_wait_h :fcntl_h);");
+        assert!(items.is_some());
+        if let Some(items) = items {
+            assert_eq!(
+                items,
+                vec![UseImportItem::Tag(":sys_wait_h"), UseImportItem::Tag(":fcntl_h")]
+            );
+        }
+    }
+
+    #[test]
+    fn parses_mixed_tags_and_symbols() {
+        let items = parse_use_import_items("use Encode qw(:fallback iso_8859_1);");
+        assert!(items.is_some());
+        if let Some(items) = items {
+            assert_eq!(
+                items,
+                vec![UseImportItem::Tag(":fallback"), UseImportItem::Symbol("iso_8859_1")]
+            );
+        }
+    }
+
+    #[test]
+    fn expands_common_known_tags() {
+        let posix = expand_known_import_tag("POSIX", ":sys_wait_h");
+        assert!(posix.contains(&"WIFEXITED"));
+        assert!(posix.contains(&"WEXITSTATUS"));
+
+        let fcntl = expand_known_import_tag("Fcntl", ":seek");
+        assert_eq!(fcntl, &["SEEK_SET", "SEEK_CUR", "SEEK_END"]);
     }
 }
