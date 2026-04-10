@@ -1199,13 +1199,14 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         true
     }
 
-    fn find_symbol_node_at_offset(ast: &Node, offset: usize) -> Option<&Node> {
+    fn find_symbol_node_at_offset(ast: &Node, offset: usize) -> Option<(Vec<&Node>, &Node)> {
         let mut path = Vec::new();
         if !collect_node_path_at_offset(ast, offset, &mut path) {
             return None;
         }
 
-        path.iter()
+        let node = path
+            .iter()
             .rev()
             .copied()
             .find(|node| {
@@ -1218,11 +1219,75 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                         | NodeKind::Use { .. }
                 )
             })
-            .or_else(|| path.last().copied())
+            .or_else(|| path.last().copied())?;
+
+        Some((path, node))
     }
 
     fn node_variable_name(node: &Node) -> Option<&str> {
         if let NodeKind::Variable { name, .. } = &node.kind { Some(name.as_str()) } else { None }
+    }
+
+    fn normalize_symbol_name(raw: &str) -> Option<String> {
+        let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
+        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    }
+
+    fn plack_builder_middleware_symbol(path: &[&Node], offset: usize) -> Option<SymbolKey> {
+        let has_builder = path.iter().any(|ancestor| {
+            matches!(ancestor.kind, NodeKind::FunctionCall { ref name, .. } if name == "builder")
+        });
+        if !has_builder {
+            return None;
+        }
+
+        let block = path.iter().rev().find_map(|ancestor| {
+            if let NodeKind::Block { statements } = &ancestor.kind {
+                Some(statements)
+            } else {
+                None
+            }
+        })?;
+
+        for statement in block {
+            let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+                continue;
+            };
+            let NodeKind::FunctionCall { name, args } = &expression.kind else {
+                continue;
+            };
+            if name != "enable" {
+                continue;
+            }
+
+            let Some(first) = args.first() else {
+                continue;
+            };
+            if offset < first.location.start || offset > first.location.end {
+                continue;
+            }
+
+            let raw_name = match &first.kind {
+                NodeKind::String { value, .. } => normalize_symbol_name(value)?,
+                NodeKind::Identifier { name } => name.clone(),
+                _ => continue,
+            };
+
+            let middleware_name = if raw_name.contains("::") {
+                raw_name
+            } else {
+                format!("Plack::Middleware::{raw_name}")
+            };
+
+            return Some(SymbolKey {
+                pkg: middleware_name.clone().into(),
+                name: middleware_name.into(),
+                sigil: None,
+                kind: SymKind::Pack,
+            });
+        }
+
+        None
     }
 
     fn looks_like_package_name(name: &str) -> bool {
@@ -1314,7 +1379,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         }
     }
 
-    let node = find_symbol_node_at_offset(ast, offset)?;
+    let (path, node) = find_symbol_node_at_offset(ast, offset)?;
+
+    if let Some(symbol_key) = plack_builder_middleware_symbol(&path, offset) {
+        return Some(symbol_key);
+    }
+
     match &node.kind {
         NodeKind::Variable { sigil, name } => {
             // Variable already has sigil separated

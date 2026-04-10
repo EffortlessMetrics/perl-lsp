@@ -1879,6 +1879,7 @@ dependencies = [
 name = "perl-lsp-config"
 version = "0.12.3"
 dependencies = [
+ "perl-dap-platform",
  "serde",
  "serde_json",
  "tempfile",

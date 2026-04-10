@@ -74,7 +74,7 @@ where
         NodeKind::PhaseBlock { block, .. } => {
             walk_node(block, func);
         }
-        NodeKind::Eval { block } => {
+        NodeKind::Eval { block } | NodeKind::Defer { block } => {
             walk_node(block, func);
         }
         NodeKind::Class { body, .. } => {

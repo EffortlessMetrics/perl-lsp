@@ -29,7 +29,9 @@ fn analyze_strict(code: &str) -> Vec<ScopeIssue> {
             strict_subs: true,
             strict_vars: true,
             warnings: true,
+            disabled_warning_categories: Vec::new(),
             features: Vec::new(),
+            builtin_imports: Vec::new(),
         },
     )];
 

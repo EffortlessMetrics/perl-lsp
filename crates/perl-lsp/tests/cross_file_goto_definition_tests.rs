@@ -7,8 +7,8 @@
 
 mod support;
 
-use serde_json::json;
-use support::lsp_harness::LspHarness;
+use serde_json::{Value, json};
+use support::lsp_harness::{LspHarness, TempWorkspace};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -20,6 +20,38 @@ fn assert_valid_location(location: &serde_json::Value) {
     let range = range.ok_or("missing range").unwrap_or(&json!(null));
     assert!(range.get("start").is_some(), "Range must have 'start' position");
     assert!(range.get("end").is_some(), "Range must have 'end' position");
+}
+
+fn find_line_char(code: &str, needle: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+    for (line_idx, line) in code.lines().enumerate() {
+        if let Some(char_idx) = line.find(needle) {
+            return Ok((line_idx as u32, char_idx as u32));
+        }
+    }
+
+    Err(format!("could not find '{needle}' in test source").into())
+}
+
+fn first_location(response: &Value) -> Result<&Value, Box<dyn std::error::Error>> {
+    let locations = response
+        .as_array()
+        .ok_or_else(|| std::io::Error::other("expected array result for definition"))?;
+    Ok(locations.first().ok_or_else(|| std::io::Error::other("definition result was empty"))?)
+}
+
+fn find_pos(
+    code: &str,
+    needle: &str,
+    target_line: usize,
+) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+    let line = code
+        .lines()
+        .nth(target_line)
+        .ok_or_else(|| std::io::Error::other(format!("no line {target_line} in test code")))?;
+    let col = line.find(needle).ok_or_else(|| {
+        std::io::Error::other(format!("could not find `{needle}` on line {target_line}"))
+    })?;
+    Ok((target_line as u32, col as u32))
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +199,192 @@ Demo::Worker::run();
 }
 
 // ---------------------------------------------------------------------------
+// Test 3: XS bootstrap calls navigate to native `.xs` entry points
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_xsloader_load_navigates_to_boot_symbol() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let server = perl_lsp::LspServer::new();
+
+    let module_pm = r#"package My::Module;
+use strict;
+use warnings;
+use XSLoader;
+our $VERSION = '0.01';
+XSLoader::load(__PACKAGE__, $VERSION);
+1;
+"#;
+    let module_xs = r#"#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+EXTERN_C void
+boot_My__Module(pTHX_ CV* cv)
+{
+}
+"#;
+
+    workspace.write("lib/My/Module.pm", module_pm)?;
+    workspace.write("Module.xs", module_xs)?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(&workspace.uri("lib/My/Module.pm"), module_pm)?;
+    harness.barrier();
+
+    let cursor = module_pm.find("load").ok_or("missing XSLoader::load")?;
+    let (line, character) = server.offset_to_position(module_pm, cursor);
+    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/My/Module.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("expected uri")?;
+    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(u64::from(boot_line)),
+        "expected goto-definition to land on boot_My__Module",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_bootstrap_keyword_navigates_to_boot_symbol() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let server = perl_lsp::LspServer::new();
+
+    let loader_pm = r#"package My::Module;
+use strict;
+use warnings;
+require DynaLoader;
+our @ISA = qw(DynaLoader);
+our $VERSION = '0.01';
+bootstrap My::Module $VERSION;
+1;
+"#;
+    let module_xs = r#"#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+EXTERN_C void
+boot_My__Module(pTHX_ CV* cv)
+{
+}
+"#;
+
+    workspace.write("lib/My/Module.pm", loader_pm)?;
+    workspace.write("Module.xs", module_xs)?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(&workspace.uri("lib/My/Module.pm"), loader_pm)?;
+    harness.barrier();
+
+    let cursor = loader_pm.find("bootstrap").ok_or("missing bootstrap keyword")?;
+    let (line, character) = server.offset_to_position(loader_pm, cursor);
+    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/My/Module.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("expected uri")?;
+    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(u64::from(boot_line)),
+        "expected goto-definition to land on boot_My__Module",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_dynaloader_bootstrap_navigates_to_boot_symbol() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+    let server = perl_lsp::LspServer::new();
+
+    let loader_pm = r#"package My::Module;
+use strict;
+use warnings;
+require DynaLoader;
+our @ISA = qw(DynaLoader);
+our $VERSION = '0.01';
+DynaLoader::bootstrap(__PACKAGE__, $VERSION);
+1;
+"#;
+    let module_xs = r#"#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+EXTERN_C void
+boot_My__Module(pTHX_ CV* cv)
+{
+}
+"#;
+
+    workspace.write("lib/My/Module.pm", loader_pm)?;
+    workspace.write("Module.xs", module_xs)?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    harness.open(&workspace.uri("lib/My/Module.pm"), loader_pm)?;
+    harness.barrier();
+
+    let cursor = loader_pm.find("DynaLoader::bootstrap").ok_or("missing DynaLoader::bootstrap")?;
+    let (line, character) = server.offset_to_position(loader_pm, cursor);
+    let boot_offset = module_xs.find("boot_My__Module").ok_or("missing boot symbol")?;
+    let (boot_line, _) = server.offset_to_position(module_xs, boot_offset);
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/My/Module.pm")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected XS bootstrap definition result");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("expected uri")?;
+    assert!(uri.contains("Module.xs"), "expected Module.xs target, got: {uri}");
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(u64::from(boot_line)),
+        "expected goto-definition to land on boot_My__Module",
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 3: $self->method() navigates to the method definition
 // ---------------------------------------------------------------------------
 
@@ -224,6 +442,125 @@ sub greet {
         let uri = first["uri"].as_str().ok_or("Expected URI")?;
         assert!(uri.contains("Animal.pm"), "Definition should point to Animal.pm, got: {}", uri);
     }
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_super_method_uses_parent_chain() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/Animal.pm",
+        r#"package Base;
+sub greet { "base" }
+
+package Child;
+use parent 'Base';
+sub greet {
+    my $self = shift;
+    return $self->SUPER::greet();
+}
+
+1;
+"#,
+    )?;
+
+    harness.barrier();
+
+    let (line, character) = find_line_char(
+        r#"package Base;
+sub greet { "base" }
+
+package Child;
+use parent 'Base';
+sub greet {
+    my $self = shift;
+    return $self->SUPER::greet();
+}
+
+1;
+"#,
+        "SUPER::greet",
+    )?;
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///lib/Animal.pm"},
+            "position": {"line": line, "character": character + 8}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected array result for SUPER definition")?;
+    assert!(!locations.is_empty(), "SUPER::greet should resolve to parent implementation");
+    let first = &locations[0];
+    assert_valid_location(first);
+    assert!(
+        first["uri"].as_str().unwrap_or("").contains("Animal.pm"),
+        "SUPER::greet should resolve within the current file, got: {first:?}"
+    );
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(1),
+        "SUPER::greet should navigate to Base::greet"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_super_method_respects_c3_mro() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let code = r#"package Root;
+sub greet { "root" }
+
+package Left;
+use parent 'Root';
+
+package Right;
+use parent 'Root';
+sub greet { "right" }
+
+package Child;
+use mro 'c3';
+use parent 'Left', 'Right';
+sub greet {
+    my $self = shift;
+    return $self->SUPER::greet();
+}
+
+1;
+"#;
+
+    harness.open("file:///lib/Animal.pm", code)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(code, "SUPER::greet")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///lib/Animal.pm"},
+            "position": {"line": line, "character": character + 8}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected array result for SUPER definition")?;
+    assert!(!locations.is_empty(), "SUPER::greet should resolve under C3 mro");
+    let first = &locations[0];
+    assert_valid_location(first);
+    assert!(
+        first["uri"].as_str().unwrap_or("").contains("Animal.pm"),
+        "SUPER::greet should resolve within the current file, got: {first:?}"
+    );
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(8),
+        "C3 mro should resolve to Right::greet, not the Root fallback"
+    );
 
     Ok(())
 }
@@ -865,6 +1202,90 @@ fn symbol_at_cursor_resolves_use_statement() -> TestResult {
             sym.pkg,
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn plack_builder_middleware_enable_navigates_to_module_file() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Plack/Middleware/Static.pm",
+        r#"package Plack::Middleware::Static;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "lib/Plack/Middleware/Session.pm",
+        r#"package Plack::Middleware::Session;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "app.psgi",
+        r#"use Plack::Builder;
+
+builder {
+    enable 'Static';
+    enable 'Plack::Middleware::Session';
+};
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let static_uri = workspace.uri("lib/Plack/Middleware/Static.pm");
+    let static_content =
+        std::fs::read_to_string(workspace.dir.path().join("lib/Plack/Middleware/Static.pm"))?;
+    harness.open(&static_uri, &static_content)?;
+
+    let session_uri = workspace.uri("lib/Plack/Middleware/Session.pm");
+    let session_content =
+        std::fs::read_to_string(workspace.dir.path().join("lib/Plack/Middleware/Session.pm"))?;
+    harness.open(&session_uri, &session_content)?;
+
+    let app_uri = workspace.uri("app.psgi");
+    let app_content = std::fs::read_to_string(workspace.dir.path().join("app.psgi"))?;
+    harness.open(&app_uri, &app_content)?;
+
+    harness.barrier();
+
+    let (static_line, static_character) = find_pos(&app_content, "Static", 3)?;
+    let static_def = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": app_uri},
+            "position": {"line": static_line, "character": static_character}
+        }),
+    )?;
+    let static_location = first_location(&static_def)?;
+    assert_valid_location(static_location);
+    assert_eq!(
+        static_location["uri"].as_str(),
+        Some(static_uri.as_str()),
+        "short-name middleware navigation should jump to the Static module"
+    );
+
+    let (session_line, session_character) =
+        find_pos(&app_content, "Plack::Middleware::Session", 4)?;
+    let session_def = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": app_uri},
+            "position": {"line": session_line, "character": session_character}
+        }),
+    )?;
+    let session_location = first_location(&session_def)?;
+    assert_valid_location(session_location);
+    assert_eq!(
+        session_location["uri"].as_str(),
+        Some(session_uri.as_str()),
+        "fully-qualified middleware navigation should jump to the Session module"
+    );
 
     Ok(())
 }

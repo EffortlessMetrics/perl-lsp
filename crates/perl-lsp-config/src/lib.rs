@@ -4,6 +4,8 @@
 //! This microcrate isolates configuration parsing and defaults from the main
 //! server crate so they can evolve independently and be reused by tooling.
 
+#[cfg(not(target_arch = "wasm32"))]
+use perl_dap_platform::resolve_perl_path_with_toolchain;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
@@ -243,6 +245,21 @@ impl ServerConfig {
     }
 }
 
+/// Controls whether PERL5LIB paths are prepended or appended to `include_paths`.
+///
+/// `Prepend` (the default) mirrors Perl's own behaviour: paths earlier in the
+/// search order shadow later ones, so PERL5LIB paths take priority over any
+/// project-level `include_paths`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Perl5LibPrecedence {
+    /// PERL5LIB entries are placed *before* `include_paths` (default).
+    #[default]
+    Prepend,
+    /// PERL5LIB entries are placed *after* `include_paths`.
+    Append,
+}
+
 /// Workspace configuration for module resolution
 ///
 /// Controls how the LSP server resolves module imports and finds
@@ -251,8 +268,8 @@ impl ServerConfig {
 pub struct WorkspaceConfig {
     /// Workspace-root-relative include paths for module resolution.
     ///
-    /// Absolute entries are accepted syntactically, but still must resolve
-    /// inside the workspace boundary.
+    /// Relative entries are resolved against the workspace root. Absolute
+    /// entries are honored literally as external include roots.
     /// Default: `["lib", ".", "local/lib/perl5"]`
     pub include_paths: Vec<String>,
 
@@ -263,9 +280,25 @@ pub struct WorkspaceConfig {
     /// Cached system @INC paths (populated lazily when use_system_inc is true)
     system_inc_cache: Option<Vec<PathBuf>>,
 
+    /// Perl interpreter used for startup `@INC` probing.
+    ///
+    /// When unset, falls back to `perl` on `PATH`.
+    pub perl_path: Option<String>,
+
+    /// Extra arguments passed to the Perl interpreter for startup `@INC` probing.
+    pub perl_args: Vec<String>,
+
     /// Resolution timeout in milliseconds
     /// Default: 50ms
     pub resolution_timeout_ms: u64,
+
+    /// Whether the `PERL5LIB` environment variable is read and merged into
+    /// the module search path.  Default: `true`.
+    pub use_perl5lib: bool,
+
+    /// Controls whether PERL5LIB entries come before or after `include_paths`.
+    /// Default: `Prepend` (mirrors Perl's own search order).
+    pub perl5lib_precedence: Perl5LibPrecedence,
 }
 
 impl Default for WorkspaceConfig {
@@ -274,12 +307,52 @@ impl Default for WorkspaceConfig {
             include_paths: vec!["lib".to_string(), ".".to_string(), "local/lib/perl5".to_string()],
             use_system_inc: false,
             system_inc_cache: None,
+            perl_path: None,
+            perl_args: Vec::new(),
             resolution_timeout_ms: 50,
+            use_perl5lib: true,
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
         }
     }
 }
 
 impl WorkspaceConfig {
+    /// Parse a `PERL5LIB` environment variable value into a list of paths.
+    ///
+    /// Uses `:` as the separator on Unix and `;` on Windows, matching Perl's
+    /// own behaviour.  Empty components (produced by leading, trailing, or
+    /// consecutive separators) are silently dropped.
+    pub fn parse_perl5lib(value: &str) -> Vec<String> {
+        #[cfg(windows)]
+        const SEP: char = ';';
+        #[cfg(not(windows))]
+        const SEP: char = ':';
+        value.split(SEP).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+    }
+
+    /// Return the effective module-search-path, merging `PERL5LIB` paths with
+    /// `self.include_paths` according to `self.perl5lib_precedence`.
+    ///
+    /// If `self.use_perl5lib` is `false`, or `perl5lib_paths` is empty, the
+    /// returned list is identical to `self.include_paths`.
+    pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
+        if !self.use_perl5lib || perl5lib_paths.is_empty() {
+            return self.include_paths.clone();
+        }
+        match self.perl5lib_precedence {
+            Perl5LibPrecedence::Prepend => {
+                let mut result = perl5lib_paths.to_vec();
+                result.extend_from_slice(&self.include_paths);
+                result
+            }
+            Perl5LibPrecedence::Append => {
+                let mut result = self.include_paths.clone();
+                result.extend_from_slice(perl5lib_paths);
+                result
+            }
+        }
+    }
+
     /// Update workspace configuration from LSP settings.
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
         if let Some(workspace) = settings.get("workspace") {
@@ -293,8 +366,35 @@ impl WorkspaceConfig {
                 }
                 self.use_system_inc = use_inc;
             }
+            if let Some(perl_path) = workspace.get("perlPath").and_then(|v| v.as_str()) {
+                let next = Some(perl_path.to_string());
+                if next != self.perl_path {
+                    self.system_inc_cache = None;
+                }
+                self.perl_path = next;
+            }
+            if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
+                let next: Vec<String> =
+                    perl_args.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
+                if next != self.perl_args {
+                    self.system_inc_cache = None;
+                }
+                self.perl_args = next;
+            }
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
+            }
+            if let Some(use_p5l) = workspace.get("usePerl5lib").and_then(|v| v.as_bool()) {
+                self.use_perl5lib = use_p5l;
+            }
+            if let Some(prec) = workspace.get("perl5libPrecedence").and_then(|v| v.as_str()) {
+                // Only update on recognised values; leave the current setting unchanged for
+                // unknown strings so a typo does not silently reset an explicitly-set Append.
+                match prec {
+                    "append" => self.perl5lib_precedence = Perl5LibPrecedence::Append,
+                    "prepend" => self.perl5lib_precedence = Perl5LibPrecedence::Prepend,
+                    _ => {} // unknown value — leave current setting intact
+                }
             }
         }
     }
@@ -306,15 +406,25 @@ impl WorkspaceConfig {
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache = Some(Self::fetch_perl_inc());
+            self.system_inc_cache =
+                Some(Self::fetch_perl_inc(self.perl_path.as_deref(), &self.perl_args));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
-        let output = Command::new("perl").args(["-e", "print join(\"\\n\", @INC)"]).output();
+    fn fetch_perl_inc(perl_path: Option<&str>, perl_args: &[String]) -> Vec<PathBuf> {
+        let perl_path = match perl_path.filter(|path| !path.is_empty()) {
+            Some(path) => PathBuf::from(path),
+            None => match resolve_perl_path_with_toolchain() {
+                Ok(path) => path,
+                Err(_) => return Vec::new(),
+            },
+        };
+        let mut command = Command::new(perl_path);
+        command.args(perl_args);
+        let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
 
         match output {
             Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
@@ -327,7 +437,7 @@ impl WorkspaceConfig {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
+    fn fetch_perl_inc(_: Option<&str>, _: &[String]) -> Vec<PathBuf> {
         Vec::new()
     }
 }
@@ -363,12 +473,17 @@ pub struct ProjectPerlConfig {
     /// Additional include paths for module resolution.
     ///
     /// Relative entries are resolved against the workspace root. Absolute
-    /// entries are accepted syntactically, but still must resolve inside the
-    /// workspace boundary.
+    /// entries are honored literally as external include roots.
     pub include_paths: Vec<String>,
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.
     pub version: Option<String>,
+    /// Whether to read `PERL5LIB` from the environment and include it in the
+    /// module search path.  Unset means "leave the server default unchanged".
+    pub use_perl5lib: Option<bool>,
+    /// Whether PERL5LIB paths come before or after `include_paths`.
+    /// Unset means "leave the server default unchanged".
+    pub perl5lib_precedence: Option<Perl5LibPrecedence>,
 }
 
 /// `[diagnostics]` section of `.perl-lsp.toml`.
@@ -465,6 +580,12 @@ impl ProjectConfig {
     pub fn apply_to_workspace_config(&self, config: &mut WorkspaceConfig) {
         if !self.perl.include_paths.is_empty() {
             config.include_paths = self.perl.include_paths.clone();
+        }
+        if let Some(use_p5l) = self.perl.use_perl5lib {
+            config.use_perl5lib = use_p5l;
+        }
+        if let Some(ref prec) = self.perl.perl5lib_precedence {
+            config.perl5lib_precedence = prec.clone();
         }
     }
 }
@@ -639,6 +760,8 @@ mod tests {
         let config = WorkspaceConfig::default();
         assert_eq!(config.include_paths, vec!["lib", ".", "local/lib/perl5"]);
         assert!(!config.use_system_inc);
+        assert!(config.perl_path.is_none());
+        assert!(config.perl_args.is_empty());
         assert_eq!(config.resolution_timeout_ms, 50);
     }
 
@@ -660,6 +783,19 @@ mod tests {
             "workspace": { "resolutionTimeout": 100 }
         }));
         assert_eq!(config.resolution_timeout_ms, 100);
+    }
+
+    #[test]
+    fn workspace_config_updates_perl_probe_settings() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&json!({
+            "workspace": {
+                "perlPath": "/opt/custom/perl",
+                "perlArgs": ["-I", "/tmp/custom/lib"]
+            }
+        }));
+        assert_eq!(config.perl_path.as_deref(), Some("/opt/custom/perl"));
+        assert_eq!(config.perl_args, vec!["-I", "/tmp/custom/lib"]);
     }
 
     #[test]

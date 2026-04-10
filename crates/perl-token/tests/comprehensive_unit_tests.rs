@@ -188,6 +188,7 @@ fn all_token_kinds() -> Vec<TokenKind> {
         TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
+        TokenKind::Defer,
         // Operators
         TokenKind::Assign,
         TokenKind::Plus,
@@ -334,6 +335,7 @@ fn all_variants_are_listed() {
             | TokenKind::Field
             | TokenKind::Format
             | TokenKind::Undef
+            | TokenKind::Defer
             | TokenKind::Assign
             | TokenKind::Plus
             | TokenKind::Minus
@@ -534,6 +536,7 @@ fn keyword_token_round_trip() {
         (TokenKind::Field, "field"),
         (TokenKind::Format, "format"),
         (TokenKind::Undef, "undef"),
+        (TokenKind::Defer, "defer"),
     ];
 
     let mut offset = 0;

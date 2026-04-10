@@ -16,7 +16,9 @@ use perl_path_security::validate_workspace_path;
 /// Resolve a Perl module name to a workspace-relative filesystem path candidate.
 ///
 /// The search order is:
-/// 1. Each `include_path` under `root`, rejecting path traversal.
+/// 1. Each configured include path in order:
+///    - Relative paths are resolved under `root` and validated against traversal.
+///    - Absolute paths are treated as literal external roots.
 /// 2. Fallback to `root/lib/<module>.pm`.
 #[must_use]
 pub fn resolve_module_path(
@@ -27,15 +29,22 @@ pub fn resolve_module_path(
     let relative_path = module_name_to_path(module_name);
 
     for base in include_paths {
-        let candidate = if base == "." {
+        let base_path = Path::new(base);
+        let candidate = if base_path.is_absolute() {
+            base_path.join(&relative_path)
+        } else if base == "." {
             root.join(&relative_path)
         } else {
             root.join(base).join(&relative_path)
         };
 
-        let safe_candidate = match validate_workspace_path(&candidate, root) {
-            Ok(path) => path,
-            Err(_) => continue,
+        let safe_candidate = if base_path.is_absolute() {
+            candidate
+        } else {
+            match validate_workspace_path(&candidate, root) {
+                Ok(path) => path,
+                Err(_) => continue,
+            }
         };
 
         if safe_candidate.exists() {
@@ -111,23 +120,23 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_when_absolute_include_path_is_outside_workspace()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn resolves_absolute_include_path_outside_workspace() -> Result<(), Box<dyn std::error::Error>>
+    {
         let workspace = tempfile::tempdir()?;
         let outside = tempfile::tempdir()?;
         let root = workspace.path().to_path_buf();
         let outside_base = outside.path().join("lib");
-        let fallback = root.join("lib").join("Outside").join("Mod.pm");
+        let module = outside_base.join("Outside").join("Mod.pm");
 
-        fs::create_dir_all(fallback.parent().ok_or("no parent")?)?;
-        fs::write(&fallback, "package Outside::Mod; 1;")?;
+        fs::create_dir_all(module.parent().ok_or("no parent")?)?;
+        fs::write(&module, "package Outside::Mod; 1;")?;
 
         let resolved = resolve_module_path(
             &root,
             "Outside::Mod",
             &[outside_base.to_string_lossy().to_string()],
         );
-        assert_eq!(resolved, Some(fallback));
+        assert_eq!(resolved, Some(module));
         Ok(())
     }
 }

@@ -135,6 +135,8 @@ pub enum DiagnosticCode {
     DuplicateSubroutine,
     /// Missing explicit return statement
     MissingReturn,
+    /// Same-file Moo/Moose roles provide conflicting methods
+    RoleConflict,
     /// Invalid character(s) in a subroutine prototype
     ///
     /// Perl only allows `$`, `@`, `%`, `&`, `*`, `\`, `;`, `+`, `_`, and
@@ -248,6 +250,7 @@ impl DiagnosticCode {
             DiagnosticCode::DuplicateSubroutine => "PL300",
             DiagnosticCode::MissingReturn => "PL301",
             DiagnosticCode::InvalidPrototype => "PL302",
+            DiagnosticCode::RoleConflict => "PL303",
             DiagnosticCode::BarewordFilehandle => "PL400",
             DiagnosticCode::TwoArgOpen => "PL401",
             DiagnosticCode::ImplicitReturn => "PL402",
@@ -314,6 +317,7 @@ impl DiagnosticCode {
             "PL300" => "https://docs.perl-lsp.org/errors/PL300",
             "PL301" => "https://docs.perl-lsp.org/errors/PL301",
             "PL302" => "https://docs.perl-lsp.org/errors/PL302",
+            "PL303" => "https://docs.perl-lsp.org/errors/PL303",
             "PL400" => "https://docs.perl-lsp.org/errors/PL400",
             "PL401" => "https://docs.perl-lsp.org/errors/PL401",
             "PL402" => "https://docs.perl-lsp.org/errors/PL402",
@@ -372,6 +376,7 @@ impl DiagnosticCode {
             | DiagnosticCode::DuplicateSubroutine
             | DiagnosticCode::MissingReturn
             | DiagnosticCode::InvalidPrototype
+            | DiagnosticCode::RoleConflict
             | DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen
             | DiagnosticCode::ImplicitReturn
@@ -478,6 +483,10 @@ impl DiagnosticCode {
             DiagnosticCode::MissingReturn => Some(
                 "This subroutine has no explicit `return` statement. \
                 Add `return $value;` to make the return value clear.",
+            ),
+            DiagnosticCode::RoleConflict => Some(
+                "Two or more consumed Moo/Moose roles provide the same method. \
+                Define the method in the class or remove one of the conflicting roles.",
             ),
             DiagnosticCode::InvalidPrototype => Some(
                 "The prototype contains a character that Perl does not recognise. \
@@ -691,6 +700,7 @@ impl DiagnosticCode {
             "PL300" => Some(DiagnosticCode::DuplicateSubroutine),
             "PL301" => Some(DiagnosticCode::MissingReturn),
             "PL302" => Some(DiagnosticCode::InvalidPrototype),
+            "PL303" => Some(DiagnosticCode::RoleConflict),
             "PL400" => Some(DiagnosticCode::BarewordFilehandle),
             "PL401" => Some(DiagnosticCode::TwoArgOpen),
             "PL402" => Some(DiagnosticCode::ImplicitReturn),
@@ -790,6 +800,7 @@ impl DiagnosticCode {
             DiagnosticCode::DuplicateSubroutine
             | DiagnosticCode::MissingReturn
             | DiagnosticCode::InvalidPrototype => DiagnosticCategory::Subroutine,
+            DiagnosticCode::RoleConflict => DiagnosticCategory::Subroutine,
 
             DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen

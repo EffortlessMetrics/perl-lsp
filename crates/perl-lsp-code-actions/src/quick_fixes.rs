@@ -621,6 +621,185 @@ pub fn fix_bareword_filehandle(diagnostic: &QuickFixDiagnostic) -> Vec<CodeActio
     }]
 }
 
+/// Fix missing package declaration by inserting `package main;` at the top
+///
+/// When a Perl file has no `package` declaration (PL200), the default package
+/// is `main`. This fix makes that intent explicit by inserting `package main;`
+/// at the top of the file.
+pub fn fix_missing_package_declaration(source: &str) -> Vec<CodeAction> {
+    // Insert after shebang if present, otherwise at top
+    let insert_pos =
+        if source.starts_with("#!") { source.find('\n').map(|p| p + 1).unwrap_or(0) } else { 0 };
+
+    vec![CodeAction {
+        title: "Add 'package main;' declaration".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::MissingPackageDeclaration.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: "package main;\n".to_string(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Fix variable redeclaration by removing the duplicate `my` keyword
+///
+/// When a variable is declared twice in the same scope (PL105), the fix
+/// is to remove the `my` keyword from the second declaration, turning it
+/// into a plain assignment.
+pub fn fix_variable_redeclaration(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let mut actions = Vec::new();
+
+    if let Some((abs_my_start, abs_my_end)) = find_duplicate_my_span(source, diagnostic) {
+        // Remove only the duplicate declarator and keep the assignment/value intact.
+
+        actions.push(CodeAction {
+            title: "Remove duplicate 'my' declaration".to_string(),
+            kind: CodeActionKind::QuickFix,
+            diagnostics: vec![DiagnosticCode::VariableRedeclaration.as_str().to_string()],
+            edit: CodeActionEdit {
+                changes: vec![TextEdit {
+                    location: SourceLocation { start: abs_my_start, end: abs_my_end },
+                    new_text: String::new(),
+                }],
+            },
+            is_preferred: true,
+        });
+    }
+
+    actions
+}
+
+fn find_duplicate_my_span(source: &str, diagnostic: &QuickFixDiagnostic) -> Option<(usize, usize)> {
+    let variable_start = diagnostic.range.0.min(source.len());
+    let line_start = source[..variable_start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
+    let before_var = &source[line_start..variable_start];
+    let my_offset = before_var.rfind("my ")?;
+
+    if before_var[my_offset + 3..].chars().all(char::is_whitespace) {
+        let start = line_start + my_offset;
+        return Some((start, start + 3));
+    }
+
+    None
+}
+
+/// Fix misspelled pragma by replacing with the correctly spelled name
+///
+/// The MisspelledPragma diagnostic (PL111) message has the format:
+/// `"Did you mean 'use <correct>;'? '<typo>' is not a known pragma"`
+/// This fix extracts the correct name and replaces the entire `use <typo>` statement.
+pub fn fix_misspelled_pragma(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let mut actions = Vec::new();
+
+    // Parse correct pragma from message: "Did you mean 'use <correct>;'?"
+    let msg = &diagnostic.message;
+    if let Some(after_use) = msg.strip_prefix("Did you mean 'use ")
+        && let Some(correct_name) = after_use.split(';').next()
+    {
+        let correct_pragma = correct_name.trim();
+        actions.push(CodeAction {
+            title: format!("Fix pragma spelling: 'use {};'", correct_pragma),
+            kind: CodeActionKind::QuickFix,
+            diagnostics: vec![DiagnosticCode::MisspelledPragma.as_str().to_string()],
+            edit: CodeActionEdit {
+                changes: vec![TextEdit {
+                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                    new_text: format!("use {};", correct_pragma),
+                }],
+            },
+            is_preferred: true,
+        });
+    }
+
+    // Unused parameter suppression: source is used indirectly through the
+    // diagnostic message which was produced from the same source text.
+    let _ = source;
+
+    actions
+}
+
+/// Fix unreachable code by removing the unreachable statement
+///
+/// PL406 fires when a statement follows an unconditional exit (return, die, exit).
+/// The fix removes the entire line containing the unreachable statement.
+pub fn fix_unreachable_code(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    // Find the full line containing the unreachable statement
+    let line_start = source[..diagnostic.range.0].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let line_end = source[diagnostic.range.1..]
+        .find('\n')
+        .map(|p| diagnostic.range.1 + p + 1)
+        .unwrap_or(source.len());
+
+    vec![CodeAction {
+        title: "Remove unreachable code".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::UnreachableCode.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: line_start, end: line_end },
+                new_text: String::new(),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Fix duplicate subroutine by suggesting rename of the second definition
+///
+/// PL300 fires when a subroutine is defined more than once. The fix renames the
+/// second definition to avoid the conflict, preserving both implementations.
+pub fn fix_duplicate_subroutine(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let mut actions = Vec::new();
+
+    // Extract sub name from message: "Subroutine 'foo' is defined more than once..."
+    let sub_name = diagnostic.message.split('\'').nth(1).unwrap_or("sub");
+
+    actions.push(CodeAction {
+        title: format!("Rename duplicate subroutine '{}' to '{}_2'", sub_name, sub_name),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::DuplicateSubroutine.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                new_text: format!("{}_2", sub_name),
+            }],
+        },
+        is_preferred: true,
+    });
+
+    actions
+}
+
+/// Fix missing return statement by adding an explicit `return` before the closing brace
+///
+/// PL301 fires when a subroutine has no explicit return statement. The diagnostic
+/// range covers the subroutine body. This inserts `return;` at the end of the range.
+pub fn fix_missing_return(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    // Find indentation to match surrounding code style
+    let insert_pos = diagnostic.range.1.min(source.len());
+    let indent = get_indent_at(source, insert_pos.saturating_sub(1));
+
+    vec![CodeAction {
+        title: "Add explicit 'return' statement".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::MissingReturn.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: insert_pos, end: insert_pos },
+                new_text: format!("{}return;\n", indent),
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
 /// Suggest upgrading two-argument open() to three-argument form
 ///
 /// Two-argument `open($fh, $filename)` is unsafe because `$filename` can

@@ -221,10 +221,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             }
 
             // `defer { }` block — requires v5.36 (`use feature 'defer'`).
-            // The parser currently models this as a FunctionCall with a single
-            // block argument. Ordinary helper calls named `defer` should not
-            // trigger PL900.
-            NodeKind::FunctionCall { name, args } if is_defer_feature_usage(name, args) => {
+            NodeKind::Defer { .. } => {
                 if !effective_features.contains(&"defer") {
                     let min = feature_min_version("defer");
                     diagnostics.push(make_diagnostic(n, "defer", declared_version, min));
@@ -357,15 +354,6 @@ fn builtin_import_names(arg: &str) -> Vec<String> {
     }
 
     vec![trimmed.trim_matches(|c| c == '\'' || c == '"').to_string()]
-}
-
-/// Return `true` when a node represents the `defer { ... }` feature form.
-fn is_defer_feature_usage(name: &str, args: &[Node]) -> bool {
-    if name != "defer" || args.len() != 1 {
-        return false;
-    }
-
-    matches!(args.first().map(|arg| &arg.kind), Some(NodeKind::Block { .. }))
 }
 
 /// Build a PL900 diagnostic for a version-incompatible feature use.

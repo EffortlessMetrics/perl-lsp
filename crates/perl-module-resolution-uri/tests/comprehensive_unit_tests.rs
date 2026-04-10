@@ -623,6 +623,37 @@ fn include_path_traversal_is_blocked() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
+fn absolute_include_path_outside_workspace_is_honored() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    std::fs::create_dir_all(&workspace)?;
+    let outside = temp.path().join("outside_lib");
+    let module_file = outside.join("External").join("Util.pm");
+    std::fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+    std::fs::write(&module_file, "1;")?;
+
+    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "uri")?.to_string();
+
+    let result = resolve_module_uri(
+        "External::Util",
+        &[],
+        &[workspace_uri],
+        &[outside.to_string_lossy().to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("External/Util.pm"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
 fn deeply_nested_traversal_is_blocked() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let workspace = temp.path().join("deep").join("nested").join("workspace");

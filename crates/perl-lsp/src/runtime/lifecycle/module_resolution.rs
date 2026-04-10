@@ -5,7 +5,7 @@
 use super::super::*;
 use perl_module_resolution::{
     ModuleUriResolution, resolve_module_path as resolve_workspace_module_path, resolve_module_uri,
-    use_lib::{extract_use_lib_paths, resolve_use_lib_paths},
+    use_lib::resolve_use_lib_paths_from_source,
 };
 use std::path::PathBuf;
 use std::sync::Once;
@@ -29,13 +29,33 @@ fn prepend_use_lib_paths(
     workspace_root: &std::path::Path,
     file_dir: Option<&std::path::Path>,
 ) {
-    let extracted = extract_use_lib_paths(doc_text);
-    let dynamic = resolve_use_lib_paths(&extracted, workspace_root, file_dir);
+    let dynamic = resolve_use_lib_paths_from_source(doc_text, workspace_root, file_dir);
     for p in dynamic.into_iter().rev() {
-        if !include_paths.contains(&p) {
-            include_paths.insert(0, p);
+        include_paths.retain(|existing| existing != &p);
+        include_paths.insert(0, p);
+    }
+}
+
+fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -> Option<PathBuf> {
+    let doc_path =
+        doc_uri.and_then(|u| url::Url::parse(u).ok()).and_then(|u| u.to_file_path().ok());
+
+    if let Some(doc_path) = doc_path {
+        for folder in workspace_folders {
+            let Some(candidate) = url::Url::parse(folder).ok().and_then(|u| u.to_file_path().ok())
+            else {
+                continue;
+            };
+            if doc_path.starts_with(&candidate) {
+                return Some(candidate);
+            }
         }
     }
+
+    workspace_folders
+        .first()
+        .and_then(|u| url::Url::parse(u).ok())
+        .and_then(|u| u.to_file_path().ok())
 }
 
 impl LspServer {
@@ -68,7 +88,10 @@ impl LspServer {
 
         let mut include_paths = {
             let config = self.workspace_config.lock();
-            config.include_paths.clone()
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+            config.effective_include_paths(&perl5lib_paths)
         };
 
         if let Some(text) = doc_text {
@@ -104,7 +127,10 @@ impl LspServer {
 
         let mut include_paths = {
             let config = self.workspace_config.lock();
-            config.include_paths.clone()
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+            config.effective_include_paths(&perl5lib_paths)
         };
 
         if let Some(text) = doc_text {
@@ -119,6 +145,38 @@ impl LspServer {
         }
 
         resolve_workspace_module_path(&root, module, &include_paths)
+    }
+
+    /// Resolve an XS bootstrap target to the most likely `.xs` source path.
+    ///
+    /// XS distributions commonly place native sources either next to the Perl
+    /// module file (`lib/Foo/Bar.xs`) or at the dist root as a leaf file
+    /// (`Bar.xs`). This helper covers those two high-signal layouts.
+    pub(crate) fn resolve_xs_bootstrap_path_with_uri(
+        &self,
+        module: &str,
+        doc_text: Option<&str>,
+        doc_uri: Option<&str>,
+    ) -> Option<PathBuf> {
+        let normalized = normalize_package_separator(module);
+        let leaf = normalized.rsplit("::").next()?;
+
+        if let Some(pm_path) = self.resolve_module_path_with_uri(module, doc_text, doc_uri)
+            && let Some(parent) = pm_path.parent()
+        {
+            let sibling = parent.join(format!("{leaf}.xs"));
+            if sibling.is_file() {
+                return Some(sibling);
+            }
+        }
+
+        let root = self.root_path.lock().clone()?;
+        let root_candidate = root.join(format!("{leaf}.xs"));
+        if root_candidate.is_file() {
+            return Some(root_candidate);
+        }
+
+        None
     }
 
     /// Resolve a module name to a file path URI
@@ -166,7 +224,14 @@ impl LspServer {
     ) -> Option<String> {
         let (mut include_paths, timeout_ms, use_system_inc) = {
             let config = self.workspace_config.lock();
-            (config.include_paths.clone(), config.resolution_timeout_ms, config.use_system_inc)
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+            (
+                config.effective_include_paths(&perl5lib_paths),
+                config.resolution_timeout_ms,
+                config.use_system_inc,
+            )
         };
         let timeout = Duration::from_millis(timeout_ms);
 
@@ -174,15 +239,11 @@ impl LspServer {
 
         // Wire use lib paths scoped to this call
         if let Some(text) = doc_text {
-            // Use the first workspace folder as the root for relative use lib paths
-            let root_opt = workspace_folders
-                .first()
-                .and_then(|u| url::Url::parse(u).ok())
-                .and_then(|u| u.to_file_path().ok());
+            let root_opt = workspace_root_for_doc(&workspace_folders, doc_uri);
             if root_opt.is_none() && !workspace_folders.is_empty() {
                 tracing::trace!(
-                    "Module URI resolution failed for workspace folder: {:?}",
-                    workspace_folders.first()
+                    "Module URI resolution failed for workspace folders: {:?}",
+                    workspace_folders
                 );
             }
             if let Some(root) = root_opt {
@@ -204,6 +265,8 @@ impl LspServer {
 
         let system_paths = if use_system_inc {
             let mut config = self.workspace_config.lock();
+            // `WorkspaceConfig` now resolves the active interpreter with
+            // perlbrew/plenv-aware fallback before probing startup `@INC`.
             config.get_system_inc().to_vec()
         } else {
             Vec::new()
@@ -367,6 +430,64 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn resolve_xs_bootstrap_path_finds_sibling_xs_file() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let module_file = workspace.join("lib").join("My").join("Module.pm");
+        let xs_file = workspace.join("lib").join("My").join("Module.xs");
+
+        fs::create_dir_all(module_file.parent().ok_or("missing module parent")?)?;
+        fs::write(&module_file, "package My::Module; 1;")?;
+        fs::write(&xs_file, "EXTERN_C void boot_My__Module(pTHX_ CV* cv) {}")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        let workspace_uri =
+            url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["lib".to_string()];
+            config.use_system_inc = false;
+        }
+
+        let resolved = server
+            .resolve_xs_bootstrap_path_with_uri("My::Module", None, None)
+            .ok_or("expected xs bootstrap path")?;
+        assert_eq!(resolved, xs_file);
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_xs_bootstrap_path_finds_root_leaf_xs_file() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let module_file = workspace.join("lib").join("My").join("Module.pm");
+        let xs_file = workspace.join("Module.xs");
+
+        fs::create_dir_all(module_file.parent().ok_or("missing module parent")?)?;
+        fs::write(&module_file, "package My::Module; 1;")?;
+        fs::write(&xs_file, "EXTERN_C void boot_My__Module(pTHX_ CV* cv) {}")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        let workspace_uri =
+            url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["lib".to_string()];
+            config.use_system_inc = false;
+        }
+
+        let resolved = server
+            .resolve_xs_bootstrap_path_with_uri("My::Module", None, None)
+            .ok_or("expected xs bootstrap path")?;
+        assert_eq!(resolved, xs_file);
+        Ok(())
+    }
+
     // --- use lib wiring tests ---
 
     #[test]
@@ -424,6 +545,61 @@ mod tests {
             "unexpected path: {}",
             resolved.display()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_no_lib_removes_overlay() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let custom_dir = workspace.join("custom");
+        let module_file = custom_dir.join("Gone").join("Soon.pm");
+        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+        fs::write(&module_file, "package Gone::Soon; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        let doc_text = "use lib 'custom';\nno lib 'custom';\nuse Gone::Soon;\n";
+        let resolved = server
+            .resolve_module_path("Gone::Soon", Some(doc_text))
+            .ok_or("expected candidate path")?;
+        assert_ne!(
+            resolved, module_file,
+            "no lib should remove prior use lib path from lexical overlay"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_repeated_use_lib_reorders_precedence() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+
+        let a_mod = workspace.join("a").join("Dup").join("Winner.pm");
+        let b_mod = workspace.join("b").join("Dup").join("Winner.pm");
+        fs::create_dir_all(a_mod.parent().ok_or("no parent")?)?;
+        fs::create_dir_all(b_mod.parent().ok_or("no parent")?)?;
+        fs::write(&a_mod, "package Dup::Winner; 1;")?;
+        fs::write(&b_mod, "package Dup::Winner; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        let doc_text = "use lib 'a';\nuse lib 'b';\nuse lib 'a';\n";
+        let resolved = server
+            .resolve_module_path("Dup::Winner", Some(doc_text))
+            .ok_or("expected resolve_module_path to find Dup::Winner via repeated use lib")?;
+
+        assert_eq!(resolved, a_mod, "re-adding a path should move it to front");
         Ok(())
     }
 
@@ -518,11 +694,11 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_module_path_use_lib_outside_workspace_ignored() -> TestResult {
+    fn test_resolve_module_path_use_lib_outside_workspace_honored() -> TestResult {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         fs::create_dir_all(&workspace)?;
-        // Place a module OUTSIDE the workspace to ensure it is not returned
+        // Place a module OUTSIDE the workspace and verify absolute use lib can find it.
         let outside_dir = temp.path().join("outside");
         let outside_module = outside_dir.join("Evil").join("Hack.pm");
         fs::create_dir_all(outside_module.parent().ok_or("no parent")?)?;
@@ -535,21 +711,16 @@ mod tests {
             config.include_paths = vec![];
         }
 
-        // Try to escape workspace via absolute path in use lib
+        // Absolute paths in use lib should be honored literally.
         let outside_dir_str = outside_dir.to_string_lossy().to_string();
         let doc_text = format!("use lib '{outside_dir_str}';\n");
         let result = server
             .resolve_module_path("Evil::Hack", Some(&doc_text))
             .ok_or("resolve_module_path returned None unexpectedly")?;
-
-        // The result must NOT be the actual outside-workspace file.
-        // resolve_use_lib_paths silently drops absolute paths outside workspace,
-        // so resolution falls back to a candidate inside the workspace.
-        assert_ne!(
+        assert_eq!(
             result, outside_module,
-            "absolute path outside workspace must be ignored; got: {result:?}"
+            "absolute path outside workspace should resolve directly: {result:?}"
         );
-        assert!(result.starts_with(&workspace), "result must remain inside workspace: {result:?}");
         Ok(())
     }
 

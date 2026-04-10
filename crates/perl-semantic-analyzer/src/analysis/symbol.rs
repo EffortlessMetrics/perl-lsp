@@ -334,17 +334,39 @@ pub enum FrameworkKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Web framework variant detected via `use` statements during Parse/Analyze workflows.
 pub enum WebFrameworkKind {
+    /// `use Dancer;`
+    Dancer,
     /// `use Dancer2;` or `use Dancer2::Core;`
     Dancer2,
     /// `use Mojolicious::Lite;`
     MojoliciousLite,
+    /// `use Plack::Builder;`
+    PlackBuilder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Async framework variant detected via `use` statements during Parse/Analyze workflows.
 pub enum AsyncFrameworkKind {
+    /// `use AnyEvent;`
+    AnyEvent,
+    /// `use EV;`
+    EV,
+    /// `use Future;`
+    Future,
+    /// `use Future::XS;`
+    FutureXS,
+    /// `use Promise;`
+    Promise,
+    /// `use Promise::XS;`
+    PromiseXS,
+    /// `use POE;`
+    POE,
     /// `use IO::Async;`
     IOAsync,
+    /// `use Mojo::Redis;`
+    MojoRedis,
+    /// `use Mojo::Pg;`
+    MojoPg,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -356,10 +378,12 @@ pub struct FrameworkFlags {
     pub class_accessor: bool,
     /// Which specific Moo/Moose variant was detected.
     pub kind: Option<FrameworkKind>,
-    /// Web framework variant, if any (Dancer2, Mojolicious::Lite).
+    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite).
     pub web_framework: Option<WebFrameworkKind>,
     /// Async framework variant, if any (IO::Async).
     pub async_framework: Option<AsyncFrameworkKind>,
+    /// Catalyst controller/package marker used for action synthesis.
+    pub catalyst_controller: bool,
 }
 
 /// Extract symbols from an AST for Parse/Index workflows.
@@ -502,6 +526,37 @@ impl SymbolExtractor {
 
                 if name.is_some() {
                     let documentation = self.extract_leading_comment(node.location.start);
+                    let mut symbol_attributes = attributes.clone();
+                    let documentation = if self.current_package_is_catalyst_controller()
+                        && let Some((action_kind, action_details)) =
+                            Self::catalyst_action_metadata(attributes)
+                    {
+                        symbol_attributes.push("framework=Catalyst".to_string());
+                        symbol_attributes.push("catalyst_controller=true".to_string());
+                        symbol_attributes.push("catalyst_action=true".to_string());
+                        symbol_attributes.push(format!("catalyst_action_kind={action_kind}"));
+                        if !action_details.is_empty() {
+                            symbol_attributes.push(format!(
+                                "catalyst_action_attributes={}",
+                                action_details.join(", ")
+                            ));
+                        }
+
+                        let action_doc = if action_details.is_empty() {
+                            format!("Catalyst action ({action_kind})")
+                        } else {
+                            format!(
+                                "Catalyst action ({action_kind}; {})",
+                                action_details.join(", ")
+                            )
+                        };
+                        match documentation {
+                            Some(doc) => Some(format!("{doc}\n{action_doc}")),
+                            None => Some(action_doc),
+                        }
+                    } else {
+                        documentation
+                    };
                     let symbol = Symbol {
                         name: sub_name.clone(),
                         qualified_name: format!("{}::{}", self.table.current_package, sub_name),
@@ -510,7 +565,7 @@ impl SymbolExtractor {
                         scope_id: self.table.current_scope(),
                         declaration: None,
                         documentation,
-                        attributes: attributes.clone(),
+                        attributes: symbol_attributes,
                     };
 
                     self.table.add_symbol(symbol);
@@ -532,6 +587,9 @@ impl SymbolExtractor {
             NodeKind::Package { name, block, name_span: _ } => {
                 let old_package = self.table.current_package.clone();
                 self.table.current_package = name.clone();
+                if Self::is_catalyst_controller_package_name(name) {
+                    self.mark_catalyst_controller_package(name);
+                }
 
                 let documentation = self.extract_package_documentation(name, node.location);
                 let symbol = Symbol {
@@ -642,6 +700,9 @@ impl SymbolExtractor {
                 };
                 self.table.add_reference(reference);
 
+                self.synthesize_plack_builder_symbols(name, args);
+                self.synthesize_ev_symbols(name, node.location);
+
                 for arg in args {
                     self.visit_node(arg);
                 }
@@ -659,7 +720,8 @@ impl SymbolExtractor {
                     is_write: false,
                 });
 
-                self.synthesize_io_async_class_symbol(object);
+                self.synthesize_async_framework_class_symbol(object);
+                self.synthesize_future_api_symbols(object, method, node.location);
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -715,6 +777,9 @@ impl SymbolExtractor {
 
             NodeKind::Use { module, args, .. } => {
                 self.update_framework_context(module, args);
+                if module == "EV" {
+                    self.synthesize_ev_framework_symbol(node.location);
+                }
             }
 
             NodeKind::No { module: _, args: _, .. } => {
@@ -746,7 +811,7 @@ impl SymbolExtractor {
                 self.visit_node(condition);
             }
 
-            NodeKind::Do { block } | NodeKind::Eval { block } => {
+            NodeKind::Do { block } | NodeKind::Eval { block } | NodeKind::Defer { block } => {
                 self.visit_node(block);
             }
 
@@ -774,8 +839,13 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Class { name, body, .. } => {
+            NodeKind::Class { name, parents, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
+                if Self::is_catalyst_controller_package_name(name)
+                    || parents.iter().any(|parent| parent == "Catalyst::Controller")
+                {
+                    self.mark_catalyst_controller_package(name);
+                }
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: name.clone(),
@@ -1082,10 +1152,10 @@ impl SymbolExtractor {
         None
     }
 
-    /// Detect Moo/Moose method modifiers (`around`, `before`, `after`).
+    /// Detect Moo/Moose method modifiers (`before`, `after`, `around`, `override`, `augment`).
     ///
     /// Pattern (two statements):
-    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`)
+    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`/`override`/`augment`)
     /// 2. `ExpressionStatement(HashLiteral([ (method_name, Subroutine{...}) ]))`
     ///
     /// Also handles FunctionCall form: `around 'name' => sub { }` (post parser fix).
@@ -1095,7 +1165,7 @@ impl SymbolExtractor {
         // FunctionCall form: `around 'name' => sub { }` parsed as a bare call.
         if let NodeKind::ExpressionStatement { expression } = &first.kind
             && let NodeKind::FunctionCall { name, args } = &expression.kind
-            && matches!(name.as_str(), "around" | "before" | "after")
+            && Self::is_moose_method_modifier(name)
         {
             let modifier_name = name.as_str();
             let method_names: Vec<String> =
@@ -1127,12 +1197,10 @@ impl SymbolExtractor {
 
         let second = &statements[idx + 1];
 
-        // Check: first is ExpressionStatement(Identifier("around"|"before"|"after"))
+        // Check: first is ExpressionStatement(Identifier("before"|"after"|"around"|"override"|"augment"))
         let modifier_name = match &first.kind {
             NodeKind::ExpressionStatement { expression } => match &expression.kind {
-                NodeKind::Identifier { name }
-                    if matches!(name.as_str(), "around" | "before" | "after") =>
-                {
+                NodeKind::Identifier { name } if Self::is_moose_method_modifier(name) => {
                     name.as_str()
                 }
                 _ => return None,
@@ -1177,6 +1245,10 @@ impl SymbolExtractor {
         Some(2)
     }
 
+    fn is_moose_method_modifier(name: &str) -> bool {
+        matches!(name, "before" | "after" | "around" | "override" | "augment")
+    }
+
     /// Detect Moo/Moose `extends 'Parent'` and `with 'Role'` declarations.
     ///
     /// Pattern (two statements):
@@ -1195,6 +1267,10 @@ impl SymbolExtractor {
             let keyword = name.as_str();
             let names: Vec<String> = args.iter().flat_map(Self::collect_symbol_names).collect();
             if !names.is_empty() {
+                if names.iter().any(|name| name == "Catalyst::Controller") {
+                    let package = self.table.current_package.clone();
+                    self.mark_catalyst_controller_package(&package);
+                }
                 let ref_kind =
                     if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
                 for ref_name in names {
@@ -1235,6 +1311,11 @@ impl SymbolExtractor {
         let names = Self::collect_symbol_names(expression);
         if names.is_empty() {
             return None;
+        }
+
+        if names.iter().any(|name| name == "Catalyst::Controller") {
+            let package = self.table.current_package.clone();
+            self.mark_catalyst_controller_package(&package);
         }
 
         let ref_location = SourceLocation { start: first.location.start, end: second.location.end };
@@ -1427,7 +1508,7 @@ impl SymbolExtractor {
         if require_embedded_marker { None } else { Some(attr_expr) }
     }
 
-    /// Detect Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
+    /// Detect Dancer/Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
     ///
     /// Pattern (two statements):
     /// 1. `ExpressionStatement(Identifier("get"|"post"|"put"|"del"|"patch"|"any"))`
@@ -1440,6 +1521,10 @@ impl SymbolExtractor {
         statements: &[Node],
         idx: usize,
     ) -> Option<usize> {
+        let web_framework = self
+            .framework_flags
+            .get(&self.table.current_package)
+            .and_then(|flags| flags.web_framework);
         let first = &statements[idx];
 
         // FunctionCall form: `get '/path' => sub { }` parsed as a bare call.
@@ -1472,6 +1557,25 @@ impl SymbolExtractor {
                             documentation: Some(format!("{http_method} {path}")),
                             attributes: vec![format!("http_method={http_method}")],
                         });
+
+                        if matches!(
+                            web_framework,
+                            Some(WebFrameworkKind::Dancer | WebFrameworkKind::Dancer2)
+                        ) && let Some(target_node) = args.get(1)
+                        {
+                            if let Some(target_name) =
+                                Self::collect_symbol_names(target_node).first().cloned()
+                            {
+                                self.table.add_reference(SymbolReference {
+                                    name: target_name,
+                                    kind: SymbolKind::Subroutine,
+                                    location: target_node.location,
+                                    scope_id: self.table.current_scope(),
+                                    is_write: false,
+                                });
+                            }
+                        }
+
                         self.visit_node(first);
                         return Some(1);
                     }
@@ -1547,6 +1651,145 @@ impl SymbolExtractor {
         Some(2)
     }
 
+    /// Synthesize Plack::Builder middleware and mount symbols from a builder block.
+    fn synthesize_plack_builder_symbols(&mut self, name: &str, args: &[Node]) {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return;
+        };
+        if flags.web_framework != Some(WebFrameworkKind::PlackBuilder) || name != "builder" {
+            return;
+        }
+
+        let Some(block) = args.first() else {
+            return;
+        };
+        let NodeKind::Block { statements } = &block.kind else {
+            return;
+        };
+
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for statement in statements {
+            let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+                continue;
+            };
+            let NodeKind::FunctionCall { name: stmt_name, args: stmt_args } = &expression.kind
+            else {
+                continue;
+            };
+
+            match stmt_name.as_str() {
+                "enable" => {
+                    self.synthesize_plack_enable_symbol(statement, stmt_args, scope_id, &package);
+                }
+                "mount" => {
+                    self.synthesize_plack_mount_symbol(statement, stmt_args, scope_id, &package);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn synthesize_plack_enable_symbol(
+        &mut self,
+        statement: &Node,
+        args: &[Node],
+        scope_id: ScopeId,
+        _package: &str,
+    ) {
+        let Some(first) = args.first() else {
+            return;
+        };
+        let Some(raw_name) = Self::single_symbol_name(first) else {
+            return;
+        };
+        let middleware_name = if raw_name.contains("::") {
+            raw_name
+        } else {
+            format!("Plack::Middleware::{raw_name}")
+        };
+        if middleware_name.is_empty() {
+            return;
+        }
+
+        if self.table.symbols.get(&middleware_name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Package
+                    && symbol.declaration.as_deref() == Some("enable")
+                    && symbol
+                        .attributes
+                        .iter()
+                        .any(|attr| attr == &format!("middleware={middleware_name}"))
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: middleware_name.clone(),
+            qualified_name: middleware_name.clone(),
+            kind: SymbolKind::Package,
+            location: statement.location,
+            scope_id,
+            declaration: Some("enable".to_string()),
+            documentation: Some(format!("PSGI middleware {middleware_name}")),
+            attributes: vec![
+                "framework=Plack::Builder".to_string(),
+                format!("middleware={middleware_name}"),
+            ],
+        });
+    }
+
+    fn synthesize_plack_mount_symbol(
+        &mut self,
+        statement: &Node,
+        args: &[Node],
+        scope_id: ScopeId,
+        _package: &str,
+    ) {
+        let Some(path_node) = args.first() else {
+            return;
+        };
+        let Some(path) = Self::single_symbol_name(path_node) else {
+            return;
+        };
+        if path.is_empty() {
+            return;
+        }
+
+        let target = args
+            .get(1)
+            .map(Self::value_summary)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "$app".to_string());
+
+        if self.table.symbols.get(&path).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some("mount")
+                    && symbol.attributes.iter().any(|attr| attr == &format!("mount_path={path}"))
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: path.clone(),
+            qualified_name: path.clone(),
+            kind: SymbolKind::Subroutine,
+            location: statement.location,
+            scope_id,
+            declaration: Some("mount".to_string()),
+            documentation: Some(format!("PSGI mount {path} -> {target}")),
+            attributes: vec![
+                "framework=Plack::Builder".to_string(),
+                format!("mount_path={path}"),
+                format!("mount_target={target}"),
+            ],
+        });
+    }
+
     /// Extract Class::Accessor generated accessors from `mk_*_accessors` calls.
     fn try_extract_class_accessor_declaration(&mut self, statement: &Node) -> bool {
         let NodeKind::ExpressionStatement { expression } = &statement.kind else {
@@ -1597,31 +1840,55 @@ impl SymbolExtractor {
         true
     }
 
-    /// Synthesize class symbols for IO::Async namespaces used in method-call form.
-    fn synthesize_io_async_class_symbol(&mut self, object: &Node) -> bool {
+    /// Synthesize class symbols for async framework namespaces used in method-call form.
+    fn synthesize_async_framework_class_symbol(&mut self, object: &Node) -> bool {
         let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
             return false;
         };
-        if !matches!(flags.async_framework, Some(AsyncFrameworkKind::IOAsync)) {
-            return false;
-        }
+
+        let (module_name, framework_name, exact_match) = match flags.async_framework {
+            Some(AsyncFrameworkKind::AnyEvent) => ("AnyEvent", "AnyEvent", false),
+            Some(AsyncFrameworkKind::EV) => ("EV", "EV", true),
+            Some(AsyncFrameworkKind::Future) => ("Future", "Future", true),
+            Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
+            Some(AsyncFrameworkKind::Promise) => ("Promise", "Promise", true),
+            Some(AsyncFrameworkKind::PromiseXS) => ("Promise::XS", "Promise::XS", true),
+            Some(AsyncFrameworkKind::POE) => ("POE", "POE", false),
+            Some(AsyncFrameworkKind::IOAsync) => ("IO::Async", "IO::Async", false),
+            Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis", true),
+            Some(AsyncFrameworkKind::MojoPg) => ("Mojo::Pg", "Mojo::Pg", true),
+            None => return false,
+        };
 
         let Some(name) = Self::single_symbol_name(object) else {
             return false;
         };
-        if !name.starts_with("IO::Async::") {
+        if flags.async_framework == Some(AsyncFrameworkKind::AnyEvent) {
+            if !matches!(
+                name.as_str(),
+                "AnyEvent" | "AnyEvent::CondVar" | "AnyEvent::Timer" | "AnyEvent::IO"
+            ) {
+                return false;
+            }
+        } else if exact_match {
+            if name != module_name {
+                return false;
+            }
+        } else if !name.starts_with(&format!("{module_name}::")) {
             return false;
         }
 
         let already_synthesized = self.table.symbols.get(&name).is_some_and(|symbols| {
             symbols.iter().any(|symbol| {
                 symbol.kind == SymbolKind::Class
-                    && symbol.declaration.as_deref() == Some("framework=IO::Async")
+                    && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
             })
         });
         if already_synthesized {
             return true;
         }
+
+        let framework_attr = format!("framework={framework_name}");
 
         self.table.add_symbol(Symbol {
             name: name.clone(),
@@ -1629,9 +1896,163 @@ impl SymbolExtractor {
             kind: SymbolKind::Class,
             location: object.location,
             scope_id: self.table.current_scope(),
-            declaration: Some("framework=IO::Async".to_string()),
-            documentation: Some("Synthetic IO::Async class".to_string()),
-            attributes: vec!["framework=IO::Async".to_string()],
+            declaration: Some(framework_attr.clone()),
+            documentation: Some(format!("Synthetic {framework_name} class")),
+            attributes: vec![framework_attr],
+        });
+
+        true
+    }
+
+    /// Synthesize the `EV` namespace symbol when the framework is imported.
+    fn synthesize_ev_framework_symbol(&mut self, location: SourceLocation) {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return;
+        };
+        if flags.async_framework != Some(AsyncFrameworkKind::EV) {
+            return;
+        }
+
+        let name = "EV";
+        if self.table.symbols.get(name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Class
+                    && symbol.declaration.as_deref() == Some("framework=EV")
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Class,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("framework=EV".to_string()),
+            documentation: Some("Synthetic EV namespace".to_string()),
+            attributes: vec!["framework=EV".to_string()],
+        });
+    }
+
+    /// Synthesize narrow EV watcher / loop API symbols used in function-call form.
+    fn synthesize_ev_symbols(&mut self, name: &str, location: SourceLocation) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+        if flags.async_framework != Some(AsyncFrameworkKind::EV) {
+            return false;
+        }
+
+        let Some(ev_suffix) = name.strip_prefix("EV::") else {
+            return false;
+        };
+        if !matches!(ev_suffix, "timer" | "io" | "signal" | "idle") {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some("framework=EV")
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Subroutine,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("framework=EV".to_string()),
+            documentation: Some(format!("Synthetic EV API `{ev_suffix}`")),
+            attributes: vec!["framework=EV".to_string(), format!("ev_api={ev_suffix}")],
+        });
+
+        true
+    }
+
+    /// Synthesize a narrow async framework API surface for common entrypoints.
+    ///
+    /// This intentionally avoids type inference. It only exposes the canonical
+    /// constructor / class methods and the common chain methods that are most
+    /// useful for navigation and references when a file opts into an async
+    /// framework such as Future or Promise.
+    fn synthesize_future_api_symbols(
+        &mut self,
+        object: &Node,
+        method: &str,
+        location: SourceLocation,
+    ) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+
+        let (framework_name, root_name, chain_methods, class_entrypoints) =
+            match flags.async_framework {
+                Some(AsyncFrameworkKind::Future) => (
+                    "Future",
+                    "Future",
+                    vec!["then", "catch", "finally", "get", "is_done", "is_ready"],
+                    vec!["new", "done", "fail", "wait_all", "needs_all", "needs_any"],
+                ),
+                Some(AsyncFrameworkKind::FutureXS) => (
+                    "Future::XS",
+                    "Future::XS",
+                    vec!["then", "catch", "finally", "get", "is_done", "is_ready"],
+                    vec!["new", "done", "fail", "wait_all", "needs_all", "needs_any"],
+                ),
+                Some(AsyncFrameworkKind::Promise) => (
+                    "Promise",
+                    "Promise",
+                    vec!["then", "catch", "finally", "resolve", "reject"],
+                    vec!["new", "all", "race", "any"],
+                ),
+                Some(AsyncFrameworkKind::PromiseXS) => (
+                    "Promise::XS",
+                    "Promise::XS",
+                    vec!["then", "catch", "finally", "resolve", "reject"],
+                    vec!["new", "all", "race", "any"],
+                ),
+                _ => return false,
+            };
+
+        let object_name = Self::single_symbol_name(object);
+
+        let should_synthesize = if chain_methods.contains(&method) {
+            true
+        } else if class_entrypoints.contains(&method) {
+            object_name.is_some_and(|name| name == root_name)
+        } else {
+            false
+        };
+        if !should_synthesize {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(method).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
+                    && symbol.attributes.iter().any(|attr| attr == &format!("future_api={method}"))
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: method.to_string(),
+            qualified_name: format!("{framework_name}::{method}"),
+            kind: SymbolKind::Subroutine,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some(format!("framework={framework_name}")),
+            documentation: Some(format!("Synthetic {framework_name} API `{method}`")),
+            attributes: vec![format!("framework={framework_name}"), format!("future_api={method}")],
         });
 
         true
@@ -1650,30 +2071,86 @@ impl SymbolExtractor {
         };
 
         if let Some(kind) = framework_kind {
-            let flags = self.framework_flags.entry(pkg).or_default();
+            let flags = self.framework_flags.entry(pkg.clone()).or_default();
             flags.moo = true;
             flags.kind = Some(kind);
             return;
         }
 
         if module == "Class::Accessor" {
-            self.framework_flags.entry(pkg).or_default().class_accessor = true;
+            self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
             return;
         }
 
         let web_kind = match module {
+            "Dancer" => Some(WebFrameworkKind::Dancer),
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
+            "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
             _ => None,
         };
         if let Some(kind) = web_kind {
-            self.framework_flags.entry(pkg).or_default().web_framework = Some(kind);
+            self.framework_flags.entry(pkg.clone()).or_default().web_framework = Some(kind);
             return;
         }
 
         if module == "IO::Async" || module.starts_with("IO::Async::") {
-            self.framework_flags.entry(pkg).or_default().async_framework =
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
                 Some(AsyncFrameworkKind::IOAsync);
+            return;
+        }
+
+        if module == "AnyEvent" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::AnyEvent);
+            return;
+        }
+
+        if module == "EV" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::EV);
+            return;
+        }
+
+        if module == "Future" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::Future);
+            return;
+        }
+
+        if module == "Future::XS" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::FutureXS);
+            return;
+        }
+
+        if module == "Promise" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::Promise);
+            return;
+        }
+
+        if module == "Promise::XS" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::PromiseXS);
+            return;
+        }
+
+        if module == "POE" || module.starts_with("POE::") {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::POE);
+            return;
+        }
+
+        if module == "Mojo::Redis" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoRedis);
+            return;
+        }
+
+        if module == "Mojo::Pg" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoPg);
             return;
         }
 
@@ -1683,9 +2160,81 @@ impl SymbolExtractor {
                 .filter_map(|arg| Self::normalize_symbol_name(arg))
                 .any(|arg| arg == "Class::Accessor");
             if has_class_accessor_parent {
-                self.framework_flags.entry(pkg).or_default().class_accessor = true;
+                self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
+            }
+            let has_catalyst_controller_parent = args
+                .iter()
+                .filter_map(|arg| Self::normalize_symbol_name(arg))
+                .any(|arg| arg == "Catalyst::Controller");
+            if has_catalyst_controller_parent {
+                self.mark_catalyst_controller_package(&pkg);
             }
         }
+    }
+
+    fn mark_catalyst_controller_package(&mut self, package: &str) {
+        self.framework_flags.entry(package.to_string()).or_default().catalyst_controller = true;
+    }
+
+    fn current_package_is_catalyst_controller(&self) -> bool {
+        self.framework_flags
+            .get(&self.table.current_package)
+            .is_some_and(|flags| flags.catalyst_controller)
+            || Self::is_catalyst_controller_package_name(&self.table.current_package)
+    }
+
+    fn is_catalyst_controller_package_name(package: &str) -> bool {
+        package.contains("::Controller::") || package.ends_with("::Controller")
+    }
+
+    fn catalyst_action_metadata(attributes: &[String]) -> Option<(String, Vec<String>)> {
+        let mut kind = None;
+        let mut details = Vec::new();
+        let mut seen = HashSet::new();
+
+        for attr in attributes {
+            let attr_name = Self::attribute_base_name(attr);
+            if !Self::is_catalyst_action_attribute(&attr_name) {
+                continue;
+            }
+
+            if kind.is_none()
+                || matches!(kind.as_deref(), Some("Args" | "CaptureArgs" | "PathPart"))
+            {
+                if matches!(attr_name.as_str(), "Path" | "Local" | "Global" | "Regex" | "Chained") {
+                    kind = Some(attr_name.clone());
+                } else if kind.is_none() {
+                    kind = Some(attr_name.clone());
+                }
+            }
+
+            if seen.insert(attr.clone()) {
+                details.push(attr.clone());
+            }
+        }
+
+        if let Some(action_kind) = kind.as_deref()
+            && matches!(action_kind, "Path" | "Local" | "Global" | "Regex" | "Chained")
+        {
+            details.retain(|attr| Self::attribute_base_name(attr) != action_kind);
+        }
+
+        kind.map(|kind| (kind, details))
+    }
+
+    fn is_catalyst_action_attribute(attr_name: &str) -> bool {
+        matches!(
+            attr_name,
+            "Path" | "Local" | "Global" | "Regex" | "Chained" | "PathPart" | "Args" | "CaptureArgs"
+        )
+    }
+
+    fn attribute_base_name(attr: &str) -> String {
+        attr.trim_start_matches(':')
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == ':'))
+            .next()
+            .unwrap_or("")
+            .to_string()
     }
 
     /// Parse attribute metadata from Moo/Moose option hashes.
@@ -1919,6 +2468,7 @@ impl SymbolExtractor {
                 Self::normalize_symbol_name(value).unwrap_or_else(|| value.clone())
             }
             NodeKind::Identifier { name } => name.clone(),
+            NodeKind::Variable { sigil, name } => format!("{sigil}{name}"),
             NodeKind::Number { value } => value.clone(),
             NodeKind::ArrayLiteral { elements } => {
                 let mut entries = Vec::new();

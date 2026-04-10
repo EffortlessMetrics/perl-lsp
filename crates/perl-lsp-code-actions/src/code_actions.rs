@@ -173,6 +173,33 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::TwoArgOpen.as_str() => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
+                    // PL200: Missing package declaration
+                    c if c == DiagnosticCode::MissingPackageDeclaration.as_str() => {
+                        actions.extend(quick_fixes::fix_missing_package_declaration(&self.source));
+                    }
+                    // PL105: Variable redeclaration (duplicate my)
+                    c if c == DiagnosticCode::VariableRedeclaration.as_str() => {
+                        actions.extend(quick_fixes::fix_variable_redeclaration(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
+                    // PL111: Misspelled pragma
+                    c if c == DiagnosticCode::MisspelledPragma.as_str() => {
+                        actions.extend(quick_fixes::fix_misspelled_pragma(&self.source, &qf_diag));
+                    }
+                    // PL406: Unreachable code
+                    c if c == DiagnosticCode::UnreachableCode.as_str() => {
+                        actions.extend(quick_fixes::fix_unreachable_code(&self.source, &qf_diag));
+                    }
+                    // PL300: Duplicate subroutine
+                    c if c == DiagnosticCode::DuplicateSubroutine.as_str() => {
+                        actions.extend(quick_fixes::fix_duplicate_subroutine(&qf_diag));
+                    }
+                    // PL301: Missing return statement
+                    c if c == DiagnosticCode::MissingReturn.as_str() => {
+                        actions.extend(quick_fixes::fix_missing_return(&self.source, &qf_diag));
+                    }
                     _ => {}
                 }
             }

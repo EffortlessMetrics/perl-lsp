@@ -14,6 +14,15 @@ pub struct UseLibPath {
     pub from_findbin: bool,
 }
 
+/// A `use lib` / `no lib` operation extracted from source in lexical order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UseLibAction {
+    /// Add paths to the effective include stack.
+    Add(Vec<UseLibPath>),
+    /// Remove paths from the effective include stack.
+    Remove(Vec<UseLibPath>),
+}
+
 /// Extract include paths from `use lib` statements in Perl source text.
 ///
 /// Handles the following patterns:
@@ -48,6 +57,34 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     paths
 }
 
+/// Extract ordered `use lib` and `no lib` operations from source text.
+#[must_use]
+pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
+    let mut ops = Vec::new();
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = strip_use_lib_prefix(trimmed) {
+            let mut paths = Vec::new();
+            extract_paths_from_args(rest, &mut paths);
+            if !paths.is_empty() {
+                ops.push(UseLibAction::Add(paths));
+            }
+            continue;
+        }
+
+        if let Some(rest) = strip_no_lib_prefix(trimmed) {
+            let mut paths = Vec::new();
+            extract_paths_from_args(rest, &mut paths);
+            if !paths.is_empty() {
+                ops.push(UseLibAction::Remove(paths));
+            }
+        }
+    }
+
+    ops
+}
+
 /// Resolve `use lib` paths against a workspace root and optional file directory.
 ///
 /// - Absolute paths are returned as-is (if they exist).
@@ -78,6 +115,9 @@ pub fn resolve_use_lib_paths(
         if ulp.from_findbin {
             let base = file_dir.unwrap_or(workspace_root);
             let resolved = base.join(path_str);
+            if resolved.strip_prefix(workspace_root).is_err() {
+                continue;
+            }
             if let Some(s) = path_to_relative_string(&resolved, workspace_root) {
                 if !result.contains(&s) {
                     result.push(s);
@@ -86,11 +126,9 @@ pub fn resolve_use_lib_paths(
         } else {
             let p = Path::new(path_str);
             if p.is_absolute() {
-                if let Ok(rel) = p.strip_prefix(workspace_root) {
-                    let s = rel.to_string_lossy().to_string();
-                    if !result.contains(&s) {
-                        result.push(s);
-                    }
+                let s = normalize_relative_path_string(path_str);
+                if !result.contains(&s) {
+                    result.push(s);
                 }
             } else {
                 let s = path_str.to_string();
@@ -104,8 +142,51 @@ pub fn resolve_use_lib_paths(
     result
 }
 
+/// Resolve effective include paths from lexical `use lib` / `no lib` operations.
+#[must_use]
+pub fn resolve_use_lib_paths_from_source(
+    source: &str,
+    workspace_root: &Path,
+    file_dir: Option<&Path>,
+) -> Vec<String> {
+    // Front of this vector is highest-precedence (searched first), matching Perl's
+    // `use lib` behavior where later statements prepend to `@INC`.
+    let mut resolved = Vec::new();
+    for op in extract_use_lib_operations(source) {
+        match op {
+            UseLibAction::Add(paths) => {
+                let added = resolve_use_lib_paths(&paths, workspace_root, file_dir);
+                for path in added.into_iter().rev() {
+                    // Re-adding an existing path must move it back to highest precedence.
+                    resolved.retain(|existing| existing != &path);
+                    resolved.insert(0, path);
+                }
+            }
+            UseLibAction::Remove(paths) => {
+                for path in resolve_use_lib_paths(&paths, workspace_root, file_dir) {
+                    resolved.retain(|existing| existing != &path);
+                }
+            }
+        }
+    }
+    resolved
+}
+
 fn strip_use_lib_prefix(trimmed: &str) -> Option<&str> {
     let rest = trimmed.strip_prefix("use")?;
+    if !rest.starts_with(|c: char| c.is_whitespace()) {
+        return None;
+    }
+    let rest = rest.trim_start();
+    let rest = rest.strip_prefix("lib")?;
+    if !rest.starts_with(|c: char| c.is_whitespace() || c == '(' || c == ';') {
+        return None;
+    }
+    Some(rest.trim_start())
+}
+
+fn strip_no_lib_prefix(trimmed: &str) -> Option<&str> {
+    let rest = trimmed.strip_prefix("no")?;
     if !rest.starts_with(|c: char| c.is_whitespace()) {
         return None;
     }
@@ -404,7 +485,7 @@ mod tests {
         let paths =
             vec![UseLibPath { path: inside.to_string_lossy().to_string(), from_findbin: false }];
         let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
-        assert_eq!(resolved, vec!["lib"]);
+        assert_eq!(resolved, vec![inside.to_string_lossy().to_string()]);
         Ok(())
     }
 
@@ -417,7 +498,7 @@ mod tests {
             from_findbin: false,
         }];
         let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
-        assert!(resolved.is_empty());
+        assert_eq!(resolved, vec![outside.path().join("lib").to_string_lossy().to_string()]);
         Ok(())
     }
 
@@ -429,5 +510,34 @@ mod tests {
         ];
         let resolved = resolve_use_lib_paths(&paths, Path::new("/project"), None);
         assert_eq!(resolved, vec!["lib"]);
+    }
+
+    #[test]
+    fn extracts_no_lib_operations() {
+        let ops = extract_use_lib_operations("use lib 'lib';\nno lib 'lib';\n");
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops.first(), Some(UseLibAction::Add(_))));
+        assert!(matches!(ops.get(1), Some(UseLibAction::Remove(_))));
+    }
+
+    #[test]
+    fn resolves_use_and_no_lib_order() {
+        let source = "use lib 'lib';\nuse lib 't/lib';\nno lib 'lib';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["t/lib"]);
+    }
+
+    #[test]
+    fn repeated_use_lib_reinserts_with_highest_precedence() {
+        let source = "use lib 'a';\nuse lib 'b';\nuse lib 'a';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn multiple_use_lib_statements_last_statement_wins() {
+        let source = "use lib 'a';\nuse lib 'b';\n";
+        let resolved = resolve_use_lib_paths_from_source(source, Path::new("/project"), None);
+        assert_eq!(resolved, vec!["b", "a"]);
     }
 }
