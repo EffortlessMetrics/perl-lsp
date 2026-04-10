@@ -211,6 +211,7 @@ fn attach_request_args_tcp_mode() -> Result<(), Box<dyn std::error::Error>> {
         host: Some("localhost".to_string()),
         port: Some(13603),
         timeout: Some(5000),
+        stop_on_entry: None,
     };
     let json = serde_json::to_string(&args)?;
     let back: AttachRequestArguments = serde_json::from_str(&json)?;
@@ -223,8 +224,13 @@ fn attach_request_args_tcp_mode() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn attach_request_args_pid_mode() -> Result<(), Box<dyn std::error::Error>> {
-    let args =
-        AttachRequestArguments { process_id: Some(12345), host: None, port: None, timeout: None };
+    let args = AttachRequestArguments {
+        process_id: Some(12345),
+        host: None,
+        port: None,
+        timeout: None,
+        stop_on_entry: None,
+    };
     let json = serde_json::to_string(&args)?;
     assert!(json.contains("processId"), "camelCase: {json}");
     assert!(!json.contains("host"), "None host should be omitted: {json}");

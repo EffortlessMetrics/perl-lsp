@@ -534,6 +534,7 @@ fn test_attach_args_round_trip() -> Result<()> {
         host: Some("127.0.0.1".to_string()),
         port: Some(13603),
         timeout: Some(5000),
+        stop_on_entry: None,
     };
     let json = serde_json::to_string(&args)?;
     let rt: AttachRequestArguments = serde_json::from_str(&json)?;

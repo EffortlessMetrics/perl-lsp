@@ -800,7 +800,12 @@ impl DebugAdapter {
                     *guard = Some(pid);
                 }
 
+                let stop_on_entry =
+                    args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
                 let thread_id = Self::i64_to_i32_saturating(i64::from(pid));
+
+                // Always emit the "attach" stopped event to signal the client that the
+                // debugger is connected and paused.
                 self.send_event(
                     "stopped",
                     Some(json!({
@@ -810,7 +815,25 @@ impl DebugAdapter {
                     })),
                 );
 
-                tracing::info!(pid, "Attach request: Process ID attachment (signal-control mode)");
+                // When stopOnEntry is requested, emit an additional "entry" stopped event
+                // so the IDE pauses at the first available program location.
+                if stop_on_entry {
+                    self.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "entry",
+                            "threadId": thread_id,
+                            "allThreadsStopped": true,
+                            "description": "Paused on entry"
+                        })),
+                    );
+                }
+
+                tracing::info!(
+                    pid,
+                    stop_on_entry,
+                    "Attach request: Process ID attachment (signal-control mode)"
+                );
 
                 DapMessage::Response {
                     seq,
@@ -844,6 +867,8 @@ impl DebugAdapter {
                 }
                 let port = raw_port as u16;
                 let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
+                let stop_on_entry =
+                    args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
                 // Validate arguments.
                 if host.trim().is_empty() {
@@ -1021,6 +1046,23 @@ impl DebugAdapter {
                                 }
                             }
                         });
+
+                        // When stopOnEntry is requested, emit a stopped event so the IDE
+                        // pauses at the first available program location after the TCP
+                        // attach handshake completes.
+                        if stop_on_entry {
+                            self.send_event(
+                                "stopped",
+                                Some(json!({
+                                    "reason": "entry",
+                                    "threadId": 1,
+                                    "allThreadsStopped": true,
+                                    "description": "Paused on entry"
+                                })),
+                            );
+                        }
+
+                        tracing::info!(host, port, stop_on_entry, "TCP attach successful");
 
                         DapMessage::Response {
                             seq,

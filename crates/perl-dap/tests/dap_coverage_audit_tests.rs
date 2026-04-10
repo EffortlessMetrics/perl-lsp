@@ -1230,16 +1230,24 @@ fn test_launch_config_resolve_paths_no_cwd() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn test_attach_config_max_valid_port() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 65535, timeout_ms: Some(5000) };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 65535,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
     config.validate()?;
     Ok(())
 }
 
 #[test]
 fn test_attach_config_min_valid_port() -> Result<(), Box<dyn std::error::Error>> {
-    let config =
-        AttachConfiguration { host: "localhost".to_string(), port: 1, timeout_ms: Some(5000) };
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 1,
+        timeout_ms: Some(5000),
+        stop_on_entry: None,
+    };
     config.validate()?;
     Ok(())
 }
@@ -1251,6 +1259,7 @@ fn test_attach_config_boundary_timeout() -> Result<(), Box<dyn std::error::Error
         host: "localhost".to_string(),
         port: 13603,
         timeout_ms: Some(300_000),
+        stop_on_entry: None,
     };
     config.validate()?;
 
@@ -1259,6 +1268,7 @@ fn test_attach_config_boundary_timeout() -> Result<(), Box<dyn std::error::Error
         host: "localhost".to_string(),
         port: 13603,
         timeout_ms: Some(300_001),
+        stop_on_entry: None,
     };
     assert!(config.validate().is_err());
     Ok(())
@@ -1520,6 +1530,7 @@ fn test_attach_request_arguments_round_trip() -> Result<(), Box<dyn std::error::
         host: Some("localhost".to_string()),
         port: Some(13603),
         timeout: Some(5000),
+        stop_on_entry: None,
     };
 
     let json = serde_json::to_string(&args)?;

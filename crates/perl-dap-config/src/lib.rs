@@ -36,6 +36,7 @@
 //!     host: "localhost".to_string(),
 //!     port: 13603,
 //!     timeout_ms: Some(5000),
+//!     stop_on_entry: None,
 //! };
 //!
 //! config.validate()?;
@@ -232,11 +233,24 @@ pub struct AttachConfiguration {
     /// Connection timeout in milliseconds (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u32>,
+
+    /// If true, pause execution at the first opportunity after attaching.
+    ///
+    /// Equivalent to the DAP `stopOnEntry` field. When set, the adapter emits a
+    /// `stopped` event with `reason = "entry"` immediately after the attach
+    /// handshake completes. Defaults to `false` when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_on_entry: Option<bool>,
 }
 
 impl Default for AttachConfiguration {
     fn default() -> Self {
-        Self { host: "localhost".to_string(), port: 13603, timeout_ms: Some(5000) }
+        Self {
+            host: "localhost".to_string(),
+            port: 13603,
+            timeout_ms: Some(5000),
+            stop_on_entry: None,
+        }
     }
 }
 
@@ -262,6 +276,7 @@ impl AttachConfiguration {
     ///     host: "localhost".to_string(),
     ///     port: 13603,
     ///     timeout_ms: Some(5000),
+    ///     stop_on_entry: None,
     /// };
     ///
     /// config.validate()?;
@@ -357,7 +372,8 @@ pub fn create_attach_json_snippet() -> String {
         "name": "Attach to Perl::LanguageServer",
         "host": "localhost",
         "port": 13603,
-        "timeout": 5000
+        "timeout": 5000,
+        "stopOnEntry": false
     });
     serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
         tracing::error!(error = %e, "Failed to serialize attach.json snippet");
