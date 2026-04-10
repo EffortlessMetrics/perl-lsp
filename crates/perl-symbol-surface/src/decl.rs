@@ -384,3 +384,58 @@ fn sigil_to_symbol_kind(sigil: &str) -> SymbolKind {
         _ => SymbolKind::Variable(VarKind::Scalar),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{constant_names_from_use_args, is_constant_name_candidate, qw_names};
+
+    #[test]
+    fn constant_names_extract_hash_style_pairs() {
+        let args = vec![
+            "{".to_string(),
+            "FOO".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "BAR".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ];
+
+        assert_eq!(constant_names_from_use_args(&args), vec!["FOO".to_string(), "BAR".to_string()]);
+    }
+
+    #[test]
+    fn constant_names_falls_back_to_first_top_level_candidate() {
+        let args = vec!["ANSWER".to_string(), "=>".to_string(), "42".to_string()];
+
+        assert_eq!(constant_names_from_use_args(&args), vec!["ANSWER".to_string()]);
+    }
+
+    #[test]
+    fn constant_names_supports_qw_and_deduplicates_entries() {
+        let args = vec!["qw(ONE TWO ONE)".to_string()];
+
+        assert_eq!(constant_names_from_use_args(&args), vec!["ONE".to_string(), "TWO".to_string()]);
+    }
+
+    #[test]
+    fn qw_names_support_multiple_delimiters() {
+        assert_eq!(qw_names("qw(one two)"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(qw_names("qw[one two]"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(qw_names("qw{one two}"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(qw_names("qw<one two>"), Some(vec!["one".to_string(), "two".to_string()]));
+    }
+
+    #[test]
+    fn constant_name_candidate_rejects_non_names() {
+        assert!(is_constant_name_candidate("VALID_NAME"));
+        assert!(!is_constant_name_candidate(""));
+        assert!(!is_constant_name_candidate("=>"));
+        assert!(!is_constant_name_candidate("$scalar"));
+        assert!(!is_constant_name_candidate("@array"));
+        assert!(!is_constant_name_candidate("%hash"));
+        assert!(!is_constant_name_candidate("-flag"));
+    }
+}
