@@ -367,8 +367,8 @@ fn severity_to_diagnostic_severity() {
     assert_eq!(Severity::Brutal.to_diagnostic_severity(), DiagnosticSeverity::ERROR);
     assert_eq!(Severity::Cruel.to_diagnostic_severity(), DiagnosticSeverity::ERROR);
     assert_eq!(Severity::Harsh.to_diagnostic_severity(), DiagnosticSeverity::WARNING);
-    assert_eq!(Severity::Stern.to_diagnostic_severity(), DiagnosticSeverity::INFORMATION);
-    assert_eq!(Severity::Gentle.to_diagnostic_severity(), DiagnosticSeverity::INFORMATION);
+    assert_eq!(Severity::Stern.to_diagnostic_severity(), DiagnosticSeverity::HINT);
+    assert_eq!(Severity::Gentle.to_diagnostic_severity(), DiagnosticSeverity::HINT);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2057,7 +2057,7 @@ fn critic_analyzer_to_diagnostics_multiple_severities() {
     assert_eq!(diagnostics.len(), 3);
     assert_eq!(diagnostics[0].severity, Some(lsp_types::DiagnosticSeverity::ERROR));
     assert_eq!(diagnostics[1].severity, Some(lsp_types::DiagnosticSeverity::WARNING));
-    assert_eq!(diagnostics[2].severity, Some(lsp_types::DiagnosticSeverity::INFORMATION));
+    assert_eq!(diagnostics[2].severity, Some(lsp_types::DiagnosticSeverity::HINT));
 }
 
 #[cfg(feature = "lsp-compat")]
