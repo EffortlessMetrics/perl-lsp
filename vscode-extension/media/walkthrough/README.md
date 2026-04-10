@@ -1,6 +1,6 @@
 # Walkthrough Assets
 
-This directory is the current home for the launch-demo visuals called out in issue #2336.
+This directory is the current home for the launch-demo visuals called out in issue #3302.
 
 Status:
 - The SVG files in this folder are storyboard previews, not recorded GIFs.
@@ -14,6 +14,9 @@ Status:
 | `install-health.gif` | [`install-health.svg`](install-health.svg) | Fresh install, extension auto-download, and `perllsp --health` |
 | `find-references.gif` | [`find-references.svg`](find-references.svg) | Go to definition and find references over `demo_workspace/main.pl` and `demo_workspace/lib/Utils.pm` |
 | `extract-variable.gif` | [`extract-variable.svg`](extract-variable.svg) | Code action refactor flow in `demo_workspace/main.pl` |
+
+For the canonical capture checklist and asset names, see
+[`../../../docs/assets/demo-asset-plan.toml`](../../../docs/assets/demo-asset-plan.toml).
 
 ## Manual Capture Notes
 
