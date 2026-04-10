@@ -1348,6 +1348,38 @@ push @$arrayref, 'second';
     Ok(())
 }
 
+/// Regression test for issue #3445: scalar-declared array references used through
+/// both explicit `@$ref` and arrow access must count as uses of the same lexical.
+#[test]
+fn issue_3445_arrayref_deref_and_arrow_access_not_unused() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict;
+use warnings;
+
+my $arrayref = [];
+push @$arrayref, 'item';
+print $arrayref->[0];
+"#;
+
+    let issues = scope_issues_strict(code);
+    let relevant_issues: Vec<_> =
+        issues.iter().filter(|issue| issue.variable_name.contains("arrayref")).collect();
+
+    assert!(
+        relevant_issues.iter().all(|issue| issue.kind != IssueKind::UnusedVariable),
+        "issue #3445: $arrayref used via push @$arrayref / ->[] should not be unused; issues: {:?}",
+        relevant_issues.iter().map(|issue| (&issue.kind, &issue.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        relevant_issues.iter().all(|issue| issue.kind != IssueKind::UndeclaredVariable),
+        "issue #3445: declared $arrayref should not be undeclared; issues: {:?}",
+        relevant_issues.iter().map(|issue| (&issue.kind, &issue.variable_name)).collect::<Vec<_>>()
+    );
+
+    Ok(())
+}
+
 /// Regression test for issue #3338: all three primary dereference sigil forms
 /// (`@$ref`, `%$ref`, `$$ref`) should mark the underlying scalar declaration used.
 #[test]
