@@ -41,14 +41,22 @@ fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -
         doc_uri.and_then(|u| url::Url::parse(u).ok()).and_then(|u| u.to_file_path().ok());
 
     if let Some(doc_path) = doc_path {
+        let mut best_match: Option<(PathBuf, usize)> = None;
         for folder in workspace_folders {
             let Some(candidate) = url::Url::parse(folder).ok().and_then(|u| u.to_file_path().ok())
             else {
                 continue;
             };
             if doc_path.starts_with(&candidate) {
-                return Some(candidate);
+                let depth = candidate.components().count();
+                match &best_match {
+                    Some((_, best_depth)) if *best_depth >= depth => {}
+                    _ => best_match = Some((candidate, depth)),
+                }
             }
+        }
+        if let Some((best, _)) = best_match {
+            return Some(best);
         }
     }
 
@@ -427,6 +435,47 @@ mod tests {
         assert!(resolved.starts_with("file://"));
         assert!(resolved.contains("Demo"));
         assert!(resolved.contains("Worker.pm"));
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_root_for_doc_prefers_most_specific_workspace_folder() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path().join("repo");
+        let app = repo.join("app");
+        let script = app.join("script").join("run.pl");
+        fs::create_dir_all(script.parent().ok_or("missing script parent")?)?;
+        fs::write(&script, "use strict;\n")?;
+
+        let repo_uri = url::Url::from_file_path(&repo).map_err(|_| "failed repo URI")?;
+        let app_uri = url::Url::from_file_path(&app).map_err(|_| "failed app URI")?;
+        let doc_uri = url::Url::from_file_path(&script).map_err(|_| "failed doc URI")?;
+        let workspace_folders = vec![repo_uri.to_string(), app_uri.to_string()];
+
+        let matched = workspace_root_for_doc(&workspace_folders, Some(doc_uri.as_str()))
+            .ok_or("expected a matching workspace root")?;
+        assert_eq!(matched, app, "nested workspace root should prefer most specific folder");
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_root_for_doc_falls_back_to_first_workspace_folder() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path().join("repo");
+        let app = repo.join("app");
+        fs::create_dir_all(&repo)?;
+        fs::create_dir_all(&app)?;
+
+        let repo_uri = url::Url::from_file_path(&repo).map_err(|_| "failed repo URI")?;
+        let app_uri = url::Url::from_file_path(&app).map_err(|_| "failed app URI")?;
+        let workspace_folders = vec![repo_uri.to_string(), app_uri.to_string()];
+
+        let matched = workspace_root_for_doc(&workspace_folders, None)
+            .ok_or("expected fallback workspace root")?;
+        assert_eq!(
+            matched, repo,
+            "fallback should keep first workspace folder when no document URI is provided"
+        );
         Ok(())
     }
 
