@@ -106,7 +106,7 @@ pub fn version_implies_warnings(version: PerlVersion) -> bool {
 ///
 /// Mirrors the Perl `feature` pragma bundle semantics: each `use vX.Y`
 /// declaration implicitly enables the same features as `use feature ':X.Y'`.
-/// Features that were removed from a bundle (e.g. `switch` removed in v5.38)
+/// Features that were removed from a bundle (e.g. `switch` removed in v5.36)
 /// are **not** included for that version and above.
 ///
 /// Reference: <https://perldoc.perl.org/feature#FEATURE-BUNDLES>
@@ -140,20 +140,15 @@ pub fn features_enabled_by_version(version: PerlVersion) -> Vec<&'static str> {
         features.push("try");
     }
 
-    // v5.36 bundle adds: signatures (stable), defer, isa
+    // v5.36 bundle adds: signatures (stable), isa, and removes switch.
     if version >= PerlVersion::new(5, 36) {
-        features.extend_from_slice(&["signatures", "defer", "isa"]);
-    }
-
-    // v5.38 bundle adds: class, field, method; removes: switch (given/when deprecated)
-    if version >= PerlVersion::new(5, 38) {
-        features.extend_from_slice(&["class", "field", "method"]);
+        features.extend_from_slice(&["signatures", "isa"]);
         features.retain(|&f| f != "switch");
     }
 
-    // v5.40 bundle adds: builtin
-    if version >= PerlVersion::new(5, 40) {
-        features.push("builtin");
+    // v5.38 bundle adds: class, field, method.
+    if version >= PerlVersion::new(5, 38) {
+        features.extend_from_slice(&["class", "field", "method"]);
     }
 
     features

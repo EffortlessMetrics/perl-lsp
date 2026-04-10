@@ -728,27 +728,27 @@ fn v5_26_enables_unicode_eval_and_postfix_deref() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-fn v5_36_enables_signatures_defer_isa() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_36_enables_signatures_and_isa_but_not_defer_or_switch()
+-> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 36));
     assert!(features.contains(&"signatures"), "v5.36 must enable 'signatures'");
-    assert!(features.contains(&"defer"), "v5.36 must enable 'defer'");
     assert!(features.contains(&"isa"), "v5.36 must enable 'isa'");
+    assert!(!features.contains(&"defer"), "v5.36 must not bundle 'defer'");
+    assert!(!features.contains(&"switch"), "v5.36 must not bundle 'switch'");
     Ok(())
 }
 
 #[test]
-fn v5_40_enables_builtin() -> Result<(), Box<dyn std::error::Error>> {
+fn v5_40_does_not_bundle_builtin() -> Result<(), Box<dyn std::error::Error>> {
     let features = features_enabled_by_version(PerlVersion::new(5, 40));
-    assert!(features.contains(&"builtin"), "v5.40 must enable 'builtin'");
-    // Should also retain all v5.36 features
     assert!(features.contains(&"signatures"), "v5.40 should retain 'signatures'");
     assert!(features.contains(&"isa"), "v5.40 should retain 'isa'");
+    assert!(!features.contains(&"builtin"), "v5.40 must not implicitly bundle 'builtin'");
     Ok(())
 }
 
 #[test]
-fn v5_12_does_not_have_switch() -> Result<(), Box<dyn std::error::Error>> {
-    // switch was removed/deprecated in v5.38
+fn v5_12_still_has_switch() -> Result<(), Box<dyn std::error::Error>> {
     let features_v12 = features_enabled_by_version(PerlVersion::new(5, 12));
     assert!(
         features_v12.contains(&"switch"),
@@ -758,10 +758,9 @@ fn v5_12_does_not_have_switch() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn v5_38_removes_switch() -> Result<(), Box<dyn std::error::Error>> {
-    // switch (given/when) was removed from the bundle in v5.38
-    let features = features_enabled_by_version(PerlVersion::new(5, 38));
-    assert!(!features.contains(&"switch"), "v5.38 should not include 'switch' (removed)");
+fn v5_36_removes_switch() -> Result<(), Box<dyn std::error::Error>> {
+    let features = features_enabled_by_version(PerlVersion::new(5, 36));
+    assert!(!features.contains(&"switch"), "v5.36 should not include 'switch' in the bundle");
     Ok(())
 }
 
@@ -782,13 +781,15 @@ fn use_v5_10_state_has_say_state_switch() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
-fn use_v5_36_state_has_signatures_defer_isa() -> Result<(), Box<dyn std::error::Error>> {
+fn use_v5_36_state_has_signatures_and_isa_but_not_defer_or_switch()
+-> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("v5.36", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
     assert!(state.has_feature("signatures"), "v5.36 state must have 'signatures'");
-    assert!(state.has_feature("defer"), "v5.36 state must have 'defer'");
     assert!(state.has_feature("isa"), "v5.36 state must have 'isa'");
+    assert!(!state.has_feature("defer"), "v5.36 state must not have 'defer'");
+    assert!(!state.has_feature("switch"), "v5.36 state must not have 'switch'");
     // v5.36 also implies strict and warnings
     assert!(state.strict_vars, "v5.36 implies strict");
     assert!(state.warnings, "v5.36 implies warnings");
@@ -796,11 +797,11 @@ fn use_v5_36_state_has_signatures_defer_isa() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn use_v5_40_state_has_builtin() -> Result<(), Box<dyn std::error::Error>> {
+fn use_v5_40_state_does_not_bundle_builtin() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("v5.40", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
-    assert!(state.has_feature("builtin"), "v5.40 state must have 'builtin'");
+    assert!(!state.has_feature("builtin"), "v5.40 state must not have 'builtin' implicitly");
     Ok(())
 }
 

@@ -43,7 +43,7 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("defer", 5, 36),
     ("class", 5, 38),
     ("field", 5, 38),
-    ("builtin", 5, 40),
+    ("builtin", 5, 36),
 ];
 
 const GIVEN_WHEN_DEPRECATION_VERSION: PerlVersion = PerlVersion::new(5, 38);
@@ -179,14 +179,14 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             }
 
             NodeKind::FunctionCall { name, .. } if name.starts_with("builtin::") => {
-                if !effective_features.contains(&"builtin") && !use_builtin_declared {
+                if declared_version < PerlVersion::new(5, 36) && !use_builtin_declared {
                     let min = feature_min_version("builtin");
                     diagnostics.push(make_diagnostic(n, "builtin::", declared_version, min));
                 }
             }
 
             NodeKind::Use { module, .. } if module == "builtin" => {
-                if !effective_features.contains(&"builtin") {
+                if declared_version < PerlVersion::new(5, 36) {
                     let min = feature_min_version("builtin");
                     diagnostics.push(make_diagnostic(n, "use builtin", declared_version, min));
                 }
