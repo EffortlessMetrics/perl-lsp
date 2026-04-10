@@ -226,23 +226,17 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
 
         // ── use constant NAME => value ─────────────────────────────────────
         NodeKind::Use { module, args, .. } if module == "constant" => {
-            // `args` layout: [NAME, value, ...] or [NAME1, val1, NAME2, val2, ...]
-            // The first arg is the constant name (or a hash-ref style with
-            // multiple names — for MVP we take just the first string arg).
-            if let Some(const_name) = args.first() {
-                // Skip if it looks like a reference marker or is empty.
-                if !const_name.is_empty() && !const_name.starts_with('{') {
-                    let container = ctx.current_package.clone();
-                    out.push(SymbolDecl {
-                        kind: SymbolKind::Constant,
-                        name: const_name.clone(),
-                        qualified_name: ctx.qualify(const_name),
-                        full_span: (node.location.start, node.location.end),
-                        anchor_span: None, // No precise span available from Use node
-                        container,
-                        declarator: None,
-                    });
-                }
+            for const_name in constant_names_from_use_args(args) {
+                let container = ctx.current_package.clone();
+                out.push(SymbolDecl {
+                    kind: SymbolKind::Constant,
+                    name: const_name.clone(),
+                    qualified_name: ctx.qualify(&const_name),
+                    full_span: (node.location.start, node.location.end),
+                    anchor_span: None, // No precise span available from Use node
+                    container,
+                    declarator: None,
+                });
             }
         }
 
@@ -257,6 +251,84 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
 
         // All other nodes: no declaration to project.
         _ => {}
+    }
+}
+
+fn constant_names_from_use_args(args: &[String]) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut brace_depth = 0usize;
+    let mut fallback_name: Option<String> = None;
+
+    for (idx, arg) in args.iter().enumerate() {
+        match arg.as_str() {
+            "{" => {
+                brace_depth += 1;
+                continue;
+            }
+            "}" => {
+                brace_depth = brace_depth.saturating_sub(1);
+                continue;
+            }
+            "+" | "," => continue,
+            _ => {}
+        }
+
+        if let Some(qw_names) = qw_names(arg) {
+            for name in qw_names {
+                push_unique(&mut names, name);
+            }
+            continue;
+        }
+
+        if is_constant_name_candidate(arg) {
+            if brace_depth == 1 && args.get(idx + 1).is_some_and(|next| next == "=>") {
+                push_unique(&mut names, arg.clone());
+                continue;
+            }
+
+            if brace_depth == 0 && fallback_name.is_none() {
+                fallback_name = Some(arg.clone());
+            }
+        }
+    }
+
+    if names.is_empty() {
+        if let Some(name) = fallback_name {
+            names.push(name);
+        }
+    }
+
+    names
+}
+
+fn qw_names(arg: &str) -> Option<Vec<String>> {
+    let content = arg.strip_prefix("qw").and_then(|rest| {
+        rest.strip_prefix('(')
+            .and_then(|s| s.strip_suffix(')'))
+            .or_else(|| rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')))
+            .or_else(|| rest.strip_prefix('{').and_then(|s| s.strip_suffix('}')))
+            .or_else(|| rest.strip_prefix('<').and_then(|s| s.strip_suffix('>')))
+    });
+
+    content.map(|text| {
+        text.split_whitespace().filter(|name| !name.is_empty()).map(str::to_owned).collect()
+    })
+}
+
+fn is_constant_name_candidate(arg: &str) -> bool {
+    !arg.is_empty()
+        && arg != "=>"
+        && !arg.starts_with('{')
+        && !arg.starts_with('}')
+        && !arg.starts_with('-')
+        && !arg.starts_with('$')
+        && !arg.starts_with('@')
+        && !arg.starts_with('%')
+}
+
+fn push_unique(names: &mut Vec<String>, name: String) {
+    if !names.iter().any(|existing| existing == &name) {
+        names.push(name);
     }
 }
 
