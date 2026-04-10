@@ -13,6 +13,7 @@
 
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
+use perl_pragma::PragmaTracker;
 
 use super::super::walker::walk_node;
 use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
@@ -46,8 +47,11 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         return;
     }
 
-    let mut has_strict = false;
-    let mut has_warnings = false;
+    let pragma_map = PragmaTracker::build(node);
+    let mut has_strict = pragma_map
+        .iter()
+        .any(|(_, state)| state.strict_vars || state.strict_subs || state.strict_refs);
+    let mut has_warnings = pragma_map.iter().any(|(_, state)| state.warnings);
 
     // OO frameworks that implicitly provide strict+warnings
     const IMPLICIT_STRICT_MODULES: &[&str] = &[
@@ -69,6 +73,10 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 has_strict = true;
             } else if module == "warnings" {
                 has_warnings = true;
+            } else if module.starts_with('v')
+                || module.chars().next().is_some_and(|c| c.is_ascii_digit())
+            {
+                // Version pragmas are already reflected in the shared pragma map.
             } else if IMPLICIT_STRICT_MODULES.contains(&module.as_str()) {
                 has_strict = true;
                 has_warnings = true;
@@ -212,6 +220,35 @@ mod tests {
         assert!(
             !has_strict_warn,
             "file with both pragmas should get no strict/warnings diagnostic"
+        );
+    }
+
+    #[test]
+    fn version_pragma_suppresses_strict_warnings_diagnostic() {
+        let diags = strict_warnings_diags("use v5.40;\nmy $x = 1;\n");
+        let has_strict_warn =
+            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(!has_strict_warn, "use v5.40 should suppress strict/warnings diagnostics");
+    }
+
+    #[test]
+    fn numeric_version_pragma_suppresses_strict_warnings_diagnostic() {
+        let diags = strict_warnings_diags("use 5.040;\nmy $x = 1;\n");
+        let has_strict_warn =
+            diags.iter().any(|d| matches!(d.code.as_deref(), Some("PL100") | Some("PL101")));
+        assert!(!has_strict_warn, "use 5.040 should suppress strict/warnings diagnostics");
+    }
+
+    #[test]
+    fn v5_12_suppresses_strict_but_not_missing_warnings() {
+        let diags = strict_warnings_diags("use v5.12;\nmy $x = 1;\n");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL100")),
+            "use v5.12 should imply strict"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "use v5.12 should not imply warnings"
         );
     }
 

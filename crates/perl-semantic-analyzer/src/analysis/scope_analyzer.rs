@@ -438,7 +438,8 @@ impl ScopeAnalyzer {
     ) {
         // Get effective pragma state at this node's location
         let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
-        let strict_mode = pragma_state.strict_subs;
+        let strict_vars_mode = pragma_state.strict_vars;
+        let strict_subs_mode = pragma_state.strict_subs;
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 let extracted = self.extract_variable_name(variable);
@@ -588,41 +589,17 @@ impl ScopeAnalyzer {
                     return;
                 }
 
-                // Try to use the variable - allocation free!
-                let (mut variable_used, mut is_initialized) = scope.use_variable_parts(sigil, name);
-
-                // If not found as simple variable, check if this is part of a hash/array access pattern
-                if !variable_used && (sigil == "$" || sigil == "@") {
-                    // Check parent for hash/array access context
-                    if let Some(parent) = ancestors.last() {
-                        if let NodeKind::Binary { op, left, .. } = &parent.kind {
-                            // Only check if this node is the LEFT side of the access
-                            if std::ptr::eq(left.as_ref(), node) {
-                                if op == "{}" || op == "->{}" {
-                                    // Check if the corresponding hash exists
-                                    let (hash_used, hash_init) =
-                                        scope.use_variable_parts("%", name);
-                                    if hash_used {
-                                        variable_used = true;
-                                        is_initialized = hash_init;
-                                    }
-                                } else if op == "[]" || op == "->[]" {
-                                    // Check if the corresponding array exists
-                                    let (array_used, array_init) =
-                                        scope.use_variable_parts("@", name);
-                                    if array_used {
-                                        variable_used = true;
-                                        is_initialized = array_init;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Normalize explicit dereference/container syntax before lookup so that
+                // `@$ref` resolves to `$ref`, while direct subscripting keeps using the
+                // container sigil that the syntax implies.
+                let (lookup_sigil, lookup_name) =
+                    self.resolve_variable_use_target(node, ancestors).unwrap_or((sigil, name));
+                let (variable_used, is_initialized) =
+                    scope.use_variable_parts(lookup_sigil, lookup_name);
 
                 // Variable not found - check if we should report it
                 if !variable_used {
-                    if strict_mode {
+                    if strict_vars_mode {
                         let full_name = format!("{}{}", sigil, name);
                         issues.push(ScopeIssue {
                             kind: IssueKind::UndeclaredVariable,
@@ -720,7 +697,7 @@ impl ScopeAnalyzer {
             NodeKind::Identifier { name } => {
                 // Check for barewords under strict mode, excluding hash keys
                 // Hybrid check: Fast path for immediate hash keys (depth 1), then known functions, then deep check
-                if strict_mode
+                if strict_subs_mode
                     && !self.is_in_hash_key_context(node, ancestors, 1)
                     && !is_known_function(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
@@ -912,11 +889,17 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&sub_scope, issues, context);
             }
 
-            NodeKind::FunctionCall { args, .. } => {
-                // Handle function arguments, which may contain complex variable patterns
+            NodeKind::FunctionCall { name, args } => {
+                // Handle function arguments, which may contain complex variable patterns.
+                // Some builtins consume declaration-capable filehandle arguments directly,
+                // e.g. `open my $fh, ...` or `pipe my $r, my $w;`. Those declarations should
+                // count as used and initialized by the builtin itself.
                 ancestors.push(node);
                 for arg in args {
                     self.analyze_node(arg, scope, ancestors, issues, context);
+                    if is_declaration_capable_builtin(name) {
+                        self.mark_builtin_declaration_arg_consumed(arg, scope);
+                    }
                 }
                 ancestors.pop();
             }
@@ -930,6 +913,41 @@ impl ScopeAnalyzer {
                 ancestors.pop();
             }
         }
+    }
+
+    /// Resolve the variable symbol that a syntax form should count as a use.
+    ///
+    /// This keeps explicit dereference syntax precise:
+    /// - `@$ref` and `%$ref` count as uses of `$ref`
+    /// - `$arr[0]` counts as a use of `@arr`
+    /// - `$hash{k}` counts as a use of `%hash`
+    /// - Arrow dereference forms stay on the scalar reference itself
+    fn resolve_variable_use_target<'a>(
+        &self,
+        node: &'a Node,
+        ancestors: &[&'a Node],
+    ) -> Option<(&'a str, &'a str)> {
+        let NodeKind::Variable { sigil, name } = &node.kind else {
+            return None;
+        };
+
+        if (sigil == "@" || sigil == "%") && name.starts_with('$') && name.len() > 1 {
+            return Some(("$", &name[1..]));
+        }
+
+        if sigil == "$"
+            && let Some(parent) = ancestors.last()
+            && let NodeKind::Binary { op, left, .. } = &parent.kind
+            && std::ptr::eq(left.as_ref(), node)
+        {
+            match op.as_str() {
+                "[]" => return Some(("@", name)),
+                "{}" => return Some(("%", name)),
+                _ => {}
+            }
+        }
+
+        Some((sigil, name))
     }
 
     /// Marks variables as initialized when they appear on the left-hand side of an assignment.
@@ -948,6 +966,27 @@ impl ScopeAnalyzer {
                     self.mark_initialized(child, scope);
                 }
             }
+        }
+    }
+
+    fn mark_builtin_declaration_arg_consumed(&self, node: &Node, scope: &Rc<Scope>) {
+        match &node.kind {
+            NodeKind::VariableDeclaration { variable, .. } => {
+                let extracted = self.extract_variable_name(variable);
+                let (sigil, name) = extracted.parts();
+                if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
+                    let _ = scope.initialize_and_use_variable_parts(sigil, name);
+                }
+            }
+            NodeKind::VariableListDeclaration { variables, .. } => {
+                for variable in variables {
+                    self.mark_builtin_declaration_arg_consumed(variable, scope);
+                }
+            }
+            NodeKind::VariableWithAttributes { variable, .. } => {
+                self.mark_builtin_declaration_arg_consumed(variable, scope);
+            }
+            _ => {}
         }
     }
 
@@ -1308,6 +1347,15 @@ fn is_known_function(name: &str) -> bool {
         | "state" | "scalar" | "wantarray" | "warn" => true,
         _ => false,
     }
+}
+
+/// Builtins whose declaration-capable filehandle arguments are consumed by the builtin itself.
+///
+/// Keep this list explicit and conservative. Only include builtins where the parser already
+/// emits declaration nodes for the handle argument, and where treating that declaration as
+/// used avoids false diagnostics after the call.
+fn is_declaration_capable_builtin(name: &str) -> bool {
+    matches!(name, "open" | "opendir" | "sysopen" | "pipe" | "socket" | "accept")
 }
 
 /// Check if an identifier is a known filehandle

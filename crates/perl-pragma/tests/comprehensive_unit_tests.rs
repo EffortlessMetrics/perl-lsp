@@ -234,6 +234,43 @@ fn use_warnings_enables_warnings() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn use_v5_12_enables_effective_strict_only() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.12", &[], 0, 12)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    assert!(!state.warnings, "v5.12 should not imply warnings");
+    Ok(())
+}
+
+#[test]
+fn use_v5_40_enables_effective_strict_and_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40", &[], 0, 12)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    assert!(state.warnings);
+    Ok(())
+}
+
+#[test]
+fn use_numeric_version_enables_effective_strict_and_warnings()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("5.040", &[], 0, 12)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    assert!(state.warnings);
+    Ok(())
+}
+
+#[test]
 fn no_warnings_disables_warnings() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("warnings", &[], 0, 15), no_node("warnings", &[], 16, 30)]);
     let map = PragmaTracker::build(&ast);
