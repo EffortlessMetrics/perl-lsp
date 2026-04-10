@@ -10,7 +10,7 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{route_index_access, IndexAccessMode};
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 use perl_module_path::file_path_to_module_name;
 use perl_module_rename::plan_module_rename_edits;
@@ -832,11 +832,11 @@ impl LspServer {
                     // qualified function calls). These are known gaps tracked in
                     // docs/reference/KNOWN_LIMITATIONS.md.
                     if !old_module.is_empty() {
-                        let updated_uris: std::collections::HashSet<&str> = workspace_edit
-                            ["changes"]
-                            .as_object()
-                            .map(|m| m.keys().map(|k| k.as_str()).collect())
-                            .unwrap_or_default();
+                        let updated_uris: std::collections::HashSet<&str> =
+                            workspace_edit["changes"]
+                                .as_object()
+                                .map(|m| m.keys().map(|k| k.as_str()).collect())
+                                .unwrap_or_default();
                         // Build a word-boundary pattern so "Base" does not match "Database".
                         // Perl module names consist of \w and ::, so we check that any match
                         // of old_module in the document text is not immediately preceded or

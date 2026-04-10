@@ -93,6 +93,26 @@ fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -
         .and_then(|u| u.to_file_path().ok())
 }
 
+fn workspace_config_for_doc(
+    server: &LspServer,
+    doc_uri: Option<&str>,
+) -> perl_lsp_config::WorkspaceConfig {
+    if let Some(uri) = doc_uri
+        && let Some(config) = server.config_for_doc(uri)
+    {
+        return config;
+    }
+    server.workspace_config.lock().clone()
+}
+
+fn resolution_root(server: &LspServer, doc_uri: Option<&str>) -> Option<PathBuf> {
+    let workspace_folders = server.workspace_folders.lock().clone();
+    let workspace_folder_uris: Vec<String> =
+        workspace_folders.iter().map(|f| f.uri.clone()).collect();
+    workspace_root_for_doc(&workspace_folder_uris, doc_uri)
+        .or_else(|| server.root_path.lock().clone())
+}
+
 fn build_effective_inc_roots(
     include_paths: &[String],
     lexical_paths: &[String],
@@ -160,7 +180,7 @@ impl LspServer {
         module: &str,
         doc_text: Option<&str>,
     ) -> Option<PathBuf> {
-        let root = match self.root_path.lock().clone() {
+        let root = match resolution_root(self, None) {
             Some(r) => r,
             None => {
                 WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
@@ -174,13 +194,11 @@ impl LspServer {
             }
         };
 
-        let mut include_paths = {
-            let config = self.workspace_config.lock();
-            let perl5lib_paths = std::env::var("PERL5LIB")
-                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
-                .unwrap_or_default();
-            config.effective_include_paths(&perl5lib_paths)
-        };
+        let config = workspace_config_for_doc(self, None);
+        let perl5lib_paths = std::env::var("PERL5LIB")
+            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+            .unwrap_or_default();
+        let mut include_paths = config.effective_include_paths(&perl5lib_paths);
 
         if let Some(text) = doc_text {
             prepend_use_lib_paths(&mut include_paths, text, &root, None);
@@ -199,7 +217,7 @@ impl LspServer {
         doc_text: Option<&str>,
         doc_uri: Option<&str>,
     ) -> Option<PathBuf> {
-        let root = match self.root_path.lock().clone() {
+        let root = match resolution_root(self, doc_uri) {
             Some(r) => r,
             None => {
                 WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
@@ -213,13 +231,11 @@ impl LspServer {
             }
         };
 
-        let mut include_paths = {
-            let config = self.workspace_config.lock();
-            let perl5lib_paths = std::env::var("PERL5LIB")
-                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
-                .unwrap_or_default();
-            config.effective_include_paths(&perl5lib_paths)
-        };
+        let config = workspace_config_for_doc(self, doc_uri);
+        let perl5lib_paths = std::env::var("PERL5LIB")
+            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+            .unwrap_or_default();
+        let mut include_paths = config.effective_include_paths(&perl5lib_paths);
 
         if let Some(text) = doc_text {
             let file_dir = doc_uri
@@ -310,42 +326,43 @@ impl LspServer {
         doc_text: Option<&str>,
         doc_uri: Option<&str>,
     ) -> Option<String> {
-        let (include_paths, timeout_ms, use_system_inc) = {
-            let config = self.workspace_config.lock();
-            let perl5lib_paths = std::env::var("PERL5LIB")
-                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
-                .unwrap_or_default();
-            (
-                config.effective_include_paths(&perl5lib_paths),
-                config.resolution_timeout_ms,
-                config.use_system_inc,
-            )
-        };
+        let mut config = workspace_config_for_doc(self, doc_uri);
+        let perl5lib_paths = std::env::var("PERL5LIB")
+            .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+            .unwrap_or_default();
+        let include_paths = config.effective_include_paths(&perl5lib_paths);
+        let timeout_ms = config.resolution_timeout_ms;
+        let use_system_inc = config.use_system_inc;
         let timeout = Duration::from_millis(timeout_ms);
 
         let workspace_folders = self.workspace_folders.lock().clone();
-        let workspace_folder_uris: Vec<String> = workspace_folders.iter().map(|f| f.uri.clone()).collect();
+        let workspace_folder_uris: Vec<String> =
+            workspace_folders.iter().map(|f| f.uri.clone()).collect();
+        let root = match resolution_root(self, doc_uri) {
+            Some(r) => r,
+            None => {
+                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
+                    tracing::warn!(
+                        "perl-lsp: workspace root not detected — module resolution disabled. \
+                         To enable: open the project folder in your editor (File > Open Folder) \
+                         rather than individual files. This warning appears once per server session."
+                    );
+                });
+                return None;
+            }
+        };
 
         // Wire use lib paths scoped to this call
         let mut lexical_paths = Vec::new();
         if let Some(text) = doc_text {
-            let root_opt = workspace_root_for_doc(&workspace_folder_uris, doc_uri);
-            if root_opt.is_none() && !workspace_folders.is_empty() {
-                tracing::trace!(
-                    "Module URI resolution failed for workspace folders: {:?}",
-                    workspace_folders
-                );
+            let file_dir = doc_uri
+                .and_then(|u| url::Url::parse(u).ok())
+                .and_then(|u| u.to_file_path().ok())
+                .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+            if file_dir.is_none() && doc_uri.is_some() {
+                tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
             }
-            if let Some(root) = root_opt {
-                let file_dir = doc_uri
-                    .and_then(|u| url::Url::parse(u).ok())
-                    .and_then(|u| u.to_file_path().ok())
-                    .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-                if file_dir.is_none() && doc_uri.is_some() {
-                    tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
-                }
-                lexical_paths = resolve_use_lib_paths_from_source(text, &root, file_dir.as_deref());
-            }
+            lexical_paths = resolve_use_lib_paths_from_source(text, &root, file_dir.as_deref());
         }
 
         let open_document_uris: Vec<String> = {
@@ -354,7 +371,6 @@ impl LspServer {
         };
 
         let system_paths = if use_system_inc {
-            let mut config = self.workspace_config.lock();
             // `WorkspaceConfig` now resolves the active interpreter with
             // perlbrew/plenv-aware fallback before probing startup `@INC`.
             config.get_system_inc().to_vec()
@@ -480,7 +496,7 @@ mod tests {
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
         *server.workspace_folders.lock() = vec![
             crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
-                .with_path(workspace.clone())
+                .with_path(workspace.clone()),
         ];
         {
             let mut config = server.workspace_config.lock();
@@ -510,7 +526,7 @@ mod tests {
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
         *server.workspace_folders.lock() = vec![
             crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
-                .with_path(workspace.clone())
+                .with_path(workspace.clone()),
         ];
         {
             let mut config = server.workspace_config.lock();
@@ -585,7 +601,7 @@ mod tests {
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
         *server.workspace_folders.lock() = vec![
             crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
-                .with_path(workspace.clone())
+                .with_path(workspace.clone()),
         ];
         {
             let mut config = server.workspace_config.lock();
@@ -617,7 +633,7 @@ mod tests {
             url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
         *server.workspace_folders.lock() = vec![
             crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.to_string())
-                .with_path(workspace.clone())
+                .with_path(workspace.clone()),
         ];
         {
             let mut config = server.workspace_config.lock();
@@ -815,6 +831,85 @@ mod tests {
             !doc_b_str.contains("custom"),
             "doc B (no use lib) must not include 'custom' path — global state pollution detected: {doc_b_str}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_with_uri_uses_folder_specific_config() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let folder_a = temp.path().join("folder-a");
+        let folder_b = temp.path().join("folder-b");
+        let script_a = folder_a.join("script.pl");
+        let script_b = folder_b.join("script.pl");
+        let module_a = folder_a.join("lib").join("ModuleA.pm");
+        let module_b = folder_b.join("vendor").join("lib").join("ModuleB.pm");
+
+        fs::create_dir_all(module_a.parent().ok_or("no parent for module_a")?)?;
+        fs::create_dir_all(module_b.parent().ok_or("no parent for module_b")?)?;
+        fs::write(&module_a, "package ModuleA; 1;")?;
+        fs::write(&module_b, "package ModuleB; 1;")?;
+        fs::write(&script_a, "use ModuleA;\n")?;
+        fs::write(&script_b, "use ModuleB;\n")?;
+        let script_a_uri = Url::from_file_path(&script_a)
+            .map_err(|_| "failed to create script_a uri")?
+            .to_string();
+        let script_b_uri = Url::from_file_path(&script_b)
+            .map_err(|_| "failed to create script_b uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        {
+            let mut folders = server.workspace_folders.lock();
+            let mut config_a = perl_lsp_config::WorkspaceConfig::default();
+            config_a.include_paths = vec!["lib".to_string()];
+            let mut config_b = perl_lsp_config::WorkspaceConfig::default();
+            config_b.include_paths = vec!["vendor/lib".to_string()];
+
+            folders.push(
+                crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                    Url::from_directory_path(&folder_a)
+                        .map_err(|_| "failed to create folder_a uri")?
+                        .to_string(),
+                )
+                .with_path(folder_a.clone())
+                .with_effective_workspace_config(config_a),
+            );
+            folders.push(
+                crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                    Url::from_directory_path(&folder_b)
+                        .map_err(|_| "failed to create folder_b uri")?
+                        .to_string(),
+                )
+                .with_path(folder_b.clone())
+                .with_effective_workspace_config(config_b),
+            );
+        }
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["wrong".to_string()];
+            config.use_system_inc = false;
+        }
+
+        let resolved_a = server
+            .resolve_module_path_with_uri("ModuleA", Some("use ModuleA;\n"), Some(&script_a_uri))
+            .ok_or("expected ModuleA to resolve from folder-a config")?;
+        assert!(
+            resolved_a.ends_with("folder-a/lib/ModuleA.pm")
+                || resolved_a.ends_with("folder-a\\lib\\ModuleA.pm"),
+            "unexpected ModuleA resolution: {}",
+            resolved_a.display()
+        );
+
+        let resolved_b = server
+            .resolve_module_path_with_uri("ModuleB", Some("use ModuleB;\n"), Some(&script_b_uri))
+            .ok_or("expected ModuleB to resolve from folder-b config")?;
+        assert!(
+            resolved_b.ends_with("folder-b/vendor/lib/ModuleB.pm")
+                || resolved_b.ends_with("folder-b\\vendor\\lib\\ModuleB.pm"),
+            "unexpected ModuleB resolution: {}",
+            resolved_b.display()
+        );
+
         Ok(())
     }
 

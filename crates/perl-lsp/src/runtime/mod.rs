@@ -121,6 +121,18 @@ pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
     Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
 }
 
+fn workspace_folder_path(folder: &WorkspaceFolderState) -> Option<PathBuf> {
+    folder.path.clone().or_else(|| Url::parse(&folder.uri).ok().and_then(|u| u.to_file_path().ok()))
+}
+
+fn workspace_folder_matches_doc_uri(folder: &WorkspaceFolderState, doc_uri: &str) -> bool {
+    let doc_path = Url::parse(doc_uri).ok().and_then(|u| u.to_file_path().ok());
+    match (doc_path, workspace_folder_path(folder)) {
+        (Some(doc_path), Some(folder_path)) => doc_path.starts_with(folder_path),
+        _ => doc_uri == folder.uri,
+    }
+}
+
 /// Lightweight view of a document for scan-heavy operations
 ///
 /// This struct provides the minimal data needed for workspace-wide scans
@@ -413,7 +425,7 @@ impl LspServer {
         self.workspace_folders
             .lock()
             .iter()
-            .find(|folder| doc_uri.starts_with(&folder.uri))
+            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
             .cloned()
     }
 
@@ -426,7 +438,7 @@ impl LspServer {
         self.workspace_folders
             .lock()
             .iter()
-            .find(|folder| doc_uri.starts_with(&folder.uri))
+            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
             .map(|folder| folder.effective_workspace_config.clone())
     }
 
@@ -439,12 +451,14 @@ impl LspServer {
     pub fn include_paths_for_doc(&self, doc_uri: &str) -> Vec<std::path::PathBuf> {
         let mut paths = Vec::new();
         let folders = self.workspace_folders.lock();
-        
+
         // Add current folder's include paths first
-        if let Some(current_folder) = folders.iter().find(|folder| doc_uri.starts_with(&folder.uri)) {
+        if let Some(current_folder) =
+            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
+        {
             for include_path in &current_folder.effective_workspace_config.include_paths {
                 // Resolve relative paths against the folder path
-                let resolved = if let Some(folder_path) = &current_folder.path {
+                let resolved = if let Some(folder_path) = workspace_folder_path(current_folder) {
                     if std::path::Path::new(include_path).is_absolute() {
                         std::path::PathBuf::from(include_path)
                     } else {
@@ -453,18 +467,18 @@ impl LspServer {
                 } else {
                     std::path::PathBuf::from(include_path)
                 };
-                
+
                 if !paths.contains(&resolved) {
                     paths.push(resolved);
                 }
             }
         }
-        
+
         // Add other folders' include paths
         for folder in folders.iter() {
-            if !doc_uri.starts_with(&folder.uri) {
+            if !workspace_folder_matches_doc_uri(folder, doc_uri) {
                 for include_path in &folder.effective_workspace_config.include_paths {
-                    let resolved = if let Some(folder_path) = &folder.path {
+                    let resolved = if let Some(folder_path) = workspace_folder_path(folder) {
                         if std::path::Path::new(include_path).is_absolute() {
                             std::path::PathBuf::from(include_path)
                         } else {
@@ -473,14 +487,14 @@ impl LspServer {
                     } else {
                         std::path::PathBuf::from(include_path)
                     };
-                    
+
                     if !paths.contains(&resolved) {
                         paths.push(resolved);
                     }
                 }
             }
         }
-        
+
         paths
     }
 
@@ -495,7 +509,9 @@ impl LspServer {
     #[must_use]
     pub fn search_scopes_for_doc(&self, doc_uri: &str) -> Vec<WorkspaceFolderState> {
         let folders = self.workspace_folders.lock();
-        if let Some(current_folder) = folders.iter().find(|folder| doc_uri.starts_with(&folder.uri)) {
+        if let Some(current_folder) =
+            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
+        {
             let mut scopes = vec![current_folder.clone()];
             for folder in folders.iter() {
                 if folder.uri != current_folder.uri {
@@ -516,15 +532,18 @@ impl LspServer {
     ///
     /// If no document URI is provided, uses all folders in registration order.
     #[must_use]
-    pub fn build_resolution_context(&self, doc_uri: Option<&str>) -> crate::runtime::lifecycle::module_resolution::ResolutionContext {
+    pub fn build_resolution_context(
+        &self,
+        doc_uri: Option<&str>,
+    ) -> crate::runtime::lifecycle::module_resolution::ResolutionContext {
         use crate::runtime::lifecycle::module_resolution::{ResolutionContext, ResolutionScope};
-        
+
         let mut search_scopes = Vec::new();
-        
+
         if let Some(uri) = doc_uri {
             // Get ordered search scopes for this document
             let folder_scopes = self.search_scopes_for_doc(uri);
-            
+
             for folder in folder_scopes {
                 let scope = ResolutionScope {
                     folder_uri: folder.uri.clone(),
@@ -545,11 +564,8 @@ impl LspServer {
                 search_scopes.push(scope);
             }
         }
-        
-        ResolutionContext {
-            doc_uri: doc_uri.map(|u| u.to_string()),
-            search_scopes,
-        }
+
+        ResolutionContext { doc_uri: doc_uri.map(|u| u.to_string()), search_scopes }
     }
 
     /// Get all workspace folder URIs (for backward compatibility).
@@ -558,11 +574,7 @@ impl LspServer {
     /// of URI strings rather than the full `WorkspaceFolderState` objects.
     #[must_use]
     pub fn workspace_folder_uris(&self) -> Vec<String> {
-        self.workspace_folders
-            .lock()
-            .iter()
-            .map(|f| f.uri.clone())
-            .collect()
+        self.workspace_folders.lock().iter().map(|f| f.uri.clone()).collect()
     }
 
     /// Get all workspace folders as a cloned vector.

@@ -691,12 +691,9 @@ fn lookup_workspace_definition(
         if symbol.container_name.as_deref() == Some(pkg)
             || symbol.qualified_name.as_ref().map(|q| q.starts_with(pkg)).unwrap_or(false)
         {
-            if let Some(lsp_location) =
-                crate::workspace_index::lsp_adapter::to_lsp_location(&crate::workspace_index::Location {
-                    uri: symbol.uri.clone(),
-                    range: symbol.range,
-                })
-            {
+            if let Some(lsp_location) = crate::workspace_index::lsp_adapter::to_lsp_location(
+                &crate::workspace_index::Location { uri: symbol.uri.clone(), range: symbol.range },
+            ) {
                 return Some(json!([lsp_location]));
             }
         }
@@ -1090,9 +1087,12 @@ impl LspServer {
                                     let name = parts.last().copied().unwrap_or("");
                                     let pkg = parts[..parts.len() - 1].join("::");
 
-                                    if let Some(result) =
-                                        lookup_workspace_definition(self.coordinator(), &pkg, name, Some(uri))
-                                    {
+                                    if let Some(result) = lookup_workspace_definition(
+                                        self.coordinator(),
+                                        &pkg,
+                                        name,
+                                        Some(uri),
+                                    ) {
                                         return Ok(Some(result));
                                     }
                                     // Partial/None: fall through to same-file resolution

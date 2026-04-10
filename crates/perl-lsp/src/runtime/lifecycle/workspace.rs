@@ -121,12 +121,10 @@ include_paths = ["other_lib"]
         .expect("failed to write config2");
 
         // Add workspace folders
-        let uri1 = url::Url::from_directory_path(&folder1)
-            .expect("failed to create uri1")
-            .to_string();
-        let uri2 = url::Url::from_directory_path(&folder2)
-            .expect("failed to create uri2")
-            .to_string();
+        let uri1 =
+            url::Url::from_directory_path(&folder1).expect("failed to create uri1").to_string();
+        let uri2 =
+            url::Url::from_directory_path(&folder2).expect("failed to create uri2").to_string();
 
         server.workspace_folders.lock().push(
             crate::runtime::workspace_folder::WorkspaceFolderState::new(uri1.clone())
@@ -146,17 +144,21 @@ include_paths = ["other_lib"]
 
         let folder1_state = folders.iter().find(|f| f.uri == uri1).unwrap();
         assert!(folder1_state.project_config.is_some());
-        assert!(folder1_state
-            .effective_workspace_config
-            .include_paths
-            .contains(&"custom_lib".to_string()));
+        assert!(
+            folder1_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"custom_lib".to_string())
+        );
 
         let folder2_state = folders.iter().find(|f| f.uri == uri2).unwrap();
         assert!(folder2_state.project_config.is_some());
-        assert!(folder2_state
-            .effective_workspace_config
-            .include_paths
-            .contains(&"other_lib".to_string()));
+        assert!(
+            folder2_state
+                .effective_workspace_config
+                .include_paths
+                .contains(&"other_lib".to_string())
+        );
     }
 
     #[test]
@@ -167,9 +169,7 @@ include_paths = ["other_lib"]
         std::fs::create_dir_all(&folder).expect("failed to create folder");
 
         // Add workspace folder without config
-        let uri = url::Url::from_directory_path(&folder)
-            .expect("failed to create uri")
-            .to_string();
+        let uri = url::Url::from_directory_path(&folder).expect("failed to create uri").to_string();
 
         server.workspace_folders.lock().push(
             crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
