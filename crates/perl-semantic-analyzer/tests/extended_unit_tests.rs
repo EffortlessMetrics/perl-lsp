@@ -219,6 +219,59 @@ fn symbol_at_cursor_on_use_statement() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
+fn symbol_at_cursor_resolves_posix_tag_imported_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use POSIX qw(:sys_wait_h);
+my $status = 0;
+WIFEXITED($status);
+"#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let offset = must_some(code.find("WIFEXITED"));
+
+    let sym = must_some(symbol_at_cursor(&ast, offset, "main"));
+    assert_eq!(sym.pkg.as_ref(), "POSIX");
+    assert_eq!(sym.name.as_ref(), "WIFEXITED");
+    Ok(())
+}
+
+#[test]
+fn symbol_at_cursor_resolves_quoted_posix_tag_imported_symbol()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use POSIX ':sys_wait_h';
+my $status = 0;
+WIFEXITED($status);
+"#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let offset = must_some(code.find("WIFEXITED"));
+
+    let sym = must_some(symbol_at_cursor(&ast, offset, "main"));
+    assert_eq!(sym.pkg.as_ref(), "POSIX");
+    assert_eq!(sym.name.as_ref(), "WIFEXITED");
+    Ok(())
+}
+
+#[test]
+fn symbol_at_cursor_resolves_qw_angle_tag_imported_symbol() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use POSIX qw<:sys_wait_h>;
+my $status = 0;
+WIFEXITED($status);
+"#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let offset = must_some(code.find("WIFEXITED"));
+
+    let sym = must_some(symbol_at_cursor(&ast, offset, "main"));
+    assert_eq!(sym.pkg.as_ref(), "POSIX");
+    assert_eq!(sym.name.as_ref(), "WIFEXITED");
+    Ok(())
+}
+
+#[test]
 fn symbol_at_cursor_returns_none_in_whitespace() -> Result<(), Box<dyn std::error::Error>> {
     let code = "    ";
     let mut parser = Parser::new(code);

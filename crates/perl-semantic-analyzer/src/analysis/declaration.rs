@@ -1245,20 +1245,102 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
     }
 
+    fn normalize_import_token(token: &str) -> &str {
+        token.trim().trim_matches('\'').trim_matches('"').trim()
+    }
+
+    fn export_tag_members(module: &str, tag: &str) -> &'static [&'static str] {
+        match (module, normalize_import_token(tag)) {
+            // POSIX tag sets commonly used in system scripts.
+            ("POSIX", ":sys_wait_h") => {
+                &["WEXITSTATUS", "WIFEXITED", "WIFSIGNALED", "WIFSTOPPED", "WTERMSIG"]
+            }
+            ("POSIX", ":fcntl_h") => &["F_GETFD", "F_SETFD", "F_GETFL", "F_SETFL", "FD_CLOEXEC"],
+            ("POSIX", ":termios_h") => {
+                &["B9600", "B19200", "B38400", "TCSANOW", "TCSADRAIN", "TCSAFLUSH"]
+            }
+            // File::Find exports.
+            ("File::Find", ":find") => &["find", "finddepth"],
+            // Fcntl exports.
+            ("Fcntl", ":seek") => &["SEEK_SET", "SEEK_CUR", "SEEK_END"],
+            ("Fcntl", ":lock") => &["LOCK_SH", "LOCK_EX", "LOCK_NB", "LOCK_UN"],
+            // Encode exports.
+            ("Encode", ":fallback") => &[
+                "FB_DEFAULT",
+                "FB_CROAK",
+                "FB_QUIET",
+                "FB_WARN",
+                "FB_PERLQQ",
+                "FB_HTMLCREF",
+                "FB_XMLCREF",
+            ],
+            _ => &[],
+        }
+    }
+
+    fn tag_imports_symbol(module: &str, import_token: &str, symbol_name: &str) -> bool {
+        let tag = normalize_import_token(import_token);
+        if !tag.starts_with(':') {
+            return false;
+        }
+        export_tag_members(module, tag).contains(&symbol_name)
+    }
+
+    fn qw_content(arg: &str) -> Option<&str> {
+        let bytes = arg.as_bytes();
+        if bytes.len() < 3 || bytes[0] != b'q' || bytes[1] != b'w' {
+            return None;
+        }
+
+        let mut idx = 2usize;
+        while idx < bytes.len() && (bytes[idx] as char).is_ascii_whitespace() {
+            idx += 1;
+        }
+        if idx >= bytes.len() {
+            return None;
+        }
+
+        let open = bytes[idx] as char;
+        if open.is_ascii_alphanumeric() || open == '_' {
+            return None;
+        }
+        let close = match open {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            _ => open,
+        };
+
+        let start = idx + 1;
+        let mut end = start;
+        while end < bytes.len() && (bytes[end] as char) != close {
+            end += 1;
+        }
+        if end >= bytes.len() {
+            return None;
+        }
+
+        Some(&arg[start..end])
+    }
+
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
         fn find(node: &Node, name: &str) -> Option<String> {
             if let NodeKind::Use { module, args, .. } = &node.kind {
                 for arg in args {
-                    if arg == name {
+                    if normalize_import_token(arg) == name {
                         return Some(module.clone());
                     }
-                    if arg.starts_with("qw") {
-                        let content = arg
-                            .trim_start_matches("qw")
-                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                        if content.split_whitespace().any(|w| w == name) {
-                            return Some(module.clone());
+                    if tag_imports_symbol(module, arg, name) {
+                        return Some(module.clone());
+                    }
+                    if let Some(content) = qw_content(arg) {
+                        for import_token in content.split_whitespace() {
+                            if import_token == name
+                                || tag_imports_symbol(module, import_token, name)
+                            {
+                                return Some(module.clone());
+                            }
                         }
                     }
                 }
