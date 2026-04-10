@@ -1037,3 +1037,132 @@ fn test_defer_helper_call_is_not_version_feature() -> Result<(), Box<dyn std::er
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Helpers for builtin:: tests
+// ---------------------------------------------------------------------------
+
+fn builtin_floor_call() -> Node {
+    Node::new(
+        NodeKind::FunctionCall {
+            name: "builtin::floor".to_string(),
+            args: vec![Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                loc(30, 32),
+            )],
+        },
+        loc(20, 33),
+    )
+}
+
+fn use_builtin_node() -> Node {
+    Node::new(
+        NodeKind::Use {
+            module: "builtin".to_string(),
+            args: vec!["'floor'".to_string()],
+            has_filter_risk: false,
+        },
+        loc(0, 22),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Test 25: builtin::floor in v5.36 -> warns (requires v5.40+)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_builtin_qualified_call_warns_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), builtin_floor_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'builtin::floor' in v5.36, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("builtin"), "Message should mention 'builtin': {}", msg.message);
+    assert!(
+        msg.message.contains("v5.40") || msg.message.contains("5.40"),
+        "Message should mention minimum version v5.40: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 26: builtin::floor in v5.40 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_builtin_qualified_call_ok_on_v5_40() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40"), builtin_floor_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'builtin::floor' in v5.40, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 27: `use builtin` pragma in v5.36 -> warns (requires v5.40+)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_use_builtin_warns_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), use_builtin_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'use builtin' in v5.36, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("builtin"), "Message should mention 'builtin': {}", msg.message);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 28: `use builtin` pragma in v5.40 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_use_builtin_ok_on_v5_40() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40"), use_builtin_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'use builtin' in v5.40, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 29: `use builtin` on old version suppresses builtin:: call warning
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_use_builtin_suppresses_qualified_call_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), use_builtin_node(), builtin_floor_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let pl900_count = diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL900")).count();
+    assert!(
+        pl900_count <= 1,
+        "Expected at most one PL900 for 'use builtin' + 'builtin::floor' on v5.36, got {} warnings: {:?}",
+        pl900_count,
+        diagnostics
+    );
+    Ok(())
+}

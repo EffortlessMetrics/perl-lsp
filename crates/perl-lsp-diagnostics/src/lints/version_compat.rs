@@ -43,6 +43,7 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("defer", 5, 36),
     ("class", 5, 38),
     ("field", 5, 38),
+    ("builtin", 5, 40),
 ];
 
 const GIVEN_WHEN_DEPRECATION_VERSION: PerlVersion = PerlVersion::new(5, 38);
@@ -61,6 +62,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
     let mut declared_version: Option<PerlVersion> = None;
     let mut explicit_features: Vec<String> = Vec::new();
+    let mut use_builtin_declared = false;
 
     for stmt in statements {
         if let NodeKind::Use { module, args, .. } = &stmt.kind {
@@ -80,6 +82,9 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                     let name = arg.trim_matches(|c| c == '\'' || c == '"');
                     explicit_features.push(name.to_string());
                 }
+            }
+            if module == "builtin" {
+                use_builtin_declared = true;
             }
         }
     }
@@ -170,6 +175,20 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 if !effective_features.contains(&"defer") {
                     let min = feature_min_version("defer");
                     diagnostics.push(make_diagnostic(n, "defer", declared_version, min));
+                }
+            }
+
+            NodeKind::FunctionCall { name, .. } if name.starts_with("builtin::") => {
+                if !effective_features.contains(&"builtin") && !use_builtin_declared {
+                    let min = feature_min_version("builtin");
+                    diagnostics.push(make_diagnostic(n, "builtin::", declared_version, min));
+                }
+            }
+
+            NodeKind::Use { module, .. } if module == "builtin" => {
+                if !effective_features.contains(&"builtin") {
+                    let min = feature_min_version("builtin");
+                    diagnostics.push(make_diagnostic(n, "use builtin", declared_version, min));
                 }
             }
 
