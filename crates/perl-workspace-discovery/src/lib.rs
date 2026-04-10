@@ -66,15 +66,12 @@ pub fn discover_perl_files(root: &Path) -> DiscoveryResult {
 #[must_use]
 pub fn is_perl_discovery_path(path: &Path) -> bool {
     is_perl_source_path(path)
-        || path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .is_some_and(|ext| {
-                ext.eq_ignore_ascii_case("xs")
-                    || ext.eq_ignore_ascii_case("ep")
-                    || ext.eq_ignore_ascii_case("tt")
-                    || ext.eq_ignore_ascii_case("tt2")
-            })
+        || path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("xs")
+                || ext.eq_ignore_ascii_case("ep")
+                || ext.eq_ignore_ascii_case("tt")
+                || ext.eq_ignore_ascii_case("tt2")
+        })
 }
 
 fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
