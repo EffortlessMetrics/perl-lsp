@@ -948,6 +948,25 @@ impl ScopeAnalyzer {
             }
         }
 
+        // When the parser interprets `print $arr[0]` as indirect-object syntax, it produces
+        // `IndirectCall { object: Variable($, "arr"), args: [ArrayLiteral([0])] }`.
+        // Similarly, `print $hash{a}` produces
+        // `IndirectCall { object: Variable($, "hash"), args: [Block([a])] }`.
+        // Bridge the sigil so that `@arr` / `%hash` are marked as used, not `$arr` / `$hash`.
+        if sigil == "$"
+            && let Some(parent) = ancestors.last()
+            && let NodeKind::IndirectCall { object, args, .. } = &parent.kind
+            && std::ptr::eq(object.as_ref(), node)
+        {
+            if let Some(first_arg) = args.first() {
+                match &first_arg.kind {
+                    NodeKind::ArrayLiteral { .. } => return Some(("@", name)),
+                    NodeKind::Block { .. } => return Some(("%", name)),
+                    _ => {}
+                }
+            }
+        }
+
         Some((sigil, name))
     }
 
