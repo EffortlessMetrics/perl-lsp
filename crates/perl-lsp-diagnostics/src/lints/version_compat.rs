@@ -39,6 +39,9 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("field", 5, 38),
 ];
 
+const GIVEN_WHEN_DEPRECATION_VERSION: PerlVersion = PerlVersion::new(5, 38);
+const GIVEN_WHEN_REMOVAL_VERSION: PerlVersion = PerlVersion::new(5, 42);
+
 /// Check for Perl version compatibility issues.
 ///
 /// Walks the AST looking for uses of version-gated features and emits
@@ -105,6 +108,23 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 if !effective_features.contains(&"class") {
                     let min = feature_min_version("class");
                     diagnostics.push(make_diagnostic(n, "class", declared_version, min));
+                }
+            }
+
+            // `given` / `when` — deprecated in v5.38 and removed in v5.42.
+            NodeKind::Given { .. } => {
+                if declared_version >= GIVEN_WHEN_REMOVAL_VERSION {
+                    diagnostics.push(make_given_when_diagnostic(
+                        n,
+                        declared_version,
+                        DiagnosticSeverity::Error,
+                    ));
+                } else if declared_version >= GIVEN_WHEN_DEPRECATION_VERSION {
+                    diagnostics.push(make_given_when_diagnostic(
+                        n,
+                        declared_version,
+                        DiagnosticSeverity::Warning,
+                    ));
                 }
             }
 
@@ -176,6 +196,63 @@ fn make_diagnostic(
     declared_version: PerlVersion,
     min_version: (u32, u32),
 ) -> Diagnostic {
+    make_diagnostic_with_details(
+        node,
+        display,
+        declared_version,
+        min_version,
+        DiagnosticSeverity::Warning,
+        Some(format!(
+            "Update 'use v{}.{}' to 'use v{}.{}' or add 'use feature \"{}\";'",
+            declared_version.major, declared_version.minor, min_version.0, min_version.1, display,
+        )),
+    )
+}
+
+fn make_given_when_diagnostic(
+    node: &Node,
+    declared_version: PerlVersion,
+    severity: DiagnosticSeverity,
+) -> Diagnostic {
+    let (message, min_version) = match severity {
+        DiagnosticSeverity::Error => (
+            format!(
+                "'given/when' was removed in Perl v5.42; declared version is v{}.{}",
+                declared_version.major, declared_version.minor
+            ),
+            (5, 42),
+        ),
+        _ => (
+            format!(
+                "'given/when' is deprecated starting in Perl v5.38; declared version is v{}.{}",
+                declared_version.major, declared_version.minor
+            ),
+            (5, 38),
+        ),
+    };
+
+    Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity,
+        code: Some(DiagnosticCode::VersionIncompatFeature.as_str().to_string()),
+        message,
+        related_information: vec![],
+        tags: vec![],
+        suggestion: Some(format!(
+            "Refactor `given` / `when` to `if` / `elsif` or another supported control-flow form before targeting Perl v{}.{}",
+            min_version.0, min_version.1
+        )),
+    }
+}
+
+fn make_diagnostic_with_details(
+    node: &Node,
+    display: &str,
+    declared_version: PerlVersion,
+    min_version: (u32, u32),
+    severity: DiagnosticSeverity,
+    suggestion: Option<String>,
+) -> Diagnostic {
     let message = format!(
         "'{}' requires Perl v{}.{}+; declared version is v{}.{}",
         display, min_version.0, min_version.1, declared_version.major, declared_version.minor,
@@ -183,14 +260,11 @@ fn make_diagnostic(
 
     Diagnostic {
         range: (node.location.start, node.location.end),
-        severity: DiagnosticSeverity::Warning,
+        severity,
         code: Some(DiagnosticCode::VersionIncompatFeature.as_str().to_string()),
         message,
         related_information: vec![],
         tags: vec![],
-        suggestion: Some(format!(
-            "Update 'use v{}.{}' to 'use v{}.{}' or add 'use feature \"{}\";'",
-            declared_version.major, declared_version.minor, min_version.0, min_version.1, display,
-        )),
+        suggestion,
     }
 }
