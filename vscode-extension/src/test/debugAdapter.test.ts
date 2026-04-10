@@ -165,9 +165,10 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('returns undefined when perl-dap is not found anywhere', () => {
+  test('returns undefined and shows an actionable warning when perl-dap is not found anywhere', () => {
     const ctx = makeContext(tmpDir);
     const factory = new PerlDebugAdapterDescriptorFactory(ctx);
+    const vscode = require('vscode');
 
     const origPath = process.env.PATH;
     const origHome = process.env.HOME;
@@ -179,6 +180,11 @@ describe('PerlDebugAdapterDescriptorFactory', () => {
     try {
       const result = factory.createDebugAdapterDescriptor({} as any, undefined);
       expect(result).toBeUndefined();
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+        expect.stringContaining('perl-dap'),
+        'Reinstall',
+        'Open Debugging Guide'
+      );
     } finally {
       process.env.PATH = origPath;
       process.env.HOME = origHome;

@@ -174,6 +174,7 @@ export const env = {
 };
 
 export const extensions = {
+  all: [] as any[],
   getExtension: jest.fn(() => undefined),
 };
 
