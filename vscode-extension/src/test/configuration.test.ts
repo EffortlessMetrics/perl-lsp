@@ -127,6 +127,7 @@ describe('package.json contributes', () => {
       expect(exts).toContain('.mason');
       expect(exts).toContain('.mas');
       expect(exts).not.toContain('.m');
+      expect(exts).toContain('.xs');
     });
 
     test('perl language has shebang first-line detection', () => {
