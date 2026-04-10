@@ -353,7 +353,7 @@ fn check_global_signal_handler_assignment(
         severity: DiagnosticSeverity::Warning,
         code: Some(DiagnosticCode::SecuritySignalHandler.as_str().to_string()),
         message: format!(
-            "Global assignment to ${}{{{}}} changes process-wide behavior. Use local $SIG{{...}} to scope the handler.",
+            "Global assignment to {}{{{}}} changes process-wide behavior. Use local $SIG{{...}} to scope the handler.",
             signal_table_display(&signal_handler.access),
             signal_handler.signal_name
         ),
