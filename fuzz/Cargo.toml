@@ -14,6 +14,8 @@ libfuzzer-sys = "0.4"
 path = "../crates/perl-parser"
 [dependencies.perl-lsp-cancellation]
 path = "../crates/perl-lsp-cancellation"
+[dependencies.perl-quote]
+path = "../crates/perl-quote"
 
 [dependencies.serde_json]
 version = "1.0.149"
@@ -63,6 +65,14 @@ bench = false
 [[bin]]
 name = "parser_integration"
 path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
+
+[[bin]]
+name = "quote_operators"
+path = "fuzz_targets/quote_operators.rs"
 test = false
 doc = false
 bench = false

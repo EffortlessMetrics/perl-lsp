@@ -420,9 +420,10 @@ The parser is validated against a comprehensive test corpus:
 
 ### Fuzz Testing
 
-Seven fuzz targets exercise the most fragile parsing paths:
+Eight fuzz targets exercise the most fragile parsing paths:
 
 - `parser_integration` -- parser, trivia, and symbol-extraction integration
+- `quote_operators` -- regex, substitution, and transliteration delimiter handling
 - `heredoc_parsing` -- heredoc edge cases
 - `substitution_parsing` -- s/// variants
 - `builtin_functions` -- list operator argument parsing
