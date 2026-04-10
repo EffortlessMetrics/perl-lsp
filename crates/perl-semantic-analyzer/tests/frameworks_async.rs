@@ -1,4 +1,4 @@
-//! Framework semantic extraction tests for IO::Async.
+//! Framework semantic extraction tests for async frameworks.
 
 use perl_semantic_analyzer::{
     Parser,
@@ -77,5 +77,40 @@ my $loop = IO::Async::Loop->new;
     assert!(
         !has_symbol(&table, "IO::Async::Loop", SymbolKind::Class),
         "did not expect IO::Async class synthesis without `use IO::Async`"
+    );
+}
+
+#[test]
+fn mojo_redis_use_synthesizes_framework_class_symbol() {
+    let code = r#"
+use Mojo::Redis;
+
+my $redis = Mojo::Redis->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Mojo::Redis", SymbolKind::Class),
+        "expected Mojo::Redis class symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "Mojo::Redis", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=Mojo::Redis"),
+        "expected `framework=Mojo::Redis` on Mojo::Redis, got {attrs:?}"
+    );
+}
+
+#[test]
+fn mojo_redis_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $redis = Mojo::Redis->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "Mojo::Redis", SymbolKind::Class),
+        "did not expect Mojo::Redis class synthesis without `use Mojo::Redis`"
     );
 }
