@@ -136,8 +136,10 @@ pub fn resolve_module_uri_with_effective_inc(
         let workspace_path = workspace_folder_to_path(workspace_folder);
 
         for inc_root in &ordered_roots {
-            if !matches!(inc_root.kind, IncRootKind::FileLocalLexical | IncRootKind::WorkspaceRelative)
-            {
+            if !matches!(
+                inc_root.kind,
+                IncRootKind::FileLocalLexical | IncRootKind::WorkspaceRelative
+            ) {
                 continue;
             }
             if start_time.elapsed() > timeout {
@@ -158,7 +160,9 @@ pub fn resolve_module_uri_with_effective_inc(
     for inc_root in &ordered_roots {
         if !matches!(
             inc_root.kind,
-            IncRootKind::ExternalAbsolute | IncRootKind::InterpreterStartup | IncRootKind::RuntimeDerived
+            IncRootKind::ExternalAbsolute
+                | IncRootKind::InterpreterStartup
+                | IncRootKind::RuntimeDerived
         ) {
             continue;
         }
