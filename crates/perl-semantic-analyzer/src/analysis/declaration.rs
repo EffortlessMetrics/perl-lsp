@@ -1233,6 +1233,40 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
     }
 
+    fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
+        fn find(node: &Node, name: &str) -> Option<String> {
+            match &node.kind {
+                NodeKind::Use { module, args, .. } => {
+                    for arg in args {
+                        if arg == name {
+                            return Some(module.clone());
+                        }
+                        if arg.starts_with("qw") {
+                            let content = arg
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            if content.split_whitespace().any(|w| w == name) {
+                                return Some(module.clone());
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            for child in get_node_children(node) {
+                if let Some(module) = find(child, name) {
+                    return Some(module);
+                }
+            }
+
+            None
+        }
+
+        find(ast, symbol_name)
+    }
+
     fn plack_builder_middleware_symbol(path: &[&Node], offset: usize) -> Option<SymbolKey> {
         let has_builder = path.iter().any(|ancestor| {
             matches!(ancestor.kind, NodeKind::FunctionCall { ref name, .. } if name == "builder")
@@ -1398,9 +1432,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         }
         NodeKind::FunctionCall { name, .. } => {
             let (pkg, bare) = if let Some(idx) = name.rfind("::") {
-                (&name[..idx], &name[idx + 2..])
+                (name[..idx].to_string(), name[idx + 2..].to_string())
             } else {
-                (current_pkg, name.as_str())
+                (
+                    find_import_source(ast, name).unwrap_or_else(|| current_pkg.to_string()),
+                    name.clone(),
+                )
             };
             Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
         }

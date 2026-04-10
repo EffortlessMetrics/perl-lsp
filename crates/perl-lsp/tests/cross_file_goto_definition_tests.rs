@@ -199,6 +199,73 @@ Demo::Worker::run();
 }
 
 // ---------------------------------------------------------------------------
+// Test 2b: imported functions via `use Module qw(func)` navigate to the exporter
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_imported_function_navigates_to_source_module() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Utils.pm",
+        r#"package My::Utils;
+use strict;
+use warnings;
+
+sub calculate_sum {
+    my (@nums) = @_;
+    my $total = 0;
+    $total += $_ for @nums;
+    return $total;
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Utils.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Utils.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use My::Utils qw(calculate_sum);
+
+my $result = calculate_sum(1, 2, 3);
+"#;
+    harness.open(&workspace.uri("app.pl"), caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "calculate_sum(1, 2, 3)")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for imported function");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Utils.pm") || uri.contains("My%2FUtils.pm"),
+        "Definition should point to My/Utils.pm, got: {}",
+        uri
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 3: XS bootstrap calls navigate to native `.xs` entry points
 // ---------------------------------------------------------------------------
 
