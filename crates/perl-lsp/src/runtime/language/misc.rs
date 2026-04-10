@@ -14,6 +14,7 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
+use perl_module_import::resolve_known_export_tag;
 use perl_source_file::is_perl_source_uri;
 use std::borrow::Cow;
 use std::sync::OnceLock;
@@ -1141,9 +1142,22 @@ impl LspServer {
                                 .trim_start_matches("qw")
                                 .trim_start_matches(|c: char| "([{/<|!".contains(c))
                                 .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            if content.split_whitespace().any(|w| w == name) {
-                                return Some(module.clone());
+                            for word in content.split_whitespace() {
+                                if word == name {
+                                    return Some(module.clone());
+                                }
+                                if word.starts_with(':')
+                                    && let Some(expanded) = resolve_known_export_tag(module, word)
+                                    && expanded.contains(&name)
+                                {
+                                    return Some(module.clone());
+                                }
                             }
+                        } else if arg.starts_with(':')
+                            && let Some(expanded) = resolve_known_export_tag(module, arg)
+                            && expanded.contains(&name)
+                        {
+                            return Some(module.clone());
                         }
                     }
                 }

@@ -39,6 +39,19 @@ sub first { }
     index
 }
 
+fn make_file_find_index() -> Arc<WorkspaceIndex> {
+    let index = Arc::new(WorkspaceIndex::new());
+    let uri = must(Url::parse("file:///workspace/File/Find.pm"));
+    let code = r#"package File::Find;
+our @EXPORT_OK = qw(find finddepth);
+sub find { }
+sub finddepth { }
+1;
+"#;
+    must(index.index_file(uri, code.to_string()));
+    index
+}
+
 // ---------------------------------------------------------------------------
 // Test 1: extract_import_map parses qw correctly
 // ---------------------------------------------------------------------------
@@ -260,4 +273,40 @@ fn extract_import_map_parses_alternate_qw_delimiters() {
             sum_item.sort_text
         );
     }
+}
+
+#[test]
+fn extract_import_map_expands_known_posix_tag() {
+    let source = "use File::Find qw(:find);\nfi";
+    let index = make_file_find_index();
+    let provider = parse_provider_with_index(source, index);
+    let items = provider.get_completions(source, source.len());
+
+    let wifexited = must_some(
+        items
+            .iter()
+            .find(|i| i.label == "finddepth" || i.insert_text.as_deref() == Some("finddepth")),
+    );
+    assert!(
+        wifexited.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        "finddepth should be promoted as imported via :find; got: {:?}",
+        wifexited.sort_text
+    );
+}
+
+#[test]
+fn extract_import_map_supports_mixed_tag_and_symbol_imports() {
+    let source = "use File::Find qw(:find find);\nfi";
+    let index = make_file_find_index();
+    let provider = parse_provider_with_index(source, index);
+    let items = provider.get_completions(source, source.len());
+
+    let seek_set = must_some(
+        items.iter().find(|i| i.label == "find" || i.insert_text.as_deref() == Some("find")),
+    );
+    assert!(
+        seek_set.sort_text.as_deref().is_some_and(|s| s.starts_with("2_")),
+        "find should be promoted when mixed with tags; got: {:?}",
+        seek_set.sort_text
+    );
 }

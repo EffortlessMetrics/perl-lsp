@@ -113,6 +113,7 @@ pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
 pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
+use perl_module_import::resolve_known_export_tag;
 use perl_parser_core::ast::Node;
 use perl_parser_core::ast::NodeKind;
 use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};
@@ -267,13 +268,17 @@ impl CompletionProvider {
     fn extract_import_map(ast: &Node) -> ImportMap {
         let mut map: ImportMap = HashMap::new();
 
-        fn collect_import_symbols(arg: &str, symbols: &mut HashSet<String>) -> bool {
+        fn collect_import_symbols(
+            module: &str,
+            arg: &str,
+            symbols: &mut HashSet<String>,
+        ) -> (bool, bool) {
             let trimmed = arg.trim();
             if trimmed.is_empty() {
-                return false;
+                return (false, false);
             }
             if matches!(trimmed, "=>" | "," | "(" | ")" | "[" | "]" | "{" | "}") {
-                return false;
+                return (false, false);
             }
 
             let mut content = trimmed;
@@ -288,25 +293,45 @@ impl CompletionProvider {
                     .trim_end_matches(|c: char| ")]}/|!>".contains(c))
                     .trim();
 
+                let mut unresolved_tag = false;
                 for word in content.split_whitespace() {
-                    if !word.is_empty() {
+                    if word.is_empty() {
+                        continue;
+                    }
+                    if word.starts_with(':') {
+                        if let Some(expanded) = resolve_known_export_tag(module, word) {
+                            symbols.extend(expanded.iter().map(|name| (*name).to_string()));
+                        } else {
+                            unresolved_tag = true;
+                        }
+                    } else {
                         symbols.insert(word.to_string());
                     }
                 }
-                return !content.is_empty();
+                return (!content.is_empty(), unresolved_tag);
             }
 
             let cleaned = content.trim_matches(|c: char| c == '\'' || c == '"');
             if cleaned.is_empty() {
-                return false;
+                return (false, false);
             }
 
+            let mut unresolved_tag = false;
             for word in cleaned.split_whitespace() {
-                if !word.is_empty() {
+                if word.is_empty() {
+                    continue;
+                }
+                if word.starts_with(':') {
+                    if let Some(expanded) = resolve_known_export_tag(module, word) {
+                        symbols.extend(expanded.iter().map(|name| (*name).to_string()));
+                    } else {
+                        unresolved_tag = true;
+                    }
+                } else {
                     symbols.insert(word.to_string());
                 }
             }
-            true
+            (true, unresolved_tag)
         }
 
         fn collect(node: &Node, map: &mut ImportMap) {
@@ -325,6 +350,7 @@ impl CompletionProvider {
 
                     let mut symbols: HashSet<String> = HashSet::new();
                     let mut has_symbol_args = false;
+                    let mut has_unresolved_tag = false;
 
                     for arg in args {
                         // Skip version numbers (e.g. "1.50" in `use List::Util 1.50 qw(sum)`)
@@ -336,9 +362,18 @@ impl CompletionProvider {
                         if arg.starts_with('-') {
                             continue;
                         }
-                        if collect_import_symbols(arg, &mut symbols) {
+                        let (has_symbols_in_arg, unresolved_tag) =
+                            collect_import_symbols(module, arg, &mut symbols);
+                        if has_symbols_in_arg {
                             has_symbol_args = true;
                         }
+                        if unresolved_tag {
+                            has_unresolved_tag = true;
+                        }
+                    }
+
+                    if has_unresolved_tag {
+                        return;
                     }
 
                     if has_symbol_args {
