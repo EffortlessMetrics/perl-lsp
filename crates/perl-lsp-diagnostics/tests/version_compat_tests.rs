@@ -3,7 +3,7 @@
 //! These tests verify that the version_compat lint correctly detects uses of
 //! Perl features that are not available in the declared Perl version.
 
-use perl_lsp_diagnostics::version_compat::check_version_compat;
+use perl_lsp_diagnostics::{DiagnosticSeverity, version_compat::check_version_compat};
 use perl_parser_core::{Node, NodeKind, SourceLocation};
 use perl_tdd_support::must_some;
 
@@ -48,9 +48,37 @@ fn class_node(name: &str) -> Node {
     )
 }
 
+fn num_node(value: &str) -> Node {
+    Node::new(NodeKind::Number { value: value.to_string() }, loc(20, 21))
+}
+
 fn try_node() -> Node {
     Node::new(
         NodeKind::Try { body: Box::new(block(vec![])), catch_blocks: vec![], finally_block: None },
+        loc(20, 60),
+    )
+}
+
+fn given_when_node() -> Node {
+    let when = Node::new(
+        NodeKind::When {
+            condition: Box::new(Node::new(
+                NodeKind::Number { value: "1".to_string() },
+                loc(34, 35),
+            )),
+            body: Box::new(block(vec![say_call()])),
+        },
+        loc(28, 52),
+    );
+
+    Node::new(
+        NodeKind::Given {
+            expr: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+                loc(24, 30),
+            )),
+            body: Box::new(block(vec![when])),
+        },
         loc(20, 60),
     )
 }
@@ -66,6 +94,31 @@ fn say_call() -> Node {
         },
         loc(20, 32),
     )
+}
+
+fn given_node() -> Node {
+    Node::new(
+        NodeKind::Given {
+            expr: Box::new(num_node("1")),
+            body: Box::new(block(vec![when_node(), default_node()])),
+        },
+        loc(20, 80),
+    )
+}
+
+fn when_node() -> Node {
+    Node::new(
+        NodeKind::When { condition: Box::new(num_node("1")), body: Box::new(block(vec![])) },
+        loc(30, 50),
+    )
+}
+
+fn default_node() -> Node {
+    Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(50, 70))
+}
+
+fn default_with_class_node() -> Node {
+    Node::new(NodeKind::Default { body: Box::new(block(vec![class_node("Nested")])) }, loc(50, 90))
 }
 
 fn sub_with_signature() -> Node {
@@ -251,6 +304,198 @@ fn test_try_ok_on_v5_34() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ---------------------------------------------------------------------------
+// Test 5b: given/when warns on v5.38 (deprecated)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_given_when_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38"), given_when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(
+        diag.severity,
+        perl_lsp_diagnostic_types::DiagnosticSeverity::Warning,
+        "Expected warning severity for deprecated given/when on v5.38, got: {:?}",
+        diag
+    );
+    assert!(
+        diag.message.contains("given/when"),
+        "Message should mention given/when: {}",
+        diag.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5bb: default warns on v5.38 (deprecated)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_default_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38"), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(
+        diag.severity,
+        perl_lsp_diagnostic_types::DiagnosticSeverity::Warning,
+        "Expected warning severity for deprecated default on v5.38, got: {:?}",
+        diag
+    );
+    assert!(diag.message.contains("default"), "Message should mention default: {}", diag.message);
+    assert!(
+        diag.message.contains("deprecated"),
+        "Message should mention deprecation: {}",
+        diag.message
+    );
+    Ok(())
+}
+
+#[test]
+fn test_when_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38"), when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+    assert!(
+        diag.message.contains("given/when/default"),
+        "Message should mention given/when/default: {}",
+        diag.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5c: given/when errors on v5.42 (removed)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_given_when_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.42"), given_when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(
+        diag.severity,
+        perl_lsp_diagnostic_types::DiagnosticSeverity::Error,
+        "Expected error severity for removed given/when on v5.42, got: {:?}",
+        diag
+    );
+    assert!(
+        diag.suggestion
+            .as_deref()
+            .is_some_and(|suggestion| suggestion.contains("if") && suggestion.contains("elsif")),
+        "Expected migration suggestion for given/when removal, got: {:?}",
+        diag.suggestion
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5cb: default errors on v5.42 (removed)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_default_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.42"), default_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(
+        diag.severity,
+        perl_lsp_diagnostic_types::DiagnosticSeverity::Error,
+        "Expected error severity for removed default on v5.42, got: {:?}",
+        diag
+    );
+    assert!(diag.message.contains("default"), "Message should mention default: {}", diag.message);
+    assert!(diag.message.contains("removed"), "Message should mention removal: {}", diag.message);
+    assert!(
+        diag.suggestion
+            .as_deref()
+            .is_some_and(|suggestion| suggestion.contains("if") && suggestion.contains("elsif")),
+        "Expected migration suggestion for default removal, got: {:?}",
+        diag.suggestion
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5b: given/when in v5.36 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_given_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), given_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'given/when' in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5c: given/when in v5.38 -> warns
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_given_warns_on_v5_38() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.38"), given_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'given/when' in v5.38, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(msg.severity, DiagnosticSeverity::Warning);
+    assert!(
+        msg.message.contains("v5.38") || msg.message.contains("5.38"),
+        "Message should mention minimum version v5.38: {}",
+        msg.message
+    );
+    assert!(
+        msg.message.contains("deprecated"),
+        "Message should mention deprecation: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5d: given/when in v5.42 -> error
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_given_errors_on_v5_42() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.42"), given_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert_eq!(msg.severity, DiagnosticSeverity::Error);
+    assert!(
+        msg.message.contains("v5.42") || msg.message.contains("5.42"),
+        "Message should mention removal version v5.42: {}",
+        msg.message
+    );
+    assert!(msg.message.contains("removed"), "Message should mention removal: {}", msg.message);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test 6: say in v5.8 -> warns
 // ---------------------------------------------------------------------------
 
@@ -285,6 +530,36 @@ fn test_say_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
         "Expected no PL900 warning for 'say' in v5.10, got: {:?}",
         diagnostics
     );
+    Ok(())
+}
+
+#[test]
+fn test_say_inside_given_when_is_reached_by_walker() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), given_when_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900") && d.message.contains("say")),
+    );
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
+    Ok(())
+}
+
+#[test]
+fn test_class_inside_default_is_reached_by_walker() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), default_with_class_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let diag = must_some(
+        diagnostics
+            .iter()
+            .find(|d| d.code.as_deref() == Some("PL900") && d.message.contains("class")),
+    );
+    assert_eq!(diag.severity, DiagnosticSeverity::Warning);
     Ok(())
 }
 
