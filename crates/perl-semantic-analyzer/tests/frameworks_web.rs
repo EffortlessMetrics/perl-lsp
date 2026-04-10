@@ -6,6 +6,7 @@
 
 use perl_semantic_analyzer::{
     Parser,
+    declaration::{current_package_at, symbol_at_cursor},
     symbol::{SymbolExtractor, SymbolKind, SymbolTable},
 };
 use perl_tdd_support::must;
@@ -323,6 +324,36 @@ builder {
     assert!(
         doc.is_some_and(|d| d.contains("middleware") && d.contains("Static")),
         "expected middleware documentation to mention the normalized module name"
+    );
+}
+
+#[test]
+fn plack_builder_enable_symbol_at_cursor_resolves_middleware_package() {
+    let code = r#"
+use Plack::Builder;
+
+builder {
+    enable 'Static';
+    enable 'Plack::Middleware::Session';
+};
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let static_offset = code.find("Static").expect("could not find Static");
+    let current_pkg = current_package_at(&ast, static_offset);
+    let symbol = symbol_at_cursor(&ast, static_offset, current_pkg)
+        .expect("expected symbol_at_cursor to resolve Plack middleware");
+
+    assert_eq!(
+        symbol.pkg.as_ref(),
+        "Plack::Middleware::Static",
+        "short-name Plack middleware should normalize to the full package name"
+    );
+    assert_eq!(
+        symbol.name.as_ref(),
+        "Plack::Middleware::Static",
+        "short-name Plack middleware should normalize to the full package name"
     );
 }
 

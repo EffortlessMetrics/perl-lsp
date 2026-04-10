@@ -7,8 +7,8 @@
 
 mod support;
 
-use serde_json::json;
-use support::lsp_harness::LspHarness;
+use serde_json::{Value, json};
+use support::lsp_harness::{LspHarness, TempWorkspace};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -30,6 +30,28 @@ fn find_line_char(code: &str, needle: &str) -> Result<(u32, u32), Box<dyn std::e
     }
 
     Err(format!("could not find '{needle}' in test source").into())
+}
+
+fn first_location(response: &Value) -> Result<&Value, Box<dyn std::error::Error>> {
+    let locations = response
+        .as_array()
+        .ok_or_else(|| std::io::Error::other("expected array result for definition"))?;
+    Ok(locations.first().ok_or_else(|| std::io::Error::other("definition result was empty"))?)
+}
+
+fn find_pos(
+    code: &str,
+    needle: &str,
+    target_line: usize,
+) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+    let line = code
+        .lines()
+        .nth(target_line)
+        .ok_or_else(|| std::io::Error::other(format!("no line {target_line} in test code")))?;
+    let col = line.find(needle).ok_or_else(|| {
+        std::io::Error::other(format!("could not find `{needle}` on line {target_line}"))
+    })?;
+    Ok((target_line as u32, col as u32))
 }
 
 // ---------------------------------------------------------------------------
@@ -994,6 +1016,90 @@ fn symbol_at_cursor_resolves_use_statement() -> TestResult {
             sym.pkg,
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn plack_builder_middleware_enable_navigates_to_module_file() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Plack/Middleware/Static.pm",
+        r#"package Plack::Middleware::Static;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "lib/Plack/Middleware/Session.pm",
+        r#"package Plack::Middleware::Session;
+
+1;
+"#,
+    )?;
+    workspace.write(
+        "app.psgi",
+        r#"use Plack::Builder;
+
+builder {
+    enable 'Static';
+    enable 'Plack::Middleware::Session';
+};
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let static_uri = workspace.uri("lib/Plack/Middleware/Static.pm");
+    let static_content =
+        std::fs::read_to_string(workspace.dir.path().join("lib/Plack/Middleware/Static.pm"))?;
+    harness.open(&static_uri, &static_content)?;
+
+    let session_uri = workspace.uri("lib/Plack/Middleware/Session.pm");
+    let session_content =
+        std::fs::read_to_string(workspace.dir.path().join("lib/Plack/Middleware/Session.pm"))?;
+    harness.open(&session_uri, &session_content)?;
+
+    let app_uri = workspace.uri("app.psgi");
+    let app_content = std::fs::read_to_string(workspace.dir.path().join("app.psgi"))?;
+    harness.open(&app_uri, &app_content)?;
+
+    harness.barrier();
+
+    let (static_line, static_character) = find_pos(&app_content, "Static", 3)?;
+    let static_def = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": app_uri},
+            "position": {"line": static_line, "character": static_character}
+        }),
+    )?;
+    let static_location = first_location(&static_def)?;
+    assert_valid_location(static_location);
+    assert_eq!(
+        static_location["uri"].as_str(),
+        Some(static_uri.as_str()),
+        "short-name middleware navigation should jump to the Static module"
+    );
+
+    let (session_line, session_character) =
+        find_pos(&app_content, "Plack::Middleware::Session", 4)?;
+    let session_def = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": app_uri},
+            "position": {"line": session_line, "character": session_character}
+        }),
+    )?;
+    let session_location = first_location(&session_def)?;
+    assert_valid_location(session_location);
+    assert_eq!(
+        session_location["uri"].as_str(),
+        Some(session_uri.as_str()),
+        "fully-qualified middleware navigation should jump to the Session module"
+    );
 
     Ok(())
 }
