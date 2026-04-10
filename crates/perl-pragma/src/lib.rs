@@ -445,6 +445,17 @@ impl PragmaTracker {
             | NodeKind::Foreach { body, .. } => {
                 Self::build_ranges(body, current_state, ranges);
             }
+            // `package Foo { ... }` — the block form is lexically scoped.
+            // Save/restore state around the block so pragmas declared inside
+            // don't leak out, just like a regular braced block.
+            //
+            // `package Foo;` (no block) has no inner scope to walk — its
+            // siblings in `Program` already accumulate state normally.
+            NodeKind::Package { block: Some(pkg_block), .. } => {
+                let saved_state = current_state.clone();
+                Self::build_ranges(pkg_block, current_state, ranges);
+                *current_state = saved_state;
+            }
             // Other node types don't contain use/no statements
             _ => {}
         }
