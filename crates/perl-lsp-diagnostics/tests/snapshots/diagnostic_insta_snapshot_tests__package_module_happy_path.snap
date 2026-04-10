@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-diagnostics/tests/diagnostic_insta_snapshot_tests.rs
+expression: snapshot
+---
+
