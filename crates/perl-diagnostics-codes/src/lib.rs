@@ -149,6 +149,8 @@ pub enum DiagnosticCode {
     PrintfFormatMismatch,
     /// Statement that cannot be reached due to preceding unconditional exit
     UnreachableCode,
+    /// `$@` / `$EVAL_ERROR` reads that are not paired with a nearby `eval`/`try`
+    EvalErrorFlow,
 
     // Deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -233,6 +235,7 @@ impl DiagnosticCode {
             DiagnosticCode::NumericComparisonWithUndef => "PL404",
             DiagnosticCode::PrintfFormatMismatch => "PL405",
             DiagnosticCode::UnreachableCode => "PL406",
+            DiagnosticCode::EvalErrorFlow => "PL407",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::SecurityStringEval => "PL600",
@@ -291,6 +294,7 @@ impl DiagnosticCode {
             "PL404" => "https://docs.perl-lsp.org/errors/PL404",
             "PL405" => "https://docs.perl-lsp.org/errors/PL405",
             "PL406" => "https://docs.perl-lsp.org/errors/PL406",
+            "PL407" => "https://docs.perl-lsp.org/errors/PL407",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
@@ -348,6 +352,7 @@ impl DiagnosticCode {
             | DiagnosticCode::SecuritySignalHandler
             | DiagnosticCode::ModuleNotFound
             | DiagnosticCode::VersionIncompatFeature
+            | DiagnosticCode::EvalErrorFlow
             | DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
 
@@ -454,6 +459,10 @@ impl DiagnosticCode {
             DiagnosticCode::NumericComparisonWithUndef => Some(
                 "Comparing a potentially undefined value with a numeric operator \
                 produces a warning at runtime. Check for definedness first with `defined()`.",
+            ),
+            DiagnosticCode::EvalErrorFlow => Some(
+                "Read `$@` or `$EVAL_ERROR` immediately after an `eval` or `try` \
+                block; intervening statements can clobber the exception state.",
             ),
             DiagnosticCode::UnreachableCode => Some(
                 "This statement cannot be executed because a preceding statement \
@@ -707,7 +716,8 @@ impl DiagnosticCode {
             | DiagnosticCode::AssignmentInCondition
             | DiagnosticCode::NumericComparisonWithUndef
             | DiagnosticCode::PrintfFormatMismatch
-            | DiagnosticCode::UnreachableCode => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::UnreachableCode
+            | DiagnosticCode::EvalErrorFlow => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 DiagnosticCategory::Deprecated
@@ -749,6 +759,7 @@ mod tests {
     fn test_code_strings() {
         assert_eq!(DiagnosticCode::ParseError.as_str(), "PL001");
         assert_eq!(DiagnosticCode::MissingStrict.as_str(), "PL100");
+        assert_eq!(DiagnosticCode::EvalErrorFlow.as_str(), "PL407");
         assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
         assert_eq!(DiagnosticCode::SecuritySignalHandler.as_str(), "PL602");
     }
@@ -757,6 +768,7 @@ mod tests {
     fn test_severity() {
         assert_eq!(DiagnosticCode::ParseError.severity(), DiagnosticSeverity::Error);
         assert_eq!(DiagnosticCode::UnusedVariable.severity(), DiagnosticSeverity::Warning);
+        assert_eq!(DiagnosticCode::EvalErrorFlow.severity(), DiagnosticSeverity::Warning);
         assert_eq!(DiagnosticCode::CriticSeverity5.severity(), DiagnosticSeverity::Hint);
     }
 
@@ -787,6 +799,7 @@ mod tests {
         assert_eq!(DiagnosticCode::ParseError.category(), DiagnosticCategory::Parser);
         assert_eq!(DiagnosticCode::MissingStrict.category(), DiagnosticCategory::StrictWarnings);
         assert_eq!(DiagnosticCode::SecuritySignalHandler.category(), DiagnosticCategory::Security);
+        assert_eq!(DiagnosticCode::EvalErrorFlow.category(), DiagnosticCategory::BestPractices);
         assert_eq!(DiagnosticCode::CriticSeverity1.category(), DiagnosticCategory::PerlCritic);
     }
 

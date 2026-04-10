@@ -12,6 +12,7 @@
 //!   misspelled pragma detection
 //! - **common_mistakes**: Frequent programming errors (assignment in conditions, etc.)
 //! - **security**: Security anti-patterns (two-arg open, string eval, backtick execution, global signal handlers)
+//! - **eval_error_flow**: Conservative `$@` / `$EVAL_ERROR` flow checks after `eval` / `try`
 //!
 //! # Diagnostic Code Reference
 //!
@@ -59,6 +60,12 @@
 //! |------|----------|-------------|
 //! | `assignment-in-condition` | Warning | `=` used where `==` likely intended |
 //! | `numeric-undef` | Warning | `==`/`!=` with potentially undef value |
+//!
+//! ## Eval / try flow (`eval_error_flow.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL407` | Warning | `$@` / `$EVAL_ERROR` read without a nearby `eval` / `try` |
 //!
 //! ## Security (`security.rs`)
 //!
@@ -111,6 +118,8 @@
 
 pub mod common_mistakes;
 pub mod deprecated;
+/// Conservative `$@` / `$EVAL_ERROR` flow checks after `eval` / `try`
+pub mod eval_error_flow;
 /// Missing module detection (PL701)
 pub mod missing_module;
 /// Package and subroutine diagnostics (PL200, PL201, PL300)

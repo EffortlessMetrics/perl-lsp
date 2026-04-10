@@ -14,6 +14,7 @@ use perl_semantic_analyzer::symbol::SymbolExtractor;
 use crate::dedup::deduplicate_diagnostics;
 use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
+use crate::lints::eval_error_flow::check_eval_error_flow;
 use crate::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
@@ -147,6 +148,7 @@ impl DiagnosticsProvider {
 
         // Security anti-pattern detection (string eval, two-arg open, backtick exec)
         check_security(ast, &mut diagnostics);
+        check_eval_error_flow(ast, &mut diagnostics);
 
         // Unused import detection
         check_unused_imports(ast, source, &mut diagnostics);
