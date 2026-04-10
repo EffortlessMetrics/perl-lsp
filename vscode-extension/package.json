@@ -76,7 +76,8 @@
           ".tt",
           ".tt2",
           ".ep",
-          ".xs"
+          ".xs",
+          ".i"
         ],
         "firstLine": "^#!.*\\bperl\\b",
         "configuration": "./language-configuration.json"
