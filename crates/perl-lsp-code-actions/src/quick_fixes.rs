@@ -656,18 +656,8 @@ pub fn fix_variable_redeclaration(
 ) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
-    // Look for `my ` at or near the start of the diagnostic range
-    let search_start = diagnostic.range.0;
-    let search_end = diagnostic.range.1.min(source.len());
-
-    if search_start >= source.len() {
-        return actions;
-    }
-
-    let snippet = &source[search_start..search_end];
-    if let Some(my_pos) = snippet.find("my ") {
-        let abs_my_start = search_start + my_pos;
-        let abs_my_end = abs_my_start + 3; // "my ".len()
+    if let Some((abs_my_start, abs_my_end)) = find_duplicate_my_span(source, diagnostic) {
+        // Remove only the duplicate declarator and keep the assignment/value intact.
 
         actions.push(CodeAction {
             title: "Remove duplicate 'my' declaration".to_string(),
@@ -686,44 +676,18 @@ pub fn fix_variable_redeclaration(
     actions
 }
 
-/// Fix uninitialized variable by inserting `= undef` or `= ""` initialization
-///
-/// When a variable is used before being initialized (PL110), offer to initialize
-/// it at the declaration site with `undef` (the safer default) or an empty string.
-pub fn fix_uninitialized_variable(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
-    let mut actions = Vec::new();
+fn find_duplicate_my_span(source: &str, diagnostic: &QuickFixDiagnostic) -> Option<(usize, usize)> {
+    let variable_start = diagnostic.range.0.min(source.len());
+    let line_start = source[..variable_start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
+    let before_var = &source[line_start..variable_start];
+    let my_offset = before_var.rfind("my ")?;
 
-    if let Some(var_name) = diagnostic.message.split('\'').nth(1) {
-        // Initialize with undef — safe default
-        actions.push(CodeAction {
-            title: format!("Initialize '{}' with undef", var_name),
-            kind: CodeActionKind::QuickFix,
-            diagnostics: vec![DiagnosticCode::UninitializedVariable.as_str().to_string()],
-            edit: CodeActionEdit {
-                changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
-                    new_text: " = undef".to_string(),
-                }],
-            },
-            is_preferred: true,
-        });
-
-        // Initialize with empty string — common for string variables
-        actions.push(CodeAction {
-            title: format!("Initialize '{}' with empty string", var_name),
-            kind: CodeActionKind::QuickFix,
-            diagnostics: vec![DiagnosticCode::UninitializedVariable.as_str().to_string()],
-            edit: CodeActionEdit {
-                changes: vec![TextEdit {
-                    location: SourceLocation { start: diagnostic.range.1, end: diagnostic.range.1 },
-                    new_text: r#" = """#.to_string(),
-                }],
-            },
-            is_preferred: false,
-        });
+    if before_var[my_offset + 3..].chars().all(char::is_whitespace) {
+        let start = line_start + my_offset;
+        return Some((start, start + 3));
     }
 
-    actions
+    None
 }
 
 /// Fix misspelled pragma by replacing with the correctly spelled name

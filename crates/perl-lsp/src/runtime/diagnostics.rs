@@ -945,7 +945,6 @@ fn is_fixable_diagnostic(code: &str) -> bool {
                 | DiagnosticCode::DeprecatedDefined
                 | DiagnosticCode::MissingPackageDeclaration
                 | DiagnosticCode::VariableRedeclaration
-                | DiagnosticCode::UninitializedVariable
                 | DiagnosticCode::MisspelledPragma
                 | DiagnosticCode::UnreachableCode
                 | DiagnosticCode::DuplicateSubroutine
