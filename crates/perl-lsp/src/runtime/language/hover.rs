@@ -1512,10 +1512,42 @@ impl LspServer {
 
     /// Return educational hover documentation for Perl special variables.
     ///
-    /// Covers the 20 most common special variables that every Perl developer
-    /// encounters.  Returns a JSON hover response with markdown content, or
-    /// `None` if the variable is not in the known set.
+    /// Covers the common special variables every Perl developer encounters,
+    /// plus a few internal `PL_sv_*` constants used by XS/C code. Returns a
+    /// JSON hover response with markdown content, or `None` if the variable is
+    /// not in the known set.
+    fn get_internal_special_variable_hover(name: &str) -> Option<Value> {
+        let (heading, description) = match name {
+            "PL_sv_yes" => (
+                "Internal Special Variable",
+                "The canonical true scalar used by Perl internals and XS/C code. It is an immutable shared value, so extensions can return or compare against it without allocating a fresh true scalar.",
+            ),
+            "PL_sv_no" => (
+                "Internal Special Variable",
+                "The canonical false scalar used by Perl internals and XS/C code. It is an immutable shared value representing Perl's shared false value.",
+            ),
+            "PL_sv_undef" => (
+                "Internal Special Variable",
+                "The canonical undefined scalar used by Perl internals and XS/C code. It represents Perl's shared `undef` value.",
+            ),
+            _ => return None,
+        };
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**`{name}` \u{2014} {heading}**\n\n{description}\n\n```perl\n# XS/C internals typically treat this as a shared value\n```"
+                ),
+            },
+        }))
+    }
+
     fn get_special_variable_hover(name: &str) -> Option<Value> {
+        if let Some(hover) = Self::get_internal_special_variable_hover(name) {
+            return Some(hover);
+        }
+
         // Handle $1-$9 capture group variables with dynamic content.
         if let Some(digit) = name
             .strip_prefix('$')

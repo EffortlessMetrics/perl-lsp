@@ -1299,6 +1299,9 @@ fn strict_subs_only_checks_barewords() -> Result<(), Box<dyn std::error::Error>>
 use strict 'subs';
 print $unknown_var;
 print FOO;
+print PL_sv_yes;
+print PL_sv_no;
+print PL_sv_undef;
 "#;
     let issues = scope_issues_strict(code);
 
@@ -1312,6 +1315,14 @@ print FOO;
             .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
         "strict 'subs' should flag barewords"
     );
+    for internal in ["PL_sv_yes", "PL_sv_no", "PL_sv_undef"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == internal
+            }),
+            "strict 'subs' should not flag internal special constant {internal}"
+        );
+    }
     Ok(())
 }
 
