@@ -1015,24 +1015,6 @@ impl ScopeAnalyzer {
 
                 ancestors.pop();
             }
-
-            NodeKind::FunctionCall { name, args } => {
-                // Handle function arguments, which may contain complex variable patterns.
-                // Some builtins consume declaration-capable arguments directly, but the
-                // eligible positions are builtin-specific:
-                //   - `open my $fh, ...`      — position 0 is the declaration
-                //   - `read $fh, my $buf, ...` — position 1 is the declaration
-                // Use the position-aware helper to avoid marking the wrong argument.
-                let decl_positions = builtin_declaration_arg_positions(name);
-                ancestors.push(node);
-                for (idx, arg) in args.iter().enumerate() {
-                    self.analyze_node(arg, scope, ancestors, issues, context);
-                    if decl_positions.contains(&idx) {
-                        self.mark_builtin_declaration_arg_consumed(arg, scope);
-                    }
-                }
-                ancestors.pop();
-            }
             _ => {
                 // Recursively analyze children
                 ancestors.push(node);
@@ -1653,6 +1635,10 @@ fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
         "socketpair" => &[0, 1],
         _ => &[],
     }
+}
+
+fn is_declaration_capable_builtin(name: &str) -> bool {
+    !builtin_declaration_arg_positions(name).is_empty()
 }
 
 /// Check if an identifier is a known filehandle
