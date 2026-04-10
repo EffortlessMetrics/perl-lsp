@@ -889,6 +889,43 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&sub_scope, issues, context);
             }
 
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                ancestors.push(node);
+                self.analyze_node(body, scope, ancestors, issues, context);
+
+                for (catch_var, catch_body) in catch_blocks {
+                    let catch_scope = Rc::new(Scope::with_parent(scope.clone()));
+
+                    if let Some(full_name) = catch_var.as_deref() {
+                        let (sigil, name) = split_variable_name(full_name);
+                        if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
+                            let _ = catch_scope.declare_variable_parts(
+                                sigil,
+                                name,
+                                catch_body.location.start,
+                                false,
+                                true,
+                            );
+                        }
+                    }
+
+                    self.analyze_block_with_scope(
+                        catch_body,
+                        &catch_scope,
+                        ancestors,
+                        issues,
+                        context,
+                    );
+                    self.collect_unused_variables(&catch_scope, issues, context);
+                }
+
+                if let Some(finally) = finally_block {
+                    self.analyze_node(finally, scope, ancestors, issues, context);
+                }
+
+                ancestors.pop();
+            }
+
             NodeKind::FunctionCall { name, args } => {
                 // Handle function arguments, which may contain complex variable patterns.
                 // Some builtins consume declaration-capable filehandle arguments directly,
@@ -967,6 +1004,25 @@ impl ScopeAnalyzer {
                     self.mark_initialized(child, scope);
                 }
             }
+        }
+    }
+
+    fn analyze_block_with_scope<'a>(
+        &self,
+        node: &'a Node,
+        scope: &Rc<Scope>,
+        ancestors: &mut Vec<&'a Node>,
+        issues: &mut Vec<ScopeIssue>,
+        context: &AnalysisContext<'a>,
+    ) {
+        if let NodeKind::Block { statements } = &node.kind {
+            ancestors.push(node);
+            for stmt in statements {
+                self.analyze_node(stmt, scope, ancestors, issues, context);
+            }
+            ancestors.pop();
+        } else {
+            self.analyze_node(node, scope, ancestors, issues, context);
         }
     }
 

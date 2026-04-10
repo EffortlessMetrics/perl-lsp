@@ -176,6 +176,75 @@ print $client;
     Ok(())
 }
 
+#[test]
+fn scope_try_catch_binds_catch_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        "catch variable should be declared inside catch block: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        "used catch variable should not be reported as unused: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_variable_does_not_escape() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+print $e;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$e"),
+        "catch variable should not be visible after the catch block: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_unused_variable_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print "handled";
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        "unused catch variable should be reported: {:?}",
+        issues
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Variable Scope Resolution — our
 // ===========================================================================
