@@ -26,6 +26,7 @@ const ALL_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::DuplicatePackage,
     DiagnosticCode::DuplicateSubroutine,
     DiagnosticCode::MissingReturn,
+    DiagnosticCode::InvalidPrototype,
     DiagnosticCode::BarewordFilehandle,
     DiagnosticCode::TwoArgOpen,
     DiagnosticCode::ImplicitReturn,
@@ -1162,8 +1163,8 @@ fn unused_variable_tag_is_exactly_unnecessary() {
 // --- Cross-cutting: ALL_CODES count ---
 
 #[test]
-fn all_codes_count_is_21() {
-    assert_eq!(ALL_CODES.len(), 21, "expected 21 diagnostic codes total");
+fn all_codes_count_is_22() {
+    assert_eq!(ALL_CODES.len(), 22, "expected 22 diagnostic codes total");
 }
 
 // --- DiagnosticCode: parse_code boundary values ---
@@ -1172,7 +1173,7 @@ fn all_codes_count_is_21() {
 fn parse_code_all_valid_pl_codes() {
     let valid_pl = [
         "PL001", "PL002", "PL003", "PL100", "PL101", "PL102", "PL103", "PL200", "PL201", "PL300",
-        "PL301", "PL400", "PL401", "PL402", "PL602",
+        "PL301", "PL302", "PL400", "PL401", "PL402", "PL602",
     ];
     for s in &valid_pl {
         assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
@@ -1193,7 +1194,7 @@ fn parse_code_gaps_return_none() {
     // Note: PL104-PL111, PL403-PL404, PL500-PL501, PL600-PL602, PL700, PL800-PL806
     // are now assigned; only truly unassigned gaps are listed here.
     let gaps = [
-        "PL004", "PL050", "PL099", "PL112", "PL150", "PL199", "PL202", "PL250", "PL302", "PL399",
+        "PL004", "PL050", "PL099", "PL112", "PL150", "PL199", "PL202", "PL250", "PL303", "PL399",
         "PL499", "PL502", "PL599", "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
     ];
     for s in &gaps {

@@ -572,6 +572,25 @@ impl ScopeAnalyzer {
                 let is_our = declarator == "our";
                 let is_initialized = initializer.is_some();
 
+                // `local` of a builtin special variable (e.g. `local $/`, `local $,`) temporarily
+                // modifies the global; it does not create a new lexical binding.  Declaring it in
+                // the lexical scope would cause a spurious UnusedVariable diagnostic because all
+                // later uses of `$/` etc. are recognised by is_builtin_global and never counted as
+                // uses of the scope entry.  Skip the declaration entirely and only analyse any
+                // initialiser expression that may be present.
+                if declarator == "local" && is_builtin_global(sigil, var_name_part) {
+                    // For `local $special = expr`, the parser embeds the assignment inside
+                    // `variable` as an Assignment node rather than in `initializer`.  Walk the
+                    // variable node's children to pick up any RHS expressions.
+                    if let Some(init) = initializer {
+                        self.analyze_node(init, scope, ancestors, issues, context);
+                    }
+                    if let NodeKind::Assignment { rhs, .. } = &variable.kind {
+                        self.analyze_node(rhs, scope, ancestors, issues, context);
+                    }
+                    return;
+                }
+
                 // If checking initializer first (e.g. my $x = $x), we need to analyze initializer in
                 // current scope BEFORE declaring the variable (standard Perl behavior)
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
@@ -728,9 +747,10 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                // Skip built-in global variables
-                // Optimization: Check built-ins first to avoid string scan for "::" on common globals
-                if is_builtin_global(sigil, name) {
+                // Skip built-in global variables — but only when no lexical declaration shadows
+                // them.  Variables like $a and $b are sort globals, but `my ($a, $b) = @_`
+                // creates a lexical shadow that must be tracked as used.
+                if is_builtin_global(sigil, name) && !scope.has_variable_parts(sigil, name) {
                     return;
                 }
 
@@ -962,8 +982,10 @@ impl ScopeAnalyzer {
 
                 ancestors.push(node);
 
-                // Declare the loop variable
+                // Declare the loop variable and immediately mark it initialized — the list
+                // provides its value at runtime so there is no uninitialized window.
                 self.analyze_node(variable, &loop_scope, ancestors, issues, context);
+                self.mark_initialized(variable, &loop_scope, context);
                 self.analyze_node(list, &loop_scope, ancestors, issues, context);
                 self.analyze_node(body, &loop_scope, ancestors, issues, context);
                 if let Some(cb) = continue_block {
@@ -1222,6 +1244,25 @@ impl ScopeAnalyzer {
                 }
                 "{}" => return Some(("%", name)),
                 _ => {}
+            }
+        }
+
+        // When the parser interprets `print $arr[0]` as indirect-object syntax, it produces
+        // `IndirectCall { object: Variable($, "arr"), args: [ArrayLiteral([0])] }`.
+        // Similarly, `print $hash{a}` produces
+        // `IndirectCall { object: Variable($, "hash"), args: [Block([a])] }`.
+        // Bridge the sigil so that `@arr` / `%hash` are marked as used, not `$arr` / `$hash`.
+        if sigil == "$"
+            && let Some(parent) = ancestors.last()
+            && let NodeKind::IndirectCall { object, args, .. } = &parent.kind
+            && std::ptr::eq(object.as_ref(), node)
+        {
+            if let Some(first_arg) = args.first() {
+                match &first_arg.kind {
+                    NodeKind::ArrayLiteral { .. } => return Some(("@", name)),
+                    NodeKind::Block { .. } => return Some(("%", name)),
+                    _ => {}
+                }
             }
         }
 
@@ -1811,8 +1852,9 @@ fn is_known_function(name: &str) -> bool {
 /// used avoids false diagnostics after the call.
 ///
 /// Position semantics:
-/// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `socketpair`
-/// - Position 1: `read`, `sysread`, `recv`, `socketpair` (second handle)
+/// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `dbmopen`
+/// - Position 1: `read`, `sysread`, `recv`, `shmread`
+/// - Positions 0 and 1: `pipe`, `socketpair`
 fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
     match name {
         // Position 0: the first argument is the new handle/socket

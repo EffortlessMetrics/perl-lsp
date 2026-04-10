@@ -133,6 +133,12 @@ pub enum DiagnosticCode {
     DuplicateSubroutine,
     /// Missing explicit return statement
     MissingReturn,
+    /// Invalid character(s) in a subroutine prototype
+    ///
+    /// Perl only allows `$`, `@`, `%`, `&`, `*`, `\`, `;`, `+`, `_`, and
+    /// spaces in old-style prototypes.  Any other character triggers Perl's
+    /// "Illegal character in prototype" warning.
+    InvalidPrototype,
 
     // Best practices (PL400-PL499)
     /// Bareword filehandle usage
@@ -228,6 +234,7 @@ impl DiagnosticCode {
             DiagnosticCode::DuplicatePackage => "PL201",
             DiagnosticCode::DuplicateSubroutine => "PL300",
             DiagnosticCode::MissingReturn => "PL301",
+            DiagnosticCode::InvalidPrototype => "PL302",
             DiagnosticCode::BarewordFilehandle => "PL400",
             DiagnosticCode::TwoArgOpen => "PL401",
             DiagnosticCode::ImplicitReturn => "PL402",
@@ -287,6 +294,7 @@ impl DiagnosticCode {
             "PL201" => "https://docs.perl-lsp.org/errors/PL201",
             "PL300" => "https://docs.perl-lsp.org/errors/PL300",
             "PL301" => "https://docs.perl-lsp.org/errors/PL301",
+            "PL302" => "https://docs.perl-lsp.org/errors/PL302",
             "PL400" => "https://docs.perl-lsp.org/errors/PL400",
             "PL401" => "https://docs.perl-lsp.org/errors/PL401",
             "PL402" => "https://docs.perl-lsp.org/errors/PL402",
@@ -339,6 +347,7 @@ impl DiagnosticCode {
             | DiagnosticCode::DuplicatePackage
             | DiagnosticCode::DuplicateSubroutine
             | DiagnosticCode::MissingReturn
+            | DiagnosticCode::InvalidPrototype
             | DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen
             | DiagnosticCode::ImplicitReturn
@@ -439,6 +448,11 @@ impl DiagnosticCode {
             DiagnosticCode::MissingReturn => Some(
                 "This subroutine has no explicit `return` statement. \
                 Add `return $value;` to make the return value clear.",
+            ),
+            DiagnosticCode::InvalidPrototype => Some(
+                "The prototype contains a character that Perl does not recognise. \
+                Valid prototype characters are: $, @, %, &, *, \\, ;, +, _ and spaces. \
+                See perlsub for the full prototype syntax.",
             ),
             DiagnosticCode::BarewordFilehandle => Some(
                 "Bareword filehandles (e.g., `open FH, ...`) are global and unsafe. \
@@ -588,6 +602,10 @@ impl DiagnosticCode {
             Some(DiagnosticCode::BarewordFilehandle)
         } else if msg_lower.contains("two-argument") || msg_lower.contains("2-arg") {
             Some(DiagnosticCode::TwoArgOpen)
+        } else if msg_lower.contains("invalid prototype character")
+            || msg_lower.contains("illegal character in prototype")
+        {
+            Some(DiagnosticCode::InvalidPrototype)
         } else if msg_lower.contains("parse error") || msg_lower.contains("syntax error") {
             Some(DiagnosticCode::ParseError)
         } else {
@@ -617,6 +635,7 @@ impl DiagnosticCode {
             "PL201" => Some(DiagnosticCode::DuplicatePackage),
             "PL300" => Some(DiagnosticCode::DuplicateSubroutine),
             "PL301" => Some(DiagnosticCode::MissingReturn),
+            "PL302" => Some(DiagnosticCode::InvalidPrototype),
             "PL400" => Some(DiagnosticCode::BarewordFilehandle),
             "PL401" => Some(DiagnosticCode::TwoArgOpen),
             "PL402" => Some(DiagnosticCode::ImplicitReturn),
@@ -706,9 +725,9 @@ impl DiagnosticCode {
                 DiagnosticCategory::PackageModule
             }
 
-            DiagnosticCode::DuplicateSubroutine | DiagnosticCode::MissingReturn => {
-                DiagnosticCategory::Subroutine
-            }
+            DiagnosticCode::DuplicateSubroutine
+            | DiagnosticCode::MissingReturn
+            | DiagnosticCode::InvalidPrototype => DiagnosticCategory::Subroutine,
 
             DiagnosticCode::BarewordFilehandle
             | DiagnosticCode::TwoArgOpen

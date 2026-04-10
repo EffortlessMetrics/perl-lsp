@@ -43,6 +43,40 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("defer", 5, 36),
     ("class", 5, 38),
     ("field", 5, 38),
+    // isa: experimental in v5.32, stable-bundled at v5.36.
+    // `$obj isa 'ClassName'` — infix operator for class membership testing.
+    ("isa", 5, 36),
+    ("builtin", 5, 40),
+];
+
+/// `builtin` bundle and import minimums.
+///
+/// The namespace-level bundle still gates at 5.40, but individual functions
+/// were introduced across multiple releases.
+const BUILTIN_BUNDLE_MIN_VERSION: PerlVersion = PerlVersion::new(5, 40);
+
+const BUILTIN_FUNCTION_VERSIONS: &[(&str, u32, u32)] = &[
+    ("true", 5, 36),
+    ("false", 5, 36),
+    ("is_bool", 5, 36),
+    ("inf", 5, 40),
+    ("nan", 5, 40),
+    ("weaken", 5, 36),
+    ("unweaken", 5, 36),
+    ("is_weak", 5, 36),
+    ("blessed", 5, 36),
+    ("refaddr", 5, 36),
+    ("reftype", 5, 36),
+    ("created_as_string", 5, 36),
+    ("created_as_number", 5, 36),
+    ("stringify", 5, 36),
+    ("ceil", 5, 36),
+    ("floor", 5, 36),
+    ("indexed", 5, 36),
+    ("trim", 5, 36),
+    ("is_tainted", 5, 38),
+    ("export_lexically", 5, 38),
+    ("load_module", 5, 40),
 ];
 
 const GIVEN_WHEN_DEPRECATION_VERSION: PerlVersion = PerlVersion::new(5, 38);
@@ -61,6 +95,8 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
     let mut declared_version: Option<PerlVersion> = None;
     let mut explicit_features: Vec<String> = Vec::new();
+    let mut builtin_imports: Vec<String> = Vec::new();
+    let mut builtin_bundle_declared = false;
 
     for stmt in statements {
         if let NodeKind::Use { module, args, .. } = &stmt.kind {
@@ -79,6 +115,27 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                     // Args may be bare names or quoted: 'say', "say"
                     let name = arg.trim_matches(|c| c == '\'' || c == '"');
                     explicit_features.push(name.to_string());
+                }
+            }
+            if module == "builtin" {
+                if args.is_empty() {
+                    builtin_bundle_declared = true;
+                }
+
+                for arg in args {
+                    let name = normalize_builtin_import(arg);
+                    if name.is_empty() {
+                        continue;
+                    }
+
+                    if name.starts_with(':') {
+                        builtin_bundle_declared = true;
+                        continue;
+                    }
+
+                    if !builtin_imports.contains(&name) {
+                        builtin_imports.push(name);
+                    }
                 }
             }
         }
@@ -173,6 +230,53 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             }
 
+            NodeKind::FunctionCall { name, .. } if name.starts_with("builtin::") => {
+                let builtin_name = name.trim_start_matches("builtin::");
+                let min = builtin_min_version(builtin_name);
+                let imported = builtin_imports.iter().any(|import| import == builtin_name);
+
+                if declared_version < min && !builtin_bundle_declared && !imported {
+                    diagnostics.push(make_diagnostic(
+                        n,
+                        name,
+                        declared_version,
+                        (min.major, min.minor),
+                    ));
+                }
+            }
+
+            NodeKind::Use { module, args, .. } if module == "builtin" => {
+                if args.is_empty() {
+                    if declared_version < BUILTIN_BUNDLE_MIN_VERSION {
+                        diagnostics.push(make_diagnostic(
+                            n,
+                            "use builtin",
+                            declared_version,
+                            (BUILTIN_BUNDLE_MIN_VERSION.major, BUILTIN_BUNDLE_MIN_VERSION.minor),
+                        ));
+                    }
+                    return;
+                }
+
+                for arg in args {
+                    let name = normalize_builtin_import(arg);
+                    if name.is_empty() {
+                        continue;
+                    }
+
+                    let min = builtin_import_min_version(&name);
+                    if declared_version < min {
+                        let display = format!("use builtin {}", arg);
+                        diagnostics.push(make_diagnostic(
+                            n,
+                            &display,
+                            declared_version,
+                            (min.major, min.minor),
+                        ));
+                    }
+                }
+            }
+
             // `state $x` declaration — requires v5.10
             NodeKind::VariableDeclaration { declarator, .. } if declarator == "state" => {
                 if !effective_features.contains(&"state") {
@@ -204,6 +308,14 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             }
 
+            // `$obj isa 'ClassName'` — infix operator; stable at v5.36
+            NodeKind::Binary { op, .. } if op == "isa" => {
+                if !effective_features.contains(&"isa") {
+                    let min = feature_min_version("isa");
+                    diagnostics.push(make_diagnostic(n, "isa", declared_version, min));
+                }
+            }
+
             _ => {}
         }
     });
@@ -216,6 +328,27 @@ fn feature_min_version(feature: &str) -> (u32, u32) {
         .find(|(name, _, _)| *name == feature)
         .map(|(_, maj, min)| (*maj, *min))
         .unwrap_or((5, 0))
+}
+
+/// Return the minimum Perl version for a `builtin::name` call or named import.
+fn builtin_min_version(name: &str) -> PerlVersion {
+    BUILTIN_FUNCTION_VERSIONS
+        .iter()
+        .find(|(builtin_name, _, _)| *builtin_name == name)
+        .map(|(_, maj, min)| PerlVersion::new(*maj, *min))
+        .unwrap_or(BUILTIN_BUNDLE_MIN_VERSION)
+}
+
+fn builtin_import_min_version(name: &str) -> PerlVersion {
+    if let Some(bundle) = name.strip_prefix(':') {
+        return parse_perl_version(bundle).unwrap_or(BUILTIN_BUNDLE_MIN_VERSION);
+    }
+
+    builtin_min_version(name)
+}
+
+fn normalize_builtin_import(arg: &str) -> String {
+    arg.trim_matches(|c| c == '\'' || c == '"').to_string()
 }
 
 /// Return `true` when a node represents the `defer { ... }` feature form.

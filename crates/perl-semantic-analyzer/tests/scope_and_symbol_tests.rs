@@ -550,6 +550,140 @@ sub modify_it {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// 3b. local with builtin special variables — issue #3502
+// ---------------------------------------------------------------------------
+
+#[test]
+fn local_input_record_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` (slurp mode) must not produce a false UnusedVariable diagnostic.
+    let code = "use strict;\nlocal $/ = undef;\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ should produce no false UnusedVariable or UndeclaredVariable; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_output_field_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $,` (output field separator) must not produce a false UnusedVariable diagnostic.
+    let code = "use strict;\nlocal $, = \", \";\nprint \"a\", \"b\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$,"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $, should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_output_record_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $\` (output record separator) must not produce false diagnostics.
+    let code = "use strict;\nlocal $\\ = \"\\n\";\nprint \"hello\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$\\"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $\\ should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_list_sep_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $"` (list separator) must not produce false diagnostics.
+    let code = "use strict;\nlocal $\" = \"-\";\nmy @arr = (1, 2);\nprint \"@arr\";\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$\""
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $\" should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_special_var_in_block_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` without an initializer in a block must not produce false diagnostics.
+    let code = "use strict;\n{\n    local $/;\n    my $data = <STDIN>;\n    print $data;\n}\n";
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ (no initializer) should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
+#[test]
+fn local_special_var_in_sub_no_false_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // `local $/` inside a subroutine must not produce false diagnostics.
+    let code = r#"use strict;
+use warnings;
+sub slurp {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or die $!;
+    local $/ = undef;
+    my $content = <$fh>;
+    close($fh);
+    return $content;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let false_pos: Vec<_> = issues
+        .iter()
+        .filter(|i| {
+            (i.kind == IssueKind::UnusedVariable || i.kind == IssueKind::UndeclaredVariable)
+                && i.variable_name == "$/"
+        })
+        .collect();
+    assert!(
+        false_pos.is_empty(),
+        "local $/ inside sub should produce no false diagnostics; got: {:?}",
+        false_pos
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 4. Variable Scope Resolution — state
 // ===========================================================================
@@ -1281,6 +1415,60 @@ $obj->$method();
         issues
     );
 
+    Ok(())
+}
+
+#[test]
+fn subscript_access_marks_array_parent_used() -> Result<(), Box<dyn std::error::Error>> {
+    // $arr[0] passed to a function should mark @arr as used — no unused-variable diagnostic.
+    let code = r#"
+my @arr = (1, 2, 3);
+print $arr[0];
+"#;
+    let issues = scope_issues(code);
+    let unused_arr = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arr"))
+        .count();
+    assert_eq!(unused_arr, 0, "@arr should not be flagged as unused when accessed via $arr[0]");
+    Ok(())
+}
+
+#[test]
+fn subscript_access_marks_hash_parent_used() -> Result<(), Box<dyn std::error::Error>> {
+    // $hash{key} passed to a function should mark %hash as used — no unused-variable diagnostic.
+    let code = r#"
+my %hash = (a => 1);
+print $hash{a};
+"#;
+    let issues = scope_issues(code);
+    let unused_hash = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hash"))
+        .count();
+    assert_eq!(
+        unused_hash, 0,
+        "%hash should not be flagged as unused when accessed via $hash{{a}}"
+    );
+    Ok(())
+}
+
+#[test]
+fn subscript_access_does_not_suppress_truly_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // A %hash or @array that is truly never accessed should still be flagged as unused.
+    let code = r#"
+my %unused_hash = (a => 1);
+my @unused_arr = (1, 2, 3);
+"#;
+    let issues = scope_issues(code);
+    let unused_hash = issues
+        .iter()
+        .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("unused_hash"));
+    let unused_arr = issues
+        .iter()
+        .any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("unused_arr"));
+    assert!(unused_hash, "%unused_hash with no subscripts should still be flagged as unused");
+    assert!(unused_arr, "@unused_arr with no subscripts should still be flagged as unused");
     Ok(())
 }
 
@@ -2331,22 +2519,28 @@ print $data;
 #[test]
 fn read_position_zero_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
     // Position 0 in `read` is an existing filehandle, NOT a declaration target.
-    // Passing a bare (non-declaration) variable at position 0 should not affect its
-    // declaration status — it must have been declared separately.
+    // An undeclared handle at position 0 should still be flagged, while the
+    // position-1 buffer should be treated as the declaration/initialization target.
     let code = r#"
 use strict;
-my $fh = \*STDIN;
-my $buffer;
-read $fh, $buffer, 1024;
+read $undeclared_fh, my $buffer, 1024;
 print $buffer;
 "#;
     let issues = scope_issues_strict(code);
     assert!(
+        issues.iter().any(|i| {
+            i.variable_name.contains("undeclared_fh")
+                && matches!(i.kind, IssueKind::UndeclaredVariable)
+        }),
+        "undeclared read handle should still be flagged (issues: {:?})",
+        issues
+    );
+    assert!(
         !issues.iter().any(|i| {
-            i.variable_name.contains("fh")
+            i.variable_name.contains("buffer")
                 && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
         }),
-        "existing $fh should not be flagged (issues: {:?})",
+        "read buffer declaration should not be flagged (issues: {:?})",
         issues
     );
     Ok(())
@@ -2480,6 +2674,70 @@ if ("hello world" =~ /world/p) {
         !has_issue(&issues, IssueKind::UndeclaredVariable, "^POSTMATCH"),
         "{{^POSTMATCH}} should be a recognized builtin; got issues: {:?}",
         issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Topic variable $_ in map/grep block contexts (#3457)
+// ===========================================================================
+
+#[test]
+fn topic_var_in_map_block_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ is the implicit topic variable set by map; it must never be flagged
+    // as undeclared under `use strict`.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @doubled = map { $_ * 2 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
+        "$_ in map block should not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn topic_var_in_grep_block_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ is the implicit topic variable set by grep; it must never be flagged
+    // as undeclared under `use strict`.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @evens = grep { $_ % 2 == 0 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "_"),
+        "$_ in grep block should not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn topic_var_chained_map_grep_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // $_ used across both map and grep in the same file should produce zero
+    // UndeclaredVariable diagnostics.
+    let code = r#"
+use strict;
+use warnings;
+my @nums = (1, 2, 3);
+my @doubled = map { $_ * 2 } @nums;
+my @evens = grep { $_ % 2 == 0 } @nums;
+"#;
+    let issues = scope_issues_strict(code);
+    let undeclared: Vec<_> =
+        issues.iter().filter(|i| i.kind == IssueKind::UndeclaredVariable).collect();
+    assert!(
+        undeclared.is_empty(),
+        "no UndeclaredVariable diagnostics expected for $_ in map/grep contexts; got: {:?}",
+        undeclared.iter().map(|i| &i.variable_name).collect::<Vec<_>>()
     );
     Ok(())
 }

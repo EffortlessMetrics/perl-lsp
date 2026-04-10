@@ -1037,3 +1037,275 @@ fn test_defer_helper_call_is_not_version_feature() -> Result<(), Box<dyn std::er
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Helpers for builtin:: tests
+// ---------------------------------------------------------------------------
+
+fn builtin_floor_call() -> Node {
+    builtin_call("builtin::floor")
+}
+
+fn builtin_call(name: &str) -> Node {
+    Node::new(
+        NodeKind::FunctionCall {
+            name: name.to_string(),
+            args: vec![Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                loc(30, 32),
+            )],
+        },
+        loc(20, 33),
+    )
+}
+
+fn use_builtin_node() -> Node {
+    use_builtin_import("'floor'")
+}
+
+fn use_builtin_import(import: &str) -> Node {
+    Node::new(
+        NodeKind::Use {
+            module: "builtin".to_string(),
+            args: vec![import.to_string()],
+            has_filter_risk: false,
+        },
+        loc(0, 22),
+    )
+}
+
+fn isa_node() -> Node {
+    Node::new(
+        NodeKind::Binary {
+            op: "isa".to_string(),
+            left: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "obj".to_string() },
+                loc(24, 28),
+            )),
+            right: Box::new(Node::new(
+                NodeKind::String { value: "MyClass".to_string(), interpolated: false },
+                loc(29, 38),
+            )),
+        },
+        loc(20, 38),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Test 25: builtin::floor in v5.36 -> ok (available since v5.36)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_builtin_qualified_call_floor_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), builtin_floor_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'builtin::floor' in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 26: builtin::floor in v5.40 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_builtin_qualified_call_ok_on_v5_40() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40"), builtin_floor_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'builtin::floor' in v5.40, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 27: `use builtin 'floor'` in v5.36 -> ok (available since v5.36)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_use_builtin_floor_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), use_builtin_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'use builtin \"floor\"' in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 28: builtin bundle import in v5.36 -> warns (requires v5.40+)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_use_builtin_bundle_warns_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.36"), use_builtin_import("':5.40'")]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'use builtin \":5.40\"' in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 29: builtin import on old version suppresses duplicate qualified-call warning
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_use_builtin_suppresses_qualified_call_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("v5.38"),
+        use_builtin_import("'load_module'"),
+        builtin_call("builtin::load_module"),
+    ]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    let pl900_count = diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL900")).count();
+    assert!(
+        pl900_count <= 1,
+        "Expected at most one PL900 for 'use builtin load_module' + 'builtin::load_module' on v5.38, got {} warnings: {:?}",
+        pl900_count,
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_builtin_qualified_calls_have_distinct_minimum_versions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        ("builtin::floor", "v5.36", false),
+        ("builtin::is_tainted", "v5.36", true),
+        ("builtin::is_tainted", "v5.38", false),
+        ("builtin::export_lexically", "v5.36", true),
+        ("builtin::export_lexically", "v5.38", false),
+        ("builtin::load_module", "v5.38", true),
+        ("builtin::load_module", "v5.40", false),
+    ];
+
+    for (name, version, should_warn) in cases {
+        let ast = program(vec![use_node(version), builtin_call(name)]);
+        let mut diagnostics = vec![];
+        check_version_compat(&ast, &mut diagnostics);
+
+        assert_eq!(
+            diagnostics_have_code(&diagnostics, "PL900"),
+            should_warn,
+            "Unexpected builtin:: compatibility result for {name} on {version}: {:?}",
+            diagnostics
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_builtin_imports_have_distinct_minimum_versions() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        ("'floor'", "v5.36", false),
+        ("'is_tainted'", "v5.36", true),
+        ("'is_tainted'", "v5.38", false),
+        ("'export_lexically'", "v5.36", true),
+        ("'export_lexically'", "v5.38", false),
+        ("'load_module'", "v5.38", true),
+        ("'load_module'", "v5.40", false),
+        ("':5.40'", "v5.38", true),
+        ("':5.40'", "v5.40", false),
+    ];
+
+    for (import, version, should_warn) in cases {
+        let ast = program(vec![use_node(version), use_builtin_import(import)]);
+        let mut diagnostics = vec![];
+        check_version_compat(&ast, &mut diagnostics);
+
+        assert_eq!(
+            diagnostics_have_code(&diagnostics, "PL900"),
+            should_warn,
+            "Unexpected builtin import compatibility result for {import} on {version}: {:?}",
+            diagnostics
+        );
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 30: `isa` operator in v5.30 -> warns (requires v5.36)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_isa_warns_on_v5_30() -> Result<(), Box<dyn std::error::Error>> {
+    // `$obj isa 'MyClass'` with `use v5.30` should produce a PL900 warning
+    let ast = program(vec![use_node("v5.30"), isa_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning for 'isa' operator in v5.30, got: {:?}",
+        diagnostics
+    );
+    let msg = must_some(diagnostics.iter().find(|d| d.code.as_deref() == Some("PL900")));
+    assert!(msg.message.contains("isa"), "Message should mention 'isa': {}", msg.message);
+    assert!(
+        msg.message.contains("v5.36") || msg.message.contains("5.36"),
+        "Message should mention minimum version v5.36: {}",
+        msg.message
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 31: `isa` operator in v5.36 -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_isa_ok_on_v5_36() -> Result<(), Box<dyn std::error::Error>> {
+    // `$obj isa 'MyClass'` with `use v5.36` should NOT produce a warning
+    let ast = program(vec![use_node("v5.36"), isa_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for 'isa' operator in v5.36, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 32: `isa` operator with `use feature 'isa'` on old version -> no warn
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_isa_ok_with_use_feature_isa() -> Result<(), Box<dyn std::error::Error>> {
+    // Explicit `use feature 'isa'` on v5.10 should suppress PL900
+    let ast = program(vec![use_node("v5.10"), use_feature("isa"), isa_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning when 'use feature 'isa'' is present on v5.10, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
