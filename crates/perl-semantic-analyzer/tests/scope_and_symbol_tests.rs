@@ -177,6 +177,60 @@ print $client;
 }
 
 #[test]
+fn scope_phase_blocks_keep_lexicals_inside_their_block() -> Result<(), Box<dyn std::error::Error>> {
+    for phase in ["BEGIN", "CHECK", "INIT", "UNITCHECK", "END"] {
+        let code = format!(
+            r#"
+use strict;
+{phase} {{
+    my $phase_local = 1;
+    print $phase_local;
+}}
+print $phase_local;
+"#
+        );
+
+        let issues = scope_issues_strict(&code);
+        assert!(
+            has_issue(&issues, IssueKind::UndeclaredVariable, "$phase_local"),
+            "{phase} block lexical should not leak into outer scope: {:?}",
+            issues
+        );
+        assert!(
+            !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 5),
+            "{phase} block lexical should stay valid inside its own block: {:?}",
+            issues
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn scope_phase_blocks_do_not_share_lexicals() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+BEGIN {
+    my $phase_local = 1;
+    print $phase_local;
+}
+CHECK {
+    print $phase_local;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$phase_local"),
+        "lexicals declared in one phase block should not be visible in sibling phase blocks: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn scope_try_catch_binds_catch_variable() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict;
