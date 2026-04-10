@@ -103,16 +103,15 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
 
 /// Derive the user-facing severity for a parser error.
 pub fn parse_error_severity(error: &ParseError) -> DiagnosticSeverity {
-    if matches!(error, ParseError::SyntaxError { .. }) {
-        if matches!(parse_error_code(error), DiagnosticCode::InvalidPrototype)
+    if matches!(error, ParseError::SyntaxError { .. })
+        && (matches!(parse_error_code(error), DiagnosticCode::InvalidPrototype)
             || matches!(
                 error,
                 ParseError::SyntaxError { message, .. }
                     if is_unknown_subroutine_attribute_warning(message)
-            )
-        {
-            return DiagnosticSeverity::Warning;
-        }
+            ))
+    {
+        return DiagnosticSeverity::Warning;
     }
 
     DiagnosticSeverity::Error
