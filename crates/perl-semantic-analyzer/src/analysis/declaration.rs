@@ -337,6 +337,9 @@ impl<'a> DeclarationProvider<'a> {
                 self.find_method_declaration(node, method, object)
             }
             NodeKind::Identifier { name } => self.find_identifier_declaration(node, name),
+            // Handle string literals that are method names inside modifier calls:
+            // `before 'save' => sub { }` — cursor on 'save' navigates to sub save { }
+            NodeKind::String { value, .. } => self.find_modifier_target_declaration(node, value),
             _ => None,
         }
     }
@@ -526,6 +529,69 @@ impl<'a> DeclarationProvider<'a> {
                 const_decl,
                 self.get_constant_name_range_for(const_decl, name),
             )]);
+        }
+
+        None
+    }
+
+    /// Find the definition of the method that a modifier string argument targets.
+    ///
+    /// When the cursor is on the string `'save'` in `before 'save' => sub { }`,
+    /// this walks up the parent map to confirm the string is the first argument
+    /// of a `before`/`after`/`around` function call, then returns the location of
+    /// `sub save { }`.
+    fn find_modifier_target_declaration(
+        &self,
+        string_node: &Node,
+        method_name: &str,
+    ) -> Option<Vec<LocationLink>> {
+        // Strip surrounding quotes from the raw token text ('save' → save, "save" → save).
+        let bare_name = method_name.trim().trim_matches('\'').trim_matches('"').trim();
+        if bare_name.is_empty() {
+            return None;
+        }
+
+        // Build parent map for upward traversal.
+        let temp_parent_map;
+        let parent_map = if let Some(pm) = self.parent_map {
+            pm
+        } else {
+            temp_parent_map = {
+                let mut map = FxHashMap::default();
+                Self::build_parent_map(&self.ast, &mut map, None);
+                map
+            };
+            &temp_parent_map
+        };
+        let node_lookup = self.build_node_lookup_map();
+
+        // Walk up: String → FunctionCall { name: "before"/"after"/"around" }
+        // The String node may be a direct child of the FunctionCall's args list,
+        // so its immediate parent should be the FunctionCall node.
+        let string_ptr: *const Node = string_node as *const _;
+        let parent_ptr = parent_map.get(&string_ptr).copied()?;
+        let parent = node_lookup.get(&parent_ptr).copied()?;
+
+        // Check direct parent is a modifier FunctionCall where the string is first arg.
+        if let NodeKind::FunctionCall { name, args } = &parent.kind {
+            if matches!(name.as_str(), "before" | "after" | "around" | "override") {
+                if args.first().map(|a| std::ptr::eq(a, string_node)).unwrap_or(false) {
+                    return self.find_subroutine_declaration(string_node, bare_name);
+                }
+            }
+        }
+
+        // The FunctionCall may be wrapped in an ExpressionStatement — check one
+        // level further up in case the parent is the statement wrapper.
+        let grandparent_ptr = parent_map.get(&parent_ptr).copied()?;
+        let grandparent = node_lookup.get(&grandparent_ptr).copied()?;
+
+        if let NodeKind::FunctionCall { name, args } = &grandparent.kind {
+            if matches!(name.as_str(), "before" | "after" | "around" | "override") {
+                if args.first().map(|a| std::ptr::eq(a, string_node)).unwrap_or(false) {
+                    return self.find_subroutine_declaration(string_node, bare_name);
+                }
+            }
         }
 
         None
