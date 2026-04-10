@@ -715,6 +715,7 @@ impl SymbolExtractor {
 
             NodeKind::Use { module, args, .. } => {
                 self.update_framework_context(module, args);
+                self.synthesize_io_async_use_symbol(module, node.location);
             }
 
             NodeKind::No { module: _, args: _, .. } => {
@@ -1613,7 +1614,20 @@ impl SymbolExtractor {
             return false;
         }
 
-        let already_synthesized = self.table.symbols.get(&name).is_some_and(|symbols| {
+        self.add_io_async_class_symbol(&name, object.location)
+    }
+
+    /// Synthesize a class symbol directly from `use IO::Async::Namespace`.
+    fn synthesize_io_async_use_symbol(&mut self, module: &str, location: SourceLocation) -> bool {
+        if !module.starts_with("IO::Async::") {
+            return false;
+        }
+
+        self.add_io_async_class_symbol(module, location)
+    }
+
+    fn add_io_async_class_symbol(&mut self, name: &str, location: SourceLocation) -> bool {
+        let already_synthesized = self.table.symbols.get(name).is_some_and(|symbols| {
             symbols.iter().any(|symbol| {
                 symbol.kind == SymbolKind::Class
                     && symbol.declaration.as_deref() == Some("framework=IO::Async")
@@ -1624,10 +1638,10 @@ impl SymbolExtractor {
         }
 
         self.table.add_symbol(Symbol {
-            name: name.clone(),
-            qualified_name: name.clone(),
+            name: name.to_string(),
+            qualified_name: name.to_string(),
             kind: SymbolKind::Class,
-            location: object.location,
+            location,
             scope_id: self.table.current_scope(),
             declaration: Some("framework=IO::Async".to_string()),
             documentation: Some("Synthetic IO::Async class".to_string()),
