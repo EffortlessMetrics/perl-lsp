@@ -38,10 +38,6 @@ pub fn check_security(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 check_global_signal_handler_assignment(lhs, n, diagnostics);
             }
 
-            NodeKind::VariableDeclaration { declarator, variable, .. } if declarator == "local" => {
-                let _ = signal_handler_name(variable);
-            }
-
             // The parser produces Eval { block } for both `eval { ... }` and
             // `eval "string"`.  Block evals are safe (exception handling);
             // string/variable evals are a security risk.
