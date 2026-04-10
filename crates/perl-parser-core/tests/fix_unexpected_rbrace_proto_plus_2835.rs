@@ -16,6 +16,7 @@
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
+use perl_parser_core::NodeKind;
 
 // ---------------------------------------------------------------------------
 // Core `+` prototype patterns
@@ -98,16 +99,20 @@ fn test_named_sub_attr_then_plus_proto() {
     assert_clean_parse("sub foo : lvalue (+) { 1 }");
 }
 
-/// Correct Perl ordering: prototype THEN attribute.
-/// `sub foo (+) : lvalue { ... }` is valid Perl (perlsub spec).
-/// NOTE: This is a KNOWN pre-existing parser limitation (tracked in fix_expected_colon):
-/// the parser does not yet support attributes after prototypes. The `+` prototype itself
-/// is parsed correctly; only the `: lvalue` suffix fails. This `#[ignore]` documents the
-/// gap without blocking the fix for the `+` prototype character.
 #[test]
-#[ignore = "pre-existing: parser does not support proto-then-attribute ordering (fix_expected_colon)"]
 fn test_proto_then_attr_correct_order() {
-    assert_clean_parse("sub foo (+) : lvalue { $_[0] }");
+    let ast = parse("sub foo (+) : lvalue { $_[0] }");
+    let NodeKind::Program { statements } = &ast.kind else {
+        panic!("expected program node, got: {:?}", ast.kind);
+    };
+    let Some(first) = statements.first() else {
+        panic!("expected a subroutine statement");
+    };
+    let NodeKind::Subroutine { prototype, attributes, .. } = &first.kind else {
+        panic!("expected subroutine node, got: {:?}", first.kind);
+    };
+    assert!(prototype.is_some(), "expected prototype for sub foo (+)");
+    assert_eq!(attributes, &vec!["lvalue".to_string()]);
 }
 
 // ---------------------------------------------------------------------------
