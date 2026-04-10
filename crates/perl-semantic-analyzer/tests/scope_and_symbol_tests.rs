@@ -806,6 +806,10 @@ push @{$arrayref}, 2;
 my $hashref;
 $hashref->{k};
 
+my $hashslice_ref = { a => 1, b => 2 };
+my @vals = %$hashslice_ref{'a', 'b'};
+my @vals_list = @$hashslice_ref{'a', 'b'};
+
 my $value = 1;
 my $scalarref = \$value;
 $$scalarref;
@@ -826,6 +830,17 @@ $arr[0];
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hashref"))
         .count();
     assert_eq!(unused_hashref, 0, "$hashref used via arrow dereference should not be unused");
+
+    let unused_hashslice_ref = issues
+        .iter()
+        .filter(|i| {
+            i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hashslice_ref")
+        })
+        .count();
+    assert_eq!(
+        unused_hashslice_ref, 0,
+        "$hashslice_ref used via hash slice dereference should not be unused"
+    );
 
     let unused_scalarref = issues
         .iter()
