@@ -16,7 +16,6 @@
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
 
-use super::super::walker::walk_node;
 use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 
 /// Check for security anti-patterns
@@ -27,47 +26,311 @@ use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformati
 /// - Backtick/qx command execution (ensure input is sanitized)
 /// - Global signal-handler assignment to `$SIG{__DIE__}` / `$SIG{__WARN__}`
 pub fn check_security(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    walk_node(node, &mut |n| {
-        match &n.kind {
-            NodeKind::FunctionCall { name, args } => {
-                check_two_arg_open(name, args, n, diagnostics);
-                check_string_eval(name, args, n, diagnostics);
-            }
+    walk_security_node(node, diagnostics, false);
+}
 
-            NodeKind::Assignment { lhs, .. } => {
-                check_global_signal_handler_assignment(lhs, n, diagnostics);
-            }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SignalTableAccess {
+    Bare,
+    MainQualified,
+}
 
-            // The parser produces Eval { block } for both `eval { ... }` and
-            // `eval "string"`.  Block evals are safe (exception handling);
-            // string/variable evals are a security risk.
-            NodeKind::Eval { block } => {
-                check_eval_node(block, n, diagnostics);
-            }
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SignalHandlerTarget {
+    access: SignalTableAccess,
+    signal_name: String,
+}
 
-            // Backtick strings: the parser stores `cmd` and qx(cmd) as
-            // String { value: "`cmd`", interpolated: true }
-            NodeKind::String { value, interpolated: true } if is_backtick_string(value) => {
-                diagnostics.push(Diagnostic {
-                    range: (n.location.start, n.location.end),
-                    severity: DiagnosticSeverity::Information,
-                    code: Some(DiagnosticCode::SecurityBacktickExec.as_str().to_string()),
-                    message: "Command execution detected. Ensure input is sanitized.".to_string(),
-                    related_information: vec![RelatedInformation {
-                        location: (n.location.start, n.location.end),
-                        message: "Consider using open() with a pipe, or IPC::Run for safer command execution with proper input validation".to_string(),
-                    }],
-                    tags: Vec::new(),
-                    suggestion: Some(
-                        "Use open(my $fh, '-|', @cmd) or IPC::Run for safer command execution"
-                            .to_string(),
-                    ),
-                });
+fn walk_security_node(
+    node: &Node,
+    diagnostics: &mut Vec<Diagnostic>,
+    signal_shadowed: bool,
+) -> bool {
+    match &node.kind {
+        NodeKind::Program { statements } => {
+            let mut current_shadowed = signal_shadowed;
+            for stmt in statements {
+                current_shadowed = walk_security_node(stmt, diagnostics, current_shadowed);
             }
-
-            _ => {}
+            current_shadowed
         }
-    });
+        NodeKind::Block { statements } => {
+            let mut block_shadowed = signal_shadowed;
+            for stmt in statements {
+                block_shadowed = walk_security_node(stmt, diagnostics, block_shadowed);
+            }
+            signal_shadowed
+        }
+        NodeKind::ExpressionStatement { expression } => {
+            walk_security_node(expression, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Assignment { lhs, rhs, .. } => {
+            check_global_signal_handler_assignment(lhs, node, diagnostics, signal_shadowed);
+            walk_security_node(lhs, diagnostics, signal_shadowed);
+            walk_security_node(rhs, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
+            if let Some(init) = initializer {
+                walk_security_node(init, diagnostics, signal_shadowed);
+            }
+
+            let mut updated_shadowed = signal_shadowed;
+            if matches!(declarator.as_str(), "my" | "state") && shadows_signal_table(variable) {
+                updated_shadowed = true;
+            }
+
+            if declarator != "local" {
+                walk_security_node(variable, diagnostics, signal_shadowed);
+            }
+            updated_shadowed
+        }
+        NodeKind::VariableListDeclaration { declarator, variables, initializer, .. } => {
+            if let Some(init) = initializer {
+                walk_security_node(init, diagnostics, signal_shadowed);
+            }
+
+            if declarator != "local" {
+                for variable in variables {
+                    walk_security_node(variable, diagnostics, signal_shadowed);
+                }
+            }
+
+            if matches!(declarator.as_str(), "my" | "state")
+                && variables.iter().any(shadows_signal_table)
+            {
+                true
+            } else {
+                signal_shadowed
+            }
+        }
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            walk_security_node(condition, diagnostics, signal_shadowed);
+            walk_security_node(then_branch, diagnostics, signal_shadowed);
+            for (condition, branch) in elsif_branches {
+                walk_security_node(condition, diagnostics, signal_shadowed);
+                walk_security_node(branch, diagnostics, signal_shadowed);
+            }
+            if let Some(branch) = else_branch {
+                walk_security_node(branch, diagnostics, signal_shadowed);
+            }
+            signal_shadowed
+        }
+        NodeKind::While { condition, body, .. } => {
+            walk_security_node(condition, diagnostics, signal_shadowed);
+            walk_security_node(body, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::For { init, condition, update, body, continue_block } => {
+            let mut loop_shadowed = signal_shadowed;
+            if let Some(init) = init {
+                loop_shadowed = walk_security_node(init, diagnostics, loop_shadowed);
+            }
+            if let Some(condition) = condition {
+                walk_security_node(condition, diagnostics, loop_shadowed);
+            }
+            if let Some(update) = update {
+                walk_security_node(update, diagnostics, loop_shadowed);
+            }
+            walk_security_node(body, diagnostics, loop_shadowed);
+            if let Some(continue_block) = continue_block {
+                walk_security_node(continue_block, diagnostics, loop_shadowed);
+            }
+            signal_shadowed
+        }
+        NodeKind::Foreach { variable, list, body, continue_block } => {
+            let mut loop_shadowed = walk_security_node(variable, diagnostics, signal_shadowed);
+            if shadows_signal_table(variable) {
+                loop_shadowed = true;
+            }
+            walk_security_node(list, diagnostics, signal_shadowed);
+            walk_security_node(body, diagnostics, loop_shadowed);
+            if let Some(continue_block) = continue_block {
+                walk_security_node(continue_block, diagnostics, loop_shadowed);
+            }
+            signal_shadowed
+        }
+        NodeKind::Given { expr, body } => {
+            walk_security_node(expr, diagnostics, signal_shadowed);
+            walk_security_node(body, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::When { condition, body } => {
+            walk_security_node(condition, diagnostics, signal_shadowed);
+            walk_security_node(body, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Default { body } => {
+            walk_security_node(body, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::StatementModifier { statement, condition, .. } => {
+            walk_security_node(statement, diagnostics, signal_shadowed);
+            walk_security_node(condition, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Subroutine { signature, body, .. } => {
+            let mut sub_shadowed = signal_shadowed;
+            if let Some(signature) = signature {
+                sub_shadowed = walk_security_node(signature, diagnostics, sub_shadowed);
+            }
+            walk_security_node(body, diagnostics, sub_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Method { signature, body, .. } => {
+            let mut method_shadowed = signal_shadowed;
+            if let Some(signature) = signature {
+                method_shadowed = walk_security_node(signature, diagnostics, method_shadowed);
+            }
+            walk_security_node(body, diagnostics, method_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Signature { parameters } => {
+            let mut signature_shadowed = signal_shadowed;
+            for parameter in parameters {
+                signature_shadowed = walk_security_node(parameter, diagnostics, signature_shadowed);
+            }
+            signature_shadowed
+        }
+        NodeKind::MandatoryParameter { variable }
+        | NodeKind::SlurpyParameter { variable }
+        | NodeKind::NamedParameter { variable } => {
+            let updated_shadowed =
+                if shadows_signal_table(variable) { true } else { signal_shadowed };
+            walk_security_node(variable, diagnostics, signal_shadowed);
+            updated_shadowed
+        }
+        NodeKind::OptionalParameter { variable, default_value } => {
+            walk_security_node(default_value, diagnostics, signal_shadowed);
+            let updated_shadowed =
+                if shadows_signal_table(variable) { true } else { signal_shadowed };
+            walk_security_node(variable, diagnostics, signal_shadowed);
+            updated_shadowed
+        }
+        NodeKind::Package { block: Some(block), .. }
+        | NodeKind::PhaseBlock { block, .. }
+        | NodeKind::Class { body: block, .. } => {
+            walk_security_node(block, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Try { body, catch_blocks, finally_block } => {
+            walk_security_node(body, diagnostics, signal_shadowed);
+            for (_, catch_body) in catch_blocks {
+                walk_security_node(catch_body, diagnostics, signal_shadowed);
+            }
+            if let Some(finally_block) = finally_block {
+                walk_security_node(finally_block, diagnostics, signal_shadowed);
+            }
+            signal_shadowed
+        }
+        NodeKind::Binary { left, right, .. } => {
+            walk_security_node(left, diagnostics, signal_shadowed);
+            walk_security_node(right, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Ternary { condition, then_expr, else_expr } => {
+            walk_security_node(condition, diagnostics, signal_shadowed);
+            walk_security_node(then_expr, diagnostics, signal_shadowed);
+            walk_security_node(else_expr, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Unary { operand, .. } => {
+            walk_security_node(operand, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::VariableWithAttributes { variable, .. } => {
+            walk_security_node(variable, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::FunctionCall { name, args } => {
+            check_two_arg_open(name, args, node, diagnostics);
+            check_string_eval(name, args, node, diagnostics);
+            for arg in args {
+                walk_security_node(arg, diagnostics, signal_shadowed);
+            }
+            signal_shadowed
+        }
+        NodeKind::IndirectCall { object, args, .. } | NodeKind::MethodCall { object, args, .. } => {
+            walk_security_node(object, diagnostics, signal_shadowed);
+            for arg in args {
+                walk_security_node(arg, diagnostics, signal_shadowed);
+            }
+            signal_shadowed
+        }
+        NodeKind::Eval { block } => {
+            check_eval_node(block, node, diagnostics);
+            walk_security_node(block, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        // Backtick strings: the parser stores `cmd` and qx(cmd) as
+        // String { value: "`cmd`", interpolated: true }
+        NodeKind::String { value, interpolated: true } if is_backtick_string(value) => {
+            diagnostics.push(Diagnostic {
+                range: (node.location.start, node.location.end),
+                severity: DiagnosticSeverity::Information,
+                code: Some(DiagnosticCode::SecurityBacktickExec.as_str().to_string()),
+                message: "Command execution detected. Ensure input is sanitized.".to_string(),
+                related_information: vec![RelatedInformation {
+                    location: (node.location.start, node.location.end),
+                    message: "Consider using open() with a pipe, or IPC::Run for safer command execution with proper input validation".to_string(),
+                }],
+                tags: Vec::new(),
+                suggestion: Some(
+                    "Use open(my $fh, '-|', @cmd) or IPC::Run for safer command execution"
+                        .to_string(),
+                ),
+            });
+            signal_shadowed
+        }
+        NodeKind::Return { value: Some(value) } => {
+            walk_security_node(value, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Return { value: None } => signal_shadowed,
+        NodeKind::LabeledStatement { statement, .. } => {
+            walk_security_node(statement, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Error { partial: Some(partial), .. } => {
+            walk_security_node(partial, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
+        NodeKind::Heredoc { .. }
+        | NodeKind::Tie { .. }
+        | NodeKind::Untie { .. }
+        | NodeKind::Format { .. } => signal_shadowed,
+        NodeKind::Package { block: None, .. }
+        | NodeKind::Use { .. }
+        | NodeKind::No { .. }
+        | NodeKind::DataSection { .. }
+        | NodeKind::Number { .. }
+        | NodeKind::String { .. }
+        | NodeKind::Regex { .. }
+        | NodeKind::Match { .. }
+        | NodeKind::Substitution { .. }
+        | NodeKind::Transliteration { .. }
+        | NodeKind::Identifier { .. }
+        | NodeKind::Variable { .. }
+        | NodeKind::Typeglob { .. }
+        | NodeKind::Diamond
+        | NodeKind::Ellipsis
+        | NodeKind::Undef
+        | NodeKind::Readline { .. }
+        | NodeKind::Glob { .. }
+        | NodeKind::ArrayLiteral { .. }
+        | NodeKind::HashLiteral { .. }
+        | NodeKind::Do { .. }
+        | NodeKind::LoopControl { .. }
+        | NodeKind::Goto { .. }
+        | NodeKind::Prototype { .. }
+        | NodeKind::MissingExpression
+        | NodeKind::MissingStatement
+        | NodeKind::MissingIdentifier
+        | NodeKind::MissingBlock
+        | NodeKind::Error { .. }
+        | NodeKind::UnknownRest => signal_shadowed,
+    }
 }
 
 /// Detect a global assignment to `$SIG{__DIE__}` or `$SIG{__WARN__}`.
@@ -75,17 +338,24 @@ fn check_global_signal_handler_assignment(
     lhs: &Node,
     node: &Node,
     diagnostics: &mut Vec<Diagnostic>,
+    signal_shadowed: bool,
 ) {
-    let Some(signal_name) = signal_handler_name(lhs) else {
+    let Some(signal_handler) = signal_handler_name(lhs) else {
         return;
     };
+
+    if signal_handler.access == SignalTableAccess::Bare && signal_shadowed {
+        return;
+    }
 
     diagnostics.push(Diagnostic {
         range: (node.location.start, node.location.end),
         severity: DiagnosticSeverity::Warning,
         code: Some(DiagnosticCode::SecuritySignalHandler.as_str().to_string()),
         message: format!(
-            "Global assignment to $SIG{{{signal_name}}} changes process-wide behavior. Use local $SIG{{...}} to scope the handler."
+            "Global assignment to ${}{{{}}} changes process-wide behavior. Use local $SIG{{...}} to scope the handler.",
+            signal_table_display(&signal_handler.access),
+            signal_handler.signal_name
         ),
         related_information: vec![RelatedInformation {
             location: (node.location.start, node.location.end),
@@ -93,13 +363,21 @@ fn check_global_signal_handler_assignment(
         }],
         tags: Vec::new(),
         suggestion: Some(format!(
-            "Use `local $SIG{{{signal_name}}} = ...` if the handler should be scoped"
+            "Use `local $SIG{{{}}} = ...` if the handler should be scoped",
+            signal_handler.signal_name
         )),
     });
 }
 
+fn signal_table_display(access: &SignalTableAccess) -> &'static str {
+    match access {
+        SignalTableAccess::Bare => "$SIG",
+        SignalTableAccess::MainQualified => "$main::SIG",
+    }
+}
+
 /// Extract the signal-handler key if the node targets `$SIG{__DIE__}` or `$SIG{__WARN__}`.
-fn signal_handler_name(node: &Node) -> Option<&str> {
+fn signal_handler_name(node: &Node) -> Option<SignalHandlerTarget> {
     let NodeKind::Binary { op, left, right } = &node.kind else {
         return None;
     };
@@ -108,21 +386,29 @@ fn signal_handler_name(node: &Node) -> Option<&str> {
         return None;
     }
 
-    let is_sig_hash = matches!(
-        &left.kind,
-        NodeKind::Variable { sigil, name } if (sigil == "$" || sigil == "%") && name == "SIG"
-    );
-    if !is_sig_hash {
-        return None;
-    }
+    let access = match &left.kind {
+        NodeKind::Variable { sigil, name } if (sigil == "$" || sigil == "%") && name == "SIG" => {
+            SignalTableAccess::Bare
+        }
+        NodeKind::Variable { sigil, name }
+            if (sigil == "$" || sigil == "%") && (name == "main::SIG" || name == "::SIG") =>
+        {
+            SignalTableAccess::MainQualified
+        }
+        _ => return None,
+    };
 
     match &right.kind {
         NodeKind::Identifier { name } if name == "__DIE__" || name == "__WARN__" => {
-            Some(name.as_str())
+            Some(SignalHandlerTarget { access, signal_name: name.to_string() })
         }
         NodeKind::String { value, .. } => {
             let trimmed = value.trim_matches(['"', '\'']);
-            if trimmed == "__DIE__" || trimmed == "__WARN__" { Some(trimmed) } else { None }
+            if trimmed == "__DIE__" || trimmed == "__WARN__" {
+                Some(SignalHandlerTarget { access, signal_name: trimmed.to_string() })
+            } else {
+                None
+            }
         }
         _ => None,
     }
@@ -232,6 +518,25 @@ fn is_backtick_string(value: &str) -> bool {
     value.starts_with('`') && value.ends_with('`') && value.len() >= 2
 }
 
+fn shadows_signal_table(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::Variable { sigil, name } => sigil == "%" && name == "SIG",
+        NodeKind::VariableWithAttributes { variable, .. } => shadows_signal_table(variable),
+        NodeKind::VariableDeclaration { declarator, variable, .. } => {
+            matches!(declarator.as_str(), "my" | "state") && shadows_signal_table(variable)
+        }
+        NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+            matches!(declarator.as_str(), "my" | "state")
+                && variables.iter().any(shadows_signal_table)
+        }
+        NodeKind::MandatoryParameter { variable }
+        | NodeKind::SlurpyParameter { variable }
+        | NodeKind::NamedParameter { variable } => shadows_signal_table(variable),
+        NodeKind::OptionalParameter { variable, .. } => shadows_signal_table(variable),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,11 +560,38 @@ mod tests {
     }
 
     #[test]
+    fn quoted_global_sig_warn_handler_is_flagged() {
+        let diags = security_diags("$SIG{'__WARN__'} = sub { };");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL602")),
+            "quoted __WARN__ handler should be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
     fn global_sig_die_handler_is_flagged() {
         let diags = security_diags("%SIG{__DIE__} = sub { };");
         assert!(
             diags.iter().any(|d| d.code.as_deref() == Some("PL602")),
             "global __DIE__ handler should be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn main_qualified_sig_warn_handler_is_flagged() {
+        let diags = security_diags("$main::SIG{__WARN__} = sub { };");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL602")),
+            "main-qualified __WARN__ handler should be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn lexical_sig_shadow_is_not_flagged() {
+        let diags = security_diags("my %SIG; $SIG{__WARN__} = sub { };");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
+            "lexical %SIG shadow should not be flagged: {diags:?}"
         );
     }
 

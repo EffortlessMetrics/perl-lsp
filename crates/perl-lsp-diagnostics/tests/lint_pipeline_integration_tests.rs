@@ -257,7 +257,7 @@ fn lint_pipeline_string_eval_emits_pl600() {
 
 #[test]
 fn lint_pipeline_global_sig_handler_emits_pl602() {
-    let source = "use strict;\nuse warnings;\n$SIG{__WARN__} = sub { warn \"caught\" };\n";
+    let source = "use strict;\nuse warnings;\n$main::SIG{'__WARN__'} = sub { warn \"caught\" };\n";
     let diags = diagnostics_for(source);
 
     let signal: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL602")).collect();
@@ -271,6 +271,19 @@ fn lint_pipeline_global_sig_handler_emits_pl602() {
     );
     assert_eq!(signal[0].severity, DiagnosticSeverity::Warning);
     assert!(signal[0].suggestion.is_some(), "security-signal-handler should carry a suggestion");
+}
+
+#[test]
+fn lint_pipeline_lexical_sig_shadow_does_not_emit_pl602() {
+    let source =
+        "use strict;\nuse warnings;\nmy %SIG;\n$SIG{__WARN__} = sub { warn \"caught\" };\n";
+    let diags = diagnostics_for(source);
+
+    assert!(
+        diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
+        "lexical %SIG shadow should not emit PL602 from get_diagnostics(), got {:?}",
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
 }
 
 // =========================================================================
