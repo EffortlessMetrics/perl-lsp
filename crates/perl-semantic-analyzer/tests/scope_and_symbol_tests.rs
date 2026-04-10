@@ -2855,3 +2855,60 @@ my $a = 42;
     assert!(!undeclared, "a lexically declared $a must never be flagged as undeclared");
     Ok(())
 }
+
+// ===========================================================================
+// Print with comma-separated arguments (#3503)
+// ===========================================================================
+
+/// Regression test for issue #3503: variables passed to `print` as a comma-separated
+/// list must be marked as used by the scope analyzer and must not produce
+/// `UnusedVariable` diagnostics.
+#[test]
+fn scope_many_variables_in_scope() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my $a = 1;
+my $b = 2;
+my $c = 3;
+my $d = 4;
+my $e = 5;
+print $a, $b, $c, $d, $e;
+"#;
+    let issues = scope_issues(code);
+    let unused = count_issues(&issues, IssueKind::UnusedVariable);
+    assert_eq!(unused, 0, "all variables used in print should not be unused");
+    Ok(())
+}
+
+#[test]
+fn scope_print_comma_args_with_strict() -> Result<(), Box<dyn std::error::Error>> {
+    // Same pattern but with `use strict` enabled — reproducer from issue #3503.
+    let code = r#"
+use strict;
+my $name = "world";
+my $greeting = "hello";
+print $greeting, " ", $name, "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    let unused: Vec<_> = issues.iter().filter(|i| i.kind == IssueKind::UnusedVariable).collect();
+    assert!(
+        unused.is_empty(),
+        "variables used in print comma-arg list must not be flagged as unused (strict); got: {:?}",
+        unused.iter().map(|i| &i.variable_name).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_say_comma_separated_args_marked_used() -> Result<(), Box<dyn std::error::Error>> {
+    // `say` uses the same indirect-object / FunctionCall path as `print`.
+    let code = r#"
+my $a = "first";
+my $b = "second";
+my $c = "third";
+say $a, $b, $c;
+"#;
+    let issues = scope_issues(code);
+    let unused = count_issues(&issues, IssueKind::UnusedVariable);
+    assert_eq!(unused, 0, "all variables used in say should not be unused");
+    Ok(())
+}
