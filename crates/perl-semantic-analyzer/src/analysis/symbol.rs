@@ -2375,10 +2375,7 @@ sub foo () {
         let table = extractor.extract(&ast);
 
         // Sub `foo` is registered as a symbol
-        assert!(
-            table.symbols.contains_key("foo"),
-            "sub foo should be in the symbol table"
-        );
+        assert!(table.symbols.contains_key("foo"), "sub foo should be in the symbol table");
         // No spurious variable symbols from an empty signature
         assert_eq!(
             table.symbols.len(),
