@@ -2063,7 +2063,6 @@ read $fh, $buffer, 1024;
 print $buffer;
 "#;
     let issues = scope_issues_strict(code);
-    // $fh was declared with `my` — should not be flagged at all
     assert!(
         !issues.iter().any(|i| {
             i.variable_name.contains("fh")
@@ -2100,5 +2099,109 @@ print $b;
             issues
         );
     }
+    Ok(())
+}
+
+// ===========================================================================
+// Builtin globals — regex position arrays @- and @+ (#3354)
+// ===========================================================================
+
+#[test]
+fn builtin_at_minus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello" =~ /ell/) {
+    my $start = $-[0];
+    my @starts = @-;
+    print $start, "\n";
+    print @starts, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "-"),
+        "@- should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_at_plus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello" =~ /ell/) {
+    my $end = $+[0];
+    my @ends = @+;
+    print $end, "\n";
+    print @ends, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "+"),
+        "@+ should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Builtin globals — ${^MATCH}, ${^PREMATCH}, ${^POSTMATCH} (#3351)
+// ===========================================================================
+
+#[test]
+fn builtin_caret_match_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^MATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^MATCH"),
+        "{{^MATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_caret_prematch_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^PREMATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^PREMATCH"),
+        "{{^PREMATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_caret_postmatch_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^POSTMATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^POSTMATCH"),
+        "{{^POSTMATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
     Ok(())
 }

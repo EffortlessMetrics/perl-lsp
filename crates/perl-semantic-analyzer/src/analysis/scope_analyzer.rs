@@ -1543,11 +1543,29 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
             "PERL_VERSION" | "OLD_PERL_VERSION" => true,
             _ => {
                 // Check patterns
-                // $^[A-Z] variables
-                if name.starts_with('^') && name.len() == 2 {
-                    // Optimization: access byte directly since we know len is 2 and it's ASCII range
-                    let second = name.as_bytes()[1];
-                    if second.is_ascii_uppercase() {
+                // $^X (single-char) control variables — lexer produces name `^X`.
+                // ${^NAME} (multi-char) control variables — lexer produces name `{^NAME}`.
+                // Both should be treated as built-ins.
+                //
+                // Form 1: `^` followed by one or more ASCII uppercase letters or underscores.
+                //   Examples: `^A`, `^W`, `^MATCH`, `^PREMATCH`, `^POSTMATCH`.
+                // Form 2: `{^NAME}` — same but wrapped in braces by the lexer.
+                //   Examples: `{^MATCH}`, `{^PREMATCH}`, `{^POSTMATCH}`.
+                let caret_name = if let Some(inner) = name
+                    .strip_prefix('{')
+                    .and_then(|s| s.strip_suffix('}'))
+                {
+                    inner
+                } else {
+                    name
+                };
+                if let Some(rest) = caret_name.strip_prefix('^') {
+                    if !rest.is_empty()
+                        && rest
+                            .as_bytes()
+                            .iter()
+                            .all(|c| c.is_ascii_uppercase() || *c == b'_')
+                    {
                         return true;
                     }
                 }
@@ -1562,7 +1580,7 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
                 false
             }
         },
-        b'@' => matches!(name, "_" | "+" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
+        b'@' => matches!(name, "_" | "+" | "-" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
         b'%' => matches!(name, "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
         _ => false,
     }
