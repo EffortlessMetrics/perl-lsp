@@ -1300,6 +1300,20 @@ impl ScopeAnalyzer {
             return None;
         };
 
+        // Explicit scalar-reference dereference forms should count as uses of the
+        // underlying scalar lexical (`$ref`) rather than a container lexical of the
+        // same bare name. This covers compact and braced syntaxes such as:
+        // - `@$ref`, `%$ref`, `$$ref`
+        // - `@{$ref}`, `%{$ref}`, `${$ref}`
+        if (sigil == "@" || sigil == "%" || sigil == "$")
+            && context
+                .code
+                .get(node.location.start..node.location.end)
+                .is_some_and(is_explicit_scalar_reference_deref)
+        {
+            return Some(("$", normalize_scalar_deref_base_name(name)));
+        }
+
         if (sigil == "@" || sigil == "%" || sigil == "$") && name.starts_with('$') && name.len() > 1
         {
             return Some(("$", &name[1..]));
@@ -1998,6 +2012,22 @@ fn is_topic_defaulting_builtin(name: &str) -> bool {
 /// Topic-defaulting builtins that also modify `$_` when called without args.
 fn is_topic_modifying_builtin(name: &str) -> bool {
     matches!(name, "chomp" | "chop")
+}
+
+fn is_explicit_scalar_reference_deref(source: &str) -> bool {
+    source.starts_with("@$")
+        || source.starts_with("%$")
+        || source.starts_with("$$")
+        || source.starts_with("@{$")
+        || source.starts_with("%{$")
+        || source.starts_with("${$")
+}
+
+fn normalize_scalar_deref_base_name(name: &str) -> &str {
+    let unwrapped =
+        name.strip_prefix('{').and_then(|inner| inner.strip_suffix('}')).unwrap_or(name);
+
+    unwrapped.strip_prefix('$').unwrap_or(unwrapped)
 }
 
 /// Check if an identifier is a known filehandle
