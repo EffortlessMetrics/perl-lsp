@@ -106,3 +106,39 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
         remediation: 'Try "Run Health Check" to diagnose, or "Reinstall" to fetch a fresh binary.',
     };
 }
+
+/**
+ * Choose the most informative startup diagnosis to surface to the user.
+ *
+ * Strategy (#3329): OS-level probe results are preferred when they classify a
+ * specific error (glibc mismatch, wrong arch, permission error, etc.).  When
+ * the probe returns `Unknown` — meaning execFile gave no useful output — fall
+ * back to the health-check string from `runStartupDiagnostics`, which can
+ * detect environment issues like a missing Perl interpreter.
+ *
+ * @param probe      Result of `probeStartupFailure`.
+ * @param healthMsg  Result of `onboardingManager.runStartupDiagnostics`, or
+ *                   `undefined` if that call was skipped / not yet awaited.
+ * @returns          The best available diagnosis, with `hint` and `remediation`
+ *                   ready for display.
+ */
+export function selectBestDiagnosis(
+    probe: StartupErrorDiagnosis,
+    healthMsg: string | undefined,
+): StartupErrorDiagnosis {
+    if (probe.kind !== StartupErrorKind.Unknown) {
+        // Probe classified the error specifically — trust it.
+        return probe;
+    }
+    if (!healthMsg) {
+        // Nothing better available — return the probe as-is.
+        return probe;
+    }
+    // Probe was inconclusive; promote the health-check string as the hint so
+    // the user sees "Perl interpreter not found" instead of the generic message.
+    return {
+        kind: StartupErrorKind.Unknown,
+        hint: healthMsg,
+        remediation: probe.remediation,
+    };
+}
