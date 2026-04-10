@@ -2627,6 +2627,28 @@ print $b;
     Ok(())
 }
 
+#[test]
+fn socketpair_non_handle_positions_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
+    // `socketpair` only consumes declaration-capable handles at positions 0 and 1.
+    // Declarations in later positions must remain ordinary lexicals.
+    let code = r#"
+use strict;
+socketpair my $a, my $b, my $domain, 1, 0;
+print $a;
+print $b;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            i.variable_name == "$domain"
+                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+        }),
+        "socketpair position-2 declaration should not be auto-consumed (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // Builtin globals — regex position arrays @- and @+ (#3354)
 // ===========================================================================
