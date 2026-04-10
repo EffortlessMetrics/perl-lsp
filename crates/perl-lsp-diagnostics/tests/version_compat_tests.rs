@@ -1067,10 +1067,7 @@ fn use_builtin_node() -> Node {
 }
 
 fn scalar_var(name: &str) -> Node {
-    Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: name.to_string() },
-        loc(20, 22),
-    )
+    Node::new(NodeKind::Variable { sigil: "$".to_string(), name: name.to_string() }, loc(20, 22))
 }
 
 fn given_node() -> Node {
@@ -1082,10 +1079,7 @@ fn given_node() -> Node {
 
 fn when_node() -> Node {
     Node::new(
-        NodeKind::When {
-            condition: Box::new(scalar_var("x")),
-            body: Box::new(block(vec![])),
-        },
+        NodeKind::When { condition: Box::new(scalar_var("x")), body: Box::new(block(vec![])) },
         loc(20, 40),
     )
 }
