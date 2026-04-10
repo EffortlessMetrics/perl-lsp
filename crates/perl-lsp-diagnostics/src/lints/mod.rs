@@ -99,6 +99,12 @@
 //! |------|----------|-------------|
 //! | `PL406` | Hint | Statement cannot be reached due to preceding unconditional exit |
 //!
+//! ## Duplicate hash keys (`duplicate_hash_keys.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL408` | Warning | Hash key appears more than once in the same literal |
+//!
 //! # Severity Levels
 //!
 //! Each lint produces diagnostics with appropriate severity:
@@ -118,6 +124,8 @@
 
 pub mod common_mistakes;
 pub mod deprecated;
+/// Duplicate hash key detection (PL408)
+pub mod duplicate_hash_keys;
 /// Conservative `$@` / `$EVAL_ERROR` flow checks after `eval` / `try`
 pub mod eval_error_flow;
 /// Missing module detection (PL701)
