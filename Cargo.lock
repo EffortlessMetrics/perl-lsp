@@ -2072,6 +2072,7 @@ name = "perl-lsp-input-validation"
 version = "0.12.3"
 dependencies = [
  "anyhow",
+ "perl-lsp-limits",
  "perl-path-security",
  "perl-tdd-support",
  "serde_json",
