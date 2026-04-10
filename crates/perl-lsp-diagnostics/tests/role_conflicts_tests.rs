@@ -127,3 +127,97 @@ requires 'shared';
 
     assert!(pl303_diags(source).is_empty(), "`requires` should not create a role-method conflict");
 }
+
+#[test]
+fn multiple_with_calls_accumulate_and_conflict() {
+    let source = r#"
+package MyApp::Consumer;
+use strict;
+use warnings;
+use Moo;
+with 'MyApp::RoleA';
+with 'MyApp::RoleB';
+
+package MyApp::RoleA;
+use strict;
+use warnings;
+use Moo::Role;
+sub clash { 1 }
+
+package MyApp::RoleB;
+use strict;
+use warnings;
+use Moo::Role;
+sub clash { 2 }
+"#;
+    let diags = pl303_diags(source);
+    assert!(
+        !diags.is_empty(),
+        "multiple separate `with` calls should still detect method conflicts: {diags:?}"
+    );
+}
+
+#[test]
+fn three_conflicting_roles_emit_single_pl303() {
+    let source = r#"
+package MyApp::Consumer;
+use strict;
+use warnings;
+use Moo;
+with 'MyApp::RoleA', 'MyApp::RoleB', 'MyApp::RoleC';
+
+package MyApp::RoleA;
+use strict;
+use warnings;
+use Moo::Role;
+sub clash { 1 }
+
+package MyApp::RoleB;
+use strict;
+use warnings;
+use Moo::Role;
+sub clash { 2 }
+
+package MyApp::RoleC;
+use strict;
+use warnings;
+use Moo::Role;
+sub clash { 3 }
+"#;
+    let diags = pl303_diags(source);
+    assert_eq!(
+        diags.len(),
+        1,
+        "three roles providing the same method is still one conflict: {diags:?}"
+    );
+    assert!(diags[0].message.contains("clash"), "message should mention the method name");
+}
+
+#[test]
+fn role_consuming_roles_does_not_trigger_pl303() {
+    // A role with its own `with` should not trigger PL303 since it is itself a role
+    let source = r#"
+package MyApp::RoleComposite;
+use strict;
+use warnings;
+use Moo::Role;
+with 'MyApp::RoleA', 'MyApp::RoleB';
+
+package MyApp::RoleA;
+use strict;
+use warnings;
+use Moo::Role;
+sub clash { 1 }
+
+package MyApp::RoleB;
+use strict;
+use warnings;
+use Moo::Role;
+sub clash { 2 }
+"#;
+    assert!(
+        pl303_diags(source).is_empty(),
+        "a role composing conflicting roles should not itself trigger PL303: {:?}",
+        pl303_diags(source)
+    );
+}
