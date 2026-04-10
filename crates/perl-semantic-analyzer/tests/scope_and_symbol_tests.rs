@@ -177,6 +177,36 @@ print $client;
 }
 
 #[test]
+fn open_my_handle_used_in_readline_is_tracked() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression: `open my $fh, ...` declares `$fh` and later `<$fh>` must not
+    // trigger undeclared/uninitialized/unused diagnostics.
+    let code = r#"
+use strict;
+use warnings;
+
+open my $fh, '<', 'file.txt' or die $!;
+print <$fh>;
+close $fh;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "$fh"
+        }),
+        "open-my handle should remain declared/initialized/used across <$fh>: {:?}",
+        issues
+    );
+
+    Ok(())
+}
+
+#[test]
 fn scope_phase_blocks_keep_lexicals_inside_their_block() -> Result<(), Box<dyn std::error::Error>> {
     for phase in ["BEGIN", "CHECK", "INIT", "UNITCHECK", "END"] {
         let code = format!(
