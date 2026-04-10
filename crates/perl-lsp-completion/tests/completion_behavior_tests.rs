@@ -63,6 +63,10 @@ fn labels(items: &[CompletionItem]) -> Vec<String> {
     items.iter().map(|i| i.label.clone()).collect()
 }
 
+fn find_item<'a>(items: &'a [CompletionItem], label: &str) -> Option<&'a CompletionItem> {
+    items.iter().find(|item| item.label == label)
+}
+
 // ===========================================================================
 // 1. Variable completion after dollar sign
 // ===========================================================================
@@ -382,7 +386,7 @@ fn moo_accessor_completion_includes_type_documentation() {
 package Config;
 use Moo;
 
-has 'timeout' => (is => 'rw', isa => 'Int');
+has 'timeout' => (is => 'rw', isa => 'Int', required => 1, predicate => 1, builder => 1, clearer => 1);
 
 sub check {
     my $self = shift;
@@ -392,11 +396,36 @@ sub check {
     let pos = must_some(code.find("$self->")) + "$self->".len();
     let items = completions(code, pos);
 
-    let timeout_item = must_some(items.iter().find(|c| c.label == "timeout"));
+    let timeout_item = must_some(find_item(&items, "timeout"));
     let doc = must_some(timeout_item.documentation.as_deref());
     assert!(
         doc.contains("Int"),
         "accessor documentation should include the isa type, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("read-write"),
+        "accessor documentation should include access mode, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Required"),
+        "accessor documentation should include required metadata, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Predicate") && doc.contains("has_timeout"),
+        "accessor documentation should include predicate metadata, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Builder") && doc.contains("_build_timeout"),
+        "accessor documentation should include builder metadata, got: {:?}",
+        doc
+    );
+    assert!(
+        doc.contains("Clearer") && doc.contains("clear_timeout"),
+        "accessor documentation should include clearer metadata, got: {:?}",
         doc
     );
 }

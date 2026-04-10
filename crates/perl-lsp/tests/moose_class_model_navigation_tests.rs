@@ -269,6 +269,38 @@ mod moose_class_model_navigation_tests {
         Ok(())
     }
 
+    /// Hovering an accessor with Moo/Moose metadata must surface the key fields
+    /// from the attribute model in the hover markdown.
+    #[test]
+    fn test_moose_accessor_hover_surfaces_full_attribute_metadata() -> TestResult {
+        let code = "package Widget;\nuse Moose;\nhas 'status' => (is => 'rw', isa => 'Str', required => 1, predicate => 1, builder => 1, clearer => 1);\nsub render { my ($self) = @_; print $self->status; }\n";
+        let uri = "file:///widget_metadata.pl";
+
+        let resp = hover_at(code, uri, "status", 3)?;
+        let content = semantic::hover_content(&resp)
+            .ok_or("Expected hover content for Moose accessor 'status'")?;
+
+        assert!(
+            content.contains("Moo/Moose Attribute Accessor"),
+            "Hover for Moose accessor should show the dedicated accessor card, got: {content}"
+        );
+        for expected in [
+            "**Attribute**: `status`",
+            "**Type**: `Str`",
+            "**Access**: read-write",
+            "**Required**: yes",
+            "**Predicate**: `has_status`",
+            "**Builder**: `_build_status`",
+            "**Clearer**: `clear_status`",
+        ] {
+            assert!(
+                content.contains(expected),
+                "Hover for Moose accessor should include `{expected}`, got: {content}"
+            );
+        }
+        Ok(())
+    }
+
     /// Hovering on a bare method call (no Moose) must NOT break — must still
     /// return some content as before.
     #[test]
