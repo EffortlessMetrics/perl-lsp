@@ -1898,11 +1898,12 @@ impl SymbolExtractor {
         true
     }
 
-    /// Synthesize a narrow Future/Future::XS promise-chain surface for common entrypoints.
+    /// Synthesize a narrow async framework API surface for common entrypoints.
     ///
     /// This intentionally avoids type inference. It only exposes the canonical
     /// constructor / class methods and the common chain methods that are most
-    /// useful for navigation and references when a file opts into Future.
+    /// useful for navigation and references when a file opts into an async
+    /// framework such as Future or Promise.
     fn synthesize_future_api_symbols(
         &mut self,
         object: &Node,
@@ -1913,14 +1914,34 @@ impl SymbolExtractor {
             return false;
         };
 
-        let (framework_name, root_name) = match flags.async_framework {
-            Some(AsyncFrameworkKind::Future) => ("Future", "Future"),
-            Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS"),
-            _ => return false,
-        };
-
-        let chain_methods = ["then", "catch", "finally", "get", "is_done", "is_ready"];
-        let class_entrypoints = ["new", "done", "fail", "wait_all", "needs_all", "needs_any"];
+        let (framework_name, root_name, chain_methods, class_entrypoints) =
+            match flags.async_framework {
+                Some(AsyncFrameworkKind::Future) => (
+                    "Future",
+                    "Future",
+                    vec!["then", "catch", "finally", "get", "is_done", "is_ready"],
+                    vec!["new", "done", "fail", "wait_all", "needs_all", "needs_any"],
+                ),
+                Some(AsyncFrameworkKind::FutureXS) => (
+                    "Future::XS",
+                    "Future::XS",
+                    vec!["then", "catch", "finally", "get", "is_done", "is_ready"],
+                    vec!["new", "done", "fail", "wait_all", "needs_all", "needs_any"],
+                ),
+                Some(AsyncFrameworkKind::Promise) => (
+                    "Promise",
+                    "Promise",
+                    vec!["then", "catch", "finally", "resolve", "reject"],
+                    vec!["new", "all", "race", "any"],
+                ),
+                Some(AsyncFrameworkKind::PromiseXS) => (
+                    "Promise::XS",
+                    "Promise::XS",
+                    vec!["then", "catch", "finally", "resolve", "reject"],
+                    vec!["new", "all", "race", "any"],
+                ),
+                _ => return false,
+            };
 
         let object_name = Self::single_symbol_name(object);
 
