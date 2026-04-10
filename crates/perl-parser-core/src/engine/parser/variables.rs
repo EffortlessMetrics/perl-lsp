@@ -549,7 +549,8 @@ impl<'a> Parser<'a> {
 
         // Special handling for @, %, or $ sigil followed by { - array/hash/scalar dereference
         // e.g. @{$ref}, %{$hash}, ${"${pkg}::$sym"}
-        if (sigil == "@" || sigil == "%" || (sigil == "$" && name.is_empty()))
+        if (sigil == "@" || sigil == "%" || sigil == "$")
+            && name.is_empty()
             && self.peek_kind() == Some(TokenKind::LeftBrace)
         {
             self.tokens.next()?; // consume {
