@@ -711,9 +711,24 @@ impl SymbolExtractor {
                 // We don't currently track framework deactivation via `no`.
             }
 
-            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
-                // BEGIN, END, CHECK, INIT blocks
+            NodeKind::PhaseBlock { phase, phase_span: _, block } => {
+                // BEGIN, END, CHECK, INIT, UNITCHECK blocks — expose as named symbols
+                // so they appear in document outline / Outline View (#3464).
+                let symbol = Symbol {
+                    name: phase.clone(),
+                    qualified_name: format!("{}::{}", self.table.current_package, phase),
+                    kind: SymbolKind::Subroutine,
+                    location: node.location,
+                    scope_id: self.table.current_scope(),
+                    declaration: None,
+                    documentation: None,
+                    attributes: vec![],
+                };
+                self.table.add_symbol(symbol);
+
+                self.table.push_scope(ScopeKind::Block, node.location);
                 self.visit_node(block);
+                self.table.pop_scope();
             }
 
             NodeKind::StatementModifier { statement, modifier: _, condition } => {

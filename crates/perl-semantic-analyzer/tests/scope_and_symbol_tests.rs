@@ -2855,3 +2855,68 @@ my $a = 42;
     assert!(!undeclared, "a lexically declared $a must never be flagged as undeclared");
     Ok(())
 }
+
+// ===========================================================================
+// Phase block (BEGIN/END/CHECK/INIT/UNITCHECK) symbol extraction (#3464)
+// ===========================================================================
+
+#[test]
+fn phase_block_begin_extracted_as_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { require Config; }";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "BEGIN", SymbolKind::Subroutine),
+        "BEGIN block must appear in symbol table as Subroutine; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn phase_block_end_extracted_as_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "END { cleanup(); }";
+    let table = parse_and_extract(code);
+    assert!(
+        has_symbol(&table, "END", SymbolKind::Subroutine),
+        "END block must appear in symbol table; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn phase_block_all_five_extracted() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { 1; }\nEND { 1; }\nCHECK { 1; }\nINIT { 1; }\nUNITCHECK { 1; }\n";
+    let table = parse_and_extract(code);
+    for phase in &["BEGIN", "END", "CHECK", "INIT", "UNITCHECK"] {
+        assert!(
+            has_symbol(&table, phase, SymbolKind::Subroutine),
+            "{} must appear in symbol table; symbols: {:?}",
+            phase,
+            table.symbols.keys().collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn phase_block_symbol_location_within_source() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { my $x = 1; }";
+    let table = parse_and_extract(code);
+    let syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
+    let sym = syms.first().ok_or("no symbols for BEGIN")?;
+    assert!(sym.location.start <= code.len(), "start offset must be within source");
+    assert!(sym.location.end <= code.len(), "end offset must be within source");
+    assert!(sym.location.start < sym.location.end, "start must be before end");
+    Ok(())
+}
+
+#[test]
+fn phase_block_symbol_in_global_scope() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "BEGIN { my $x = 42; }";
+    let table = parse_and_extract(code);
+    let begin_syms = table.symbols.get("BEGIN").ok_or("BEGIN not found")?;
+    let begin_sym = begin_syms.first().ok_or("no BEGIN symbol")?;
+    assert_eq!(begin_sym.scope_id, 0, "BEGIN symbol must be in global scope");
+    Ok(())
+}
