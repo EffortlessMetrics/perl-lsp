@@ -1449,11 +1449,8 @@ impl WorkspaceIndex {
         let folder_uri = self.determine_folder_uri(&uri_str);
 
         // Extract symbols and references
-        let mut file_index = FileIndex {
-            content_hash,
-            folder_uri: folder_uri.clone(),
-            ..Default::default()
-        };
+        let mut file_index =
+            FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
 
@@ -1642,7 +1639,7 @@ impl WorkspaceIndex {
     pub fn remove_folder(&self, folder_uri: &str) {
         let mut files_to_remove = Vec::new();
         let files = self.files.read();
-        
+
         // Collect all files that belong to this folder
         for (key, file_index) in files.iter() {
             if file_index.folder_uri.as_deref() == Some(folder_uri) {
@@ -1650,7 +1647,7 @@ impl WorkspaceIndex {
             }
         }
         drop(files);
-        
+
         // Remove each file
         for key in files_to_remove {
             let mut files = self.files.write();
@@ -1658,7 +1655,7 @@ impl WorkspaceIndex {
                 // Incrementally remove symbols
                 let mut symbols = self.symbols.write();
                 Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
-                
+
                 // Remove from global reference index
                 let mut global_refs = self.global_references.write();
                 Self::remove_file_global_refs(&mut global_refs, &file_index, &key);
@@ -1773,11 +1770,8 @@ impl WorkspaceIndex {
             // Determine workspace folder URI from the file URI
             let folder_uri = self.determine_folder_uri(&uri_str);
 
-            let mut file_index = FileIndex {
-                content_hash,
-                folder_uri: folder_uri.clone(),
-                ..Default::default()
-            };
+            let mut file_index =
+                FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
             let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
             visitor.visit(&ast, &mut file_index);
 
@@ -2034,10 +2028,7 @@ impl WorkspaceIndex {
     /// A vector of file indices belonging to the specified folder
     pub fn files_in_folder(&self, folder_uri: &str) -> Vec<FileIndex> {
         let files = self.files.read();
-        files.values()
-            .filter(|f| f.folder_uri.as_deref() == Some(folder_uri))
-            .cloned()
-            .collect()
+        files.values().filter(|f| f.folder_uri.as_deref() == Some(folder_uri)).cloned().collect()
     }
 
     /// Get all symbols in a specific workspace folder
@@ -2051,7 +2042,8 @@ impl WorkspaceIndex {
     /// A vector of symbols belonging to the specified folder
     pub fn symbols_in_folder(&self, folder_uri: &str) -> Vec<WorkspaceSymbol> {
         let files = self.files.read();
-        files.values()
+        files
+            .values()
             .filter(|f| f.folder_uri.as_deref() == Some(folder_uri))
             .flat_map(|f| f.symbols.iter().cloned())
             .collect()
@@ -2261,10 +2253,7 @@ impl WorkspaceIndex {
             .collect();
 
         // Sort by rank (lower is better), then by name for stability
-        ranked.sort_by(|a, b| {
-            a.1.cmp(&b.1)
-                .then_with(|| a.0.name.cmp(&b.0.name))
-        });
+        ranked.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.name.cmp(&b.0.name)));
 
         ranked.into_iter().map(|(symbol, _)| symbol).collect()
     }
@@ -2290,11 +2279,7 @@ impl WorkspaceIndex {
     /// let index = WorkspaceIndex::new();
     /// let ranked = index.search_symbols_ranked("example", "file:///project1/src/main.pl");
     /// ```
-    pub fn search_symbols_ranked(
-        &self,
-        name: &str,
-        doc_uri: &str,
-    ) -> Vec<WorkspaceSymbol> {
+    pub fn search_symbols_ranked(&self, name: &str, doc_uri: &str) -> Vec<WorkspaceSymbol> {
         let symbols = self.search_symbols(name);
         self.rank_symbols_by_folder(symbols, doc_uri)
     }
@@ -2343,11 +2328,7 @@ impl WorkspaceIndex {
     #[allow(dead_code)]
     pub fn extract_package_name(&self, symbol_name: &str) -> Option<String> {
         let parts: Vec<&str> = symbol_name.split("::").collect();
-        if parts.len() > 1 {
-            Some(parts[..parts.len() - 1].join("::"))
-        } else {
-            None
-        }
+        if parts.len() > 1 { Some(parts[..parts.len() - 1].join("::")) } else { None }
     }
 
     /// Get symbols in a specific file
@@ -4616,13 +4597,13 @@ Utils::process_data();
     #[test]
     fn test_folder_context_in_file_index() {
         let index = WorkspaceIndex::new();
-        
+
         // Set up workspace folders
         index.set_workspace_folders(vec![
             "file:///project1".to_string(),
             "file:///project2".to_string(),
         ]);
-        
+
         let uri1 = "file:///project1/lib/Module.pm";
         let code1 = r#"
 package Module;
@@ -4632,7 +4613,7 @@ sub test_sub {
 }
 "#;
         must(index.index_file(must(url::Url::parse(uri1)), code1.to_string()));
-        
+
         let uri2 = "file:///project2/lib/Other.pm";
         let code2 = r#"
 package Other;
@@ -4642,20 +4623,20 @@ sub other_sub {
 }
 "#;
         must(index.index_file(must(url::Url::parse(uri2)), code2.to_string()));
-        
+
         // Verify folder context is set correctly
         let symbols1 = index.file_symbols(uri1);
         assert_eq!(symbols1.len(), 2, "Should have 2 symbols in Module.pm");
         for symbol in &symbols1 {
             assert_eq!(symbol.uri, uri1, "Symbol URI should match file URI");
         }
-        
+
         let symbols2 = index.file_symbols(uri2);
         assert_eq!(symbols2.len(), 2, "Should have 2 symbols in Other.pm");
         for symbol in &symbols2 {
             assert_eq!(symbol.uri, uri2, "Symbol URI should match file URI");
         }
-        
+
         // Verify folder attribution
         let files = index.files.read();
         let file_index1 = must_some(files.get(&DocumentStore::uri_key(uri1)));
@@ -4664,7 +4645,7 @@ sub other_sub {
             Some("file:///project1".to_string()),
             "File should be attributed to correct workspace folder"
         );
-        
+
         let file_index2 = must_some(files.get(&DocumentStore::uri_key(uri2)));
         assert_eq!(
             file_index2.folder_uri,
@@ -4676,13 +4657,13 @@ sub other_sub {
     #[test]
     fn test_determine_folder_uri() {
         let index = WorkspaceIndex::new();
-        
+
         // Set up workspace folders
         index.set_workspace_folders(vec![
             "file:///project1".to_string(),
             "file:///project2".to_string(),
         ]);
-        
+
         // Test file in project1
         let folder1 = index.determine_folder_uri("file:///project1/lib/Module.pm");
         assert_eq!(
@@ -4690,7 +4671,7 @@ sub other_sub {
             Some("file:///project1".to_string()),
             "Should determine folder for file in project1"
         );
-        
+
         // Test file in project2
         let folder2 = index.determine_folder_uri("file:///project2/lib/Other.pm");
         assert_eq!(
@@ -4698,26 +4679,22 @@ sub other_sub {
             Some("file:///project2".to_string()),
             "Should determine folder for file in project2"
         );
-        
+
         // Test file not in any workspace folder
         let folder_none = index.determine_folder_uri("file:///other/project/Module.pm");
-        assert_eq!(
-            folder_none,
-            None,
-            "Should return None for file outside workspace folders"
-        );
+        assert_eq!(folder_none, None, "Should return None for file outside workspace folders");
     }
 
     #[test]
     fn test_remove_folder() {
         let index = WorkspaceIndex::new();
-        
+
         // Set up workspace folders
         index.set_workspace_folders(vec![
             "file:///project1".to_string(),
             "file:///project2".to_string(),
         ]);
-        
+
         // Index files from both folders
         let uri1 = "file:///project1/lib/Module.pm";
         let code1 = r#"
@@ -4728,7 +4705,7 @@ sub test_sub {
 }
 "#;
         must(index.index_file(must(url::Url::parse(uri1)), code1.to_string()));
-        
+
         let uri2 = "file:///project2/lib/Other.pm";
         let code2 = r#"
 package Other;
@@ -4738,19 +4715,16 @@ sub other_sub {
 }
 "#;
         must(index.index_file(must(url::Url::parse(uri2)), code2.to_string()));
-        
+
         // Verify both files are indexed
         assert_eq!(index.file_count(), 2, "Should have 2 files indexed");
-        
+
         // Remove project1 folder
         index.remove_folder("file:///project1");
-        
+
         // Verify only project2 file remains
         assert_eq!(index.file_count(), 1, "Should have 1 file after removing folder");
-        assert!(
-            index.file_symbols(uri1).is_empty(),
-            "File from removed folder should be gone"
-        );
+        assert!(index.file_symbols(uri1).is_empty(), "File from removed folder should be gone");
         assert_eq!(
             index.file_symbols(uri2).len(),
             2,

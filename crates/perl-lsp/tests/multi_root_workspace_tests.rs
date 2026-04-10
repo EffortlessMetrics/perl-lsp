@@ -112,18 +112,12 @@ fn test_per_folder_toml_config() -> TestResult {
     )?;
 
     // Create script in folder A that uses ModuleA
-    let script_a_uri = create_script(
-        &ws,
-        "folder-a/script.pl",
-        "use ModuleA;\nmy $x = ModuleA::func_a();\n",
-    )?;
+    let script_a_uri =
+        create_script(&ws, "folder-a/script.pl", "use ModuleA;\nmy $x = ModuleA::func_a();\n")?;
 
     // Create script in folder B that uses ModuleB
-    let script_b_uri = create_script(
-        &ws,
-        "folder-b/script.pl",
-        "use ModuleB;\nmy $y = ModuleB::func_b();\n",
-    )?;
+    let script_b_uri =
+        create_script(&ws, "folder-b/script.pl", "use ModuleB;\nmy $y = ModuleB::func_b();\n")?;
 
     // Initialize with both workspace folders
     let mut harness = LspHarness::new_raw();
@@ -331,18 +325,12 @@ fn test_same_name_ambiguity() -> TestResult {
     )?;
 
     // Create script in folder A that uses Foo::Util
-    let script_a_uri = create_script(
-        &ws,
-        "folder-a/script.pl",
-        "use Foo::Util;\nmy $x = Foo::Util::run();\n",
-    )?;
+    let script_a_uri =
+        create_script(&ws, "folder-a/script.pl", "use Foo::Util;\nmy $x = Foo::Util::run();\n")?;
 
     // Create script in folder B that uses Foo::Util
-    let script_b_uri = create_script(
-        &ws,
-        "folder-b/script.pl",
-        "use Foo::Util;\nmy $y = Foo::Util::run();\n",
-    )?;
+    let script_b_uri =
+        create_script(&ws, "folder-b/script.pl", "use Foo::Util;\nmy $y = Foo::Util::run();\n")?;
 
     // Initialize with both workspace folders
     let mut harness = LspHarness::new_raw();
@@ -433,10 +421,7 @@ fn test_same_name_ambiguity() -> TestResult {
 
     // The server should handle the query without errors
     // (whether it finds symbols depends on indexing implementation)
-    assert!(
-        symbols_result.is_ok(),
-        "Workspace symbol query should succeed"
-    );
+    assert!(symbols_result.is_ok(), "Workspace symbol query should succeed");
 
     Ok(())
 }
@@ -527,10 +512,7 @@ fn test_workspace_folder_removal() -> TestResult {
     );
 
     // Verify the server is still responsive after folder removal
-    assert!(
-        symbols_after_result.is_ok(),
-        "Server should remain responsive after folder removal"
-    );
+    assert!(symbols_after_result.is_ok(), "Server should remain responsive after folder removal");
 
     Ok(())
 }
@@ -617,15 +599,9 @@ fn test_hover_definition_consistency() -> TestResult {
     );
 
     // Assert: Both requests are handled without errors
-    assert!(
-        hover_result.is_ok(),
-        "Hover request should succeed"
-    );
+    assert!(hover_result.is_ok(), "Hover request should succeed");
 
-    assert!(
-        def_result.is_ok(),
-        "Definition request should succeed"
-    );
+    assert!(def_result.is_ok(), "Definition request should succeed");
 
     // If both work, verify they're consistent
     if let (Ok(hover), Ok(def)) = (hover_result, def_result) {
@@ -633,9 +609,12 @@ fn test_hover_definition_consistency() -> TestResult {
             if !def_array.is_empty() {
                 if let Some(def_uri) = def_array[0]["uri"].as_str() {
                     // Hover should reference the same module
-                    if let Some(hover_contents) = hover.pointer("/contents").and_then(|v| v.as_str()) {
+                    if let Some(hover_contents) =
+                        hover.pointer("/contents").and_then(|v| v.as_str())
+                    {
                         assert!(
-                            hover_contents.contains("MyModule") || hover_contents.contains("package MyModule"),
+                            hover_contents.contains("MyModule")
+                                || hover_contents.contains("package MyModule"),
                             "Hover should reference MyModule, got: {}",
                             hover_contents
                         );
@@ -800,11 +779,8 @@ fn test_ordered_scope_resolution() -> TestResult {
     )?;
 
     // Create script in folder A that uses Shared
-    let script_uri = create_script(
-        &ws,
-        "folder-a/script.pl",
-        "use Shared;\nmy $x = Shared::func();\n",
-    )?;
+    let script_uri =
+        create_script(&ws, "folder-a/script.pl", "use Shared;\nmy $x = Shared::func();\n")?;
 
     // Initialize with folder A first, then folder B
     let mut harness = LspHarness::new_raw();
@@ -866,11 +842,8 @@ fn test_ordered_scope_resolution() -> TestResult {
     )?;
 
     // Create script in folder A that uses OnlyInB
-    let script_b_uri = create_script(
-        &ws,
-        "folder-a/script_b.pl",
-        "use OnlyInB;\nmy $y = OnlyInB::func();\n",
-    )?;
+    let script_b_uri =
+        create_script(&ws, "folder-a/script_b.pl", "use OnlyInB;\nmy $y = OnlyInB::func();\n")?;
 
     // Wait for re-indexing
     std::thread::sleep(indexing_timeout());
@@ -947,11 +920,8 @@ fn test_folder_aware_ranking() -> TestResult {
     )?;
 
     // Create script in folder A that uses Common
-    let script_uri = create_script(
-        &ws,
-        "folder-a/script.pl",
-        "use Common;\nmy $x = Common::helper();\n",
-    )?;
+    let script_uri =
+        create_script(&ws, "folder-a/script.pl", "use Common;\nmy $x = Common::helper();\n")?;
 
     // Initialize with all three workspace folders
     let mut harness = LspHarness::new_raw();
