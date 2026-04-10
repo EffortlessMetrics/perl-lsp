@@ -163,6 +163,8 @@ pub enum DiagnosticCode {
     EvalErrorFlow,
     /// Duplicate key in a hash literal or hash reference constructor
     DuplicateHashKey,
+    /// `goto LABEL` references a label that does not exist in this file
+    GotoUndefinedLabel,
 
     // Deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -260,6 +262,7 @@ impl DiagnosticCode {
             DiagnosticCode::UnreachableCode => "PL406",
             DiagnosticCode::EvalErrorFlow => "PL407",
             DiagnosticCode::DuplicateHashKey => "PL408",
+            DiagnosticCode::GotoUndefinedLabel => "PL409",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::SecurityStringEval => "PL600",
@@ -327,6 +330,7 @@ impl DiagnosticCode {
             "PL406" => "https://docs.perl-lsp.org/errors/PL406",
             "PL407" => "https://docs.perl-lsp.org/errors/PL407",
             "PL408" => "https://docs.perl-lsp.org/errors/PL408",
+            "PL409" => "https://docs.perl-lsp.org/errors/PL409",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
@@ -384,6 +388,7 @@ impl DiagnosticCode {
             | DiagnosticCode::NumericComparisonWithUndef
             | DiagnosticCode::PrintfFormatMismatch
             | DiagnosticCode::DuplicateHashKey
+            | DiagnosticCode::GotoUndefinedLabel
             | DiagnosticCode::DeprecatedDefined
             | DiagnosticCode::DeprecatedArrayBase
             | DiagnosticCode::SecurityStringEval
@@ -524,6 +529,10 @@ impl DiagnosticCode {
             DiagnosticCode::DuplicateHashKey => Some(
                 "This hash key appears more than once in the same literal. \
                 Only the last value will be used; the earlier assignment is silently discarded.",
+            ),
+            DiagnosticCode::GotoUndefinedLabel => Some(
+                "This goto target label is not defined in the current file. \
+                Define the label or use a dynamic goto form only when the target is known at runtime.",
             ),
             DiagnosticCode::PrintfFormatMismatch => Some(
                 "The number of format specifiers does not match the number of arguments. \
@@ -710,6 +719,7 @@ impl DiagnosticCode {
             "PL406" => Some(DiagnosticCode::UnreachableCode),
             "PL407" => Some(DiagnosticCode::EvalErrorFlow),
             "PL408" => Some(DiagnosticCode::DuplicateHashKey),
+            "PL409" => Some(DiagnosticCode::GotoUndefinedLabel),
             "PL500" => Some(DiagnosticCode::DeprecatedDefined),
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
@@ -810,7 +820,8 @@ impl DiagnosticCode {
             | DiagnosticCode::PrintfFormatMismatch
             | DiagnosticCode::UnreachableCode
             | DiagnosticCode::EvalErrorFlow
-            | DiagnosticCode::DuplicateHashKey => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::DuplicateHashKey
+            | DiagnosticCode::GotoUndefinedLabel => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 DiagnosticCategory::Deprecated
@@ -858,6 +869,7 @@ mod tests {
         assert_eq!(DiagnosticCode::EvalErrorFlow.as_str(), "PL407");
         assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
         assert_eq!(DiagnosticCode::SecuritySignalHandler.as_str(), "PL602");
+        assert_eq!(DiagnosticCode::GotoUndefinedLabel.as_str(), "PL409");
     }
 
     #[test]
