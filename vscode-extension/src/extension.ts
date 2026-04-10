@@ -2,13 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
-import {
-    LanguageClient,
-    LanguageClientOptions,
-    ServerOptions,
-    TransportKind,
-    Trace
-} from 'vscode-languageclient/node';
+import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
+import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger, rewriteDebugTestLensCommand } from './debugAdapter';
 import { BinaryDownloader } from './downloader';

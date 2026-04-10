@@ -232,6 +232,64 @@ impl UxHarness {
         }
     }
 
+    /// Request document symbols (`textDocument/documentSymbol`).
+    ///
+    /// Returns the flat list of `SymbolInformation` or `DocumentSymbol` objects,
+    /// or an empty vec if the server returned null/empty.
+    pub fn document_symbols(&self, relative_path: &str) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/documentSymbol",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("documentSymbol returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(syms) => Ok(syms.clone()),
+            None => {
+                if resp["result"].is_null() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(vec![resp["result"].clone()])
+                }
+            }
+        }
+    }
+
+    /// Wait up to `timeout` for a `textDocument/publishDiagnostics` notification
+    /// for the given file, then return all diagnostics collected for it.
+    ///
+    /// Returns an empty vec if the deadline expires with no diagnostics published.
+    pub fn wait_for_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> Vec<Value> {
+        let uri = self.workspace.uri(relative_path);
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            {
+                let events = self.client.peek_events();
+                for ev in &events {
+                    if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
+                        if diag_uri == &uri {
+                            return diagnostics.clone();
+                        }
+                    }
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        Vec::new()
+    }
+
     /// Request go-to-definition.
     pub fn definition(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);

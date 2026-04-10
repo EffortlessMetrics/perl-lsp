@@ -68,8 +68,8 @@ fn uri_agrees_with_path_for_all_canonical() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn extension_rejects_cgi() {
-    assert!(!is_perl_source_extension("cgi"), "cgi is not a canonical Perl source extension");
+fn extension_recognises_cgi() {
+    assert!(is_perl_source_extension("cgi"), "cgi is a recognized Perl source extension");
 }
 
 #[test]

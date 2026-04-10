@@ -149,6 +149,8 @@ pub enum DiagnosticCode {
     PrintfFormatMismatch,
     /// Statement that cannot be reached due to preceding unconditional exit
     UnreachableCode,
+    /// `$@` / `$EVAL_ERROR` reads that are not paired with a nearby `eval`/`try`
+    EvalErrorFlow,
 
     // Deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
@@ -161,6 +163,8 @@ pub enum DiagnosticCode {
     SecurityStringEval,
     /// Backtick/qx command execution detected
     SecurityBacktickExec,
+    /// Global assignment to `$SIG{__DIE__}` / `$SIG{__WARN__}`
+    SecuritySignalHandler,
 
     // Import (PL700-PL799)
     /// Module appears to be unused
@@ -231,10 +235,12 @@ impl DiagnosticCode {
             DiagnosticCode::NumericComparisonWithUndef => "PL404",
             DiagnosticCode::PrintfFormatMismatch => "PL405",
             DiagnosticCode::UnreachableCode => "PL406",
+            DiagnosticCode::EvalErrorFlow => "PL407",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::SecurityStringEval => "PL600",
             DiagnosticCode::SecurityBacktickExec => "PL601",
+            DiagnosticCode::SecuritySignalHandler => "PL602",
             DiagnosticCode::UnusedImport => "PL700",
             DiagnosticCode::ModuleNotFound => "PL701",
             DiagnosticCode::HeredocInFormat => "PL800",
@@ -288,10 +294,12 @@ impl DiagnosticCode {
             "PL404" => "https://docs.perl-lsp.org/errors/PL404",
             "PL405" => "https://docs.perl-lsp.org/errors/PL405",
             "PL406" => "https://docs.perl-lsp.org/errors/PL406",
+            "PL407" => "https://docs.perl-lsp.org/errors/PL407",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
             "PL601" => "https://docs.perl-lsp.org/errors/PL601",
+            "PL602" => "https://docs.perl-lsp.org/errors/PL602",
             "PL700" => "https://docs.perl-lsp.org/errors/PL700",
             "PL701" => "https://docs.perl-lsp.org/errors/PL701",
             "PL800" => "https://docs.perl-lsp.org/errors/PL800",
@@ -341,8 +349,10 @@ impl DiagnosticCode {
             | DiagnosticCode::DeprecatedArrayBase
             | DiagnosticCode::SecurityStringEval
             | DiagnosticCode::SecurityBacktickExec
+            | DiagnosticCode::SecuritySignalHandler
             | DiagnosticCode::ModuleNotFound
             | DiagnosticCode::VersionIncompatFeature
+            | DiagnosticCode::EvalErrorFlow
             | DiagnosticCode::CriticSeverity1
             | DiagnosticCode::CriticSeverity2 => DiagnosticSeverity::Warning,
 
@@ -450,6 +460,10 @@ impl DiagnosticCode {
                 "Comparing a potentially undefined value with a numeric operator \
                 produces a warning at runtime. Check for definedness first with `defined()`.",
             ),
+            DiagnosticCode::EvalErrorFlow => Some(
+                "Read `$@` or `$EVAL_ERROR` immediately after an `eval` or `try` \
+                block; intervening statements can clobber the exception state.",
+            ),
             DiagnosticCode::UnreachableCode => Some(
                 "This statement cannot be executed because a preceding statement \
                 unconditionally exits (return, die, exit, croak). Remove or relocate it.",
@@ -505,6 +519,10 @@ impl DiagnosticCode {
             DiagnosticCode::SecurityBacktickExec => Some(
                 "Backticks/`qx()` execute shell commands and can be exploited. \
                 Use `system()` with a list form or IPC::Run for safer execution.",
+            ),
+            DiagnosticCode::SecuritySignalHandler => Some(
+                "Assigning to $SIG{__DIE__} or $SIG{__WARN__} globally changes exception \
+                and warning handling for the whole process. Use `local` to scope the handler.",
             ),
             DiagnosticCode::UnusedImport => Some(
                 "This module is imported but none of its exports appear to be used. \
@@ -610,6 +628,7 @@ impl DiagnosticCode {
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
             "PL601" => Some(DiagnosticCode::SecurityBacktickExec),
+            "PL602" => Some(DiagnosticCode::SecuritySignalHandler),
             "PL700" => Some(DiagnosticCode::UnusedImport),
             "PL701" => Some(DiagnosticCode::ModuleNotFound),
             "PL800" => Some(DiagnosticCode::HeredocInFormat),
@@ -697,7 +716,8 @@ impl DiagnosticCode {
             | DiagnosticCode::AssignmentInCondition
             | DiagnosticCode::NumericComparisonWithUndef
             | DiagnosticCode::PrintfFormatMismatch
-            | DiagnosticCode::UnreachableCode => DiagnosticCategory::BestPractices,
+            | DiagnosticCode::UnreachableCode
+            | DiagnosticCode::EvalErrorFlow => DiagnosticCategory::BestPractices,
 
             DiagnosticCode::DeprecatedDefined | DiagnosticCode::DeprecatedArrayBase => {
                 DiagnosticCategory::Deprecated
@@ -706,6 +726,7 @@ impl DiagnosticCode {
             DiagnosticCode::SecurityStringEval | DiagnosticCode::SecurityBacktickExec => {
                 DiagnosticCategory::Security
             }
+            DiagnosticCode::SecuritySignalHandler => DiagnosticCategory::Security,
 
             DiagnosticCode::UnusedImport | DiagnosticCode::ModuleNotFound => {
                 DiagnosticCategory::Import
@@ -738,13 +759,16 @@ mod tests {
     fn test_code_strings() {
         assert_eq!(DiagnosticCode::ParseError.as_str(), "PL001");
         assert_eq!(DiagnosticCode::MissingStrict.as_str(), "PL100");
+        assert_eq!(DiagnosticCode::EvalErrorFlow.as_str(), "PL407");
         assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
+        assert_eq!(DiagnosticCode::SecuritySignalHandler.as_str(), "PL602");
     }
 
     #[test]
     fn test_severity() {
         assert_eq!(DiagnosticCode::ParseError.severity(), DiagnosticSeverity::Error);
         assert_eq!(DiagnosticCode::UnusedVariable.severity(), DiagnosticSeverity::Warning);
+        assert_eq!(DiagnosticCode::EvalErrorFlow.severity(), DiagnosticSeverity::Warning);
         assert_eq!(DiagnosticCode::CriticSeverity5.severity(), DiagnosticSeverity::Hint);
     }
 
@@ -763,6 +787,10 @@ mod tests {
     #[test]
     fn test_from_str() {
         assert_eq!(DiagnosticCode::parse_code("PL001"), Some(DiagnosticCode::ParseError));
+        assert_eq!(
+            DiagnosticCode::parse_code("PL602"),
+            Some(DiagnosticCode::SecuritySignalHandler)
+        );
         assert_eq!(DiagnosticCode::parse_code("INVALID"), None);
     }
 
@@ -770,6 +798,8 @@ mod tests {
     fn test_category() {
         assert_eq!(DiagnosticCode::ParseError.category(), DiagnosticCategory::Parser);
         assert_eq!(DiagnosticCode::MissingStrict.category(), DiagnosticCategory::StrictWarnings);
+        assert_eq!(DiagnosticCode::SecuritySignalHandler.category(), DiagnosticCategory::Security);
+        assert_eq!(DiagnosticCode::EvalErrorFlow.category(), DiagnosticCategory::BestPractices);
         assert_eq!(DiagnosticCode::CriticSeverity1.category(), DiagnosticCategory::PerlCritic);
     }
 

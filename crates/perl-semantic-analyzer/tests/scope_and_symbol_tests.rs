@@ -1462,6 +1462,9 @@ fn strict_subs_only_checks_barewords() -> Result<(), Box<dyn std::error::Error>>
 use strict 'subs';
 print $unknown_var;
 print FOO;
+print PL_sv_yes;
+print PL_sv_no;
+print PL_sv_undef;
 "#;
     let issues = scope_issues_strict(code);
 
@@ -1475,6 +1478,14 @@ print FOO;
             .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
         "strict 'subs' should flag barewords"
     );
+    for internal in ["PL_sv_yes", "PL_sv_no", "PL_sv_undef"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == internal
+            }),
+            "strict 'subs' should not flag internal special constant {internal}"
+        );
+    }
     Ok(())
 }
 
@@ -1951,7 +1962,285 @@ fn edge_scope_issue_range_within_source() -> Result<(), Box<dyn std::error::Erro
 }
 
 // ===========================================================================
-// 17. Position-aware builtin declaration handling (read/sysread/recv at pos 1)
+// 17. Package statement scope analysis (#3356)
+// ===========================================================================
+
+#[test]
+fn package_stmt_our_no_false_redeclaration() -> Result<(), Box<dyn std::error::Error>> {
+    // `our` variables with the same name in different packages declared via the
+    // statement form (`package Foo;`) must NOT trigger VariableRedeclaration.
+    // Before fix: both `our $VAR` declarations share the same root scope and the
+    // second triggers a false VariableRedeclaration because the Package node had
+    // no handler and the scope was never reset between packages.
+    let code = r#"
+use strict;
+package Alpha;
+our $VAR = 1;
+
+package Beta;
+our $VAR = 2;
+
+print $Alpha::VAR;
+print $Beta::VAR;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our $VAR in different packages must not trigger VariableRedeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_creates_scope_boundary() -> Result<(), Box<dyn std::error::Error>> {
+    // `package Foo { ... }` block form should create a scoped boundary.
+    // `our` variables inside the block belong to that package scope and should
+    // not leak out or conflict with same-named variables in the outer package.
+    let code = r#"
+use strict;
+package Alpha;
+our $VAR = 1;
+
+package Beta {
+    our $VAR = 2;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our $VAR in package block must not conflict with outer package our $VAR; got: {:?}",
+        redecl
+    );
+    let shadow: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableShadowing && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        shadow.is_empty(),
+        "our $VAR in package block must not produce VariableShadowing; got: {:?}",
+        shadow
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_inner_vars_not_visible_outside() -> Result<(), Box<dyn std::error::Error>> {
+    // Variables declared with `my` inside a `package Foo { }` block must not
+    // be visible after the block ends.
+    let code = r#"
+use strict;
+my $outer = 1;
+package Inner {
+    my $private = 2;
+    print $private;
+}
+print $outer;
+print $private;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "private"),
+        "my variable inside package block must not be visible outside it; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    let outer_undecl = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("outer"))
+        .count();
+    assert_eq!(outer_undecl, 0, "$outer should still be accessible after package block");
+    Ok(())
+}
+
+#[test]
+fn package_stmt_does_not_break_my_variable_tracking() -> Result<(), Box<dyn std::error::Error>> {
+    // A `package` statement must not disrupt tracking of `my` variables already
+    // declared in the file-level scope before the package statement.
+    let code = r#"
+my $top = 1;
+package Foo;
+print $top;
+"#;
+    let issues = scope_issues(code);
+    let top_unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("top"))
+        .count();
+    assert_eq!(
+        top_unused, 0,
+        "$top declared before package should be accessible after package statement"
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_my_var_not_leaked_strict() -> Result<(), Box<dyn std::error::Error>> {
+    // With strict mode, accessing a `my` variable declared inside a `package`
+    // block from outside the block must be an UndeclaredVariable error.
+    let code = r#"
+use strict;
+package Scoped {
+    my $inner_var = 42;
+    print $inner_var;
+}
+print $inner_var;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "inner_var"),
+        "my var inside package block must not escape to outer scope; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_bare_usage_not_undeclared_strict() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression guard: `our $VAR` should remain accessible as bare `$VAR`
+    // in the same package under strict mode. This ensures the Package handler
+    // does not accidentally break the lookup path for `our` declarations.
+    let code = r#"
+use strict;
+our $GLOBAL = 42;
+print $GLOBAL;
+"#;
+    let issues = scope_issues_strict(code);
+    let undecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("GLOBAL"))
+        .collect();
+    assert!(
+        undecl.is_empty(),
+        "our $GLOBAL should be accessible as bare $GLOBAL in strict mode; got: {:?}",
+        undecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_from_other_package_not_visible_as_bare_name()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Bare `$VAR` in a later package must not resolve against an `our $VAR`
+    // declared in an earlier package. Package switches change which package
+    // global a bare name refers to under `strict 'vars'`.
+    let code = r#"
+use strict;
+package Alpha;
+our $VAR = 1;
+
+package Beta;
+print $VAR;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "VAR"),
+        "bare $VAR in package Beta must not resolve to Alpha::VAR; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn package_our_same_package_redeclaration_is_silent() -> Result<(), Box<dyn std::error::Error>> {
+    // `our $x; our $x;` in the SAME package is redundant but valid Perl — the
+    // second declaration is a no-op that re-imports the same package global.
+    // Must NOT emit VariableRedeclaration.
+    let code = r#"
+use strict;
+package Foo;
+our $x = 1;
+our $x = 2;
+print $x;
+"#;
+    let issues = scope_issues_strict(code);
+    let redecl: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name.contains('x'))
+        .collect();
+    assert!(
+        redecl.is_empty(),
+        "our $x redeclared in same package must not emit VariableRedeclaration; got: {:?}",
+        redecl
+    );
+    Ok(())
+}
+
+#[test]
+fn package_nested_block_scope_save_restore() -> Result<(), Box<dyn std::error::Error>> {
+    // Nested `package Outer { package Inner { } }` must correctly save and restore
+    // the outer package name when the inner block exits. Variables declared with
+    // `my` in the inner block must not escape to the outer block or file scope.
+    let code = r#"
+use strict;
+package Outer {
+    my $outer_var = 1;
+    package Inner {
+        my $inner_var = 2;
+        print $inner_var;
+    }
+    print $outer_var;
+    print $inner_var;
+}
+print $outer_var;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "inner_var"),
+        "my var inside nested package block must not escape; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    let outer_at_file_scope = issues
+        .iter()
+        .filter(|i| {
+            i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("outer_var")
+        })
+        .count();
+    assert!(
+        outer_at_file_scope > 0,
+        "my var inside package Outer block must not escape to file scope; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn package_block_our_no_false_shadowing() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression: `our $VAR` inside a package block must NOT produce VariableShadowing
+    // even if an outer scope also declares `our $VAR` with the same bare name.
+    // These are different package globals (Foo::VAR vs Bar::VAR) and the inner `our`
+    // does NOT lexically shadow the outer one.
+    let code = r#"
+use strict;
+our $VAR = 1;
+
+package Inner {
+    our $VAR = 2;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let shadow: Vec<_> = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::VariableShadowing && i.variable_name.contains("VAR"))
+        .collect();
+    assert!(
+        shadow.is_empty(),
+        "our $VAR in package block must not produce VariableShadowing for outer our $VAR; got: {:?}",
+        shadow
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// 18. Position-aware builtin declaration handling (read/sysread/recv at pos 1)
 // ===========================================================================
 
 #[test]
@@ -2052,7 +2341,6 @@ read $fh, $buffer, 1024;
 print $buffer;
 "#;
     let issues = scope_issues_strict(code);
-    // $fh was declared with `my` — should not be flagged at all
     assert!(
         !issues.iter().any(|i| {
             i.variable_name.contains("fh")
@@ -2089,5 +2377,223 @@ print $b;
             issues
         );
     }
+    Ok(())
+}
+
+// ===========================================================================
+// Builtin globals — regex position arrays @- and @+ (#3354)
+// ===========================================================================
+
+#[test]
+fn builtin_at_minus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello" =~ /ell/) {
+    my $start = $-[0];
+    my @starts = @-;
+    print $start, "\n";
+    print @starts, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "-"),
+        "@- should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_at_plus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello" =~ /ell/) {
+    my $end = $+[0];
+    my @ends = @+;
+    print $end, "\n";
+    print @ends, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "+"),
+        "@+ should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// Builtin globals — ${^MATCH}, ${^PREMATCH}, ${^POSTMATCH} (#3351)
+// ===========================================================================
+
+#[test]
+fn builtin_caret_match_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^MATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^MATCH"),
+        "{{^MATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_caret_prematch_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^PREMATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^PREMATCH"),
+        "{{^PREMATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_caret_postmatch_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("hello world" =~ /world/p) {
+    print ${^POSTMATCH}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^POSTMATCH"),
+        "{{^POSTMATCH}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// 18. $a and $b Sort Variable Recognition
+// ===========================================================================
+
+#[test]
+fn sort_a_b_no_diagnostic_in_sort_block() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my @numbers = (3, 1, 4, 1, 5);
+my @sorted = sort { $a <=> $b } @numbers;
+print @sorted;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in sort block must not be flagged as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in sort block must not be flagged as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "a"),
+        "$a in sort block must not be flagged as unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "b"),
+        "$b in sort block must not be flagged as unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_no_diagnostic_with_string_comparator() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my @words = qw(banana apple cherry);
+my @strings = sort { lc($a) cmp lc($b) } @words;
+print @strings;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in string-cmp sort block must not be undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in string-cmp sort block must not be undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_in_named_sub_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+sub by_length { length($a) <=> length($b) }
+my @words = qw(foo barbaz hi);
+my @by_len = sort by_length @words;
+print @by_len;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "a"),
+        "$a in named sort sub must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "b"),
+        "$b in named sort sub must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn sort_a_b_no_diagnostic_without_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my @numbers = (5, 2, 8, 1);
+my @sorted = sort { $a <=> $b } @numbers;
+print @sorted;
+"#;
+    let issues = scope_issues(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "a"),
+        "$a in sort block must not be flagged as unused (no strict); issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UnusedVariable, "b"),
+        "$b in sort block must not be flagged as unused (no strict); issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn user_variable_named_a_outside_sort_is_not_undeclared() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+my $a = 42;
+"#;
+    let issues = scope_issues(code);
+    let undeclared = has_issue(&issues, IssueKind::UndeclaredVariable, "a");
+    assert!(!undeclared, "a lexically declared $a must never be flagged as undeclared");
     Ok(())
 }

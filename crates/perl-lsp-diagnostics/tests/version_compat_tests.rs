@@ -771,7 +771,7 @@ fn test_say_in_return_value_detected() -> Result<(), Box<dyn std::error::Error>>
 // Tests for given/when/default (#3344) and defer (#3350)
 // ---------------------------------------------------------------------------
 
-fn given_node() -> Node {
+fn issue_3344_given_node() -> Node {
     Node::new(
         NodeKind::Given {
             expr: Box::new(Node::new(
@@ -784,7 +784,7 @@ fn given_node() -> Node {
     )
 }
 
-fn when_node() -> Node {
+fn issue_3344_when_node() -> Node {
     Node::new(
         NodeKind::When {
             condition: Box::new(Node::new(
@@ -797,7 +797,7 @@ fn when_node() -> Node {
     )
 }
 
-fn default_node() -> Node {
+fn issue_3344_default_node() -> Node {
     Node::new(NodeKind::Default { body: Box::new(block(vec![])) }, loc(20, 40))
 }
 
@@ -832,7 +832,7 @@ fn defer_helper_call() -> Node {
 
 #[test]
 fn test_given_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.8"), given_node()]);
+    let ast = program(vec![use_node("v5.8"), issue_3344_given_node()]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -857,7 +857,7 @@ fn test_given_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_when_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.8"), when_node()]);
+    let ast = program(vec![use_node("v5.8"), issue_3344_when_node()]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -877,7 +877,7 @@ fn test_when_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_default_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.8"), default_node()]);
+    let ast = program(vec![use_node("v5.8"), issue_3344_default_node()]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -897,7 +897,7 @@ fn test_default_warns_on_v5_8() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_given_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.10"), given_node()]);
+    let ast = program(vec![use_node("v5.10"), issue_3344_given_node()]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -911,7 +911,7 @@ fn test_given_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_when_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.10"), when_node()]);
+    let ast = program(vec![use_node("v5.10"), issue_3344_when_node()]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -925,7 +925,7 @@ fn test_when_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_default_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.10"), default_node()]);
+    let ast = program(vec![use_node("v5.10"), issue_3344_default_node()]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 
@@ -947,7 +947,7 @@ fn test_default_ok_on_v5_10() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_given_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("v5.8"), use_feature("switch"), given_node()]);
+    let ast = program(vec![use_node("v5.8"), use_feature("switch"), issue_3344_given_node()]);
     let mut diagnostics = vec![];
     check_version_compat(&ast, &mut diagnostics);
 

@@ -102,6 +102,122 @@ pub(super) fn is_file_test_operator(op: &str) -> bool {
     )
 }
 
+/// Get documentation for a Perl file test operator.
+///
+/// Returns signature and description for known file test operators,
+/// or `None` if documentation is not available.
+pub fn get_operator_documentation(op: &str) -> Option<BuiltinDoc> {
+    macro_rules! doc {
+        ($signature:expr, $description:expr) => {
+            Some(BuiltinDoc { signature: $signature, description: $description })
+        };
+    }
+
+    match op {
+        "-e" => doc!("-e FILE\n-e", "Returns true if FILE exists. If FILE is omitted, tests `$_`."),
+        "-f" => doc!(
+            "-f FILE\n-f",
+            "Returns true if FILE is a plain file. If FILE is omitted, tests `$_`."
+        ),
+        "-d" => doc!(
+            "-d FILE\n-d",
+            "Returns true if FILE is a directory. If FILE is omitted, tests `$_`."
+        ),
+        "-r" => doc!(
+            "-r FILE\n-r",
+            "Returns true if FILE is readable by the effective user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-w" => doc!(
+            "-w FILE\n-w",
+            "Returns true if FILE is writable by the effective user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-x" => doc!(
+            "-x FILE\n-x",
+            "Returns true if FILE is executable by the effective user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-o" => doc!(
+            "-o FILE\n-o",
+            "Returns true if FILE is owned by the effective user ID. If FILE is omitted, tests `$_`."
+        ),
+        "-R" => doc!(
+            "-R FILE\n-R",
+            "Returns true if FILE is readable by the real user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-W" => doc!(
+            "-W FILE\n-W",
+            "Returns true if FILE is writable by the real user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-X" => doc!(
+            "-X FILE\n-X",
+            "Returns true if FILE is executable by the real user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-O" => doc!(
+            "-O FILE\n-O",
+            "Returns true if FILE is owned by the real user ID. If FILE is omitted, tests `$_`."
+        ),
+        "-z" => doc!(
+            "-z FILE\n-z",
+            "Returns true if FILE exists and has zero size. If FILE is omitted, tests `$_`."
+        ),
+        "-s" => doc!(
+            "-s FILE\n-s",
+            "Returns the file size in bytes in scalar context, or true if FILE has nonzero size. If FILE is omitted, tests `$_`."
+        ),
+        "-l" => doc!(
+            "-l FILE\n-l",
+            "Returns true if FILE is a symbolic link. If FILE is omitted, tests `$_`."
+        ),
+        "-p" => doc!(
+            "-p FILE\n-p",
+            "Returns true if FILE is a named pipe (FIFO). If FILE is omitted, tests `$_`."
+        ),
+        "-S" => {
+            doc!("-S FILE\n-S", "Returns true if FILE is a socket. If FILE is omitted, tests `$_`.")
+        }
+        "-u" => doc!(
+            "-u FILE\n-u",
+            "Returns true if FILE has the setuid bit set. If FILE is omitted, tests `$_`."
+        ),
+        "-g" => doc!(
+            "-g FILE\n-g",
+            "Returns true if FILE has the setgid bit set. If FILE is omitted, tests `$_`."
+        ),
+        "-k" => doc!(
+            "-k FILE\n-k",
+            "Returns true if FILE has the sticky bit set. If FILE is omitted, tests `$_`."
+        ),
+        "-t" => doc!(
+            "-t FILEHANDLE\n-t",
+            "Returns true if FILEHANDLE is connected to a tty. If FILEHANDLE is omitted, tests `STDIN`."
+        ),
+        "-T" => doc!(
+            "-T FILE\n-T",
+            "Returns true if FILE looks like a text file. If FILE is omitted, tests `$_`."
+        ),
+        "-B" => doc!(
+            "-B FILE\n-B",
+            "Returns true if FILE looks like a binary file. If FILE is omitted, tests `$_`."
+        ),
+        "-M" => doc!(
+            "-M FILE\n-M",
+            "Returns the file age in days at program start, based on the file's modification time."
+        ),
+        "-A" => doc!("-A FILE\n-A", "Returns the file age in days based on the last access time."),
+        "-C" => {
+            doc!("-C FILE\n-C", "Returns the file age in days based on the last inode change time.")
+        }
+        "-b" => doc!(
+            "-b FILE\n-b",
+            "Returns true if FILE is a block special file. If FILE is omitted, tests `$_`."
+        ),
+        "-c" => doc!(
+            "-c FILE\n-c",
+            "Returns true if FILE is a character special file. If FILE is omitted, tests `$_`."
+        ),
+        _ => None,
+    }
+}
+
 /// Get documentation for a Perl built-in function.
 ///
 /// Returns signature and description for known built-in functions,

@@ -109,7 +109,6 @@ export class OnboardingManager {
    * Replaceable exec function.  In production this wraps `child_process.execFile`;
    * in tests it is replaced with a jest mock via `mgr._execCheck = jest.fn(...)`.
    */
-  // eslint-disable-next-line @typescript-eslint/naming-convention
   _execCheck: ExecCheckFn;
 
   constructor(

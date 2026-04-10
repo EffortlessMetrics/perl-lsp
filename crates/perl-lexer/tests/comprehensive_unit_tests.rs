@@ -513,6 +513,17 @@ fn perl_keywords_recognized() -> R {
     Ok(())
 }
 
+#[test]
+fn defer_block_is_tokenized_as_keyword() -> R {
+    let tok = first_token("defer { }").ok_or("no token")?;
+    assert!(
+        matches!(&tok.token_type, TokenType::Keyword(k) if k.as_ref() == "defer"),
+        "expected 'defer' to tokenize as a keyword, got {:?}",
+        tok.token_type
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 9. Variable / sigil parsing
 // ===========================================================================

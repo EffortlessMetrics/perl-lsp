@@ -356,8 +356,8 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
     constructor(private readonly context: vscode.ExtensionContext) {}
 
     createDebugAdapterDescriptor(
-        session: vscode.DebugSession,
-        executable: vscode.DebugAdapterExecutable | undefined
+        _session: vscode.DebugSession,
+        _executable: vscode.DebugAdapterExecutable | undefined
     ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
         // Try to find perl-dap in PATH or use bundled version
         const dapPath = this.findDebugAdapter();
@@ -463,9 +463,9 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
 
 export class PerlDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
     resolveDebugConfiguration(
-        folder: vscode.WorkspaceFolder | undefined,
+        _folder: vscode.WorkspaceFolder | undefined,
         config: vscode.DebugConfiguration,
-        token?: vscode.CancellationToken
+        _token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
         // If launch.json is missing or empty
         if (!config.type && !config.request && !config.name) {
@@ -501,8 +501,8 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
     }
 
     provideDebugConfigurations(
-        folder: vscode.WorkspaceFolder | undefined,
-        token?: vscode.CancellationToken
+        _folder: vscode.WorkspaceFolder | undefined,
+        _token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration[]> {
         return [
             {

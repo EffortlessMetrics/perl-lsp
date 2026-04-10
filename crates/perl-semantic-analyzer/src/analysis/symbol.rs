@@ -483,7 +483,7 @@ impl SymbolExtractor {
             NodeKind::Subroutine {
                 name,
                 prototype: _,
-                signature: _,
+                signature,
                 attributes,
                 body,
                 name_span: _,
@@ -510,9 +510,12 @@ impl SymbolExtractor {
                 // Create subroutine scope
                 self.table.push_scope(ScopeKind::Subroutine, node.location);
 
-                {
-                    self.visit_node(body);
+                // Register signature parameters as implicit `my` declarations
+                if let Some(sig) = signature {
+                    self.register_signature_params(sig);
                 }
+
+                self.visit_node(body);
 
                 self.table.pop_scope();
             }
@@ -765,7 +768,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Method { name, signature: _, attributes, body } => {
+            NodeKind::Method { name, signature, attributes, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 let mut symbol_attributes = Vec::with_capacity(attributes.len() + 1);
                 symbol_attributes.push("method".to_string());
@@ -783,6 +786,12 @@ impl SymbolExtractor {
                 self.table.add_symbol(symbol);
 
                 self.table.push_scope(ScopeKind::Subroutine, node.location);
+
+                // Register signature parameters as implicit `my` declarations
+                if let Some(sig) = signature {
+                    self.register_signature_params(sig);
+                }
+
                 self.visit_node(body);
                 self.table.pop_scope();
             }
@@ -2037,6 +2046,28 @@ impl SymbolExtractor {
         None
     }
 
+    /// Register signature parameters as implicit `my` variable declarations in the current scope.
+    ///
+    /// Handles `MandatoryParameter`, `OptionalParameter`, `SlurpyParameter`, and
+    /// `NamedParameter` nodes by extracting the inner variable and registering it
+    /// exactly as if the user had written `my $x` at the top of the subroutine body.
+    fn register_signature_params(&mut self, sig: &Node) {
+        let NodeKind::Signature { parameters } = &sig.kind else {
+            return;
+        };
+        for param in parameters {
+            let variable = match &param.kind {
+                NodeKind::MandatoryParameter { variable } => variable.as_ref(),
+                NodeKind::OptionalParameter { variable, .. } => variable.as_ref(),
+                NodeKind::SlurpyParameter { variable } => variable.as_ref(),
+                NodeKind::NamedParameter { variable } => variable.as_ref(),
+                // Unexpected node kind inside a signature — skip gracefully
+                _ => continue,
+            };
+            self.handle_variable_declaration("my", variable, &[], variable.location, None);
+        }
+    }
+
     /// Handle variable declaration
     fn handle_variable_declaration(
         &mut self,
@@ -2202,6 +2233,202 @@ class MyClass {
         assert!(
             greet_symbols[0].attributes.contains(&"method".to_string()),
             "method symbol should have 'method' attribute"
+        );
+    }
+
+    // ── Issue #3361: signature parameters added to symbol table ──
+
+    #[test]
+    fn test_subroutine_mandatory_params_in_symbol_table() {
+        let code = r#"
+sub foo ($x, $y) {
+    return $x + $y;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("x"),
+            "mandatory parameter $x should be in the symbol table"
+        );
+        assert!(
+            table.symbols.contains_key("y"),
+            "mandatory parameter $y should be in the symbol table"
+        );
+
+        let x_symbols = &table.symbols["x"];
+        assert_eq!(x_symbols.len(), 1);
+        assert_eq!(
+            x_symbols[0].declaration,
+            Some("my".to_string()),
+            "$x should be declared as 'my'"
+        );
+
+        let y_symbols = &table.symbols["y"];
+        assert_eq!(y_symbols.len(), 1);
+        assert_eq!(
+            y_symbols[0].declaration,
+            Some("my".to_string()),
+            "$y should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_subroutine_optional_param_in_symbol_table() {
+        let code = r#"
+sub bar ($x, $y = 0) {
+    return $x + $y;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("x"),
+            "mandatory parameter $x should be in the symbol table"
+        );
+        assert!(
+            table.symbols.contains_key("y"),
+            "optional parameter $y should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["y"][0].declaration,
+            Some("my".to_string()),
+            "optional parameter $y should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_subroutine_slurpy_param_in_symbol_table() {
+        let code = r#"
+sub baz ($x, @rest) {
+    return scalar @rest;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("x"),
+            "mandatory parameter $x should be in the symbol table"
+        );
+        assert!(
+            table.symbols.contains_key("rest"),
+            "slurpy parameter @rest should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["rest"][0].declaration,
+            Some("my".to_string()),
+            "slurpy parameter @rest should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_method_signature_params_in_symbol_table() {
+        let code = r#"
+class Foo {
+    method greet ($name) {
+        return $name;
+    }
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("name"),
+            "method signature parameter $name should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["name"][0].declaration,
+            Some("my".to_string()),
+            "method parameter $name should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_empty_signature_no_crash() {
+        // Edge case: empty signature `sub foo () { }` — should not crash and
+        // should leave the symbol table with only the sub itself, not any param.
+        let code = r#"
+sub foo () {
+    return 1;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        // Sub `foo` is registered as a symbol
+        assert!(table.symbols.contains_key("foo"), "sub foo should be in the symbol table");
+        // No spurious variable symbols from an empty signature
+        assert_eq!(
+            table.symbols.len(),
+            1,
+            "only 'foo' should be in the symbol table for an empty-signature sub"
+        );
+    }
+
+    #[test]
+    fn test_hash_slurpy_param_in_symbol_table() {
+        // Edge case: hash slurpy `%opts` — sigil % maps to SymbolKind::hash()
+        let code = r#"
+sub configure ($x, %opts) {
+    return $opts{key};
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("opts"),
+            "hash slurpy parameter %opts should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["opts"][0].declaration,
+            Some("my".to_string()),
+            "hash slurpy parameter %opts should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_optional_param_location_is_variable_span() {
+        // The symbol location for an optional param `$y = 0` should span just
+        // the variable `$y`, not the entire `$y = 0` expression.  Callers like
+        // go-to-definition use this span to highlight the declaration site.
+        let code = "sub bar ($x, $y = 0) { $x + $y }";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        // `$y` starts at offset 13 in "sub bar ($x, $y = 0)"
+        //                                            ^ offset 13
+        let y_sym = &table.symbols["y"][0];
+        let span_len = y_sym.location.end - y_sym.location.start;
+        // The variable node "$y" is 2 bytes; the full param "$y = 0" is 6 bytes.
+        assert_eq!(
+            span_len, 2,
+            "symbol location should cover just '$y' (2 chars), not the full '$y = 0' (6 chars)"
         );
     }
 }
