@@ -44,16 +44,6 @@ pub enum AccessorType {
     Bare,
 }
 
-/// Method-resolution order for inherited method lookup.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MethodResolutionOrder {
-    /// Default Perl depth-first resolution order.
-    #[default]
-    Dfs,
-    /// C3 linearization enabled via `use mro 'c3';`.
-    C3,
-}
-
 /// A Moose/Moo attribute declared via `has`.
 #[derive(Debug, Clone)]
 pub struct Attribute {
@@ -189,8 +179,6 @@ pub struct ClassModel {
     pub adjusts: Vec<MethodInfo>,
     /// Parent classes from `extends 'Parent'`, `use parent`, `use base`, or `@ISA`
     pub parents: Vec<String>,
-    /// Method-resolution order for inherited method lookup.
-    pub mro: MethodResolutionOrder,
     /// Roles consumed via `with 'Role'`
     pub roles: Vec<String>,
     /// Method modifiers (before/after/around/override/augment)
@@ -206,11 +194,6 @@ impl ClassModel {
     pub fn has_framework(&self) -> bool {
         !matches!(self.framework, Framework::None)
     }
-
-    /// Return the names of Object::Pad fields that participate in constructor parameters.
-    pub fn object_pad_param_field_names(&self) -> impl Iterator<Item = &str> {
-        self.fields.iter().filter(|field| field.param).map(|field| field.name.as_str())
-    }
 }
 
 /// Builds `ClassModel` instances by walking an AST.
@@ -223,7 +206,6 @@ pub struct ClassModelBuilder {
     current_methods: Vec<MethodInfo>,
     current_adjusts: Vec<MethodInfo>,
     current_parents: Vec<String>,
-    current_mro: MethodResolutionOrder,
     current_roles: Vec<String>,
     current_modifiers: Vec<MethodModifier>,
     current_exports: Vec<String>,
@@ -251,7 +233,6 @@ impl ClassModelBuilder {
             current_methods: Vec::new(),
             current_adjusts: Vec::new(),
             current_parents: Vec::new(),
-            current_mro: MethodResolutionOrder::Dfs,
             current_roles: Vec::new(),
             current_modifiers: Vec::new(),
             current_exports: Vec::new(),
@@ -288,7 +269,6 @@ impl ClassModelBuilder {
                 methods: std::mem::take(&mut self.current_methods),
                 adjusts: std::mem::take(&mut self.current_adjusts),
                 parents: std::mem::take(&mut self.current_parents),
-                mro: self.current_mro,
                 roles: std::mem::take(&mut self.current_roles),
                 modifiers: std::mem::take(&mut self.current_modifiers),
                 exports: std::mem::take(&mut self.current_exports),
@@ -303,7 +283,6 @@ impl ClassModelBuilder {
             self.current_methods.clear();
             self.current_adjusts.clear();
             self.current_parents.clear();
-            self.current_mro = MethodResolutionOrder::Dfs;
             self.current_roles.clear();
             self.current_modifiers.clear();
             self.current_exports.clear();
@@ -325,7 +304,6 @@ impl ClassModelBuilder {
                 self.current_package = name.clone();
                 self.current_framework =
                     self.framework_map.get(name).copied().unwrap_or(Framework::None);
-                self.current_mro = MethodResolutionOrder::Dfs;
 
                 if let Some(block) = block {
                     self.visit_node(block);
@@ -345,10 +323,6 @@ impl ClassModelBuilder {
 
             NodeKind::Use { module, args, .. } => {
                 self.detect_framework(module, args);
-            }
-
-            NodeKind::No { module, .. } if module == "mro" => {
-                self.current_mro = MethodResolutionOrder::Dfs;
             }
 
             // `our @ISA = qw(Parent1 Parent2);` / `our @EXPORT = qw(...);` / `our @EXPORT_OK = qw(...);`
@@ -427,7 +401,6 @@ impl ClassModelBuilder {
                 } else {
                     Framework::NativeClass
                 };
-                self.current_mro = MethodResolutionOrder::Dfs;
                 self.framework_map.insert(name.clone(), self.current_framework);
                 self.current_package_aliases.clear();
                 // Populate parent classes from `:isa(Parent)` attributes
@@ -477,7 +450,6 @@ impl ClassModelBuilder {
         while idx < statements.len() {
             // First, check for `use` declarations to detect frameworks
             if let NodeKind::Use { module, args, .. } = &statements[idx].kind {
-                self.detect_mro(module, args);
                 self.detect_framework(module, args);
                 idx += 1;
                 continue;
@@ -572,33 +544,6 @@ impl ClassModelBuilder {
 
         self.current_framework = framework;
         self.framework_map.insert(self.current_package.clone(), framework);
-    }
-
-    /// Detect `use mro 'c3'` / `use mro 'dfs'` for the current package.
-    fn detect_mro(&mut self, module: &str, args: &[String]) {
-        if module != "mro" {
-            return;
-        }
-
-        if args.is_empty() {
-            self.current_mro = MethodResolutionOrder::Dfs;
-            return;
-        }
-
-        for arg in args {
-            let trimmed = arg.trim().trim_matches('\'').trim_matches('"');
-            match trimmed {
-                "c3" => {
-                    self.current_mro = MethodResolutionOrder::C3;
-                    return;
-                }
-                "dfs" => {
-                    self.current_mro = MethodResolutionOrder::Dfs;
-                    return;
-                }
-                _ => {}
-            }
-        }
     }
 
     /// Extract Moo/Moose `has` declarations.
@@ -993,23 +938,43 @@ impl ClassModelBuilder {
 
         match &statement.kind {
             NodeKind::Method { name, body, .. } if name == "ADJUST" => {
-                self.record_object_pad_adjust(statement.location);
+                self.current_adjusts.push(MethodInfo::synthetic(
+                    "ADJUST".to_string(),
+                    statement.location,
+                    None,
+                ));
                 self.visit_node(body);
                 return Some(1);
             }
             NodeKind::Subroutine { name, body, .. } if name.as_deref() == Some("ADJUST") => {
-                self.record_object_pad_adjust(statement.location);
+                self.current_adjusts.push(MethodInfo::synthetic(
+                    "ADJUST".to_string(),
+                    statement.location,
+                    None,
+                ));
                 self.visit_node(body);
                 return Some(1);
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                if matches!(&expression.kind, NodeKind::Identifier { name } if name == "ADJUST") {
+                    self.current_adjusts.push(MethodInfo::synthetic(
+                        "ADJUST".to_string(),
+                        statement.location,
+                        None,
+                    ));
+                    if idx + 1 < statements.len()
+                        && matches!(&statements[idx + 1].kind, NodeKind::Block { .. })
+                    {
+                        self.visit_node(&statements[idx + 1]);
+                        return Some(2);
+                    }
+                    return Some(1);
+                }
             }
             _ => {}
         }
 
         None
-    }
-
-    fn record_object_pad_adjust(&mut self, location: SourceLocation) {
-        self.current_adjusts.push(MethodInfo::synthetic("ADJUST".to_string(), location, None));
     }
 
     fn object_pad_field_from_statement(statement: &Node) -> Option<FieldInfo> {
@@ -1379,30 +1344,6 @@ has 'level' => (is => 'ro');
         assert!(model.parents.contains(&"MyApp::User".to_string()));
         assert_eq!(model.roles, vec!["MyApp::Printable", "MyApp::Serializable"]);
         assert_eq!(model.attributes.len(), 1);
-    }
-
-    #[test]
-    fn mro_pragma_tracks_c3_and_reset() {
-        let models = build_models(
-            r#"
-package Example::Child;
-use parent 'Example::Base';
-use mro 'c3';
-sub greet { }
-
-package Example::Sibling;
-use parent 'Example::Base';
-no mro;
-sub greet { }
-"#,
-        );
-
-        let child = find_model(&models, "Example::Child").expect("expected ClassModel for Child");
-        assert_eq!(child.mro, MethodResolutionOrder::C3);
-
-        let sibling =
-            find_model(&models, "Example::Sibling").expect("expected ClassModel for Sibling");
-        assert_eq!(sibling.mro, MethodResolutionOrder::Dfs);
     }
 
     #[test]
@@ -1852,48 +1793,6 @@ class Point {
         assert!(y.param);
         assert_eq!(y.writer.as_deref(), Some("set_y"));
         assert_eq!(y.default.as_deref(), Some("1"));
-
-        let param_names: Vec<_> = model.object_pad_param_field_names().collect();
-        assert_eq!(param_names, vec!["x", "y"]);
-    }
-
-    #[test]
-    fn object_pad_adjust_blocks_are_tracked() {
-        let models = build_models(
-            r#"
-use Object::Pad;
-
-class Config {
-    ADJUST {
-        my $tmp = 1;
-    }
-}
-"#,
-        );
-
-        let model = find_model(&models, "Config").expect("Config model");
-        assert_eq!(model.framework, Framework::ObjectPad);
-        assert_eq!(model.adjusts.len(), 1, "expected one ADJUST block");
-        assert_eq!(model.adjusts[0].name, "ADJUST");
-        assert!(model.adjusts[0].synthetic, "ADJUST should be modeled as synthetic");
-    }
-
-    #[test]
-    fn object_pad_param_field_names_exclude_non_param_fields() {
-        let models = build_models(
-            r#"
-use Object::Pad;
-
-class Config {
-    field $name :param;
-    field $cache = 1;
-}
-"#,
-        );
-
-        let model = find_model(&models, "Config").expect("Config model");
-        let param_names: Vec<_> = model.object_pad_param_field_names().collect();
-        assert_eq!(param_names, vec!["name"]);
     }
 
     #[test]
@@ -2175,28 +2074,6 @@ class MyApp::Point3D :isa(MyApp::Point) {
             model.parents.contains(&"MyApp::Point".to_string()),
             "qualified :isa must preserve qualified name, got {:?}",
             model.parents
-        );
-    }
-
-    #[test]
-    fn second_class_without_isa_does_not_inherit_first_class_parents() {
-        // Regression guard: parents from the first class must not bleed into the second.
-        // flush_current_package() uses mem::take so current_parents is reset between classes.
-        let models = build_models(
-            r#"
-class Point3D :isa(Point) {
-    field $z :param = 0;
-}
-class Standalone {
-    field $x :param = 0;
-}
-"#,
-        );
-        let standalone = models.iter().find(|m| m.name == "Standalone").expect("Standalone model");
-        assert!(
-            standalone.parents.is_empty(),
-            "Standalone class must have no parents, but got {:?}",
-            standalone.parents
         );
     }
 }

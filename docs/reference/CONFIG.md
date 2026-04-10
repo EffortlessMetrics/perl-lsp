@@ -182,30 +182,7 @@ the workspace root. Absolute entries are honored as provided only when they
 still stay inside the workspace boundary. These paths are searched by
 `perl-lsp` and are not appended to Perl's runtime `@INC`.
 
-When `perlPath` is unset, the server will try perlbrew/plenv-managed
-interpreters before falling back to `perl` on `PATH` for the system `@INC`
-probe. Use `useSystemInc` to opt in to that system `@INC` lookup.
-
-#### `perl.workspace.perlPath`
-
-| Property | Value |
-|---|---|
-| Type | `string` |
-| Default | auto-detected |
-| Key | `perlPath` |
-
-Path to the Perl interpreter used for system `@INC` probing. When set, this
-value overrides auto-detection and `PATH` lookup.
-
-#### `perl.workspace.perlArgs`
-
-| Property | Value |
-|---|---|
-| Type | `string[]` |
-| Default | `[]` |
-| Key | `perlArgs` |
-
-Extra arguments passed to the Perl interpreter when probing startup `@INC`.
+Use `useSystemInc` to opt in to system `@INC` lookup.
 
 ```json
 {

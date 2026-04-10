@@ -384,7 +384,6 @@ impl<'a> TokenStream<'a> {
                 "method" => TokenKind::Method,
                 "format" => TokenKind::Format,
                 "undef" => TokenKind::Undef,
-                "defer" => TokenKind::Defer,
                 "and" => TokenKind::WordAnd,
                 "or" => TokenKind::WordOr,
                 "not" => TokenKind::WordNot,

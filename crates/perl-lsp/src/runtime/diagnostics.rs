@@ -106,9 +106,7 @@ impl LspServer {
             // Get diagnostics (already includes unused variable detection).
             // resolver is called with the documents lock *released* — no reentrant deadlock.
             let provider = DiagnosticsProvider::new(ast, text.clone());
-            let resolver = |module: &str| {
-                self.resolve_module_to_path_with_doc(module, Some(&text), Some(uri)).is_some()
-            };
+            let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
             let source_path = source_path_from_uri(uri);
             let mut diagnostics = provider.get_diagnostics_with_path(
                 ast,
@@ -276,10 +274,7 @@ impl LspServer {
                 // Get diagnostics from the existing provider
                 if let Some(ast) = &doc.ast {
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                    let resolver = |module: &str| {
-                        self.resolve_module_to_path_with_doc(module, Some(&doc.text), Some(uri))
-                            .is_some()
-                    };
+                    let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
                     let source_path = source_path_from_uri(uri);
                     let mut diagnostics = provider.get_diagnostics_with_path(
                         ast,
@@ -517,10 +512,7 @@ impl LspServer {
 
             if let Some(ast) = &doc.ast {
                 let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                let resolver = |module: &str| {
-                    self.resolve_module_to_path_with_doc(module, Some(&doc.text), Some(uri_str))
-                        .is_some()
-                };
+                let resolver = |module: &str| self.resolve_module_to_path(module).is_some();
                 let source_path = source_path_from_uri(uri_str);
                 let mut diagnostics = provider.get_diagnostics_with_path(
                     ast,
@@ -943,12 +935,6 @@ fn is_fixable_diagnostic(code: &str) -> bool {
                 | DiagnosticCode::AssignmentInCondition
                 | DiagnosticCode::NumericComparisonWithUndef
                 | DiagnosticCode::DeprecatedDefined
-                | DiagnosticCode::MissingPackageDeclaration
-                | DiagnosticCode::VariableRedeclaration
-                | DiagnosticCode::MisspelledPragma
-                | DiagnosticCode::UnreachableCode
-                | DiagnosticCode::DuplicateSubroutine
-                | DiagnosticCode::MissingReturn
         )
     )
 }

@@ -193,40 +193,6 @@ fn test_use_constant_produces_symbol_decl() {
     assert!(d.anchor_span.is_none());
 }
 
-#[test]
-fn test_use_constant_hash_ref_style_produces_all_symbol_decls() {
-    // use constant { FOO => 1, BAR => 2, BAZ => 3 };
-    let use_node = Node::new(
-        NodeKind::Use {
-            module: "constant".to_string(),
-            args: vec![
-                "{".to_string(),
-                "FOO".to_string(),
-                "=>".to_string(),
-                "1".to_string(),
-                "BAR".to_string(),
-                "=>".to_string(),
-                "2".to_string(),
-                "BAZ".to_string(),
-                "=>".to_string(),
-                "3".to_string(),
-                "}".to_string(),
-            ],
-            has_filter_risk: false,
-        },
-        loc(0, 39),
-    );
-    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 39));
-
-    let decls = extract_symbol_decls(&program, None);
-
-    assert_eq!(decls.len(), 3);
-    assert_eq!(decls[0].kind, SymbolKind::Constant);
-    assert_eq!(decls[0].name, "FOO");
-    assert_eq!(decls[1].name, "BAR");
-    assert_eq!(decls[2].name, "BAZ");
-}
-
 // ── Class (Perl 5.38+) ────────────────────────────────────────────────────────
 
 #[test]

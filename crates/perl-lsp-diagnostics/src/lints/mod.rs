@@ -83,7 +83,6 @@
 //! | `PL200` | Warning | File has no package declaration |
 //! | `PL201` | Warning | Package name declared more than once |
 //! | `PL300` | Warning | Subroutine name defined more than once |
-//! | `PL303` | Warning | Same-file Moo/Moose roles provide conflicting methods |
 //!
 //! ## Dead code (`dead_code.rs`)
 //!
@@ -131,12 +130,10 @@ pub mod duplicate_hash_keys;
 pub mod eval_error_flow;
 /// Missing module detection (PL701)
 pub mod missing_module;
-/// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)
+/// Package and subroutine diagnostics (PL200, PL201, PL300)
 pub mod package_subroutine;
 /// printf/sprintf format specifier arity validation (PL405)
 pub mod printf_format;
-/// Same-file Moo/Moose role conflict detection (PL303)
-pub mod role_conflicts;
 pub mod security;
 pub mod strict_warnings;
 /// Unreachable code detection (PL406)

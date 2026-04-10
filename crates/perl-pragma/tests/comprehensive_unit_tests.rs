@@ -220,32 +220,6 @@ fn no_strict_quoted_double() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[test]
-fn use_feature_signatures_enables_all_strict_categories() -> Result<(), Box<dyn std::error::Error>>
-{
-    let ast = program(vec![use_node("feature", &["'signatures'"], 0, 28)]);
-    let map = PragmaTracker::build(&ast);
-    assert_eq!(map.len(), 1);
-    let state = &map[0].1;
-    assert!(state.strict_vars);
-    assert!(state.strict_subs);
-    assert!(state.strict_refs);
-    Ok(())
-}
-
-#[test]
-fn use_feature_qw_signatures_enables_all_strict_categories()
--> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("feature", &["qw(signatures say)"], 0, 34)]);
-    let map = PragmaTracker::build(&ast);
-    assert_eq!(map.len(), 1);
-    let state = &map[0].1;
-    assert!(state.strict_vars);
-    assert!(state.strict_subs);
-    assert!(state.strict_refs);
-    Ok(())
-}
-
 // ===========================================================================
 // use warnings / no warnings
 // ===========================================================================
@@ -942,26 +916,6 @@ fn use_v5_40_state_has_builtin() -> Result<(), Box<dyn std::error::Error>> {
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
     assert!(state.has_feature("builtin"), "v5.40 state must have 'builtin'");
-    assert!(!state.has_builtin_import("floor"), "v5.40 should not imply lexical builtin imports");
-    assert!(state.builtin_imports.is_empty(), "v5.40 should not populate lexical builtin imports");
-    Ok(())
-}
-
-#[test]
-fn use_builtin_tracks_lexical_imports_only() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("builtin", &["'true'", "'floor'"], 0, 28)]);
-    let map = PragmaTracker::build(&ast);
-    let state = &map[0].1;
-    assert!(state.has_builtin_import("true"));
-    assert!(state.has_builtin_import("floor"));
-    assert!(
-        !state.has_builtin_import("is_bool"),
-        "only the names actually imported should be tracked"
-    );
-    assert!(
-        !state.has_feature("builtin"),
-        "lexical builtin imports should stay separate from version-implied features"
-    );
     Ok(())
 }
 
@@ -979,100 +933,5 @@ fn state_default_has_no_features() -> Result<(), Box<dyn std::error::Error>> {
     let state = PragmaState::default();
     assert!(!state.has_feature("say"), "default state has no features");
     assert!(!state.has_feature("state"), "default state has no features");
-    Ok(())
-}
-
-// ===========================================================================
-// Package statement -- pragma state preservation (#3480)
-// ===========================================================================
-
-fn package_node(name: &str, block_node: Option<Node>, start: usize, end: usize) -> Node {
-    Node {
-        kind: NodeKind::Package {
-            name: name.to_string(),
-            name_span: loc(start, end),
-            block: block_node.map(Box::new),
-        },
-        location: loc(start, end),
-    }
-}
-
-/// `use strict; package Foo;` -- subsequent top-level statements after the bare
-/// `package Foo;` form (no block) must still see strict in effect.
-///
-/// The bare `package` form does not create a new scope, so pragma state from
-/// before the declaration accumulates normally through sibling statements.
-#[test]
-fn package_bare_form_does_not_reset_pragma_state() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![
-        use_node("strict", &[], 0, 12),
-        package_node("Foo", None, 13, 25),
-        use_node("warnings", &[], 26, 41),
-    ]);
-    let map = PragmaTracker::build(&ast);
-
-    let state = PragmaTracker::state_for_offset(&map, 35);
-    assert!(state.strict_vars, "strict_vars must survive a bare package statement");
-    assert!(state.strict_subs, "strict_subs must survive a bare package statement");
-    assert!(state.strict_refs, "strict_refs must survive a bare package statement");
-    assert!(state.warnings, "warnings must be on after use warnings");
-    Ok(())
-}
-
-/// `use strict; package Foo { ... }` -- the block form creates a new lexical
-/// scope.  Pragmas declared *before* the package block must be visible inside.
-#[test]
-fn package_block_form_inherits_outer_pragma_state() -> Result<(), Box<dyn std::error::Error>> {
-    let inner_use = use_node("warnings", &[], 20, 35);
-    let pkg_block = block(vec![inner_use], 14, 49);
-    let pkg = package_node("Foo", Some(pkg_block), 13, 50);
-    let ast = program(vec![use_node("strict", &[], 0, 12), pkg]);
-    let map = PragmaTracker::build(&ast);
-
-    let inside = PragmaTracker::state_for_offset(&map, 28);
-    assert!(inside.strict_vars, "strict must be inherited inside package block");
-    assert!(inside.warnings, "warnings enabled inside package block must be visible");
-    Ok(())
-}
-
-/// After a `package Foo { ... }` block, the state must be restored to the
-/// pre-block value (package blocks are lexically scoped like regular blocks).
-#[test]
-fn package_block_form_restores_state_after_block() -> Result<(), Box<dyn std::error::Error>> {
-    let no_refs = Node {
-        kind: NodeKind::No {
-            module: "strict".to_string(),
-            args: vec!["refs".to_string()],
-            has_filter_risk: false,
-        },
-        location: loc(20, 40),
-    };
-    let pkg_block = block(vec![no_refs], 14, 59);
-    let pkg = package_node("Foo", Some(pkg_block), 13, 60);
-    let ast = program(vec![use_node("strict", &[], 0, 12), pkg, use_node("warnings", &[], 61, 76)]);
-    let map = PragmaTracker::build(&ast);
-
-    let inside = PragmaTracker::state_for_offset(&map, 30);
-    assert!(!inside.strict_refs, "strict_refs must be disabled inside the package block");
-
-    let after = PragmaTracker::state_for_offset(&map, 70);
-    assert!(after.strict_refs, "strict_refs must be restored after the package block");
-    assert!(after.warnings, "warnings must be on after use warnings");
-    Ok(())
-}
-
-/// `package Foo { use strict 'vars'; }` -- pragma declared *inside*
-/// the package block must be visible at the inner offset.
-#[test]
-fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dyn std::error::Error>>
-{
-    let inner_strict = use_node("strict", &["vars"], 20, 40);
-    let pkg_block = block(vec![inner_strict], 14, 49);
-    let pkg = package_node("Foo", Some(pkg_block), 13, 50);
-    let ast = program(vec![pkg]);
-    let map = PragmaTracker::build(&ast);
-
-    let inside = PragmaTracker::state_for_offset(&map, 30);
-    assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
     Ok(())
 }

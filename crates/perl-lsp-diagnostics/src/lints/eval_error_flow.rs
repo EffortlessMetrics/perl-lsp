@@ -59,7 +59,7 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, state: FlowState) 
         NodeKind::Given { body, .. } | NodeKind::When { body, .. } | NodeKind::Default { body } => {
             visit_node(body, diagnostics, FlowState::default());
         }
-        NodeKind::Do { block } | NodeKind::Defer { block } => {
+        NodeKind::Do { block } => {
             visit_node(block, diagnostics, FlowState::default());
         }
         NodeKind::LabeledStatement { statement, .. } => {
@@ -192,10 +192,7 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         }
         // Nested block-like nodes are handled by `visit_node` as independent
         // same-block scopes, so they do not contribute to the current statement.
-        NodeKind::For { .. }
-        | NodeKind::Foreach { .. }
-        | NodeKind::Do { .. }
-        | NodeKind::Defer { .. } => {}
+        NodeKind::For { .. } | NodeKind::Foreach { .. } | NodeKind::Do { .. } => {}
         _ => {}
     }
 }

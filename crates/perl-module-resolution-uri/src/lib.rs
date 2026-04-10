@@ -11,7 +11,7 @@
 use perl_module_path::module_name_to_path;
 use perl_path_security::validate_workspace_path;
 use perl_workspace_folder::workspace_folder_to_path;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use url::Url;
 
@@ -66,22 +66,15 @@ pub fn resolve_module_uri(
                 return ModuleUriResolution::TimedOut;
             }
 
-            let include_base = Path::new(include_path);
-            let full_path = if include_base.is_absolute() {
-                include_base.join(&relative_path)
-            } else if include_path == "." {
+            let full_path = if include_path == "." {
                 workspace_path.join(&relative_path)
             } else {
                 workspace_path.join(include_path).join(&relative_path)
             };
 
-            let full_path = if include_base.is_absolute() {
-                full_path
-            } else {
-                match validate_workspace_path(&full_path, &workspace_path) {
-                    Ok(path) => path,
-                    Err(_) => continue,
-                }
+            let full_path = match validate_workspace_path(&full_path, &workspace_path) {
+                Ok(path) => path,
+                Err(_) => continue,
             };
 
             if full_path.is_file()

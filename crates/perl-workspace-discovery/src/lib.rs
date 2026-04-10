@@ -57,25 +57,6 @@ pub fn discover_perl_files(root: &Path) -> DiscoveryResult {
     }
 }
 
-/// Returns `true` if `path` should be considered discoverable by workspace
-/// indexing.
-///
-/// This intentionally includes XS implementation files, SWIG interface files,
-/// and common Perl templating formats so editor discovery can surface them
-/// even though they are not classified as Perl source files by the shared
-/// source-file helper.
-#[must_use]
-pub fn is_perl_discovery_path(path: &Path) -> bool {
-    is_perl_source_path(path)
-        || path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| {
-            ext.eq_ignore_ascii_case("i")
-                || ext.eq_ignore_ascii_case("xs")
-                || ext.eq_ignore_ascii_case("ep")
-                || ext.eq_ignore_ascii_case("tt")
-                || ext.eq_ignore_ascii_case("tt2")
-        })
-}
-
 fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
     let output = std::process::Command::new("git")
         .args(GIT_LS_FILES_ARGS)
@@ -117,7 +98,7 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
 
         let path = root.join(relative_path);
-        if is_perl_discovery_path(&path) {
+        if is_perl_source_path(&path) {
             files.push(path);
         } else {
             excluded_count += 1;
@@ -145,7 +126,7 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
             continue;
         }
 
-        if is_perl_discovery_path(entry.path()) {
+        if is_perl_source_path(entry.path()) {
             files.push(entry.path().to_path_buf());
         } else {
             excluded_count += 1;
@@ -315,19 +296,14 @@ mod tests {
     #[test]
     fn parse_git_output_recognizes_all_perl_extensions() {
         let root = Path::new("/tmp/workspace");
-        let payload =
-            b"lib/Foo.pm\0scripts/run.pl\0t/basic.t\0app/main.psgi\0ext/native.xs\0templates/page.html.ep\0templates/page.tt\0templates/layout.tt2\0";
+        let payload = b"lib/Foo.pm\0scripts/run.pl\0t/basic.t\0app/main.psgi\0";
         let (files, excluded_count) = parse_git_ls_files_output(root, payload);
 
-        assert_eq!(files.len(), 8);
+        assert_eq!(files.len(), 4);
         assert!(files.iter().any(|p| p.ends_with("Foo.pm")));
         assert!(files.iter().any(|p| p.ends_with("run.pl")));
         assert!(files.iter().any(|p| p.ends_with("basic.t")));
         assert!(files.iter().any(|p| p.ends_with("main.psgi")));
-        assert!(files.iter().any(|p| p.ends_with("native.xs")));
-        assert!(files.iter().any(|p| p.ends_with("page.html.ep")));
-        assert!(files.iter().any(|p| p.ends_with("page.tt")));
-        assert!(files.iter().any(|p| p.ends_with("layout.tt2")));
         assert_eq!(excluded_count, 0);
     }
 
@@ -442,16 +418,9 @@ mod tests {
         create_file(root, "bin/run.pl")?;
         create_file(root, "t/basic.t")?;
         create_file(root, "app/main.psgi")?;
-        create_file(root, "xs/native.xs")?;
-        create_file(root, "templates/page.html.ep")?;
-        create_file(root, "templates/page.tt")?;
-        create_file(root, "templates/layout.tt2")?;
 
         let result = walk_discovery(root, Instant::now());
-        assert_eq!(result.files.len(), 8);
-        assert!(result.files.iter().any(|p| p.ends_with("page.html.ep")));
-        assert!(result.files.iter().any(|p| p.ends_with("page.tt")));
-        assert!(result.files.iter().any(|p| p.ends_with("layout.tt2")));
+        assert_eq!(result.files.len(), 4);
 
         Ok(())
     }

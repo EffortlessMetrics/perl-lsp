@@ -142,24 +142,3 @@ export function selectBestDiagnosis(
         remediation: probe.remediation,
     };
 }
-
-/**
- * Format the startup failure dialog shown to the user.
- *
- * When the health-check fallback returns a specific onboarding message, we
- * surface that verbatim so the user sees the actionable Perl-missing guidance
- * immediately instead of a generic wrapper.
- */
-export function formatStartupFailureDialog(
-    probe: StartupErrorDiagnosis,
-    healthMsg: string | undefined,
-): string {
-    if (probe.kind === StartupErrorKind.Unknown && healthMsg) {
-        return healthMsg;
-    }
-
-    return (
-        `Perl Language Server failed to start.\n\n${probe.hint}\n\n` +
-        `Suggestion: ${probe.remediation}`
-    );
-}

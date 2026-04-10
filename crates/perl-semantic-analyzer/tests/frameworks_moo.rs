@@ -327,34 +327,6 @@ after 'cleanup' => sub { };
 }
 
 #[test]
-fn moose_override_modifier_emits_subroutine_symbol() {
-    let code = r#"
-package MyApp::User;
-use Moose;
-override 'render' => sub { };
-"#;
-
-    let table = extract_symbols(code);
-
-    let sym = find_symbol_with_declaration(&table, "render", SymbolKind::Subroutine, "override");
-    assert!(sym.is_some(), "expected Subroutine symbol with declaration='override' for `render`");
-}
-
-#[test]
-fn moose_augment_modifier_emits_subroutine_symbol() {
-    let code = r#"
-package MyApp::User;
-use Moose;
-augment 'render' => sub { };
-"#;
-
-    let table = extract_symbols(code);
-
-    let sym = find_symbol_with_declaration(&table, "render", SymbolKind::Subroutine, "augment");
-    assert!(sym.is_some(), "expected Subroutine symbol with declaration='augment' for `render`");
-}
-
-#[test]
 fn moo_modifier_not_emitted_without_framework() {
     let code = r#"
 package Plain;

@@ -2898,7 +2898,7 @@ impl IndexVisitor {
                     self.visit_node(val, file_index);
                 }
             }
-            NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
+            NodeKind::Eval { block } | NodeKind::Do { block } => {
                 self.visit_node(block, file_index);
             }
             NodeKind::Try { body, catch_blocks, finally_block } => {

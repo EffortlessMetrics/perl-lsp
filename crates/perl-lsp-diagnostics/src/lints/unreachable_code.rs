@@ -109,7 +109,7 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         }
 
         // Do block: fresh scope (do { ... })
-        NodeKind::Do { block } | NodeKind::Defer { block } => {
+        NodeKind::Do { block } => {
             visit_node(block, diagnostics);
         }
 

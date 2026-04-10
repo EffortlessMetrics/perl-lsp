@@ -140,48 +140,6 @@ sub calculate {
 }
 
 #[test]
-fn test_document_symbols_plack_builder_chain() -> TestResult {
-    let server = setup_server();
-
-    let content = r#"
-use Plack::Builder;
-
-builder {
-    enable 'Static';
-    mount '/api' => $api_app;
-};
-"#;
-
-    open_document(&server, "file:///plack.psgi", content);
-
-    let request = JsonRpcRequest {
-        _jsonrpc: "2.0".to_string(),
-        method: "textDocument/documentSymbol".to_string(),
-        params: Some(json!({
-            "textDocument": {
-                "uri": "file:///plack.psgi"
-            }
-        })),
-        id: Some(json!(2)),
-    };
-
-    let response = server.handle_request(request).ok_or("No response from server")?;
-    let result = response.result.ok_or("Missing result")?;
-    let symbols = result.as_array().ok_or("Result is not an array")?;
-
-    assert!(
-        symbols.iter().any(|s| s["name"].as_str() == Some("Plack::Middleware::Static")),
-        "document symbols should expose the synthesized Plack middleware entry: {symbols:?}"
-    );
-    assert!(
-        symbols.iter().any(|s| s["name"].as_str() == Some("/api")),
-        "document symbols should expose the synthesized mount entry: {symbols:?}"
-    );
-
-    Ok(())
-}
-
-#[test]
 fn test_document_symbols_nested() -> TestResult {
     let server = setup_server();
 

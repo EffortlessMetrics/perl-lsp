@@ -83,11 +83,6 @@ fn extension_rejects_xs() {
 }
 
 #[test]
-fn extension_rejects_i() {
-    assert!(!is_perl_source_extension("i"), "i is a SWIG interface file, not Perl source");
-}
-
-#[test]
 fn extension_rejects_al() {
     assert!(!is_perl_source_extension("al"), "al (autoloaded) is not a canonical extension");
 }

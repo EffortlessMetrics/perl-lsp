@@ -19,61 +19,10 @@ fn is_typeglob_punct_terminator(kind: Option<TokenKind>) -> bool {
 }
 
 impl<'a> Parser<'a> {
-    fn is_contextual_await_start(&mut self) -> bool {
-        if self.peek_kind() != Some(TokenKind::Identifier)
-            || !self.tokens.peek().is_ok_and(|token| token.text.as_ref() == "await")
-        {
-            return false;
-        }
-
-        let second_kind = self.tokens.peek_second().ok().map(|token| token.kind);
-        if matches!(
-            second_kind,
-            Some(TokenKind::FatArrow | TokenKind::Arrow | TokenKind::DoubleColon)
-        ) {
-            return false;
-        }
-
-        if second_kind == Some(TokenKind::Colon)
-            && self.tokens.peek_third().is_ok_and(|token| token.kind == TokenKind::Colon)
-        {
-            return false;
-        }
-
-        true
-    }
-
     /// Parse unary expression
     fn parse_unary(&mut self) -> ParseResult<Node> {
         if self.peek_kind() == Some(TokenKind::Slash) {
             self.tokens.relex_as_term();
-        }
-
-        if self.is_contextual_await_start() {
-            let op_token = self.tokens.next()?;
-            let start = op_token.start;
-
-            if self.tokens.is_eof() || self.is_at_statement_end() {
-                let end = op_token.end;
-                return Ok(Node::new(
-                    NodeKind::Unary {
-                        op: op_token.text.to_string(),
-                        operand: Box::new(Node::new(
-                            NodeKind::Undef,
-                            SourceLocation { start: end, end },
-                        )),
-                    },
-                    SourceLocation { start, end },
-                ));
-            }
-
-            let operand = self.parse_unary()?;
-            let end = operand.location.end;
-
-            return Ok(Node::new(
-                NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
-                SourceLocation { start, end },
-            ));
         }
 
         if let Some(kind) = self.peek_kind() {

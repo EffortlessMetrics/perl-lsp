@@ -1,6 +1,7 @@
 //! Property tests for workspace discovery invariants.
 
-use perl_workspace_discovery::{discover_perl_files, is_perl_discovery_path};
+use perl_source_file::is_perl_source_path;
+use perl_workspace_discovery::discover_perl_files;
 use proptest::prelude::*;
 use std::collections::HashSet;
 use std::fs;
@@ -11,10 +12,6 @@ fn extension_strategy() -> impl Strategy<Value = String> {
         Just("pm".to_string()),
         Just("t".to_string()),
         Just("psgi".to_string()),
-        Just("xs".to_string()),
-        Just("ep".to_string()),
-        Just("tt".to_string()),
-        Just("tt2".to_string()),
         Just("md".to_string()),
         Just("txt".to_string()),
         Just("json".to_string()),
@@ -49,7 +46,7 @@ proptest! {
             prop_assert!(fs::create_dir_all(parent).is_ok());
             prop_assert!(fs::write(&path, "# generated\n").is_ok());
 
-            if matches!(ext.as_str(), "pl" | "pm" | "t" | "psgi" | "xs" | "ep" | "tt" | "tt2") {
+            if matches!(ext.as_str(), "pl" | "pm" | "t" | "psgi") {
                 expected.insert(path);
             }
         }
@@ -62,7 +59,7 @@ proptest! {
 
         for path in &discovered {
             prop_assert!(path.starts_with(root));
-            prop_assert!(is_perl_discovery_path(path));
+            prop_assert!(is_perl_source_path(path));
         }
 
         prop_assert_eq!(discovered, expected);

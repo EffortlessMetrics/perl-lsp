@@ -128,24 +128,6 @@ fn unknown_foobar_attr_warns() {
 }
 
 #[test]
-fn attribute_handlers_custom_attribute_is_recognized() {
-    let src = r#"
-use Attribute::Handlers;
-sub MyAttr :ATTR(CODE) { }
-sub foo :MyAttr(foo) { }
-"#;
-    assert_clean_parse(src);
-
-    let mut parser = Parser::new(src);
-    let _ast = must(parser.parse());
-    assert!(
-        parser.errors().is_empty(),
-        "Expected Attribute::Handlers custom attribute support to avoid warnings, got: {:?}",
-        parser.errors()
-    );
-}
-
-#[test]
 fn unknown_attr_does_not_produce_error_ast_node() {
     // Parsing should succeed — unknown attributes produce warnings, not hard errors
     let src = "sub unknown :foobar { }";

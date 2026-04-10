@@ -78,9 +78,7 @@ fn benchmark_strict_barewords(c: &mut Criterion) {
             strict_vars: true,
             strict_refs: true,
             warnings: true,
-            disabled_warning_categories: Vec::new(),
             features: Vec::new(),
-            builtin_imports: Vec::new(),
         },
     )];
 

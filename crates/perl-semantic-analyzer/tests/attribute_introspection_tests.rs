@@ -84,19 +84,6 @@ fn attribute_doc_shared_has_description() {
 }
 
 #[test]
-fn attribute_doc_locked_has_description() {
-    let doc = get_attribute_documentation("locked");
-    assert!(doc.is_some(), "locked should have documentation");
-    let doc = must_some(doc);
-    assert!(
-        doc.description.to_lowercase().contains("serialize")
-            || doc.description.to_lowercase().contains("thread"),
-        "locked description should mention serialization or threading, got: {}",
-        doc.description
-    );
-}
-
-#[test]
 fn attribute_doc_unknown_returns_none() {
     let doc = get_attribute_documentation("nonexistent_attribute_xyz");
     assert!(doc.is_none(), "unknown attribute should return None");
@@ -111,7 +98,7 @@ fn attribute_doc_colon_stripped_lvalue() {
 
 #[test]
 fn attribute_doc_covers_all_known_builtins() {
-    let known_attrs = ["lvalue", "method", "prototype", "const", "shared", "locked"];
+    let known_attrs = ["lvalue", "method", "prototype", "const", "shared"];
     for attr in &known_attrs {
         let doc = get_attribute_documentation(attr);
         assert!(doc.is_some(), "Expected documentation for attribute '{}' but got None", attr);

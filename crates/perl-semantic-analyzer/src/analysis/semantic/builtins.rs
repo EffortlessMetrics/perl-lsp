@@ -960,10 +960,6 @@ pub fn get_attribute_documentation(attr: &str) -> Option<BuiltinDoc> {
             signature: ":weak_ref",
             description: "Marks a Moose/Moo attribute as a weak reference. The stored reference will not prevent the referent from being garbage-collected.",
         }),
-        "locked" => Some(BuiltinDoc {
-            signature: ":locked",
-            description: "Marks a subroutine so concurrent callers are serialized. Useful for thread-safe methods that must not run at the same time.",
-        }),
         "overload" => Some(BuiltinDoc {
             signature: ":overload(OP)",
             description: "Declares that a subroutine implements an operator overload for OP.",

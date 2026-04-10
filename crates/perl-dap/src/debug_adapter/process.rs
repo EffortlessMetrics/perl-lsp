@@ -256,12 +256,6 @@ impl DebugAdapter {
             })?;
         }
 
-        // Pre-launch syntax check: run `perl -c <script>` before spawning the
-        // debugger.  This catches syntax errors early and surfaces a clear,
-        // actionable message to the user instead of a generic "Cannot start
-        // Perl debugger" failure after `perl -d` exits immediately.
-        Self::check_syntax(program, &env_overrides)?;
-
         let mut cmd = Command::new("perl");
         cmd.arg("-d");
 
@@ -321,70 +315,6 @@ impl DebugAdapter {
             }
             Err(e) => Err(e.to_string()),
         }
-    }
-
-    /// Run `perl -c <script>` and return `Ok(())` if the syntax is valid,
-    /// or `Err(message)` with a user-friendly error describing the problem.
-    ///
-    /// `perl -c` exits with status 0 when the script compiles successfully
-    /// (printing "syntax OK" to stderr).  Any non-zero exit is a syntax
-    /// failure; the error detail is on stderr.
-    ///
-    /// If `perl` cannot be found or spawned, the check is silently skipped
-    /// and `Ok(())` is returned so that the subsequent `perl -d` launch
-    /// produces the correct "perl not on PATH" error to the user.
-    pub(super) fn check_syntax(
-        program: &str,
-        env_overrides: &HashMap<String, String>,
-    ) -> Result<(), String> {
-        let output = match Command::new("perl")
-            .arg("-c")
-            .arg("--")
-            .arg(program)
-            .envs(env_overrides)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-        {
-            Ok(out) => out,
-            Err(e) => {
-                // `perl` not found or could not be spawned — skip the check
-                // and let the real launch produce the "perl not on PATH" error.
-                tracing::warn!("perl -c could not be run (will try perl -d anyway): {}", e);
-                return Ok(());
-            }
-        };
-
-        if output.status.success() {
-            return Ok(());
-        }
-
-        // Combine stdout + stderr (perl writes errors to stderr; stdout is
-        // normally empty for -c, but merge both for robustness).
-        let raw_stderr = String::from_utf8_lossy(&output.stderr);
-        let raw_stdout = String::from_utf8_lossy(&output.stdout);
-        let combined = if raw_stderr.is_empty() { raw_stdout } else { raw_stderr };
-
-        // Strip the "syntax OK" confirmation line that sometimes appears even
-        // on partial failures, and drop blank lines.
-        let error_lines: Vec<&str> = combined
-            .lines()
-            .filter(|l| {
-                let trimmed = l.trim();
-                !trimmed.eq_ignore_ascii_case("syntax ok") && !trimmed.is_empty()
-            })
-            .collect();
-
-        let detail = if error_lines.is_empty() {
-            combined.trim().to_string()
-        } else {
-            error_lines.join("\n")
-        };
-
-        Err(format!(
-            "Syntax error in '{}' — fix the error below before debugging:\n{}",
-            program, detail
-        ))
     }
 
     /// Start thread to read debugger output with enhanced error recovery

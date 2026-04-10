@@ -146,7 +146,6 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         (Node::new(NodeKind::Block { statements: vec![leaf("stmt")] }, loc()), "Block", 1),
         (Node::new(NodeKind::Eval { block: Box::new(leaf("block")) }, loc()), "Eval", 1),
         (Node::new(NodeKind::Do { block: Box::new(leaf("block")) }, loc()), "Do", 1),
-        (Node::new(NodeKind::Defer { block: Box::new(leaf("block")) }, loc()), "Defer", 1),
         (
             Node::new(
                 NodeKind::Try {

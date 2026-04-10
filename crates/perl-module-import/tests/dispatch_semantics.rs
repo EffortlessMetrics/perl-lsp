@@ -4,8 +4,7 @@
 //! including import call behaviour, load timing, and file-path `require` syntax.
 
 use perl_module_import::{
-    ImportBehavior, ImportListForm, LoadTiming, ModuleImportKind, RequireForm,
-    parse_module_import_head,
+    ImportBehavior, LoadTiming, ModuleImportKind, RequireForm, parse_module_import_head,
 };
 
 // ===========================================================================
@@ -172,36 +171,6 @@ fn test_use_has_no_require_form() -> Result<(), String> {
         parse_module_import_head("use Foo::Bar;").ok_or("expected Some for use statement")?;
     if head.require_form().is_some() {
         return Err(format!("expected None require_form for use, got {:?}", head.require_form()));
-    }
-    Ok(())
-}
-
-#[test]
-fn test_use_default_import_list_form_is_recorded() -> Result<(), String> {
-    let head =
-        parse_module_import_head("use Foo::Bar;").ok_or("expected Some for use statement")?;
-    if head.import_list != Some(ImportListForm::Default) {
-        return Err(format!("expected Default import list, got {:?}", head.import_list));
-    }
-    Ok(())
-}
-
-#[test]
-fn test_use_empty_import_list_form_is_recorded() -> Result<(), String> {
-    let head = parse_module_import_head("use Foo::Bar ();")
-        .ok_or("expected Some for empty import form")?;
-    if head.import_list != Some(ImportListForm::Empty) {
-        return Err(format!("expected Empty import list, got {:?}", head.import_list));
-    }
-    Ok(())
-}
-
-#[test]
-fn test_use_explicit_import_list_form_is_recorded() -> Result<(), String> {
-    let head = parse_module_import_head("use Foo::Bar qw(baz);")
-        .ok_or("expected Some for explicit import form")?;
-    if head.import_list != Some(ImportListForm::Explicit) {
-        return Err(format!("expected Explicit import list, got {:?}", head.import_list));
     }
     Ok(())
 }

@@ -3,10 +3,10 @@
 use super::*;
 
 impl DebugAdapter {
-    /// Handle evaluate request with policy validation and timeout enforcement.
+    /// Handle evaluate request with safe evaluation mode and timeout enforcement
     ///
     /// AC10.1: Evaluates expressions in stack frame context
-    /// AC10.2: Policy validation for a non-mutating subset by default
+    /// AC10.2: Safe evaluation mode (non-mutating) by default
     /// AC10.3: Timeout enforcement (5s default, 30s hard limit)
     pub(super) fn handle_evaluate(
         &self,
@@ -54,8 +54,7 @@ impl DebugAdapter {
                 };
             }
 
-            // AC10.2: Policy validation for a non-mutating subset by default.
-            // This is admission control, not a real sandbox.
+            // AC10.2: Safe evaluation mode (non-mutating) by default
             let allow_side_effects = args.allow_side_effects.unwrap_or(false);
 
             // Validate expression safety if side effects are not allowed

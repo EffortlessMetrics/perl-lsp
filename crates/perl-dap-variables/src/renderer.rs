@@ -351,15 +351,7 @@ impl PerlVariableRenderer {
                 let prefix = self.ref_prefix_chain(value);
                 format!("{}{}", prefix, self.format_deref_target_brief(inner))
             }
-            PerlValue::Object { class, value } => {
-                let backing = match value.as_ref() {
-                    PerlValue::Hash(_) => "HASH",
-                    PerlValue::Array(_) => "ARRAY",
-                    PerlValue::Scalar(_) | PerlValue::Number(_) | PerlValue::Integer(_) => "SCALAR",
-                    _ => "REF",
-                };
-                format!("{} = {}(...)", class, backing)
-            }
+            PerlValue::Object { class, .. } => format!("{}=...", class),
             PerlValue::Code { name } => {
                 name.as_ref().map_or_else(|| "CODE(...)".to_string(), |n| format!("\\&{}", n))
             }
@@ -385,13 +377,7 @@ impl PerlVariableRenderer {
                 format!("{}{}", prefix, self.format_deref_target(inner))
             }
             PerlValue::Object { class, value } => {
-                let backing = match value.as_ref() {
-                    PerlValue::Hash(_) => "HASH",
-                    PerlValue::Array(_) => "ARRAY",
-                    PerlValue::Scalar(_) | PerlValue::Number(_) | PerlValue::Integer(_) => "SCALAR",
-                    _ => "REF",
-                };
-                format!("{} = {}(...)", class, backing)
+                format!("{}={}", class, self.format_value_brief(value))
             }
             PerlValue::Code { name } => {
                 name.as_ref().map_or_else(|| "sub { ... }".to_string(), |n| format!("\\&{}", n))
@@ -434,11 +420,6 @@ impl VariableRenderer for PerlVariableRenderer {
             }
             PerlValue::Object { class, value: inner } => {
                 rendered.type_name = Some(class.clone());
-                rendered.presentation_hint = Some(VariablePresentationHint {
-                    kind: Some("class".to_string()),
-                    attributes: None,
-                    visibility: None,
-                });
                 match inner.as_ref() {
                     PerlValue::Hash(pairs) => {
                         rendered.named_variables = Some(pairs.len() as i64);
@@ -949,7 +930,8 @@ mod tests {
         // Scalar-backed objects don't expose named or indexed children
         assert_eq!(rendered.named_variables, None);
         assert_eq!(rendered.indexed_variables, None);
-        assert_eq!(rendered.value, "URI = SCALAR(...)");
+        assert!(rendered.value.contains("URI"));
+        assert!(rendered.value.contains("https://example.com"));
     }
 
     /// Blessed object with deeply nested class name (Perl namespaces).

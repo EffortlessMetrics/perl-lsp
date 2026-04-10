@@ -1,6 +1,7 @@
 //! Fuzz-style randomized stress tests for workspace discovery.
 
-use perl_workspace_discovery::{discover_perl_files, is_perl_discovery_path};
+use perl_source_file::is_perl_source_path;
+use perl_workspace_discovery::discover_perl_files;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -59,7 +60,7 @@ fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants() -> TestResu
         ".cache/precompiled",
         ".git/hooks",
     ];
-    let extensions = ["pl", "pm", "t", "psgi", "xs", "txt", "md", "json", "rs"];
+    let extensions = ["pl", "pm", "t", "psgi", "txt", "md", "json", "rs"];
 
     let mut rng = XorShift64::new(0xA11C_E55D_1234_5678);
 
@@ -81,7 +82,7 @@ fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants() -> TestResu
 
         for path in &result.files {
             assert!(path.starts_with(root));
-            assert!(is_perl_discovery_path(path));
+            assert!(is_perl_source_path(path));
             assert!(seen.insert(path.clone()));
         }
     }

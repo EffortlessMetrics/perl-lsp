@@ -158,19 +158,6 @@ pub fn get_scanner_config() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tree_sitter::{Query, QueryCursor, StreamingIterator};
-
-    const INJECTIONS_QUERY: &str = include_str!("../../../tree-sitter-perl/queries/injections.scm");
-
-    fn capture_text<'a>(
-        query: &'a Query,
-        code: &'a str,
-        capture: tree_sitter::QueryCapture<'a>,
-    ) -> Option<(&'a str, &'a str)> {
-        let name = query.capture_names().get(capture.index as usize)?;
-        let text = capture.node.utf8_text(code.as_bytes()).ok()?;
-        Some((*name, text))
-    }
 
     #[test]
     fn test_language_loading() {
@@ -193,45 +180,6 @@ mod tests {
     fn test_parser_creation() {
         let parser = create_parser();
         assert!(parser.language().is_some());
-    }
-
-    #[test]
-    fn test_inline_cpp_injection_query_matches_heredoc_body()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let code = "use Inline CPP => <<'END_CPP';\n#include <string>\nclass Greet {};\nEND_CPP\n";
-        let tree = parse_perl_code(code)?;
-        let query = Query::new(&language(), INJECTIONS_QUERY)?;
-        let mut cursor = QueryCursor::new();
-
-        let mut matched = false;
-        let mut matches = cursor.matches(&query, tree.root_node(), code.as_bytes());
-        while let Some(m) = matches.next() {
-            let mut saw_inline_package = false;
-            let mut saw_inline_language = false;
-            let mut saw_injection_content = false;
-
-            for capture in m.captures {
-                if let Some((name, text)) = capture_text(&query, code, *capture) {
-                    match name {
-                        "inline.package" => saw_inline_package = text == "Inline",
-                        "inline.language" => saw_inline_language = text == "CPP",
-                        "injection.content" => {
-                            saw_injection_content = capture.node.kind() == "heredoc_content"
-                                && text.contains("#include <string>");
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            if saw_inline_package && saw_inline_language && saw_injection_content {
-                matched = true;
-                break;
-            }
-        }
-
-        assert!(matched, "expected Inline::CPP heredoc to match the injection query");
-        Ok(())
     }
 }
 

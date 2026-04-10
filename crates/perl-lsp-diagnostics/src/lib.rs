@@ -56,8 +56,6 @@ pub use lints::common_mistakes;
 pub use lints::deprecated;
 pub use lints::missing_module;
 pub use lints::package_subroutine;
-/// Same-file Moo/Moose role conflict detection.
-pub use lints::role_conflicts;
 pub use lints::security;
 pub use lints::strict_warnings;
 pub use lints::unreachable_code;

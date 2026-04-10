@@ -344,9 +344,9 @@ sub evaluate_expression {
                 die "Side effects not allowed without allowSideEffects flag\n";
             }
 
-            # Future work: Safe.pm compartment or interpreter isolation.
-            # The current implementation only validates the expression
-            # policy and still evaluates in the debugger context.
+            # Safe.pm compartment (future enhancement)
+            # my $cpt = Safe->new;
+            # $result = $cpt->reval($expr);
 
             $result = eval $expr;
         }
@@ -371,10 +371,6 @@ sub evaluate_expression {
 ```
 
 ### 2.3 Test Coverage (AC16)
-
-Current behavior is policy validation plus timeout framing, not a sandboxed
-interpreter boundary. `allowSideEffects: true` skips the safe-mode validators
-and evaluates in the debugger context.
 
 ```rust
 // crates/perl-dap/tests/security_validation.rs

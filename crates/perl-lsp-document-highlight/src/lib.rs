@@ -290,9 +290,7 @@ impl DocumentHighlightProvider {
             NodeKind::Default { body } => Some(vec![body.as_ref()]),
             NodeKind::LabeledStatement { statement, .. } => Some(vec![statement.as_ref()]),
             // Code evaluation (Issue #191)
-            NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
-                Some(vec![block.as_ref()])
-            }
+            NodeKind::Eval { block } | NodeKind::Do { block } => Some(vec![block.as_ref()]),
             // Error handling (Issue #191)
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 let mut children = vec![body.as_ref()];

@@ -1700,66 +1700,6 @@ print FOO;
 }
 
 #[test]
-fn version_pragma_does_not_import_builtin_short_names() -> Result<(), Box<dyn std::error::Error>> {
-    let code = r#"
-use v5.40;
-print floor;
-"#;
-    let issues = scope_issues_strict(code);
-
-    assert!(
-        issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
-        }),
-        "use v5.40 should not lexically import builtin short names"
-    );
-    Ok(())
-}
-
-#[test]
-fn builtin_pragma_imports_are_lexical_only() -> Result<(), Box<dyn std::error::Error>> {
-    let code = r#"
-use strict;
-use builtin 'true';
-print floor;
-print true;
-"#;
-    let issues = scope_issues_strict(code);
-
-    assert!(
-        issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
-        }),
-        "importing `true` must not suppress unrelated builtin names"
-    );
-    assert!(
-        !issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "true"
-        }),
-        "lexically imported builtin short name `true` should be allowed"
-    );
-    Ok(())
-}
-
-#[test]
-fn builtin_pragma_imports_allow_the_imported_name() -> Result<(), Box<dyn std::error::Error>> {
-    let code = r#"
-use strict;
-use builtin 'floor';
-print floor;
-"#;
-    let issues = scope_issues_strict(code);
-
-    assert!(
-        !issues.iter().any(|i| {
-            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
-        }),
-        "lexically imported builtin short name `floor` should not be flagged"
-    );
-    Ok(())
-}
-
-#[test]
 fn v5_36_auto_strict_flags_undeclared_variable_in_signature_sub()
 -> Result<(), Box<dyn std::error::Error>> {
     // use v5.36 enables strict automatically via feature bundle.
@@ -1776,29 +1716,6 @@ sub foo ($x) { $z = 1; }
         "use v5.36 auto-enables strict: $z inside a signature sub should be flagged as undeclared"
     );
     // The parameter $x should NOT be flagged as undeclared.
-    assert!(
-        !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
-        "signature parameter $x should not be flagged as undeclared"
-    );
-    Ok(())
-}
-
-#[test]
-fn feature_signatures_auto_strict_flags_undeclared_variable_in_signature_sub()
--> Result<(), Box<dyn std::error::Error>> {
-    // `use feature 'signatures'` should enable strict semantics automatically.
-    // An undeclared variable $z inside a signature sub should be flagged even
-    // without explicit `use strict`.
-    let code = r#"
-use feature 'signatures';
-sub foo ($x) { $z = 1; }
-"#;
-    let issues = scope_issues_strict(code);
-
-    assert!(
-        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
-        "use feature 'signatures' should auto-enable strict: $z should be flagged as undeclared"
-    );
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
         "signature parameter $x should not be flagged as undeclared"
@@ -2630,36 +2547,6 @@ print $buffer;
 }
 
 #[test]
-fn read_position_zero_declaration_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
-    // Position 0 for `read` must not be treated as a declaration-capable output slot.
-    // If a declaration appears there, it should still be analyzed like a normal lexical
-    // declaration (and therefore may be reported as unused/uninitialized).
-    let code = r#"
-use strict;
-read my $fh, my $buffer, 1024;
-print $buffer;
-"#;
-    let issues = scope_issues_strict(code);
-    assert!(
-        issues.iter().any(|i| {
-            i.variable_name == "$fh"
-                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
-        }),
-        "read position-0 declaration should not be auto-consumed (issues: {:?})",
-        issues
-    );
-    assert!(
-        !issues.iter().any(|i| {
-            i.variable_name == "$buffer"
-                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
-        }),
-        "read position-1 buffer declaration should still be consumed (issues: {:?})",
-        issues
-    );
-    Ok(())
-}
-
-#[test]
 fn socketpair_both_positions_declared() -> Result<(), Box<dyn std::error::Error>> {
     // `socketpair my $a, my $b, ...` — positions 0 and 1 are both declarations.
     let code = r#"
@@ -2684,28 +2571,6 @@ print $b;
             issues
         );
     }
-    Ok(())
-}
-
-#[test]
-fn socketpair_non_handle_positions_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
-    // `socketpair` only consumes declaration-capable handles at positions 0 and 1.
-    // Declarations in later positions must remain ordinary lexicals.
-    let code = r#"
-use strict;
-socketpair my $a, my $b, my $domain, 1, 0;
-print $a;
-print $b;
-"#;
-    let issues = scope_issues_strict(code);
-    assert!(
-        issues.iter().any(|i| {
-            i.variable_name == "$domain"
-                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
-        }),
-        "socketpair position-2 declaration should not be auto-consumed (issues: {:?})",
-        issues
-    );
     Ok(())
 }
 

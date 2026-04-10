@@ -14,11 +14,7 @@ import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
 import { StreamingCompletionController } from './streamingCompletion';
-import {
-    classifyStartupError,
-    formatStartupFailureDialog,
-    StartupErrorKind,
-} from './startupDiagnosis';
+import { classifyStartupError, selectBestDiagnosis, StartupErrorKind } from './startupDiagnosis';
 import type { StartupErrorDiagnosis } from './startupDiagnosis';
 
 let client: LanguageClient | undefined;
@@ -741,8 +737,10 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
             const onboarding = new OnboardingManager(context, outputChannel);
             healthMsg = await onboarding.runStartupDiagnostics(currentServerPath ?? null);
         }
-        const dialogMessage = formatStartupFailureDialog(probeResult, healthMsg);
-        lastStartupDiagnostic = dialogMessage;
+        const diagnosis = selectBestDiagnosis(probeResult, healthMsg);
+        lastStartupDiagnostic = `${diagnosis.hint} Suggestion: ${diagnosis.remediation}`;
+        const dialogMessage =
+            `Perl Language Server failed to start.\n\n${diagnosis.hint}\n\nSuggestion: ${diagnosis.remediation}`;
 
         const choice = await vscode.window.showErrorMessage(
             dialogMessage,

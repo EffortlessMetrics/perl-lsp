@@ -47,8 +47,6 @@ pub struct PragmaState {
     /// table. `use feature` declarations are **not** tracked here — only
     /// version-bundle implications.
     pub features: Vec<&'static str>,
-    /// Lexically imported builtin short names from `use builtin`.
-    pub builtin_imports: Vec<String>,
 }
 
 impl PragmaState {
@@ -61,7 +59,6 @@ impl PragmaState {
             warnings: false,
             disabled_warning_categories: Vec::new(),
             features: Vec::new(),
-            builtin_imports: Vec::new(),
         }
     }
 
@@ -86,12 +83,6 @@ impl PragmaState {
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {
         self.features.contains(&feature)
-    }
-
-    /// Returns `true` when a builtin short name was lexically imported in scope.
-    #[must_use]
-    pub fn has_builtin_import(&self, name: &str) -> bool {
-        self.builtin_imports.iter().any(|import| import == name)
     }
 }
 
@@ -204,31 +195,6 @@ fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVers
     state.features = features_enabled_by_version(version);
 }
 
-fn builtin_import_names(arg: &str) -> Vec<String> {
-    let trimmed = arg.trim();
-
-    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
-        return inner
-            .split_whitespace()
-            .filter(|name| !name.is_empty())
-            .map(|name| name.trim_matches('\'').trim_matches('"').to_string())
-            .collect();
-    }
-
-    let name = trimmed.trim_matches('\'').trim_matches('"');
-    if name.is_empty() { Vec::new() } else { vec![name.to_string()] }
-}
-
-fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
-    for arg in args {
-        for name in builtin_import_names(arg) {
-            if !state.builtin_imports.iter().any(|import| import == &name) {
-                state.builtin_imports.push(name);
-            }
-        }
-    }
-}
-
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
@@ -303,40 +269,6 @@ impl PragmaTracker {
                         // `use warnings` re-enables all warnings; clear any previously
                         // disabled categories so they are active again.
                         current_state.disabled_warning_categories.clear();
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
-                    }
-                    "feature" => {
-                        // `use feature 'signatures'` implicitly enables strict
-                        // (same effective behavior as `use v5.36` for strictness).
-                        // Accept quoted and unquoted args, and qw(...) bundles.
-                        let enables_signatures = args.iter().any(|arg| {
-                            let normalized = arg.trim_matches('\'').trim_matches('"');
-                            if normalized == "signatures" {
-                                return true;
-                            }
-
-                            if let Some(inner) =
-                                normalized.strip_prefix("qw(").and_then(|s| s.strip_suffix(')'))
-                            {
-                                return inner.split_whitespace().any(|item| item == "signatures");
-                            }
-
-                            false
-                        });
-
-                        if enables_signatures {
-                            current_state.strict_vars = true;
-                            current_state.strict_subs = true;
-                            current_state.strict_refs = true;
-                            ranges.push((
-                                node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
-                        }
-                    }
-                    "builtin" => {
-                        apply_builtin_imports(current_state, args);
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
@@ -444,17 +376,6 @@ impl PragmaTracker {
             | NodeKind::For { body, .. }
             | NodeKind::Foreach { body, .. } => {
                 Self::build_ranges(body, current_state, ranges);
-            }
-            // `package Foo { ... }` — the block form is lexically scoped.
-            // Save/restore state around the block so pragmas declared inside
-            // don't leak out, just like a regular braced block.
-            //
-            // `package Foo;` (no block) has no inner scope to walk — its
-            // siblings in `Program` already accumulate state normally.
-            NodeKind::Package { block: Some(pkg_block), .. } => {
-                let saved_state = current_state.clone();
-                Self::build_ranges(pkg_block, current_state, ranges);
-                *current_state = saved_state;
             }
             // Other node types don't contain use/no statements
             _ => {}

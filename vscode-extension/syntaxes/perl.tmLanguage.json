@@ -171,7 +171,7 @@
                 },
                 {
                     "name": "keyword.other.perl",
-                    "match": "\\b(my|our|local|state|sub|package|use|no|require|BEGIN|END|INIT|CHECK|UNITCHECK|MODULE|PACKAGE|BOOT|PPCODE|INPUT|OUTPUT|PREINIT|CLEANUP|PROTOTYPES)\\b"
+                    "match": "\\b(my|our|local|state|sub|package|use|no|require|BEGIN|END|INIT|CHECK|UNITCHECK)\\b"
                 },
                 {
                     "name": "keyword.operator.logical.perl",

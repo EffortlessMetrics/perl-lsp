@@ -379,9 +379,6 @@ fn is_special_variable(full_name: &str) -> bool {
             | "$INC"  // hash element access: $INC{'Foo.pm'}
             | "%SIG"
             | "$SIG" // hash element access: $SIG{INT}
-            | "$PL_sv_yes"
-            | "$PL_sv_no"
-            | "$PL_sv_undef"
     )
 }
 
@@ -951,9 +948,7 @@ where
             c
         }
         NodeKind::Class { body, .. } => vec![body.as_ref()],
-        NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
-            vec![block.as_ref()]
-        }
+        NodeKind::Eval { block } | NodeKind::Do { block } => vec![block.as_ref()],
         NodeKind::Try { body, catch_blocks, finally_block } => {
             let mut c = vec![body.as_ref()];
             for (_var, handler) in catch_blocks {

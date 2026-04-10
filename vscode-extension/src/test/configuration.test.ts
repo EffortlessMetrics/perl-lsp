@@ -124,20 +124,6 @@ describe('package.json contributes', () => {
       expect(exts).toContain('.t');
       expect(exts).toContain('.pod');
       expect(exts).toContain('.psgi');
-      expect(exts).toContain('.mason');
-      expect(exts).toContain('.mas');
-      expect(exts).toContain('.tt');
-      expect(exts).toContain('.tt2');
-      expect(exts).toContain('.ep');
-      expect(exts).not.toContain('.m');
-      expect(exts).toContain('.xs');
-      expect(exts).toContain('.i');
-    });
-
-    test('perl language keeps XS interface files associated with perl', () => {
-      const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
-      const exts: string[] = perl.extensions;
-      expect(exts.filter((ext: string) => ext === '.xs' || ext === '.i')).toHaveLength(2);
     });
 
     test('perl language has shebang first-line detection', () => {
@@ -610,22 +596,6 @@ describe('package.json contributes', () => {
       const perl = grammars.find((g: any) => g.language === 'perl');
       const grammarPath = path.join(EXT_ROOT, perl.path);
       expect(fs.existsSync(grammarPath)).toBe(true);
-    });
-
-    test('grammar includes common XS directives', () => {
-      const grammar = readJson('syntaxes/perl.tmLanguage.json');
-      const keywordPattern = grammar.repository.keywords.patterns
-        .map((entry: any) => entry.match)
-        .find((match: string) =>
-          typeof match === 'string' &&
-          match.includes('MODULE') &&
-          match.includes('PACKAGE') &&
-          match.includes('PPCODE') &&
-          match.includes('INPUT') &&
-          match.includes('OUTPUT')
-        );
-
-      expect(keywordPattern).toBeDefined();
     });
   });
 });

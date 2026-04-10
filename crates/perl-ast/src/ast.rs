@@ -381,10 +381,6 @@ impl Node {
                 format!("(do {})", block.to_sexp())
             }
 
-            NodeKind::Defer { block } => {
-                format!("(defer {})", block.to_sexp())
-            }
-
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 let mut parts = vec![format!("(try {})", body.to_sexp())];
 
@@ -948,7 +944,6 @@ impl Node {
             // Eval and Do blocks
             NodeKind::Eval { block } => f(block),
             NodeKind::Do { block } => f(block),
-            NodeKind::Defer { block } => f(block),
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 f(body);
                 for (_, catch_body) in catch_blocks {
@@ -1198,7 +1193,6 @@ impl Node {
             // Eval and Do blocks
             NodeKind::Eval { block } => f(block),
             NodeKind::Do { block } => f(block),
-            NodeKind::Defer { block } => f(block),
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 f(body);
                 for (_, catch_body) in catch_blocks {
@@ -1643,12 +1637,6 @@ pub enum NodeKind {
     /// Do block for file inclusion or expression evaluation: `do { ... }` or `do "file"`
     Do {
         /// Block to execute or file expression
-        block: Box<Node>,
-    },
-
-    /// Defer block for deferred cleanup on scope exit (Perl 5.36+ experimental, stable in 5.40)
-    Defer {
-        /// Block to execute on scope exit
         block: Box<Node>,
     },
 
@@ -2113,7 +2101,6 @@ impl NodeKind {
             NodeKind::Block { .. } => "Block",
             NodeKind::Eval { .. } => "Eval",
             NodeKind::Do { .. } => "Do",
-            NodeKind::Defer { .. } => "Defer",
             NodeKind::Try { .. } => "Try",
             NodeKind::If { .. } => "If",
             NodeKind::LabeledStatement { .. } => "LabeledStatement",
@@ -2173,7 +2160,6 @@ impl NodeKind {
         "Class",
         "DataSection",
         "Default",
-        "Defer",
         "Diamond",
         "Do",
         "Ellipsis",
@@ -2488,7 +2474,6 @@ mod tests {
             NodeKind::Block { statements: vec![] },
             NodeKind::Eval { block: Box::new(dummy_node()) },
             NodeKind::Do { block: Box::new(dummy_node()) },
-            NodeKind::Defer { block: Box::new(dummy_node()) },
             NodeKind::Try {
                 body: Box::new(dummy_node()),
                 catch_blocks: vec![],

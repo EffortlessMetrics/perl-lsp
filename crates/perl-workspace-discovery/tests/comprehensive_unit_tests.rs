@@ -97,14 +97,11 @@ fn discover_perl_files_all_returned_paths_are_perl_sources() -> TestResult {
     create_file(root, "script.pl")?;
     create_file(root, "t/test.t")?;
     create_file(root, "app.psgi")?;
-    create_file(root, "templates/page.tt")?;
-    create_file(root, "templates/layout.tt2")?;
     create_file(root, "README.md")?;
     create_file(root, "Cargo.toml")?;
 
     let result = discover_perl_files(root);
-    let valid_extensions: HashSet<&str> =
-        ["pl", "pm", "t", "psgi", "xs", "ep", "tt", "tt2"].iter().copied().collect();
+    let valid_extensions: HashSet<&str> = ["pl", "pm", "t", "psgi"].iter().copied().collect();
 
     for path in &result.files {
         let ext = path
@@ -467,10 +464,10 @@ fn discover_perl_files_handles_spaces_in_paths() -> TestResult {
     Ok(())
 }
 
-// --- All eight Perl extensions in one workspace ---
+// --- All four Perl extensions in one workspace ---
 
 #[test]
-fn discover_perl_files_finds_all_eight_perl_extensions() -> TestResult {
+fn discover_perl_files_finds_all_four_perl_extensions() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
@@ -478,13 +475,9 @@ fn discover_perl_files_finds_all_eight_perl_extensions() -> TestResult {
     create_file(root, "Module.pm")?;
     create_file(root, "test.t")?;
     create_file(root, "app.psgi")?;
-    create_file(root, "native.xs")?;
-    create_file(root, "templates/page.html.ep")?;
-    create_file(root, "templates/page.tt")?;
-    create_file(root, "templates/layout.tt2")?;
 
     let result = discover_perl_files(root);
-    assert_eq!(result.files.len(), 8);
+    assert_eq!(result.files.len(), 4);
 
     let extensions: HashSet<String> = result
         .files
@@ -496,9 +489,5 @@ fn discover_perl_files_finds_all_eight_perl_extensions() -> TestResult {
     assert!(extensions.contains("pm"));
     assert!(extensions.contains("t"));
     assert!(extensions.contains("psgi"));
-    assert!(extensions.contains("xs"));
-    assert!(extensions.contains("ep"));
-    assert!(extensions.contains("tt"));
-    assert!(extensions.contains("tt2"));
     Ok(())
 }
