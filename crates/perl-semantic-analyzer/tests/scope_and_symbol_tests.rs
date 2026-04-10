@@ -871,8 +871,7 @@ print $hash{a};
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hash"))
         .count();
     assert_eq!(
-        unused_hash,
-        0,
+        unused_hash, 0,
         "%hash should not be flagged as unused when accessed via $hash{{a}}"
     );
     Ok(())
