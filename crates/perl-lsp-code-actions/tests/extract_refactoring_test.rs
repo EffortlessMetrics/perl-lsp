@@ -422,9 +422,9 @@ fn range_bounded_traversal_excludes_out_of_range_nodes() {
 // must only return actions for the selected region, not for the entire file.
 #[test]
 fn large_file_narrow_range_returns_only_in_range_actions() {
-    // Build a file with 50 subroutines. The target range covers only sub_000.
+    // Build a file with 50 if-blocks. The target range covers only the first one.
     let mut source = String::from("use strict;\nuse warnings;\n\n");
-    // sub_000 is inserted first; record where it starts and ends
+    // Target block is inserted first; record where it starts and ends
     let sub_target_start = source.len();
     source.push_str("if ($debug) { print \"target\\n\"; }\n");
     let sub_target_end = source.len() - 1; // up to the closing newline
