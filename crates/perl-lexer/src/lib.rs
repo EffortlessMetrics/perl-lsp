@@ -859,6 +859,40 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    #[inline]
+    fn consume_balanced_segment(&mut self, open: char, close: char) -> Option<usize> {
+        if self.current_char() != Some(open) {
+            return None;
+        }
+
+        let mut depth = 1usize;
+        self.advance();
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                c if c == open => {
+                    depth += 1;
+                    self.advance();
+                }
+                c if c == close => {
+                    self.advance();
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(self.position);
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+
+        None
+    }
+
     /// Fast byte-level check for ASCII characters
     #[inline]
     fn peek_byte(&self, offset: usize) -> Option<u8> {
@@ -2737,34 +2771,116 @@ impl<'a> PerlLexer<'a> {
                         current_literal = String::new(); // Clear without cloning
                     }
 
-                    // Parse variable - optimized using byte-level checks where possible
+                    let part_start = self.position;
                     self.advance();
-                    let var_start = self.position;
+                    match self.current_char() {
+                        Some('{') => {
+                            if let Some(end) = self.consume_balanced_segment('{', '}') {
+                                parts.push(StringPart::Expression(Arc::from(
+                                    &self.input[part_start..end],
+                                )));
+                            }
+                        }
+                        Some(ch) if is_perl_identifier_start(ch) => {
+                            let var_start = self.position;
 
-                    // Fast path for ASCII identifier continuation
-                    while self.position < self.input_bytes.len() {
-                        let byte = self.input_bytes[self.position];
-                        if byte.is_ascii_alphanumeric() || byte == b'_' {
-                            self.position += 1;
-                        } else if byte >= 128 {
-                            // Only use UTF-8 parsing for non-ASCII
-                            if let Some(ch) = self.current_char() {
-                                if is_perl_identifier_continue(ch) {
-                                    self.advance();
+                            // Fast path for ASCII identifier continuation
+                            while self.position < self.input_bytes.len() {
+                                let byte = self.input_bytes[self.position];
+                                if byte.is_ascii_alphanumeric() || byte == b'_' {
+                                    self.position += 1;
+                                } else if byte >= 128 {
+                                    // Only use UTF-8 parsing for non-ASCII
+                                    if let Some(ch) = self.current_char() {
+                                        if is_perl_identifier_continue(ch) {
+                                            self.advance();
+                                        } else {
+                                            break;
+                                        }
+                                    } else {
+                                        break;
+                                    }
                                 } else {
                                     break;
                                 }
-                            } else {
-                                break;
                             }
-                        } else {
-                            break;
-                        }
-                    }
 
-                    if self.position > var_start {
-                        let var_name = &self.input[var_start - 1..self.position];
-                        parts.push(StringPart::Variable(Arc::from(var_name)));
+                            if self.position > var_start {
+                                let var_name = &self.input[part_start..self.position];
+                                parts.push(StringPart::Variable(Arc::from(var_name)));
+
+                                if self.matches_bytes(b"->") {
+                                    let tail_start = self.position;
+                                    self.advance();
+                                    self.advance();
+
+                                    match self.current_char() {
+                                        Some('[') => {
+                                            let _ = self.consume_balanced_segment('[', ']');
+                                            parts.push(StringPart::MethodCall(Arc::from(
+                                                &self.input[tail_start..self.position],
+                                            )));
+                                        }
+                                        Some('{') => {
+                                            let _ = self.consume_balanced_segment('{', '}');
+                                            parts.push(StringPart::MethodCall(Arc::from(
+                                                &self.input[tail_start..self.position],
+                                            )));
+                                        }
+                                        Some('(') => {
+                                            let _ = self.consume_balanced_segment('(', ')');
+                                            parts.push(StringPart::MethodCall(Arc::from(
+                                                &self.input[tail_start..self.position],
+                                            )));
+                                        }
+                                        Some(ch) if is_perl_identifier_start(ch) => {
+                                            while self.position < self.input_bytes.len() {
+                                                let byte = self.input_bytes[self.position];
+                                                if byte.is_ascii_alphanumeric() || byte == b'_' {
+                                                    self.position += 1;
+                                                } else if byte >= 128 {
+                                                    if let Some(ch) = self.current_char() {
+                                                        if is_perl_identifier_continue(ch) {
+                                                            self.advance();
+                                                        } else {
+                                                            break;
+                                                        }
+                                                    } else {
+                                                        break;
+                                                    }
+                                                } else {
+                                                    break;
+                                                }
+                                            }
+                                            if self.current_char() == Some('(') {
+                                                let _ = self.consume_balanced_segment('(', ')');
+                                            }
+                                            parts.push(StringPart::MethodCall(Arc::from(
+                                                &self.input[tail_start..self.position],
+                                            )));
+                                        }
+                                        _ => {
+                                            parts.push(StringPart::MethodCall(Arc::from(
+                                                &self.input[tail_start..self.position],
+                                            )));
+                                        }
+                                    }
+                                } else if self.current_char() == Some('[') {
+                                    let tail_start = self.position;
+                                    let _ = self.consume_balanced_segment('[', ']');
+                                    parts.push(StringPart::ArraySlice(Arc::from(
+                                        &self.input[tail_start..self.position],
+                                    )));
+                                } else if self.current_char() == Some('{') {
+                                    let tail_start = self.position;
+                                    let _ = self.consume_balanced_segment('{', '}');
+                                    parts.push(StringPart::Expression(Arc::from(
+                                        &self.input[tail_start..self.position],
+                                    )));
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 _ => {

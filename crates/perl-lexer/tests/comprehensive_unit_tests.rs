@@ -672,6 +672,61 @@ fn double_quoted_string() -> R {
 }
 
 #[test]
+fn interpolated_string_preserves_complex_tails() -> R {
+    let cases = [
+        (r#""${expr}""#, vec![StringPart::Expression(Arc::from("${expr}"))]),
+        (
+            r#""$arr[0]""#,
+            vec![StringPart::Variable(Arc::from("$arr")), StringPart::ArraySlice(Arc::from("[0]"))],
+        ),
+        (
+            r#""$hash{key}""#,
+            vec![
+                StringPart::Variable(Arc::from("$hash")),
+                StringPart::Expression(Arc::from("{key}")),
+            ],
+        ),
+        (
+            r#""$var->[0]""#,
+            vec![
+                StringPart::Variable(Arc::from("$var")),
+                StringPart::MethodCall(Arc::from("->[0]")),
+            ],
+        ),
+        (
+            r#""$obj->{key}""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->{key}")),
+            ],
+        ),
+    ];
+
+    for (input, expected_parts) in cases {
+        let tok = first_token(input).ok_or_else(|| format!("no token for {input:?}"))?;
+        match tok.token_type {
+            TokenType::InterpolatedString(parts) => assert_eq!(parts, expected_parts),
+            other => panic!("expected interpolated string token for {input:?}, got {other:?}"),
+        }
+    }
+
+    let simple = first_token(r#""hello $x world""#).ok_or("no token")?;
+    match simple.token_type {
+        TokenType::InterpolatedString(parts) => assert_eq!(
+            parts,
+            vec![
+                StringPart::Literal(Arc::from("hello ")),
+                StringPart::Variable(Arc::from("$x")),
+                StringPart::Literal(Arc::from(" world")),
+            ]
+        ),
+        other => panic!("expected interpolated string token, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn single_quoted_string() -> R {
     let tok = first_token("'hello'").ok_or("no token")?;
     assert!(
