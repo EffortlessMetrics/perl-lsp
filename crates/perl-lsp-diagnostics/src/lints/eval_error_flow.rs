@@ -97,9 +97,8 @@ fn check_statement_list(
 
         // Handler blocks need the outer exception-flow state so the body can
         // still report stale reads after an intervening statement.
-        if is_handler_block {
-            visit_node(statement, diagnostics, entry_state);
-        } else if !facts.reads_error_var
+        if is_handler_block
+            || !facts.reads_error_var
             || matches!(&statement.kind, NodeKind::LabeledStatement { .. })
         {
             visit_node(statement, diagnostics, entry_state);
@@ -179,15 +178,17 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         NodeKind::ExpressionStatement { expression } => {
             inspect_node(expression, facts);
         }
-        NodeKind::VariableDeclaration { initializer, .. } => {
-            if let Some(init) = initializer {
-                inspect_node(init, facts);
-            }
+        NodeKind::VariableDeclaration {
+            initializer: Some(init),
+            ..
+        } => {
+            inspect_node(init, facts);
         }
-        NodeKind::VariableListDeclaration { initializer, .. } => {
-            if let Some(init) = initializer {
-                inspect_node(init, facts);
-            }
+        NodeKind::VariableListDeclaration {
+            initializer: Some(init),
+            ..
+        } => {
+            inspect_node(init, facts);
         }
         NodeKind::Return { value: Some(value) } => {
             inspect_node(value, facts);
