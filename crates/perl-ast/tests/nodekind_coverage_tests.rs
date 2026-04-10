@@ -507,7 +507,11 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
         ),
         (
             Node::new(
-                NodeKind::Class { name: "Example".to_string(), body: Box::new(leaf("body")) },
+                NodeKind::Class {
+                    name: "Example".to_string(),
+                    parents: vec![],
+                    body: Box::new(leaf("body")),
+                },
                 loc(),
             ),
             "Class",

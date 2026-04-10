@@ -237,16 +237,41 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse class declaration (Perl 5.38+)
+    ///
+    /// Handles the full syntax: `class Name :isa(Parent) :isa(Parent2) { ... }`
+    /// Multiple `:isa(...)` attributes may appear; each contributes a parent class.
     fn parse_class(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
         let (name, _) = self.parse_qualified_name(false)?;
 
+        // Parse class-level attributes (e.g. `:isa(Parent)`)
+        let attributes = self.parse_declaration_attributes()?;
+
+        // Extract parent class names from `:isa(Parent)` attributes.
+        // `parse_declaration_attributes` stores `:isa(Parent)` as "isa(Parent)".
+        let parents: Vec<String> = attributes
+            .iter()
+            .filter_map(|attr| {
+                let trimmed = attr.trim();
+                if let Some(inner) = trimmed.strip_prefix("isa(") {
+                    // inner is "Parent)" — drop trailing ')'
+                    inner.strip_suffix(')').map(|s| s.trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+
         let body = self.parse_block()?;
 
         let end = self.previous_position();
-        Ok(Node::new(NodeKind::Class { name, body: Box::new(body) }, SourceLocation { start, end }))
+        Ok(Node::new(
+            NodeKind::Class { name, parents, body: Box::new(body) },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse method declaration (Perl 5.38+)

@@ -897,7 +897,7 @@ where
         NodeKind::Method { body, .. } => {
             find_nodes_recursive(body, predicate, results);
         }
-        NodeKind::Class { body, name: _ } => {
+        NodeKind::Class { body, .. } => {
             find_nodes_recursive(body, predicate, results);
         }
         NodeKind::FunctionCall { args, name: _ } => {

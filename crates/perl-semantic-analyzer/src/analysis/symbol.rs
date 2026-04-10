@@ -764,7 +764,7 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, body, .. } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 let symbol = Symbol {
                     name: name.clone(),

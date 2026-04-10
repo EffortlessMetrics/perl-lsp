@@ -43,7 +43,7 @@ fn use_feature(feature: &str) -> Node {
 
 fn class_node(name: &str) -> Node {
     Node::new(
-        NodeKind::Class { name: name.to_string(), body: Box::new(block(vec![])) },
+        NodeKind::Class { name: name.to_string(), parents: vec![], body: Box::new(block(vec![])) },
         loc(20, 50),
     )
 }
