@@ -23,6 +23,7 @@ Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CU
 | get working fast | [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md) |
 | set up pre-commit hooks | [how-to/PRE_COMMIT.md](how-to/PRE_COMMIT.md) |
 | install or upgrade | [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/UPGRADING.md](how-to/UPGRADING.md) |
+| set up `perllsp` in GitHub Actions | [how-to/GITHUB_ACTIONS.md](how-to/GITHUB_ACTIONS.md) |
 | configure an editor | [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md) |
 | troubleshoot a broken setup | [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md) |
 | see what is true now | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) |
@@ -33,7 +34,7 @@ Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CU
 ## Docs by Type
 
 - Tutorial: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
-- How-to: [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md), [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md), [how-to/UPGRADING.md](how-to/UPGRADING.md), [how-to/PRE_COMMIT.md](how-to/PRE_COMMIT.md)
+- How-to: [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/GITHUB_ACTIONS.md](how-to/GITHUB_ACTIONS.md), [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md), [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md), [how-to/UPGRADING.md](how-to/UPGRADING.md), [how-to/PRE_COMMIT.md](how-to/PRE_COMMIT.md)
 - Reference: [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md), [reference/CONFIG.md](reference/CONFIG.md), [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md)
 - Explanation and project docs: [INDEX.md](INDEX.md), [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), [project/ROADMAP.md](project/ROADMAP.md), [project/CI.md](project/CI.md)
 
