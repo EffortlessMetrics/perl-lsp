@@ -272,6 +272,35 @@ impl PragmaTracker {
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
+                    "feature" => {
+                        // `use feature 'signatures'` implicitly enables strict
+                        // (same effective behavior as `use v5.36` for strictness).
+                        // Accept quoted and unquoted args, and qw(...) bundles.
+                        let enables_signatures = args.iter().any(|arg| {
+                            let normalized = arg.trim_matches('\'').trim_matches('"');
+                            if normalized == "signatures" {
+                                return true;
+                            }
+
+                            if let Some(inner) =
+                                normalized.strip_prefix("qw(").and_then(|s| s.strip_suffix(')'))
+                            {
+                                return inner.split_whitespace().any(|item| item == "signatures");
+                            }
+
+                            false
+                        });
+
+                        if enables_signatures {
+                            current_state.strict_vars = true;
+                            current_state.strict_subs = true;
+                            current_state.strict_refs = true;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                        }
+                    }
                     _ => {
                         if let Some(version) = parse_perl_version(module) {
                             enable_effective_version_semantics(current_state, version);
