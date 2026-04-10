@@ -70,6 +70,29 @@ fn when_assignment_uses_space_tilde_form_then_normalization_allows_parse() {
 }
 
 #[test]
+fn when_if_block_assigns_percent_string_then_parser_keeps_string_assignment_shape() {
+    let sexp = parse_to_sexp(r#"if ($a > 0) { $a = "%"; }"#);
+
+    assert!(sexp.contains("(if_statement"), "expected if_statement; got: {sexp}");
+    assert!(
+        sexp.contains("(assignment") && sexp.contains("(string_literal %)"),
+        "expected percent-string assignment inside block; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() {
+    let sexp = parse_to_sexp("%hash = (a => 1, b => 2);");
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %hash) (=)")
+            && sexp.contains("(identifier a )")
+            && sexp.contains("(identifier b )"),
+        "expected hash assignment with fat-comma pairs; got: {sexp}"
+    );
+}
+
+#[test]
 fn when_input_has_valid_then_invalid_then_recovery_returns_partial_program() -> Result<(), String> {
     let ast = parse_ast("my $ok = 1;\nmy = ;\nprint $ok;\n");
 
