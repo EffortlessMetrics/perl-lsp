@@ -1235,24 +1235,21 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
 
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
         fn find(node: &Node, name: &str) -> Option<String> {
-            match &node.kind {
-                NodeKind::Use { module, args, .. } => {
-                    for arg in args {
-                        if arg == name {
+            if let NodeKind::Use { module, args, .. } = &node.kind {
+                for arg in args {
+                    if arg == name {
+                        return Some(module.clone());
+                    }
+                    if arg.starts_with("qw") {
+                        let content = arg
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        if content.split_whitespace().any(|w| w == name) {
                             return Some(module.clone());
-                        }
-                        if arg.starts_with("qw") {
-                            let content = arg
-                                .trim_start_matches("qw")
-                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            if content.split_whitespace().any(|w| w == name) {
-                                return Some(module.clone());
-                            }
                         }
                     }
                 }
-                _ => {}
             }
 
             for child in get_node_children(node) {
