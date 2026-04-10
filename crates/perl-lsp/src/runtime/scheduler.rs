@@ -791,6 +791,16 @@ mod tests {
     }
 
     #[test]
+    fn dedup_key_none_when_uri_missing() {
+        let params = serde_json::json!({
+            "textDocument": {},
+            "position": { "line": 1, "character": 2 }
+        });
+        let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
+        assert!(key.is_none());
+    }
+
+    #[test]
     fn dedup_key_is_supported_for_references_priority() {
         let params = serde_json::json!({
             "textDocument": { "uri": "file:///refs.pl" },
@@ -818,6 +828,16 @@ mod tests {
         let params = serde_json::json!({
             "textDocument": { "uri": "file:///bad-pos.pl" },
             "position": { "line": "12", "character": "4" }
+        });
+        let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
+        assert!(key.is_none());
+    }
+
+    #[test]
+    fn dedup_key_none_when_position_is_signed() {
+        let params = serde_json::json!({
+            "textDocument": { "uri": "file:///bad-pos.pl" },
+            "position": { "line": 1, "character": -1 }
         });
         let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
         assert!(key.is_none());
