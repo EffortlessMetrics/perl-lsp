@@ -720,6 +720,181 @@ $dog->fetch('stick');
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Test 4c: UNIVERSAL methods fall back when the class does not shadow them
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_universal_methods_fall_back_to_universal() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/UNIVERSAL.pm",
+        r#"package UNIVERSAL;
+
+sub can { 1 }
+sub isa { 1 }
+sub DOES { 1 }
+sub VERSION { 1 }
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Base.pm",
+        r#"package Base;
+use strict;
+use warnings;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let universal_uri = workspace.uri("lib/UNIVERSAL.pm");
+    let universal_content = std::fs::read_to_string(workspace.dir.path().join("lib/UNIVERSAL.pm"))
+        .map_err(|e| format!("failed to read UNIVERSAL.pm: {e}"))?;
+    harness.open(&universal_uri, &universal_content)?;
+
+    let base_uri = workspace.uri("lib/Base.pm");
+    let base_content = std::fs::read_to_string(workspace.dir.path().join("lib/Base.pm"))
+        .map_err(|e| format!("failed to read Base.pm: {e}"))?;
+    harness.open(&base_uri, &base_content)?;
+
+    harness.open(
+        &workspace.uri("app.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Base;
+
+Base->can();
+Base->isa();
+Base->DOES();
+Base->VERSION();
+"#,
+    )?;
+
+    harness.barrier();
+
+    for (line, method) in [(5, "can"), (6, "isa"), (7, "DOES"), (8, "VERSION")] {
+        let result = harness.request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": workspace.uri("app.pl")},
+                "position": {"line": line, "character": 8}
+            }),
+        )?;
+
+        if let Some(locations) = result.as_array() {
+            if !locations.is_empty() {
+                let first = &locations[0];
+                assert_valid_location(first);
+
+                let uri = first["uri"].as_str().ok_or("Expected URI")?;
+                assert!(
+                    uri.contains("UNIVERSAL.pm"),
+                    "Definition of {method} should point to UNIVERSAL.pm, got: {uri}"
+                );
+            } else {
+                return Err(format!("expected definition location for {method}").into());
+            }
+        } else {
+            return Err(format!("expected definition result array for {method}").into());
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_shadowed_universal_method_stays_on_class_method() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/UNIVERSAL.pm",
+        r#"package UNIVERSAL;
+
+sub can { 1 }
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Base.pm",
+        r#"package Base;
+use strict;
+use warnings;
+
+sub can { 1 }
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let universal_uri = workspace.uri("lib/UNIVERSAL.pm");
+    let universal_content = std::fs::read_to_string(workspace.dir.path().join("lib/UNIVERSAL.pm"))
+        .map_err(|e| format!("failed to read UNIVERSAL.pm: {e}"))?;
+    harness.open(&universal_uri, &universal_content)?;
+
+    let base_uri = workspace.uri("lib/Base.pm");
+    let base_content = std::fs::read_to_string(workspace.dir.path().join("lib/Base.pm"))
+        .map_err(|e| format!("failed to read Base.pm: {e}"))?;
+    harness.open(&base_uri, &base_content)?;
+
+    harness.open(
+        &workspace.uri("app.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Base;
+
+Base->can();
+"#,
+    )?;
+
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": 5, "character": 8}
+        }),
+    )?;
+
+    if let Some(locations) = result.as_array() {
+        if !locations.is_empty() {
+            let first = &locations[0];
+            assert_valid_location(first);
+
+            let uri = first["uri"].as_str().ok_or("Expected URI")?;
+            assert!(
+                uri.contains("Base.pm"),
+                "Definition should stay on Base.pm when Base shadows UNIVERSAL, got: {uri}"
+            );
+        } else {
+            return Err("expected at least one definition location for shadowed can".into());
+        }
+    } else {
+        return Err("expected definition result array for shadowed can".into());
+    }
+
+    Ok(())
+}
+
 #[test]
 fn go_to_definition_cross_file_constructor_assigned_bare_method_call_in_framework_workspace()
 -> TestResult {

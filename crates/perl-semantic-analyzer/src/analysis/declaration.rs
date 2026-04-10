@@ -4,6 +4,7 @@
 //! Supports LocationLink for enhanced client experience.
 
 use crate::ast::{Node, NodeKind};
+use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -491,6 +492,17 @@ impl<'a> DeclarationProvider<'a> {
 
             if let Some(decl) =
                 declarations.iter().find(|d| self.find_current_package(d) == Some(pkg))
+            {
+                return Some(vec![self.create_location_link(
+                    node,
+                    decl,
+                    self.get_subroutine_name_range(decl),
+                )]);
+            }
+
+            if is_universal_method(method_name)
+                && let Some(decl) =
+                    declarations.iter().find(|d| self.find_current_package(d) == Some("UNIVERSAL"))
             {
                 return Some(vec![self.create_location_link(
                     node,

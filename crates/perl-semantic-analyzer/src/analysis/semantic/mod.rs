@@ -35,7 +35,7 @@ pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 use crate::SourceLocation;
 use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResolutionOrder};
 use crate::ast::Node;
-use crate::symbol::{Symbol, SymbolExtractor, SymbolTable};
+use crate::symbol::{Symbol, SymbolExtractor, SymbolTable, is_universal_method};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
@@ -298,6 +298,20 @@ impl SemanticAnalyzer {
             }
         }
 
+        if is_universal_method(method_name) {
+            return self
+                .symbol_table
+                .symbols
+                .get(method_name)
+                .and_then(|symbols| {
+                    symbols.iter().find(|symbol| {
+                        symbol.kind == crate::symbol::SymbolKind::Subroutine
+                            && symbol.qualified_name == format!("UNIVERSAL::{method_name}")
+                    })
+                })
+                .map(|symbol| symbol.location);
+        }
+
         None
     }
 
@@ -335,6 +349,14 @@ impl SemanticAnalyzer {
             {
                 return Some(hover);
             }
+        }
+
+        if is_universal_method(method_name) {
+            return Some(HoverInfo {
+                signature: format!("sub UNIVERSAL::{method_name}"),
+                documentation: None,
+                details: vec!["Defined in UNIVERSAL".to_string()],
+            });
         }
 
         None
@@ -388,6 +410,14 @@ impl SemanticAnalyzer {
                 signature: format!("sub {}::{}", package_name, method_name),
                 documentation: None,
                 details: vec![format!("Inherited from {}", package_name)],
+            });
+        }
+
+        if is_universal_method(method_name) {
+            return Some(HoverInfo {
+                signature: format!("sub UNIVERSAL::{method_name}"),
+                documentation: None,
+                details: vec!["Defined in UNIVERSAL".to_string()],
             });
         }
 
@@ -621,6 +651,38 @@ Foo::bar();
 
         let hover = analyzer.hover_at(def.location).ok_or("hover not found")?;
         assert!(hover.documentation.as_ref().ok_or("doc not found")?.contains("bar sub"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_universal_method_hover_fallback() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package UNIVERSAL;
+sub can { 1 }
+sub isa { 1 }
+
+package Foo;
+sub new { bless {}, shift }
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let hover = analyzer
+            .resolve_inherited_method_hover("Foo", "can")
+            .ok_or("expected UNIVERSAL hover fallback")?;
+
+        assert!(
+            hover.signature.contains("UNIVERSAL::can"),
+            "expected UNIVERSAL hover signature, got: {}",
+            hover.signature
+        );
+        assert!(
+            hover.details.iter().any(|detail| detail.contains("UNIVERSAL")),
+            "expected UNIVERSAL hover details, got: {:?}",
+            hover.details
+        );
         Ok(())
     }
 
