@@ -276,3 +276,42 @@ my $promise = Promise->new(sub { return 1 });
         "did not expect Promise class synthesis without `use Promise`"
     );
 }
+
+#[test]
+fn poe_use_synthesizes_class_symbols_for_method_calls() {
+    let code = r#"
+use POE qw(Session Wheel::ReadWrite Component::Client::TCP);
+
+my $session = POE::Session->create;
+my $wheel = POE::Wheel::ReadWrite->new;
+my $component = POE::Component::Client::TCP->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in ["POE::Session", "POE::Wheel::ReadWrite", "POE::Component::Client::TCP"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Class),
+            "expected synthetic POE class symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Class);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=POE"),
+            "expected `framework=POE` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
+fn poe_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $session = POE::Session->create;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "POE::Session", SymbolKind::Class),
+        "did not expect POE class synthesis without `use POE`"
+    );
+}
