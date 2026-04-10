@@ -334,6 +334,8 @@ pub enum FrameworkKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Web framework variant detected via `use` statements during Parse/Analyze workflows.
 pub enum WebFrameworkKind {
+    /// `use Dancer;`
+    Dancer,
     /// `use Dancer2;` or `use Dancer2::Core;`
     Dancer2,
     /// `use Mojolicious::Lite;`
@@ -376,7 +378,7 @@ pub struct FrameworkFlags {
     pub class_accessor: bool,
     /// Which specific Moo/Moose variant was detected.
     pub kind: Option<FrameworkKind>,
-    /// Web framework variant, if any (Dancer2, Mojolicious::Lite).
+    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite).
     pub web_framework: Option<WebFrameworkKind>,
     /// Async framework variant, if any (IO::Async).
     pub async_framework: Option<AsyncFrameworkKind>,
@@ -1504,7 +1506,7 @@ impl SymbolExtractor {
         if require_embedded_marker { None } else { Some(attr_expr) }
     }
 
-    /// Detect Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
+    /// Detect Dancer/Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
     ///
     /// Pattern (two statements):
     /// 1. `ExpressionStatement(Identifier("get"|"post"|"put"|"del"|"patch"|"any"))`
@@ -1517,6 +1519,10 @@ impl SymbolExtractor {
         statements: &[Node],
         idx: usize,
     ) -> Option<usize> {
+        let web_framework = self
+            .framework_flags
+            .get(&self.table.current_package)
+            .and_then(|flags| flags.web_framework);
         let first = &statements[idx];
 
         // FunctionCall form: `get '/path' => sub { }` parsed as a bare call.
@@ -1549,6 +1555,25 @@ impl SymbolExtractor {
                             documentation: Some(format!("{http_method} {path}")),
                             attributes: vec![format!("http_method={http_method}")],
                         });
+
+                        if matches!(
+                            web_framework,
+                            Some(WebFrameworkKind::Dancer | WebFrameworkKind::Dancer2)
+                        ) && let Some(target_node) = args.get(1)
+                        {
+                            if let Some(target_name) =
+                                Self::collect_symbol_names(target_node).first().cloned()
+                            {
+                                self.table.add_reference(SymbolReference {
+                                    name: target_name,
+                                    kind: SymbolKind::Subroutine,
+                                    location: target_node.location,
+                                    scope_id: self.table.current_scope(),
+                                    is_write: false,
+                                });
+                            }
+                        }
+
                         self.visit_node(first);
                         return Some(1);
                     }
@@ -2056,6 +2081,7 @@ impl SymbolExtractor {
         }
 
         let web_kind = match module {
+            "Dancer" => Some(WebFrameworkKind::Dancer),
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
             "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
