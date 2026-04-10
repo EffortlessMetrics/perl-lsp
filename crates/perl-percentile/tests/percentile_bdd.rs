@@ -97,3 +97,19 @@ fn scenario_duplicates_are_valid_percentile_outputs() {
     assert_eq!(p90, 10);
     assert_eq!(p99, 10);
 }
+
+#[test]
+fn scenario_percentile_outputs_are_monotonic_across_increasing_checkpoints() {
+    // Given a sorted sample window.
+    let sample = [10_u64, 20, 30, 40, 50, 60, 70, 80];
+
+    // When we query increasing percentile checkpoints, including overflow.
+    let checkpoints = [0, 1, 10, 25, 50, 75, 95, 100, 200];
+    let results: Vec<u64> =
+        checkpoints.iter().map(|pct| nearest_rank_percentile(&sample, *pct)).collect();
+
+    // Then percentile outputs never decrease.
+    for pair in results.windows(2) {
+        assert!(pair[0] <= pair[1], "expected monotonic percentile outputs, got {results:?}");
+    }
+}
