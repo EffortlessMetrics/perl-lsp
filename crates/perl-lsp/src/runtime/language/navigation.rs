@@ -524,6 +524,15 @@ impl LspServer {
                 let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                 let cursor_in_text = offset - text_start;
 
+                if let Some(mason_location) = self.resolve_mason_definition(uri, &doc.text, offset)
+                {
+                    if let Some(lsp_location) =
+                        crate::workspace_index::lsp_adapter::to_lsp_location(&mason_location)
+                    {
+                        return Ok(Some(json!([lsp_location])));
+                    }
+                }
+
                 #[cfg(feature = "workspace")]
                 {
                     // Attempt to resolve fully-qualified symbols like Package::sub
