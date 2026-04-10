@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 ## Crate Overview
 
-- **Crate**: `perl-lsp-rename` (workspace, currently 0.12.2)
+- **Crate**: `perl-lsp-rename` (workspace, currently 0.12.3)
 - **Tier**: Listed under Tier 2 in workspace `Cargo.toml` (single-level workspace dependency)
 - **Purpose**: LSP rename provider for Perl -- validates rename requests, resolves symbol references, and produces text edits for single-file renames.
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 - **Tier**: 6 (application/executable crate)
 - **Purpose**: Debug Adapter Protocol server for Perl. Provides a native adapter that drives `perl -d` directly, and a `BridgeAdapter` library that proxies DAP messages to Perl::LanguageServer.
-- **Version**: workspace (currently 0.12.2)
+- **Version**: workspace (currently 0.12.3)
 
 ## Commands
 

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Parses Perl debugger text output into structured `PerlValue` representations, then renders them into DAP-compatible `RenderedVariable` structs for display in VSCode and other DAP-compatible editors.
 
-**Version**: workspace (currently 0.12.2)
+**Version**: workspace (currently 0.12.3)
 
 ## Commands
 

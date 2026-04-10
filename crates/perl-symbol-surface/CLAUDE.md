@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Derive stable, reusable symbol-bearing views from the AST so that every IDE feature uses the same extraction logic rather than each implementing its own AST pattern-match.
 
-**Version**: workspace (currently 0.12.2)
+**Version**: workspace (currently 0.12.3)
 
 ## Commands
 

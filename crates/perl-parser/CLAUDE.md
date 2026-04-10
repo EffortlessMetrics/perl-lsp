@@ -3,7 +3,7 @@
 ## Crate Overview
 
 - **Tier**: 6 (application/composition crate)
-- **Version**: workspace (currently 0.12.2)
+- **Version**: workspace (currently 0.12.3)
 - **Purpose**: Central hub crate that aggregates and re-exports the core parser, semantic analyzer, workspace indexer, refactoring engine, TDD support, and all LSP provider crates into a single public API surface. Also provides the `perl-parse` CLI binary.
 
 ## Commands
