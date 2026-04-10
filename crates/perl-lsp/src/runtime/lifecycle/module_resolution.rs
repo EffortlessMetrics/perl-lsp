@@ -234,6 +234,8 @@ impl LspServer {
 
         let system_paths = if use_system_inc {
             let mut config = self.workspace_config.lock();
+            // `WorkspaceConfig` now resolves the active interpreter with
+            // perlbrew/plenv-aware fallback before probing startup `@INC`.
             config.get_system_inc().to_vec()
         } else {
             Vec::new()
