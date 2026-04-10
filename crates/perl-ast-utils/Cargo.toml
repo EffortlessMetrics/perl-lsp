@@ -30,6 +30,7 @@ perl-ast = { workspace = true }
 
 [dev-dependencies]
 perl-ast = { workspace = true }
+perl-tdd-support = { workspace = true }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
