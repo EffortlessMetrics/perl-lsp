@@ -177,6 +177,11 @@ path = "tests/dap_non_regression_tests.rs"
 # AC:17 Phase 3 non-regression: protocol shape, seq monotonicity, capabilities consistency (#435)
 
 [[test]]
+name = "dap_bdd_tests"
+path = "tests/dap_bdd_tests.rs"
+# BDD-style Given/When/Then acceptance flows for core DAP lifecycle behavior
+
+[[test]]
 name = "dap_step_through_tests"
 path = "tests/dap_step_through_tests.rs"
 # AC:3535 Comprehensive step-through debugging tests: stepIn, stepOut, stepOver, continue, pause, gotoTargets, cancel
