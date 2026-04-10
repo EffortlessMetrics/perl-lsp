@@ -1428,6 +1428,18 @@ impl WorkspaceIndex {
             let mut symbols = self.symbols.write();
             Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
 
+            // Defensive sweep: purge any remaining cache entries whose value
+            // points to this file's URI.  incremental_remove_symbols already
+            // handles known symbol names; this sweep catches any entries that
+            // were inserted via the find_definition fallback path using a key
+            // that differs from both sym.name and sym.qualified_name.
+            // Use the URI stored in the file_index itself (not the caller-supplied
+            // uri_str) so the comparison is always against the exact string that
+            // was stored during indexing.
+            if let Some(indexed_uri) = file_index.symbols.first().map(|s| s.uri.as_str()) {
+                symbols.retain(|_, v| v.as_str() != indexed_uri);
+            }
+
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
@@ -4183,5 +4195,89 @@ Utils::process_data();
     fn test_with_capacity_zero_does_not_panic() {
         let index = WorkspaceIndex::with_capacity(0, 0);
         assert!(!index.has_symbols());
+    }
+
+    // -------------------------------------------------------------------------
+    // remove_file — symbol cache cleanup (#3494)
+    // -------------------------------------------------------------------------
+
+    /// After removing the only file that defines a symbol, both qualified and
+    /// bare-name lookups must return None.  The symbols cache must not retain
+    /// stale entries pointing to the deleted file.
+    #[test]
+    fn test_remove_file_clears_symbol_cache_qualified_and_bare() {
+        let index = WorkspaceIndex::new();
+        let uri_a = must(url::Url::parse("file:///lib/A.pm"));
+        let code_a = "package A;\nsub foo { return 1; }\n1;\n";
+
+        must(index.index_file(uri_a.clone(), code_a.to_string()));
+
+        // Pre-condition: both qualified and bare-name lookups resolve to file A.
+        let before_qual = must_some(index.find_definition("A::foo"));
+        assert_eq!(
+            before_qual.uri,
+            uri_a.to_string(),
+            "qualified lookup should point to A.pm before removal"
+        );
+        let before_bare = must_some(index.find_definition("foo"));
+        assert_eq!(
+            before_bare.uri,
+            uri_a.to_string(),
+            "bare-name lookup should point to A.pm before removal"
+        );
+
+        // Remove file A from the index (simulates file deletion).
+        index.remove_file(uri_a.as_str());
+
+        // Post-condition: the symbol cache must be clean — no stale entries.
+        assert!(
+            index.find_definition("A::foo").is_none(),
+            "qualified lookup 'A::foo' should return None after file deletion"
+        );
+        assert!(
+            index.find_definition("foo").is_none(),
+            "bare-name lookup 'foo' should return None after file deletion"
+        );
+
+        // Verify no symbols remain in the index.
+        assert_eq!(
+            index.symbol_count(),
+            0,
+            "symbol_count should be 0 after removing the only file"
+        );
+        assert!(!index.has_symbols(), "has_symbols should be false after removing the only file");
+    }
+
+    /// Deleting file A when file B has the same bare-name symbol must leave
+    /// the bare-name cache pointing to B (not remove it entirely).
+    #[test]
+    fn test_remove_file_bare_name_falls_back_to_surviving_file() {
+        let index = WorkspaceIndex::new();
+        let uri_a = must(url::Url::parse("file:///lib/A.pm"));
+        let uri_b = must(url::Url::parse("file:///lib/B.pm"));
+        let code_a = "package A;\nsub shared_fn { return 1; }\n1;\n";
+        let code_b = "package B;\nsub shared_fn { return 2; }\n1;\n";
+
+        must(index.index_file(uri_a.clone(), code_a.to_string()));
+        must(index.index_file(uri_b.clone(), code_b.to_string()));
+
+        // Remove file A — shared_fn should still resolve via B.
+        index.remove_file(uri_a.as_str());
+
+        let loc = must_some(index.find_definition("shared_fn"));
+        assert_eq!(
+            loc.uri,
+            uri_b.to_string(),
+            "bare-name 'shared_fn' should resolve to B.pm after A.pm is deleted"
+        );
+
+        assert!(
+            index.find_definition("A::shared_fn").is_none(),
+            "qualified 'A::shared_fn' must be gone after A.pm deletion"
+        );
+        assert!(
+            index.find_definition("B::shared_fn").is_some(),
+            "qualified 'B::shared_fn' must remain after A.pm deletion"
+        );
     }
 }
