@@ -4,6 +4,7 @@
 //! This microcrate isolates configuration parsing and defaults from the main
 //! server crate so they can evolve independently and be reused by tooling.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
@@ -251,14 +252,24 @@ impl ServerConfig {
 pub struct WorkspaceConfig {
     /// Workspace-root-relative include paths for module resolution.
     ///
-    /// Absolute entries are accepted syntactically, but still must resolve
-    /// inside the workspace boundary.
+    /// Absolute entries are honored as literal external roots.
     /// Default: `["lib", ".", "local/lib/perl5"]`
     pub include_paths: Vec<String>,
 
     /// Whether to include system @INC paths in module resolution
     /// Default: false (avoids blocking on network filesystems)
     pub use_system_inc: bool,
+
+    /// Perl interpreter path used for startup `@INC` probing.
+    ///
+    /// Default: `perl` on `PATH`.
+    pub perl_path: String,
+
+    /// Additional arguments passed to the Perl interpreter for `@INC` probing.
+    pub perl_args: Vec<String>,
+
+    /// Extra environment variables injected into the Perl probe process.
+    pub perl_env: BTreeMap<String, String>,
 
     /// Cached system @INC paths (populated lazily when use_system_inc is true)
     system_inc_cache: Option<Vec<PathBuf>>,
@@ -273,6 +284,9 @@ impl Default for WorkspaceConfig {
         Self {
             include_paths: vec!["lib".to_string(), ".".to_string(), "local/lib/perl5".to_string()],
             use_system_inc: false,
+            perl_path: "perl".to_string(),
+            perl_args: Vec::new(),
+            perl_env: BTreeMap::new(),
             system_inc_cache: None,
             resolution_timeout_ms: 50,
         }
@@ -293,6 +307,30 @@ impl WorkspaceConfig {
                 }
                 self.use_system_inc = use_inc;
             }
+            if let Some(perl_path) = workspace.get("perlPath").and_then(|v| v.as_str())
+                && perl_path != self.perl_path
+            {
+                self.perl_path = perl_path.to_string();
+                self.system_inc_cache = None;
+            }
+            if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
+                let parsed_args: Vec<String> =
+                    perl_args.iter().filter_map(|v| v.as_str().map(ToString::to_string)).collect();
+                if parsed_args != self.perl_args {
+                    self.perl_args = parsed_args;
+                    self.system_inc_cache = None;
+                }
+            }
+            if let Some(perl_env) = workspace.get("perlEnv").and_then(|v| v.as_object()) {
+                let parsed_env: BTreeMap<String, String> = perl_env
+                    .iter()
+                    .filter_map(|(key, value)| value.as_str().map(|v| (key.clone(), v.to_string())))
+                    .collect();
+                if parsed_env != self.perl_env {
+                    self.perl_env = parsed_env;
+                    self.system_inc_cache = None;
+                }
+            }
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
             }
@@ -306,15 +344,24 @@ impl WorkspaceConfig {
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache = Some(Self::fetch_perl_inc());
+            self.system_inc_cache =
+                Some(Self::fetch_perl_inc(&self.perl_path, &self.perl_args, &self.perl_env));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
-        let output = Command::new("perl").args(["-e", "print join(\"\\n\", @INC)"]).output();
+    fn fetch_perl_inc(
+        perl_path: &str,
+        perl_args: &[String],
+        perl_env: &BTreeMap<String, String>,
+    ) -> Vec<PathBuf> {
+        let mut command = Command::new(perl_path);
+        command.args(perl_args);
+        command.args(["-e", "print join(\"\\n\", @INC)"]);
+        command.envs(perl_env);
+        let output = command.output();
 
         match output {
             Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
@@ -363,8 +410,7 @@ pub struct ProjectPerlConfig {
     /// Additional include paths for module resolution.
     ///
     /// Relative entries are resolved against the workspace root. Absolute
-    /// entries are accepted syntactically, but still must resolve inside the
-    /// workspace boundary.
+    /// entries are honored as literal external roots.
     pub include_paths: Vec<String>,
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.

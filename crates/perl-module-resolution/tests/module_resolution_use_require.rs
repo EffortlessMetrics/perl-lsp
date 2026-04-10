@@ -643,8 +643,7 @@ mod relative_vs_absolute_paths {
         // "../secret" would escape the workspace root
         let result = resolve_module_path(&root, "Leaked::Data", &["../secret".to_string()]);
 
-        // Should fall back to lib, NOT resolve the escaped path
-        assert_eq!(result, Some(root.join("lib").join("Leaked/Data.pm")));
+        assert_eq!(result, None);
         Ok(())
     }
 
@@ -657,7 +656,7 @@ mod relative_vs_absolute_paths {
 
         let result = resolve_module_path(&root, "Escape::Attempt", &["../../etc".to_string()]);
 
-        assert_eq!(result, Some(root.join("lib").join("Escape/Attempt.pm")));
+        assert_eq!(result, None);
         Ok(())
     }
 
@@ -720,11 +719,7 @@ mod legacy_separator_resolution {
             &["lib".to_string()],
         );
 
-        // Should produce a valid path (the fallback)
-        assert!(path.is_some());
-        if let Some(p) = path {
-            assert!(p.to_string_lossy().contains("Old"), "path should contain module directory");
-        }
+        assert_eq!(path, None);
     }
 }
 
@@ -735,15 +730,14 @@ mod legacy_separator_resolution {
 mod combined_edge_cases {
     use super::*;
 
-    /// Empty include paths list causes resolution to fall back to
-    /// `root/lib/<module>.pm`.
+    /// Empty include paths list returns `None`.
     #[test]
-    fn empty_include_paths_uses_lib_fallback() -> Result<(), Box<dyn std::error::Error>> {
+    fn empty_include_paths_return_none() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
 
         let result = resolve_module_path(root, "Fallback::Target", &[]);
-        assert_eq!(result, Some(root.join("lib").join("Fallback/Target.pm")));
+        assert_eq!(result, None);
         Ok(())
     }
 
@@ -780,7 +774,7 @@ mod combined_edge_cases {
         let root = temp.path();
 
         let result = resolve_module_path(root, "", &["lib".to_string()]);
-        assert!(result.is_some(), "should return fallback path, not None");
+        assert_eq!(result, None);
         Ok(())
     }
 
@@ -791,7 +785,7 @@ mod combined_edge_cases {
         let root = temp.path();
 
         let result = resolve_module_path(root, "  ", &["lib".to_string()]);
-        assert!(result.is_some(), "should return fallback path");
+        assert_eq!(result, None);
         Ok(())
     }
 
