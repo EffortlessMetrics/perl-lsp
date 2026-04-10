@@ -2205,3 +2205,23 @@ if ("hello world" =~ /world/p) {
     );
     Ok(())
 }
+
+#[test]
+fn builtin_caret_warning_bits_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    // ${^WARNING_BITS} is a Perl built-in that uses the general ${^NAME} pattern.
+    // Confirms that the pattern-based check accepts names beyond the three PR-targeted vars,
+    // validating that the whole Perl-reserved ${^UPPERCASE_} namespace is correctly whitelisted.
+    let code = r#"
+use strict;
+use warnings;
+my $bits = ${^WARNING_BITS};
+print $bits, "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "^WARNING_BITS"),
+        "{{^WARNING_BITS}} should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
