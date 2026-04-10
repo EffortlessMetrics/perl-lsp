@@ -27,6 +27,7 @@ const ALL_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::DuplicatePackage,
     DiagnosticCode::DuplicateSubroutine,
     DiagnosticCode::MissingReturn,
+    DiagnosticCode::RoleConflict,
     DiagnosticCode::InvalidPrototype,
     DiagnosticCode::BarewordFilehandle,
     DiagnosticCode::TwoArgOpen,
@@ -193,6 +194,8 @@ fn code_as_str_package_module_range() -> Result<(), Box<dyn std::error::Error>> 
 fn code_as_str_subroutine_range() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(DiagnosticCode::DuplicateSubroutine.as_str(), "PL300");
     assert_eq!(DiagnosticCode::MissingReturn.as_str(), "PL301");
+    assert_eq!(DiagnosticCode::InvalidPrototype.as_str(), "PL302");
+    assert_eq!(DiagnosticCode::RoleConflict.as_str(), "PL303");
     Ok(())
 }
 
@@ -283,6 +286,7 @@ fn severity_warning_codes() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::DuplicatePackage,
         DiagnosticCode::DuplicateSubroutine,
         DiagnosticCode::MissingReturn,
+        DiagnosticCode::RoleConflict,
         DiagnosticCode::BarewordFilehandle,
         DiagnosticCode::TwoArgOpen,
         DiagnosticCode::ImplicitReturn,
@@ -351,6 +355,8 @@ fn documentation_url_pl_codes_have_urls() -> Result<(), Box<dyn std::error::Erro
         (DiagnosticCode::DuplicatePackage, "PL201"),
         (DiagnosticCode::DuplicateSubroutine, "PL300"),
         (DiagnosticCode::MissingReturn, "PL301"),
+        (DiagnosticCode::InvalidPrototype, "PL302"),
+        (DiagnosticCode::RoleConflict, "PL303"),
         (DiagnosticCode::BarewordFilehandle, "PL400"),
         (DiagnosticCode::TwoArgOpen, "PL401"),
         (DiagnosticCode::ImplicitReturn, "PL402"),
@@ -479,7 +485,11 @@ fn category_package_module() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn category_subroutine() -> Result<(), Box<dyn std::error::Error>> {
-    let sub_codes = [DiagnosticCode::DuplicateSubroutine, DiagnosticCode::MissingReturn];
+    let sub_codes = [
+        DiagnosticCode::DuplicateSubroutine,
+        DiagnosticCode::MissingReturn,
+        DiagnosticCode::RoleConflict,
+    ];
     for code in &sub_codes {
         assert_eq!(
             code.category(),
@@ -882,7 +892,11 @@ fn package_module_codes_are_in_200_299_range() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn subroutine_codes_are_in_300_399_range() -> Result<(), Box<dyn std::error::Error>> {
-    let codes = [DiagnosticCode::DuplicateSubroutine, DiagnosticCode::MissingReturn];
+    let codes = [
+        DiagnosticCode::DuplicateSubroutine,
+        DiagnosticCode::MissingReturn,
+        DiagnosticCode::RoleConflict,
+    ];
     for code in &codes {
         let s = code.as_str();
         let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
@@ -1177,8 +1191,8 @@ fn unused_variable_tag_is_exactly_unnecessary() {
 // --- Cross-cutting: ALL_CODES count ---
 
 #[test]
-fn all_codes_count_is_23() {
-    assert_eq!(ALL_CODES.len(), 23, "expected 23 diagnostic codes total");
+fn all_codes_count_is_24() {
+    assert_eq!(ALL_CODES.len(), 24, "expected 24 diagnostic codes total");
 }
 
 // --- DiagnosticCode: parse_code boundary values ---
@@ -1187,7 +1201,7 @@ fn all_codes_count_is_23() {
 fn parse_code_all_valid_pl_codes() {
     let valid_pl = [
         "PL001", "PL002", "PL003", "PL100", "PL101", "PL102", "PL103", "PL200", "PL201", "PL300",
-        "PL301", "PL302", "PL400", "PL401", "PL402", "PL602",
+        "PL301", "PL302", "PL303", "PL400", "PL401", "PL402", "PL602",
     ];
     for s in &valid_pl {
         assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
@@ -1205,11 +1219,11 @@ fn parse_code_all_valid_pc_codes() {
 #[test]
 fn parse_code_gaps_return_none() {
     // Codes that fall in valid ranges but aren't assigned.
-    // Note: PL104-PL111, PL403-PL404, PL500-PL501, PL600-PL602, PL700, PL800-PL806
+    // Note: PL104-PL111, PL303, PL403-PL404, PL500-PL501, PL600-PL602, PL700, PL800-PL806
     // are now assigned; only truly unassigned gaps are listed here.
     let gaps = [
-        "PL004", "PL050", "PL099", "PL150", "PL199", "PL202", "PL250", "PL303", "PL399", "PL499",
-        "PL502", "PL599", "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
+        "PL004", "PL050", "PL099", "PL150", "PL199", "PL202", "PL250", "PL399", "PL499", "PL502",
+        "PL599", "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
     ];
     for s in &gaps {
         assert!(DiagnosticCode::parse_code(s).is_none(), "expected None for unassigned code {}", s);
