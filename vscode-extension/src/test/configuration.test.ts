@@ -630,14 +630,12 @@ describe('package.json contributes', () => {
 
     test('grammar includes common SWIG directives', () => {
       const grammar = readJson('syntaxes/perl.tmLanguage.json');
-      const swigPattern = grammar.repository.swig.patterns
-        .map((entry: any) => entry.match)
-        .find((match: string) =>
-          typeof match === 'string' &&
-          match.includes('module|include|inline|header|wrapper|init|perlcode|perl5')
-        );
+      const swigPattern = grammar.repository.swig.patterns.find(
+        (entry: any) => entry.name === 'keyword.other.perl.swig'
+      );
 
       expect(swigPattern).toBeDefined();
+      expect(swigPattern.match).toContain('module|include|inline|header|wrapper|init|perlcode|perl5');
     });
 
     test('grammar maps SWIG embedded blocks to C and Perl languages', () => {
