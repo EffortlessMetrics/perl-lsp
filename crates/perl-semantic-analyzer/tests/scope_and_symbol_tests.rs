@@ -1475,3 +1475,145 @@ fn edge_scope_issue_range_within_source() -> Result<(), Box<dyn std::error::Erro
     }
     Ok(())
 }
+
+// ===========================================================================
+// 17. Position-aware builtin declaration handling (read/sysread/recv at pos 1)
+// ===========================================================================
+
+#[test]
+fn read_buffer_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // `read $fh, my $buffer, 1024` — $buffer is declared at position 1, not 0.
+    // It should not be flagged as undeclared, uninitialized, or unused.
+    let code = r#"
+use strict;
+open my $fh, '<', 'file.txt';
+read $fh, my $buffer, 1024;
+print $buffer;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$buffer", "$fh"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "read buffer/handle should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn sysread_buffer_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // `sysread $fh, my $buf, 512` — position 1 is the declaration.
+    let code = r#"
+use strict;
+open my $fh, '<', 'file.txt';
+sysread $fh, my $buf, 512;
+print $buf;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$buf", "$fh"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "sysread buffer/handle should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn recv_buffer_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // `recv $sock, my $data, 1024, 0` — position 1 is the declaration.
+    let code = r#"
+use strict;
+socket my $sock, 2, 1, 0;
+recv $sock, my $data, 1024, 0;
+print $data;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$data", "$sock"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "recv buffer/socket should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn read_position_zero_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    // Position 0 in `read` is an existing filehandle, NOT a declaration target.
+    // Passing a bare (non-declaration) variable at position 0 should not affect its
+    // declaration status — it must have been declared separately.
+    let code = r#"
+use strict;
+my $fh = \*STDIN;
+my $buffer;
+read $fh, $buffer, 1024;
+print $buffer;
+"#;
+    let issues = scope_issues_strict(code);
+    // $fh was declared with `my` — should not be flagged at all
+    assert!(
+        !issues.iter().any(|i| {
+            i.variable_name.contains("fh")
+                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+        }),
+        "existing $fh should not be flagged (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn socketpair_both_positions_declared() -> Result<(), Box<dyn std::error::Error>> {
+    // `socketpair my $a, my $b, ...` — positions 0 and 1 are both declarations.
+    let code = r#"
+use strict;
+socketpair my $a, my $b, 2, 1, 0;
+print $a;
+print $b;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$a", "$b"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "socketpair handle should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
+    }
+    Ok(())
+}
