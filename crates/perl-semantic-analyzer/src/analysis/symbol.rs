@@ -343,6 +343,10 @@ pub enum WebFrameworkKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Async framework variant detected via `use` statements during Parse/Analyze workflows.
 pub enum AsyncFrameworkKind {
+    /// `use Future;`
+    Future,
+    /// `use Future::XS;`
+    FutureXS,
     /// `use IO::Async;`
     IOAsync,
     /// `use Mojo::Redis;`
@@ -1605,16 +1609,22 @@ impl SymbolExtractor {
             return false;
         };
 
-        let (module_prefix, framework_name) = match flags.async_framework {
-            Some(AsyncFrameworkKind::IOAsync) => ("IO::Async::", "IO::Async"),
-            Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis"),
+        let (module_name, framework_name, exact_match) = match flags.async_framework {
+            Some(AsyncFrameworkKind::Future) => ("Future", "Future", true),
+            Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
+            Some(AsyncFrameworkKind::IOAsync) => ("IO::Async", "IO::Async", false),
+            Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis", true),
             None => return false,
         };
 
         let Some(name) = Self::single_symbol_name(object) else {
             return false;
         };
-        if !name.starts_with(module_prefix) {
+        if exact_match {
+            if name != module_name {
+                return false;
+            }
+        } else if !name.starts_with(&format!("{module_name}::")) {
             return false;
         }
 
@@ -1681,6 +1691,18 @@ impl SymbolExtractor {
         if module == "IO::Async" || module.starts_with("IO::Async::") {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::IOAsync);
+            return;
+        }
+
+        if module == "Future" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::Future);
+            return;
+        }
+
+        if module == "Future::XS" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::FutureXS);
             return;
         }
 
