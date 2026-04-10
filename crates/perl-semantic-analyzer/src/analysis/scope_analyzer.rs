@@ -433,6 +433,103 @@ impl ScopeAnalyzer {
         Self
     }
 
+    fn package_variable_name(&self, name: &str, context: &AnalysisContext<'_>) -> Option<String> {
+        if name.is_empty() || name.contains("::") {
+            return None;
+        }
+
+        let current_package = context.current_package.borrow();
+        Some(format!("{}::{}", current_package.as_str(), name))
+    }
+
+    fn declare_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        offset: usize,
+        is_our: bool,
+        is_initialized: bool,
+        context: &AnalysisContext<'_>,
+    ) -> Option<IssueKind> {
+        if is_our && let Some(qualified_name) = self.package_variable_name(name, context) {
+            return scope.declare_variable_parts(
+                sigil,
+                &qualified_name,
+                offset,
+                is_our,
+                is_initialized,
+            );
+        }
+
+        scope.declare_variable_parts(sigil, name, offset, is_our, is_initialized)
+    }
+
+    fn has_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) -> bool {
+        if scope.has_variable_parts(sigil, name) {
+            return true;
+        }
+
+        self.package_variable_name(name, context)
+            .is_some_and(|qualified_name| scope.has_variable_parts(sigil, &qualified_name))
+    }
+
+    fn use_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) -> (bool, bool) {
+        let (found, initialized) = scope.use_variable_parts(sigil, name);
+        if found {
+            return (found, initialized);
+        }
+
+        self.package_variable_name(name, context).map_or((false, false), |qualified_name| {
+            scope.use_variable_parts(sigil, &qualified_name)
+        })
+    }
+
+    fn initialize_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) {
+        if scope.has_variable_parts(sigil, name) {
+            scope.initialize_variable_parts(sigil, name);
+            return;
+        }
+
+        if let Some(qualified_name) = self.package_variable_name(name, context) {
+            scope.initialize_variable_parts(sigil, &qualified_name);
+        }
+    }
+
+    fn initialize_and_use_variable_parts_in_context(
+        &self,
+        scope: &Rc<Scope>,
+        sigil: &str,
+        name: &str,
+        context: &AnalysisContext<'_>,
+    ) -> bool {
+        if scope.initialize_and_use_variable_parts(sigil, name) {
+            return true;
+        }
+
+        self.package_variable_name(name, context).is_some_and(|qualified_name| {
+            scope.initialize_and_use_variable_parts(sigil, &qualified_name)
+        })
+    }
+
     pub fn analyze(
         &self,
         ast: &Node,
@@ -483,12 +580,14 @@ impl ScopeAnalyzer {
                     self.analyze_node(init, scope, ancestors, issues, context);
                 }
 
-                if let Some(issue_kind) = scope.declare_variable_parts(
+                if let Some(issue_kind) = self.declare_variable_parts_in_context(
+                    scope,
                     sigil,
                     var_name_part,
                     variable.location.start,
                     is_our,
                     is_initialized,
+                    context,
                 ) {
                     // `our` re-declares a package global — valid Perl idiom when switching
                     // packages (`package Foo; our $x; package Bar; our $x;`).  Never report
@@ -539,12 +638,14 @@ impl ScopeAnalyzer {
                     let extracted = self.extract_variable_name(variable);
                     let (sigil, var_name_part) = extracted.parts();
 
-                    if let Some(issue_kind) = scope.declare_variable_parts(
+                    if let Some(issue_kind) = self.declare_variable_parts_in_context(
+                        scope,
                         sigil,
                         var_name_part,
                         variable.location.start,
                         is_our,
                         is_initialized,
+                        context,
                     ) {
                         // `our` redeclaration is always valid — see VariableDeclaration handler.
                         if is_our && issue_kind == IssueKind::VariableRedeclaration {
@@ -593,12 +694,14 @@ impl ScopeAnalyzer {
                                     let (sigil, name) = split_variable_name(var_name);
                                     if !sigil.is_empty() {
                                         // Declare these variables as globals in the current scope
-                                        scope.declare_variable_parts(
+                                        self.declare_variable_parts_in_context(
+                                            scope,
                                             sigil,
                                             name,
                                             node.location.start,
                                             true,
                                             true,
+                                            context,
                                         ); // true = is_our (global), true = initialized (assumed)
                                     }
                                 }
@@ -609,12 +712,14 @@ impl ScopeAnalyzer {
                             if !var_name.is_empty() {
                                 let (sigil, name) = split_variable_name(var_name);
                                 if !sigil.is_empty() {
-                                    scope.declare_variable_parts(
+                                    self.declare_variable_parts_in_context(
+                                        scope,
                                         sigil,
                                         name,
                                         node.location.start,
                                         true,
                                         true,
+                                        context,
                                     );
                                 }
                             }
@@ -641,7 +746,7 @@ impl ScopeAnalyzer {
                     .resolve_variable_use_target(node, ancestors, context)
                     .unwrap_or((sigil, name));
                 let (variable_used, is_initialized) =
-                    scope.use_variable_parts(lookup_sigil, lookup_name);
+                    self.use_variable_parts_in_context(scope, lookup_sigil, lookup_name, context);
 
                 // Variable not found - check if we should report it
                 if !variable_used {
@@ -687,7 +792,7 @@ impl ScopeAnalyzer {
                 for arg in args {
                     self.analyze_node(arg, scope, ancestors, issues, context);
                     if is_declaration_capable_builtin(name) {
-                        self.mark_builtin_declaration_arg_consumed(arg, scope);
+                        self.mark_builtin_declaration_arg_consumed(arg, scope, context);
                     }
                 }
                 ancestors.pop();
@@ -723,12 +828,12 @@ impl ScopeAnalyzer {
                     || value.starts_with("qq")
                     || value.starts_with("qx")
                 {
-                    self.mark_interpolated_variables_used(value, scope);
+                    self.mark_interpolated_variables_used(value, scope, context);
                 }
             }
             NodeKind::Heredoc { content, interpolated, .. } => {
                 if *interpolated {
-                    self.mark_interpolated_variables_used(content, scope);
+                    self.mark_interpolated_variables_used(content, scope, context);
                 }
             }
             NodeKind::Assignment { lhs, rhs, op: _ } => {
@@ -740,7 +845,9 @@ impl ScopeAnalyzer {
                 // (mark_initialized + analyze_node both perform lookups)
                 if let NodeKind::Variable { sigil, name } = &lhs.kind {
                     if !name.contains("::") && !is_builtin_global(sigil, name) {
-                        if scope.initialize_and_use_variable_parts(sigil, name) {
+                        if self.initialize_and_use_variable_parts_in_context(
+                            scope, sigil, name, context,
+                        ) {
                             return;
                         }
                     }
@@ -749,7 +856,7 @@ impl ScopeAnalyzer {
                 // Then analyze LHS
                 // We need to recursively mark variables as initialized in the LHS structure
                 // This handles scalars ($x = 1) and lists (($x, $y) = (1, 2))
-                self.mark_initialized(lhs, scope);
+                self.mark_initialized(lhs, scope, context);
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
@@ -767,10 +874,10 @@ impl ScopeAnalyzer {
                 if let NodeKind::VariableDeclaration { .. } = variable.kind {
                     // Must analyze declaration FIRST to declare it, then mark initialized
                     self.analyze_node(variable, scope, ancestors, issues, context);
-                    self.mark_initialized(variable, scope);
+                    self.mark_initialized(variable, scope, context);
                 } else {
                     // For existing variables, mark initialized then analyze (usage)
-                    self.mark_initialized(variable, scope);
+                    self.mark_initialized(variable, scope, context);
                     self.analyze_node(variable, scope, ancestors, issues, context);
                 }
 
@@ -906,7 +1013,7 @@ impl ScopeAnalyzer {
                         }
 
                         // Check if parameter shadows a global or parent scope variable
-                        if scope.has_variable_parts(sigil, name) {
+                        if self.has_variable_parts_in_context(scope, sigil, name, context) {
                             issues.push(ScopeIssue {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
@@ -920,12 +1027,14 @@ impl ScopeAnalyzer {
                         }
 
                         // Declare the parameter in subroutine scope
-                        sub_scope.declare_variable_parts(
+                        self.declare_variable_parts_in_context(
+                            &sub_scope,
                             sigil,
                             name,
                             param.location.start,
                             false,
                             true,
+                            context,
                         ); // Parameters are initialized
                         // Don't mark parameters as automatically used yet - track their actual usage
                     }
@@ -1198,7 +1307,8 @@ impl ScopeAnalyzer {
         sigil: &str,
         name: &str,
     ) {
-        let (variable_used, is_initialized) = scope.use_variable_parts(sigil, name);
+        let (variable_used, is_initialized) =
+            self.use_variable_parts_in_context(scope, sigil, name, context);
         if !variable_used {
             if strict_vars_mode {
                 self.push_undeclared_variable_issue(issues, context, node, sigil, name);
@@ -1246,18 +1356,18 @@ impl ScopeAnalyzer {
 
     /// Marks variables as initialized when they appear on the left-hand side of an assignment.
     /// Handles scalar variables, list assignments like `($x, $y) = ...`, and nested structures.
-    fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>) {
+    fn mark_initialized(&self, node: &Node, scope: &Rc<Scope>, context: &AnalysisContext<'_>) {
         match &node.kind {
             NodeKind::Variable { sigil, name } => {
                 if !name.contains("::") {
-                    scope.initialize_variable_parts(sigil, name);
+                    self.initialize_variable_parts_in_context(scope, sigil, name, context);
                 }
             }
             // For all other node types (parens, lists, etc.), recurse into children
             // to find any nested variables that should be marked as initialized
             _ => {
                 for child in node.children() {
-                    self.mark_initialized(child, scope);
+                    self.mark_initialized(child, scope, context);
                 }
             }
         }
@@ -1282,28 +1392,39 @@ impl ScopeAnalyzer {
         }
     }
 
-    fn mark_builtin_declaration_arg_consumed(&self, node: &Node, scope: &Rc<Scope>) {
+    fn mark_builtin_declaration_arg_consumed(
+        &self,
+        node: &Node,
+        scope: &Rc<Scope>,
+        context: &AnalysisContext<'_>,
+    ) {
         match &node.kind {
             NodeKind::VariableDeclaration { variable, .. } => {
                 let extracted = self.extract_variable_name(variable);
                 let (sigil, name) = extracted.parts();
                 if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
-                    let _ = scope.initialize_and_use_variable_parts(sigil, name);
+                    let _ = self
+                        .initialize_and_use_variable_parts_in_context(scope, sigil, name, context);
                 }
             }
             NodeKind::VariableListDeclaration { variables, .. } => {
                 for variable in variables {
-                    self.mark_builtin_declaration_arg_consumed(variable, scope);
+                    self.mark_builtin_declaration_arg_consumed(variable, scope, context);
                 }
             }
             NodeKind::VariableWithAttributes { variable, .. } => {
-                self.mark_builtin_declaration_arg_consumed(variable, scope);
+                self.mark_builtin_declaration_arg_consumed(variable, scope, context);
             }
             _ => {}
         }
     }
 
-    fn mark_interpolated_variables_used(&self, content: &str, scope: &Rc<Scope>) {
+    fn mark_interpolated_variables_used(
+        &self,
+        content: &str,
+        scope: &Rc<Scope>,
+        context: &AnalysisContext<'_>,
+    ) {
         let bytes = content.as_bytes();
         let mut index = 0;
 
@@ -1346,7 +1467,7 @@ impl ScopeAnalyzer {
 
             if let Some(name) = content.get(start..end) {
                 if !name.contains("::") {
-                    let _ = scope.use_variable_parts(sigil, name);
+                    let _ = self.use_variable_parts_in_context(scope, sigil, name, context);
                 }
             }
 
