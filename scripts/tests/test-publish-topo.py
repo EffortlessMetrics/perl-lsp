@@ -13,6 +13,8 @@ These tests use synthetic workspace metadata to verify correct behaviour of:
 4. Normal dep cycle — must hard-fail (no valid publish order exists).
 5. Empty allowlist — must hard-fail.
 6. Allowlist crate not in workspace — must hard-fail.
+7. derive_publish_list — derive publishable crates from metadata (issue #3317).
+8. compute_publish_order with from_metadata=True — end-to-end auto-derive.
 
 Run with: python3 scripts/tests/test-publish-topo.py
 Returns exit code 0 on all-pass, 1 on any failure.
@@ -40,6 +42,7 @@ publish_topo = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(publish_topo)  # type: ignore[union-attr]
 
 compute_publish_order = publish_topo.compute_publish_order
+derive_publish_list = publish_topo.derive_publish_list
 
 
 # ---------------------------------------------------------------------------
@@ -47,15 +50,30 @@ compute_publish_order = publish_topo.compute_publish_order
 # ---------------------------------------------------------------------------
 
 
-def _pkg(name: str, version: str = "0.1.0", deps: list[dict] | None = None) -> dict:
-    """Build a minimal cargo-metadata package entry."""
-    return {
+def _pkg(
+    name: str,
+    version: str = "0.1.0",
+    deps: list[dict] | None = None,
+    publish: list[str] | None = None,
+) -> dict:
+    """Build a minimal cargo-metadata package entry.
+
+    ``publish`` mirrors the cargo-metadata field:
+    - ``None``  — field absent (publishable by default)
+    - ``[]``    — publish = false / publish = [] in Cargo.toml (not publishable)
+    - ``["some-registry"]`` — restricted registry list (treated as publishable;
+      the list is non-empty so the crate has at least one publish target)
+    """
+    pkg: dict = {
         "name": name,
         "version": version,
         "id": f"{name} {version} (path+file:///fake/{name})",
         "manifest_path": f"/fake/{name}/Cargo.toml",
         "dependencies": deps or [],
     }
+    if publish is not None:
+        pkg["publish"] = publish
+    return pkg
 
 
 def _dep(name: str, kind: str | None = None) -> dict:
@@ -264,6 +282,229 @@ class TestAllowlistFiltering(unittest.TestCase):
         self.assertNotIn("internal-helper", names)
         self.assertIn("a", names)
         self.assertIn("b", names)
+
+
+class TestDerivePublishList(unittest.TestCase):
+    """
+    derive_publish_list(meta) — derive publishable crate names from cargo metadata.
+
+    Rule: a crate is publishable iff it is a workspace member AND its
+    ``publish`` field is absent or non-empty (i.e. NOT ``[]``).
+    """
+
+    def test_all_publishable_when_no_publish_field(self) -> None:
+        """Crates with no ``publish`` field are all publishable."""
+        packages = [_pkg("a"), _pkg("b"), _pkg("c")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {},
+        }
+        result = derive_publish_list(meta)
+        self.assertEqual(set(result), {"a", "b", "c"})
+
+    def test_publish_false_excluded(self) -> None:
+        """Crate with ``publish = []`` (cargo-metadata encoding of publish=false) is excluded."""
+        packages = [_pkg("a"), _pkg("internal", publish=[]), _pkg("c")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {},
+        }
+        result = derive_publish_list(meta)
+        self.assertIn("a", result)
+        self.assertIn("c", result)
+        self.assertNotIn("internal", result)
+
+    def test_publish_empty_list_excluded(self) -> None:
+        """Crate with publish=[] explicitly (also matches publish=false semantics)."""
+        packages = [_pkg("tool", publish=[]), _pkg("lib")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {},
+        }
+        result = derive_publish_list(meta)
+        self.assertEqual(result, ["lib"])
+
+    def test_non_workspace_packages_excluded(self) -> None:
+        """Packages not in workspace_members must not appear in the derived list."""
+        internal = _pkg("not-a-member")
+        member = _pkg("real-member")
+        meta = {
+            "workspace_members": [member["id"]],  # only real-member
+            "packages": [internal, member],
+            "metadata": {},
+        }
+        result = derive_publish_list(meta)
+        self.assertEqual(result, ["real-member"])
+        self.assertNotIn("not-a-member", result)
+
+    def test_order_is_deterministic(self) -> None:
+        """derive_publish_list returns names in a deterministic (sorted) order."""
+        packages = [_pkg("z"), _pkg("a"), _pkg("m")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {},
+        }
+        result1 = derive_publish_list(meta)
+        result2 = derive_publish_list(meta)
+        self.assertEqual(result1, result2)
+        self.assertEqual(result1, sorted(result1))
+
+
+class TestComputePublishOrderFromMetadata(unittest.TestCase):
+    """
+    compute_publish_order(meta, from_metadata=True) — end-to-end auto-derive mode.
+
+    When from_metadata=True the function must derive the publish list from
+    metadata instead of reading [workspace.metadata.publish.allow].
+    """
+
+    def test_from_metadata_derives_list(self) -> None:
+        """With from_metadata=True, publishable crates are derived automatically."""
+        packages = [
+            _pkg("a", deps=[_dep("b")]),
+            _pkg("b"),
+            _pkg("internal-tool", publish=[]),
+        ]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {},  # no [publish].allow — that's fine in metadata mode
+        }
+        result = compute_publish_order(meta, from_metadata=True)
+        names = [r["name"] for r in result]
+        self.assertIn("a", names)
+        self.assertIn("b", names)
+        self.assertNotIn("internal-tool", names)
+
+    def test_from_metadata_respects_dep_order(self) -> None:
+        """Topo order is still correct when using from_metadata=True."""
+        packages = [
+            _pkg("a", deps=[_dep("b")]),
+            _pkg("b", deps=[_dep("c")]),
+            _pkg("c"),
+        ]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {},
+        }
+        result = compute_publish_order(meta, from_metadata=True)
+        names = [r["name"] for r in result]
+        self.assertLess(names.index("c"), names.index("b"))
+        self.assertLess(names.index("b"), names.index("a"))
+
+    def test_from_metadata_empty_workspace_exits(self) -> None:
+        """Empty workspace (all excluded) must still hard-fail."""
+        packages = [_pkg("a", publish=[]), _pkg("b", publish=[])]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {},
+        }
+        with self.assertRaises(SystemExit) as ctx:
+            compute_publish_order(meta, from_metadata=True)
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_allowlist_mode_still_works(self) -> None:
+        """from_metadata=False (default) still reads the explicit allowlist."""
+        packages = [_pkg("a"), _pkg("b")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {"publish": {"allow": ["a"]}},
+        }
+        result = compute_publish_order(meta, from_metadata=False)
+        names = [r["name"] for r in result]
+        self.assertIn("a", names)
+        self.assertNotIn("b", names)  # b not in explicit allowlist
+
+
+class TestAllowlistDriftCheck(unittest.TestCase):
+    """
+    check_allowlist_drift(meta) — verify the hand-maintained allowlist matches
+    the cargo-metadata-derived list.  Returns a diff (two sets).
+    """
+
+    def test_no_drift_when_equal(self) -> None:
+        """No drift reported when allowlist matches metadata-derived list exactly."""
+        packages = [_pkg("a"), _pkg("b")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {"publish": {"allow": ["a", "b"]}},
+        }
+        missing, extra = publish_topo.check_allowlist_drift(meta)
+        self.assertEqual(missing, set())
+        self.assertEqual(extra, set())
+
+    def test_missing_from_allowlist(self) -> None:
+        """Crate in metadata but missing from allowlist is reported as 'missing'."""
+        packages = [_pkg("a"), _pkg("b"), _pkg("c")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {"publish": {"allow": ["a", "b"]}},  # c missing
+        }
+        missing, extra = publish_topo.check_allowlist_drift(meta)
+        self.assertIn("c", missing)
+        self.assertEqual(extra, set())
+
+    def test_extra_in_allowlist(self) -> None:
+        """Crate in allowlist but publish=false in metadata is reported as 'extra'."""
+        packages = [_pkg("a"), _pkg("b", publish=[])]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {"publish": {"allow": ["a", "b"]}},  # b is publish=false
+        }
+        missing, extra = publish_topo.check_allowlist_drift(meta)
+        self.assertEqual(missing, set())
+        self.assertIn("b", extra)
+
+    def test_both_missing_and_extra(self) -> None:
+        """Both gaps are reported simultaneously."""
+        packages = [_pkg("a"), _pkg("b", publish=[]), _pkg("c")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": {"publish": {"allow": ["a", "b"]}},  # c missing, b extra
+        }
+        missing, extra = publish_topo.check_allowlist_drift(meta)
+        self.assertIn("c", missing)
+        self.assertIn("b", extra)
+
+    def test_null_metadata_no_crash(self) -> None:
+        """check_allowlist_drift must not crash when cargo metadata returns null for
+        the metadata field (workspace with no [workspace.metadata] section)."""
+        packages = [_pkg("a"), _pkg("b")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": None,  # cargo metadata returns null for workspaces without [workspace.metadata]
+        }
+        # Should NOT raise AttributeError — both crates appear as 'missing' since
+        # the allowlist cannot be read (treated as empty).
+        missing, extra = publish_topo.check_allowlist_drift(meta)
+        self.assertIn("a", missing)
+        self.assertIn("b", missing)
+        self.assertEqual(extra, set())
+
+    def test_null_metadata_legacy_allowlist_mode_hard_fails(self) -> None:
+        """compute_publish_order (legacy allowlist mode) must exit 1 with a clear
+        error when metadata is null — not crash with AttributeError."""
+        packages = [_pkg("a"), _pkg("b")]
+        meta = {
+            "workspace_members": [p["id"] for p in packages],
+            "packages": packages,
+            "metadata": None,
+        }
+        with self.assertRaises(SystemExit) as ctx:
+            compute_publish_order(meta, from_metadata=False)
+        self.assertEqual(ctx.exception.code, 1)
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ The tradeoff is maintenance cost. A generated parser gets correctness guarantees
 
 ## What perl-lsp Does
 
-perl-lsp is a Language Server Protocol implementation for Perl, written in Rust. It implements 98 LSP and DAP features, all at GA maturity.
+perl-lsp is a Language Server Protocol implementation for Perl, written in Rust. It implements 102 LSP and DAP features, all at GA maturity.
 
 The parser does not call Perl. It is a hand-written recursive descent parser in Rust with a stateful lexer that handles Perl's context-sensitive grammar entirely in static analysis. A single native binary handles parsing, semantic analysis, and all LSP features.
 
@@ -70,7 +70,7 @@ Compare this to PerlNavigator: go to definition, completion, diagnostics, some n
 
 The codebase enforces a zero-panic policy in production code: no `unwrap()`, no `expect()`, no `panic!()`. The parser returns `Result` types throughout, with structured error recovery that produces partial ASTs rather than crashes. An LSP server that panics on malformed input is useless — recovering gracefully and continuing to provide completions for the rest of the file is the only acceptable behavior.
 
-The CPAN corpus currently sits at 85.35% clean parses across 4,355 real modules from the CPAN top-1000 distributions. That number has been rising continuously — it was 50% a few months ago. More on how we got here below.
+The CPAN corpus currently sits at 95.3% clean parses across 9,372 real files from the CPAN top-1000 distributions. That number has been rising continuously — it was 50% a few months ago. More on how we got here below.
 
 ---
 
@@ -110,17 +110,17 @@ Feature lists are easy to generate. Here are five things a Perl developer would 
 
 ## The Corpus Story
 
-Here is the honest version of how we got to 85.35%.
+Here is the honest version of how we got to 95.3%.
 
 We started with a question: how do you know your parser works? Unit tests cover the constructs you thought to test. Real Perl is messier, more creative, and more surprising than any test author imagines. The answer is to test against reality.
 
-The CPAN corpus is 4,355 Perl modules from CPAN's top-1000 distributions. These are production modules written by hundreds of different authors — web frameworks, bioinformatics, Unicode processing, database access layers, testing infrastructure, everything. They represent real Perl as it is actually written.
+The CPAN corpus is 9,372 Perl files from CPAN's top-1000 distributions. These are production modules written by hundreds of different authors — web frameworks, bioinformatics, Unicode processing, database access layers, testing infrastructure, everything. They represent real Perl as it is actually written.
 
 Every PR runs the full corpus in CI. The baseline is ratcheted: the number of cleanly parsed files can only increase. If a change regresses parsing on a module that was previously clean, CI fails. New clean files are added to the baseline automatically after each fix wave.
 
 Starting at 50% clean parses, we identified the top error buckets — families of related parse failures with common root causes. The largest bucket (`unexpected_token_in_expr`) decomposed into ten subcategories when examined carefully. Each subcategory drove a targeted fix. Each fix was validated against the CPAN corpus before merge.
 
-Four months ago, recursive descent on Perl was a research question. Now 85.35% of the top-1000 CPAN distributions parse without errors (3,717/4,355). The remaining 14.65% breaks down as: roughly 2-3% source-filtered code that is fundamentally incompatible with static analysis, 3-4% complex runtime-dependent constructs, and 8-9% genuinely fixable parser gaps we have not reached yet.
+Four months ago, recursive descent on Perl was a research question. Now 95.3% of the top-1000 CPAN distributions parse without errors (8,931/9,372). The remaining 4.7% breaks down as: roughly 1-2% source-filtered code that is fundamentally incompatible with static analysis, 1-2% complex runtime-dependent constructs, and 1-2% genuinely fixable parser gaps we have not reached yet.
 
 The corpus is not a metric we report. It is a gate that every change must pass.
 
@@ -128,7 +128,7 @@ The corpus is not a metric we report. It is a gate that every change must pass.
 
 ## What's Next
 
-v0.13.0 targets 95% corpus coverage. The remaining fixable buckets are harder — complex expression nesting, postfix operator chains, ternary operator edge cases in deeply nested contexts — but they are bounded and well-characterized.
+v0.13.0 ships with 95.3% corpus coverage, meeting the milestone target. The remaining fixable buckets are harder — complex expression nesting, postfix operator chains, ternary operator edge cases in deeply nested contexts — but they are bounded and well-characterized. v0.14.0 targets 98% or higher.
 
 Beyond corpus coverage, three feature areas are in active development:
 
@@ -154,4 +154,4 @@ Perl has a 35-year track record of doing what it was designed to do well. The la
 
 ---
 
-*Feature count (102 total: 87 LSP + 10 DAP + 5 extension) verified against `features.toml`. Corpus rate (85.35%, 3717/4355) reflects the ratcheted CI baseline as of March 2026. Install counts sourced from the VSCode Marketplace. All competitive analysis sourced from `docs/articles/COMPETITIVE_ANALYSIS.md`.*
+*Feature count (102 total: 87 LSP + 10 DAP + 5 extension) verified against `features.toml`. Corpus rate (95.3%, 8931/9372) reflects the ratcheted CI baseline as of April 2026. Install counts sourced from the VSCode Marketplace. All competitive analysis sourced from `docs/articles/COMPETITIVE_ANALYSIS.md`.*

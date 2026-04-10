@@ -89,6 +89,17 @@ where
                 walk_node(finally, func);
             }
         }
+        NodeKind::Given { expr, body } => {
+            walk_node(expr, func);
+            walk_node(body, func);
+        }
+        NodeKind::When { condition, body } => {
+            walk_node(condition, func);
+            walk_node(body, func);
+        }
+        NodeKind::Default { body } => {
+            walk_node(body, func);
+        }
         NodeKind::Unary { operand, .. } => {
             walk_node(operand, func);
         }
@@ -117,6 +128,18 @@ where
         }
         NodeKind::LabeledStatement { statement, .. } => {
             walk_node(statement, func);
+        }
+        // given ($x) { when (...) { } default { } } — switch feature (v5.10+)
+        NodeKind::Given { expr, body } => {
+            walk_node(expr, func);
+            walk_node(body, func);
+        }
+        NodeKind::When { condition, body } => {
+            walk_node(condition, func);
+            walk_node(body, func);
+        }
+        NodeKind::Default { body } => {
+            walk_node(body, func);
         }
         _ => {} // Other nodes don't have children or are handled differently
     }

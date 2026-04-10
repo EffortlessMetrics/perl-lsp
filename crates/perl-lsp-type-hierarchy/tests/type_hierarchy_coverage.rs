@@ -552,3 +552,215 @@ use parent 'A', 'B', 'C';\n";
     assert!(a_pos < b_pos, "A must come before B");
     assert!(b_pos < c_pos, "B must come before C");
 }
+
+// ---------------------------------------------------------------------------
+// 17. Moose `extends` keyword
+// ---------------------------------------------------------------------------
+
+/// `extends 'ParentClass'` registers a supertype with detail "Parent Class".
+#[test]
+fn supertypes_via_moose_extends_single() {
+    let code = "package MyClass;\nuse Moose;\nextends 'ParentClass';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let supertypes = provider.find_supertypes(&ast, &make_item("MyClass"));
+    assert_eq!(supertypes.len(), 1, "expected one supertype; got {supertypes:?}");
+    assert_eq!(supertypes[0].name, "ParentClass");
+    assert_eq!(supertypes[0].detail.as_deref(), Some("Parent Class"));
+}
+
+/// `extends 'A', 'B'` registers both parents.
+#[test]
+fn supertypes_via_moose_extends_multiple() {
+    let code = "package MyClass;\nuse Moose;\nextends 'BaseA', 'BaseB';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let supertypes = provider.find_supertypes(&ast, &make_item("MyClass"));
+    let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"BaseA"), "expected BaseA in {names:?}");
+    assert!(names.contains(&"BaseB"), "expected BaseB in {names:?}");
+}
+
+/// `extends` also appears in the subtypes view of the parent.
+#[test]
+fn subtypes_via_moose_extends() {
+    let code = "package Parent;\npackage Child;\nuse Moose;\nextends 'Parent';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let subtypes = provider.find_subtypes(&ast, &make_item("Parent"));
+    let names: Vec<&str> = subtypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Child"), "expected Child in {names:?}");
+}
+
+// ---------------------------------------------------------------------------
+// 18. Moose `with` (role composition)
+// ---------------------------------------------------------------------------
+
+/// `with 'MyRole'` exposes the role as a supertype with detail "Role".
+#[test]
+fn supertypes_via_moose_with_single() {
+    let code = "package MyClass;\nuse Moose;\nwith 'MyRole';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let supertypes = provider.find_supertypes(&ast, &make_item("MyClass"));
+    assert_eq!(supertypes.len(), 1, "expected one role; got {supertypes:?}");
+    assert_eq!(supertypes[0].name, "MyRole");
+    assert_eq!(supertypes[0].detail.as_deref(), Some("Role"));
+}
+
+/// `with 'Role1', 'Role2'` exposes both roles.
+#[test]
+fn supertypes_via_moose_with_multiple_roles() {
+    let code = "package MyClass;\nuse Moose;\nwith 'Role1', 'Role2';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let supertypes = provider.find_supertypes(&ast, &make_item("MyClass"));
+    let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Role1"), "expected Role1 in {names:?}");
+    assert!(names.contains(&"Role2"), "expected Role2 in {names:?}");
+    // All role items carry "Role" detail
+    for s in &supertypes {
+        assert_eq!(s.detail.as_deref(), Some("Role"), "role detail mismatch for {}", s.name);
+    }
+}
+
+/// Combined: `extends` and `with` in the same class.
+#[test]
+fn supertypes_extends_and_with_combined() {
+    let code = "package Combined;\nuse Moose;\nextends 'BaseClass';\nwith 'RoleA';\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let supertypes = provider.find_supertypes(&ast, &make_item("Combined"));
+    let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"BaseClass"), "expected BaseClass in {names:?}");
+    assert!(names.contains(&"RoleA"), "expected RoleA in {names:?}");
+}
+
+// ---------------------------------------------------------------------------
+// 19. `use parent qw(...)` syntax
+// ---------------------------------------------------------------------------
+
+/// `use parent qw(Base1 Base2)` — qw() list form must be recognized.
+#[test]
+fn supertypes_via_use_parent_qw_list() {
+    let code = "package Child;\nuse parent qw(Base1 Base2);\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let supertypes = provider.find_supertypes(&ast, &make_item("Child"));
+    let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Base1"), "expected Base1 in {names:?}");
+    assert!(names.contains(&"Base2"), "expected Base2 in {names:?}");
+}
+
+/// `use base qw(...)` — qw() form must also work for the legacy `base` pragma.
+#[test]
+fn supertypes_via_use_base_qw_list() {
+    let code = "package OldStyle;\nuse base qw(OldBase AnotherOld);\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let supertypes = provider.find_supertypes(&ast, &make_item("OldStyle"));
+    let names: Vec<&str> = supertypes.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"OldBase"), "expected OldBase in {names:?}");
+    assert!(names.contains(&"AnotherOld"), "expected AnotherOld in {names:?}");
+}
+
+// ---------------------------------------------------------------------------
+// 20. Deep inheritance chain via @ISA
+// ---------------------------------------------------------------------------
+
+/// Three-level chain expressed purely with `our @ISA`: C -> B -> A.
+#[test]
+fn deep_chain_via_isa() {
+    let code = "\
+package A;\n\
+package B;\n\
+our @ISA = ('A');\n\
+package C;\n\
+our @ISA = ('B');\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    // C's immediate supertype is B
+    let c_supers = provider.find_supertypes(&ast, &make_item("C"));
+    let c_names: Vec<&str> = c_supers.iter().map(|s| s.name.as_str()).collect();
+    assert!(c_names.contains(&"B"), "expected B in {c_names:?}");
+    assert!(!c_names.contains(&"A"), "A should not appear as direct super of C; got {c_names:?}");
+
+    // B's immediate supertype is A
+    let b_supers = provider.find_supertypes(&ast, &make_item("B"));
+    let b_names: Vec<&str> = b_supers.iter().map(|s| s.name.as_str()).collect();
+    assert!(b_names.contains(&"A"), "expected A in {b_names:?}");
+
+    // A has no supertypes
+    let a_supers = provider.find_supertypes(&ast, &make_item("A"));
+    assert!(a_supers.is_empty(), "A should have no supertypes; got {a_supers:?}");
+}
+
+/// C3 MRO for a three-level @ISA chain: C -> B -> A gives [C, B, A].
+#[test]
+fn c3_mro_deep_chain_via_isa() {
+    let code = "\
+package A;\n\
+package B;\n\
+our @ISA = ('A');\n\
+package C;\n\
+our @ISA = ('B');\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    let mro = provider.c3_mro(&ast, "C");
+    assert_eq!(mro, vec!["C", "B", "A"]);
+}
+
+// ---------------------------------------------------------------------------
+// 21. Non-OOP code returns empty gracefully
+// ---------------------------------------------------------------------------
+
+/// File with only subs and variables — no inheritance declarations at all.
+#[test]
+fn non_oop_code_supertypes_empty() {
+    let code = "\
+sub hello { return 'world'; }\n\
+my $x = 42;\n\
+my @arr = (1, 2, 3);\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    assert!(
+        provider.find_supertypes(&ast, &make_item("main")).is_empty(),
+        "non-OOP code should yield no supertypes"
+    );
+}
+
+/// File with only subs — prepare() returns None for an offset in a sub body.
+#[test]
+fn non_oop_code_prepare_returns_none() {
+    let code = "sub add { my ($a, $b) = @_; $a + $b }\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    // offset 4 is inside "add" — an identifier inside a sub decl, not a package
+    let result = provider.prepare(&ast, code, 4);
+    assert!(result.is_none(), "sub identifier should not produce a type hierarchy item");
+}
+
+/// File with only subs — subtypes returns empty.
+#[test]
+fn non_oop_code_subtypes_empty() {
+    let code = "sub foo { 1 }\nsub bar { 2 }\n";
+    let ast = parse(code);
+    let provider = TypeHierarchyProvider::new();
+
+    assert!(
+        provider.find_subtypes(&ast, &make_item("main")).is_empty(),
+        "non-OOP code should yield no subtypes"
+    );
+}

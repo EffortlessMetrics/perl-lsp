@@ -177,6 +177,77 @@ print $client;
 }
 
 #[test]
+fn scope_phase_blocks_keep_lexicals_inside_their_block() -> Result<(), Box<dyn std::error::Error>> {
+    for phase in ["BEGIN", "CHECK", "INIT", "UNITCHECK", "END"] {
+        let code = format!(
+            r#"
+use strict;
+{phase} {{
+    my $phase_local = 1;
+    print $phase_local;
+}}
+print $phase_local;
+"#
+        );
+
+        let issues = scope_issues_strict(&code);
+        assert!(
+            issues.iter().any(|i| {
+                i.kind == IssueKind::UndeclaredVariable
+                    && i.variable_name == "$phase_local"
+                    && i.line == 7
+            }),
+            "{phase} block lexical should not leak into outer scope at line 7: {:?}",
+            issues
+        );
+        assert!(
+            !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 5),
+            "{phase} block lexical should stay valid inside its own block: {:?}",
+            issues
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn scope_phase_blocks_do_not_share_lexicals() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+BEGIN {
+    my $phase_local = 1;
+    print $phase_local;
+}
+CHECK {
+    print $phase_local;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 5
+        }),
+        "lexical should be valid inside its own phase block: {:?}",
+        issues
+    );
+    assert!(
+        issues.iter().any(|i| {
+            i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 8
+        }),
+        "lexicals declared in one phase block should not be visible in sibling phase blocks at line 8: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn scope_try_catch_binds_catch_variable() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict;
@@ -1056,6 +1127,98 @@ $arr[0];
     Ok(())
 }
 
+/// Regression test for issue #3338: push @$arrayref does not mark my $arrayref as used.
+///
+/// Verifies that the exact reproducer from the issue report no longer produces a
+/// false "unused variable" diagnostic. Covers string-literal arguments (the original
+/// report), numeric arguments, and both non-strict and strict-mode variants.
+#[test]
+fn issue_3338_push_arrayref_deref_not_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Exact reproducer from issue #3338 — string literal argument
+    let code = r#"
+my $arrayref;
+push @$arrayref, 'item';
+"#;
+    let issues = scope_issues(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        unused,
+        0,
+        "issue #3338: $arrayref used via push @$arrayref should not be unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Regression test for issue #3338 under strict mode: push @$arrayref should not
+/// produce UnusedVariable or UndeclaredVariable for a declared scalar ref.
+#[test]
+fn issue_3338_push_arrayref_deref_strict_mode() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $arrayref = [];
+push @$arrayref, 'item';
+push @$arrayref, 'second';
+"#;
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        unused,
+        0,
+        "issue #3338: $arrayref declared and used via push @$arrayref should not be unused under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    let undeclared = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        undeclared,
+        0,
+        "issue #3338: declared $arrayref should not be reported as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Regression test for issue #3338: all three primary dereference sigil forms
+/// (`@$ref`, `%$ref`, `$$ref`) should mark the underlying scalar declaration used.
+#[test]
+fn issue_3338_all_deref_sigil_forms_mark_base_used() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $aref = [1, 2, 3];
+my $href = {a => 1};
+my $sref = \"hello";
+
+my @items = @$aref;
+my %copy  = %$href;
+my $val   = $$sref;
+"#;
+    let issues = scope_issues_strict(code);
+
+    for var in &["aref", "href", "sref"] {
+        let unused = issues
+            .iter()
+            .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains(var))
+            .count();
+        assert_eq!(
+            unused,
+            0,
+            "issue #3338: ${} used via deref should not be unused; issues: {:?}",
+            var,
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn unused_variable_used_via_coderef_and_glob_dereference_forms()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -1333,6 +1496,53 @@ print FOO;
             .iter()
             .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
         "use v5.40 should enable strict subs"
+    );
+    Ok(())
+}
+
+#[test]
+fn v5_36_auto_strict_flags_undeclared_variable_in_signature_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    // use v5.36 enables strict automatically via feature bundle.
+    // An undeclared variable $z inside a signature sub should be flagged
+    // even without an explicit 'use strict'.
+    let code = r#"
+use v5.36;
+sub foo ($x) { $z = 1; }
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
+        "use v5.36 auto-enables strict: $z inside a signature sub should be flagged as undeclared"
+    );
+    // The parameter $x should NOT be flagged as undeclared.
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
+        "signature parameter $x should not be flagged as undeclared"
+    );
+    Ok(())
+}
+
+#[test]
+fn v5_36_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
+    // use v5.36 enables both strict vars (undeclared vars) and strict subs (barewords).
+    let code = r#"
+use v5.36;
+print $unknown_var;
+print FOO;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
+        "use v5.36 should enable strict vars — $unknown_var should be flagged"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
+        "use v5.36 should enable strict subs — bareword FOO should be flagged"
     );
     Ok(())
 }

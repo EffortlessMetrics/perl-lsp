@@ -28,16 +28,25 @@ use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("say", 5, 10),
     ("state", 5, 10),
+    // switch: the feature bundle name for given/when/default constructs (Perl 5.10+)
+    ("switch", 5, 10),
     ("postfix_deref", 5, 20),
+    ("try", 5, 34),
     // signatures: experimental since v5.20 but only stable-bundled at v5.36.
     // We use 5.36 as the effective minimum to match features_enabled_by_version,
     // preventing false-positive warnings on `use v5.20` files that rely on the
     // experimental pragma (`use feature 'signatures'`).
     ("signatures", 5, 36),
-    ("try", 5, 34),
+    // defer block: experimental since v5.36.
+    // Detected only when the AST matches the parser's `defer { ... }` shape,
+    // not for arbitrary helpers/imports named `defer`.
+    ("defer", 5, 36),
     ("class", 5, 38),
     ("field", 5, 38),
 ];
+
+const GIVEN_WHEN_DEPRECATION_VERSION: PerlVersion = PerlVersion::new(5, 38);
+const GIVEN_WHEN_REMOVAL_VERSION: PerlVersion = PerlVersion::new(5, 42);
 
 /// Check for Perl version compatibility issues.
 ///
@@ -108,6 +117,23 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             }
 
+            // `given` / `when` / `default` — deprecated in v5.38 and removed in v5.42.
+            NodeKind::Given { .. } | NodeKind::When { .. } | NodeKind::Default { .. } => {
+                if declared_version >= GIVEN_WHEN_REMOVAL_VERSION {
+                    diagnostics.push(make_given_when_default_diagnostic(
+                        n,
+                        declared_version,
+                        DiagnosticSeverity::Error,
+                    ));
+                } else if declared_version >= GIVEN_WHEN_DEPRECATION_VERSION {
+                    diagnostics.push(make_given_when_default_diagnostic(
+                        n,
+                        declared_version,
+                        DiagnosticSeverity::Warning,
+                    ));
+                }
+            }
+
             // `try { } catch { }` — requires v5.34
             NodeKind::Try { .. } => {
                 if !effective_features.contains(&"try") {
@@ -121,6 +147,41 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 if !effective_features.contains(&"say") {
                     let min = feature_min_version("say");
                     diagnostics.push(make_diagnostic(n, "say", declared_version, min));
+                }
+            }
+
+            // `defer { }` block — requires v5.36 (`use feature 'defer'`).
+            // The parser currently models this as a FunctionCall with a single
+            // block argument. Ordinary helper calls named `defer` should not
+            // trigger PL900.
+            NodeKind::FunctionCall { name, args } if is_defer_feature_usage(name, args) => {
+                if !effective_features.contains(&"defer") {
+                    let min = feature_min_version("defer");
+                    diagnostics.push(make_diagnostic(n, "defer", declared_version, min));
+                }
+            }
+
+            // `given ($x) { ... }` — requires v5.10 (`use feature 'switch'`)
+            NodeKind::Given { .. } => {
+                if !effective_features.contains(&"switch") {
+                    let min = feature_min_version("switch");
+                    diagnostics.push(make_diagnostic(n, "given", declared_version, min));
+                }
+            }
+
+            // `when ($pat) { ... }` — requires v5.10 (`use feature 'switch'`)
+            NodeKind::When { .. } => {
+                if !effective_features.contains(&"switch") {
+                    let min = feature_min_version("switch");
+                    diagnostics.push(make_diagnostic(n, "when", declared_version, min));
+                }
+            }
+
+            // `default { ... }` — requires v5.10 (`use feature 'switch'`)
+            NodeKind::Default { .. } => {
+                if !effective_features.contains(&"switch") {
+                    let min = feature_min_version("switch");
+                    diagnostics.push(make_diagnostic(n, "default", declared_version, min));
                 }
             }
 
@@ -169,12 +230,80 @@ fn feature_min_version(feature: &str) -> (u32, u32) {
         .unwrap_or((5, 0))
 }
 
+/// Return `true` when a node represents the `defer { ... }` feature form.
+fn is_defer_feature_usage(name: &str, args: &[Node]) -> bool {
+    if name != "defer" || args.len() != 1 {
+        return false;
+    }
+
+    matches!(args.first().map(|arg| &arg.kind), Some(NodeKind::Block { .. }))
+}
+
 /// Build a PL900 diagnostic for a version-incompatible feature use.
 fn make_diagnostic(
     node: &Node,
     display: &str,
     declared_version: PerlVersion,
     min_version: (u32, u32),
+) -> Diagnostic {
+    make_diagnostic_with_details(
+        node,
+        display,
+        declared_version,
+        min_version,
+        DiagnosticSeverity::Warning,
+        Some(format!(
+            "Update 'use v{}.{}' to 'use v{}.{}' or add 'use feature \"{}\";'",
+            declared_version.major, declared_version.minor, min_version.0, min_version.1, display,
+        )),
+    )
+}
+
+fn make_given_when_default_diagnostic(
+    node: &Node,
+    declared_version: PerlVersion,
+    severity: DiagnosticSeverity,
+) -> Diagnostic {
+    let (message, min_version) = match severity {
+        DiagnosticSeverity::Error => (
+            format!(
+                "'given/when/default' was removed in Perl v5.42; declared version is v{}.{}",
+                declared_version.major, declared_version.minor
+            ),
+            (5, 42),
+        ),
+        _ => (
+            format!(
+                "'given/when/default' is deprecated starting in Perl v5.38; declared version is v{}.{}",
+                declared_version.major, declared_version.minor
+            ),
+            (5, 38),
+        ),
+    };
+
+    Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity,
+        code: Some(DiagnosticCode::VersionIncompatFeature.as_str().to_string()),
+        message,
+        related_information: vec![],
+        tags: vec![],
+        suggestion: Some(format!(
+            "Refactor `given` / `when` / `default` to `if` / `elsif` or another supported control-flow form; this feature is {} in v{}.{}.",
+            if severity == DiagnosticSeverity::Error { "removed" } else { "deprecated" },
+            min_version.0,
+            min_version.1
+        )),
+    }
+}
+
+fn make_diagnostic_with_details(
+    node: &Node,
+    display: &str,
+    declared_version: PerlVersion,
+    min_version: (u32, u32),
+    severity: DiagnosticSeverity,
+    suggestion: Option<String>,
 ) -> Diagnostic {
     let message = format!(
         "'{}' requires Perl v{}.{}+; declared version is v{}.{}",
@@ -183,14 +312,11 @@ fn make_diagnostic(
 
     Diagnostic {
         range: (node.location.start, node.location.end),
-        severity: DiagnosticSeverity::Warning,
+        severity,
         code: Some(DiagnosticCode::VersionIncompatFeature.as_str().to_string()),
         message,
         related_information: vec![],
         tags: vec![],
-        suggestion: Some(format!(
-            "Update 'use v{}.{}' to 'use v{}.{}' or add 'use feature \"{}\";'",
-            declared_version.major, declared_version.minor, min_version.0, min_version.1, display,
-        )),
+        suggestion,
     }
 }

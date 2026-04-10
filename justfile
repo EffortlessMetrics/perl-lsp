@@ -2037,6 +2037,13 @@ publish-release VERSION *ARGS="":
 publish-new-crates:
     bash scripts/publish-new-crates-manually.sh
 
+# Check that the hand-maintained publish allowlist ([workspace.metadata.publish.allow])
+# matches the set of crates that cargo metadata considers publishable.
+# Run this after adding a new crate to catch drift before pushing.
+publish-allowlist-check:
+    cargo metadata --format-version=1 --no-deps \
+      | python3 scripts/publish-topo.py --check-drift
+
 # Dry-run publish gate: package every allowlisted crate in topological order.
 # Mirrors the dev-dep strip and packaging steps from publish-crates.yml.
 # Runs automatically in CI on every PR that touches Cargo.toml.
