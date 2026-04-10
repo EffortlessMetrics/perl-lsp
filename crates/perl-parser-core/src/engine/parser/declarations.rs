@@ -206,10 +206,12 @@ impl<'a> Parser<'a> {
             (None, None)
         };
 
-        // Parse optional attributes first (they come before signature in modern Perl)
-        let attributes = self.parse_declaration_attributes()?;
+        // Parse optional attributes before the prototype/signature.
+        // Perl allows both `sub foo :lvalue ($)` and `sub foo ($) :lvalue`,
+        // so we collect attributes on both sides and merge them.
+        let mut attributes = self.parse_declaration_attributes()?;
 
-        // Parse optional prototype or signature after attributes
+        // Parse optional prototype or signature after leading attributes.
         let (prototype, signature) = if self.peek_kind() == Some(TokenKind::LeftParen) {
             // Look ahead to determine if this is a prototype or signature
             if self.is_likely_prototype()? {
@@ -232,6 +234,11 @@ impl<'a> Parser<'a> {
         } else {
             (None, None)
         };
+
+        // Parse optional trailing attributes after the prototype/signature.
+        if self.peek_kind() == Some(TokenKind::Colon) {
+            attributes.extend(self.parse_declaration_attributes()?);
+        }
 
         // Check for forward declaration: sub foo; or sub foo(@); or sub foo :method;
         // Forward declarations have no block body — they end with a semicolon
