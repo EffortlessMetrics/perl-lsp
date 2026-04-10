@@ -107,10 +107,10 @@ fn collect_checklib_arguments(args: &[Node]) -> (Vec<String>, Vec<String>) {
         match key.as_str() {
             "lib" | "libpath" => {
                 if index + 1 < args.len() {
-                    match key.as_str() {
-                        "lib" => libs.extend(extract_literal_strings(&args[index + 1])),
-                        "libpath" => libpaths.extend(extract_literal_strings(&args[index + 1])),
-                        _ => unreachable!(),
+                    if key == "lib" {
+                        libs.extend(extract_literal_strings(&args[index + 1]));
+                    } else {
+                        libpaths.extend(extract_literal_strings(&args[index + 1]));
                     }
                     index += 2;
                     continue;

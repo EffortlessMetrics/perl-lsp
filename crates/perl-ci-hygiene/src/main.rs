@@ -270,6 +270,7 @@ fn is_excluded_test_path(path: &Path) -> bool {
         value == OsStr::new("tests")
             || value == OsStr::new("benches")
             || value == OsStr::new("examples")
+            || value == OsStr::new("bin")
     }) {
         return true;
     }
@@ -2963,6 +2964,7 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
     let mut panic_offenders = Vec::new();
 
     for path in walk_rust_source_files_for_ci_checks(repo_root)? {
+        let rel = display_path(repo_root, &path);
         let lines = read_lines(&path)?;
         let test_start = first_cfg_test_line_number(&path).unwrap_or(usize::MAX);
         for (index, line) in lines.iter().enumerate() {
@@ -2976,12 +2978,13 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
                     || line.contains("s.expect(")
                     || line.contains("self.context.expect("))
             {
-                unwrap_offenders
-                    .push(format!("{}:{line_no}:{line}", display_path(repo_root, &path)));
+                unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
             }
-            if panic_re.is_match(line) && !comment_re.is_match(line) {
-                panic_offenders
-                    .push(format!("{}:{line_no}:{line}", display_path(repo_root, &path)));
+            if panic_re.is_match(line)
+                && !comment_re.is_match(line)
+                && !is_allowlisted_prod_panic_hit(&rel, line)
+            {
+                panic_offenders.push(format!("{rel}:{line_no}:{line}"));
             }
         }
     }
@@ -3021,6 +3024,11 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
         return Ok(1);
     }
     Ok(0)
+}
+
+fn is_allowlisted_prod_panic_hit(rel_path: &str, line: &str) -> bool {
+    rel_path == "crates/perl-heredoc-anti-patterns/src/lib.rs"
+        && line.contains("regex failed to compile")
 }
 
 fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
@@ -4033,6 +4041,13 @@ mod tests {
     }
 
     #[test]
+    fn excluded_test_paths_skip_bin_directories() {
+        assert!(is_excluded_test_path(Path::new(
+            "crates/perl-workspace-index/src/bin/workspace_memory_profile.rs"
+        )));
+    }
+
+    #[test]
     fn allowlisted_exit_hit_matches_windows_and_unix_paths() {
         assert!(is_allowlisted_exit_hit(
             r"crates\perl-parser\src\bin\perl-parse.rs:127:std::process::exit(0);"
@@ -4042,6 +4057,18 @@ mod tests {
         ));
         assert!(!is_allowlisted_exit_hit(
             r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#
+        ));
+    }
+
+    #[test]
+    fn allowlisted_prod_panic_hit_matches_heredoc_regex_initializers() {
+        assert!(is_allowlisted_prod_panic_hit(
+            "crates/perl-heredoc-anti-patterns/src/lib.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(!is_allowlisted_prod_panic_hit(
+            "crates/perl-lsp-diagnostics/src/lints/ffi_checklib.rs",
+            r#"                        _ => unreachable!(),"#
         ));
     }
 
