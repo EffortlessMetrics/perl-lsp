@@ -194,12 +194,31 @@ fn default_search_paths() -> Vec<PathBuf> {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        paths.extend(
-            ["/lib", "/usr/lib", "/usr/local/lib", "/opt/local/lib"].iter().map(PathBuf::from),
-        );
+        paths.extend(common_unix_search_paths().into_iter().map(PathBuf::from));
     }
 
     dedup_paths(&mut paths);
+    paths
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn common_unix_search_paths() -> Vec<&'static str> {
+    let mut paths =
+        vec!["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib", "/opt/local/lib"];
+
+    #[cfg(target_arch = "x86_64")]
+    paths.extend(["/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu"]);
+    #[cfg(target_arch = "aarch64")]
+    paths.extend(["/lib/aarch64-linux-gnu", "/usr/lib/aarch64-linux-gnu"]);
+    #[cfg(target_arch = "arm")]
+    paths.extend(["/lib/arm-linux-gnueabihf", "/usr/lib/arm-linux-gnueabihf"]);
+    #[cfg(target_arch = "x86")]
+    paths.extend(["/lib/i386-linux-gnu", "/usr/lib/i386-linux-gnu"]);
+    #[cfg(target_arch = "powerpc64")]
+    paths.extend(["/lib/powerpc64le-linux-gnu", "/usr/lib/powerpc64le-linux-gnu"]);
+    #[cfg(target_arch = "s390x")]
+    paths.extend(["/lib/s390x-linux-gnu", "/usr/lib/s390x-linux-gnu"]);
+
     paths
 }
 
@@ -379,6 +398,23 @@ mod tests {
         assert!(
             diags.is_empty(),
             "FFI::Platypus::Bundle should participate in the same CheckLib hinting, got: {diags:?}"
+        );
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn default_search_paths_include_common_unix_multiarch_roots() {
+        let search_paths = default_search_paths();
+
+        assert!(
+            search_paths.contains(&PathBuf::from("/usr/lib64")),
+            "expected default search paths to include /usr/lib64, got: {search_paths:?}"
+        );
+
+        #[cfg(target_arch = "x86_64")]
+        assert!(
+            search_paths.contains(&PathBuf::from("/usr/lib/x86_64-linux-gnu")),
+            "expected default search paths to include Debian/Ubuntu x86_64 multiarch dirs"
         );
     }
 }
