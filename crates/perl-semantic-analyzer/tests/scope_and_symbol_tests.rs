@@ -2991,3 +2991,221 @@ say $x, " ", $y;
     );
     Ok(())
 }
+
+// ===========================================================================
+// Try/catch variable binding — extended coverage (#3541)
+// ===========================================================================
+
+/// The issue example uses $err, not $e.  Both must be handled identically.
+#[test]
+fn scope_try_catch_err_variable_is_bound() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($err) {
+    print $err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$err"),
+        "catch variable $err must not be reported as undeclared: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$err"),
+        "used catch variable $err must not be reported as unused: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// use v5.34 enables try/catch without an explicit use feature 'try'.
+/// The scope analyzer must bind the catch variable in both cases.
+#[test]
+fn scope_try_catch_v534_pragma_binds_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use v5.34;
+try {
+    die "error";
+} catch ($err) {
+    print $err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$err"),
+        "catch variable must be bound when enabled via use v5.34: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Multiple catch blocks must each bind their own variable independently.
+#[test]
+fn scope_try_multiple_catch_blocks_each_bind_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($first_err) {
+    print $first_err;
+} catch ($second_err) {
+    print $second_err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$first_err"),
+        "first catch variable must not be undeclared: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$second_err"),
+        "second catch variable must not be undeclared: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Each catch block's variable must be invisible in the other's block.
+#[test]
+fn scope_try_catch_variables_do_not_cross_contaminate() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($first_err) {
+    print $first_err;
+} catch ($second_err) {
+    print $first_err;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$first_err"),
+        "$first_err used in second catch block should be undeclared: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Bare catch (no variable) must not crash and must not emit any diagnostic.
+#[test]
+fn scope_try_bare_catch_no_variable_no_crash() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch {
+    print "caught";
+}
+"#;
+    // Must not panic; must not produce any undeclared-variable issue
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable),
+        "bare catch should not produce undeclared diagnostics: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// The finally block must run in the outer scope, not the catch scope.
+/// Variables declared inside a catch must not bleed into finally.
+#[test]
+fn scope_try_catch_variable_not_visible_in_finally() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "error";
+} catch ($e) {
+    print $e;
+} finally {
+    print $e;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$e"),
+        "catch variable $e must not be visible in finally block: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// Nested try/catch: the inner catch variable must be visible only within the
+/// inner catch block, and the outer catch variable within its own block.
+#[test]
+fn scope_nested_try_catch_inner_shadows_outer() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    try {
+        die "inner";
+    } catch ($inner) {
+        print $inner;
+    }
+} catch ($outer) {
+    print $outer;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$inner"),
+        "inner catch variable must be declared in inner catch scope: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$outer"),
+        "outer catch variable must be declared in outer catch scope: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+/// The catch variable range must point into the source at the catch parameter,
+/// not at an arbitrary offset, so that LSP diagnostics display correctly.
+#[test]
+fn scope_try_catch_variable_range_points_to_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($exception) {
+    print "handled";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$exception")
+        .ok_or("expected unused catch-variable diagnostic for $exception")?;
+    assert_eq!(
+        &code[unused.range.0..unused.range.1],
+        "$exception",
+        "the diagnostic range must span exactly the catch parameter text"
+    );
+    Ok(())
+}
