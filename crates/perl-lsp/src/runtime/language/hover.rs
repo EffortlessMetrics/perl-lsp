@@ -85,11 +85,17 @@ impl LspServer {
 
                         // Check for `use Module` at this offset first
                         if let Some(module_name) = Self::find_use_module_at_offset(ast, offset) {
-                            HoverExtracted::UseModule(
-                                module_name,
-                                doc.text.clone(),
-                                uri.to_string(),
-                            )
+                            // If the module is a known pragma, return pragma docs immediately
+                            // without doing module file resolution.
+                            if let Some(pragma_hover) = Self::build_pragma_hover(&module_name) {
+                                HoverExtracted::Complete(pragma_hover)
+                            } else {
+                                HoverExtracted::UseModule(
+                                    module_name,
+                                    doc.text.clone(),
+                                    uri.to_string(),
+                                )
+                            }
                         } else if let Some(module_name) =
                             Self::find_with_module_at_offset(ast, offset)
                         {
@@ -794,6 +800,31 @@ impl LspServer {
                 ),
             },
         })
+    }
+
+    /// Build a hover response for a known Perl pragma (e.g. `strict`, `warnings`).
+    ///
+    /// Returns `Some(Value)` when `module_name` is a recognized pragma with inline
+    /// documentation, or `None` when it should fall through to regular module resolution.
+    fn build_pragma_hover(module_name: &str) -> Option<Value> {
+        let doc = crate::semantic::get_pragma_documentation(module_name)?;
+
+        let version_line =
+            doc.version_required.map(|v| format!("\n\n**Requires**: Perl {v}")).unwrap_or_default();
+
+        let perldoc_link =
+            format!("[perldoc {module_name}](https://perldoc.perl.org/{module_name})");
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**Pragma: `{module_name}`**\n\n_{summary}_\n\n{description}{version_line}\n\n{perldoc_link}",
+                    summary = doc.summary,
+                    description = doc.description,
+                ),
+            },
+        }))
     }
 
     /// Extract POD documentation from a module file and format it for hover display.
