@@ -351,6 +351,8 @@ pub enum AsyncFrameworkKind {
     IOAsync,
     /// `use Mojo::Redis;`
     MojoRedis,
+    /// `use Mojo::Pg;`
+    MojoPg,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1614,6 +1616,7 @@ impl SymbolExtractor {
             Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
             Some(AsyncFrameworkKind::IOAsync) => ("IO::Async", "IO::Async", false),
             Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis", true),
+            Some(AsyncFrameworkKind::MojoPg) => ("Mojo::Pg", "Mojo::Pg", true),
             None => return false,
         };
 
@@ -1709,6 +1712,12 @@ impl SymbolExtractor {
         if module == "Mojo::Redis" {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::MojoRedis);
+            return;
+        }
+
+        if module == "Mojo::Pg" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoPg);
             return;
         }
 

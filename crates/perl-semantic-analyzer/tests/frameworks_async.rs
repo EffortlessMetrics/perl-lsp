@@ -116,6 +116,42 @@ my $redis = Mojo::Redis->new;
 }
 
 #[test]
+fn mojo_pg_use_synthesizes_framework_class_symbol() {
+    let code = r#"
+use Mojo::Pg;
+
+my $pg = Mojo::Pg->new;
+my $mode = Mojo::Pg->strict_mode;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Mojo::Pg", SymbolKind::Class),
+        "expected Mojo::Pg class symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "Mojo::Pg", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=Mojo::Pg"),
+        "expected `framework=Mojo::Pg` on Mojo::Pg, got {attrs:?}"
+    );
+}
+
+#[test]
+fn mojo_pg_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $pg = Mojo::Pg->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "Mojo::Pg", SymbolKind::Class),
+        "did not expect Mojo::Pg class synthesis without `use Mojo::Pg`"
+    );
+}
+
+#[test]
 fn future_use_synthesizes_class_symbol_for_method_calls() {
     let code = r#"
 use Future;
