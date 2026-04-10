@@ -1039,7 +1039,10 @@ fn unused_variable_used_via_dynamic_method_deref_forms() -> Result<(), Box<dyn s
     let code = r#"
 use strict;
 my $obj = bless {}, 'Foo';
+my $method = 'method';
+$obj->${method}();
 $obj->${\'method'}();
+$obj->$method();
 "#;
     let issues = scope_issues_strict(code);
 
@@ -1049,6 +1052,14 @@ $obj->${\'method'}();
                 && i.variable_name.contains("obj")
         }),
         "$obj used via dynamic method deref should not be flagged: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("method")
+        }),
+        "$method used via dynamic method selection should not be flagged: {:?}",
         issues
     );
 

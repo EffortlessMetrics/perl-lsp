@@ -612,8 +612,9 @@ impl ScopeAnalyzer {
                 // Normalize explicit dereference/container syntax before lookup so that
                 // `@$ref` resolves to `$ref`, while direct subscripting keeps using the
                 // container sigil that the syntax implies.
-                let (lookup_sigil, lookup_name) =
-                    self.resolve_variable_use_target(node, ancestors).unwrap_or((sigil, name));
+                let (lookup_sigil, lookup_name) = self
+                    .resolve_variable_use_target(node, ancestors, context)
+                    .unwrap_or((sigil, name));
                 let (variable_used, is_initialized) =
                     scope.use_variable_parts(lookup_sigil, lookup_name);
 
@@ -663,6 +664,25 @@ impl ScopeAnalyzer {
                     if is_declaration_capable_builtin(name) {
                         self.mark_builtin_declaration_arg_consumed(arg, scope);
                     }
+                }
+                ancestors.pop();
+            }
+            NodeKind::MethodCall { object, method, args } => {
+                ancestors.push(node);
+                self.analyze_node(object, scope, ancestors, issues, context);
+                if let Some((sigil, var_name)) = self.extract_method_name_variable(method) {
+                    self.record_variable_use(
+                        scope,
+                        strict_vars_mode,
+                        context,
+                        issues,
+                        node,
+                        sigil,
+                        var_name,
+                    );
+                }
+                for arg in args {
+                    self.analyze_node(arg, scope, ancestors, issues, context);
                 }
                 ancestors.pop();
             }
@@ -1035,6 +1055,7 @@ impl ScopeAnalyzer {
         &self,
         node: &'a Node,
         ancestors: &[&'a Node],
+        context: &AnalysisContext<'_>,
     ) -> Option<(&'a str, &'a str)> {
         let NodeKind::Variable { sigil, name } = &node.kind else {
             return None;
@@ -1052,7 +1073,13 @@ impl ScopeAnalyzer {
         {
             match op.as_str() {
                 "[]" => return Some(("@", name)),
-                "{}" if self.is_dynamic_method_deref_rhs(right) => return Some(("$", name)),
+                "->[]" | "->{}" => return Some(("$", name)),
+                "{}" if self.is_dynamic_method_deref_rhs(right)
+                    || self.is_dynamic_method_deref_context(parent, ancestors)
+                    || self.is_braced_dynamic_method_call(parent, context) =>
+                {
+                    return Some(("$", name));
+                }
                 "{}" => return Some(("%", name)),
                 _ => {}
             }
@@ -1073,6 +1100,16 @@ impl ScopeAnalyzer {
         Some((sigil, var_name))
     }
 
+    fn extract_method_name_variable<'a>(&self, method: &'a str) -> Option<(&'a str, &'a str)> {
+        self.extract_name_like_variable(method).or_else(|| {
+            let inner = method.strip_prefix("${")?.strip_suffix('}')?;
+            if inner.contains("::") || !self.looks_like_variable_name(inner) {
+                return None;
+            }
+            Some(("$", inner))
+        })
+    }
+
     fn looks_like_variable_name(&self, name: &str) -> bool {
         matches!(
             name.chars().next(),
@@ -1090,6 +1127,34 @@ impl ScopeAnalyzer {
                         NodeKind::String { .. } | NodeKind::Identifier { .. }
                     )
         )
+    }
+
+    fn is_dynamic_method_deref_context<'a>(&self, node: &'a Node, ancestors: &[&'a Node]) -> bool {
+        let Some(grandparent) = ancestors.iter().rev().nth(1).copied() else {
+            return false;
+        };
+
+        match &grandparent.kind {
+            NodeKind::MethodCall { object, .. } => std::ptr::eq(object.as_ref(), node),
+            NodeKind::FunctionCall { name, args } if name == "->()" => {
+                args.first().is_some_and(|arg| std::ptr::eq(arg, node))
+            }
+            _ => false,
+        }
+    }
+
+    fn is_braced_dynamic_method_call(&self, node: &Node, context: &AnalysisContext<'_>) -> bool {
+        let Some(selector_text) = context.code.get(node.location.start..node.location.end) else {
+            return false;
+        };
+        if !selector_text.contains("->${") {
+            return false;
+        }
+
+        let Some(suffix) = context.code.get(node.location.end..) else {
+            return false;
+        };
+        suffix.trim_start().starts_with("()")
     }
 
     fn record_variable_use(
