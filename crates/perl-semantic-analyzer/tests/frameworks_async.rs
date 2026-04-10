@@ -220,3 +220,59 @@ my $future = Future::XS->new;
         "did not expect Future::XS class synthesis without `use Future::XS`"
     );
 }
+
+#[test]
+fn promise_use_synthesizes_class_symbol_for_method_calls() {
+    let code = r#"
+use Promise;
+
+my $promise = Promise->new(sub { return 1 });
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Promise", SymbolKind::Class),
+        "expected Promise class symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "Promise", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=Promise"),
+        "expected `framework=Promise` on Promise, got {attrs:?}"
+    );
+}
+
+#[test]
+fn promise_xs_use_synthesizes_class_symbol_for_method_calls() {
+    let code = r#"
+use Promise::XS;
+
+my $promise = Promise::XS->new(sub { return 1 });
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Promise::XS", SymbolKind::Class),
+        "expected Promise::XS class symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "Promise::XS", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=Promise::XS"),
+        "expected `framework=Promise::XS` on Promise::XS, got {attrs:?}"
+    );
+}
+
+#[test]
+fn promise_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $promise = Promise->new(sub { return 1 });
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "Promise", SymbolKind::Class),
+        "did not expect Promise class synthesis without `use Promise`"
+    );
+}
