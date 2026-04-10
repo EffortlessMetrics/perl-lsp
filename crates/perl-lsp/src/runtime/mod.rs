@@ -276,6 +276,13 @@ pub struct LspServer {
     /// Ensures the missing perlcritic warning is only surfaced once.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) perlcritic_missing_warning_shown: AtomicBool,
+    /// Deduplication set for workspace-scoped Perl::Critic warning notifications.
+    ///
+    /// Keys are stable identifiers (for example, `missing-binary` or
+    /// `missing-profile:/abs/path`) so repeated diagnostic cycles do not spam
+    /// users with identical `window/showMessage` warnings.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) critic_workspace_warnings_sent: Mutex<std::collections::HashSet<String>>,
     /// Optional AI inline-completion backend.
     ///
     /// When `Some`, the `handle_inline_completion` handler will attempt

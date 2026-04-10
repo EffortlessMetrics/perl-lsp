@@ -204,6 +204,52 @@ export class OnboardingManager {
     }
   }
 
+  /** Check perlcritic availability/profile when perl.perlcritic.enabled is true. */
+  async checkPerlcriticSetup(): Promise<HealthCheckResult> {
+    const label = 'perlcritic';
+    const perlcriticConfig = vscode.workspace.getConfiguration('perl').get<any>('perlcritic', {});
+    const enabled = Boolean(perlcriticConfig?.enabled);
+    const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+
+    if (!enabled) {
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: 'Perl::Critic is disabled',
+      };
+    }
+
+    if (profile && !fs.existsSync(profile)) {
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Warning,
+        detail: `Configured perlcritic profile was not found: ${profile}`,
+      };
+    }
+
+    try {
+      await this._execCheck('perlcritic', ['--version']);
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: 'perlcritic found',
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Warning,
+        detail:
+          `Perl::Critic is enabled but perlcritic was not found on PATH. (${msg}) ` +
+          'Install via: cpanm Perl::Critic',
+      };
+    }
+  }
+
   /**
    * Check whether the LSP binary has been downloaded / located.
    *
@@ -249,9 +295,10 @@ export class OnboardingManager {
   ): Promise<HealthCheckResult[]> {
     this.outputChannel.appendLine('[onboarding] Running setup health check...');
 
-    const [perlResult, perltidyResult] = await Promise.all([
+    const [perlResult, perltidyResult, perlcriticResult] = await Promise.all([
       this.checkPerlInstalled(),
       this.checkPerltidyInstalled(),
+      this.checkPerlcriticSetup(),
     ]);
 
     const binaryResult = this.checkBinaryDownloaded(serverPath);
@@ -259,6 +306,7 @@ export class OnboardingManager {
     const results: HealthCheckResult[] = [
       perlResult,
       perltidyResult,
+      perlcriticResult,
       binaryResult,
     ];
 

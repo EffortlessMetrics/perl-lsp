@@ -68,23 +68,74 @@ fn test_a_violations_appear_in_pull_diagnostics_when_enabled() {
     let result = pull_diagnostics(&server, uri, "print 'hello';\n");
 
     // There must be at least one diagnostic with code
-    // "PC:TestingAndDebugging::RequireUseStrict" and severity 2 (Warning).
+    // "TestingAndDebugging::RequireUseStrict" and severity 2 (Warning).
     //
     // The pull-diagnostics response has the shape:
     //   { "kind": "full", "items": [ { "code": "...", "severity": N, ... } ], "resultId": "..." }
     let diags = result["items"].as_array().cloned().unwrap_or_default();
 
     let found = diags.iter().any(|d| {
-        d["code"].as_str() == Some("PC:TestingAndDebugging::RequireUseStrict")
+        d["code"].as_str() == Some("TestingAndDebugging::RequireUseStrict")
             && d["severity"].as_u64() == Some(2)
     });
 
     assert!(
         found,
         "Expected a Warning diagnostic with code \
-         PC:TestingAndDebugging::RequireUseStrict in the pull response; \
+         TestingAndDebugging::RequireUseStrict in the pull response; \
          got: {result}"
     );
+}
+
+#[test]
+fn test_a1_severity_five_maps_to_error() {
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 5, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(
+        b"test.pl:2:1:5:InputOutput::RequireThreeArgOpen:Use three-arg open\n".to_vec(),
+    ));
+    server.test_install_mock_critic_runtime(runtime);
+    server.test_bypass_perlcritic_command_check();
+
+    #[cfg(windows)]
+    let uri = "file:///C:/tmp/test_sev5.pl";
+    #[cfg(not(windows))]
+    let uri = "file:///tmp/test_sev5.pl";
+
+    let result = pull_diagnostics(&server, uri, "open FH, $path;\n");
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+    assert!(diags.iter().any(|d| {
+        d["code"].as_str() == Some("InputOutput::RequireThreeArgOpen")
+            && d["severity"].as_u64() == Some(1)
+    }));
+}
+
+#[test]
+fn test_a2_severity_one_maps_to_hint() {
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 1, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(
+        b"test.pl:2:1:1:InputOutput::ProhibitBarewordFileHandles:Bareword filehandle 'FH'\n"
+            .to_vec(),
+    ));
+    server.test_install_mock_critic_runtime(runtime);
+    server.test_bypass_perlcritic_command_check();
+
+    #[cfg(windows)]
+    let uri = "file:///C:/tmp/test_sev1.pl";
+    #[cfg(not(windows))]
+    let uri = "file:///tmp/test_sev1.pl";
+
+    let result = pull_diagnostics(&server, uri, "open FH, $path;\n");
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+    assert!(diags.iter().any(|d| {
+        d["code"].as_str() == Some("InputOutput::ProhibitBarewordFileHandles")
+            && d["severity"].as_u64() == Some(4)
+    }));
 }
 
 // ── Test B ────────────────────────────────────────────────────────────────────
@@ -145,10 +196,8 @@ fn test_c_graceful_skip_when_perlcritic_not_installed() {
     let result = pull_diagnostics(&server, uri, "use strict;\n");
 
     let diags = result["items"].as_array().cloned().unwrap_or_default();
-    let perlcritic_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d["code"].as_str().map(|c| c.starts_with("PC:")).unwrap_or(false))
-        .collect();
+    let perlcritic_diags: Vec<_> =
+        diags.iter().filter(|d| d["code"].as_str().is_some_and(|c| c.contains("::"))).collect();
 
     assert_eq!(
         perlcritic_diags.len(),

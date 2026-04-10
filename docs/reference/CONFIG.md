@@ -88,7 +88,7 @@ your-project/
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `perlcritic` | `boolean` | (unset) | Enable perlcritic diagnostics. When unset, the server default (`false`) applies. Requires `perlcritic` installed on the system. |
-| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. 1 = most severe (gentle), 5 = everything (brutal). Must be in the range 1–5; values outside this range are a parse error. |
+| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. Perl::Critic uses `1 = least severe` and `5 = most severe`, so `1` reports everything while `5` reports only the most severe violations. Must be in the range 1–5; values outside this range are a parse error. |
 
 #### `[features]` — LSP Feature Toggles
 
@@ -120,7 +120,7 @@ include_paths = ["lib", "local/lib/perl5"]
 # Enable perlcritic linting (opt-in; requires perlcritic installed)
 perlcritic = false
 
-# Minimum severity to report: 1 (most severe) to 5 (everything)
+# Minimum severity to report: 1 (everything) to 5 (most severe only)
 perlcritic_severity = 3
 
 [features]
@@ -402,9 +402,9 @@ is not installed on the system.
 | Type | `integer` (1–5) |
 | Default | `3` |
 
-Minimum severity level to report. `1` = most severe (Brutal), `5` = everything
-(Gentle). Values are clamped to the valid range. Equivalent to
-`perlcritic --severity N`.
+Minimum severity level to report. Perl::Critic uses `1` for least severe
+violations and `5` for most severe violations. Values are clamped to the
+valid range. Equivalent to `perlcritic --severity N`.
 
 #### `perl.perlcritic.profile`
 

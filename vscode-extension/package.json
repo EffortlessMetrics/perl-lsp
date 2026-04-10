@@ -309,8 +309,8 @@
             "default": false,
             "scope": "resource",
             "order": 40,
-            "description": "Enable Perl::Critic integration from the VS Code extension. This setting is synchronized to the server when you run PerlCritic or change the setting.",
-            "markdownDescription": "Enable `Perl::Critic` integration from the VS Code extension. This setting is synchronized to the server when you run PerlCritic or change the setting."
+            "description": "Enable external Perl::Critic diagnostics from the VS Code extension.",
+            "markdownDescription": "Enable external `perlcritic` diagnostics from the VS Code extension."
           },
           "perl-lsp.perlcritic.severity": {
             "type": "number",
@@ -331,16 +331,16 @@
             "default": 3,
             "scope": "resource",
             "order": 41,
-            "description": "Perl::Critic severity threshold. Lower numbers are more permissive; higher numbers are stricter.",
-            "markdownDescription": "Perl::Critic severity threshold. Lower numbers are more permissive; higher numbers are stricter."
+            "description": "Perl::Critic minimum severity (1 = least severe/reports more, 5 = most severe/reports less).",
+            "markdownDescription": "Perl::Critic minimum severity (`1` = least severe/reports more, `5` = most severe/reports less)."
           },
           "perl-lsp.perlcritic.profile": {
             "type": "string",
             "default": "",
             "scope": "resource",
             "order": 42,
-            "description": "Path to a .perlcriticrc profile file used by the extension when synchronizing critic settings.",
-            "markdownDescription": "Path to a `.perlcriticrc` profile file used by the extension when synchronizing critic settings."
+            "description": "Optional path to a .perlcriticrc profile file used by the extension when synchronizing critic settings.",
+            "markdownDescription": "Optional path to a `.perlcriticrc` profile file used by the extension when synchronizing critic settings."
           },
           "perl-lsp.perlcritic.theme": {
             "type": "string",
