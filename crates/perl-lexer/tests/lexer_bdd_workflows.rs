@@ -155,3 +155,28 @@ fn scenario_hash_subscript_context_suppresses_quote_op_detection() {
     assert!(tokens.iter().any(|t| matches!(t.token_type, TokenType::LeftBrace)));
     assert!(tokens.iter().any(|t| matches!(t.token_type, TokenType::RightBrace)));
 }
+
+#[test]
+fn scenario_sigil_brace_sequences_split_into_sigil_and_left_brace() {
+    let scenario = BddScenario::new("sigil_brace_boundary");
+
+    scenario
+        .given("sigil-plus-brace sequences that begin scalar, array, and hash dereference forms");
+
+    for input in ["${", "@{", "%{"] {
+        scenario.when(&format!("{input:?} is tokenized"));
+        let tokens = collect_tokens(input);
+
+        scenario.then("the sigil remains separate from the following left brace");
+        assert!(
+            matches!(tokens.first().map(|token| &token.token_type), Some(TokenType::Identifier(_))),
+            "expected leading sigil token for {input:?}, got {:?}",
+            tokens.first().map(|token| &token.token_type)
+        );
+        assert!(
+            matches!(tokens.get(1).map(|token| &token.token_type), Some(TokenType::LeftBrace)),
+            "expected LeftBrace after sigil for {input:?}, got {:?}",
+            tokens.get(1).map(|token| &token.token_type)
+        );
+    }
+}
