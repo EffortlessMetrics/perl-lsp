@@ -1127,6 +1127,98 @@ $arr[0];
     Ok(())
 }
 
+/// Regression test for issue #3338: push @$arrayref does not mark my $arrayref as used.
+///
+/// Verifies that the exact reproducer from the issue report no longer produces a
+/// false "unused variable" diagnostic. Covers string-literal arguments (the original
+/// report), numeric arguments, and both non-strict and strict-mode variants.
+#[test]
+fn issue_3338_push_arrayref_deref_not_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Exact reproducer from issue #3338 — string literal argument
+    let code = r#"
+my $arrayref;
+push @$arrayref, 'item';
+"#;
+    let issues = scope_issues(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        unused,
+        0,
+        "issue #3338: $arrayref used via push @$arrayref should not be unused; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Regression test for issue #3338 under strict mode: push @$arrayref should not
+/// produce UnusedVariable or UndeclaredVariable for a declared scalar ref.
+#[test]
+fn issue_3338_push_arrayref_deref_strict_mode() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $arrayref = [];
+push @$arrayref, 'item';
+push @$arrayref, 'second';
+"#;
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        unused,
+        0,
+        "issue #3338: $arrayref declared and used via push @$arrayref should not be unused under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    let undeclared = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(
+        undeclared,
+        0,
+        "issue #3338: declared $arrayref should not be reported as undeclared under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Regression test for issue #3338: all three primary dereference sigil forms
+/// (`@$ref`, `%$ref`, `$$ref`) should mark the underlying scalar declaration used.
+#[test]
+fn issue_3338_all_deref_sigil_forms_mark_base_used() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $aref = [1, 2, 3];
+my $href = {a => 1};
+my $sref = \"hello";
+
+my @items = @$aref;
+my %copy  = %$href;
+my $val   = $$sref;
+"#;
+    let issues = scope_issues_strict(code);
+
+    for var in &["aref", "href", "sref"] {
+        let unused = issues
+            .iter()
+            .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains(var))
+            .count();
+        assert_eq!(
+            unused,
+            0,
+            "issue #3338: ${} used via deref should not be unused; issues: {:?}",
+            var,
+            issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn unused_variable_used_via_coderef_and_glob_dereference_forms()
 -> Result<(), Box<dyn std::error::Error>> {
