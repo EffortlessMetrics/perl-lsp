@@ -338,7 +338,7 @@ sub process_data {
         for symbol in symbols {
             self.symbol_index
                 .entry(symbol.name.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(symbol);
         }
     }
