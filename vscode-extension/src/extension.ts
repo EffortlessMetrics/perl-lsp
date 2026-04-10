@@ -53,6 +53,240 @@ function serverNotRunningMessage(): string {
         'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
 }
 
+type PerlCriticSettings = {
+    enabled: boolean;
+    severity: number;
+    profile: string;
+    theme: string;
+};
+
+function getPerlCriticSettings(documentUri?: vscode.Uri): PerlCriticSettings {
+    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
+    return {
+        enabled: config.get<boolean>('perlcritic.enabled', false),
+        severity: config.get<number>('perlcritic.severity', 3),
+        profile: config.get<string>('perlcritic.profile', ''),
+        theme: config.get<string>('perlcritic.theme', ''),
+    };
+}
+
+type PerlCriticSyncSettings = {
+    enabled?: boolean;
+    severity?: number;
+    profile?: string;
+};
+
+function inspectPerlCriticOverride(
+    config: vscode.WorkspaceConfiguration,
+    key: string
+): { globalValue?: unknown; workspaceValue?: unknown; workspaceFolderValue?: unknown } | undefined {
+    return config.inspect(key) as {
+        globalValue?: unknown;
+        workspaceValue?: unknown;
+        workspaceFolderValue?: unknown;
+    } | undefined;
+}
+
+function getPerlCriticSyncSettings(
+    documentUri?: vscode.Uri,
+    severityOverride?: number
+): PerlCriticSyncSettings {
+    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
+    const settings: PerlCriticSyncSettings = {};
+
+    const enabled = inspectPerlCriticOverride(config, 'perlcritic.enabled');
+    if (enabled?.globalValue !== undefined ||
+        enabled?.workspaceValue !== undefined ||
+        enabled?.workspaceFolderValue !== undefined) {
+        settings.enabled = config.get<boolean>('perlcritic.enabled', false);
+    }
+
+    const severity = inspectPerlCriticOverride(config, 'perlcritic.severity');
+    if (severityOverride !== undefined) {
+        settings.severity = severityOverride;
+    } else if (severity?.globalValue !== undefined ||
+        severity?.workspaceValue !== undefined ||
+        severity?.workspaceFolderValue !== undefined) {
+        settings.severity = config.get<number>('perlcritic.severity', 3);
+    }
+
+    const profile = inspectPerlCriticOverride(config, 'perlcritic.profile');
+    if (profile?.globalValue !== undefined ||
+        profile?.workspaceValue !== undefined ||
+        profile?.workspaceFolderValue !== undefined) {
+        settings.profile = config.get<string>('perlcritic.profile', '');
+    }
+
+    return settings;
+}
+
+function buildPerlCriticConfiguration(settings: PerlCriticSyncSettings): Record<string, unknown> | undefined {
+    if (
+        settings.enabled === undefined &&
+        settings.severity === undefined &&
+        settings.profile === undefined
+    ) {
+        return undefined;
+    }
+
+    return {
+        settings: {
+            perl: {
+                perlcritic: settings,
+            },
+        },
+    };
+}
+
+function hasExplicitPerlCriticOverrides(documentUri?: vscode.Uri): boolean {
+    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
+    return ['perlcritic.enabled', 'perlcritic.severity', 'perlcritic.profile'].some(key => {
+        const value = config.inspect(key) as {
+            globalValue?: unknown;
+            workspaceValue?: unknown;
+            workspaceFolderValue?: unknown;
+        } | undefined;
+        return Boolean(
+            value &&
+            (value.globalValue !== undefined ||
+                value.workspaceValue !== undefined ||
+                value.workspaceFolderValue !== undefined)
+        );
+    });
+}
+
+export async function syncPerlCriticConfiguration(
+    activeClient: Pick<LanguageClient, 'sendNotification'> | undefined = client,
+    documentUri?: vscode.Uri
+): Promise<void> {
+    if (!activeClient) {
+        return;
+    }
+
+    const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(documentUri));
+    if (payload) {
+        activeClient.sendNotification('workspace/didChangeConfiguration', payload);
+    }
+}
+
+export async function runPerlCriticOnActiveFile(
+    activeClient: Pick<LanguageClient, 'sendRequest' | 'sendNotification'> | undefined = client
+): Promise<void> {
+    const channel = outputChannel ?? vscode.window.createOutputChannel('Perl Language Server');
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        vscode.window.showErrorMessage('No active Perl file to run PerlCritic on');
+        return;
+    }
+
+    if (editor.document.isDirty) {
+        await editor.document.save();
+    }
+
+    if (!activeClient) {
+        vscode.window.showWarningMessage(serverNotRunningMessage());
+        return;
+    }
+
+    if (hasExplicitPerlCriticOverrides(editor.document.uri)) {
+        await syncPerlCriticConfiguration(activeClient, editor.document.uri);
+    }
+
+    let result: unknown;
+    try {
+        result = await activeClient.sendRequest('workspace/executeCommand', {
+            command: 'perl.runCritic',
+            arguments: [editor.document.uri.toString()],
+        });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to run PerlCritic: ${message}`);
+        return;
+    }
+
+    const response = (result && typeof result === 'object') ? result as Record<string, unknown> : {};
+    const status = typeof response.status === 'string' ? response.status : 'unknown';
+    const violationCount = typeof response.violationCount === 'number'
+        ? response.violationCount
+        : Array.isArray(response.violations)
+            ? response.violations.length
+            : 0;
+    const analyzerUsed = typeof response.analyzerUsed === 'string' ? response.analyzerUsed : 'unknown';
+    const fileName = path.basename(editor.document.uri.fsPath);
+
+    channel.appendLine(
+        `[perlcritic] ${fileName}: status=${status} violations=${violationCount} analyzer=${analyzerUsed}`
+    );
+
+    if (status === 'error' || typeof response.error === 'string') {
+        const message = typeof response.error === 'string'
+            ? response.error
+            : 'PerlCritic returned an error';
+        vscode.window.showErrorMessage(message, 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                channel.show();
+            }
+        });
+        return;
+    }
+
+    if (violationCount > 0) {
+        vscode.window.showWarningMessage(
+            `PerlCritic found ${violationCount} issue${violationCount === 1 ? '' : 's'} in ${fileName}.`,
+            'Show Output'
+        ).then(selection => {
+            if (selection === 'Show Output') {
+                channel.show();
+            }
+        });
+        return;
+    }
+
+    vscode.window.showInformationMessage(
+        `PerlCritic passed for ${fileName} using ${analyzerUsed}.`,
+        'Show Output'
+    ).then(selection => {
+        if (selection === 'Show Output') {
+            channel.show();
+        }
+    });
+}
+
+export async function setPerlCriticSeverity(
+    activeClient: Pick<LanguageClient, 'sendNotification'> | undefined = client
+): Promise<void> {
+    const resourceUri = vscode.window.activeTextEditor?.document.uri;
+    const selection = await vscode.window.showQuickPick(
+        [
+            { label: '1', description: 'Very permissive' },
+            { label: '2', description: 'Permissive' },
+            { label: '3', description: 'Balanced default' },
+            { label: '4', description: 'Strict' },
+            { label: '5', description: 'Very strict' },
+        ],
+        {
+            placeHolder: 'Choose a PerlCritic severity level',
+        }
+    );
+
+    if (!selection) {
+        return;
+    }
+
+    const severity = Number(selection.label);
+    const config = vscode.workspace.getConfiguration('perl-lsp', resourceUri);
+    const target = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+    await config.update('perlcritic.severity', severity, target);
+    const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(resourceUri, severity));
+    if (activeClient && payload) {
+        activeClient.sendNotification('workspace/didChangeConfiguration', payload);
+    }
+
+    vscode.window.showInformationMessage(`PerlCritic severity set to ${severity}.`);
+}
+
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -116,6 +350,14 @@ export async function activate(context: vscode.ExtensionContext) {
         } else {
             vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
         }
+    });
+
+    const runPerlCriticCommand = vscode.commands.registerCommand('perl-lsp.runPerlCritic', async () => {
+        await runPerlCriticOnActiveFile();
+    });
+
+    const setPerlCriticSeverityCommand = vscode.commands.registerCommand('perl-lsp.setPerlCriticSeverity', async () => {
+        await setPerlCriticSeverity();
     });
     
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
@@ -184,6 +426,18 @@ export async function activate(context: vscode.ExtensionContext) {
                 detail: isTestFile ? 'Run tests for the active file' : 'Run tests for the active file (Only available for .t/.pl files)',
                 command: 'perl-lsp.runTests',
                 disabled: !isTestFile
+            },
+            {
+                label: '$(checklist) Run PerlCritic',
+                detail: isPerl ? 'Run PerlCritic on the active file' : 'Run PerlCritic on the active file (Only available for Perl files)',
+                command: 'perl-lsp.runPerlCritic',
+                disabled: !isPerl
+            },
+            {
+                label: '$(symbol-numeric) Set PerlCritic Severity',
+                detail: isPerl ? 'Choose a PerlCritic severity level' : 'Choose a PerlCritic severity level (Only available for Perl files)',
+                command: 'perl-lsp.setPerlCriticSeverity',
+                disabled: !isPerl
             },
             {
                 label: '$(list-flat) Format Document',
@@ -519,6 +773,14 @@ export async function activate(context: vscode.ExtensionContext) {
             await validateIncludePaths(context);
         }
 
+        if (
+            event.affectsConfiguration('perl-lsp.perlcritic.enabled') ||
+            event.affectsConfiguration('perl-lsp.perlcritic.severity') ||
+            event.affectsConfiguration('perl-lsp.perlcritic.profile')
+        ) {
+            await syncPerlCriticConfiguration(client);
+        }
+
         if (requiresClientRefresh(event)) {
             await promptForClientRefresh(context);
         }
@@ -564,6 +826,8 @@ export async function activate(context: vscode.ExtensionContext) {
         restartCommand,
         organizeImportsCommand,
         runTestsCommand,
+        runPerlCriticCommand,
+        setPerlCriticSeverityCommand,
         checkSyntaxCommand,
         runCurrentTestCommand,
         runAllTestsCommand,

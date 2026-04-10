@@ -63,6 +63,8 @@
     "onCommand:perl-lsp.checkForUpdate",
     "onCommand:perl-lsp.organizeImports",
     "onCommand:perl-lsp.runTests",
+    "onCommand:perl-lsp.runPerlCritic",
+    "onCommand:perl-lsp.setPerlCriticSeverity",
     "onCommand:perl-lsp.extractVariable",
     "onCommand:perl-lsp.extractMethod",
     "onCommand:perl-lsp.showRefactoringOptions",
@@ -302,11 +304,57 @@
             "description": "Path to your .perltidyrc configuration file. If omitted, perl-lsp searches the workspace and home directory.",
             "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, perl-lsp searches the workspace and home directory."
           },
+          "perl-lsp.perlcritic.enabled": {
+            "type": "boolean",
+            "default": false,
+            "scope": "resource",
+            "order": 40,
+            "description": "Enable Perl::Critic integration from the VS Code extension. This setting is synchronized to the server when you run PerlCritic or change the setting.",
+            "markdownDescription": "Enable `Perl::Critic` integration from the VS Code extension. This setting is synchronized to the server when you run PerlCritic or change the setting."
+          },
+          "perl-lsp.perlcritic.severity": {
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "enumDescriptions": [
+              "Severity 1 - very permissive",
+              "Severity 2 - permissive",
+              "Severity 3 - balanced default",
+              "Severity 4 - strict",
+              "Severity 5 - very strict"
+            ],
+            "default": 3,
+            "scope": "resource",
+            "order": 41,
+            "description": "Perl::Critic severity threshold. Lower numbers are more permissive; higher numbers are stricter.",
+            "markdownDescription": "Perl::Critic severity threshold. Lower numbers are more permissive; higher numbers are stricter."
+          },
+          "perl-lsp.perlcritic.profile": {
+            "type": "string",
+            "default": "",
+            "scope": "resource",
+            "order": 42,
+            "description": "Path to a .perlcriticrc profile file used by the extension when synchronizing critic settings.",
+            "markdownDescription": "Path to a `.perlcriticrc` profile file used by the extension when synchronizing critic settings."
+          },
+          "perl-lsp.perlcritic.theme": {
+            "type": "string",
+            "default": "",
+            "scope": "resource",
+            "order": 43,
+            "description": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization.",
+            "markdownDescription": "Optional display theme label for PerlCritic settings. Reserved for editor-facing UI organization."
+          },
           "perl-lsp.enableRefactoring": {
             "type": "boolean",
             "default": true,
             "scope": "resource",
-            "order": 40,
+            "order": 50,
             "description": "Enable refactoring-related code actions (extract variable, extract method) when supported by the connected perllsp server.",
             "markdownDescription": "Enable refactoring-related code actions (extract variable, extract method) when supported by the connected `perllsp` server."
           },
@@ -314,7 +362,7 @@
             "type": "boolean",
             "default": true,
             "scope": "resource",
-            "order": 50,
+            "order": 60,
             "description": "Enable Test::More and Test2 integration for the VS Code Test Explorer panel.",
             "markdownDescription": "Enable `Test::More` and `Test2` integration for the VS Code Test Explorer panel."
           },
@@ -322,7 +370,7 @@
             "type": "boolean",
             "default": true,
             "scope": "resource",
-            "order": 60,
+            "order": 70,
             "description": "Auto-populate new .pm files with a package declaration and new .t files with Test::More boilerplate.",
             "markdownDescription": "Auto-populate new `.pm` files with a `package` declaration and new `.t` files with `Test::More` boilerplate."
           }
@@ -534,6 +582,18 @@
         "icon": "$(beaker)"
       },
       {
+        "command": "perl-lsp.runPerlCritic",
+        "title": "Run PerlCritic",
+        "category": "Perl",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "perl-lsp.setPerlCriticSeverity",
+        "title": "Set PerlCritic Severity",
+        "category": "Perl",
+        "icon": "$(symbol-numeric)"
+      },
+      {
         "command": "perl-lsp.extractVariable",
         "title": "Extract Variable",
         "category": "Perl",
@@ -657,6 +717,14 @@
           "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/"
         },
         {
+          "command": "perl-lsp.runPerlCritic",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.setPerlCriticSeverity",
+          "when": "editorLangId == perl"
+        },
+        {
           "command": "perl-lsp.checkSyntax",
           "when": "editorLangId == perl"
         },
@@ -721,6 +789,11 @@
           "group": "navigation"
         },
         {
+          "command": "perl-lsp.runPerlCritic",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        },
+        {
           "command": "perl-lsp.previewPod",
           "when": "editorLangId == perl",
           "group": "navigation"
@@ -729,6 +802,11 @@
       "editor/context": [
         {
           "command": "perl-lsp.runTests",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        },
+        {
+          "command": "perl-lsp.runPerlCritic",
           "when": "editorLangId == perl",
           "group": "navigation"
         }
@@ -847,7 +925,7 @@
           {
             "id": "configure-settings",
             "title": "Configure Settings",
-            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable Perl::Critic linting (requires `perlcritic` on PATH)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
+            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.perlcritic.enabled` and `perl-lsp.perlcritic.severity` for quick local Perl::Critic tuning, or run the `Perl: Run PerlCritic` / `Perl: Set PerlCritic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable Perl::Critic linting (requires `perlcritic` on PATH)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
             "media": {
               "image": "media/walkthrough/configure-settings.svg",
               "altText": "Configure Settings"

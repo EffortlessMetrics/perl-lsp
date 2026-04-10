@@ -261,6 +261,10 @@ describe('package.json contributes', () => {
       expect(keys).toContain('perl-lsp.formatOnSave');
       expect(keys).toContain('perl-lsp.enableRefactoring');
       expect(keys).toContain('perl-lsp.enableTestIntegration');
+      expect(keys).toContain('perl-lsp.perlcritic.enabled');
+      expect(keys).toContain('perl-lsp.perlcritic.severity');
+      expect(keys).toContain('perl-lsp.perlcritic.profile');
+      expect(keys).toContain('perl-lsp.perlcritic.theme');
     });
 
     test('Advanced group contains featureProfile, trace.server, channel, downloadBaseUrl', () => {
@@ -382,6 +386,36 @@ describe('package.json contributes', () => {
       expect(includePaths.default).toContain('local/lib/perl5');
     });
 
+    test('defines perlcritic.enabled with default false', () => {
+      const setting = properties['perl-lsp.perlcritic.enabled'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('boolean');
+      expect(setting.default).toBe(false);
+    });
+
+    test('defines perlcritic.severity as a 1-5 picker with default 3', () => {
+      const setting = properties['perl-lsp.perlcritic.severity'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('number');
+      expect(setting.enum).toEqual([1, 2, 3, 4, 5]);
+      expect(setting.enumDescriptions).toHaveLength(5);
+      expect(setting.default).toBe(3);
+    });
+
+    test('defines perlcritic.profile as a string setting', () => {
+      const setting = properties['perl-lsp.perlcritic.profile'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('string');
+      expect(setting.default).toBe('');
+    });
+
+    test('defines perlcritic.theme as a string setting', () => {
+      const setting = properties['perl-lsp.perlcritic.theme'];
+      expect(setting).toBeDefined();
+      expect(setting.type).toBe('string');
+      expect(setting.default).toBe('');
+    });
+
     test('includePaths markdownDescription mentions module-not-found guidance', () => {
       const desc: string = properties['perl-lsp.includePaths'].markdownDescription;
       // Must mention the "Can't locate" symptom so users know what to search for
@@ -436,7 +470,7 @@ describe('package.json contributes', () => {
     test('resource-scoped settings use scope resource', () => {
       // Per-file/workspace settings should be resource-scoped so they can be
       // overridden in workspace and folder settings.
-      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableDiagnostics', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.enableRefactoring', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
+      const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableDiagnostics', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.perlcritic.enabled', 'perl-lsp.perlcritic.severity', 'perl-lsp.perlcritic.profile', 'perl-lsp.perlcritic.theme', 'perl-lsp.enableRefactoring', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
       for (const key of resourceScoped) {
         expect(properties[key]?.scope).toBe('resource');
       }

@@ -19,6 +19,9 @@ jest.mock('vscode-languageclient/node', () => ({
 }));
 import {
   validateIncludePaths,
+  runPerlCriticOnActiveFile,
+  setPerlCriticSeverity,
+  syncPerlCriticConfiguration,
   warnAboutPerlExtensionConflicts,
 } from '../extension';
 
@@ -153,5 +156,134 @@ describe('extension UX warnings', () => {
     showWarningMessage.mockClear();
     await warnAboutPerlExtensionConflicts(context);
     expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  test('syncs perlcritic settings to the server', async () => {
+    const sendNotification = jest.fn();
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn((key: string, defaultValue?: any) => {
+        switch (key) {
+          case 'perlcritic.enabled':
+            return true;
+          case 'perlcritic.severity':
+            return 5;
+          case 'perlcritic.profile':
+            return '/tmp/.perlcriticrc';
+          case 'perlcritic.theme':
+            return 'classic';
+          default:
+            return defaultValue;
+        }
+      }),
+      has: jest.fn(() => false),
+      inspect: jest.fn((key: string) => {
+        switch (key) {
+          case 'perlcritic.enabled':
+            return { workspaceValue: true };
+          case 'perlcritic.severity':
+            return { workspaceValue: 5 };
+          case 'perlcritic.profile':
+            return { workspaceValue: '/tmp/.perlcriticrc' };
+          default:
+            return undefined;
+        }
+      }),
+      update: jest.fn(),
+    }));
+
+    await syncPerlCriticConfiguration({ sendNotification } as any, vscode.Uri.file('/tmp/example.pl'));
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      'workspace/didChangeConfiguration',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          perl: expect.objectContaining({
+            perlcritic: expect.objectContaining({
+              enabled: true,
+              severity: 5,
+              profile: '/tmp/.perlcriticrc',
+            }),
+          }),
+        }),
+      })
+    );
+  });
+
+  test('does not sync perlcritic defaults when nothing is explicitly configured', async () => {
+    const sendNotification = jest.fn();
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn((key: string, defaultValue?: any) => defaultValue),
+      has: jest.fn(() => false),
+      inspect: jest.fn(() => undefined),
+      update: jest.fn(),
+    }));
+
+    await syncPerlCriticConfiguration({ sendNotification } as any, vscode.Uri.file('/tmp/example.pl'));
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  test('runs perlcritic on the active Perl file', async () => {
+    const sendRequest = jest.fn(async () => ({
+      status: 'success',
+      violationCount: 2,
+      analyzerUsed: 'external',
+      violations: [{}, {}],
+    }));
+    const activeTextEditor = {
+      document: {
+        languageId: 'perl',
+        isDirty: false,
+        uri: vscode.Uri.file('/workspace/lib/Foo.pm'),
+        save: jest.fn(async () => undefined),
+      },
+    };
+    (vscode.window as any).activeTextEditor = activeTextEditor;
+
+    await runPerlCriticOnActiveFile({ sendRequest, sendNotification: jest.fn() } as any);
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'workspace/executeCommand',
+      expect.objectContaining({
+        command: 'perl.runCritic',
+        arguments: ['file:///workspace/lib/Foo.pm'],
+      })
+    );
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('PerlCritic found 2 issues in Foo.pm.'),
+      'Show Output'
+    );
+  });
+
+  test('sets perlcritic severity and syncs it to the server', async () => {
+    const sendNotification = jest.fn();
+    const sendRequest = jest.fn();
+    const showQuickPick = vscode.window.showQuickPick as jest.Mock;
+    showQuickPick.mockResolvedValue({ label: '4', description: 'Strict' });
+
+    const update = jest.fn(async () => undefined);
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn((key: string, defaultValue?: any) => defaultValue),
+      has: jest.fn(() => false),
+      inspect: jest.fn(),
+      update,
+    }));
+
+    await setPerlCriticSeverity({ sendNotification, sendRequest } as any);
+
+    expect(update).toHaveBeenCalledWith('perlcritic.severity', 4, vscode.ConfigurationTarget.Global);
+    expect(sendNotification).toHaveBeenCalledWith(
+      'workspace/didChangeConfiguration',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          perl: expect.objectContaining({
+            perlcritic: expect.objectContaining({
+              severity: 4,
+            }),
+          }),
+        }),
+      })
+    );
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('PerlCritic severity set to 4.');
   });
 });

@@ -4,6 +4,8 @@
  *   - perl-lsp.runCurrentTest
  *   - perl-lsp.runAllTests
  *   - perl-lsp.formatDocument
+ *   - perl-lsp.runPerlCritic
+ *   - perl-lsp.setPerlCriticSeverity
  *   - perl-lsp.showIncPaths
  *   - perl-lsp.openModule
  *   - perl-lsp.showParserAst
@@ -37,6 +39,8 @@ const NEW_COMMAND_IDS = [
   'perl-lsp.runCurrentTest',
   'perl-lsp.runAllTests',
   'perl-lsp.formatDocument',
+  'perl-lsp.runPerlCritic',
+  'perl-lsp.setPerlCriticSeverity',
   'perl-lsp.showIncPaths',
   'perl-lsp.openModule',
   'perl-lsp.showParserAst',
@@ -94,6 +98,16 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
 
     test('formatDocument is guarded by editorLangId == perl', () => {
       const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.formatDocument');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('runPerlCritic is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.runPerlCritic');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('setPerlCriticSeverity is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.setPerlCriticSeverity');
       expect(entry?.when).toContain('editorLangId == perl');
     });
 
