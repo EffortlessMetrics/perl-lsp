@@ -1,7 +1,8 @@
 //! Tests for method modifier go-to-definition navigation.
 //!
 //! Covers issue #3599: go-to-definition on the method name string inside
-//! `before`/`after`/`around` modifiers should navigate to the `sub` being modified.
+//! `before`/`after`/`around`/`override`/`augment` modifiers should navigate to
+//! the `sub` being modified.
 
 mod common;
 
@@ -96,6 +97,49 @@ mod method_modifier_definition_tests {
         assert_eq!(
             def_line, 2,
             "Definition should point to line 2 (sub validate), got line {def_line}"
+        );
+        Ok(())
+    }
+
+    /// Go-to-definition on `'render'` in `override 'render' => sub { }` must jump
+    /// to the `sub render { }` definition.
+    #[test]
+    fn test_override_modifier_goto_def_jumps_to_sub() -> TestResult {
+        let code =
+            "package MyApp::User;\nuse Moose;\nsub render { }\noverride 'render' => sub { };\n";
+        let uri = "file:///myapp_user_override.pl";
+
+        let resp = goto_def(code, uri, "render", 3)?;
+
+        let (def_uri, def_line, _) = semantic::first_location(&resp).ok_or(
+            "Expected goto-definition on 'render' in override modifier to find sub render",
+        )?;
+
+        assert_eq!(def_uri, uri, "Definition should be in the same file");
+        assert_eq!(
+            def_line, 2,
+            "Definition should point to line 2 (sub render), got line {def_line}"
+        );
+        Ok(())
+    }
+
+    /// Go-to-definition on `'render'` in `augment 'render' => sub { }` must jump
+    /// to the `sub render { }` definition.
+    #[test]
+    fn test_augment_modifier_goto_def_jumps_to_sub() -> TestResult {
+        let code =
+            "package MyApp::User;\nuse Moose;\nsub render { }\naugment 'render' => sub { };\n";
+        let uri = "file:///myapp_user_augment.pl";
+
+        let resp = goto_def(code, uri, "render", 3)?;
+
+        let (def_uri, def_line, _) = semantic::first_location(&resp)
+            .ok_or("Expected goto-definition on 'render' in augment modifier to find sub render")?;
+
+        assert_eq!(def_uri, uri, "Definition should be in the same file");
+        assert_eq!(
+            def_line, 2,
+            "Definition should point to line 2 (sub render), got line {def_line}"
         );
         Ok(())
     }
