@@ -426,6 +426,12 @@ fn is_fixable_diagnostic(code: &str) -> bool {
                 | DiagnosticCode::AssignmentInCondition
                 | DiagnosticCode::NumericComparisonWithUndef
                 | DiagnosticCode::DeprecatedDefined
+                | DiagnosticCode::MissingPackageDeclaration
+                | DiagnosticCode::VariableRedeclaration
+                | DiagnosticCode::MisspelledPragma
+                | DiagnosticCode::UnreachableCode
+                | DiagnosticCode::DuplicateSubroutine
+                | DiagnosticCode::MissingReturn
         )
     )
 }
@@ -495,9 +501,10 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_data_fixable_false_for_non_fixable() -> Result<(), Box<dyn std::error::Error>> {
-        // PL105 (VariableRedeclaration) has no quick-fix action; fixable must be false
-        // so clients do not show a lightning-bolt icon for it.
+    fn diagnostic_data_fixable_true_for_variable_redeclaration()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // PL105 (VariableRedeclaration) offers a quick-fix that removes the duplicate `my`,
+        // so the enriched diagnostic data must advertise it as fixable.
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
         // Redeclare $x in the same scope to trigger PL105
@@ -509,7 +516,7 @@ mod tests {
         }) {
             let data = diag.data.as_ref().ok_or("data should be Some for PL105")?;
             assert_eq!(data["code"], "PL105");
-            assert_eq!(data["fixable"], false, "PL105 has no quick-fix; fixable must be false");
+            assert_eq!(data["fixable"], true, "PL105 now has a quick-fix; fixable must stay true");
         }
         // Also verify that every diagnostic with a code has a valid data object
         for d in &items {

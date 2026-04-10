@@ -114,11 +114,11 @@ fn test_pl100_data_fields_correct() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Test 3: non-fixable diagnostic has fixable: false
+// Test 3: PL105 fixable flag reflects quick-fix availability
 #[test]
-fn test_non_fixable_diagnostic_has_fixable_false() -> Result<(), Box<dyn std::error::Error>> {
-    let uri = "file:///test_non_fixable.pl";
-    // PL105 (VariableRedeclaration) has no quick-fix
+fn test_pl105_has_fixable_true_after_adding_quick_fix() -> Result<(), Box<dyn std::error::Error>> {
+    let uri = "file:///test_pl105_fixable.pl";
+    // PL105 (VariableRedeclaration) now has a quick-fix: remove duplicate 'my' (#3469)
     let content = "use strict; use warnings; my $x = 1; my $x = 2;\n";
     let server = open_document(uri, content);
     let items = get_diagnostics(&server, uri)?;
@@ -132,15 +132,14 @@ fn test_non_fixable_diagnostic_has_fixable_false() -> Result<(), Box<dyn std::er
         }
     }
 
-    // PL105 (VariableRedeclaration) MUST fire and MUST have fixable: false.
-    // Using ok_or to enforce the requirement — a soft if-let would make this
-    // test vacuous (passes even if the serialization is broken).
+    // PL105 (VariableRedeclaration) MUST fire and now has fixable: true since the
+    // "remove duplicate my" quick-fix was added in issue #3469.
     let diag = items
         .iter()
         .find(|d| d["code"].as_str() == Some("PL105"))
         .ok_or("Expected PL105 (VariableRedeclaration) to fire for double-declare input")?;
     let data = &diag["data"];
-    assert_eq!(data["fixable"], false, "PL105 has no quick-fix; fixable must be false");
+    assert_eq!(data["fixable"], true, "PL105 now has a quick-fix (remove duplicate 'my')");
 
     Ok(())
 }

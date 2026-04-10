@@ -82,6 +82,15 @@ impl EnhancedCodeActionsProvider {
     /// control-flow construct (`If`, `While`, `For`, `Foreach`, `Subroutine`).
     /// In that case the node is not offered as "Extract to subroutine" — only
     /// standalone bare blocks are extractable.
+    ///
+    /// # Range bounding
+    ///
+    /// This function returns immediately when the node's span does not overlap the
+    /// requested range.  Because AST children are always contained within their
+    /// parent's span, a non-overlapping parent implies none of its descendants can
+    /// overlap either — so the entire subtree is pruned in one check.  This keeps
+    /// code-action collection O(nodes in range) rather than O(total AST nodes),
+    /// which is critical for responsiveness on large files (>5000 lines).
     fn collect_actions_for_range(
         &self,
         node: &Node,
@@ -90,53 +99,58 @@ impl EnhancedCodeActionsProvider {
         actions: &mut Vec<CodeAction>,
         extract_var_seen: &mut HashSet<(usize, String)>,
     ) {
-        // Check if this node overlaps the range
-        if node.location.start <= range.1 && node.location.end >= range.0 {
-            let helpers = Helpers::new(&self.source, &self.lines);
+        // Prune entire subtree when the node is completely outside the range.
+        // Children are always within the parent span, so if the parent doesn't
+        // overlap the range neither can any child.
+        if node.location.end < range.0 || node.location.start > range.1 {
+            return;
+        }
 
-            // Extract variable — only emit when the node's end reaches or exceeds the
-            // selection's end. This prevents duplicate actions for nested expressions:
-            // when both a Binary(8..25) and its inner FunctionCall(8..20) overlap a
-            // selection (8..25), the FunctionCall's end (20) is before the selection's
-            // end (25) and is skipped; only the outermost matching node emits an action.
-            // Partial-left overlap (cursor inside expression) is still supported.
-            let node_reaches_selection_end = node.location.end >= range.1;
-            if node_reaches_selection_end && self.is_extractable_expression(node) {
-                let action =
-                    extract_variable::create_extract_variable_action(node, &self.source, &helpers);
-                if let Some(decl) = action.edit.changes.first() {
-                    let key = (decl.location.start, decl.new_text.clone());
-                    if extract_var_seen.insert(key) {
-                        actions.push(action);
-                    }
-                } else {
+        // The node overlaps the range — collect applicable actions.
+        let helpers = Helpers::new(&self.source, &self.lines);
+
+        // Extract variable — only emit when the node's end reaches or exceeds the
+        // selection's end. This prevents duplicate actions for nested expressions:
+        // when both a Binary(8..25) and its inner FunctionCall(8..20) overlap a
+        // selection (8..25), the FunctionCall's end (20) is before the selection's
+        // end (25) and is skipped; only the outermost matching node emits an action.
+        // Partial-left overlap (cursor inside expression) is still supported.
+        let node_reaches_selection_end = node.location.end >= range.1;
+        if node_reaches_selection_end && self.is_extractable_expression(node) {
+            let action =
+                extract_variable::create_extract_variable_action(node, &self.source, &helpers);
+            if let Some(decl) = action.edit.changes.first() {
+                let key = (decl.location.start, decl.new_text.clone());
+                if extract_var_seen.insert(key) {
                     actions.push(action);
                 }
-            }
-
-            // Convert old-style loops
-            if let Some(action) = loop_conversion::convert_loop_style(node, &self.source) {
+            } else {
                 actions.push(action);
             }
+        }
 
-            // Add error checking
-            if let Some(action) = error_checking::add_error_checking(node, &self.source) {
-                actions.push(action);
-            }
+        // Convert old-style loops
+        if let Some(action) = loop_conversion::convert_loop_style(node, &self.source) {
+            actions.push(action);
+        }
 
-            // Convert to postfix
-            if let Some(action) = postfix::convert_to_postfix(node, &self.source) {
-                actions.push(action);
-            }
+        // Add error checking
+        if let Some(action) = error_checking::add_error_checking(node, &self.source) {
+            actions.push(action);
+        }
 
-            // Extract subroutine — only for standalone blocks, not control-flow bodies
-            if !is_control_body && self.is_extractable_block(node) {
-                actions.push(extract_subroutine::create_extract_subroutine_action(
-                    node,
-                    &self.source,
-                    &helpers,
-                ));
-            }
+        // Convert to postfix
+        if let Some(action) = postfix::convert_to_postfix(node, &self.source) {
+            actions.push(action);
+        }
+
+        // Extract subroutine — only for standalone blocks, not control-flow bodies
+        if !is_control_body && self.is_extractable_block(node) {
+            actions.push(extract_subroutine::create_extract_subroutine_action(
+                node,
+                &self.source,
+                &helpers,
+            ));
         }
 
         // Recursively check children, flagging control-flow body blocks

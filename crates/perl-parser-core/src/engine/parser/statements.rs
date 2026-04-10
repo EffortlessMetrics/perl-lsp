@@ -83,6 +83,52 @@ impl<'a> Parser<'a> {
             .unwrap_or(false)
     }
 
+    fn is_async_sub_start(&mut self) -> bool {
+        self.peek_kind() == Some(TokenKind::Identifier)
+            && self.tokens.peek().ok().is_some_and(|t| t.text.as_ref() == "async")
+            && self
+                .tokens
+                .peek_second()
+                .ok()
+                .is_some_and(|t| t.kind == TokenKind::Sub)
+    }
+
+    fn is_adjust_block_start(&mut self) -> bool {
+        self.in_class_body > 0
+            && self.peek_kind() == Some(TokenKind::Identifier)
+            && self.tokens.peek().ok().is_some_and(|t| t.text.as_ref() == "ADJUST")
+            && self
+                .tokens
+                .peek_second()
+                .ok()
+                .is_some_and(|t| t.kind == TokenKind::LeftBrace)
+    }
+
+    fn finish_subroutine_statement(&mut self, sub_node: Node) -> ParseResult<Node> {
+        Ok(if let NodeKind::Subroutine { name, .. } = &sub_node.kind {
+            if name.is_none() {
+                // Anonymous sub may be followed by arrow: sub { 42 }->()
+                let expr = if self.peek_kind() == Some(TokenKind::Arrow) {
+                    self.parse_postfix_chain(sub_node)?
+                } else {
+                    sub_node
+                };
+                // Wrap anonymous subroutines in expression statements
+                let location = expr.location;
+                Node::new(
+                    NodeKind::ExpressionStatement { expression: Box::new(expr) },
+                    location,
+                )
+            } else {
+                // Named subroutines are statements by themselves
+                sub_node
+            }
+        } else {
+            // Shouldn't happen, but return as-is
+            sub_node
+        })
+    }
+
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
         // Every new statement begins here
         self.at_stmt_start = true;
@@ -139,9 +185,24 @@ impl<'a> Parser<'a> {
             if keyword_text.as_ref() == "elsif" && next_kind == Some(TokenKind::LeftParen) {
                 return self.parse_orphaned_elsif();
             }
+
+            if self.is_adjust_block_start() {
+                return self.parse_adjust_block();
+            }
         }
 
-        let mut stmt = match kind {
+        let mut stmt = if self.is_async_sub_start() {
+            let async_token = self.consume_token()?;
+            let mut sub_node = self.parse_subroutine()?;
+            sub_node.location.start = async_token.start;
+            if let NodeKind::Subroutine { attributes, .. } = &mut sub_node.kind
+                && !attributes.iter().any(|attr| attr == "async")
+            {
+                attributes.insert(0, "async".to_string());
+            }
+            self.finish_subroutine_statement(sub_node)
+        } else {
+            match kind {
             // Empty statement (lone semicolon) - just consume and return a no-op
             TokenKind::Semicolon => {
                 let pos = self.current_position();
@@ -222,6 +283,7 @@ impl<'a> Parser<'a> {
             TokenKind::Given => self.parse_given_statement(),
             TokenKind::Default => self.parse_default_statement(),
             TokenKind::Try => self.parse_try(),
+                TokenKind::Defer => self.parse_defer(),
 
             // Loop control — next/last/redo can be followed by a word operator at statement level,
             // e.g. `last and die` means `(last) and (die)`.
@@ -233,29 +295,7 @@ impl<'a> Parser<'a> {
             // Subroutines and modern OOP
             TokenKind::Sub => {
                 let sub_node = self.parse_subroutine()?;
-                // Check if this is an anonymous subroutine
-                Ok(if let NodeKind::Subroutine { name, .. } = &sub_node.kind {
-                    if name.is_none() {
-                        // Anonymous sub may be followed by arrow: sub { 42 }->()
-                        let expr = if self.peek_kind() == Some(TokenKind::Arrow) {
-                            self.parse_postfix_chain(sub_node)?
-                        } else {
-                            sub_node
-                        };
-                        // Wrap anonymous subroutines in expression statements
-                        let location = expr.location;
-                        Node::new(
-                            NodeKind::ExpressionStatement { expression: Box::new(expr) },
-                            location,
-                        )
-                    } else {
-                        // Named subroutines are statements by themselves
-                        sub_node
-                    }
-                } else {
-                    // Shouldn't happen, but return as-is
-                    sub_node
-                })
+                self.finish_subroutine_statement(sub_node)
             }
             TokenKind::Class => self.parse_class(),
             // `method NAME SIGNATURE BLOCK` is a Perl 5.38+ declaration.
@@ -357,6 +397,7 @@ impl<'a> Parser<'a> {
                     self.parse_expression_statement()
                 }
             }
+            }
         }?;
 
         // Check for statement modifiers — only on non-compound statements.
@@ -411,6 +452,7 @@ impl<'a> Parser<'a> {
                 | NodeKind::Given { .. }
                 | NodeKind::Default { .. }
                 | NodeKind::Try { .. }
+                | NodeKind::Defer { .. }
                 | NodeKind::Subroutine { .. }
                 | NodeKind::Package { .. }
                 | NodeKind::Block { .. }

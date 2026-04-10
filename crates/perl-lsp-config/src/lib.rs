@@ -4,6 +4,8 @@
 //! This microcrate isolates configuration parsing and defaults from the main
 //! server crate so they can evolve independently and be reused by tooling.
 
+#[cfg(not(target_arch = "wasm32"))]
+use perl_dap_platform::resolve_perl_path_with_toolchain;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
@@ -386,10 +388,13 @@ impl WorkspaceConfig {
                 self.use_perl5lib = use_p5l;
             }
             if let Some(prec) = workspace.get("perl5libPrecedence").and_then(|v| v.as_str()) {
-                self.perl5lib_precedence = match prec {
-                    "append" => Perl5LibPrecedence::Append,
-                    _ => Perl5LibPrecedence::Prepend,
-                };
+                // Only update on recognised values; leave the current setting unchanged for
+                // unknown strings so a typo does not silently reset an explicitly-set Append.
+                match prec {
+                    "append" => self.perl5lib_precedence = Perl5LibPrecedence::Append,
+                    "prepend" => self.perl5lib_precedence = Perl5LibPrecedence::Prepend,
+                    _ => {} // unknown value — leave current setting intact
+                }
             }
         }
     }
@@ -410,7 +415,13 @@ impl WorkspaceConfig {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn fetch_perl_inc(perl_path: Option<&str>, perl_args: &[String]) -> Vec<PathBuf> {
-        let perl_path = perl_path.unwrap_or("perl");
+        let perl_path = match perl_path.filter(|path| !path.is_empty()) {
+            Some(path) => PathBuf::from(path),
+            None => match resolve_perl_path_with_toolchain() {
+                Ok(path) => path,
+                Err(_) => return Vec::new(),
+            },
+        };
         let mut command = Command::new(perl_path);
         command.args(perl_args);
         let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();

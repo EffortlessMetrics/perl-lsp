@@ -138,6 +138,61 @@ my $http = AnyEvent::HTTP->new;
 }
 
 #[test]
+fn ev_use_synthesizes_root_and_common_api_symbols() {
+    let code = r#"
+use EV;
+
+EV::timer();
+EV::io();
+EV::signal();
+EV::idle();
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "EV", SymbolKind::Class),
+        "expected EV namespace symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "EV", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=EV"),
+        "expected `framework=EV` on EV, got {attrs:?}"
+    );
+
+    for name in ["EV::timer", "EV::io", "EV::signal", "EV::idle"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic EV API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=EV"),
+            "expected `framework=EV` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
+fn ev_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+EV::timer();
+EV::io();
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "EV", SymbolKind::Class),
+        "did not expect EV namespace synthesis without `use EV`"
+    );
+    assert!(
+        !has_symbol(&table, "EV::timer", SymbolKind::Subroutine),
+        "did not expect EV::timer synthesis without `use EV`"
+    );
+}
+
+#[test]
 fn mojo_redis_use_synthesizes_framework_class_symbol() {
     let code = r#"
 use Mojo::Redis;
@@ -230,6 +285,53 @@ my $future = Future->new;
 }
 
 #[test]
+fn future_use_synthesizes_common_chain_methods() {
+    let code = r#"
+use Future;
+
+my $future = Future->new;
+my $next = $future->then(sub { return Future->done(1) });
+$future->catch(sub { return Future->fail("boom") });
+$future->finally(sub { });
+$future->get;
+$future->is_done;
+$future->is_ready;
+Future->wait_all($future);
+Future->needs_all($future);
+Future->needs_any($future);
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in [
+        "new",
+        "then",
+        "catch",
+        "finally",
+        "get",
+        "is_done",
+        "is_ready",
+        "wait_all",
+        "needs_all",
+        "needs_any",
+    ] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic Future API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=Future"),
+            "expected `framework=Future` on `{name}`, got {attrs:?}"
+        );
+        assert!(
+            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            "expected `future_api={name}` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
 fn future_xs_use_synthesizes_class_symbol_for_method_calls() {
     let code = r#"
 use Future::XS;
@@ -251,6 +353,53 @@ my $future = Future::XS->new;
 }
 
 #[test]
+fn future_xs_use_synthesizes_common_chain_methods() {
+    let code = r#"
+use Future::XS;
+
+my $future = Future::XS->new;
+my $next = $future->then(sub { return Future::XS->done(1) });
+$future->catch(sub { return Future::XS->fail("boom") });
+$future->finally(sub { });
+$future->get;
+$future->is_done;
+$future->is_ready;
+Future::XS->wait_all($future);
+Future::XS->needs_all($future);
+Future::XS->needs_any($future);
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in [
+        "new",
+        "then",
+        "catch",
+        "finally",
+        "get",
+        "is_done",
+        "is_ready",
+        "wait_all",
+        "needs_all",
+        "needs_any",
+    ] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic Future::XS API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=Future::XS"),
+            "expected `framework=Future::XS` on `{name}`, got {attrs:?}"
+        );
+        assert!(
+            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            "expected `future_api={name}` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
 fn future_names_are_not_synthesized_without_framework_use() {
     let code = r#"
 my $future = Future->new;
@@ -262,6 +411,35 @@ my $future = Future->new;
         !has_symbol(&table, "Future", SymbolKind::Class),
         "did not expect Future class synthesis without `use Future`"
     );
+}
+
+#[test]
+fn future_api_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $future = Future->new;
+$future->then(sub { return Future->done(1) });
+Future->wait_all($future);
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in [
+        "new",
+        "then",
+        "catch",
+        "finally",
+        "get",
+        "is_done",
+        "is_ready",
+        "wait_all",
+        "needs_all",
+        "needs_any",
+    ] {
+        assert!(
+            !has_symbol(&table, name, SymbolKind::Subroutine),
+            "did not expect synthetic Future API symbol `{name}` without `use Future`"
+        );
+    }
 }
 
 #[test]
@@ -300,6 +478,41 @@ my $promise = Promise->new(sub { return 1 });
 }
 
 #[test]
+fn promise_use_synthesizes_common_chain_methods() {
+    let code = r#"
+use Promise;
+
+my $promise = Promise->new(sub { return 1 });
+my $next = $promise->then(sub { return Promise->resolve(1) });
+$promise->catch(sub { return Promise->reject("boom") });
+$promise->finally(sub { });
+$promise->resolve(1);
+$promise->reject("boom");
+Promise->all($promise);
+Promise->race($promise);
+Promise->any($promise);
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in ["new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic Promise API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=Promise"),
+            "expected `framework=Promise` on `{name}`, got {attrs:?}"
+        );
+        assert!(
+            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            "expected `future_api={name}` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
 fn promise_xs_use_synthesizes_class_symbol_for_method_calls() {
     let code = r#"
 use Promise::XS;
@@ -318,6 +531,41 @@ my $promise = Promise::XS->new(sub { return 1 });
         attrs.iter().any(|attr| attr == "framework=Promise::XS"),
         "expected `framework=Promise::XS` on Promise::XS, got {attrs:?}"
     );
+}
+
+#[test]
+fn promise_xs_use_synthesizes_common_chain_methods() {
+    let code = r#"
+use Promise::XS;
+
+my $promise = Promise::XS->new(sub { return 1 });
+my $next = $promise->then(sub { return Promise::XS->resolve(1) });
+$promise->catch(sub { return Promise::XS->reject("boom") });
+$promise->finally(sub { });
+$promise->resolve(1);
+$promise->reject("boom");
+Promise::XS->all($promise);
+Promise::XS->race($promise);
+Promise::XS->any($promise);
+"#;
+
+    let table = extract_symbols(code);
+
+    for name in ["new", "then", "catch", "finally", "resolve", "reject", "all", "race", "any"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic Promise::XS API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=Promise::XS"),
+            "expected `framework=Promise::XS` on `{name}`, got {attrs:?}"
+        );
+        assert!(
+            attrs.iter().any(|attr| attr == &format!("future_api={name}")),
+            "expected `future_api={name}` on `{name}`, got {attrs:?}"
+        );
+    }
 }
 
 #[test]
