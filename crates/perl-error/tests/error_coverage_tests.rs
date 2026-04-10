@@ -18,6 +18,7 @@ use perl_error::{
     BudgetTracker, ErrorContext, ParseBudget, ParseError, ParseOutput, ParseResult,
     get_error_contexts,
 };
+use perl_tdd_support::must_some;
 
 // ---------------------------------------------------------------------------
 // ParseError::suggestion() — bracket, fat-arrow, arrow patterns
@@ -67,6 +68,18 @@ fn suggestion_arrow_not_triggered_without_expression() -> Result<(), Box<dyn std
     // expected does not contain "expression", so arrow should not trigger
     let err = ParseError::unexpected("statement", "->", 0);
     assert!(err.suggestion().is_none());
+    Ok(())
+}
+
+#[test]
+fn suggestion_for_variable_expected_mentions_perl_sigil_forms()
+-> Result<(), Box<dyn std::error::Error>> {
+    let err = ParseError::unexpected("variable", "identifier", 4);
+    let sug = must_some(err.suggestion());
+
+    assert!(sug.contains("$foo"), "got: {sug}");
+    assert!(sug.contains("@bar"), "got: {sug}");
+    assert!(sug.contains("%hash"), "got: {sug}");
     Ok(())
 }
 
