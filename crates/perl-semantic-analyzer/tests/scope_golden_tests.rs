@@ -501,3 +501,48 @@ print $result;
     );
     Ok(())
 }
+
+// ===========================================================================
+// Pattern: print with comma-separated argument list
+// ===========================================================================
+
+#[test]
+fn golden_print_comma_separated_args_all_marked_used() -> Result<(), Box<dyn std::error::Error>> {
+    // Variables that appear as comma-separated arguments to `print` must be marked as used.
+    // Regression test for issue #3503: print $greeting, " ", $name, "\n" was producing
+    // UnusedVariable diagnostics for $greeting and $name.
+    let code = r#"
+use strict;
+my $name = "world";
+my $greeting = "hello";
+print $greeting, " ", $name, "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    let fp = false_positive_issues(&issues);
+    assert!(
+        fp.is_empty(),
+        "variables in print comma-separated arg list must be marked as used; got: {:?}",
+        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn golden_say_comma_separated_args_all_marked_used() -> Result<(), Box<dyn std::error::Error>> {
+    // Same as above but for `say` (adds newline automatically).
+    let code = r#"
+use strict;
+my $a = "first";
+my $b = "second";
+my $c = "third";
+say $a, $b, $c;
+"#;
+    let issues = scope_issues_strict(code);
+    let fp = false_positive_issues(&issues);
+    assert!(
+        fp.is_empty(),
+        "variables in say comma-separated arg list must be marked as used; got: {:?}",
+        fp.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
