@@ -23,6 +23,7 @@
 mod support;
 
 use serde_json::json;
+use std::time::Duration;
 use support::lsp_harness::LspHarness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -193,6 +194,62 @@ push @items, 9;
             "If hover is returned for builtin, it must have contents"
         );
     }
+
+    Ok(())
+}
+
+/// Tests feature spec: navigation.rs#hover-file-test-operators
+///
+/// Validates that hovering over Perl file test operators returns documentation.
+#[test]
+fn test_hover_on_file_test_operators() -> TestResult {
+    let doc = r#"
+my $file = "test.txt";
+-e $file;
+-M $file;
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///file_tests.pl", doc)?;
+
+    let result = harness
+        .request_with_timeout(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///file_tests.pl"},
+                "position": {"line": 2, "character": 1}
+            }),
+            Duration::from_secs(10),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "Expected hover response for -e");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    assert!(
+        value.contains("exists"),
+        "File test hover should explain -e existence checks, got: {value}"
+    );
+
+    let result = harness
+        .request_with_timeout(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///file_tests.pl"},
+                "position": {"line": 3, "character": 1}
+            }),
+            Duration::from_secs(10),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "Expected hover response for -M");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    assert!(
+        value.contains("days"),
+        "Related file test hover should explain -M age semantics, got: {value}"
+    );
 
     Ok(())
 }
