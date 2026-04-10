@@ -138,6 +138,61 @@ my $http = AnyEvent::HTTP->new;
 }
 
 #[test]
+fn ev_use_synthesizes_root_and_common_api_symbols() {
+    let code = r#"
+use EV;
+
+EV::timer();
+EV::io();
+EV::signal();
+EV::idle();
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "EV", SymbolKind::Class),
+        "expected EV namespace symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "EV", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=EV"),
+        "expected `framework=EV` on EV, got {attrs:?}"
+    );
+
+    for name in ["EV::timer", "EV::io", "EV::signal", "EV::idle"] {
+        assert!(
+            has_symbol(&table, name, SymbolKind::Subroutine),
+            "expected synthetic EV API symbol `{name}`"
+        );
+        let attrs = symbol_attrs(&table, name, SymbolKind::Subroutine);
+        assert!(
+            attrs.iter().any(|attr| attr == "framework=EV"),
+            "expected `framework=EV` on `{name}`, got {attrs:?}"
+        );
+    }
+}
+
+#[test]
+fn ev_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+EV::timer();
+EV::io();
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "EV", SymbolKind::Class),
+        "did not expect EV namespace synthesis without `use EV`"
+    );
+    assert!(
+        !has_symbol(&table, "EV::timer", SymbolKind::Subroutine),
+        "did not expect EV::timer synthesis without `use EV`"
+    );
+}
+
+#[test]
 fn mojo_redis_use_synthesizes_framework_class_symbol() {
     let code = r#"
 use Mojo::Redis;
