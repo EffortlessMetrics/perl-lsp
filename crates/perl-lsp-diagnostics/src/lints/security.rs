@@ -271,6 +271,10 @@ fn walk_security_node(
             walk_security_node(block, diagnostics, signal_shadowed);
             signal_shadowed
         }
+        NodeKind::Defer { block } => {
+            walk_security_node(block, diagnostics, signal_shadowed);
+            signal_shadowed
+        }
         // Backtick strings: the parser stores `cmd` and qx(cmd) as
         // String { value: "`cmd`", interpolated: true }
         NodeKind::String { value, interpolated: true } if is_backtick_string(value) => {

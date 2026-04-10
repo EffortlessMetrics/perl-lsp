@@ -555,10 +555,7 @@ where
         NodeKind::LabeledStatement { statement, .. } => {
             find_nodes_recursive(statement, predicate, results);
         }
-        NodeKind::Eval { block } => {
-            find_nodes_recursive(block, predicate, results);
-        }
-        NodeKind::Do { block } => {
+        NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
             find_nodes_recursive(block, predicate, results);
         }
         NodeKind::Return { value } => {

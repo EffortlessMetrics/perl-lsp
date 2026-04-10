@@ -1479,6 +1479,7 @@ fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Err
         NodeKind::Block { statements: vec![] },
         NodeKind::Eval { block: Box::new(num("1")) },
         NodeKind::Do { block: Box::new(num("1")) },
+        NodeKind::Defer { block: Box::new(num("1")) },
         NodeKind::Try { body: Box::new(block(vec![])), catch_blocks: vec![], finally_block: None },
         NodeKind::If {
             condition: Box::new(num("1")),
