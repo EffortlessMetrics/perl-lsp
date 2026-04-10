@@ -219,6 +219,7 @@
 #![deny(clippy::print_stderr, clippy::print_stdout)]
 #![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 
+pub mod bdd;
 pub mod cases;
 pub mod codegen;
 pub mod continue_redo;
@@ -232,6 +233,7 @@ pub mod meta;
 pub mod tie_interface;
 
 use anyhow::{Context, Result};
+pub use bdd::{BddScenario, bdd_scenarios};
 pub use cases::{
     ComplexDataStructureCase, EdgeCase, EdgeCaseGenerator, complex_data_structure_cases,
     edge_cases, find_complex_case, get_complex_data_structure_tests, sample_complex_case,
