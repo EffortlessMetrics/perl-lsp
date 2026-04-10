@@ -222,6 +222,8 @@ impl Scope {
 
     fn use_variable_parts(&self, sigil: &str, name: &str) -> (bool, bool) {
         let idx = sigil_to_index(sigil);
+        let fallback_idx =
+            if sigil == "@" || sigil == "%" { Some(sigil_to_index("$")) } else { None };
         let mut current_scope = self;
 
         loop {
@@ -232,6 +234,17 @@ impl Scope {
                         *var.is_used.borrow_mut() = true;
                         return (true, *var.is_initialized.borrow());
                     }
+                }
+
+                // Perl dereference syntax can present a scalar-declared reference with
+                // a container sigil (e.g. `@$ref`, `%$ref`). If no lexical declaration
+                // exists for the container sigil, fall back to the scalar declaration.
+                if let Some(fallback_idx) = fallback_idx
+                    && let Some(map) = &vars[fallback_idx]
+                    && let Some(var) = map.get(name)
+                {
+                    *var.is_used.borrow_mut() = true;
+                    return (true, *var.is_initialized.borrow());
                 }
             }
 
