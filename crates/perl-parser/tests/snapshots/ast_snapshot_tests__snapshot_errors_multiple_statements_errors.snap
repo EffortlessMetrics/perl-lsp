@@ -2,7 +2,5 @@
 source: crates/perl-parser/tests/ast_snapshot_tests.rs
 expression: "parse_errors(\"my $x = ;\\nmy $y = ;\")"
 ---
-expected expression, found ';' at position 18
-expected expression, found ';' at position 8
-expected statement, found ';' at position 18
-expected statement, found ';' at position 8
+Recovered from MissingOperand at InfixRhs (position 16)
+Recovered from MissingOperand at InfixRhs (position 6)
