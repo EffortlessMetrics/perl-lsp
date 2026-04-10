@@ -802,12 +802,10 @@ fn issue_3344_default_node() -> Node {
 }
 
 fn defer_call() -> Node {
-    // `defer` is currently parsed as a FunctionCall with a single block
-    // argument (the lexer has no Defer keyword token yet).
+    // `defer { }` is now parsed as NodeKind::Defer (Perl 5.36+ experimental, stable in 5.40).
     Node::new(
-        NodeKind::FunctionCall {
-            name: "defer".to_string(),
-            args: vec![Node::new(NodeKind::Block { statements: vec![] }, loc(26, 40))],
+        NodeKind::Defer {
+            block: Box::new(Node::new(NodeKind::Block { statements: vec![] }, loc(26, 40))),
         },
         loc(20, 41),
     )
@@ -960,7 +958,7 @@ fn test_given_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Err
 }
 
 // ---------------------------------------------------------------------------
-// Test 21: defer (as FunctionCall) in v5.34 -> warns (requires v5.36+)
+// Test 21: defer block in v5.34 -> warns (requires v5.36+)
 // ---------------------------------------------------------------------------
 
 #[test]

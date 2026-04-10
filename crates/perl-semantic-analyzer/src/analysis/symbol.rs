@@ -748,7 +748,7 @@ impl SymbolExtractor {
                 self.visit_node(condition);
             }
 
-            NodeKind::Do { block } | NodeKind::Eval { block } => {
+            NodeKind::Do { block } | NodeKind::Eval { block } | NodeKind::Defer { block } => {
                 self.visit_node(block);
             }
 

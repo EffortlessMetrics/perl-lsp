@@ -171,6 +171,8 @@ pub enum TokenKind {
     Format,
     /// Undefined value: `undef`
     Undef,
+    /// Defer block: `defer { ... }` (Perl 5.36+ experimental, stable in 5.40)
+    Defer,
 
     // ===== Operators =====
     /// Assignment: `=`
@@ -424,6 +426,7 @@ impl TokenKind {
             TokenKind::Field => "'field'",
             TokenKind::Format => "'format'",
             TokenKind::Undef => "'undef'",
+            TokenKind::Defer => "'defer'",
 
             // Operators
             TokenKind::Assign => "'='",

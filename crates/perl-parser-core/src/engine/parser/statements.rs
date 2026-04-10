@@ -222,6 +222,7 @@ impl<'a> Parser<'a> {
             TokenKind::Given => self.parse_given_statement(),
             TokenKind::Default => self.parse_default_statement(),
             TokenKind::Try => self.parse_try(),
+                TokenKind::Defer => self.parse_defer(),
 
             // Loop control — next/last/redo can be followed by a word operator at statement level,
             // e.g. `last and die` means `(last) and (die)`.
@@ -411,6 +412,7 @@ impl<'a> Parser<'a> {
                 | NodeKind::Given { .. }
                 | NodeKind::Default { .. }
                 | NodeKind::Try { .. }
+                | NodeKind::Defer { .. }
                 | NodeKind::Subroutine { .. }
                 | NodeKind::Package { .. }
                 | NodeKind::Block { .. }

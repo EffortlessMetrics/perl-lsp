@@ -948,7 +948,9 @@ where
             c
         }
         NodeKind::Class { body, .. } => vec![body.as_ref()],
-        NodeKind::Eval { block } | NodeKind::Do { block } => vec![block.as_ref()],
+        NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
+            vec![block.as_ref()]
+        }
         NodeKind::Try { body, catch_blocks, finally_block } => {
             let mut c = vec![body.as_ref()];
             for (_var, handler) in catch_blocks {
