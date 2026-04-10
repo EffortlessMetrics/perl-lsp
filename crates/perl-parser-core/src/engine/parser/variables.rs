@@ -882,6 +882,26 @@ impl<'a> Parser<'a> {
                             // `$x`, `@arr`, etc. → signature
                             return Ok(false);
                         }
+                        if let Ok(third) = self.tokens.peek_third() {
+                            let third_starts_signature = match third.kind {
+                                TokenKind::Identifier => third
+                                    .text
+                                    .chars()
+                                    .next()
+                                    .is_some_and(|c| matches!(c, '$' | '@' | '%' | '*' | '&')),
+                                TokenKind::ScalarSigil
+                                | TokenKind::ArraySigil
+                                | TokenKind::HashSigil
+                                | TokenKind::SubSigil
+                                | TokenKind::GlobSigil => true,
+                                _ => false,
+                            };
+
+                            if third_starts_signature {
+                                // `Type $x`, `Role @rest`, etc. are typed signatures.
+                                return Ok(false);
+                            }
+                        }
                         // Bare alphabetic identifier with no sigil (e.g., `XYZ`, `foo`) →
                         // treat as prototype candidate; invalid chars will be warned about.
                         true
@@ -1012,6 +1032,25 @@ mod prototype_heuristic_tests {
 
         if let NodeKind::Subroutine { signature, .. } = &node.kind {
             assert!(signature.is_some(), "sub foo($x, $y) should have a signature");
+        }
+    }
+
+    #[test]
+    fn typed_signature_with_type_constraint() {
+        let node = parse_sub("sub foo(Type $x) {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo(Type $x) {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { signature, prototype, .. } = &node.kind {
+            assert!(signature.is_some(), "typed signature should keep a signature");
+            assert!(prototype.is_none(), "typed signature should not become a prototype");
         }
     }
 
