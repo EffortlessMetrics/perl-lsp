@@ -738,6 +738,49 @@ mod module_hover_tests {
         Ok(())
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn hover_on_use_statement_honors_absolute_perl5lib_outside_workspace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let original_perl5lib = std::env::var_os("PERL5LIB");
+
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let external_lib = temp.path().join("external").join("lib");
+        let module_dir = external_lib.join("External");
+        fs::create_dir_all(&module_dir)?;
+        fs::write(module_dir.join("Tool.pm"), "package External::Tool; 1;")?;
+
+        unsafe {
+            std::env::set_var("PERL5LIB", &external_lib);
+        }
+
+        let workspace_path = workspace.to_str().ok_or("non-UTF-8 workspace path")?;
+        let server = TestServerBuilder::new().with_workspace(workspace_path).build();
+
+        let code = "use External::Tool;\nmy $x = 1;\n";
+        let uri = "file:///test.pl";
+        server.open_document(uri, code);
+
+        let response = server.get_hover(uri, 0, 5);
+        let content = hover_content(&response).ok_or("expected hover content for use statement")?;
+
+        assert!(
+            content.contains("External::Tool"),
+            "hover should show module name, got: {content}"
+        );
+        assert!(
+            content.contains("Tool.pm") && content.contains("Go to module"),
+            "hover should show resolved path for PERL5LIB module, got: {content}"
+        );
+
+        match original_perl5lib {
+            Some(value) => unsafe { std::env::set_var("PERL5LIB", value) },
+            None => unsafe { std::env::remove_var("PERL5LIB") },
+        }
+        Ok(())
+    }
+
     #[test]
     fn hover_on_use_statement_module_not_found() -> Result<(), Box<dyn std::error::Error>> {
         let server = TestServerBuilder::new().build();
