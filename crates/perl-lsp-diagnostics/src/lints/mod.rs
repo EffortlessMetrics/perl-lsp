@@ -129,6 +129,8 @@ pub mod deprecated;
 pub mod duplicate_hash_keys;
 /// Conservative `$@` / `$EVAL_ERROR` flow checks after `eval` / `try`
 pub mod eval_error_flow;
+/// FFI::CheckLib native-library validation hints
+pub mod ffi_checklib;
 /// Missing module detection (PL701)
 pub mod missing_module;
 /// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)

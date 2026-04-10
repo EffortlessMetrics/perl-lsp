@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use perl_lsp_diagnostics::{Diagnostic, DiagnosticSeverity, DiagnosticTag, DiagnosticsProvider};
 use perl_parser::Parser;
+use tempfile::tempdir;
 
 fn diagnostics_for(source: &str) -> Vec<Diagnostic> {
     let output = Parser::new(source).parse_with_recovery();
@@ -381,4 +382,24 @@ fn lint_pipeline_dedup_removes_exact_duplicates() {
             );
         }
     }
+}
+
+// =========================================================================
+// 16. FFI::CheckLib hints surface through the full pipeline
+// =========================================================================
+
+#[test]
+fn lint_pipeline_ffi_checklib_missing_library_emits_hint() {
+    let tempdir = tempdir().unwrap();
+    let source = format!(
+        "use FFI::CheckLib;\nfind_lib(lib => 'ffi_checklib_pipeline_missing_3574', libpath => '{}');\n",
+        tempdir.path().display()
+    );
+    let diags = diagnostics_for(&source);
+
+    assert!(
+        diags.iter().any(|d| d.message.contains("ffi_checklib_pipeline_missing_3574")),
+        "Expected an FFI::CheckLib missing-library diagnostic, got: {:?}",
+        diags.iter().map(|d| d.message.as_str()).collect::<Vec<_>>()
+    );
 }
