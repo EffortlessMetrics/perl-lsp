@@ -7,83 +7,323 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Pre-announcement cleanup wave following the v0.12.2 GitHub Release. These
-changes target the v0.13.0 public alpha announcement.
+<!-- To be populated before announcement -->
+
+## [0.12.3] - 2026-04-08
+
+<!-- Pipeline rehearsal release — validates the full publish + extension + Docker cycle before v0.13.0 public alpha -->
+<!-- Rolls up publish pipeline fixes, UX P0 improvements, and CI hardening from Waves 10/11/12 -->
+
+### Headlines
+
+- **`tree-sitter-perl-c` first published to crates.io** — the conventional C grammar
+  binding (tree-sitter FFI over the C parser) is now a proper published leaf crate,
+  shedding its `libclang`/bindgen dependency in favour of vendored C sources compiled
+  via `cc`. Framed as a compatibility and comparison surface alongside the native v3
+  parser stack. (#3234)
+
+- **Publish pipeline overhauled** — three layered fixes make the pipeline correct
+  and fast: Tarjan SCC topological sort properly handles dev-dependency cycles (#3236);
+  dev-dependencies are stripped from each manifest before publishing so circular
+  workspace dev-deps no longer block `cargo publish` (#3254); and the registry
+  indexing wait is replaced with progressive sparse-index probes that catch silent
+  upload failures instead of proceeding on false success (#3230).
+
+- **Archive: 7 dead tree-sitter harness crates removed from the workspace** — the
+  old Pest-based `tree-sitter-perl-rs` harness and 6 `perl-ts-*` compatibility shims
+  are moved to `archive/`, clearing the `tree-sitter-perl-rs` name for a planned
+  Rust-native tree-sitter-style facade over the v3 parser. (#3244, #3250)
+
+- **DevEx polish** — `just doctor` auto-detects and self-heals recurring worktree
+  state-corruption bugs; the pre-push hook gains a doc-only fast path and
+  self-heals `core.bare=true` corruption; `just bump-version` centralises
+  version sync across 191 sites. (#3249, #3238, #3228)
+
+- **Quality burn-down** — ~210 `eprintln!` calls in library crates migrated to
+  structured `tracing` macros; three waves of `unwrap`/`expect` eliminations across
+  test code; two dead `build.rs` files removed that were causing unnecessary
+  recompiles. (#3245, #3229, #3241)
 
 ### Added
 
-- **`perl-heredoc-anti-patterns` microcrate**: SRP extraction from
-  `perl-ts-heredoc-analysis::anti_pattern_detector`. The only module of
-  the larger heredoc-analysis crate that production code (perl-lsp-diagnostics)
-  actually consumes. Now a clean publishable leaf crate. (#3199)
-- **`perl-parser-bench` microcrate**: SRP extraction of the `bench_parser`
-  binary that was misplaced inside the tree-sitter-perl-rs harness. Uses
-  `perl-parser` (v3 native) directly. Replaces `perl-ci-hygiene`'s
-  subprocess invocation. (#3198)
-- **`perl-parser-pest` is now publishable**: enabled the legacy v2 Pest-based
-  Perl parser for crates.io publication as a learning tool / Pest reference
+- **`just doctor`**: one-stop workspace health-check that auto-detects and
+  (where safe) auto-fixes recurring state-corruption bugs — `core.bare=true`,
+  stale branches, worktree file leaks, orphaned worktree directories, and missing
+  pre-push hook. (#3249)
+
+- **`just bump-version`**: centralised version-sync command covering all 191
+  version sites (workspace Cargo.toml, every crate manifest, VS Code extension
+  manifest and lockfile, `features.toml`, README, CLAUDE.md, ROADMAP). Paired with
+  an updated `check-version-sync` gate that now covers all the same sites, so drift
+  cannot go undetected. (#3228)
+
+- **`perl-heredoc-anti-patterns` microcrate**: SRP extraction of
+  `anti_pattern_detector` from the larger `perl-ts-heredoc-analysis` crate, which
+  is now archived. The only part that production code consumed is now a clean
+  publishable leaf crate. (#3199)
+
+- **`perl-parser-bench` microcrate**: SRP extraction of the `bench_parser` binary
+  that was misplaced inside the tree-sitter-perl-rs harness. Uses `perl-parser`
+  (v3 native) directly. (#3198)
+
+- **`perl-parser-pest` published to crates.io**: the legacy v2 Pest-based Perl
+  parser is now a published crate, available as a learning tool and Pest reference
   implementation for the broader Perl-in-Rust ecosystem. (#3195)
-- **`perl-lsp-ai-provider` is now publishable**: filled out crates.io metadata
-  and added to the publish allow-list. Was blocking `perl-lsp-rs` from
-  publishing because perl-lsp-rs hard-depends on it. (#3196)
-- **GitHub Discussions enabled** for community Q&A.
-- **Homepage URL** set in repo metadata.
-- **`.gitignore`**: Playwright MCP browser session artifacts. (#3190)
+
+- **`perl-lsp-ai-provider` published to crates.io**: filled out crates.io metadata
+  and added to the publish allow-list. This was a blocker for `perl-lsp-rs`
+  publication. (#3196)
+
+- **4 orphaned workspace members registered**: `perl-workspace-folder`,
+  `perl-dap-stack`, `perl-lsp-feature-policy`, and `perl-lsp-formatting-types`
+  were referenced throughout the workspace but missing from `[workspace] members`,
+  causing them to be silently skipped by every workspace-wide CI gate. (#3232)
+
+- **AI streaming tests**: mock streaming-backend coverage for progress, cancel,
+  and error paths; final stream sequence field assertion; relaxed error-path
+  assertion for terminal final event. (#3170, #3172, #3174, #3175)
+
+- **CPAN corpus caching in CI**: CPAN corpus is now installed and cached before
+  the ratchet step, preventing spurious corpus-ratchet failures on clean CI runs.
+  (#3173)
+
+### Changed
+
+- **`tree-sitter-perl-c` is now publishable**: vendored C sources compiled via
+  `cc` replace the `libclang`/bindgen build step entirely; the single hand-written
+  FFI symbol was already sufficient. Crate brought into the workspace as a proper
+  member. (#3234)
+
+- **xtask now depends on standalone crates directly**: dev tooling in `xtask` and
+  `scripts/test_recursion.rs` was swapped off the archived tree-sitter-perl harness
+  onto `perl-parser-pest` (Rust parser) and `tree-sitter-perl-c` (C FFI) directly,
+  removing the harness's last consumers before archival. (#3206)
+
+- **`just quick-bench` fixed to actually compare C vs Rust parsers**: previously
+  both columns invoked the same `perl-parser-bench` binary (comparing a warm vs
+  cold run of the native parser). The C column now invokes `bench_parser_c` from
+  `tree-sitter-perl-c`, so the speedup column reflects a real C vs Rust comparison.
+  (#3204, #3253)
+
+- **Pre-push hook smarter**: doc-only fast path (markdown/text/license/docs changes
+  run `cargo fmt --check` only, skip the full ci-gate); self-heals `core.bare=true`
+  corruption before any git operation. (#3238)
+
+- **Publish workflow indexing wait replaced with sparse-index probes**: progressive
+  probe at 5s/15s/45s/90s elapsed replaces a fixed 5-minute wait; each crate is
+  verified via the crates.io sparse index after publish; the final verify job runs
+  unconditionally (`if: always()`) and lists exactly which crates failed. (#3230)
+
+- **`eprintln!` → `tracing` in library code**: ~210 `eprintln!` calls across
+  library crates replaced with structured `tracing` macros at appropriate levels
+  (warn/error for failures, info for lifecycle, debug/trace for routine output).
+  `tracing` added to 6 crates that lacked it. (#3224, #3245)
+
+- **Documentation framing updated**: README Architecture section names the native
+  parser/lexer/analysis stack as the architectural centre, distinguishes
+  `tree-sitter-perl-c` (C FFI reference, maintained for compatibility) from the
+  planned `tree-sitter-perl-rs` facade (Rust-native, in development), and frames
+  tree-sitter compatibility as an interoperability surface. (#3247)
+
+- **Per-crate CLAUDE.md headers refreshed** post-archive of tree-sitter harness
+  crates. Stale references to archived crates removed. (#3240)
 
 ### Fixed
 
-- **License detection**: GitHub now reports `Apache-2.0` instead of
-  `NOASSERTION`. Replaced all 126 LICENSE files (root + 62 per-crate × 2)
-  with canonical SPDX text. The previous LICENSE-APACHE held only the
-  short Apache header notice (not the full ~200-line canonical text);
-  the previous LICENSE-MIT held curly quotes that broke licensee's
-  pattern match. (#3193)
-- **Docker arm64 publish workflow**: Dockerfile pinned to
-  `rust:1.92-slim-bookworm` (was tracking older toolchain), and
-  `timeout-minutes` bumped 30→90 for the arm64 builder image and the
-  consolidated Docker Hub publish job. (#3188 → #3191)
-- **`perl-ci-hygiene check-todos`**: now skips `.claude/` ephemeral
-  agent-worktree state. The scanner was treating gitignored worktree
-  files as project source and flagging their TODO comments. (#3196)
-- **README "Current release"** line: stale `v0.12.1` → `v0.12.2`. (#3186)
-- **Top-level `ROADMAP.md` and `NOW_NEXT_LATER.md`**: stuck describing
-  v0.12.2 as in-progress with already-merged PR numbers. Refreshed to
-  reflect post-v0.12.2 pre-announcement state. (#3200)
-- **`docs/project/ROADMAP.md`**: same staleness, current-framing block
-  refreshed and the dead `#3018` reference dropped (AI inline completion
-  shipped in v0.12.2). (#3194)
+- **Publish: dev-dependency cycles no longer block `cargo publish`** — dev-deps
+  are stripped from each crate's `Cargo.toml` before publishing (and restored
+  afterward via a `trap` on EXIT). Fixes the 3-crate dev-dep cycle
+  (`perl-parser-core` / `perl-tdd-support` / `perl-corpus`) that caused publish
+  order failures. (#3254, #3256)
+
+- **Publish: Tarjan SCC topological sort for dev-dep edges** — the previous sort
+  excluded dev-dep edges, causing crates that dev-depend on later-published siblings
+  to be ordered before them. The fix includes dev-dep edges in the graph, uses
+  Tarjan SCC to find strongly-connected components, and retains only inter-SCC
+  dev-dep edges (intra-SCC edges are the only ones that can close a cycle).
+  (#3236, #3242)
+
+- **Publish: `perl-test-must` published before `perl-tdd-support`** — ordering
+  fix for the initial publish sequence that caused `perl-tdd-support` to land
+  before its dependency. (#3176, #3177)
+
+- **Corpus ratchet path mismatch** (#3189 / #3257): xtask's CPAN corpus paths are
+  now anchored at the workspace root (via `env!("CARGO_MANIFEST_DIR")` at build
+  time) rather than resolved against `std::env::current_dir()`. The workflow's
+  `test -d` step is aligned to the same absolute path. Regression-guarded by a
+  unit test that asserts `workspace_root()` contains a top-level `Cargo.toml`.
+
+- **`hook-tests` workspace scribble** (#3203 / #3246): the hook-test scaffold's
+  throwaway git repo inherited `core.hooksPath` from the parent environment,
+  causing the parent pre-commit hook to fire inside the temp repo. In one observed
+  run the temp repo's `README.md` write landed on the real workspace `README.md`.
+  The temp repo is now explicitly isolated with `GIT_CONFIG_NOSYSTEM=1` and
+  `core.hooksPath` cleared; temp dirs are created under `$TMPDIR` not the
+  workspace root.
+
+- **Windows xtask file-lock** (#3202 / #3241): two dead `build.rs` files removed —
+  the root `build.rs` (workspace-only manifest, never run by cargo) and
+  `crates/perl-parser/build.rs` (set environment variables that nothing read, and
+  marked `perl-parser` dirty on every commit via `.git/HEAD` rerun-if-changed
+  directives, propagating unnecessary rebuilds to all 50+ dependents).
+
+- **Windows xtask: recursive subprocess eliminated** (#3221): `cmd_check_parse_errors`
+  was spawning xtask as a subprocess of itself, which caused `Access is denied` (os
+  error 5) on Windows due to the write-lock on the running executable. The inner
+  call is now replaced with a direct function call.
+
+- **Windows xtask: backslash mangling in `smoke-test-release.sh`** (#3214): absolute
+  Windows `PathBuf` paths passed to `bash` as arguments caused backslash-escape
+  collapse. Fixed by using a relative path instead.
+
+- **Triage workflow silently aborting** (#3235): the `triage-issues` workflow was
+  failing on every run that encountered an issue needing labels, silently aborting
+  at the first `add_labels` call.
+
+- **`features.toml` dead test paths repaired**: 43 dead test paths corrected to
+  match the current `crates/perl-lsp/tests/` layout; the
+  `experimental.perlInlineCompletionStream` feature row added (shipped in v0.12.2).
+  (#3222, #3251)
+
+- **`unsafe` block documented**: `GenerateConsoleCtrlEvent` FFI call in
+  `perl-dap` now carries a SAFETY comment explaining why the call is sound.
+  (#3232)
 
 ### Removed
 
-- 3 stray standalone `LICENSE` files in `crates/perl-corpus/`,
-  `crates/perl-lexer/`, `crates/perl-parser/`. They were byte-identical
-  1069-byte orphans holding the old curly-quote MIT text alongside the
-  proper LICENSE-MIT and LICENSE-APACHE files. Not referenced by any
-  Cargo.toml `license-file` field. (#3196)
+- **Archived 7 dead tree-sitter harness crates** to `archive/crates/`:
+  `tree-sitter-perl-rs` (old Pest-based harness), `perl-ts-heredoc-analysis`,
+  `perl-ts-statement-tracker`, `perl-ts-logos-lexer`, `perl-ts-heredoc-parser`,
+  `perl-ts-partial-ast`, `perl-ts-advanced-parsers`. All workspace references,
+  CI exclusion lists, and benchmark function paths updated. (#3244, #3250)
+
+- **Dead stray LICENSE files** in `crates/perl-corpus/`, `crates/perl-lexer/`,
+  `crates/perl-parser/`: byte-identical orphan files not referenced by any
+  `Cargo.toml` `license-file` field. (#3196)
 
 ### Dependencies
 
-7 Dependabot PRs merged, including 3 majors verified safe via parallel
-worktree investigation:
-
-- **major**: `eslint` 9.39.4 → 10.2.0 (#3179) — flat config already in
-  use, lint passes clean with v10
-- **major**: `actions/cache` v4 → v5 (#3181) — Node 24 runtime bump
-  only, no schema or cache-key changes, existing v4 caches remain
+- `similar` 2.7.0 → 3.0.0 (#3184) — only consumer is xtask; breaking changes do
+  not intersect our usage
+- `actions/cache` v4 → v5 (#3181) — Node 24 runtime bump; existing caches remain
   readable
-- **major**: `similar` 2.7.0 → 3.0.0 (#3184) — only consumer is
-  `xtask`, breaking changes don't intersect our usage
+- `eslint` 9.39.4 → 10.2.0 (#3179) — flat config already in use; lint passes clean
 - `tokio` 1.50.0 → 1.51.0 (#3180)
 - `tree-sitter` 0.26.7 → 0.26.8 (#3182)
 - dependencies group with 3 updates (#3183)
 - npm group in vscode-extension (#3178)
 
-## [0.12.2] - 2026-04-04
+### Publish pipeline fixes (post-v0.12.2 publish run lessons)
+
+These fixes landed after the initial v0.12.2 publish run and directly address the
+partial-publish (108/129) and cascading-failure patterns observed in production:
+
+- **HTTP 429 throttle** (#3307): publish workflow detects crates.io rate-limit
+  responses and retries with exponential back-off; the 21 crates that failed in
+  the v0.12.2 publish run were blocked by 429s from rapid-fire publish attempts.
+
+- **Publish allowlist extended** (#3296): `perl-workspace-index-monitoring` and
+  `perl-test-generators` added to the publish allow-list after they were found
+  missing from the v0.12.2 publish set.
+
+- **LICENSE files corrected** (#3304): missing or incorrect `LICENSE` files added
+  to 4 publishable crates (`perl-lsp-ai-provider`, `perl-workspace-index`,
+  `tree-sitter-perl-rs`, `tree-sitter-perl-c`); crates.io rejects publishes with
+  license-file fields pointing to absent files.
+
+- **Duplicate `[package.metadata.docs.rs]` key** (#3315): `tree-sitter-perl-c`
+  had two `[package.metadata.docs.rs]` tables in `Cargo.toml`; the duplicate key
+  caused `cargo publish` to emit a parse warning and was silently dropped, causing
+  docs.rs to build without the intended features. Resolved by merging the two
+  tables.
+
+- **Continue-on-failure** (#3316): publish loop now tracks failures in a
+  `FAILED_CRATES` array instead of `exit 1` immediately; all topologically-ready
+  crates are attempted even when an earlier crate fails. On v0.12.2 run
+  24126423987, 19 crates were blocked by a single cascade; on run 24133403944,
+  22 crates were blocked. Re-runs safely skip already-published crates via the
+  sparse-index check.
+
+- **`tree-sitter-perl-c` polish for first publish** (#3273): vendored sources and
+  FFI bindings verified clean for crates.io submission; duplicate metadata resolved
+  (#3315 above).
+
+- **docs.rs metadata** (#3299): `[package.metadata.docs.rs]` blocks added or
+  corrected for feature-gated crates across the workspace; enables docs.rs to
+  build documentation with the correct feature flags set.
+
+- **Publish dry-run gate** (#3301): new CI check runs `cargo publish --dry-run` on
+  every PR that modifies a `Cargo.toml`, catching publish-time errors (missing
+  files, bad metadata, syntax) before they reach the release pipeline.
+
+### UX fixes (P0 launch blockers)
+
+Five actionability fixes for user-visible error paths that surfaced during the
+v0.12.2 publish run and post-publish testing:
+
+- **Actionable binary download errors** (#3306): extension now shows a specific
+  message with platform, arch, and download URL when the LSP server binary cannot
+  be fetched, instead of a generic network failure.
+
+- **LSP startup error diagnosis** (#3308): `classifyStartupError()` maps stderr
+  signatures (GLIBC version mismatch, missing shared library, Exec format error,
+  permission denied) to actionable hints and remediation steps; reorders error
+  dialog actions so "View Logs" appears before "Reinstall".
+
+- **Workspace root detection warning** (#3309): when the workspace root cannot be
+  determined, the server now emits a `window/showMessage` warning with the detected
+  state instead of failing silently. Previously users had no indication of why
+  features were degraded.
+
+- **Enterprise binary distribution note** (#3310): documentation updated to
+  explain that `perllsp` is distributed as a pre-compiled binary via `cargo
+  install`, with offline-install guidance for air-gapped enterprise environments.
+
+- **Perl interpreter missing error** (#3312): when `perl` is not found on `$PATH`,
+  the extension shows the exact binary name searched and a platform-specific
+  installation suggestion, replacing the previous "Perl not found" dead end.
+
+### CI hardening
+
+- **SHA-pinned third-party Actions** (#3294): all `uses:` references to third-party
+  GitHub Actions pinned to immutable commit SHAs with version comments (e.g.,
+  `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2`).
+  Prevents supply-chain attacks via tag mutation.
+
+- **GIT_DIR cleared in hook-tests** (#3318): xtask hook-test scaffold now runs
+  with `GIT_DIR` unset, preventing the worktree's inherited `GIT_DIR` value from
+  causing git commands inside the temp repo to resolve against the wrong object
+  store. Observed contamination: test-repo commits were silently landing in the
+  agent worktree.
+
+- **UX regression gate** (#3293): new CI check detects regressions in user-visible
+  LSP, DAP, and extension behaviour on every PR that touches those surfaces.
+  Backed by the UX test harness framework (#3297).
+
+- **UX test harness framework** (#3297): systematic framework for UX regression
+  tests with helpers for LSP, DAP, and extension surface validation.
+
+## [0.12.2] - 2026-04-08
 
 `v0.12.2` is the confidence-building release for the 0.12.x series. 89 commits
 across 59 PRs spanning new features, performance, testing, distribution, and
 documentation. The entire 0.12.x roadmap from v0.12.2 through v0.12.8 milestones
 is consolidated into this single release.
+
+The v0.12.2 publish run extended the original GitHub Release with a wave of
+quality, distribution, and CI infrastructure work needed to land the full crate
+set on crates.io. 108 of 129 crates published successfully in the first attempt;
+the remaining 21 (including `tree-sitter-perl-c`, `tree-sitter-perl-rs`,
+`perl-parser`, `perl-lsp-rs`, `perllsp`, `perl-dap`) will retry after the HTTP
+429 throttle fix lands.
+
+### New Crates (first publish)
+
+- **`tree-sitter-perl-rs`**: v3 ergonomic facade over the native parser stack,
+  published alongside `tree-sitter-perl-c` for projects that want tree-sitter
+  call ergonomics on top of the Rust-native parser (#3255)
+- **`tree-sitter-perl-c`**: conventional C-binding crate for the tree-sitter
+  grammar, now publishable on crates.io (#3234)
 
 ### Added
 
@@ -163,6 +403,58 @@ is consolidated into this single release.
 - removed 8 unused dependencies across 6 crates (#3146)
 - dependabot: insta 1.47.1, proptest, tar, toml 1.1.0, uuid 1.23.0,
   actions/deploy-pages 5, codecov/codecov-action 6
+
+### Quality (publish-run additions)
+
+- **`eprintln!` → `tracing`**: migrated all `eprintln!` / `println!` calls in
+  library code to structured `tracing` spans/events; `eprintln!` now banned in
+  non-binary crates (#3224, #3245)
+- **unwrap burn-down**: Wave 2 (`perl-dap-security`) and Wave 3 (5 crates, 9
+  eliminations) converted `unwrap()`/`expect()` calls to `?` and pattern
+  matching (#3246 area)
+- **error message actionability**: user-visible LSP/DAP error messages rewritten
+  to be actionable — what failed, why, what to do next — ahead of v0.13.0
+  launch (#3291)
+- **crates.io metadata**: `description`, `keywords`, `categories`, `repository`,
+  `documentation`, `readme` fields polished across all publishable crates (#3234)
+- **docs.rs metadata**: `[package.metadata.docs.rs]` blocks added for
+  feature-gated crates (#3234)
+- **dead build.rs files removed**: stale `build.rs` files that caused publish
+  errors removed from 3 crates (#3217, #3241)
+- **stale harness crates archived**: dead tree-sitter harness crates moved to
+  `archive/` to reduce workspace noise (#3250, #3244)
+
+### CI (publish-run additions)
+
+- **publish topological sort**: dev-dependencies now included in the publish
+  order graph so crates publish in the correct dependency order (#3236, #3242)
+- **dev-dependency stripping**: `cargo publish` now strips `[dev-dependencies]`
+  before publishing to avoid version conflicts (#3254, #3256)
+- **`--allow-dirty` for publish**: added after dev-dep strip leaves the working
+  tree dirty (#3300)
+- **HTTP 429 throttle handling**: publish workflow detects crates.io rate-limit
+  responses and retries with back-off (pending)
+- **sparse index wait replaced**: replaced fixed-duration index wait with
+  sparse-index polling for faster, more reliable publish verification
+- **UX regression gate**: PR check that detects regressions in user-visible LSP,
+  DAP, and extension behavior on every PR touching those surfaces (#3293)
+- **post-publish smoke test**: automated verification that published crates
+  install and the binary starts correctly after each publish run (#3288)
+- **version-bump automation centralized**: `just bump-version` now handles
+  Cargo.toml, extension package.json, and docs in one command (#3289)
+- **`just doctor`**: new workspace health-check recipe that validates the full
+  workspace is in a buildable state before starting a session (#3249)
+- **`vsce publish` idempotency**: marketplace publish step no longer fails on
+  re-run when the version already exists (#3187, #3267)
+
+### UX (publish-run additions)
+
+- **Settings schema polish**: VS Code extension settings schema updated for
+  launch-readiness — correct types, descriptions, and defaults (#3278)
+- **VS Code Marketplace punch list**: README badges, Open VSX registration,
+  extension icon, and feature highlights aligned for marketplace discovery
+  (#3284)
+- **test de-flake**: `empty_timer_reports_total` race condition fixed (#3278)
 
 ## [0.12.1] - 2026-03-30
 

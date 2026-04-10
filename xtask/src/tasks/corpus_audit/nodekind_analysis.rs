@@ -129,11 +129,7 @@ fn extract_nodekinds_from_content(path: &PathBuf) -> Vec<String> {
         eprintln!("   Warning: Failed to parse {}", path.display());
     }
 
-    let result: Vec<String> = nodekinds.into_iter().collect();
-    if path.to_string_lossy().contains("basic_constructs") {
-        eprintln!("   Debug: NodeKinds in basic_constructs.pl: {:?}", result);
-    }
-    result
+    nodekinds.into_iter().collect()
 }
 
 fn collect_nodekinds_recursive(node: &perl_parser::ast::Node, out: &mut HashSet<String>) {

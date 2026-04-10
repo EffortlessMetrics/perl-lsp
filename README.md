@@ -22,7 +22,7 @@ Perl has lacked a proper modern LSP implementation. Other languages — Rust, Ty
 
 ## What It Is
 
-`perl-lsp` is a workspace of Rust crates delivering a complete Perl 5 tooling stack: an LSP server (`perllsp`) covering all 98 LSP 3.18 protocol features, a DAP debug adapter, a recursive-descent parser, a context-aware lexer, and a semantic analyzer — packaged as a single native binary you can drop into any editor. It runs on Windows, macOS, and Linux.
+`perl-lsp` is a workspace of Rust crates delivering a complete Perl 5 tooling stack: an LSP server (`perllsp`) covering 102 catalogued capabilities (87 LSP + 10 DAP + 5 extension features), a DAP debug adapter, a recursive-descent parser, a context-aware lexer, and a semantic analyzer — packaged as a single native binary you can drop into any editor. It runs on Windows, macOS, and Linux.
 
 ## Quick Start
 
@@ -63,7 +63,7 @@ For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/G
 
 ## Key Features
 
-- **Full LSP coverage** — completions, diagnostics, hover, go-to-definition, find references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, workspace symbols — all 98 LSP 3.18 features implemented
+- **Full LSP coverage** — completions, diagnostics, hover, go-to-definition, find references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, workspace symbols — 102 catalogued capabilities at 100% coverage
 - **Native debug adapter** — DAP breakpoints, stepping, stack frames, variable inspection, and evaluate; no wrapper script required
 - **Fast native parser** — recursive-descent v3 parser with a context-aware lexer; validated against a curated CPAN corpus
 - **Semantic analysis** — symbol resolution, scope tracking, Moose/Moo method modifiers and role composition
@@ -117,7 +117,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
 
 ## Status
 
-**Current release: v0.12.2** — public alpha. The 0.12.x line is building parser corpus confidence, diagnostic hardening, and distribution coverage toward the v0.13.0 public alpha announcement. See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the milestone ladder and [docs/project/status/index.md](docs/project/status/index.md) for live metrics.
+**Current release: v0.12.3** — public alpha. The 0.12.x line is building parser corpus confidence, diagnostic hardening, and distribution coverage toward the v0.13.0 public alpha announcement. See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the milestone ladder and [docs/project/status/index.md](docs/project/status/index.md) for live metrics.
 
 ## Security
 

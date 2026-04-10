@@ -21,5 +21,8 @@ perl-module-token-core = { workspace = true }
 proptest.workspace = true
 perl-module-reference = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

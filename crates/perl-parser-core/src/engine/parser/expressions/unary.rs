@@ -21,6 +21,10 @@ fn is_typeglob_punct_terminator(kind: Option<TokenKind>) -> bool {
 impl<'a> Parser<'a> {
     /// Parse unary expression
     fn parse_unary(&mut self) -> ParseResult<Node> {
+        if self.peek_kind() == Some(TokenKind::Slash) {
+            self.tokens.relex_as_term();
+        }
+
         if let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Minus => {
@@ -31,6 +35,23 @@ impl<'a> Parser<'a> {
                     if let Some(TokenKind::Identifier) = self.peek_kind() {
                         let next_token = self.tokens.peek()?;
                         if next_token.text.len() == 1 {
+                            // Before a fat arrow, `-G`, `-r`, etc. are hash/list keys, not
+                            // file-test operators.
+                            if self
+                                .tokens
+                                .peek_second()
+                                .is_ok_and(|token| token.kind == TokenKind::FatArrow)
+                            {
+                                let test_token = self.tokens.next()?;
+                                let end = test_token.end;
+                                return Ok(Node::new(
+                                    NodeKind::Identifier {
+                                        name: format!("-{}", test_token.text),
+                                    },
+                                    SourceLocation { start, end },
+                                ));
+                            }
+
                             // It's a file test operator
                             let test_token = self.tokens.next()?;
                             let file_test = format!("-{}", test_token.text);
@@ -169,7 +190,7 @@ impl<'a> Parser<'a> {
                     if op_token.kind == TokenKind::Star {
                         if let Some(next_kind) = self.peek_kind() {
                             match next_kind {
-                                TokenKind::Identifier => {
+                                kind if Self::can_be_sub_name(kind) => {
                                     let id_token = self.tokens.next()?;
                                     let end = id_token.end;
                                     let node = Node::new(

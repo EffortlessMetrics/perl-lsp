@@ -20,5 +20,8 @@ regex.workspace = true
 [lib]
 doctest = false
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

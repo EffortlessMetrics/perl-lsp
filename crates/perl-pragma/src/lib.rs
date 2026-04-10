@@ -6,6 +6,22 @@
 use perl_ast::ast::{Node, NodeKind};
 use std::ops::Range;
 
+/// Parsed Perl version from a lexical `use v...;` or `use 5.xxx;` pragma.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PerlVersion {
+    /// Major Perl version component.
+    pub major: u32,
+    /// Minor Perl version component.
+    pub minor: u32,
+}
+
+impl PerlVersion {
+    /// Create a new Perl version value.
+    pub const fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
+    }
+}
+
 /// Pragma state at a given point in the code
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PragmaState {
@@ -23,6 +39,77 @@ impl PragmaState {
     /// Create a new pragma state with all strict modes enabled
     pub fn all_strict() -> Self {
         Self { strict_vars: true, strict_subs: true, strict_refs: true, warnings: false }
+    }
+}
+
+/// Parse a Perl version string into a major/minor pair.
+///
+/// Handles lexical version pragmas such as:
+/// - `v5.36`
+/// - `v5.36.0`
+/// - `5.036`
+/// - `5.10`
+/// - developer releases like `5.012_001`
+pub fn parse_perl_version(module: &str) -> Option<PerlVersion> {
+    let s = module.strip_prefix('v').unwrap_or(module);
+
+    let parts: Vec<&str> = s.splitn(3, '.').collect();
+    let major: u32 = parse_version_component(parts.first()?)?;
+    let minor: u32 = match parts.get(1) {
+        Some(part) => parse_version_component(part)?,
+        None => 0,
+    };
+
+    Some(PerlVersion { major, minor })
+}
+
+fn parse_version_component(component: &str) -> Option<u32> {
+    let component = component.split_once('_').map_or(component, |(head, _)| head);
+    component.parse().ok()
+}
+
+/// Whether `use VERSION` implies `strict` for this version.
+#[must_use]
+pub fn version_implies_strict(version: PerlVersion) -> bool {
+    version >= PerlVersion::new(5, 12)
+}
+
+/// Whether `use VERSION` implies `warnings` for this version.
+#[must_use]
+pub fn version_implies_warnings(version: PerlVersion) -> bool {
+    version >= PerlVersion::new(5, 35)
+}
+
+/// Returns the language features implicitly enabled by declaring `use VERSION`.
+#[must_use]
+pub fn features_enabled_by_version(version: PerlVersion) -> Vec<&'static str> {
+    let mut features = Vec::new();
+    if version >= PerlVersion::new(5, 10) {
+        features.extend_from_slice(&["say", "state"]);
+    }
+    if version >= PerlVersion::new(5, 20) {
+        features.push("postfix_deref");
+    }
+    if version >= PerlVersion::new(5, 34) {
+        features.push("try");
+    }
+    if version >= PerlVersion::new(5, 36) {
+        features.push("signatures");
+    }
+    if version >= PerlVersion::new(5, 38) {
+        features.extend_from_slice(&["class", "field", "method"]);
+    }
+    features
+}
+
+fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVersion) {
+    if version_implies_strict(version) {
+        state.strict_vars = true;
+        state.strict_subs = true;
+        state.strict_refs = true;
+    }
+    if version_implies_warnings(version) {
+        state.warnings = true;
     }
 }
 
@@ -100,7 +187,15 @@ impl PragmaTracker {
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
-                    _ => {}
+                    _ => {
+                        if let Some(version) = parse_perl_version(module) {
+                            enable_effective_version_semantics(current_state, version);
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                        }
+                    }
                 }
             }
             NodeKind::No { module, args, .. } => {

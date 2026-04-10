@@ -116,6 +116,8 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
 /// Configuration for the corpus sweep
 #[derive(Debug, Clone)]
 pub struct SweepConfig {
+    /// Optional corpus profile override for report and receipt naming.
+    pub corpus_profile: Option<String>,
     /// High-level roots for report metadata (e.g., `/usr/share/perl`)
     pub base_roots: Vec<PathBuf>,
     /// Expanded directories to actually scan (includes versioned subdirs)
@@ -132,7 +134,7 @@ pub struct SweepConfig {
     pub enforce: bool,
     /// Include per-file details in output
     pub verbose: bool,
-    /// Write receipt JSON to target/receipts/corpus-sweep.json
+    /// Write receipt JSON to target/receipts/<profile>-corpus-sweep.json
     pub receipt: bool,
 }
 
@@ -142,7 +144,7 @@ pub struct SweepReport {
     pub schema_version: String,
     pub commit: String,
     pub timestamp: String,
-    /// Corpus profile identifier (always "system" for now)
+    /// Corpus profile identifier (for example "system", "common", or "cpan")
     #[serde(default = "default_corpus_profile")]
     pub corpus_profile: String,
     /// High-level base roots (e.g., 3 base directories)
@@ -170,8 +172,19 @@ fn default_corpus_profile() -> String {
     "system".to_string()
 }
 
+fn receipt_path_for_profile(profile: &str) -> PathBuf {
+    PathBuf::from(format!("target/receipts/{profile}-corpus-sweep.json"))
+}
+
 fn default_perl_version() -> String {
     "unknown".to_string()
+}
+
+fn portable_report_path(path: &Path) -> String {
+    match path.strip_prefix(super::cpan_corpus::workspace_root()) {
+        Ok(relative) => relative.display().to_string(),
+        Err(_) => path.display().to_string(),
+    }
 }
 
 /// Per-file result
@@ -396,13 +409,12 @@ where
         return Some(direct);
     }
 
-    #[cfg(windows)]
+    // Keep the production Windows-only behavior in `windows_manifest_module_path`,
+    // but allow tests to inject a converter regardless of host platform.
+    if let Some(converted) = windows_converter(path)
+        && converted.exists()
     {
-        if let Some(converted) = windows_converter(path)
-            && converted.exists()
-        {
-            return Some(converted);
-        }
+        return Some(converted);
     }
 
     None
@@ -496,11 +508,15 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let start_time = Instant::now();
 
     // Determine corpus profile and file list
-    let (corpus_profile, pm_files) = if let Some(ref manifest) = config.manifest_path {
+    let default_profile =
+        if config.manifest_path.is_some() { "common".to_string() } else { "system".to_string() };
+    let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
+
+    let pm_files = if let Some(ref manifest) = config.manifest_path {
         let files = resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?;
-        ("common".to_string(), files)
+        files
     } else {
-        ("system".to_string(), discover_pm_files(&config.corpus_roots))
+        discover_pm_files(&config.corpus_roots)
     };
 
     let use_manifest = config.manifest_path.is_some();
@@ -540,6 +556,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     for path in &pm_files {
         total_files += 1;
+        let portable_path = portable_report_path(path);
         progress.set_message(
             path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
         );
@@ -550,7 +567,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 files_unreadable += 1;
                 if config.verbose {
                     file_results.push(FileResult {
-                        path: path.display().to_string(),
+                        path: portable_path.clone(),
                         status: "unreadable".to_string(),
                         error_node_count: 0,
                         first_error: None,
@@ -571,10 +588,10 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 total_error_nodes += 1;
                 let bucket = "catastrophic_parse_failure".to_string();
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
-                files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
+                files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
                 if config.verbose {
                     file_results.push(FileResult {
-                        path: path.display().to_string(),
+                        path: portable_path.clone(),
                         status: "errors".to_string(),
                         error_node_count: 1,
                         first_error: Some(bucket),
@@ -592,7 +609,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             clean_files += 1;
             if config.verbose {
                 file_results.push(FileResult {
-                    path: path.display().to_string(),
+                    path: portable_path.clone(),
                     status: "clean".to_string(),
                     error_node_count: 0,
                     first_error: None,
@@ -604,10 +621,10 @@ pub fn run(config: SweepConfig) -> Result<()> {
             let first = summary.first_message.as_deref().unwrap_or("unknown");
             let bucket = normalize_error_bucket(first);
             *first_error_buckets.entry(bucket.clone()).or_default() += 1;
-            files_by_bucket.entry(bucket.clone()).or_default().push(path.display().to_string());
+            files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
             if config.verbose {
                 file_results.push(FileResult {
-                    path: path.display().to_string(),
+                    path: portable_path,
                     status: "errors".to_string(),
                     error_node_count: summary.count,
                     first_error: Some(bucket),
@@ -629,9 +646,9 @@ pub fn run(config: SweepConfig) -> Result<()> {
         timestamp: chrono::Utc::now().to_rfc3339(),
         corpus_profile: corpus_profile.clone(),
         corpus_roots: if use_manifest {
-            vec![config.manifest_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default()]
+            vec![config.manifest_path.as_ref().map(|p| portable_report_path(p)).unwrap_or_default()]
         } else {
-            config.base_roots.iter().map(|p| p.display().to_string()).collect()
+            config.base_roots.iter().map(|p| portable_report_path(p)).collect()
         },
         resolved_roots_count: if use_manifest { pm_files.len() } else { config.corpus_roots.len() },
         perl_version: get_perl_version(),
@@ -661,8 +678,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     // Write receipt if requested
     if config.receipt {
-        let receipt_path =
-            PathBuf::from(format!("target/receipts/{}-corpus-sweep.json", corpus_profile));
+        let receipt_path = receipt_path_for_profile(&corpus_profile);
         if let Some(parent) = receipt_path.parent() {
             fs::create_dir_all(parent).context("Failed to create receipt directory")?;
         }
@@ -1275,6 +1291,22 @@ mod tests {
     }
 
     #[test]
+    fn test_receipt_path_for_profile_uses_profile_name() {
+        assert_eq!(
+            receipt_path_for_profile("system"),
+            PathBuf::from("target/receipts/system-corpus-sweep.json")
+        );
+        assert_eq!(
+            receipt_path_for_profile("cpan"),
+            PathBuf::from("target/receipts/cpan-corpus-sweep.json")
+        );
+        assert_eq!(
+            receipt_path_for_profile("cpan-common"),
+            PathBuf::from("target/receipts/cpan-common-corpus-sweep.json")
+        );
+    }
+
+    #[test]
     fn test_enforce_strict_clean_all_clean() {
         let report = test_report(10, 0, 0, 0, BTreeMap::new());
         let violations = enforce_strict_clean(&report);
@@ -1714,5 +1746,18 @@ mod tests {
         let report = SweepReport { files_by_bucket: fbb_b, ..baseline.clone() };
         let violations = enforce_ratchet(&report, &baseline);
         assert!(violations.is_empty(), "files_by_bucket changes should not affect ratchet");
+    }
+
+    #[test]
+    fn test_portable_report_path_relativizes_workspace_paths() {
+        let workspace_root = super::super::cpan_corpus::workspace_root();
+        let path = workspace_root.join("target/cpan-corpus/lib/perl5/Foo.pm");
+        assert_eq!(portable_report_path(&path), "target/cpan-corpus/lib/perl5/Foo.pm");
+    }
+
+    #[test]
+    fn test_portable_report_path_preserves_external_paths() {
+        let path = PathBuf::from("/usr/share/perl/Foo.pm");
+        assert_eq!(portable_report_path(&path), "/usr/share/perl/Foo.pm");
     }
 }

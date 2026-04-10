@@ -26,5 +26,9 @@ lsp-ga-lock = [
     "perl-lsp-feature-profile/lsp-ga-lock",
 ]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

@@ -16,6 +16,7 @@
 
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
+use perl_pragma::{PerlVersion, features_enabled_by_version, parse_perl_version};
 
 use super::super::walker::walk_node;
 use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
@@ -38,47 +39,6 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     ("field", 5, 38),
 ];
 
-/// Parse a Perl version string into (major, minor).
-///
-/// Handles:
-/// - `"v5.36"`, `"v5.36.0"` → `(5, 36)`
-/// - `"5.036"` → `(5, 36)` (thousandths notation: `parse("036")` == 36)
-/// - `"5.010"` → `(5, 10)`
-/// - `"5.10"` → `(5, 10)`
-/// - `"5.8"` → `(5, 8)`
-fn parse_perl_version(module: &str) -> Option<(u32, u32)> {
-    // Strip optional 'v' prefix: "v5.36" → "5.36"
-    let s = module.strip_prefix('v').unwrap_or(module);
-
-    let parts: Vec<&str> = s.splitn(3, '.').collect();
-    let major: u32 = parts.first()?.parse().ok()?;
-    // "036" parses as 36, "10" parses as 10 — both correct for our comparison
-    let minor: u32 = parts.get(1)?.parse().ok()?;
-
-    Some((major, minor))
-}
-
-/// Returns the set of features implicitly enabled by declaring `use vM.N`.
-fn features_enabled_by_version(major: u32, minor: u32) -> Vec<&'static str> {
-    let mut features = Vec::new();
-    if (major, minor) >= (5, 10) {
-        features.extend_from_slice(&["say", "state"]);
-    }
-    if (major, minor) >= (5, 20) {
-        features.push("postfix_deref");
-    }
-    if (major, minor) >= (5, 34) {
-        features.push("try");
-    }
-    if (major, minor) >= (5, 36) {
-        features.push("signatures");
-    }
-    if (major, minor) >= (5, 38) {
-        features.extend_from_slice(&["class", "field", "method"]);
-    }
-    features
-}
-
 /// Check for Perl version compatibility issues.
 ///
 /// Walks the AST looking for uses of version-gated features and emits
@@ -90,16 +50,13 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         _ => return,
     };
 
-    let mut declared_version: Option<(u32, u32)> = None;
+    let mut declared_version: Option<PerlVersion> = None;
     let mut explicit_features: Vec<String> = Vec::new();
 
     for stmt in statements {
         if let NodeKind::Use { module, args, .. } = &stmt.kind {
             // Check for `use vN.NN` or `use N.NNN`
-            if (module.starts_with('v')
-                || module.chars().next().is_some_and(|c| c.is_ascii_digit()))
-                && let Some(version) = parse_perl_version(module)
-            {
+            if let Some(version) = parse_perl_version(module) {
                 // Take the highest declared version if multiple appear
                 match declared_version {
                     None => declared_version = Some(version),
@@ -119,13 +76,13 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     }
 
     // If no version was declared, skip all checks.
-    let (major, minor) = match declared_version {
+    let declared_version = match declared_version {
         Some(v) => v,
         None => return,
     };
 
     // Derive effective feature set from declared version.
-    let mut effective_features = features_enabled_by_version(major, minor);
+    let mut effective_features = features_enabled_by_version(declared_version);
 
     // Explicit `use feature 'X'` additions override version.
     for feat in &explicit_features {
@@ -147,7 +104,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             NodeKind::Class { .. } => {
                 if !effective_features.contains(&"class") {
                     let min = feature_min_version("class");
-                    diagnostics.push(make_diagnostic(n, "class", major, minor, min));
+                    diagnostics.push(make_diagnostic(n, "class", declared_version, min));
                 }
             }
 
@@ -155,7 +112,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             NodeKind::Try { .. } => {
                 if !effective_features.contains(&"try") {
                     let min = feature_min_version("try");
-                    diagnostics.push(make_diagnostic(n, "try/catch", major, minor, min));
+                    diagnostics.push(make_diagnostic(n, "try/catch", declared_version, min));
                 }
             }
 
@@ -163,7 +120,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             NodeKind::FunctionCall { name, .. } if name == "say" => {
                 if !effective_features.contains(&"say") {
                     let min = feature_min_version("say");
-                    diagnostics.push(make_diagnostic(n, "say", major, minor, min));
+                    diagnostics.push(make_diagnostic(n, "say", declared_version, min));
                 }
             }
 
@@ -171,7 +128,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             NodeKind::VariableDeclaration { declarator, .. } if declarator == "state" => {
                 if !effective_features.contains(&"state") {
                     let min = feature_min_version("state");
-                    diagnostics.push(make_diagnostic(n, "state", major, minor, min));
+                    diagnostics.push(make_diagnostic(n, "state", declared_version, min));
                 }
             }
 
@@ -181,7 +138,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             {
                 if !effective_features.contains(&"postfix_deref") {
                     let min = feature_min_version("postfix_deref");
-                    diagnostics.push(make_diagnostic(n, "postfix deref", major, minor, min));
+                    diagnostics.push(make_diagnostic(n, "postfix deref", declared_version, min));
                 }
             }
 
@@ -192,8 +149,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                     diagnostics.push(make_diagnostic(
                         n,
                         "subroutine signatures",
-                        major,
-                        minor,
+                        declared_version,
                         min,
                     ));
                 }
@@ -217,13 +173,12 @@ fn feature_min_version(feature: &str) -> (u32, u32) {
 fn make_diagnostic(
     node: &Node,
     display: &str,
-    declared_major: u32,
-    declared_minor: u32,
+    declared_version: PerlVersion,
     min_version: (u32, u32),
 ) -> Diagnostic {
     let message = format!(
         "'{}' requires Perl v{}.{}+; declared version is v{}.{}",
-        display, min_version.0, min_version.1, declared_major, declared_minor,
+        display, min_version.0, min_version.1, declared_version.major, declared_version.minor,
     );
 
     Diagnostic {
@@ -235,7 +190,7 @@ fn make_diagnostic(
         tags: vec![],
         suggestion: Some(format!(
             "Update 'use v{}.{}' to 'use v{}.{}' or add 'use feature \"{}\";'",
-            declared_major, declared_minor, min_version.0, min_version.1, display,
+            declared_version.major, declared_version.minor, min_version.0, min_version.1, display,
         )),
     }
 }

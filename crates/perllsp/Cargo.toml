@@ -30,6 +30,9 @@ path = "src/main.rs"
 [dependencies]
 perl-lsp-rs = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

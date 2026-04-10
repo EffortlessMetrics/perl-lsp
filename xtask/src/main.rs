@@ -1055,6 +1055,12 @@ enum CpanCorpusCommand {
         /// Verbose output
         #[arg(long)]
         verbose: bool,
+
+        /// Force a full wipe of the install directory before installing.
+        /// Default is an incremental install that keeps `lib/perl5` between
+        /// runs and lets cpanm skip already-installed modules.
+        #[arg(long)]
+        reset: bool,
     },
 
     /// Run parser corpus sweep against installed CPAN modules
@@ -1305,6 +1311,7 @@ fn main() -> Result<()> {
             let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
             let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
             parser_corpus_sweep::run(parser_corpus_sweep::SweepConfig {
+                corpus_profile: None,
                 base_roots,
                 corpus_roots,
                 manifest_path: manifest,
@@ -1326,10 +1333,11 @@ fn main() -> Result<()> {
                     }
                     cpan_corpus::fetch_list(&config)
                 }
-                CpanCorpusCommand::Install { dist_list, install_dir, verbose } => {
+                CpanCorpusCommand::Install { dist_list, install_dir, verbose, reset } => {
                     if let Some(dl) = dist_list {
                         config.dist_list = dl;
                     }
+                    config.force_reset = reset;
                     if let Some(id) = install_dir {
                         config.install_dir = id;
                     }

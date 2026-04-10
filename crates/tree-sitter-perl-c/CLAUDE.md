@@ -4,12 +4,15 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`tree-sitter-perl-c` is a **Tier 7 legacy/benchmarking crate** that wraps
-the C-based tree-sitter Perl grammar via a hand-written FFI declaration.
+`tree-sitter-perl-c` is the **conventional tree-sitter grammar/binding crate**
+for Perl, maintained for compatibility and comparison against the native v3
+parser. It wraps the C-based tree-sitter Perl grammar via a hand-written FFI
+declaration.
 
 **Purpose**: Compile the vendored C parser (`parser.c`) and external
 scanner (`scanner.c`) from `c-src/` via the `cc` crate and expose a
-tree-sitter `Language` for benchmarking against the native Rust parser.
+tree-sitter `Language` for compatibility testing and benchmarking against
+the native Rust parser.
 
 **Version**: tracks the workspace (currently `0.12.2`).
 
@@ -106,9 +109,9 @@ let lang = language();
 
 - Requires a C compiler only — no `libclang` / `bindgen` toolchain needed.
 - Participates in the default workspace build and is on the publish allowlist.
-- Legacy crate kept as the honest C-FFI reference implementation; active
-  development for the native parser uses the v3 Rust parser in
-  `crates/perl-parser/`.
+- Conventional C-FFI reference implementation maintained for compatibility
+  and comparison; active development for the native parser uses the v3
+  Rust parser in `crates/perl-parser/`.
 - The C sources under `c-src/` are a vendored snapshot. The old harness crate
   (`tree-sitter-perl-rs`) has been archived to `archive/crates/tree-sitter-perl-rs/`;
   `c-src/` is now the sole source of truth for upstream C grammar snapshots.

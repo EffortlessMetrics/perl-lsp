@@ -26,12 +26,14 @@ doctest = false
 
 [dependencies]
 perl-ast = { workspace = true }
-perl-position-tracking = { workspace = true }
 perl-symbol-types = { workspace = true }
 
 [dev-dependencies]
 perl-ast = { workspace = true }
 perl-symbol-types = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

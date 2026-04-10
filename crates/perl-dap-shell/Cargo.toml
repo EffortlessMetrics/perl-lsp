@@ -27,5 +27,8 @@ path = "src/lib.rs"
 perl-dap-command-args = { workspace = true }
 perl-dap-platform = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

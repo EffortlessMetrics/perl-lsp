@@ -22,5 +22,8 @@ perl-module-path = { workspace = true }
 serde_json.workspace = true
 url.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

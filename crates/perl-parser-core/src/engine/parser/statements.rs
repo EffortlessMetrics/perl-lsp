@@ -156,7 +156,11 @@ impl<'a> Parser<'a> {
             // Variable declarations
             TokenKind::My | TokenKind::Our | TokenKind::State => {
                 let decl = self.parse_variable_declaration()?;
-                Ok(self.parse_word_or_expr(decl)?)
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.finish_expression_from(decl)
+                } else {
+                    Ok(self.parse_word_or_expr(decl)?)
+                }
             }
             // `field` is a variable declarator only in Perl 5.38+ class bodies.
             // In legacy code it is commonly a regular identifier (function call,
@@ -166,7 +170,37 @@ impl<'a> Parser<'a> {
             // to expression parsing.
             TokenKind::Field if self.is_field_declaration_context() => {
                 let decl = self.parse_variable_declaration()?;
-                Ok(self.parse_word_or_expr(decl)?)
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    let variable = match decl.kind {
+                        NodeKind::VariableDeclaration { variable, .. } => *variable,
+                        _ => decl,
+                    };
+                    let call_start = variable.location.start;
+                    let mut args = vec![variable];
+
+                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                        self.consume_token()?;
+
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            self.consume_token()?;
+                        }
+
+                        if self.is_at_statement_end() {
+                            break;
+                        }
+
+                        args.push(self.parse_assignment_or_declaration()?);
+                    }
+
+                    let end = args.last().map(|arg| arg.location.end).unwrap_or(call_start);
+                    let call = Node::new(
+                        NodeKind::FunctionCall { name: "field".to_string(), args },
+                        SourceLocation { start: call_start, end },
+                    );
+                    Ok(self.parse_word_or_expr(call)?)
+                } else {
+                    Ok(self.parse_word_or_expr(decl)?)
+                }
             }
             TokenKind::Local => self.parse_local_statement(),
 
@@ -392,104 +426,7 @@ impl<'a> Parser<'a> {
     /// expression.
     fn finish_expression_from(&mut self, first: Node) -> ParseResult<Node> {
         let start = first.location.start;
-        let mut expr = first;
-
-        // Continue with comma / fat-arrow parsing (mirrors parse_comma logic)
-        if self.peek_kind() == Some(TokenKind::Comma)
-            || self.peek_kind() == Some(TokenKind::FatArrow)
-        {
-            let mut expressions = vec![expr];
-            let mut saw_fat_comma = false;
-
-            // Handle initial fat arrow
-            if self.peek_kind() == Some(TokenKind::FatArrow) {
-                saw_fat_comma = true;
-                self.tokens.next()?; // consume =>
-                expressions.push(self.parse_assignment()?);
-            }
-
-            while self.peek_kind() == Some(TokenKind::Comma)
-                || self.peek_kind() == Some(TokenKind::FatArrow)
-            {
-                let was_comma = self.peek_kind() == Some(TokenKind::Comma);
-                if was_comma {
-                    self.consume_token()?; // consume comma
-                }
-
-                // Handle `, =>` (comma then fat arrow) and chained `=>`
-                // where the previous value is now a key.
-                if self.peek_kind() == Some(TokenKind::FatArrow) {
-                    saw_fat_comma = true;
-                    if !was_comma {
-                        if let Some(last) = expressions.last_mut() {
-                            if let NodeKind::Identifier { ref name } = last.kind {
-                                *last = Node::new(
-                                    NodeKind::String { value: name.clone(), interpolated: false },
-                                    last.location,
-                                );
-                            }
-                        }
-                    }
-                    self.consume_token()?; // consume =>
-                }
-
-                // Check for end of expression (includes statement modifier
-                // keywords so that trailing-comma before a modifier does not
-                // try to parse the modifier as another comma element).
-                // Exception: a keyword followed by `=>` is an autoquoted hash
-                // key, not a statement modifier — e.g. `if => 1, for => 2`.
-                match self.peek_kind() {
-                    Some(TokenKind::Semicolon)
-                    | Some(TokenKind::RightParen)
-                    | Some(TokenKind::RightBrace)
-                    | Some(TokenKind::RightBracket) => break,
-                    Some(k) if Self::is_stmt_modifier_kind(k)
-                        && !self.is_keyword_before_fat_arrow() => break,
-                    _ => {}
-                }
-
-                // The next element might also be a keyword before =>
-                let elem = if self.peek_kind().is_some_and(Self::is_keyword_token)
-                    && self.is_keyword_before_fat_arrow()
-                {
-                    let token = self.consume_token()?;
-                    Node::new(
-                        NodeKind::String {
-                            value: token.text.to_string(),
-                            interpolated: false,
-                        },
-                        SourceLocation { start: token.start, end: token.end },
-                    )
-                } else {
-                    self.parse_assignment()?
-                };
-
-                // Check for fat arrow after element
-                if self.peek_kind() == Some(TokenKind::FatArrow) {
-                    saw_fat_comma = true;
-                    self.tokens.next()?; // consume =>
-                    expressions.push(elem);
-
-                    // Check again for end of expression
-                    match self.peek_kind() {
-                        Some(TokenKind::Semicolon)
-                        | Some(TokenKind::RightParen)
-                        | Some(TokenKind::RightBrace)
-                        | Some(TokenKind::RightBracket) => break,
-                        Some(k) if Self::is_stmt_modifier_kind(k) => break,
-                        _ => expressions.push(self.parse_assignment()?),
-                    }
-                } else {
-                    expressions.push(elem);
-                }
-            }
-
-            let end = expressions
-                .last()
-                .map(|e| e.location.end)
-                .unwrap_or(start);
-            expr = Self::build_list_or_hash(expressions, saw_fat_comma, start, end);
-        }
+        let mut expr = self.collect_comma_fat_arrow_continuation(first)?;
 
         // Handle trailing word operators (or, and, xor)
         expr = self.parse_word_or_expr(expr)?;
@@ -554,6 +491,7 @@ impl<'a> Parser<'a> {
         expr = self.parse_and_with(expr)?;
         expr = self.parse_or_with(expr)?;
         expr = self.parse_ternary_with(expr)?;
+        expr = self.collect_comma_fat_arrow_continuation(expr)?;
         self.parse_word_or_expr(expr)
     }
 

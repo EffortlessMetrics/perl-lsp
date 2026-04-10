@@ -45,6 +45,8 @@ default = []
 ci-fast = []
 
 [package.metadata.docs.rs]
-all-features = false
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

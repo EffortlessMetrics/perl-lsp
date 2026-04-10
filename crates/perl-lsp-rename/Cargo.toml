@@ -25,5 +25,8 @@ perl-symbol-cursor = { workspace = true }
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

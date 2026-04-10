@@ -58,6 +58,11 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     exit $RC
 
+# Pre-merge guard: verify a PR is not draft, has merge-ready label, and title has (#NNN)
+# Usage: just pre-merge-check 3291
+pre-merge-check NUMBER:
+    bash scripts/pre-merge-check.sh {{NUMBER}}
+
 # Tier: Merge-gate (required before merge to master ~3-5 min)
 merge-gate: _check-tools-basic pr-fast
     #!/usr/bin/env bash
@@ -664,24 +669,6 @@ ci-measure:
 # UX Regression Tests (first-5-minutes user experience)
 # ============================================================================
 
-# Run UX regression test suite (depends on crates/perl-lsp-ux-tests/ landing)
-# Categories: startup, first-open, missing-dep, bad-config, protocol-handling, error-messages
-ux-tests:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    if ! cargo metadata --no-deps --quiet 2>/dev/null | python3 -c \
-        "import json,sys; pkgs=json.load(sys.stdin)['packages']; \
-         names=[p['name'] for p in pkgs]; \
-         sys.exit(0 if 'perl-lsp-ux-tests' in names else 1)"; then
-        echo "ERROR: crates/perl-lsp-ux-tests not found in workspace"
-        echo "  The UX test harness has not yet been scaffolded."
-        echo "  Waiting for the perl-lsp-ux-tests crate to land before running UX tests."
-        exit 1
-    fi
-    echo "Running UX regression tests (perl-lsp-ux-tests)..."
-    cargo test -p perl-lsp-ux-tests --locked -- --test-threads=2
-    echo "UX regression tests passed"
-
 # Fast merge gate on MSRV (~2-5 min) - proves 1.92 compatibility
 ci-gate-msrv:
     @echo "🚪 Running fast merge gate on MSRV (Rust 1.92)..."
@@ -913,6 +900,23 @@ ci-lsp-smoke-e2e:
         cargo test -p perl-lsp-rs --test lsp_smoke_e2e -- --test-threads=1
     @echo "✅ LSP smoke E2E passed"
 
+# UX regression test harness — systematic first-5-minutes scenario testing.
+# Runs all 9 base scenarios (scenarios 01-09, excluding the large-file integration-test tier).
+# For the full large-file tier: just ux-tests-full
+ux-tests:
+    @echo "Running UX regression test harness (base scenarios)..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests -- --test-threads=1
+    @echo "UX tests passed"
+
+# UX regression test harness — full suite including large-file scenario.
+# Slower (~5-10 min).  Run before releases or after large LSP changes.
+ux-tests-full:
+    @echo "Running UX regression test harness (full, including large-file)..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
+    @echo "UX tests (full) passed"
+
 # LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
 ci-lsp-bdd:
     @echo "🎭 Running LSP BDD workflow tests..."
@@ -964,6 +968,12 @@ ci-docs:
     @echo "📚 Building documentation..."
     cargo doc -p perl-parser -p perl-lsp-rs --no-deps
     @echo "✅ Docs build passed"
+
+# Verify docs.rs builds for all publishable crates
+# Usage: just docs-verify [--fast]  (--fast skips large crates)
+docs-verify *args:
+    @echo "Verifying docs.rs builds for all publishable crates..."
+    bash scripts/verify-docs-rs.sh {{args}}
 
 # Mutation testing (expensive, ~15-30 min)
 ci-test-mutation:
@@ -2014,6 +2024,103 @@ release-turnkey VERSION *ARGS="":
 # Dispatch publish-to-crates.io workflow for a release version.
 publish-release VERSION *ARGS="":
     @cargo xtask publish-release "{{VERSION}}" {{ARGS}}
+
+# Manually publish the 4 new crates for v0.12.2 one at a time with 10-min gaps.
+# Use when the automated workflow is blocked by crates.io's new-crate rate limit
+# (burst=5, refill=1/10 min — separate from the update limit fixed in #3307).
+# See docs/reference/MANUAL_PUBLISH_NEW_CRATES.md for full context.
+#
+# Dry run (safe, no actual publishing):
+#   DRY_RUN=true just publish-new-crates
+# Live run:
+#   CARGO_REGISTRY_TOKEN=<token> just publish-new-crates
+publish-new-crates:
+    bash scripts/publish-new-crates-manually.sh
+
+# Dry-run publish gate: package every allowlisted crate in topological order.
+# Mirrors the dev-dep strip and packaging steps from publish-crates.yml.
+# Runs automatically in CI on every PR that touches Cargo.toml.
+# Use this locally to verify your change won't break the publish workflow.
+publish-dry-run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Publish dry-run gate ==="
+    echo "Running publish-topo unit tests..."
+    python3 scripts/tests/test-publish-topo.py -v
+
+    echo ""
+    echo "Computing topological publish order..."
+    cargo metadata --format-version=1 --no-deps \
+      | python3 scripts/publish-topo.py > /tmp/publish-dry-run-crates.json
+
+    COUNT=$(python3 -c 'import json; print(len(json.load(open("/tmp/publish-dry-run-crates.json"))))')
+    echo "  ${COUNT} crates in publish allowlist"
+
+    STRIP_SCRIPT="$(mktemp --suffix=.py)"
+    cat > "$STRIP_SCRIPT" << 'STRIP_SCRIPT_EOF'
+    import re, sys, pathlib
+    path = pathlib.Path(sys.argv[1])
+    text = path.read_text(encoding="utf-8")
+    new_text = re.sub(
+        r"^\[dev-dependencies\].*?(?=^\[|\Z)",
+        "",
+        text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    path.write_text(new_text, encoding="utf-8")
+    STRIP_SCRIPT_EOF
+
+    MANIFEST_MAP="$(mktemp)"
+    cargo metadata --format-version=1 --no-deps | python3 -c '
+    import json, sys
+    meta = json.load(sys.stdin)
+    ws = set(meta["workspace_members"])
+    for pkg in meta["packages"]:
+        if pkg["id"] in ws:
+            print("{} {}".format(pkg["name"], pkg["manifest_path"]))
+    ' > "$MANIFEST_MAP"
+
+    FAILED=""
+    CRATES_LIST="$(mktemp)"
+    python3 -c \
+      'import json,sys; [print("{} {}".format(c["name"],c["version"])) for c in json.load(open("/tmp/publish-dry-run-crates.json"))]' \
+      > "$CRATES_LIST"
+
+    while read -r CRATE VERSION; do
+      echo ""
+      echo "===> Packaging $CRATE@$VERSION"
+      MANIFEST_PATH="$(grep "^${CRATE} " "$MANIFEST_MAP" | awk '{print $2}')"
+      if [ -z "$MANIFEST_PATH" ]; then
+        echo "  ERROR: Could not find manifest path"
+        FAILED="${FAILED} ${CRATE}"
+        continue
+      fi
+      MANIFEST_BACKUP="$(mktemp)"
+      cp "$MANIFEST_PATH" "$MANIFEST_BACKUP"
+      # shellcheck disable=SC2064
+      trap "cp '$MANIFEST_BACKUP' '$MANIFEST_PATH'; rm -f '$MANIFEST_BACKUP'" EXIT
+      python3 "$STRIP_SCRIPT" "$MANIFEST_PATH"
+      TARGET_DIR="/tmp/cargo-package-dry-run-${CRATE//\//-}"
+      rm -rf "$TARGET_DIR"
+      if CARGO_TARGET_DIR="$TARGET_DIR" CARGO_PACKAGE_NO_VERIFY=1 \
+         bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"; then
+        echo "  OK"
+      else
+        echo "  FAILED"
+        FAILED="${FAILED} ${CRATE}"
+      fi
+      cp "$MANIFEST_BACKUP" "$MANIFEST_PATH"
+      rm -f "$MANIFEST_BACKUP"
+      trap - EXIT
+    done < "$CRATES_LIST"
+
+    echo ""
+    if [ -n "$FAILED" ]; then
+      echo "ERROR: Packaging failed for:${FAILED}"
+      echo "These crates would break the publish workflow. Fix before merging."
+      exit 1
+    fi
+    echo "=== All ${COUNT} crates packaged successfully. ==="
 
 # Run post-release installed-binary smoke test for a release version.
 smoke-test-release VERSION:

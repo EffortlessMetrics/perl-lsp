@@ -70,7 +70,7 @@ Compare this to PerlNavigator: go to definition, completion, diagnostics, some n
 
 The codebase enforces a zero-panic policy in production code: no `unwrap()`, no `expect()`, no `panic!()`. The parser returns `Result` types throughout, with structured error recovery that produces partial ASTs rather than crashes. An LSP server that panics on malformed input is useless — recovering gracefully and continuing to provide completions for the rest of the file is the only acceptable behavior.
 
-The CPAN corpus currently sits at 90.9% clean parses across 4,355 real modules from the CPAN top-1000 distributions. That number has been rising continuously — it was 50% a few months ago. More on how we got here below.
+The CPAN corpus currently sits at 85.35% clean parses across 4,355 real modules from the CPAN top-1000 distributions. That number has been rising continuously — it was 50% a few months ago. More on how we got here below.
 
 ---
 
@@ -110,7 +110,7 @@ Feature lists are easy to generate. Here are five things a Perl developer would 
 
 ## The Corpus Story
 
-Here is the honest version of how we got to 90.9%.
+Here is the honest version of how we got to 85.35%.
 
 We started with a question: how do you know your parser works? Unit tests cover the constructs you thought to test. Real Perl is messier, more creative, and more surprising than any test author imagines. The answer is to test against reality.
 
@@ -120,7 +120,7 @@ Every PR runs the full corpus in CI. The baseline is ratcheted: the number of cl
 
 Starting at 50% clean parses, we identified the top error buckets — families of related parse failures with common root causes. The largest bucket (`unexpected_token_in_expr`) decomposed into ten subcategories when examined carefully. Each subcategory drove a targeted fix. Each fix was validated against the CPAN corpus before merge.
 
-Four months ago, recursive descent on Perl was a research question. Now 90.9% of the top-1000 CPAN distributions parse without errors. The remaining 9.1% breaks down as: roughly 2-3% source-filtered code that is fundamentally incompatible with static analysis, 3-4% complex runtime-dependent constructs, and 2-3% genuinely fixable parser gaps we have not reached yet.
+Four months ago, recursive descent on Perl was a research question. Now 85.35% of the top-1000 CPAN distributions parse without errors (3,717/4,355). The remaining 14.65% breaks down as: roughly 2-3% source-filtered code that is fundamentally incompatible with static analysis, 3-4% complex runtime-dependent constructs, and 8-9% genuinely fixable parser gaps we have not reached yet.
 
 The corpus is not a metric we report. It is a gate that every change must pass.
 
@@ -154,4 +154,4 @@ Perl has a 35-year track record of doing what it was designed to do well. The la
 
 ---
 
-*Feature count (98) verified against `features.toml`. Corpus rate (90.9%) reflects the ratcheted CI baseline as of March 2026. Install counts sourced from the VSCode Marketplace. All competitive analysis sourced from `docs/articles/COMPETITIVE_ANALYSIS.md`.*
+*Feature count (102 total: 87 LSP + 10 DAP + 5 extension) verified against `features.toml`. Corpus rate (85.35%, 3717/4355) reflects the ratcheted CI baseline as of March 2026. Install counts sourced from the VSCode Marketplace. All competitive analysis sourced from `docs/articles/COMPETITIVE_ANALYSIS.md`.*

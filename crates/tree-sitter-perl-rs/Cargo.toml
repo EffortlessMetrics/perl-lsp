@@ -30,6 +30,10 @@ all-features = true
 name = "tree_sitter_perl_rs"
 doctest = true
 
+[[bin]]
+name = "bench_facade"
+path = "src/bin/bench_facade.rs"
+
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-ast = { workspace = true }

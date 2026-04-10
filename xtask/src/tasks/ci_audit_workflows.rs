@@ -15,6 +15,14 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     "ci-security.yml",
     // Path-filtered to UX-relevant crates only; runs on all PRs touching LSP/DAP/extension
     "ux-regression-gate.yml",
+    // publish-dry-run.yml is a PR gate that runs unconditionally on Cargo.toml
+    // path changes. The `paths:` filter in the workflow trigger is the cost gate
+    // (only triggers when Cargo.toml or publish scripts change). Adding an `if:`
+    // on top of the paths filter would be redundant and defeat the purpose.
+    "publish-dry-run.yml",
+    // ci-gate-self-tests.yml is path-filtered to gate scripts only.
+    // Runs only when the gate scripts or self-test scripts change.
+    "ci-gate-self-tests.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];

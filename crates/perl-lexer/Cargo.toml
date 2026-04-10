@@ -27,7 +27,6 @@ perl-keywords = { workspace = true }
 
 [dev-dependencies]
 criterion.workspace = true
-pretty_assertions = "1.4.1"
 proptest.workspace = true
 
 [features]
@@ -36,6 +35,10 @@ default = []
 simd = []
 # Enable slow stress tests (regex fuzzing, etc.)
 slow_tests = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

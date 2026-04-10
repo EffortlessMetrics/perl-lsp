@@ -14,5 +14,8 @@ keywords = ["perl", "lsp", "features", "ids", "capabilities"]
 categories = ["development-tools", "development-tools::testing"]
 include = ["src/**", "Cargo.toml", "README.md"]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

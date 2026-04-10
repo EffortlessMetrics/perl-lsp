@@ -16,8 +16,8 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 thiserror.workspace = true
 
-[dev-dependencies]
-perl-tdd-support = { path = "../perl-tdd-support" }
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

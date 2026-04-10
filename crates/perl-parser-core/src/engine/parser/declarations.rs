@@ -739,6 +739,17 @@ impl<'a> Parser<'a> {
                             // Fallback: just add the whole token as string
                             args.push(qw_token.text.to_string());
                         }
+
+                        match self.peek_kind() {
+                            Some(TokenKind::Comma) => {
+                                self.consume_token()?;
+                            }
+                            Some(TokenKind::FatArrow) => {
+                                self.consume_token()?;
+                                self.consume_use_import_value(&mut args)?;
+                            }
+                            _ => {}
+                        }
                     }
                     Some(TokenKind::Minus) => {
                         // Handle -strict, -dist => 'value', -conflicts => { ... }, etc.

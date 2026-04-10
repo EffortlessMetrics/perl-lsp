@@ -321,6 +321,174 @@ fn catalyst_action() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn map_block_with_builtin_call_key_expr() {
+    let source = r#"our %ENCODE_NAME_OF = map { uc $MIME_NAME_OF{$_} => $_ } keys %MIME_NAME_OF;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn map_block_with_ternary_key_expr_in_arrayref() {
+    let source = r#"my @pattern = map { [ ( ref $_ ? $_ : qr/$_/ ) => 0 ] } @values;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn readonly_style_scalar_decl_before_fat_arrow() {
+    let source = r#"if (ref eq 'SCALAR') { Scalar my $v => $$_; $_ = \$v }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn readonly_style_array_decl_before_fat_arrow() {
+    let source = r#"if (ref eq 'ARRAY') { Array my @v => @$_; $_ = \@v }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn readonly_style_hash_decl_before_fat_arrow() {
+    let source = r#"if (ref eq 'HASH') { Hash my %v => $_; $_ = \%v }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn word_or_rhs_hash_pair() {
+    let source = r#"$a or foo => 1;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn word_and_rhs_hash_pair() {
+    let source = r#"$a and foo => 1;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn trailing_fat_arrow_in_parenthesized_call_args() {
+    let source = r#"foo(on_closed =>);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn keyword_hash_key_after_block_in_bare_call_args() {
+    let source = r#"repeat { 1 } foreach => $addrlist;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn chained_keyword_fat_arrow_args_in_method_call() {
+    let source = r#"$future->new->fail("connect: $err", connect => connect => $err);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn variable_then_dash_key_fat_arrow_args() {
+    let source = r#"field $class_id => -init => "$value";"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn dash_prefixed_named_args_in_method_call() {
+    let source = r#"$w->configure(-background => 'black');"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn my_declaration_followed_by_fat_arrow_separator() {
+    let source = r#"my $filename => basename $url->path;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn bare_block_call_with_multiple_named_keyword_args() {
+    let source =
+        r#"try_repeat { $self->bind($ai) } foreach => \@addrs, until => sub { shift->is_done };"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn filetest_chain_as_fat_arrow_table() {
+    let source = r#"my %x = (-r => readable => -R => r_readable =>);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn dash_prefixed_key_in_array_constructor() {
+    let source = r#"my @args = (-G => '%{cmake_generator}');"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn map_prefix_plus_hash_pairs() {
+    let source = r#"my %h = ((map +($_ => __PACKAGE__->make_binop_expander('_expand_between')), qw(between not_between)),);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn double_fat_arrow_before_subref_value() {
+    let source = r#"my %noquote = (bit => => sub { $_[0] =~ /^[01]\z/ },);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn chained_subref_pairs_with_double_fat_arrow_middle_entry() {
+    let source = r#"my %noquote = (
+        int => sub { $_[0] =~ /^ [-+]? \d+ \z/x },
+        bit => => sub { $_[0] =~ /^[01]\z/ },
+        money => sub { $_[0] =~ /^\$ \d+ (?:\.\d*)? \z/x },
+    );"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn word_operator_tokens_used_as_hash_keys() {
+    let source = r#"my %render = (not => '_render_unop_paren', and => '_render_op_andor', or => '_render_op_andor');"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn overload_qw_name_followed_by_subref_value() {
+    let source = r#"use overload qw[bool] => sub { 0 };"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn aligned_filetest_chain_with_empty_middle_key() {
+    let source = r#"my %x = (-e => exists => -f => file => => -p => fifo =>);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn bare_hash_assignment_with_aligned_filetest_chain() {
+    let source = r#"%X_tests = (
+    -r  =>  readable           =>  -R  =>  r_readable      =>
+    -w  =>  writeable          =>  -W  =>  r_writeable     =>
+    -w  =>  writable           =>  -W  =>  r_writable      =>
+    -x  =>  executable         =>  -X  =>  r_executable    =>
+    -o  =>  owned              =>  -O  =>  r_owned         =>
+
+    -e  =>  exists             =>  -f  =>  file            =>
+    -z  =>  empty              =>  -d  =>  directory       =>
+    -s  =>  nonempty           =>  -l  =>  symlink         =>
+                               =>  -p  =>  fifo            =>
+    -u  =>  setuid             =>  -S  =>  socket          =>
+    -g  =>  setgid             =>  -b  =>  block           =>
+    -k  =>  sticky             =>  -c  =>  character       =>
+                               =>  -t  =>  tty             =>
+    -M  =>  modified                                       =>
+    -A  =>  accessed           =>  -T  =>  ascii           =>
+    -C  =>  changed            =>  -B  =>  binary          =>
+   );"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn use_constant_with_block_and_named_callback() {
+    let source =
+        r#"use constant ON_APPLICATION => do { after apply_roles_to_package => sub { 1 }; 1; };"#;
+    assert_clean_parse(source);
+}
+
 // DBI connect with hash
 #[test]
 fn dbi_connect_hash() {

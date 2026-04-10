@@ -134,6 +134,48 @@ my ($alpha, $bravo, $charlie) = (1, 2, 3);
     Ok(())
 }
 
+#[test]
+fn scope_declaration_capable_builtins_initialize_handle_bindings()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+open my $fh, '<', 'input.txt' or die $!;
+print $fh;
+opendir my $dh, '.' or die $!;
+print $dh;
+sysopen my $sys_fh, 'sysfile.txt', 0 or die $!;
+print $sys_fh;
+pipe my $reader, my $writer;
+print $reader;
+print $writer;
+socket my $sock, PF_INET, SOCK_STREAM, getprotobyname('tcp');
+print $sock;
+accept my $client, $sock;
+print $client;
+"#;
+
+    let issues = scope_issues_strict(code);
+    let handled = ["$fh", "$dh", "$sys_fh", "$reader", "$writer", "$sock", "$client"];
+
+    for variable_name in handled {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == variable_name
+            }),
+            "builtin filehandle declaration should be declared, initialized, and consumed: {} (issues: {:?})",
+            variable_name,
+            issues
+        );
+    }
+
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Variable Scope Resolution — our
 // ===========================================================================
@@ -755,6 +797,52 @@ fn unused_variable_basic_hash() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn unused_variable_used_via_explicit_dereference_forms() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my $arrayref;
+push @$arrayref, 1;
+push @{$arrayref}, 2;
+
+my $hashref;
+$hashref->{k};
+
+my $value = 1;
+my $scalarref = \$value;
+$$scalarref;
+
+my @arr = (1, 2, 3);
+$arr[0];
+"#;
+    let issues = scope_issues(code);
+
+    let unused_arrayref = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arrayref"))
+        .count();
+    assert_eq!(unused_arrayref, 0, "$arrayref used via dereference should not be unused");
+
+    let unused_hashref = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hashref"))
+        .count();
+    assert_eq!(unused_hashref, 0, "$hashref used via arrow dereference should not be unused");
+
+    let unused_scalarref = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("scalarref"))
+        .count();
+    assert_eq!(unused_scalarref, 0, "$scalarref used via scalar dereference should not be unused");
+
+    let unused_arr = issues
+        .iter()
+        .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arr"))
+        .count();
+    assert_eq!(unused_arr, 0, "@arr used via direct indexing should not be unused");
+
+    Ok(())
+}
+
+#[test]
 fn unused_underscore_prefix_suppressed() -> Result<(), Box<dyn std::error::Error>> {
     // Variables prefixed with underscore should NOT be flagged as unused.
     let code = r#"
@@ -900,6 +988,100 @@ print $unknown_var;
     assert!(
         has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
         "should detect undeclared $unknown_var under strict"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_vars_only_checks_undeclared_variables() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'vars';
+print $unknown_var;
+print FOO;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
+        "strict 'vars' should flag undeclared variables"
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
+        "strict 'vars' should not flag barewords"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_only_checks_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+print $unknown_var;
+print FOO;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
+        "strict 'subs' should not flag undeclared variables"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
+        "strict 'subs' should flag barewords"
+    );
+    Ok(())
+}
+
+#[test]
+fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use v5.40;
+print $unknown_var;
+print FOO;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
+        "use v5.40 should enable strict vars"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO" }),
+        "use v5.40 should enable strict subs"
+    );
+    Ok(())
+}
+
+#[test]
+fn scalar_reference_dereference_uses_declared_scalar_under_strict()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $value = 1;
+my $ref = \$value;
+print $$ref;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$$ref"),
+        "$$ref should resolve through declared $ref: {:?}",
+        issues
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UnusedVariable) && i.variable_name.contains("ref")),
+        "$ref used via $$ref should not be unused: {:?}",
+        issues
     );
     Ok(())
 }

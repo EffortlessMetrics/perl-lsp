@@ -1,0 +1,36 @@
+[package]
+name = "perl-lsp-ux-tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "UX regression test harness for perl-lsp — systematic first-5-minutes scenario testing"
+publish = false
+
+[lib]
+name = "perl_lsp_ux_tests"
+path = "src/lib.rs"
+
+[dependencies]
+serde_json.workspace = true
+anyhow.workspace = true
+url.workspace = true
+tempfile.workspace = true
+which = "8.0.2"
+
+[dev-dependencies]
+serde_json.workspace = true
+anyhow.workspace = true
+url.workspace = true
+tempfile.workspace = true
+
+[features]
+# Gate slow/heavy integration tests behind this feature flag.
+# Run with: cargo test -p perl-lsp-ux-tests --features integration-test
+integration-test = []
+
+[lints]
+workspace = true

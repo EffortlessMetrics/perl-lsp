@@ -19,6 +19,8 @@ import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
 import { StreamingCompletionController } from './streamingCompletion';
+import { classifyStartupError } from './startupDiagnosis';
+import type { StartupErrorDiagnosis } from './startupDiagnosis';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -28,6 +30,27 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let healthWidget: HealthWidget | undefined;
 let streamingController: StreamingCompletionController | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
+/**
+ * Cached diagnostic message from the last startup failure.
+ * Set by `initializeLanguageClient` when the LSP fails to start; read by
+ * command handlers that need to surface a "server not running" message so
+ * they can report the specific root cause rather than a generic "restart" message.
+ */
+let lastStartupDiagnostic: string | undefined;
+
+/**
+ * Return the best available "server not running" message to show the user.
+ *
+ * When a startup failure has been diagnosed (i.e. `lastStartupDiagnostic` is
+ * set), that specific message is returned so the user can see the root cause
+ * (e.g. "Perl interpreter not found" rather than a generic restart prompt).
+ * Falls back to a brief actionable message for the case where the server was
+ * never started in this session.
+ */
+function serverNotRunningMessage(): string {
+    return lastStartupDiagnostic ??
+        'Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.';
+}
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -97,11 +120,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
         if (!currentServerPath) {
             vscode.window.showErrorMessage(
-                'Perl Language Server is not running. Restart the server or check the Output panel for startup errors.',
-                'Restart Server', 'Show Output'
+                serverNotRunningMessage(),
+                'Restart Server', 'Show Output', 'Run Health Check'
             ).then(sel => {
                 if (sel === 'Restart Server') { void vscode.commands.executeCommand('perl-lsp.restart'); }
                 if (sel === 'Show Output') { outputChannel.show(); }
+                if (sel === 'Run Health Check') { void vscode.commands.executeCommand('perl-lsp.runHealthCheck'); }
             });
             return;
         }
@@ -281,7 +305,7 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
         if (!client) {
-            vscode.window.showWarningMessage('Perl Language Server is not running. Restart the server and try again.');
+            vscode.window.showWarningMessage(serverNotRunningMessage());
             return;
         }
         const range = editor.selection;
@@ -327,7 +351,7 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
         if (!client) {
-            vscode.window.showWarningMessage('Perl Language Server is not running. Restart the server and try again.');
+            vscode.window.showWarningMessage(serverNotRunningMessage());
             return;
         }
         const range = editor.selection;
@@ -704,18 +728,32 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         try { void client.dispose(); } catch { /* already dead */ }
         client = undefined;
         healthWidget?.onStateChange(ClientState.Stopped);
+
+        // Probe the binary to get an actionable OS-level diagnosis (#3280).
+        // lastStartupDiagnostic is updated so that serverNotRunningMessage() in
+        // command handlers surfaces the specific root cause rather than a generic prompt.
+        const diagnosis = currentServerPath
+            ? await probeStartupFailure(currentServerPath)
+            : classifyStartupError('');
+        lastStartupDiagnostic = `${diagnosis.hint} Suggestion: ${diagnosis.remediation}`;
+        const dialogMessage =
+            `Perl Language Server failed to start.\n\n${diagnosis.hint}\n\nSuggestion: ${diagnosis.remediation}`;
+
         const choice = await vscode.window.showErrorMessage(
-            `Perl Language Server failed to start. The binary at '${currentServerPath}' may be corrupted or incompatible.`,
-            'Show Output',
+            dialogMessage,
+            'View Logs',
+            'Run Health Check',
             'Reinstall',
-            'Run Health Check'
+            'Check serverPath Setting'
         );
-        if (choice === 'Show Output') {
+        if (choice === 'View Logs') {
             outputChannel.show();
-        } else if (choice === 'Reinstall') {
-            await reinstallServerBinary(context);
         } else if (choice === 'Run Health Check') {
             await vscode.commands.executeCommand('perl-lsp.runHealthCheck', currentServerPath);
+        } else if (choice === 'Reinstall') {
+            await reinstallServerBinary(context);
+        } else if (choice === 'Check serverPath Setting') {
+            void vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
         }
         return false;
     }
@@ -730,6 +768,9 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
     // Initialize streaming inline completion controller (config-gated)
     refreshStreamingController(client);
 
+    // Clear any stale startup diagnostic — the server started successfully so
+    // the root cause (e.g. missing Perl) no longer applies.
+    lastStartupDiagnostic = undefined;
     outputChannel.appendLine('Perl Language Server started successfully');
     return true;
 }
@@ -854,6 +895,51 @@ export function maybeNudgeArrowCompletion(event: vscode.TextDocumentChangeEvent)
     }
 
     void vscode.commands.executeCommand('editor.action.triggerSuggest');
+}
+
+/**
+ * Probe the LSP binary directly and return diagnostic information.
+ *
+ * Runs the binary with `--version` (fast probe, 3s timeout). On failure,
+ * classifies the stderr output into an actionable diagnosis.
+ *
+ * When execFile fails with no stderr (e.g., ENOEXEC for wrong-arch or EACCES
+ * for permission denied), the OS never writes to stderr — the error code lives
+ * in err.code instead.  We synthesize a recognisable string so that
+ * classifyStartupError() returns the right kind rather than Unknown.
+ */
+async function probeStartupFailure(serverPath: string): Promise<StartupErrorDiagnosis> {
+    return new Promise(resolve => {
+        execFile(serverPath, ['--version'], { timeout: 3000 }, (err: Error | null, stdout: string, stderr: string) => {
+            const combined = [stderr, stdout].filter(Boolean).join('\n').trim();
+            if (err) {
+                outputChannel.appendLine(`[startup-probe] Binary probe failed: ${err.message}`);
+                if (combined) {
+                    outputChannel.appendLine(`[startup-probe] stderr: ${combined}`);
+                }
+
+                // When stderr is empty, infer from the OS error code so the
+                // classifier returns an actionable kind instead of Unknown.
+                const errCode = (err as NodeJS.ErrnoException).code;
+                let diagInput = combined;
+                if (!diagInput) {
+                    if (errCode === 'ENOEXEC') {
+                        // Kernel refused execve — wrong ELF machine type (arch mismatch)
+                        diagInput = 'cannot execute binary file: Exec format error';
+                    } else if (errCode === 'EACCES') {
+                        // Kernel refused execve — execute bit not set
+                        diagInput = 'Permission denied';
+                    } else {
+                        diagInput = err.message;
+                    }
+                }
+                resolve(classifyStartupError(diagInput));
+            } else {
+                // Binary responded fine — classify as unknown (client-level issue)
+                resolve(classifyStartupError(''));
+            }
+        });
+    });
 }
 
 /**
@@ -1204,7 +1290,7 @@ async function showParserAst(): Promise<void> {
     }
 
     if (!client) {
-        vscode.window.showWarningMessage('Perl Language Server is not running');
+        vscode.window.showWarningMessage(serverNotRunningMessage());
         return;
     }
 

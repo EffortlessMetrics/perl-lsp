@@ -13,5 +13,8 @@ documentation = "https://docs.rs/perl-lsp-text-utils"
 keywords = ["perl", "lsp", "text", "refactoring"]
 categories = ["development-tools", "text-editors"]
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

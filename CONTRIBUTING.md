@@ -125,6 +125,34 @@ bash scripts/install-githooks.sh
 just ci-full    # Full pipeline including mutation testing, fuzzing, benchmarks (~15-30 min)
 ```
 
+### 5a. Verify your Cargo.toml changes won't break publishing
+
+If your PR touches any `Cargo.toml` file (adding/removing deps, adding new crates, modifying
+workspace metadata), a **publish dry-run gate** runs automatically in CI. It packages every
+allowlisted crate in topological dependency order — the same order and with the same dev-dep
+stripping logic used by the actual publish workflow — and fails loudly if any crate cannot be
+packaged.
+
+**Why this gate exists:** Two separate publish failures happened within a single session:
+- A dev-dep ordering issue where `perl-corpus` dev-depends on `perl-tdd-support` but was
+  sorted before it (fixed by Tarjan SCC in the topo sort, #3236).
+- An intra-SCC dev-dep cycle where `perl-module-import` dev-depends on `perl-module-token`,
+  causing `cargo package` to fail during manifest resolution (#3254).
+
+Both bugs would have been caught by this gate before the breaking PR merged.
+
+**If the gate fails**, your PR would break the `publish-crates.yml` workflow. Fix before merging.
+Common causes: adding a dev-dep on an un-allowlisted crate, a normal-dep cycle, or removing a
+crate without updating dependents.
+
+**Run it locally:**
+
+```bash
+just publish-dry-run
+```
+
+This runs in ~5-10 minutes (packaging only, no uploading).
+
 ### 6. Keep docs and status in sync (only needed if you changed metrics or generated files)
 
 ```bash

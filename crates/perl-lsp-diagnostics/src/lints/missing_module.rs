@@ -19,7 +19,8 @@ use super::super::walker::walk_node;
 ///
 /// This list prevents false positives when `use_system_inc` is false.
 /// Conservative (under-includes) — a missed detection is better than
-/// a false positive that erodes diagnostic trust.
+/// a false positive that erodes diagnostic trust. It does not attempt to
+/// emulate Perl's full runtime `@INC` search order.
 pub const CORE_MODULES: &[&str] = &[
     // Pragmas (no-network, no-filesystem)
     "strict",

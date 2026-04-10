@@ -810,7 +810,16 @@ fn cmd_run_comparison(repo_root: &Path) -> Result<i32> {
 }
 
 fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
-    println!("=== Quick Parser Comparison ===");
+    println!("=== Three-Way Parser Comparison ===");
+    println!();
+    println!("Parsers:");
+    println!("  native-v3  : perl-parser-bench  (v3 recursive-descent, raw parser API)");
+    println!(
+        "  facade     : bench_facade        (tree-sitter-perl-rs, v3 wrapped in tree-sitter ergonomics)"
+    );
+    println!(
+        "  c-grammar  : bench_parser_c      (tree-sitter C grammar binding, requires libclang)"
+    );
     println!();
 
     let files = vec![
@@ -829,38 +838,103 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
         .collect();
     candidates.sort_by(|a, b| a.0.cmp(&b.0));
 
-    println!("File,Size,C_Time(µs),Rust_Time(µs),Speedup");
-    println!("----,----,----------,------------- ,-------");
+    // Collect results once to avoid running each parser twice per file.
+    struct Row {
+        name: String,
+        size: u64,
+        rust_time: Option<f64>,
+        facade_time: Option<f64>,
+        c_time: Option<f64>,
+    }
 
-    for (name, path) in candidates {
-        let size = fs::metadata(&path).map(|metadata| metadata.len()).unwrap_or(0);
+    let mut rows: Vec<Row> = Vec::new();
+    for (name, path) in &candidates {
+        let size = fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
+        let rust_time = run_rust_bench_us(repo_root, path)?;
+        let facade_time = run_facade_bench_us(repo_root, path)?;
+        let c_time = run_c_bench_us(repo_root, path)?;
+        rows.push(Row { name: name.clone(), size, rust_time, facade_time, c_time });
+    }
 
-        let c_time = run_c_bench_us(repo_root, &path)?;
-        let rust_time = run_rust_bench_us(repo_root, &path)?;
+    // --- Table 1: raw timings ---
+    let col_file = 30usize;
+    let col_num = 12usize;
+    println!(
+        "{:<col_file$} {:>8}  {:>col_num$}  {:>col_num$}  {:>col_num$}  fastest",
+        "File", "Size", "native-v3(µs)", "facade(µs)", "c-gram(µs)"
+    );
+    println!(
+        "{:<col_file$} {:>8}  {:>col_num$}  {:>col_num$}  {:>col_num$}  -------",
+        "----", "----", "-------------", "----------", "----------"
+    );
 
-        let speedup = if let (Some(c_val), Some(rust_val)) = (c_time, rust_time) {
-            if rust_val > 0.0 { Some(c_val / rust_val) } else { None }
-        } else {
-            None
+    for row in &rows {
+        let times: [(&str, Option<f64>); 3] =
+            [("native-v3", row.rust_time), ("facade", row.facade_time), ("c-grammar", row.c_time)];
+        let fastest_label = times
+            .iter()
+            .filter_map(|(label, t)| t.map(|v| (label, v)))
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(label, _)| *label)
+            .unwrap_or("N/A");
+
+        let fmt = |v: Option<f64>| -> String {
+            v.map(|us| format!("{us:.0}")).unwrap_or_else(|| "N/A".to_string())
         };
 
-        let speedup_text = if let Some(speedup) = speedup {
-            if speedup > 1.0 {
-                format!("{speedup:.2}x (Rust faster)")
-            } else {
-                format!("{:.2}x (C faster)", 1.0 / speedup.max(0.000_000_1))
+        println!(
+            "{:<col_file$} {:>8}  {:>col_num$}  {:>col_num$}  {:>col_num$}  {}",
+            row.name,
+            row.size,
+            fmt(row.rust_time),
+            fmt(row.facade_time),
+            fmt(row.c_time),
+            fastest_label,
+        );
+    }
+
+    println!();
+
+    // --- Table 2: relative-to-fastest ---
+    println!("=== Relative to fastest (per file) ===");
+    println!();
+    println!(
+        "{:<col_file$}  {:>col_num$}  {:>col_num$}  {:>col_num$}",
+        "File", "native-v3", "facade", "c-grammar"
+    );
+    println!(
+        "{:<col_file$}  {:>col_num$}  {:>col_num$}  {:>col_num$}",
+        "----", "---------", "------", "---------"
+    );
+
+    for row in &rows {
+        let available: Vec<f64> =
+            [row.rust_time, row.facade_time, row.c_time].iter().filter_map(|&t| t).collect();
+        let min = available.iter().cloned().fold(f64::INFINITY, f64::min);
+
+        let rel = |v: Option<f64>| -> String {
+            match v {
+                Some(us) if min > 0.0 => format!("{:.2}x", us / min),
+                Some(_) => "1.00x".to_string(),
+                None => "N/A".to_string(),
             }
-        } else {
-            "N/A".to_string()
         };
 
-        let c_ms = c_time.unwrap_or(0.0);
-        let rust_ms = rust_time.unwrap_or(0.0);
-        println!("{:<30} {:>8} {:>12.0} {:>12.0} {}", name, size, c_ms, rust_ms, speedup_text);
+        println!(
+            "{:<col_file$}  {:>col_num$}  {:>col_num$}  {:>col_num$}",
+            row.name,
+            rel(row.rust_time),
+            rel(row.facade_time),
+            rel(row.c_time),
+        );
     }
 
     println!();
     println!("Quick benchmark complete!");
+    println!("Note: c-grammar requires libclang; N/A means libclang was not found.");
+    println!(
+        "Note: facade overhead vs native-v3 should be near epsilon (facade wraps same v3 parser)."
+    );
     Ok(0)
 }
 
@@ -1040,6 +1114,18 @@ const C_BENCH_BIN: &str = "bench_parser_c";
 /// binary name and the crate location remain distinct from the Rust bench path.
 const C_BENCH_MANIFEST: &str = "crates/tree-sitter-perl-c/Cargo.toml";
 
+/// Crate identifier for the `tree-sitter-perl-rs` facade benchmark.
+///
+/// Lives in the normal workspace (no excluded crate dance), so it is
+/// invoked with `-p FACADE_BENCH_CRATE --bin FACADE_BENCH_BIN`.
+const FACADE_BENCH_CRATE: &str = "tree-sitter-perl-rs";
+
+/// Binary identifier for the `tree-sitter-perl-rs` facade benchmark.
+///
+/// Used by [`cmd_quick_bench`] and asserted in the unit test
+/// `three_way_bench_all_binaries_distinct`.
+const FACADE_BENCH_BIN: &str = "bench_facade";
+
 /// Run the v3 native Rust parser bench binary against `file`.
 ///
 /// Returns wall-clock duration in microseconds, or `None` if the bench
@@ -1086,6 +1172,28 @@ fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
         C_BENCH_BIN,
         "--features",
         "test-utils",
+        "--",
+        file_arg.as_str(),
+    ];
+    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
+    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+}
+
+/// Run the `tree-sitter-perl-rs` facade bench binary against `file`.
+///
+/// The facade crate lives in the normal workspace so it is invoked with
+/// `-p` rather than `--manifest-path`. Returns wall-clock duration in
+/// microseconds, or `None` if the bench binary exits non-zero.
+fn run_facade_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+    let file_arg = file.to_string_lossy().into_owned();
+    let args = [
+        "run",
+        "--quiet",
+        "--release",
+        "-p",
+        FACADE_BENCH_CRATE,
+        "--bin",
+        FACADE_BENCH_BIN,
         "--",
         file_arg.as_str(),
     ];
@@ -1731,7 +1839,8 @@ fi
 
 # --- Detect doc-only changes for the fast-path gate ---
 # A push is doc-only if every changed file matches one of:
-#   *.md, *.txt, LICENSE*, CHANGELOG*, docs/**, .github/ISSUE_TEMPLATE/**
+#   *.md, *.txt, LICENSE*, CHANGELOG*, docs/**, .github/ISSUE_TEMPLATE/**,
+#   or */LICENSE* (crate-subdir license files, e.g. crates/*/LICENSE-APACHE)
 # Doc-only pushes run a lighter gate (fmt check only) instead of the full
 # ci-gate, since the test suite is pointless for prose-only changes.
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -1751,7 +1860,7 @@ for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
     while IFS= read -r changed; do
         [ -z "$changed" ] && continue
         case "$changed" in
-            *.md|*.txt|LICENSE*|CHANGELOG*|docs/*|.github/ISSUE_TEMPLATE/*)
+            *.md|*.txt|LICENSE*|CHANGELOG*|docs/*|.github/ISSUE_TEMPLATE/*|*/LICENSE*)
                 ;;
             *)
                 DOC_ONLY=false
@@ -3959,6 +4068,21 @@ mod tests {
     }
 
     #[test]
+    fn three_way_bench_all_binaries_distinct() {
+        // Guard for the three-way comparison introduced after PR #3255
+        // (tree-sitter-perl-rs facade). All three parser binaries must be
+        // distinct so a future refactor can't silently collapse any pair.
+        assert_ne!(RUST_BENCH_BIN, C_BENCH_BIN, "raw Rust v3 and C binaries must differ");
+        assert_ne!(RUST_BENCH_BIN, FACADE_BENCH_BIN, "raw Rust v3 and facade binaries must differ");
+        assert_ne!(C_BENCH_BIN, FACADE_BENCH_BIN, "C and facade binaries must differ");
+        assert_eq!(FACADE_BENCH_BIN, "bench_facade");
+        assert_eq!(FACADE_BENCH_CRATE, "tree-sitter-perl-rs");
+        // Facade crate lives in the workspace, so it is invoked with -p, not
+        // --manifest-path.  Pin that it has no separate manifest string.
+        assert_ne!(FACADE_BENCH_CRATE, C_BENCH_MANIFEST);
+    }
+
+    #[test]
     fn pre_push_hook_skips_ci_gate_on_delete_only_push() {
         let hook = pre_push_hook_script();
         // The hook must detect when all refs have a zero local SHA (deletion).
@@ -4033,6 +4157,19 @@ mod tests {
         assert!(
             after_doc.contains("exit 0"),
             "doc-only branch must exit 0 without invoking the full gate"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_doc_only_fast_path_matches_crate_subdir_license_files() {
+        let hook = pre_push_hook_script();
+        // Issue #3305: the doc-only case pattern must also match license files
+        // in crate subdirectories (e.g. crates/tree-sitter-perl-rs/LICENSE-APACHE).
+        // Pattern `LICENSE*` only matches root-level files; `*/LICENSE*` is required
+        // to handle files like `crates/*/LICENSE-APACHE` and `crates/*/LICENSE-MIT`.
+        assert!(
+            hook.contains("*/LICENSE*"),
+            "hook doc-only pattern must include '*/LICENSE*' to match crate-subdir license files              (e.g. crates/tree-sitter-perl-rs/LICENSE-APACHE) — see issue #3305"
         );
     }
 
