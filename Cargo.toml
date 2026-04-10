@@ -246,6 +246,7 @@ allow = [
     # Tier 5 — Application crates
     "perl-dead-code",
     "perl-parser",
+    "perl-parser-bench",
     "perl-parser-pest",
     "perl-corpus",
 
