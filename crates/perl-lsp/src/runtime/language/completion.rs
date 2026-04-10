@@ -10,7 +10,9 @@
 use crate::cancellation::{
     GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, RequestCleanupGuard,
 };
-use crate::completion::{CompletionItemKind, CompletionProvider};
+use crate::completion::{
+    CompletionItemKind, CompletionProvider, add_xs_api_completions_for_prefix,
+};
 use crate::{
     protocol::{JsonRpcError, REQUEST_CANCELLED, req_position, req_uri},
     runtime::routing::{IndexAccessMode, route_index_access},
@@ -377,7 +379,7 @@ impl LspServer {
                     base_completions
                 } else {
                     // Fallback: provide basic keyword completions when AST is unavailable
-                    self.lexical_complete(&doc.text, offset)
+                    self.lexical_complete(&doc.text, offset, Some(uri))
                 };
 
                 // Add workspace-wide completions using routing policy
@@ -587,7 +589,7 @@ impl LspServer {
                         &cancel_fn,
                     )
                 } else {
-                    self.lexical_complete(&doc.text, offset)
+                    self.lexical_complete(&doc.text, offset, Some(uri))
                 };
 
                 // Check for cancellation after provider call using relaxed read
@@ -687,6 +689,7 @@ impl LspServer {
         &self,
         content: &str,
         offset: usize,
+        filepath: Option<&str>,
     ) -> Vec<crate::completion::CompletionItem> {
         let mut completions = Vec::new();
 
@@ -700,6 +703,7 @@ impl LspServer {
             .chars()
             .rev()
             .collect::<String>();
+        let prefix_start = offset.saturating_sub(prefix.len());
 
         // Check if we're in a method call context (after ->)
         let is_method_call = text_before.ends_with("->")
@@ -820,6 +824,15 @@ impl LspServer {
                 }
             }
             _ => {
+                add_xs_api_completions_for_prefix(
+                    &mut completions,
+                    &prefix,
+                    prefix_start,
+                    offset,
+                    content,
+                    filepath,
+                );
+
                 // No sigil - suggest keywords
                 for kw in LSP_RUNTIME_COMPLETION_KEYWORDS {
                     if kw.starts_with(&prefix) {
