@@ -826,6 +826,20 @@ impl ScopeAnalyzer {
                     );
                 }
             }
+            NodeKind::Readline { filehandle: Some(filehandle) } => {
+                let (sigil, var_name) = split_variable_name(filehandle);
+                if !sigil.is_empty() && !var_name.is_empty() && !var_name.contains("::") {
+                    self.record_variable_use(
+                        scope,
+                        strict_vars_mode,
+                        context,
+                        issues,
+                        node,
+                        sigil,
+                        var_name,
+                    );
+                }
+            }
             NodeKind::FunctionCall { name, args } => {
                 if let Some((sigil, var_name)) = self.extract_name_like_variable(name) {
                     self.record_variable_use(
