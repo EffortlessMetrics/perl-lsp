@@ -1024,7 +1024,7 @@ impl ClassModelBuilder {
 
     fn object_pad_reader_name(field_name: &str, traits: &[String]) -> Option<String> {
         if traits.iter().any(|trait_name| trait_name == "reader") {
-            Some(field_name.to_string())
+            Some(Self::object_pad_public_name(field_name).to_string())
         } else {
             None
         }
@@ -1032,7 +1032,7 @@ impl ClassModelBuilder {
 
     fn object_pad_writer_name(field_name: &str, traits: &[String]) -> Option<String> {
         if traits.iter().any(|trait_name| trait_name == "writer") {
-            Some(format!("set_{field_name}"))
+            Some(format!("set_{}", Self::object_pad_public_name(field_name)))
         } else {
             None
         }
@@ -1040,7 +1040,7 @@ impl ClassModelBuilder {
 
     fn object_pad_accessor_name(field_name: &str, traits: &[String]) -> Option<String> {
         if traits.iter().any(|trait_name| trait_name == "accessor") {
-            Some(field_name.to_string())
+            Some(Self::object_pad_public_name(field_name).to_string())
         } else {
             None
         }
@@ -1048,10 +1048,14 @@ impl ClassModelBuilder {
 
     fn object_pad_mutator_name(field_name: &str, traits: &[String]) -> Option<String> {
         if traits.iter().any(|trait_name| trait_name == "mutator") {
-            Some(format!("set_{field_name}"))
+            Some(Self::object_pad_public_name(field_name).to_string())
         } else {
             None
         }
+    }
+
+    fn object_pad_public_name(field_name: &str) -> &str {
+        field_name.strip_prefix('_').unwrap_or(field_name)
     }
 
     /// Return true when a `Class::Accessor` call targets the current package.
@@ -1787,6 +1791,30 @@ class Point {
         assert!(y.param);
         assert_eq!(y.writer.as_deref(), Some("set_y"));
         assert_eq!(y.default.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn object_pad_generated_names_follow_documented_defaults() {
+        let models = build_models(
+            r#"
+use Object::Pad;
+
+class Defaults {
+    field $_secret :reader :writer :accessor :mutator;
+}
+"#,
+        );
+
+        let model = find_model(&models, "Defaults").expect("Defaults model");
+        let field = model.fields.iter().find(|field| field.name == "_secret").unwrap();
+
+        assert_eq!(field.reader.as_deref(), Some("secret"));
+        assert_eq!(field.writer.as_deref(), Some("set_secret"));
+        assert_eq!(field.accessor.as_deref(), Some("secret"));
+        assert_eq!(field.mutator.as_deref(), Some("secret"));
+
+        assert!(has_method(model, "secret", true, None));
+        assert!(has_method(model, "set_secret", true, None));
     }
 
     #[test]
