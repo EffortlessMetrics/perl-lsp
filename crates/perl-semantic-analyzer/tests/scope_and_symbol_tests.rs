@@ -808,6 +808,7 @@ $hashref->{k};
 
 my $hashslice_ref = { a => 1, b => 2 };
 my @vals = %$hashslice_ref{'a', 'b'};
+my @vals_list = @$hashslice_ref{'a', 'b'};
 
 my $value = 1;
 my $scalarref = \$value;
