@@ -68,6 +68,8 @@
         "extensions": [
           ".pl",
           ".pm",
+          ".xs",
+          ".xsi",
           ".pod",
           ".t",
           ".psgi",

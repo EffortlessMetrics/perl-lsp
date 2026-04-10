@@ -109,7 +109,8 @@ impl LspServer {
                             self.extract_symbol_hover(uri, ast, &doc.text, offset)
                         }
                     } else {
-                        HoverExtracted::None
+                        let offset = self.pos16_to_offset(doc, line, character);
+                        Self::extract_token_hover(uri, &doc.text, offset)
                     }
                 } else {
                     HoverExtracted::None
@@ -347,6 +348,11 @@ impl LspServer {
             }));
         }
 
+        Self::extract_token_hover(uri, text, offset)
+    }
+
+    /// Extract hover information from the token fallback path.
+    fn extract_token_hover(uri: &str, text: &str, offset: usize) -> HoverExtracted {
         // Check if the cursor is inside a regex literal and provide explanation.
         if let Some(regex_hover) = Self::extract_regex_hover(text, offset) {
             return HoverExtracted::Complete(regex_hover);
@@ -378,8 +384,13 @@ impl LspServer {
             }
         }
 
-        // Fall back to simple token display, with builtin docs
-        let hover_text = self.get_token_at_position(text, offset);
+        // Fall back to simple token display, with builtin docs.
+        let hover_text = {
+            // The normal tokenizer only captures `[$@%]` + alphanumeric/underscore,
+            // so it misses punctuation variables handled above.
+            let token = Self::get_token_at_position_static(text, offset);
+            token
+        };
 
         if !hover_text.is_empty() {
             // Check for special variable hover (handles $_, @_, @ISA, %ENV, etc.)
@@ -396,6 +407,20 @@ impl LspServer {
                             "**Built-in Function**\n\n```\n{}\n```\n\n{}",
                             builtin_doc.signature,
                             builtin_doc.description
+                        ),
+                    },
+                }));
+            }
+
+            if crate::completion::is_xs_source(text, Some(uri))
+                && let Some((sig, desc)) = crate::completion::get_xs_api_documentation(bare)
+            {
+                return HoverExtracted::Complete(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**XS / Perl C API**\n\n```c\n{}\n```\n\n{}",
+                            sig, desc
                         ),
                     },
                 }));
@@ -610,6 +635,32 @@ impl LspServer {
 
     fn is_truthy(value: &str) -> bool {
         matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
+    }
+
+    /// Get a token using the same simple fallback as rename, without requiring `&self`.
+    fn get_token_at_position_static(content: &str, offset: usize) -> String {
+        let chars: Vec<char> = content.chars().collect();
+        if offset >= chars.len() {
+            return String::new();
+        }
+
+        let mut start = offset;
+        while start > 0
+            && (chars[start - 1].is_alphanumeric()
+                || chars[start - 1] == '_'
+                || chars[start - 1] == '$'
+                || chars[start - 1] == '@'
+                || chars[start - 1] == '%')
+        {
+            start -= 1;
+        }
+
+        let mut end = offset;
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+            end += 1;
+        }
+
+        chars[start..end].iter().collect()
     }
 
     /// Extract the receiver token immediately before `->` at `offset`.

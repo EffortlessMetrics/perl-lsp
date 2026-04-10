@@ -104,12 +104,14 @@ mod sort;
 pub(crate) mod test_more;
 mod variables;
 mod workspace;
+mod xs_api;
 
 // Re-export public types
 pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
 pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
+pub use self::xs_api::{get_xs_api_documentation, is_xs_source};
 
 use perl_parser_core::ast::Node;
 use perl_parser_core::ast::NodeKind;
@@ -720,6 +722,7 @@ impl CompletionProvider {
             }
 
             let builtins = builtins::create_builtins();
+            xs_api::add_xs_api_completions(&mut completions, &context, source, filepath);
             if context.prefix.is_empty() || self.could_be_function(&context.prefix, &builtins) {
                 builtins::add_builtin_completions(&mut completions, &context, &builtins);
                 if is_cancelled() {
