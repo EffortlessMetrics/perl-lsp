@@ -627,6 +627,25 @@ describe('package.json contributes', () => {
 
       expect(keywordPattern).toBeDefined();
     });
+
+    test('grammar includes common SWIG directives', () => {
+      const grammar = readJson('syntaxes/perl.tmLanguage.json');
+      const swigPattern = grammar.repository.swig.patterns
+        .map((entry: any) => entry.match)
+        .find((match: string) =>
+          typeof match === 'string' &&
+          match.includes('module|include|inline|header|wrapper|init|perlcode|perl5')
+        );
+
+      expect(swigPattern).toBeDefined();
+    });
+
+    test('grammar maps SWIG embedded blocks to C and Perl languages', () => {
+      const pkg = readJson('package.json');
+      const grammar = pkg.contributes.grammars.find((g: any) => g.language === 'perl');
+      expect(grammar.embeddedLanguages['meta.embedded.block.c.perl']).toBe('c');
+      expect(grammar.embeddedLanguages['meta.embedded.block.perl.perl']).toBe('perl');
+    });
   });
 });
 

@@ -87,7 +87,11 @@
       {
         "language": "perl",
         "scopeName": "source.perl",
-        "path": "./syntaxes/perl.tmLanguage.json"
+        "path": "./syntaxes/perl.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.c.perl": "c",
+          "meta.embedded.block.perl.perl": "perl"
+        }
       }
     ],
     "breakpoints": [

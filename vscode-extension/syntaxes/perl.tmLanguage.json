@@ -2,12 +2,12 @@
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
     "name": "Perl",
     "scopeName": "source.perl",
-    "patterns": [
-        {
-            "include": "#comments"
-        },
-        {
-            "include": "#pod"
+        "patterns": [
+            {
+                "include": "#comments"
+            },
+            {
+                "include": "#pod"
         },
         {
             "include": "#strings"
@@ -24,14 +24,17 @@
         {
             "include": "#operators"
         },
-        {
-            "include": "#functions"
-        },
-        {
-            "include": "#regex"
-        }
-    ],
-    "repository": {
+            {
+                "include": "#functions"
+            },
+            {
+                "include": "#regex"
+            },
+            {
+                "include": "#swig"
+            }
+        ],
+        "repository": {
         "comments": {
             "patterns": [
                 {
@@ -280,6 +283,26 @@
                             "match": "\\\\."
                         }
                     ]
+                }
+            ]
+        },
+        "swig": {
+            "patterns": [
+                {
+                    "name": "keyword.other.perl.swig",
+                    "match": "^\\s*%(module|include|inline|header|wrapper|init|perlcode|perl5)\\b"
+                },
+                {
+                    "name": "meta.embedded.block.c.perl",
+                    "begin": "^\\s*(?:%inline\\b\\s*)?%\\{\\s*$",
+                    "end": "^\\s*%\\}\\s*$",
+                    "contentName": "source.c"
+                },
+                {
+                    "name": "meta.embedded.block.perl.perl",
+                    "begin": "^\\s*%(?:perlcode|perl5)\\b\\s*%\\{\\s*$",
+                    "end": "^\\s*%\\}\\s*$",
+                    "contentName": "source.perl"
                 }
             ]
         }
