@@ -361,6 +361,12 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
                     Arc::new(LspServer::new_with_feature_profile(launch_config.feature_profile));
                 startup_timer.checkpoint("server_construction");
 
+                // Install the global panic hook so unexpected panics are
+                // logged and surfaced to the LSP client rather than silently
+                // terminating the process.
+                server.install_panic_hook();
+                startup_timer.checkpoint("panic_hook_installed");
+
                 let (tx, rx) = tokio::sync::mpsc::channel(64);
                 spawn_reader_thread(std::io::stdin(), tx);
 
@@ -471,6 +477,11 @@ fn run_server(command_name: &str, launch_config: LaunchConfig) {
                                     output, profile,
                                 ));
                                 conn_timer.checkpoint("server_construction");
+
+                                // Install panic hook per-connection so notifications
+                                // reach the correct client's outbound channel.
+                                server.install_panic_hook();
+                                conn_timer.checkpoint("panic_hook_installed");
 
                                 let (tx, rx) = tokio::sync::mpsc::channel(64);
                                 spawn_reader_thread(reader, tx);

@@ -519,6 +519,32 @@ impl LspServer {
     //   test_runners      - run_test, run_test_file
     //   test_api          - #[cfg(test)] public wrappers
 
+    /// Install a global panic hook that logs panic information and notifies
+    /// the connected LSP client via `window/showMessage`.
+    ///
+    /// The hook is backed by a clone of this server's [`OutboundSender`] so
+    /// it can send notifications without holding any server lock. It chains to
+    /// the previously-registered panic hook (typically the default stderr
+    /// writer) and does **not** abort the process — panics continue to unwind
+    /// normally.
+    ///
+    /// # When to call
+    ///
+    /// Call this once during server startup, after constructing the server but
+    /// before entering the message loop. See `cli::run_server` for the
+    /// production call site.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// let server = perl_lsp::LspServer::new();
+    /// server.install_panic_hook();
+    /// server.run().ok();
+    /// ```
+    pub fn install_panic_hook(&self) {
+        crate::panic_hook::install(self.outbound.clone());
+    }
+
     /// Number of background workspace-indexing tasks currently in flight.
     ///
     /// Returns 0 when all background `index_file` tasks have completed.

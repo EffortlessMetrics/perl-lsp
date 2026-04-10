@@ -335,6 +335,7 @@ pub mod execute_command;
 pub mod fallback;
 pub mod features;
 pub mod handlers;
+pub mod panic_hook;
 pub mod protocol;
 pub mod runtime;
 pub mod security;
