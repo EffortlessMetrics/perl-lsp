@@ -379,6 +379,9 @@ fn is_special_variable(full_name: &str) -> bool {
             | "$INC"  // hash element access: $INC{'Foo.pm'}
             | "%SIG"
             | "$SIG" // hash element access: $SIG{INT}
+            | "$PL_sv_yes"
+            | "$PL_sv_no"
+            | "$PL_sv_undef"
     )
 }
 
