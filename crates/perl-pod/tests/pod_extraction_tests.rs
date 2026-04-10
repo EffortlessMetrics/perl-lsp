@@ -20,6 +20,23 @@ sub new { bless {}, shift }
 }
 
 #[test]
+fn code_before_pod_still_allows_extraction() {
+    let source = r#"
+package Inventory;
+
+sub add_item { }
+
+=head1 NAME
+
+Inventory - Tracks stock
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert_eq!(doc.name.as_deref(), Some("Inventory - Tracks stock"));
+}
+
+#[test]
 fn extracts_name_section() {
     let source = r#"
 =head1 NAME
