@@ -959,6 +959,7 @@ impl ScopeAnalyzer {
                 if strict_subs_mode
                     && !self.is_in_hash_key_context(node, ancestors, 1)
                     && !is_known_function(name)
+                    && !pragma_state.has_builtin_import(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {

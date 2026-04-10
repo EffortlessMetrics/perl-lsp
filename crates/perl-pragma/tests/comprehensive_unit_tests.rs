@@ -942,6 +942,26 @@ fn use_v5_40_state_has_builtin() -> Result<(), Box<dyn std::error::Error>> {
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
     assert!(state.has_feature("builtin"), "v5.40 state must have 'builtin'");
+    assert!(!state.has_builtin_import("floor"), "v5.40 should not imply lexical builtin imports");
+    assert!(state.builtin_imports.is_empty(), "v5.40 should not populate lexical builtin imports");
+    Ok(())
+}
+
+#[test]
+fn use_builtin_tracks_lexical_imports_only() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("builtin", &["'true'", "'floor'"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.has_builtin_import("true"));
+    assert!(state.has_builtin_import("floor"));
+    assert!(
+        !state.has_builtin_import("is_bool"),
+        "only the names actually imported should be tracked"
+    );
+    assert!(
+        !state.has_feature("builtin"),
+        "lexical builtin imports should stay separate from version-implied features"
+    );
     Ok(())
 }
 

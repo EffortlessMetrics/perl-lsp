@@ -1700,6 +1700,66 @@ print FOO;
 }
 
 #[test]
+fn version_pragma_does_not_import_builtin_short_names() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use v5.40;
+print floor;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "use v5.40 should not lexically import builtin short names"
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_pragma_imports_are_lexical_only() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use builtin 'true';
+print floor;
+print true;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "importing `true` must not suppress unrelated builtin names"
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "true"
+        }),
+        "lexically imported builtin short name `true` should be allowed"
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_pragma_imports_allow_the_imported_name() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use builtin 'floor';
+print floor;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "floor"
+        }),
+        "lexically imported builtin short name `floor` should not be flagged"
+    );
+    Ok(())
+}
+
+#[test]
 fn v5_36_auto_strict_flags_undeclared_variable_in_signature_sub()
 -> Result<(), Box<dyn std::error::Error>> {
     // use v5.36 enables strict automatically via feature bundle.

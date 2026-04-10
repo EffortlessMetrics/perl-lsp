@@ -47,6 +47,8 @@ pub struct PragmaState {
     /// table. `use feature` declarations are **not** tracked here — only
     /// version-bundle implications.
     pub features: Vec<&'static str>,
+    /// Lexically imported builtin short names from `use builtin`.
+    pub builtin_imports: Vec<String>,
 }
 
 impl PragmaState {
@@ -59,6 +61,7 @@ impl PragmaState {
             warnings: false,
             disabled_warning_categories: Vec::new(),
             features: Vec::new(),
+            builtin_imports: Vec::new(),
         }
     }
 
@@ -83,6 +86,12 @@ impl PragmaState {
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {
         self.features.contains(&feature)
+    }
+
+    /// Returns `true` when a builtin short name was lexically imported in scope.
+    #[must_use]
+    pub fn has_builtin_import(&self, name: &str) -> bool {
+        self.builtin_imports.iter().any(|import| import == name)
     }
 }
 
@@ -195,6 +204,31 @@ fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVers
     state.features = features_enabled_by_version(version);
 }
 
+fn builtin_import_names(arg: &str) -> Vec<String> {
+    let trimmed = arg.trim();
+
+    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+        return inner
+            .split_whitespace()
+            .filter(|name| !name.is_empty())
+            .map(|name| name.trim_matches('\'').trim_matches('"').to_string())
+            .collect();
+    }
+
+    let name = trimmed.trim_matches('\'').trim_matches('"');
+    if name.is_empty() { Vec::new() } else { vec![name.to_string()] }
+}
+
+fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
+    for arg in args {
+        for name in builtin_import_names(arg) {
+            if !state.builtin_imports.iter().any(|import| import == &name) {
+                state.builtin_imports.push(name);
+            }
+        }
+    }
+}
+
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
@@ -300,6 +334,11 @@ impl PragmaTracker {
                                 current_state.clone(),
                             ));
                         }
+                    }
+                    "builtin" => {
+                        apply_builtin_imports(current_state, args);
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     _ => {
                         if let Some(version) = parse_perl_version(module) {
