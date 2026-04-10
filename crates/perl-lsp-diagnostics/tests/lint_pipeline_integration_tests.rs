@@ -252,7 +252,42 @@ fn lint_pipeline_string_eval_emits_pl600() {
 }
 
 // =========================================================================
-// 11. Unused imports lint fires through the full pipeline (#2694)
+// 11. Security lint: global SIG handlers fire through the full pipeline
+// =========================================================================
+
+#[test]
+fn lint_pipeline_global_sig_handler_emits_pl602() {
+    let source = "use strict;\nuse warnings;\n$main::SIG{'__WARN__'} = sub { warn \"caught\" };\n";
+    let diags = diagnostics_for(source);
+
+    let signal: Vec<_> = diags.iter().filter(|d| d.code.as_deref() == Some("PL602")).collect();
+
+    assert!(
+        !signal.is_empty(),
+        "Expected security-signal-handler (PL602) diagnostic from get_diagnostics(), \
+         got {} total diags with codes: {:?}",
+        diags.len(),
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+    assert_eq!(signal[0].severity, DiagnosticSeverity::Warning);
+    assert!(signal[0].suggestion.is_some(), "security-signal-handler should carry a suggestion");
+}
+
+#[test]
+fn lint_pipeline_lexical_sig_shadow_does_not_emit_pl602() {
+    let source =
+        "use strict;\nuse warnings;\nmy %SIG;\n$SIG{__WARN__} = sub { warn \"caught\" };\n";
+    let diags = diagnostics_for(source);
+
+    assert!(
+        diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
+        "lexical %SIG shadow should not emit PL602 from get_diagnostics(), got {:?}",
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
+// =========================================================================
+// 12. Unused imports lint fires through the full pipeline (#2694)
 // =========================================================================
 
 #[test]
@@ -282,7 +317,7 @@ fn lint_pipeline_unused_import_emits_pl700() {
 }
 
 // =========================================================================
-// 12. Used import does NOT fire PL700 (#2694)
+// 13. Used import does NOT fire PL700 (#2694)
 // =========================================================================
 
 #[test]
@@ -302,7 +337,7 @@ fn lint_pipeline_used_import_no_pl700() {
 }
 
 // =========================================================================
-// 13. Dedup removes duplicate diagnostics (#2696)
+// 14. Dedup removes duplicate diagnostics (#2696)
 // =========================================================================
 
 #[test]

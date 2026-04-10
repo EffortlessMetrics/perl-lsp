@@ -11,7 +11,7 @@
 //! - **strict_warnings**: Missing `use strict` / `use warnings` advisories and
 //!   misspelled pragma detection
 //! - **common_mistakes**: Frequent programming errors (assignment in conditions, etc.)
-//! - **security**: Security anti-patterns (two-arg open, string eval, backtick execution)
+//! - **security**: Security anti-patterns (two-arg open, string eval, backtick execution, global signal handlers)
 //!
 //! # Diagnostic Code Reference
 //!
@@ -67,6 +67,7 @@
 //! | `security-two-arg-open` | Warning | `open(FH, ">file")` -- use 3-arg open |
 //! | `security-string-eval` | Warning | `eval "$string"` is a security risk |
 //! | `security-backtick-exec` | Information | Backtick/qx command execution detected |
+//! | `security-signal-handler` | Warning | Global `$SIG{__DIE__}` / `$SIG{__WARN__}` assignment |
 //!
 //! ## Package / subroutine (`package_subroutine.rs`)
 //!
