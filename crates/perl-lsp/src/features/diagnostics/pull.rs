@@ -426,6 +426,13 @@ fn is_fixable_diagnostic(code: &str) -> bool {
                 | DiagnosticCode::AssignmentInCondition
                 | DiagnosticCode::NumericComparisonWithUndef
                 | DiagnosticCode::DeprecatedDefined
+                | DiagnosticCode::MissingPackageDeclaration
+                | DiagnosticCode::VariableRedeclaration
+                | DiagnosticCode::UninitializedVariable
+                | DiagnosticCode::MisspelledPragma
+                | DiagnosticCode::UnreachableCode
+                | DiagnosticCode::DuplicateSubroutine
+                | DiagnosticCode::MissingReturn
         )
     )
 }
