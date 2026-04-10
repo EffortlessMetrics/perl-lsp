@@ -871,4 +871,100 @@ mod tests {
         machine.transition_to_initializing();
         assert!(matches!(machine.update_initialization_progress(50), TransitionResult::Success));
     }
+
+    #[test]
+    fn test_update_initialization_progress_clamps_at_100() {
+        let machine = IndexStateMachine::new();
+        machine.transition_to_initializing();
+
+        assert!(matches!(machine.update_initialization_progress(250), TransitionResult::Success));
+        assert!(matches!(machine.state(), IndexState::Initializing { progress: 100, .. }));
+    }
+
+    #[test]
+    fn test_transition_to_invalidating_rejects_transitional_states() {
+        let machine = IndexStateMachine::new();
+        machine.transition_to_initializing();
+
+        assert!(matches!(
+            machine.transition_to_invalidating(InvalidationReason::ManualRequest),
+            TransitionResult::InvalidTransition {
+                from: IndexStateKind::Initializing,
+                to: IndexStateKind::Invalidating
+            }
+        ));
+    }
+
+    #[test]
+    fn test_transition_to_degraded_keeps_available_symbols_from_ready() {
+        let machine = IndexStateMachine::new();
+        machine.transition_to_initializing();
+        machine.transition_to_building(100);
+        machine.transition_to_ready(42, 777);
+
+        assert!(matches!(
+            machine.transition_to_degraded(DegradationReason::ParseStorm { pending_parses: 3 }),
+            TransitionResult::Success
+        ));
+        assert!(matches!(machine.state(), IndexState::Degraded { available_symbols: 777, .. }));
+    }
+
+    #[test]
+    fn test_transition_to_degraded_from_error_is_invalid() {
+        let machine = IndexStateMachine::new();
+        machine.transition_to_error("fatal".to_string());
+
+        assert!(matches!(
+            machine.transition_to_degraded(DegradationReason::ResourceLimit {
+                kind: ResourceKind::MaxFiles
+            }),
+            TransitionResult::InvalidTransition {
+                from: IndexStateKind::Error,
+                to: IndexStateKind::Degraded
+            }
+        ));
+    }
+
+    #[test]
+    fn test_update_building_progress_preserves_total_count() {
+        let machine = IndexStateMachine::new();
+        machine.transition_to_initializing();
+        machine.transition_to_building(123);
+
+        assert!(matches!(
+            machine.update_building_progress(10, BuildPhase::Scanning),
+            TransitionResult::Success
+        ));
+        assert!(matches!(
+            machine.state(),
+            IndexState::Building {
+                indexed_count: 10,
+                total_count: 123,
+                phase: BuildPhase::Scanning,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_state_helpers_report_expected_flags() {
+        let machine = IndexStateMachine::new();
+        let idle = machine.state();
+        assert_eq!(idle.kind(), IndexStateKind::Idle);
+        assert!(!idle.is_ready());
+        assert!(!idle.is_error());
+        assert!(!idle.is_transitional());
+        assert!(idle.state_started_at() <= Instant::now());
+
+        machine.transition_to_initializing();
+        let initializing = machine.state();
+        assert_eq!(initializing.kind(), IndexStateKind::Initializing);
+        assert!(initializing.is_transitional());
+
+        machine.transition_to_error("boom".to_string());
+        let error = machine.state();
+        assert_eq!(error.kind(), IndexStateKind::Error);
+        assert!(error.is_error());
+        assert!(!error.is_ready());
+    }
 }
