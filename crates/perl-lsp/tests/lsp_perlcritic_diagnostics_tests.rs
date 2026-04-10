@@ -268,3 +268,48 @@ fn test_d_perlcriticrc_walkup_finds_workspace_root_config() {
         invocations[0].args
     );
 }
+
+#[test]
+fn test_e_empty_profile_falls_back_to_walkup_config() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().to_path_buf();
+    let lib_dir = root.join("lib");
+    fs::create_dir_all(&lib_dir).expect("create lib/");
+
+    let rc_path = root.join(".perlcriticrc");
+    fs::write(&rc_path, "severity = 3\n").expect("write .perlcriticrc");
+
+    let module_path = lib_dir.join("MyModule.pm");
+    fs::write(&module_path, "package MyModule;\n1;\n").expect("write MyModule.pm");
+
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 3, Some(String::new()));
+    server.test_set_root_path(root.clone());
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+    server.test_bypass_perlcritic_command_check();
+
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+
+    pull_diagnostics(&server, &uri, "package MyModule;\n1;\n");
+
+    let invocations = runtime.invocations();
+    assert_eq!(
+        invocations.len(),
+        1,
+        "empty profile values should not suppress perlcritic execution; got: {invocations:?}"
+    );
+
+    let expected_profile = rc_path.to_string_lossy().to_string();
+    let profile_arg = format!("--profile={expected_profile}");
+    assert!(
+        invocations[0].args.contains(&profile_arg),
+        "empty profile should fall back to workspace walk-up .perlcriticrc; args: {:?}",
+        invocations[0].args
+    );
+}

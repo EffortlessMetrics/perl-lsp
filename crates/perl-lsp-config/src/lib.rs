@@ -204,7 +204,8 @@ impl ServerConfig {
                 self.perlcritic_severity = severity.clamp(1, 5) as u8;
             }
             if let Some(profile) = critic.get("profile").and_then(|v| v.as_str()) {
-                self.perlcritic_profile = Some(profile.to_string());
+                let profile = profile.trim();
+                self.perlcritic_profile = (!profile.is_empty()).then(|| profile.to_string());
             }
         }
 
@@ -748,6 +749,14 @@ mod tests {
         let mut config = ServerConfig::default();
         config.update_from_value(&json!({ "perlcritic": { "profile": "/path/to/.perlcriticrc" } }));
         assert_eq!(config.perlcritic_profile, Some("/path/to/.perlcriticrc".to_string()));
+    }
+
+    #[test]
+    fn server_config_perlcritic_empty_profile_clears_to_none() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({ "perlcritic": { "profile": "/path/to/.perlcriticrc" } }));
+        config.update_from_value(&json!({ "perlcritic": { "profile": "" } }));
+        assert!(config.perlcritic_profile.is_none());
     }
 
     #[test]

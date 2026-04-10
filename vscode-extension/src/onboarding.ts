@@ -204,10 +204,10 @@ export class OnboardingManager {
     }
   }
 
-  /** Check perlcritic availability/profile when perl.perlcritic.enabled is true. */
+  /** Check perlcritic availability/profile when perl-lsp.perlcritic.enabled is true. */
   async checkPerlcriticSetup(): Promise<HealthCheckResult> {
     const label = 'perlcritic';
-    const perlcriticConfig = vscode.workspace.getConfiguration('perl').get<any>('perlcritic', {});
+    const perlcriticConfig = vscode.workspace.getConfiguration('perl-lsp').get<any>('perlcritic', {});
     const enabled = Boolean(perlcriticConfig?.enabled);
     const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
 

@@ -769,23 +769,6 @@ impl LspServer {
     /// The `doc_text` parameter is used to convert perlcritic's line/column
     /// positions into byte offsets for the internal diagnostic range.
     #[cfg(not(target_arch = "wasm32"))]
-    fn warn_perlcritic_missing_once(&self) {
-        if !self.should_emit_perlcritic_missing_warning() {
-            return;
-        }
-
-        let message = perlcritic_missing_warning_message();
-        if let Err(e) = self.show_message(crate::runtime::window::MessageType::Warning, &message) {
-            tracing::warn!(error = %e, "Failed to send perlcritic missing warning");
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn should_emit_perlcritic_missing_warning(&self) -> bool {
-        !self.perlcritic_missing_warning_shown.swap(true, std::sync::atomic::Ordering::Relaxed)
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
     fn collect_external_perlcritic_diagnostics(
         &self,
         uri: &str,
@@ -800,6 +783,7 @@ impl LspServer {
         if !enabled {
             return;
         }
+        let profile = profile.and_then(|profile| (!profile.trim().is_empty()).then_some(profile));
 
         // Convert URI to file system path; skip non-file URIs
         let file_path = match url::Url::parse(uri) {
@@ -1025,34 +1009,12 @@ fn builtin_violation_to_diagnostic(
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn perlcritic_missing_warning_message() -> String {
-    "Perl::Critic is not installed, so perlcritic diagnostics are disabled. Install it with `cpan Perl::Critic` or your system package manager, then reload the file."
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn perlcritic_missing_warning_message_mentions_install_step() {
-        let message = perlcritic_missing_warning_message();
-        assert!(message.contains("Perl::Critic is not installed"));
-        assert!(message.contains("cpan Perl::Critic"));
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    fn perlcritic_missing_warning_is_emitted_once() {
-        let server = LspServer::new();
-        assert!(server.should_emit_perlcritic_missing_warning());
-        assert!(!server.should_emit_perlcritic_missing_warning());
-    }
-
-    #[test]
-    fn builtin_violation_maps_gentle_to_hint() {
+    fn builtin_violation_maps_gentle_to_error() {
         let violation = crate::perl_critic::Violation {
             policy: "GentlePolicy".to_string(),
             description: "gentle".to_string(),
@@ -1066,7 +1028,7 @@ mod tests {
         };
 
         let diagnostic = builtin_violation_to_diagnostic(&violation);
-        assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Hint);
+        assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Error);
         assert_eq!(diagnostic.code.as_deref(), Some("GentlePolicy"));
     }
 }

@@ -273,9 +273,6 @@ pub struct LspServer {
     /// Initialized to `false`; only the test helper methods flip this.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_perlcritic_command_check: AtomicBool,
-    /// Ensures the missing perlcritic warning is only surfaced once.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) perlcritic_missing_warning_shown: AtomicBool,
     /// Deduplication set for workspace-scoped Perl::Critic warning notifications.
     ///
     /// Keys are stable identifiers (for example, `missing-binary` or
