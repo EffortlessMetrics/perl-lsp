@@ -93,6 +93,17 @@ impl<'a> Parser<'a> {
                 .is_some_and(|t| t.kind == TokenKind::Sub)
     }
 
+    fn is_adjust_block_start(&mut self) -> bool {
+        self.in_class_body > 0
+            && self.peek_kind() == Some(TokenKind::Identifier)
+            && self.tokens.peek().ok().is_some_and(|t| t.text.as_ref() == "ADJUST")
+            && self
+                .tokens
+                .peek_second()
+                .ok()
+                .is_some_and(|t| t.kind == TokenKind::LeftBrace)
+    }
+
     fn finish_subroutine_statement(&mut self, sub_node: Node) -> ParseResult<Node> {
         Ok(if let NodeKind::Subroutine { name, .. } = &sub_node.kind {
             if name.is_none() {
@@ -173,6 +184,10 @@ impl<'a> Parser<'a> {
 
             if keyword_text.as_ref() == "elsif" && next_kind == Some(TokenKind::LeftParen) {
                 return self.parse_orphaned_elsif();
+            }
+
+            if self.is_adjust_block_start() {
+                return self.parse_adjust_block();
             }
         }
 

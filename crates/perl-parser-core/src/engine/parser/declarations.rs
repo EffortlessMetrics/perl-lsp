@@ -292,7 +292,10 @@ impl<'a> Parser<'a> {
             .filter(|s| !s.is_empty())
             .collect();
 
-        let body = self.parse_block()?;
+        self.in_class_body += 1;
+        let body = self.parse_block();
+        self.in_class_body -= 1;
+        let body = body?;
 
         let end = self.previous_position();
         Ok(Node::new(
@@ -327,6 +330,25 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::Method { name, signature, attributes, body: Box::new(body) },
+            SourceLocation { start, end },
+        ))
+    }
+
+    /// Parse an Object::Pad `ADJUST` block as a method-like class body node.
+    fn parse_adjust_block(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.tokens.next()?; // consume 'ADJUST'
+
+        let body = self.parse_block()?;
+
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::Method {
+                name: "ADJUST".to_string(),
+                signature: None,
+                attributes: Vec::new(),
+                body: Box::new(body),
+            },
             SourceLocation { start, end },
         ))
     }
