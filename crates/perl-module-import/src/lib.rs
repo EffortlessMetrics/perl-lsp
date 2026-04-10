@@ -53,6 +53,20 @@ impl DispatchSemantics {
     }
 }
 
+/// How a `use` statement spells its import list.
+///
+/// This is syntactic only: it distinguishes the default import form from an
+/// explicitly empty list and from an explicit parenthesized import list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportListForm {
+    /// `use Module;`
+    Default,
+    /// `use Module ();`
+    Empty,
+    /// `use Module (...)`
+    Explicit,
+}
+
 /// Distinguishes the two syntactic forms of `require`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RequireForm {
@@ -108,6 +122,8 @@ pub struct ModuleImportHead<'a> {
     /// For `require`, whether the argument was a quoted file path or a bare module name.
     /// Always `None` for `use` forms.
     require_form: Option<RequireForm>,
+    /// For `use` statements, how the import list is spelled.
+    pub import_list: Option<ImportListForm>,
 }
 
 impl<'a> ModuleImportHead<'a> {
@@ -147,7 +163,21 @@ pub fn parse_module_import_head(line: &str) -> Option<ModuleImportHead<'_>> {
             "base" => ModuleImportKind::UseBase,
             _ => ModuleImportKind::Use,
         };
-        return Some(ModuleImportHead { kind, token, token_start, token_end, require_form: None });
+
+        let import_list = match kind {
+            ModuleImportKind::Use => Some(classify_use_import_list(&line[token_end..])),
+            ModuleImportKind::UseParent | ModuleImportKind::UseBase => None,
+            ModuleImportKind::Require => None,
+        };
+
+        return Some(ModuleImportHead {
+            kind,
+            token,
+            token_start,
+            token_end,
+            require_form: None,
+            import_list,
+        });
     }
 
     if let Some(result) = parse_require_head(line) {
@@ -192,6 +222,7 @@ fn parse_require_head(line: &str) -> Option<ModuleImportHead<'_>> {
             token_start,
             token_end,
             require_form: Some(RequireForm::FilePath),
+            import_list: None,
         });
     }
 
@@ -206,7 +237,34 @@ fn parse_require_head(line: &str) -> Option<ModuleImportHead<'_>> {
         token_start,
         token_end,
         require_form: Some(RequireForm::ModuleName),
+        import_list: None,
     })
+}
+
+fn classify_use_import_list(rest: &str) -> ImportListForm {
+    let trimmed = rest.trim_start();
+
+    if trimmed.is_empty() || trimmed.starts_with(';') {
+        return ImportListForm::Default;
+    }
+
+    if let Some(after_open) = trimmed.strip_prefix('(') {
+        if let Some(close_idx) = after_open.find(')') {
+            if after_open[..close_idx].trim().is_empty() {
+                let after_close = after_open[close_idx + 1..].trim_start();
+                if after_close.is_empty()
+                    || after_close.starts_with(';')
+                    || after_close.starts_with('#')
+                {
+                    return ImportListForm::Empty;
+                }
+            }
+        }
+
+        return ImportListForm::Explicit;
+    }
+
+    ImportListForm::Explicit
 }
 
 fn parse_statement_head<'a>(line: &'a str, keyword: &str) -> Option<(&'a str, usize, usize)> {
