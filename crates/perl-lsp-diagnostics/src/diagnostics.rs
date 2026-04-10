@@ -107,15 +107,45 @@ impl DiagnosticsProvider {
                 })
                 .unwrap_or_default();
 
+            // Derive the most specific diagnostic code available.
+            //
+            // For SyntaxError variants, `from_message` may match a named code
+            // such as `InvalidPrototype` (PL302) — use it when available so that
+            // the LSP client sees the intended code and severity instead of the
+            // generic PL002.  Other parse-error variants stay as-is.
             let code = match error {
                 ParseError::UnexpectedEof => DiagnosticCode::UnexpectedEof,
-                ParseError::SyntaxError { .. } => DiagnosticCode::SyntaxError,
+                ParseError::SyntaxError { .. } => {
+                    DiagnosticCode::from_message(&message).unwrap_or(DiagnosticCode::SyntaxError)
+                }
                 _ => DiagnosticCode::ParseError,
+            };
+
+            // When `from_message` promoted the code to a named diagnostic (e.g.
+            // `InvalidPrototype`), honour the canonical severity from the code
+            // catalogue rather than the generic parse-error severity.
+            let severity = if matches!(error, ParseError::SyntaxError { .. })
+                && code != DiagnosticCode::SyntaxError
+            {
+                // Convert from perl_diagnostics_codes severity to the LSP internal type.
+                // DiagnosticSeverity is re-exported from perl_lsp_diagnostic_types above.
+                match code.severity() {
+                    perl_diagnostics_codes::DiagnosticSeverity::Error => DiagnosticSeverity::Error,
+                    perl_diagnostics_codes::DiagnosticSeverity::Warning => {
+                        DiagnosticSeverity::Warning
+                    }
+                    perl_diagnostics_codes::DiagnosticSeverity::Information => {
+                        DiagnosticSeverity::Information
+                    }
+                    perl_diagnostics_codes::DiagnosticSeverity::Hint => DiagnosticSeverity::Hint,
+                }
+            } else {
+                parse_error_severity(error, &message)
             };
 
             diagnostics.push(Diagnostic {
                 range: (range_start, range_end),
-                severity: parse_error_severity(error, &message),
+                severity,
                 code: Some(code.as_str().to_string()),
                 message,
                 related_information,
