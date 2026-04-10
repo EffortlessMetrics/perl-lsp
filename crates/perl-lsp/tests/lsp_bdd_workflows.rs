@@ -393,6 +393,18 @@ fn highlight_kinds(response: &Value) -> Vec<u64> {
         .unwrap_or_default()
 }
 
+fn inlay_labels(response: &Value) -> Vec<String> {
+    response
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("label").and_then(Value::as_str).map(ToOwned::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn setup_workspace(files: &[(&str, &str)]) -> Result<(LspHarness, TempWorkspace), String> {
     let (mut harness, workspace) = LspHarness::with_workspace(files)?;
 
@@ -1653,6 +1665,406 @@ sub main_func {}
     assert!(find_symbol(symbols, "inner_func"), "Expected inner_func");
     assert!(find_symbol(symbols, "main"), "Expected main package");
     assert!(find_symbol(symbols, "main_func"), "Expected main_func");
+
+    Ok(())
+}
+#[test]
+#[serial]
+fn bdd_references_respects_include_declaration_flag() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("References honor includeDeclaration behavior");
+
+    let module = r#"package Foo;
+use strict;
+use warnings;
+
+sub process_data {
+    return 1;
+}
+
+1;
+"#;
+
+    let main = r#"use strict;
+use warnings;
+use lib './lib';
+use Foo;
+
+my $result = Foo::process_data();
+my $again = Foo::process_data();
+"#;
+
+    scenario.given("a workspace where a symbol has one declaration and multiple call sites");
+    let (mut harness, workspace) = setup_workspace(&[("lib/Foo.pm", module), ("main.pl", main)])?;
+    let module_uri = workspace.uri("lib/Foo.pm");
+    let main_uri = workspace.uri("main.pl");
+
+    harness.open(&module_uri, module)?;
+    harness.open(&main_uri, main)?;
+    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    let (line, character) = find_position(module, "process_data");
+
+    scenario.when("requesting references with includeDeclaration=false");
+    let without_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": module_uri },
+            "position": { "line": line, "character": character },
+            "context": { "includeDeclaration": false }
+        }),
+    )?;
+
+    scenario.then("usage locations are still returned when declarations are excluded");
+    let without_decl_locations = without_decl
+        .as_array()
+        .ok_or("references response should be an array for includeDeclaration=false")?;
+    let without_decl_uris = ref_uris(&without_decl);
+    assert!(
+        uri_set_contains(&without_decl_uris, &main_uri),
+        "usage file should still be included when includeDeclaration=false; got {without_decl_uris:?}"
+    );
+    assert!(
+        without_decl_locations.len() >= 2,
+        "expected at least the two call-site references in main.pl; got {without_decl_locations:?}"
+    );
+
+    scenario.when("requesting references with includeDeclaration=true");
+    let with_decl = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": module_uri },
+            "position": { "line": line, "character": character },
+            "context": { "includeDeclaration": true }
+        }),
+    )?;
+
+    scenario.then("includeDeclaration=true returns at least as many locations as usage-only mode");
+    let with_decl_locations = with_decl
+        .as_array()
+        .ok_or("references response should be an array for includeDeclaration=true")?;
+    let with_decl_uris = ref_uris(&with_decl);
+    assert!(
+        uri_set_contains(&with_decl_uris, &main_uri),
+        "usage file should remain present when includeDeclaration=true; got {with_decl_uris:?}"
+    );
+    assert!(
+        with_decl_uris.len() >= without_decl_uris.len(),
+        "includeDeclaration=true should not return fewer URI buckets than includeDeclaration=false; without={without_decl_uris:?} with={with_decl_uris:?}"
+    );
+    assert!(
+        with_decl_locations.len() >= without_decl_locations.len(),
+        "includeDeclaration=true should not return fewer locations than includeDeclaration=false; without={} with={}",
+        without_decl_locations.len(),
+        with_decl_locations.len()
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_incremental_completion_reflects_new_local_symbol() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Incremental completion reflects new local symbols");
+
+    let before = r#"use strict;
+use warnings;
+
+my $value = cal
+"#;
+
+    let after = r#"use strict;
+use warnings;
+
+sub calculate_total {
+    my ($left, $right) = @_;
+    return $left + $right;
+}
+
+my $value = cal
+"#;
+
+    scenario.given("a file where completion initially has no local function declaration");
+    let (mut harness, workspace) = setup_workspace(&[("incremental_completion.pl", before)])?;
+    let uri = workspace.uri("incremental_completion.pl");
+    harness.open(&uri, before)?;
+    harness.barrier();
+
+    let (line, col) = find_position(before, "my $value = cal");
+    let completion_character = col + "my $value = cal".len() as u32;
+
+    scenario.when("requesting completion before introducing the helper function");
+    let before_completion = harness.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": completion_character }
+        }),
+    )?;
+
+    let before_labels = completion_labels(&before_completion);
+
+    scenario.when("adding a helper function via didChange and requesting completion again");
+    harness.change_full(&uri, 2, after)?;
+    harness.barrier();
+    harness.wait_for_symbol("calculate_total", Some(&uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    let (line_after, col_after) = find_position(after, "my $value = cal");
+    let after_completion = harness.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": {
+                "line": line_after,
+                "character": col_after + "my $value = cal".len() as u32
+            }
+        }),
+    )?;
+
+    scenario.then("the refreshed completion list now includes the newly declared function");
+    let after_labels = completion_labels(&after_completion);
+    assert!(
+        !before_labels.contains("calculate_total"),
+        "baseline completion should not already include calculate_total; got {before_labels:?}"
+    );
+    assert!(
+        after_labels
+            .iter()
+            .any(|label| label == "calculate_total" || label.ends_with("calculate_total")),
+        "completion after didChange should include calculate_total; got {after_labels:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_prepare_rename_rejects_non_symbol_positions() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Prepare rename rejects non-symbol positions");
+
+    let code = r#"use strict;
+use warnings;
+
+my $value = 41;
+print $value + 1;
+"#;
+
+    scenario.given("a file where rename is attempted over punctuation instead of an identifier");
+    let (mut harness, workspace) = setup_workspace(&[("rename_invalid.pl", code)])?;
+    let uri = workspace.uri("rename_invalid.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    let (line, plus_col) = find_position(code, "+ 1");
+
+    scenario.when("requesting prepareRename on the '+' operator");
+    let prepare = harness.request(
+        "textDocument/prepareRename",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": plus_col }
+        }),
+    )?;
+
+    scenario.then("the server declines rename at that position");
+    assert!(
+        prepare.is_null() || !has_lsp_range(&prepare),
+        "prepareRename at operator positions should not return a symbol range; got {prepare:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_prepare_rename_returns_range_for_keyword_token() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Prepare rename returns range for keyword token");
+
+    let code = r#"use strict;
+use warnings;
+
+my $value = 1;
+print $value;
+"#;
+
+    scenario.given("a Perl document and a cursor positioned on a keyword token");
+    let (mut harness, workspace) = setup_workspace(&[("rename_guard.pl", code)])?;
+    let uri = workspace.uri("rename_guard.pl");
+    harness.open(&uri, code)?;
+
+    let (line, character) = find_position(code, "print $value;");
+
+    scenario.when("requesting prepareRename on the `print` keyword token");
+    let response = harness.request_raw_with_timeout(
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/prepareRename",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": {
+                    "line": line,
+                    "character": character
+                }
+            }
+        }),
+        Duration::from_secs(2),
+    );
+
+    scenario.then("the server returns a valid range payload rather than crashing");
+    assert!(
+        response.get("error").is_none(),
+        "prepareRename should not hard-fail; got {response:?}"
+    );
+    assert!(
+        response.get("result").is_some_and(has_lsp_range),
+        "prepareRename should return a range-compatible result; got {response:?}"
+    );
+    assert_eq!(
+        response.pointer("/result/placeholder").and_then(Value::as_str),
+        Some("print"),
+        "prepareRename should surface the touched token as placeholder"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_references_toggle_include_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("References remain stable across includeDeclaration toggle");
+
+    let code = r#"use strict;
+use warnings;
+
+my $total = 1;
+print $total;
+$total += 2;
+"#;
+
+    scenario.given("a file with one lexical declaration and two usages");
+    let (mut harness, workspace) = setup_workspace(&[("references.pl", code)])?;
+    let uri = workspace.uri("references.pl");
+    harness.open(&uri, code)?;
+
+    let (line, character) = find_position(code, "$total += 2");
+
+    scenario.when("requesting references with includeDeclaration=true");
+    let with_declaration = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 1 },
+            "context": { "includeDeclaration": true }
+        }),
+    )?;
+
+    scenario.then("the response includes declaration and usages");
+    let with_decl_items = with_declaration.as_array().cloned().unwrap_or_default();
+    assert!(
+        with_decl_items.len() >= 3,
+        "expected declaration + 2 usages when includeDeclaration=true; got {with_decl_items:?}"
+    );
+
+    scenario.when("requesting references with includeDeclaration=false");
+    let without_declaration = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 1 },
+            "context": { "includeDeclaration": false }
+        }),
+    )?;
+
+    scenario.then("the response stays structurally valid and returns reference locations");
+    let without_decl_items = without_declaration.as_array().cloned().unwrap_or_default();
+    assert!(
+        !without_decl_items.is_empty(),
+        "reference lookup with includeDeclaration=false should still return locations"
+    );
+    assert!(
+        without_decl_items.len() >= with_decl_items.len().saturating_sub(1),
+        "includeDeclaration=false should not catastrophically reduce references (with={}, without={})",
+        with_decl_items.len(),
+        without_decl_items.len()
+    );
+    assert!(
+        without_decl_items.iter().all(|item| item.get("uri").is_some() && has_lsp_range(item)),
+        "reference entries should preserve uri + range fields; got {without_decl_items:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_structural_navigation_supports_folding_and_inlay_hints()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Structural navigation supports folding and inlay hints");
+
+    let code = r#"use strict;
+use warnings;
+
+sub render {
+    my ($name) = @_;
+    if ($name) {
+        return substr($name, 0, 3);
+    }
+    return "n/a";
+}
+"#;
+
+    scenario.given("a Perl document with nested blocks and a builtin call that takes arguments");
+    let (mut harness, workspace) = setup_workspace(&[("structure.pl", code)])?;
+    let uri = workspace.uri("structure.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting folding ranges for the document");
+    let folding = harness.request(
+        "textDocument/foldingRange",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("the server returns foldable structural ranges");
+    let folding_ranges = folding.as_array().ok_or("foldingRange should return an array payload")?;
+    assert!(!folding_ranges.is_empty(), "expected at least one folding range");
+    assert!(
+        folding_ranges
+            .iter()
+            .all(|range| range.get("startLine").is_some() && range.get("endLine").is_some()),
+        "all folding ranges should expose startLine and endLine"
+    );
+
+    scenario.when("requesting inlay hints for the same range");
+    let inlay = harness.request(
+        "textDocument/inlayHint",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": code.lines().count() as u32, "character": 0 }
+            }
+        }),
+    )?;
+
+    scenario.then("inlay hints return a valid payload shape for the requested range");
+    let hints = inlay.as_array().ok_or("inlayHint should return an array payload")?;
+    assert!(
+        hints.iter().all(|hint| hint.get("position").is_some() && hint.get("label").is_some()),
+        "every inlay hint should include position and label when present"
+    );
+
+    let labels = inlay_labels(&inlay);
+    if !labels.is_empty() {
+        assert!(
+            labels.iter().any(|label| matches!(label.as_str(), "expr:" | "offset:" | "length:")),
+            "expected substr-style parameter hints in {labels:?}"
+        );
+    }
 
     Ok(())
 }
