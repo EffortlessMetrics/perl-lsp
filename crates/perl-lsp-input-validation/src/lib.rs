@@ -6,9 +6,6 @@ use perl_path_security::validate_workspace_path;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-/// Maximum allowed file size for parsing (10MB).
-const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
-
 /// Maximum allowed path length.
 const MAX_PATH_LENGTH: usize = 4096;
 
@@ -40,13 +37,17 @@ pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Res
 }
 
 /// Validates file content before parsing to prevent resource exhaustion.
+///
+/// The file size limit is sourced from [`perl_lsp_limits::max_file_size_bytes`],
+/// which defaults to 1MB and is configurable via `perl.limits.maxFileSizeBytes`.
 pub fn validate_file_content(content: &str, file_path: &Path) -> Result<()> {
-    if content.len() > MAX_FILE_SIZE {
+    let max_file_size = perl_lsp_limits::max_file_size_bytes();
+    if content.len() > max_file_size {
         return Err(anyhow!(
-            "File {} too large: {} bytes (max: {})",
+            "File {} too large: {} bytes (max: {} bytes) — adjust perl.limits.maxFileSizeBytes to increase",
             file_path.display(),
             content.len(),
-            MAX_FILE_SIZE
+            max_file_size
         ));
     }
 
@@ -224,9 +225,10 @@ mod tests {
 
     #[test]
     fn test_validate_file_content_too_large() {
+        let max = perl_lsp_limits::max_file_size_bytes();
         let mut content = String::new();
-        content.reserve(MAX_FILE_SIZE + 1);
-        content.extend(std::iter::repeat_n('x', MAX_FILE_SIZE + 1));
+        content.reserve(max + 1);
+        content.extend(std::iter::repeat_n('x', max + 1));
         let file_path = Path::new("large.pl");
 
         let result = validate_file_content(&content, file_path);
@@ -296,5 +298,18 @@ mod tests {
 
         let result = validate_lsp_request(method, &params);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_size_limit_sourced_from_lsp_limits() {
+        // The file size limit must come from perl-lsp-limits, not a local constant.
+        // This test documents the expected single source of truth.
+        let expected_limit = perl_lsp_limits::max_file_size_bytes();
+        // Default is 1MB per LspLimits::default()
+        assert_eq!(
+            expected_limit,
+            1_024 * 1_024,
+            "default file size limit must be 1MB from perl-lsp-limits"
+        );
     }
 }
