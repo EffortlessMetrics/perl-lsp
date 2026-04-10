@@ -1830,6 +1830,44 @@ print FOO;
 }
 
 #[test]
+fn use_builtin_true_not_flagged_as_bareword_under_strict_subs()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use builtin 'true';
+print true;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "true"
+        }),
+        "'true' imported via use builtin should not be flagged as bareword: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_true_without_builtin_is_flagged_as_bareword()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+print true;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "true"
+        }),
+        "'true' should be flagged as bareword under strict subs when builtin feature is not enabled"
+    );
+    Ok(())
+}
+
+#[test]
 fn scalar_reference_dereference_uses_declared_scalar_under_strict()
 -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"

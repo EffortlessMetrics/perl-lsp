@@ -382,6 +382,11 @@ impl PragmaTracker {
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
+                    "builtin" => {
+                        current_state.features.retain(|feature| *feature != "builtin");
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
                     "warnings" => {
                         if args.is_empty() {
                             // `no warnings;` — disable all warnings globally
