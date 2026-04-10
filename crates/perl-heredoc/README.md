@@ -20,6 +20,20 @@ collector works identically on Windows and Unix sources.
 - `CollectionResult` -- all collected contents, terminator-found flags, next byte offset
 - `QuoteKind` -- enum: `Unquoted`, `Single`, `Double`, `Backtick`
 
+
+## Coverage
+
+The crate's behavior is already covered by
+[`tests/comprehensive_unit_tests.rs`](tests/comprehensive_unit_tests.rs),
+which exercises the public API and the main heredoc edge cases:
+
+- terminated heredoc collection
+- indented heredoc stripping (`<<~`)
+- unterminated heredoc reporting
+- CRLF handling
+- FIFO behavior across multiple pending heredocs
+- exact label matching
+
 ## Workspace Role
 
 Internal Tier 1 leaf crate in the
