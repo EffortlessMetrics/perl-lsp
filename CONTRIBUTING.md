@@ -160,6 +160,18 @@ just status-update
 just status-check
 ```
 
+If your change introduces or modifies public APIs, also run the documentation
+coverage workflow so CI catches missing rustdoc before review:
+
+```bash
+just docs-check
+just docs-report
+```
+
+See [docs/reference/MISSING_DOCUMENTATION_GUIDE.md](docs/reference/MISSING_DOCUMENTATION_GUIDE.md)
+for remediation workflow and [docs/reference/API_DOCUMENTATION_STANDARDS.md](docs/reference/API_DOCUMENTATION_STANDARDS.md)
+for required rustdoc structure.
+
 ### 7. Open a Pull Request
 
 1. Push your branch and open a PR
