@@ -20,6 +20,12 @@ use perl_parser_core::ast::{Node, NodeKind};
 use super::super::walker::walk_node;
 
 const CHECKLIB_SUPPORT_MODULES: &[&str] = &["FFI::CheckLib", "FFI::Platypus::Bundle"];
+const QUALIFIED_CHECKLIB_CALLS: &[&str] = &[
+    "FFI::CheckLib::find_lib",
+    "FFI::CheckLib::check_lib_or_exit",
+    "FFI::Platypus::Bundle::find_lib",
+    "FFI::Platypus::Bundle::check_lib_or_exit",
+];
 
 pub fn check_ffi_checklib(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     let has_support_module = has_checklib_support_module(node);
@@ -46,7 +52,7 @@ fn has_checklib_support_module(node: &Node) -> bool {
 }
 
 fn is_checklib_call(name: &str, has_support_module: bool) -> bool {
-    if name.ends_with("::find_lib") || name.ends_with("::check_lib_or_exit") {
+    if QUALIFIED_CHECKLIB_CALLS.contains(&name) {
         return true;
     }
 
@@ -382,6 +388,15 @@ mod tests {
 
         let diags = diagnostics_for(&source);
         assert!(diags.is_empty(), "qualified FFI::CheckLib call should be handled, got: {diags:?}");
+    }
+
+    #[test]
+    fn unrelated_qualified_find_lib_is_ignored() {
+        let diags = diagnostics_for("Vendor::find_lib(lib => 'ffi_checklib_missing_3574');\n");
+        assert!(
+            diags.is_empty(),
+            "non-FFI qualified find_lib calls should not trigger CheckLib diagnostics, got: {diags:?}"
+        );
     }
 
     #[test]
