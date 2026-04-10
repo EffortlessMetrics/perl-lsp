@@ -13,7 +13,7 @@ pub const DEFAULT_DAP_FEATURES: &[&str] =
     &["dap.breakpoints.basic", "dap.core", "dap.inline_values"];
 
 /// Source metadata for the catalog file.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Meta {
     /// Canonical release or feature-set version.
     pub version: String,
@@ -66,7 +66,7 @@ impl Maturity {
 }
 
 /// Per-feature catalog entry.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Feature {
     /// Canonical feature identifier (for example: `lsp.completion`).
     pub id: String,
@@ -97,7 +97,7 @@ const fn default_counts_in_coverage() -> bool {
 }
 
 /// Full catalog loaded from `features.toml`.
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Catalog {
     /// Shared metadata section.
     pub meta: Meta,
