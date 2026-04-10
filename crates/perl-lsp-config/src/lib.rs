@@ -251,8 +251,7 @@ impl ServerConfig {
 pub struct WorkspaceConfig {
     /// Workspace-root-relative include paths for module resolution.
     ///
-    /// Absolute entries are accepted syntactically, but still must resolve
-    /// inside the workspace boundary.
+    /// Absolute entries are treated as literal external roots.
     /// Default: `["lib", ".", "local/lib/perl5"]`
     pub include_paths: Vec<String>,
 
@@ -262,6 +261,17 @@ pub struct WorkspaceConfig {
 
     /// Cached system @INC paths (populated lazily when use_system_inc is true)
     system_inc_cache: Option<Vec<PathBuf>>,
+
+    /// Perl interpreter path used for startup `@INC` probing.
+    ///
+    /// Default: `"perl"` from PATH.
+    pub perl_path: String,
+
+    /// Additional args for startup `@INC` probing.
+    pub perl_args: Vec<String>,
+
+    /// Environment variables applied to startup `@INC` probing.
+    pub perl_env: std::collections::BTreeMap<String, String>,
 
     /// Resolution timeout in milliseconds
     /// Default: 50ms
@@ -274,6 +284,9 @@ impl Default for WorkspaceConfig {
             include_paths: vec!["lib".to_string(), ".".to_string(), "local/lib/perl5".to_string()],
             use_system_inc: false,
             system_inc_cache: None,
+            perl_path: "perl".to_string(),
+            perl_args: Vec::new(),
+            perl_env: std::collections::BTreeMap::new(),
             resolution_timeout_ms: 50,
         }
     }
@@ -293,6 +306,32 @@ impl WorkspaceConfig {
                 }
                 self.use_system_inc = use_inc;
             }
+            if let Some(perl_path) = workspace.get("perlPath").and_then(|v| v.as_str())
+                && perl_path != self.perl_path
+            {
+                self.perl_path = perl_path.to_string();
+                self.system_inc_cache = None;
+            }
+            if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
+                let parsed = perl_args
+                    .iter()
+                    .filter_map(|v| v.as_str().map(ToString::to_string))
+                    .collect::<Vec<_>>();
+                if parsed != self.perl_args {
+                    self.perl_args = parsed;
+                    self.system_inc_cache = None;
+                }
+            }
+            if let Some(perl_env) = workspace.get("perlEnv").and_then(|v| v.as_object()) {
+                let parsed = perl_env
+                    .iter()
+                    .filter_map(|(k, v)| v.as_str().map(|value| (k.clone(), value.to_string())))
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                if parsed != self.perl_env {
+                    self.perl_env = parsed;
+                    self.system_inc_cache = None;
+                }
+            }
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
             }
@@ -306,15 +345,25 @@ impl WorkspaceConfig {
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache = Some(Self::fetch_perl_inc());
+            self.system_inc_cache =
+                Some(Self::fetch_perl_inc(&self.perl_path, &self.perl_args, &self.perl_env));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
-        let output = Command::new("perl").args(["-e", "print join(\"\\n\", @INC)"]).output();
+    fn fetch_perl_inc(
+        perl_path: &str,
+        perl_args: &[String],
+        perl_env: &std::collections::BTreeMap<String, String>,
+    ) -> Vec<PathBuf> {
+        let mut cmd = Command::new(perl_path);
+        cmd.args(perl_args).args(["-e", "print join(\"\\n\", @INC)"]);
+        if !perl_env.is_empty() {
+            cmd.envs(perl_env);
+        }
+        let output = cmd.output();
 
         match output {
             Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
@@ -327,7 +376,11 @@ impl WorkspaceConfig {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn fetch_perl_inc() -> Vec<PathBuf> {
+    fn fetch_perl_inc(
+        _perl_path: &str,
+        _perl_args: &[String],
+        _perl_env: &std::collections::BTreeMap<String, String>,
+    ) -> Vec<PathBuf> {
         Vec::new()
     }
 }
@@ -362,9 +415,8 @@ pub struct ProjectConfig {
 pub struct ProjectPerlConfig {
     /// Additional include paths for module resolution.
     ///
-    /// Relative entries are resolved against the workspace root. Absolute
-    /// entries are accepted syntactically, but still must resolve inside the
-    /// workspace boundary.
+    /// Relative entries are resolved against the workspace root.
+    /// Absolute entries are treated as literal external roots.
     pub include_paths: Vec<String>,
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.
@@ -639,6 +691,9 @@ mod tests {
         let config = WorkspaceConfig::default();
         assert_eq!(config.include_paths, vec!["lib", ".", "local/lib/perl5"]);
         assert!(!config.use_system_inc);
+        assert_eq!(config.perl_path, "perl");
+        assert!(config.perl_args.is_empty());
+        assert!(config.perl_env.is_empty());
         assert_eq!(config.resolution_timeout_ms, 50);
     }
 
@@ -668,6 +723,21 @@ mod tests {
         config.update_from_value(&json!({}));
         assert_eq!(config.include_paths, vec!["lib", ".", "local/lib/perl5"]);
         assert!(!config.use_system_inc);
+    }
+
+    #[test]
+    fn workspace_config_updates_perl_probe_settings() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&json!({
+            "workspace": {
+                "perlPath": "/usr/local/bin/perl",
+                "perlArgs": ["-Icustom/lib"],
+                "perlEnv": {"PERL5LIB": "/opt/perl/lib"}
+            }
+        }));
+        assert_eq!(config.perl_path, "/usr/local/bin/perl");
+        assert_eq!(config.perl_args, vec!["-Icustom/lib"]);
+        assert_eq!(config.perl_env.get("PERL5LIB"), Some(&"/opt/perl/lib".to_string()));
     }
 
     // ── WorkspaceConfig::get_system_inc ──────────────────────

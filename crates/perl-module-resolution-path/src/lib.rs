@@ -27,15 +27,22 @@ pub fn resolve_module_path(
     let relative_path = module_name_to_path(module_name);
 
     for base in include_paths {
-        let candidate = if base == "." {
+        let base_path = Path::new(base);
+        let candidate = if base_path.is_absolute() {
+            base_path.join(&relative_path)
+        } else if base == "." {
             root.join(&relative_path)
         } else {
             root.join(base).join(&relative_path)
         };
 
-        let safe_candidate = match validate_workspace_path(&candidate, root) {
-            Ok(path) => path,
-            Err(_) => continue,
+        let safe_candidate = if base_path.is_absolute() {
+            candidate
+        } else {
+            match validate_workspace_path(&candidate, root) {
+                Ok(path) => path,
+                Err(_) => continue,
+            }
         };
 
         if safe_candidate.exists() {
@@ -117,17 +124,17 @@ mod tests {
         let outside = tempfile::tempdir()?;
         let root = workspace.path().to_path_buf();
         let outside_base = outside.path().join("lib");
-        let fallback = root.join("lib").join("Outside").join("Mod.pm");
+        let outside_module = outside_base.join("Outside").join("Mod.pm");
 
-        fs::create_dir_all(fallback.parent().ok_or("no parent")?)?;
-        fs::write(&fallback, "package Outside::Mod; 1;")?;
+        fs::create_dir_all(outside_module.parent().ok_or("no parent")?)?;
+        fs::write(&outside_module, "package Outside::Mod; 1;")?;
 
         let resolved = resolve_module_path(
             &root,
             "Outside::Mod",
             &[outside_base.to_string_lossy().to_string()],
         );
-        assert_eq!(resolved, Some(fallback));
+        assert_eq!(resolved, Some(outside_module));
         Ok(())
     }
 }

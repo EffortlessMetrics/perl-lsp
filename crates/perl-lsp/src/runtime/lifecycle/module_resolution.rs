@@ -5,7 +5,7 @@
 use super::super::*;
 use perl_module_resolution::{
     ModuleUriResolution, resolve_module_path as resolve_workspace_module_path, resolve_module_uri,
-    use_lib::{extract_use_lib_paths, resolve_use_lib_paths},
+    use_lib::apply_use_lib_overrides,
 };
 use std::path::PathBuf;
 use std::sync::Once;
@@ -23,18 +23,38 @@ static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 /// The extra paths are scoped to this resolution pass only and are searched
 /// ahead of the configured workspace paths.
 /// Paths are scoped to this call only — `workspace_config.include_paths` is never mutated.
-fn prepend_use_lib_paths(
-    include_paths: &mut Vec<String>,
+fn apply_document_use_lib_paths(
+    include_paths: &[String],
     doc_text: &str,
     workspace_root: &std::path::Path,
     file_dir: Option<&std::path::Path>,
-) {
-    let extracted = extract_use_lib_paths(doc_text);
-    let dynamic = resolve_use_lib_paths(&extracted, workspace_root, file_dir);
-    for p in dynamic.into_iter().rev() {
-        if !include_paths.contains(&p) {
-            include_paths.insert(0, p);
+) -> Vec<String> {
+    apply_use_lib_overrides(doc_text, include_paths, workspace_root, file_dir)
+}
+
+fn workspace_root_for_doc(
+    workspace_folders: &[String],
+    doc_uri: Option<&str>,
+) -> Option<std::path::PathBuf> {
+    let doc_path =
+        doc_uri.and_then(|u| url::Url::parse(u).ok()).and_then(|u| u.to_file_path().ok());
+
+    let mut candidates = workspace_folders
+        .iter()
+        .filter_map(|folder| url::Url::parse(folder).ok().and_then(|u| u.to_file_path().ok()))
+        .collect::<Vec<_>>();
+
+    if let Some(doc_path) = doc_path {
+        candidates.sort_by_key(|p| p.as_os_str().len());
+        candidates.reverse();
+        for root in candidates {
+            if doc_path.starts_with(&root) {
+                return Some(root);
+            }
         }
+        None
+    } else {
+        candidates.into_iter().next()
     }
 }
 
@@ -72,7 +92,7 @@ impl LspServer {
         };
 
         if let Some(text) = doc_text {
-            prepend_use_lib_paths(&mut include_paths, text, &root, None);
+            include_paths = apply_document_use_lib_paths(&include_paths, text, &root, None);
         }
 
         resolve_workspace_module_path(&root, module, &include_paths)
@@ -115,7 +135,8 @@ impl LspServer {
             if file_dir.is_none() && doc_uri.is_some() {
                 tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
             }
-            prepend_use_lib_paths(&mut include_paths, text, &root, file_dir.as_deref());
+            include_paths =
+                apply_document_use_lib_paths(&include_paths, text, &root, file_dir.as_deref());
         }
 
         resolve_workspace_module_path(&root, module, &include_paths)
@@ -174,11 +195,7 @@ impl LspServer {
 
         // Wire use lib paths scoped to this call
         if let Some(text) = doc_text {
-            // Use the first workspace folder as the root for relative use lib paths
-            let root_opt = workspace_folders
-                .first()
-                .and_then(|u| url::Url::parse(u).ok())
-                .and_then(|u| u.to_file_path().ok());
+            let root_opt = workspace_root_for_doc(&workspace_folders, doc_uri);
             if root_opt.is_none() && !workspace_folders.is_empty() {
                 tracing::trace!(
                     "Module URI resolution failed for workspace folder: {:?}",
@@ -193,7 +210,8 @@ impl LspServer {
                 if file_dir.is_none() && doc_uri.is_some() {
                     tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
                 }
-                prepend_use_lib_paths(&mut include_paths, text, &root, file_dir.as_deref());
+                include_paths =
+                    apply_document_use_lib_paths(&include_paths, text, &root, file_dir.as_deref());
             }
         }
 
