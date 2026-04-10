@@ -426,7 +426,7 @@ Example debug output:
 
 3. **Enhanced Diagnostics**
    - Type checking (where possible)
-   - Security warnings (taint checking)
+   - Security anti-pattern warnings (for example string eval, backtick execution, and unsafe open patterns)
    - Best practice suggestions
 
 4. **Multi-file Support**
