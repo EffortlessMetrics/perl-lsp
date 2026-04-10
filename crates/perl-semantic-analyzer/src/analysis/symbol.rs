@@ -347,6 +347,8 @@ pub enum WebFrameworkKind {
 pub enum AsyncFrameworkKind {
     /// `use AnyEvent;`
     AnyEvent,
+    /// `use EV;`
+    EV,
     /// `use Future;`
     Future,
     /// `use Future::XS;`
@@ -661,6 +663,7 @@ impl SymbolExtractor {
                 self.table.add_reference(reference);
 
                 self.synthesize_plack_builder_symbols(name, args);
+                self.synthesize_ev_symbols(name, node.location);
 
                 for arg in args {
                     self.visit_node(arg);
@@ -735,6 +738,9 @@ impl SymbolExtractor {
 
             NodeKind::Use { module, args, .. } => {
                 self.update_framework_context(module, args);
+                if module == "EV" {
+                    self.synthesize_ev_framework_symbol(node.location);
+                }
             }
 
             NodeKind::No { module: _, args: _, .. } => {
@@ -1764,6 +1770,7 @@ impl SymbolExtractor {
 
         let (module_name, framework_name, exact_match) = match flags.async_framework {
             Some(AsyncFrameworkKind::AnyEvent) => ("AnyEvent", "AnyEvent", false),
+            Some(AsyncFrameworkKind::EV) => ("EV", "EV", true),
             Some(AsyncFrameworkKind::Future) => ("Future", "Future", true),
             Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
             Some(AsyncFrameworkKind::Promise) => ("Promise", "Promise", true),
@@ -1819,6 +1826,77 @@ impl SymbolExtractor {
         true
     }
 
+    /// Synthesize the `EV` namespace symbol when the framework is imported.
+    fn synthesize_ev_framework_symbol(&mut self, location: SourceLocation) {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return;
+        };
+        if flags.async_framework != Some(AsyncFrameworkKind::EV) {
+            return;
+        }
+
+        let name = "EV";
+        if self.table.symbols.get(name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Class
+                    && symbol.declaration.as_deref() == Some("framework=EV")
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Class,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("framework=EV".to_string()),
+            documentation: Some("Synthetic EV namespace".to_string()),
+            attributes: vec!["framework=EV".to_string()],
+        });
+    }
+
+    /// Synthesize narrow EV watcher / loop API symbols used in function-call form.
+    fn synthesize_ev_symbols(&mut self, name: &str, location: SourceLocation) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+        if flags.async_framework != Some(AsyncFrameworkKind::EV) {
+            return false;
+        }
+
+        let Some(ev_suffix) = name.strip_prefix("EV::") else {
+            return false;
+        };
+        if !matches!(ev_suffix, "timer" | "io" | "signal" | "idle") {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some("framework=EV")
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Subroutine,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("framework=EV".to_string()),
+            documentation: Some(format!("Synthetic EV API `{ev_suffix}`")),
+            attributes: vec!["framework=EV".to_string(), format!("ev_api={ev_suffix}")],
+        });
+
+        true
+    }
+
     /// Update framework detection state from `use` statements.
     fn update_framework_context(&mut self, module: &str, args: &[String]) {
         let pkg = self.table.current_package.clone();
@@ -1863,6 +1941,12 @@ impl SymbolExtractor {
         if module == "AnyEvent" {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::AnyEvent);
+            return;
+        }
+
+        if module == "EV" {
+            self.framework_flags.entry(pkg).or_default().async_framework =
+                Some(AsyncFrameworkKind::EV);
             return;
         }
 
