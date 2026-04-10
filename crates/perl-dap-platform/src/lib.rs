@@ -16,6 +16,9 @@ const PERL_EXECUTABLE: &str = "perl.exe";
 const PERL_EXECUTABLE: &str = "perl";
 
 /// Resolve the perl binary path on the current platform.
+///
+/// Searches only the system `PATH`. For toolchain-aware resolution that
+/// also checks perlbrew and plenv, use [`resolve_perl_path_with_toolchain`].
 pub fn resolve_perl_path() -> Result<PathBuf> {
     let path_env = env::var("PATH").context("PATH environment variable not set")?;
     resolve_perl_path_from_path_env(&path_env)
@@ -30,6 +33,108 @@ pub(crate) fn resolve_perl_path_from_path_env(path_env: &str) -> Result<PathBuf>
     }
 
     anyhow::bail!("perl binary not found on PATH. Please install Perl or add it to PATH.")
+}
+/// Resolve the Perl interpreter path, checking perlbrew and plenv before PATH.
+///
+/// Detection order:
+/// 1. perlbrew -- check PERLBREW_PERL + PERLBREW_ROOT env vars.
+/// 2. plenv -- check PLENV_VERSION + PLENV_ROOT env vars.
+/// 3. System PATH -- delegate to resolve_perl_path().
+///
+/// # Errors
+///
+/// Returns an error only when all strategies fail to find a Perl binary.
+pub fn resolve_perl_path_with_toolchain() -> Result<PathBuf> {
+    if let Some(path) = detect_perlbrew_perl() {
+        return Ok(path);
+    }
+    if let Some(path) = detect_plenv_perl() {
+        return Ok(path);
+    }
+    resolve_perl_path()
+}
+
+/// Detect the active Perl interpreter managed by perlbrew.
+///
+/// Reads `PERLBREW_PERL` for the version name and `PERLBREW_ROOT` (or
+/// `~/perl5/perlbrew` by default) for the installation root.
+///
+/// Returns `None` when env vars are absent or the binary path does not exist.
+pub fn detect_perlbrew_perl() -> Option<PathBuf> {
+    let version = env::var("PERLBREW_PERL").ok()?;
+    if version.is_empty() {
+        return None;
+    }
+    let root = perlbrew_root();
+    let perl_bin = root
+        .join("perls")
+        .join(&version)
+        .join("bin")
+        .join(PERL_EXECUTABLE);
+    if perl_bin.exists() && perl_bin.is_file() {
+        Some(perl_bin)
+    } else {
+        None
+    }
+}
+
+/// Detect the active Perl interpreter managed by plenv.
+///
+/// Reads `PLENV_VERSION` for the version name and `PLENV_ROOT` (or
+/// `~/.plenv` by default) for the installation root.
+///
+/// Returns `None` when env vars are absent or the binary path does not exist.
+pub fn detect_plenv_perl() -> Option<PathBuf> {
+    let version = env::var("PLENV_VERSION").ok()?;
+    if version.is_empty() {
+        return None;
+    }
+    let root = plenv_root();
+    let perl_bin = root
+        .join("versions")
+        .join(&version)
+        .join("bin")
+        .join(PERL_EXECUTABLE);
+    if perl_bin.exists() && perl_bin.is_file() {
+        Some(perl_bin)
+    } else {
+        None
+    }
+}
+
+/// Return the perlbrew root directory (`PERLBREW_ROOT` or `~/perl5/perlbrew`).
+fn perlbrew_root() -> PathBuf {
+    if let Ok(root) = env::var("PERLBREW_ROOT") {
+        if !root.is_empty() {
+            return PathBuf::from(root);
+        }
+    }
+    home_dir().join("perl5").join("perlbrew")
+}
+
+/// Return the plenv root directory (`PLENV_ROOT` or `~/.plenv`).
+fn plenv_root() -> PathBuf {
+    if let Ok(root) = env::var("PLENV_ROOT") {
+        if !root.is_empty() {
+            return PathBuf::from(root);
+        }
+    }
+    home_dir().join(".plenv")
+}
+
+/// Return the user home directory, falling back to `/tmp`.
+fn home_dir() -> PathBuf {
+    if let Ok(home) = env::var("HOME") {
+        if !home.is_empty() {
+            return PathBuf::from(home);
+        }
+    }
+    if let Ok(profile) = env::var("USERPROFILE") {
+        if !profile.is_empty() {
+            return PathBuf::from(profile);
+        }
+    }
+    PathBuf::from("/tmp")
 }
 
 /// Normalize a file path for cross-platform compatibility.
