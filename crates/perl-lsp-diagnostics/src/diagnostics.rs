@@ -15,6 +15,7 @@ use crate::lints::common_mistakes::check_common_mistakes;
 use crate::lints::deprecated::check_deprecated_syntax;
 use crate::lints::duplicate_hash_keys::check_duplicate_hash_keys;
 use crate::lints::eval_error_flow::check_eval_error_flow;
+use crate::lints::ffi_checklib::check_ffi_checklib;
 use crate::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
@@ -144,6 +145,7 @@ impl DiagnosticsProvider {
 
         // Security anti-pattern detection (string eval, two-arg open, backtick exec)
         check_security(ast, &mut diagnostics);
+        check_ffi_checklib(ast, &mut diagnostics);
         check_eval_error_flow(ast, &mut diagnostics);
 
         // Unused import detection
