@@ -605,6 +605,7 @@ mod tests {
         assert_eq!(classify("initialized"), RequestClass::Lifecycle);
         assert_eq!(classify("shutdown"), RequestClass::Lifecycle);
         assert_eq!(classify("exit"), RequestClass::Lifecycle);
+        assert_eq!(classify("$/setTrace"), RequestClass::Lifecycle);
     }
 
     #[test]
@@ -612,6 +613,19 @@ mod tests {
         assert_eq!(classify("textDocument/didOpen"), RequestClass::Mutation);
         assert_eq!(classify("textDocument/didChange"), RequestClass::Mutation);
         assert_eq!(classify("textDocument/didClose"), RequestClass::Mutation);
+        assert_eq!(classify("textDocument/didSave"), RequestClass::Mutation);
+        assert_eq!(classify("textDocument/willSave"), RequestClass::Mutation);
+        assert_eq!(classify("textDocument/willSaveWaitUntil"), RequestClass::Mutation);
+        assert_eq!(classify("notebookDocument/didOpen"), RequestClass::Mutation);
+        assert_eq!(classify("notebookDocument/didChange"), RequestClass::Mutation);
+        assert_eq!(classify("notebookDocument/didSave"), RequestClass::Mutation);
+        assert_eq!(classify("notebookDocument/didClose"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didChangeWatchedFiles"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didChangeWorkspaceFolders"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didChangeConfiguration"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didRenameFiles"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didDeleteFiles"), RequestClass::Mutation);
+        assert_eq!(classify("workspace/didCreateFiles"), RequestClass::Mutation);
     }
 
     #[test]
@@ -767,6 +781,38 @@ mod tests {
         });
         let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
         assert!(key.is_none());
+    }
+
+    #[test]
+    fn dedup_key_none_when_uri_missing() {
+        let params = serde_json::json!({
+            "textDocument": {},
+            "position": { "line": 1, "character": 2 }
+        });
+        let key = extract_dedup_key("textDocument/hover", Some(&params), RequestPriority::Hover);
+        assert!(key.is_none());
+    }
+
+    #[test]
+    fn dedup_key_none_when_line_or_character_not_u64() {
+        let line_string = serde_json::json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": "1", "character": 2 }
+        });
+        let line_key =
+            extract_dedup_key("textDocument/hover", Some(&line_string), RequestPriority::Hover);
+        assert!(line_key.is_none());
+
+        let character_negative = serde_json::json!({
+            "textDocument": { "uri": "file:///test.pl" },
+            "position": { "line": 1, "character": -1 }
+        });
+        let character_key = extract_dedup_key(
+            "textDocument/hover",
+            Some(&character_negative),
+            RequestPriority::Hover,
+        );
+        assert!(character_key.is_none());
     }
 
     #[test]
