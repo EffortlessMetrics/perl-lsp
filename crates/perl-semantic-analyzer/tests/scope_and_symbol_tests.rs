@@ -2782,6 +2782,34 @@ print $data;
 }
 
 #[test]
+fn open_my_filehandle_with_readline_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression for #3446: `open my $fh, ...` declares `$fh` and later `<$fh>`
+    // reads must not be reported as undeclared/uninitialized.
+    let code = r#"
+use strict;
+use warnings;
+
+open my $fh, '<', 'file.txt' or die $!;
+print <$fh>;
+close $fh;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "$fh"
+        }),
+        "open my $fh / <$fh> should not be flagged; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn read_position_zero_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
     // Position 0 in `read` is an existing filehandle, NOT a declaration target.
     // An undeclared handle at position 0 should still be flagged, while the
