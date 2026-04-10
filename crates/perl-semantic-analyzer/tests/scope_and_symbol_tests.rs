@@ -203,6 +203,33 @@ try {
 }
 
 #[test]
+fn scope_try_catch_shadowing_is_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+my $e = 1;
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::VariableShadowing, "e"),
+        "catch variable should report shadowing against outer scope: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        "shadowed catch variable should still be bound in catch scope: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn scope_try_catch_variable_does_not_escape() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict;

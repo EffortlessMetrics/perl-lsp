@@ -899,13 +899,36 @@ impl ScopeAnalyzer {
                     if let Some(full_name) = catch_var.as_deref() {
                         let (sigil, name) = split_variable_name(full_name);
                         if !sigil.is_empty() && !name.is_empty() && !name.contains("::") {
-                            let _ = catch_scope.declare_variable_parts(
+                            if let Some(issue_kind) = catch_scope.declare_variable_parts(
                                 sigil,
                                 name,
                                 catch_body.location.start,
                                 false,
                                 true,
-                            );
+                            ) {
+                                let description = match issue_kind {
+                                    IssueKind::VariableShadowing => {
+                                        format!(
+                                            "Variable '{}' shadows a variable in outer scope",
+                                            full_name
+                                        )
+                                    }
+                                    IssueKind::VariableRedeclaration => {
+                                        format!(
+                                            "Variable '{}' is already declared in this scope",
+                                            full_name
+                                        )
+                                    }
+                                    _ => String::new(),
+                                };
+                                issues.push(ScopeIssue {
+                                    kind: issue_kind,
+                                    variable_name: full_name.to_string(),
+                                    line: context.get_line(catch_body.location.start),
+                                    range: (catch_body.location.start, catch_body.location.start),
+                                    description,
+                                });
+                            }
                         }
                     }
 
