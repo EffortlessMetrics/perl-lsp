@@ -220,6 +220,32 @@ fn no_strict_quoted_double() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn use_feature_signatures_enables_all_strict_categories() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![use_node("feature", &["'signatures'"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn use_feature_qw_signatures_enables_all_strict_categories()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["qw(signatures say)"], 0, 34)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
 // ===========================================================================
 // use warnings / no warnings
 // ===========================================================================

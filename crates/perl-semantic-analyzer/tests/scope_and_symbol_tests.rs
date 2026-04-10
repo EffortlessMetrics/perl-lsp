@@ -1724,6 +1724,29 @@ sub foo ($x) { $z = 1; }
 }
 
 #[test]
+fn feature_signatures_auto_strict_flags_undeclared_variable_in_signature_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    // `use feature 'signatures'` should enable strict semantics automatically.
+    // An undeclared variable $z inside a signature sub should be flagged even
+    // without explicit `use strict`.
+    let code = r#"
+use feature 'signatures';
+sub foo ($x) { $z = 1; }
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
+        "use feature 'signatures' should auto-enable strict: $z should be flagged as undeclared"
+    );
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "x"),
+        "signature parameter $x should not be flagged as undeclared"
+    );
+    Ok(())
+}
+
+#[test]
 fn v5_36_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     // use v5.36 enables both strict vars (undeclared vars) and strict subs (barewords).
     let code = r#"
