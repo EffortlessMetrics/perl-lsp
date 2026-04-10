@@ -68,7 +68,10 @@ impl LspServer {
 
         let mut include_paths = {
             let config = self.workspace_config.lock();
-            config.include_paths.clone()
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+            config.effective_include_paths(&perl5lib_paths)
         };
 
         if let Some(text) = doc_text {
@@ -104,7 +107,10 @@ impl LspServer {
 
         let mut include_paths = {
             let config = self.workspace_config.lock();
-            config.include_paths.clone()
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+            config.effective_include_paths(&perl5lib_paths)
         };
 
         if let Some(text) = doc_text {
@@ -166,7 +172,14 @@ impl LspServer {
     ) -> Option<String> {
         let (mut include_paths, timeout_ms, use_system_inc) = {
             let config = self.workspace_config.lock();
-            (config.include_paths.clone(), config.resolution_timeout_ms, config.use_system_inc)
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+            (
+                config.effective_include_paths(&perl5lib_paths),
+                config.resolution_timeout_ms,
+                config.use_system_inc,
+            )
         };
         let timeout = Duration::from_millis(timeout_ms);
 

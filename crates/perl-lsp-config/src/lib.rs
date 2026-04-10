@@ -243,6 +243,21 @@ impl ServerConfig {
     }
 }
 
+/// Controls whether PERL5LIB paths are prepended or appended to `include_paths`.
+///
+/// `Prepend` (the default) mirrors Perl's own behaviour: paths earlier in the
+/// search order shadow later ones, so PERL5LIB paths take priority over any
+/// project-level `include_paths`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Perl5LibPrecedence {
+    /// PERL5LIB entries are placed *before* `include_paths` (default).
+    #[default]
+    Prepend,
+    /// PERL5LIB entries are placed *after* `include_paths`.
+    Append,
+}
+
 /// Workspace configuration for module resolution
 ///
 /// Controls how the LSP server resolves module imports and finds
@@ -266,6 +281,14 @@ pub struct WorkspaceConfig {
     /// Resolution timeout in milliseconds
     /// Default: 50ms
     pub resolution_timeout_ms: u64,
+
+    /// Whether the `PERL5LIB` environment variable is read and merged into
+    /// the module search path.  Default: `true`.
+    pub use_perl5lib: bool,
+
+    /// Controls whether PERL5LIB entries come before or after `include_paths`.
+    /// Default: `Prepend` (mirrors Perl's own search order).
+    pub perl5lib_precedence: Perl5LibPrecedence,
 }
 
 impl Default for WorkspaceConfig {
@@ -275,11 +298,49 @@ impl Default for WorkspaceConfig {
             use_system_inc: false,
             system_inc_cache: None,
             resolution_timeout_ms: 50,
+            use_perl5lib: true,
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
         }
     }
 }
 
 impl WorkspaceConfig {
+    /// Parse a `PERL5LIB` environment variable value into a list of paths.
+    ///
+    /// Uses `:` as the separator on Unix and `;` on Windows, matching Perl's
+    /// own behaviour.  Empty components (produced by leading, trailing, or
+    /// consecutive separators) are silently dropped.
+    pub fn parse_perl5lib(value: &str) -> Vec<String> {
+        #[cfg(windows)]
+        const SEP: char = ';';
+        #[cfg(not(windows))]
+        const SEP: char = ':';
+        value.split(SEP).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+    }
+
+    /// Return the effective module-search-path, merging `PERL5LIB` paths with
+    /// `self.include_paths` according to `self.perl5lib_precedence`.
+    ///
+    /// If `self.use_perl5lib` is `false`, or `perl5lib_paths` is empty, the
+    /// returned list is identical to `self.include_paths`.
+    pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
+        if !self.use_perl5lib || perl5lib_paths.is_empty() {
+            return self.include_paths.clone();
+        }
+        match self.perl5lib_precedence {
+            Perl5LibPrecedence::Prepend => {
+                let mut result = perl5lib_paths.to_vec();
+                result.extend_from_slice(&self.include_paths);
+                result
+            }
+            Perl5LibPrecedence::Append => {
+                let mut result = self.include_paths.clone();
+                result.extend_from_slice(perl5lib_paths);
+                result
+            }
+        }
+    }
+
     /// Update workspace configuration from LSP settings.
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
         if let Some(workspace) = settings.get("workspace") {
@@ -295,6 +356,15 @@ impl WorkspaceConfig {
             }
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
+            }
+            if let Some(use_p5l) = workspace.get("usePerl5lib").and_then(|v| v.as_bool()) {
+                self.use_perl5lib = use_p5l;
+            }
+            if let Some(prec) = workspace.get("perl5libPrecedence").and_then(|v| v.as_str()) {
+                self.perl5lib_precedence = match prec {
+                    "append" => Perl5LibPrecedence::Append,
+                    _ => Perl5LibPrecedence::Prepend,
+                };
             }
         }
     }
@@ -369,6 +439,12 @@ pub struct ProjectPerlConfig {
     /// Perl version string (e.g. "5.38") — parsed but not yet wired to diagnostics.
     /// Reserved for future use; ignored in this implementation.
     pub version: Option<String>,
+    /// Whether to read `PERL5LIB` from the environment and include it in the
+    /// module search path.  Unset means "leave the server default unchanged".
+    pub use_perl5lib: Option<bool>,
+    /// Whether PERL5LIB paths come before or after `include_paths`.
+    /// Unset means "leave the server default unchanged".
+    pub perl5lib_precedence: Option<Perl5LibPrecedence>,
 }
 
 /// `[diagnostics]` section of `.perl-lsp.toml`.
@@ -465,6 +541,12 @@ impl ProjectConfig {
     pub fn apply_to_workspace_config(&self, config: &mut WorkspaceConfig) {
         if !self.perl.include_paths.is_empty() {
             config.include_paths = self.perl.include_paths.clone();
+        }
+        if let Some(use_p5l) = self.perl.use_perl5lib {
+            config.use_perl5lib = use_p5l;
+        }
+        if let Some(ref prec) = self.perl.perl5lib_precedence {
+            config.perl5lib_precedence = prec.clone();
         }
     }
 }
