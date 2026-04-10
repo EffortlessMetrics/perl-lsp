@@ -267,6 +267,66 @@ CHECK {
 }
 
 #[test]
+fn scope_scalar_arrayref_deref_counts_as_use() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $arrayref = [];
+push @$arrayref, 'item';
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|issue| issue.kind == IssueKind::UnusedVariable
+                && issue.variable_name == "$arrayref"),
+        "scalar arrayref dereference should mark $arrayref as used: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_scalar_hashref_deref_counts_as_use() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $hashref = {};
+keys %$hashref;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|issue| issue.kind == IssueKind::UnusedVariable
+                && issue.variable_name == "$hashref"),
+        "scalar hashref dereference should mark $hashref as used: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_scalar_scalarref_deref_counts_as_use() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $target = 1;
+my $ref = \$target;
+$$ref = 3;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|issue| issue.kind == IssueKind::UnusedVariable && issue.variable_name == "$ref"),
+        "scalar dereference should mark $ref as used: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn scope_try_catch_binds_catch_variable() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict;
