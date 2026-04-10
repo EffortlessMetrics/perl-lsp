@@ -39,9 +39,15 @@ fn xs_api_completion_is_available_in_xs_sources() {
     let names = labels(&items);
 
     assert!(names.contains(&"dXSARGS".to_string()));
+    assert!(names.contains(&"items".to_string()));
     assert!(names.contains(&"ST".to_string()));
+    assert!(names.contains(&"newSViv".to_string()));
     assert!(names.contains(&"newSVpv".to_string()));
+    assert!(names.contains(&"sv_2mortal".to_string()));
+    assert!(names.contains(&"EXTEND".to_string()));
     assert!(names.contains(&"PL_sv_yes".to_string()));
     assert_eq!(kind_for(&items, "ST"), Some(CompletionItemKind::Snippet));
     assert_eq!(kind_for(&items, "newSVpv"), Some(CompletionItemKind::Snippet));
+    assert_eq!(kind_for(&items, "newSViv"), Some(CompletionItemKind::Snippet));
+    assert_eq!(kind_for(&items, "EXTEND"), Some(CompletionItemKind::Snippet));
 }

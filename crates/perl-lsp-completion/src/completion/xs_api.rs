@@ -24,6 +24,14 @@ const XS_API_ENTRIES: &[XsApiEntry] = &[
         description: "Declare the standard XS argument variables, including `items`.",
     },
     XsApiEntry {
+        name: "items",
+        kind: CompletionItemKind::Variable,
+        insert_text: "items",
+        detail: "XS argument count",
+        signature: "items",
+        description: "Number of XS arguments available in the current call.",
+    },
+    XsApiEntry {
         name: "ST",
         kind: CompletionItemKind::Snippet,
         insert_text: "ST(${1:index})",
@@ -40,6 +48,14 @@ const XS_API_ENTRIES: &[XsApiEntry] = &[
         description: "Convert an SV to an IV value.",
     },
     XsApiEntry {
+        name: "newSViv",
+        kind: CompletionItemKind::Snippet,
+        insert_text: "newSViv(${1:iv})",
+        detail: "Create a new IV SV",
+        signature: "newSViv(iv)",
+        description: "Create a new scalar value from an integer.",
+    },
+    XsApiEntry {
         name: "newSVpv",
         kind: CompletionItemKind::Snippet,
         insert_text: "newSVpv(${1:pv}, ${2:len})",
@@ -48,12 +64,28 @@ const XS_API_ENTRIES: &[XsApiEntry] = &[
         description: "Create a new scalar value from a byte buffer and length.",
     },
     XsApiEntry {
+        name: "sv_2mortal",
+        kind: CompletionItemKind::Function,
+        insert_text: "sv_2mortal(${1:sv})",
+        detail: "Mark SV mortal",
+        signature: "sv_2mortal(sv)",
+        description: "Mark an SV for destruction at the end of the statement.",
+    },
+    XsApiEntry {
         name: "PUSHs",
         kind: CompletionItemKind::Snippet,
         insert_text: "PUSHs(${1:sv})",
         detail: "Push an SV onto the stack",
         signature: "PUSHs(sv)",
         description: "Push an SV onto Perl's return stack.",
+    },
+    XsApiEntry {
+        name: "EXTEND",
+        kind: CompletionItemKind::Snippet,
+        insert_text: "EXTEND(${1:sp}, ${2:n})",
+        detail: "Grow the stack",
+        signature: "EXTEND(sp, n)",
+        description: "Ensure room on the Perl stack before pushing values.",
     },
     XsApiEntry {
         name: "XSRETURN_UNDEF",

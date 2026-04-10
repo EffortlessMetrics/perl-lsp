@@ -17,7 +17,15 @@ fn hover_value(result: &serde_json::Value) -> Option<String> {
 
 #[test]
 fn hover_shows_xs_api_docs_in_xs_sources() -> TestResult {
-    let doc = "package My::Module;\nnewSVpv\n";
+    let doc = concat!(
+        "#include \"EXTERN.h\"\n",
+        "#include \"perl.h\"\n",
+        "#include \"XSUB.h\"\n",
+        "MODULE = My::Module PACKAGE = My::Module\n",
+        "PPCODE:\n",
+        "    newSVpv\n",
+        "\0"
+    );
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
     harness.open_document("file:///example.xs", doc)?;
@@ -27,7 +35,7 @@ fn hover_shows_xs_api_docs_in_xs_sources() -> TestResult {
             "textDocument/hover",
             json!({
                 "textDocument": {"uri": "file:///example.xs"},
-                "position": {"line": 1, "character": 3}
+                "position": {"line": 5, "character": 7}
             }),
         )
         .unwrap_or(json!(null));
