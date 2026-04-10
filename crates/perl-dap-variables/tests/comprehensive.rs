@@ -1469,7 +1469,7 @@ fn brief_format_covers_all_variants_in_preview() -> Result<(), Box<dyn std::erro
     assert!(rendered.value.contains("ARRAY(1)"));
     assert!(rendered.value.contains("HASH(1)"));
     assert!(rendered.value.contains("\\1"));
-    assert!(rendered.value.contains("Cls=..."));
+    assert!(rendered.value.contains("Cls = HASH(...)"));
     assert!(rendered.value.contains("\\&fn"));
     assert!(rendered.value.contains("CODE(...)"));
     assert!(rendered.value.contains("*main::FOO"));

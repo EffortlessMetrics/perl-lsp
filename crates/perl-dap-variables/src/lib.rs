@@ -31,4 +31,6 @@ mod renderer;
 
 pub use parser::{VariableParseError, VariableParser};
 pub use perl_dap_value::PerlValue;
-pub use renderer::{PerlVariableRenderer, RenderedVariable, VariableRenderer};
+pub use renderer::{
+    PerlVariableRenderer, RenderedVariable, VariablePresentationHint, VariableRenderer,
+};
