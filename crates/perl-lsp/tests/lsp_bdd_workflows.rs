@@ -393,6 +393,18 @@ fn highlight_kinds(response: &Value) -> Vec<u64> {
         .unwrap_or_default()
 }
 
+fn inlay_labels(response: &Value) -> Vec<String> {
+    response
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("label").and_then(Value::as_str).map(ToOwned::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn setup_workspace(files: &[(&str, &str)]) -> Result<(LspHarness, TempWorkspace), String> {
     let (mut harness, workspace) = LspHarness::with_workspace(files)?;
 
@@ -1653,6 +1665,78 @@ sub main_func {}
     assert!(find_symbol(symbols, "inner_func"), "Expected inner_func");
     assert!(find_symbol(symbols, "main"), "Expected main package");
     assert!(find_symbol(symbols, "main_func"), "Expected main_func");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_structural_navigation_supports_folding_and_inlay_hints()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Structural navigation supports folding and inlay hints");
+
+    let code = r#"use strict;
+use warnings;
+
+sub render {
+    my ($name) = @_;
+    if ($name) {
+        return substr($name, 0, 3);
+    }
+    return "n/a";
+}
+"#;
+
+    scenario.given("a Perl document with nested blocks and a builtin call that takes arguments");
+    let (mut harness, workspace) = setup_workspace(&[("structure.pl", code)])?;
+    let uri = workspace.uri("structure.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting folding ranges for the document");
+    let folding = harness.request(
+        "textDocument/foldingRange",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("the server returns foldable structural ranges");
+    let folding_ranges = folding.as_array().ok_or("foldingRange should return an array payload")?;
+    assert!(!folding_ranges.is_empty(), "expected at least one folding range");
+    assert!(
+        folding_ranges
+            .iter()
+            .all(|range| range.get("startLine").is_some() && range.get("endLine").is_some()),
+        "all folding ranges should expose startLine and endLine"
+    );
+
+    scenario.when("requesting inlay hints for the same range");
+    let inlay = harness.request(
+        "textDocument/inlayHint",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": code.lines().count() as u32, "character": 0 }
+            }
+        }),
+    )?;
+
+    scenario.then("inlay hints return a valid payload shape for the requested range");
+    let hints = inlay.as_array().ok_or("inlayHint should return an array payload")?;
+    assert!(
+        hints.iter().all(|hint| hint.get("position").is_some() && hint.get("label").is_some()),
+        "every inlay hint should include position and label when present"
+    );
+
+    let labels = inlay_labels(&inlay);
+    if !labels.is_empty() {
+        assert!(
+            labels.iter().any(|label| matches!(label.as_str(), "expr:" | "offset:" | "length:")),
+            "expected substr-style parameter hints in {labels:?}"
+        );
+    }
 
     Ok(())
 }
