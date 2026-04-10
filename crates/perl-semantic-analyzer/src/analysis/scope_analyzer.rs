@@ -52,7 +52,7 @@
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use rustc_hash::FxHashMap;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -67,6 +67,8 @@ pub enum IssueKind {
     UnusedParameter,
     UnquotedBareword,
     UninitializedVariable,
+    /// Capture variable (`$1`, `$2`, etc.) used with no preceding regex match in scope.
+    CaptureVarWithoutRegexMatch,
 }
 
 #[derive(Debug, Clone)]
@@ -126,17 +128,31 @@ struct Scope {
     // Outer key: sigil index, Inner key: name
     variables: RefCell<[Option<FxHashMap<String, Rc<Variable>>>; 6]>,
     parent: Option<Rc<Scope>>,
+    /// Whether a regex match operation (`=~`, `m//`, `s///`) has been seen in this scope.
+    has_regex_match: Cell<bool>,
 }
 
 impl Scope {
     fn new() -> Self {
         let vars = std::array::from_fn(|_| None);
-        Self { variables: RefCell::new(vars), parent: None }
+        Self { variables: RefCell::new(vars), parent: None, has_regex_match: Cell::new(false) }
     }
 
     fn with_parent(parent: Rc<Scope>) -> Self {
         let vars = std::array::from_fn(|_| None);
-        Self { variables: RefCell::new(vars), parent: Some(parent) }
+        Self {
+            variables: RefCell::new(vars),
+            parent: Some(parent),
+            has_regex_match: Cell::new(false),
+        }
+    }
+
+    /// Returns true if this scope or any ancestor scope has seen a regex match operation.
+    fn regex_match_in_scope(&self) -> bool {
+        if self.has_regex_match.get() {
+            return true;
+        }
+        if let Some(ref parent) = self.parent { parent.regex_match_in_scope() } else { false }
     }
 
     fn declare_variable_parts(
@@ -747,6 +763,25 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
+                // Capture variables ($1, $2, ...) are built-in globals but require a preceding
+                // regex match in scope to be meaningful. Check before the general builtin skip.
+                if sigil == "$" && is_capture_variable(name) {
+                    if !scope.regex_match_in_scope() {
+                        let full_name = format!("{}{}", sigil, name);
+                        issues.push(ScopeIssue {
+                            kind: IssueKind::CaptureVarWithoutRegexMatch,
+                            variable_name: full_name.clone(),
+                            line: context.get_line(node.location.start),
+                            range: (node.location.start, node.location.end),
+                            description: format!(
+                                "Capture variable '{}' used without a preceding regex match in scope",
+                                full_name
+                            ),
+                        });
+                    }
+                    return;
+                }
+
                 // Skip built-in global variables — but only when no lexical declaration shadows
                 // them.  Variables like $a and $b are sort globals, but `my ($a, $b) = @_`
                 // creates a lexical shadow that must be tracked as used.
@@ -1195,6 +1230,27 @@ impl ScopeAnalyzer {
                     *context.current_package.borrow_mut() = name.clone();
                 }
             }
+
+            // Regex match operations set capture variables ($1, $2, ...) in the current scope.
+            NodeKind::Match { expr, .. } => {
+                scope.has_regex_match.set(true);
+                ancestors.push(node);
+                self.analyze_node(expr, scope, ancestors, issues, context);
+                ancestors.pop();
+            }
+
+            NodeKind::Substitution { expr, .. } => {
+                scope.has_regex_match.set(true);
+                ancestors.push(node);
+                self.analyze_node(expr, scope, ancestors, issues, context);
+                ancestors.pop();
+            }
+
+            // Standalone regex (m// matching against $_) also sets capture variables.
+            NodeKind::Regex { .. } => {
+                scope.has_regex_match.set(true);
+            }
+
             _ => {
                 // Recursively analyze children
                 ancestors.push(node);
@@ -1706,9 +1762,25 @@ impl ScopeAnalyzer {
                 IssueKind::UninitializedVariable => {
                     format!("Initialize '{}' before use", issue.variable_name)
                 }
+                IssueKind::CaptureVarWithoutRegexMatch => {
+                    format!(
+                        "Perform a regex match (=~ /.../) before using capture variable '{}'",
+                        issue.variable_name
+                    )
+                }
             })
             .collect()
     }
+}
+
+/// Returns true if `name` (without sigil) is a numbered capture variable.
+///
+/// Capture variables are `$1`, `$2`, ..., `$9`, `$10`, `$11`, etc.
+/// `$0` is the program name and is NOT a capture variable.
+#[inline]
+fn is_capture_variable(name: &str) -> bool {
+    // Must be non-empty, all digits, and not "0" (which is $0 = program name)
+    !name.is_empty() && name != "0" && name.as_bytes().iter().all(|c| c.is_ascii_digit())
 }
 
 /// Check if a variable is a built-in Perl global variable
