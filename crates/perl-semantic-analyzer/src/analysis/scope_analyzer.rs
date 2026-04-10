@@ -958,6 +958,7 @@ impl ScopeAnalyzer {
                 if strict_subs_mode
                     && !self.is_in_hash_key_context(node, ancestors, 1)
                     && !is_known_function(name)
+                    && !is_feature_builtin_function(name, &pragma_state)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
@@ -1950,6 +1951,26 @@ fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
 
 fn is_declaration_capable_builtin(name: &str) -> bool {
     !builtin_declaration_arg_positions(name).is_empty()
+}
+
+fn is_feature_builtin_function(name: &str, pragma_state: &PragmaState) -> bool {
+    if !pragma_state.has_feature("builtin") {
+        return false;
+    }
+
+    matches!(
+        name,
+        "true"
+            | "false"
+            | "is_bool"
+            | "blessed"
+            | "refaddr"
+            | "reftype"
+            | "ceil"
+            | "floor"
+            | "indexed"
+            | "trim"
+    )
 }
 
 /// Builtins that operate on `$_` by default when called with zero arguments.

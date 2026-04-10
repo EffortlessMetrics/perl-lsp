@@ -920,6 +920,25 @@ fn use_v5_40_state_has_builtin() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn use_builtin_adds_builtin_feature() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("builtin", &["'true'"], 0, 19)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.has_feature("builtin"), "use builtin must enable builtin feature");
+    Ok(())
+}
+
+#[test]
+fn no_builtin_removes_builtin_feature() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40", &[], 0, 12), no_node("builtin", &[], 13, 24)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 2, "expected one state per pragma");
+    assert!(map[0].1.has_feature("builtin"), "v5.40 must enable builtin feature");
+    assert!(!map[1].1.has_feature("builtin"), "no builtin must disable builtin feature");
+    Ok(())
+}
+
+#[test]
 fn no_version_declaration_has_no_features() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("strict", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);

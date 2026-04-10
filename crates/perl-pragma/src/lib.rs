@@ -272,6 +272,13 @@ impl PragmaTracker {
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
+                    "builtin" => {
+                        if !current_state.features.contains(&"builtin") {
+                            current_state.features.push("builtin");
+                        }
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
                     _ => {
                         if let Some(version) = parse_perl_version(module) {
                             enable_effective_version_semantics(current_state, version);
@@ -311,6 +318,11 @@ impl PragmaTracker {
                         }
 
                         // Record the state change at this location
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "builtin" => {
+                        current_state.features.retain(|feature| *feature != "builtin");
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
