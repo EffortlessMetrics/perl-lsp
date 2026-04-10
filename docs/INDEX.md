@@ -9,6 +9,7 @@ Choose the path that matches what you are trying to do:
 | I want to... | Read this first |
 |---|---|
 | Install the language server | [Installation Guide](how-to/INSTALLATION.md) |
+| Integrate perl-lsp into GitHub Actions | [GitHub Actions Integration](how-to/GITHUB_ACTIONS.md) |
 | Upgrade an existing installation | [Upgrading](how-to/UPGRADING.md) |
 | Get a working editor setup quickly | [Getting Started](tutorials/GETTING_STARTED.md) |
 | Configure editor or workspace settings | [Configuration Reference](reference/CONFIG.md) |
@@ -35,6 +36,7 @@ Hands-on guides for learning the system by doing.
 Task-focused instructions for common operational and development workflows.
 
 - [Installation Guide](how-to/INSTALLATION.md)
+- [GitHub Actions Integration](how-to/GITHUB_ACTIONS.md)
 - [Upgrading](how-to/UPGRADING.md)
 - [Editor Setup](how-to/EDITOR_SETUP.md)
 - [Troubleshooting](how-to/TROUBLESHOOTING.md)

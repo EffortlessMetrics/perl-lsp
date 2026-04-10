@@ -7,6 +7,9 @@ If you only need editor integration after installation, jump to
 [EDITOR_SETUP.md](EDITOR_SETUP.md). If the binary starts but does not behave as
 expected, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
+If you are wiring `perllsp` into a GitHub Actions workflow, see
+[GitHub Actions Integration](GITHUB_ACTIONS.md).
+
 ## Fastest Path
 
 Use one of the public install paths that matches how you work:
