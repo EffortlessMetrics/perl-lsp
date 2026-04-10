@@ -73,6 +73,7 @@
           ".psgi",
           ".mason",
           ".mas",
+          ".ep",
           ".xs"
         ],
         "firstLine": "^#!.*\\bperl\\b",

@@ -12,6 +12,7 @@ fn extension_strategy() -> impl Strategy<Value = String> {
         Just("t".to_string()),
         Just("psgi".to_string()),
         Just("xs".to_string()),
+        Just("ep".to_string()),
         Just("md".to_string()),
         Just("txt".to_string()),
         Just("json".to_string()),
@@ -46,7 +47,7 @@ proptest! {
             prop_assert!(fs::create_dir_all(parent).is_ok());
             prop_assert!(fs::write(&path, "# generated\n").is_ok());
 
-            if matches!(ext.as_str(), "pl" | "pm" | "t" | "psgi" | "xs") {
+            if matches!(ext.as_str(), "pl" | "pm" | "t" | "psgi" | "xs" | "ep") {
                 expected.insert(path);
             }
         }
