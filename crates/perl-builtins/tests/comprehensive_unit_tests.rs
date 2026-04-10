@@ -622,8 +622,24 @@ fn create_builtin_signatures_is_cached() -> Result<(), String> {
 fn signatures_contains_io_functions() -> Result<(), String> {
     let sigs = create_builtin_signatures();
     for name in &[
-        "print", "printf", "say", "open", "sysopen", "close", "read", "readline", "readpipe",
-        "sysread", "write", "syswrite", "seek", "tell", "eof",
+        "print",
+        "printf",
+        "say",
+        "open",
+        "XSLoader::load",
+        "DynaLoader::bootstrap",
+        "bootstrap",
+        "sysopen",
+        "close",
+        "read",
+        "readline",
+        "readpipe",
+        "sysread",
+        "write",
+        "syswrite",
+        "seek",
+        "tell",
+        "eof",
     ] {
         if !sigs.contains_key(name) {
             return Err(format!("Missing IO function: {name}"));
@@ -1095,6 +1111,27 @@ fn phf_and_hashmap_share_common_core_builtins() -> Result<(), String> {
         }
         if !hashmap_sigs.contains_key(name) {
             return Err(format!("{name} missing from HashMap signatures"));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn xs_bootstrap_signatures_exist_in_both_stores() -> Result<(), String> {
+    let sigs = create_builtin_signatures();
+    for name in ["XSLoader::load", "DynaLoader::bootstrap", "bootstrap"] {
+        let sig = must_some(sigs.get(name));
+        if sig.documentation.is_empty() {
+            return Err(format!("{name} should have documentation"));
+        }
+        if sig.signatures.is_empty() {
+            return Err(format!("{name} should have at least one signature"));
+        }
+        if !is_builtin(name) {
+            return Err(format!("{name} should be present in the PHF builtin map"));
+        }
+        if get_param_names(name).is_empty() {
+            return Err(format!("{name} should expose parameter names"));
         }
     }
     Ok(())
