@@ -237,15 +237,18 @@ mod moo_semantics_e2e_tests {
         let hover_response = server.get_hover(uri, call_line as u32, call_char as u32);
         let hover_text = semantic::hover_content(&hover_response).ok_or("hover content missing")?;
         assert!(
-            hover_text.contains("Moo/Moose attribute `email`")
+            hover_text.contains("Moo/Moose Attribute Accessor")
+                || hover_text.contains("Moo/Moose attribute `email`")
                 || hover_text.contains("Moo/Moose accessor")
                 || hover_text.contains("Generated accessor from Moo/Moose `has`"),
             "expected Moo/Moose hover attribution, got: {hover_text}"
         );
-        // The Moo/Moose hover card now uses "isa: Str, rw" format (from the
-        // declaration == "has" early-return path) rather than "is=rw" / "isa=Str"
-        // from the old generic attribute rendering path.
-        assert!(hover_text.contains("rw"), "expected rw accessor mode in hover, got: {hover_text}");
+        // The current Moo/Moose hover card renders a labeled access mode such as
+        // "Access: read-write" instead of the older "rw" shorthand.
+        assert!(
+            hover_text.contains("read-write") || hover_text.contains("rw"),
+            "expected accessor mode in hover, got: {hover_text}"
+        );
         assert!(hover_text.contains("Str"), "expected isa type 'Str' in hover, got: {hover_text}");
 
         server.shutdown();
