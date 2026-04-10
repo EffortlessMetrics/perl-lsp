@@ -24,6 +24,8 @@ token_types:
   18: regexp
   19: operator
   20: sql_string
+  21: sql_heredoc_keyword
+  22: json_heredoc_key
 modifiers:
   0: declaration
   1: definition
@@ -35,3 +37,6 @@ modifiers:
   7: modification
   8: documentation
   9: defaultLibrary
+  10: scalarVariable
+  11: arrayVariable
+  12: hashVariable
