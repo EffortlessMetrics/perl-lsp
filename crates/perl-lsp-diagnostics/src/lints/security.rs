@@ -11,6 +11,7 @@
 //! | `security-two-arg-open` | Warning | `open(FH, ">file")` -- use 3-arg open for safety |
 //! | `security-string-eval` | Warning | `eval "$string"` -- string eval is a security risk |
 //! | `security-backtick-exec` | Information | Backtick/qx command execution detected |
+//! | `security-signal-handler` | Warning | Global `$SIG{__DIE__}` / `$SIG{__WARN__}` assignment |
 
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
@@ -24,12 +25,21 @@ use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformati
 /// - Two-argument `open` calls (should use 3-arg form)
 /// - String `eval` (security risk vs. block `eval`)
 /// - Backtick/qx command execution (ensure input is sanitized)
+/// - Global signal-handler assignment to `$SIG{__DIE__}` / `$SIG{__WARN__}`
 pub fn check_security(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     walk_node(node, &mut |n| {
         match &n.kind {
             NodeKind::FunctionCall { name, args } => {
                 check_two_arg_open(name, args, n, diagnostics);
                 check_string_eval(name, args, n, diagnostics);
+            }
+
+            NodeKind::Assignment { lhs, .. } => {
+                check_global_signal_handler_assignment(lhs, n, diagnostics);
+            }
+
+            NodeKind::VariableDeclaration { declarator, variable, .. } if declarator == "local" => {
+                let _ = signal_handler_name(variable);
             }
 
             // The parser produces Eval { block } for both `eval { ... }` and
@@ -62,6 +72,64 @@ pub fn check_security(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             _ => {}
         }
     });
+}
+
+/// Detect a global assignment to `$SIG{__DIE__}` or `$SIG{__WARN__}`.
+fn check_global_signal_handler_assignment(
+    lhs: &Node,
+    node: &Node,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(signal_name) = signal_handler_name(lhs) else {
+        return;
+    };
+
+    diagnostics.push(Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity: DiagnosticSeverity::Warning,
+        code: Some(DiagnosticCode::SecuritySignalHandler.as_str().to_string()),
+        message: format!(
+            "Global assignment to $SIG{{{signal_name}}} changes process-wide behavior. Use local $SIG{{...}} to scope the handler."
+        ),
+        related_information: vec![RelatedInformation {
+            location: (node.location.start, node.location.end),
+            message: "Localized signal handlers avoid leaking exception or warning hooks across unrelated code.".to_string(),
+        }],
+        tags: Vec::new(),
+        suggestion: Some(format!(
+            "Use `local $SIG{{{signal_name}}} = ...` if the handler should be scoped"
+        )),
+    });
+}
+
+/// Extract the signal-handler key if the node targets `$SIG{__DIE__}` or `$SIG{__WARN__}`.
+fn signal_handler_name(node: &Node) -> Option<&str> {
+    let NodeKind::Binary { op, left, right } = &node.kind else {
+        return None;
+    };
+
+    if op != "{}" {
+        return None;
+    }
+
+    let is_sig_hash = matches!(
+        &left.kind,
+        NodeKind::Variable { sigil, name } if (sigil == "$" || sigil == "%") && name == "SIG"
+    );
+    if !is_sig_hash {
+        return None;
+    }
+
+    match &right.kind {
+        NodeKind::Identifier { name } if name == "__DIE__" || name == "__WARN__" => {
+            Some(name.as_str())
+        }
+        NodeKind::String { value, .. } => {
+            let trimmed = value.trim_matches(['"', '\'']);
+            if trimmed == "__DIE__" || trimmed == "__WARN__" { Some(trimmed) } else { None }
+        }
+        _ => None,
+    }
 }
 
 /// Detect string `eval` from `NodeKind::Eval` nodes.
@@ -166,4 +234,51 @@ fn check_string_eval(name: &str, args: &[Node], node: &Node, diagnostics: &mut V
 /// `String { value: "`cmd`", interpolated: true }`.
 fn is_backtick_string(value: &str) -> bool {
     value.starts_with('`') && value.ends_with('`') && value.len() >= 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::must;
+
+    fn security_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_security(&ast, &mut diags);
+        diags
+    }
+
+    #[test]
+    fn global_sig_warn_handler_is_flagged() {
+        let diags = security_diags("$SIG{__WARN__} = sub { };");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL602")),
+            "global __WARN__ handler should be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn global_sig_die_handler_is_flagged() {
+        let diags = security_diags("%SIG{__DIE__} = sub { };");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL602")),
+            "global __DIE__ handler should be flagged: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn local_sig_handlers_are_not_flagged() {
+        let warn_diags = security_diags("local $SIG{__WARN__} = sub { };");
+        let die_diags = security_diags("local $SIG{__DIE__} = sub { };");
+
+        assert!(
+            warn_diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
+            "localized __WARN__ handler should not be flagged: {warn_diags:?}"
+        );
+        assert!(
+            die_diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
+            "localized __DIE__ handler should not be flagged: {die_diags:?}"
+        );
+    }
 }

@@ -161,6 +161,8 @@ pub enum DiagnosticCode {
     SecurityStringEval,
     /// Backtick/qx command execution detected
     SecurityBacktickExec,
+    /// Global assignment to `$SIG{__DIE__}` / `$SIG{__WARN__}`
+    SecuritySignalHandler,
 
     // Import (PL700-PL799)
     /// Module appears to be unused
@@ -235,6 +237,7 @@ impl DiagnosticCode {
             DiagnosticCode::DeprecatedArrayBase => "PL501",
             DiagnosticCode::SecurityStringEval => "PL600",
             DiagnosticCode::SecurityBacktickExec => "PL601",
+            DiagnosticCode::SecuritySignalHandler => "PL602",
             DiagnosticCode::UnusedImport => "PL700",
             DiagnosticCode::ModuleNotFound => "PL701",
             DiagnosticCode::HeredocInFormat => "PL800",
@@ -292,6 +295,7 @@ impl DiagnosticCode {
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
             "PL601" => "https://docs.perl-lsp.org/errors/PL601",
+            "PL602" => "https://docs.perl-lsp.org/errors/PL602",
             "PL700" => "https://docs.perl-lsp.org/errors/PL700",
             "PL701" => "https://docs.perl-lsp.org/errors/PL701",
             "PL800" => "https://docs.perl-lsp.org/errors/PL800",
@@ -341,6 +345,7 @@ impl DiagnosticCode {
             | DiagnosticCode::DeprecatedArrayBase
             | DiagnosticCode::SecurityStringEval
             | DiagnosticCode::SecurityBacktickExec
+            | DiagnosticCode::SecuritySignalHandler
             | DiagnosticCode::ModuleNotFound
             | DiagnosticCode::VersionIncompatFeature
             | DiagnosticCode::CriticSeverity1
@@ -506,6 +511,10 @@ impl DiagnosticCode {
                 "Backticks/`qx()` execute shell commands and can be exploited. \
                 Use `system()` with a list form or IPC::Run for safer execution.",
             ),
+            DiagnosticCode::SecuritySignalHandler => Some(
+                "Assigning to $SIG{__DIE__} or $SIG{__WARN__} globally changes exception \
+                and warning handling for the whole process. Use `local` to scope the handler.",
+            ),
             DiagnosticCode::UnusedImport => Some(
                 "This module is imported but none of its exports appear to be used. \
                 Remove the `use` statement to reduce unnecessary dependencies.",
@@ -610,6 +619,7 @@ impl DiagnosticCode {
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
             "PL601" => Some(DiagnosticCode::SecurityBacktickExec),
+            "PL602" => Some(DiagnosticCode::SecuritySignalHandler),
             "PL700" => Some(DiagnosticCode::UnusedImport),
             "PL701" => Some(DiagnosticCode::ModuleNotFound),
             "PL800" => Some(DiagnosticCode::HeredocInFormat),
@@ -706,6 +716,7 @@ impl DiagnosticCode {
             DiagnosticCode::SecurityStringEval | DiagnosticCode::SecurityBacktickExec => {
                 DiagnosticCategory::Security
             }
+            DiagnosticCode::SecuritySignalHandler => DiagnosticCategory::Security,
 
             DiagnosticCode::UnusedImport | DiagnosticCode::ModuleNotFound => {
                 DiagnosticCategory::Import
@@ -739,6 +750,7 @@ mod tests {
         assert_eq!(DiagnosticCode::ParseError.as_str(), "PL001");
         assert_eq!(DiagnosticCode::MissingStrict.as_str(), "PL100");
         assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
+        assert_eq!(DiagnosticCode::SecuritySignalHandler.as_str(), "PL602");
     }
 
     #[test]
@@ -763,6 +775,10 @@ mod tests {
     #[test]
     fn test_from_str() {
         assert_eq!(DiagnosticCode::parse_code("PL001"), Some(DiagnosticCode::ParseError));
+        assert_eq!(
+            DiagnosticCode::parse_code("PL602"),
+            Some(DiagnosticCode::SecuritySignalHandler)
+        );
         assert_eq!(DiagnosticCode::parse_code("INVALID"), None);
     }
 
@@ -770,6 +786,7 @@ mod tests {
     fn test_category() {
         assert_eq!(DiagnosticCode::ParseError.category(), DiagnosticCategory::Parser);
         assert_eq!(DiagnosticCode::MissingStrict.category(), DiagnosticCategory::StrictWarnings);
+        assert_eq!(DiagnosticCode::SecuritySignalHandler.category(), DiagnosticCategory::Security);
         assert_eq!(DiagnosticCode::CriticSeverity1.category(), DiagnosticCategory::PerlCritic);
     }
 
