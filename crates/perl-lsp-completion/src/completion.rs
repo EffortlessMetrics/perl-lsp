@@ -1171,13 +1171,8 @@ impl CompletionProvider {
         }
 
         let segment = options_text[segment_start..].trim_start();
-        let Some(option_prefix) = segment.strip_prefix(option_name) else {
-            return None;
-        };
-
-        let Some(option_prefix) = option_prefix.trim_start().strip_prefix("=>") else {
-            return None;
-        };
+        let option_prefix = segment.strip_prefix(option_name)?;
+        let option_prefix = option_prefix.trim_start().strip_prefix("=>")?;
 
         Some(option_prefix.trim_start().to_string())
     }
