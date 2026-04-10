@@ -12,6 +12,10 @@
 //! | `security-string-eval` | Warning | `eval "$string"` -- string eval is a security risk |
 //! | `security-backtick-exec` | Information | Backtick/qx command execution detected |
 //! | `security-signal-handler` | Warning | Global `$SIG{__DIE__}` / `$SIG{__WARN__}` assignment |
+//! | `PL603` | Warning | `system()` call executes shell commands |
+//! | `PL604` | Warning | `exec()` call replaces the current process |
+//! | `PL605` | Warning | Pipe-open executes shell commands |
+//! | `PL606` | Warning | `readpipe()` executes shell commands (equivalent to qx//) |
 
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
@@ -246,6 +250,10 @@ fn walk_security_node(
         NodeKind::FunctionCall { name, args } => {
             check_two_arg_open(name, args, node, diagnostics);
             check_string_eval(name, args, node, diagnostics);
+            check_system_call(name, node, diagnostics);
+            check_exec_call(name, node, diagnostics);
+            check_pipe_open(name, args, node, diagnostics);
+            check_readpipe(name, node, diagnostics);
             for arg in args {
                 walk_security_node(arg, diagnostics, signal_shadowed);
             }
@@ -510,6 +518,175 @@ fn check_string_eval(name: &str, args: &[Node], node: &Node, diagnostics: &mut V
     });
 }
 
+/// Detect `system()` calls.
+///
+/// `system("cmd")` or `system("cmd", @args)` executes a shell command.
+/// The list form `system($cmd, @args)` is safer (avoids shell injection),
+/// but we flag all uses to prompt developers to consider the security context.
+fn check_system_call(name: &str, node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    if name != "system" {
+        return;
+    }
+
+    diagnostics.push(Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity: DiagnosticSeverity::Warning,
+        code: Some(DiagnosticCode::SecuritySystemCall.as_str().to_string()),
+        message: "system() executes a shell command. Ensure input is sanitized.".to_string(),
+        related_information: vec![RelatedInformation {
+            location: (node.location.start, node.location.end),
+            message: "Use the list form system($cmd, @args) to avoid shell injection when arguments come from user input".to_string(),
+        }],
+        tags: Vec::new(),
+        suggestion: Some(
+            "Use the list form: system($cmd, @args) instead of system(\"$cmd @args\") to avoid shell injection"
+                .to_string(),
+        ),
+    });
+}
+
+/// Detect `exec()` calls.
+///
+/// `exec("cmd")` replaces the current process with a shell command.
+/// The list form `exec($cmd, @args)` is safer (avoids shell injection),
+/// but we flag all uses to prompt developers to consider the security context.
+fn check_exec_call(name: &str, node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    if name != "exec" {
+        return;
+    }
+
+    diagnostics.push(Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity: DiagnosticSeverity::Warning,
+        code: Some(DiagnosticCode::SecurityExecCall.as_str().to_string()),
+        message: "exec() replaces the current process with a shell command. Ensure input is sanitized.".to_string(),
+        related_information: vec![RelatedInformation {
+            location: (node.location.start, node.location.end),
+            message: "Use the list form exec($cmd, @args) to avoid shell injection when arguments come from user input".to_string(),
+        }],
+        tags: Vec::new(),
+        suggestion: Some(
+            "Use the list form: exec($cmd, @args) instead of exec(\"$cmd @args\") to avoid shell injection"
+                .to_string(),
+        ),
+    });
+}
+
+/// Detect pipe-open patterns.
+///
+/// Both 2-arg `open(FH, "|cmd")` and 3-arg `open(FH, "|-", "cmd")` /
+/// `open(FH, "-|", "cmd")` forms execute shell commands via pipes.
+/// These are distinct from the two-arg-open security check (PL401),
+/// which covers all 2-arg open calls regardless of pipe status.
+///
+/// The parser may represent `open(FH, "|cmd", ...)` args as either:
+/// - Flat `args`: `[fh, mode_str, ...]` (unit-test-constructed ASTs)
+/// - Wrapped: `[ArrayLiteral { elements: [fh, mode_str, ...] }]` (real parser output)
+fn check_pipe_open(name: &str, args: &[Node], node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    if name != "open" {
+        return;
+    }
+
+    // Resolve the effective argument list: the parser may wrap args in a
+    // single ArrayLiteral node (e.g. `open(FH, "|-", "cmd")` becomes
+    // `FunctionCall { args: [ArrayLiteral { elements: [fh, "|-", "cmd"] }] }`).
+    let effective_args: &[Node] = if args.len() == 1 {
+        if let NodeKind::ArrayLiteral { elements } = &args[0].kind {
+            elements.as_slice()
+        } else {
+            args
+        }
+    } else {
+        args
+    };
+
+    let is_pipe = match effective_args.len() {
+        // 3+ arg form: open(FH, "|-", "cmd") or open(FH, "-|", "cmd")
+        n if n >= 3 => {
+            let mode_node = &effective_args[1];
+            is_pipe_mode_string(mode_node)
+        }
+        // 2-arg form: open(FH, "|cmd") — mode string starts with "|"
+        2 => {
+            let mode_node = &effective_args[1];
+            is_pipe_two_arg_string(mode_node)
+        }
+        _ => false,
+    };
+
+    if !is_pipe {
+        return;
+    }
+
+    diagnostics.push(Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity: DiagnosticSeverity::Warning,
+        code: Some(DiagnosticCode::SecurityPipeOpen.as_str().to_string()),
+        message: "Pipe-open executes a shell command. Ensure input is sanitized.".to_string(),
+        related_information: vec![RelatedInformation {
+            location: (node.location.start, node.location.end),
+            message: "Use the list form open(my $fh, '-|', $cmd, @args) to avoid shell injection when arguments come from user input".to_string(),
+        }],
+        tags: Vec::new(),
+        suggestion: Some(
+            "Use the list form: open(my $fh, '-|', $cmd, @args) for safer command execution"
+                .to_string(),
+        ),
+    });
+}
+
+/// Returns true if the node is a string literal representing a pipe mode:
+/// `"|-"` (write pipe) or `"-|"` (read pipe).
+fn is_pipe_mode_string(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::String { value, .. } => {
+            let trimmed = value.trim_matches(['"', '\'']);
+            trimmed == "|-" || trimmed == "-|"
+        }
+        _ => false,
+    }
+}
+
+/// Returns true if the node is a 2-arg open mode string that starts with `|`,
+/// indicating a write-pipe: `"|cmd"`.
+fn is_pipe_two_arg_string(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::String { value, .. } => {
+            let trimmed = value.trim_matches(['"', '\'']);
+            trimmed.starts_with('|')
+        }
+        _ => false,
+    }
+}
+
+/// Detect `readpipe()` function calls.
+///
+/// `readpipe("cmd")` is functionally identical to backticks/qx//,
+/// executing a shell command. Backtick strings are already caught via
+/// the `NodeKind::String` branch (PL601); this check covers the explicit
+/// function call form.
+fn check_readpipe(name: &str, node: &Node, diagnostics: &mut Vec<Diagnostic>) {
+    if name != "readpipe" {
+        return;
+    }
+
+    diagnostics.push(Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity: DiagnosticSeverity::Warning,
+        code: Some(DiagnosticCode::SecurityReadpipe.as_str().to_string()),
+        message: "readpipe() executes a shell command (equivalent to qx//). Ensure input is sanitized.".to_string(),
+        related_information: vec![RelatedInformation {
+            location: (node.location.start, node.location.end),
+            message: "Use open(my $fh, '-|', $cmd, @args) or IPC::Run for safer command execution with proper input validation".to_string(),
+        }],
+        tags: Vec::new(),
+        suggestion: Some(
+            "Use open(my $fh, '-|', @cmd) or IPC::Run for safer command execution"
+                .to_string(),
+        ),
+    });
+}
+
 /// Check if a string value represents a backtick command execution.
 ///
 /// The parser stores backtick literals (`` `cmd` ``) and qx(cmd) as
@@ -607,6 +784,99 @@ mod tests {
         assert!(
             die_diags.iter().all(|d| d.code.as_deref() != Some("PL602")),
             "localized __DIE__ handler should not be flagged: {die_diags:?}"
+        );
+    }
+
+    // --- system() tests ---
+
+    #[test]
+    fn system_call_is_flagged() {
+        let diags = security_diags(r#"system("ls -la");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL603")),
+            "system() should be flagged as PL603: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn system_call_list_form_is_flagged() {
+        let diags = security_diags(r#"system("ls", "-la");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL603")),
+            "system() list form should be flagged as PL603: {diags:?}"
+        );
+    }
+
+    // --- exec() tests ---
+
+    #[test]
+    fn exec_call_is_flagged() {
+        let diags = security_diags(r#"exec("ls -la");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL604")),
+            "exec() should be flagged as PL604: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn exec_call_list_form_is_flagged() {
+        let diags = security_diags(r#"exec("ls", "-la");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL604")),
+            "exec() list form should be flagged as PL604: {diags:?}"
+        );
+    }
+
+    // --- pipe-open tests ---
+
+    #[test]
+    fn pipe_write_open_is_flagged() {
+        // open(my $fh, "|-", "cmd") — write pipe
+        let diags = security_diags(r#"open(my $fh, "|-", "ls");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL605")),
+            "write pipe-open should be flagged as PL605: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn pipe_read_open_is_flagged() {
+        // open(my $fh, "-|", "cmd") — read pipe
+        let diags = security_diags(r#"open(my $fh, "-|", "ls");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL605")),
+            "read pipe-open should be flagged as PL605: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn two_arg_pipe_open_is_flagged_as_pipe_open() {
+        // open(FH, "|cmd") — 2-arg pipe-open (also a pipe, covered by PL605 not just PL401)
+        let diags = security_diags(r#"open(FH, "|cmd");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL605")),
+            "two-arg pipe-open should be flagged as PL605: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn normal_three_arg_open_is_not_pipe_flagged() {
+        // open(my $fh, "<", "file") — safe, not a pipe
+        let diags = security_diags(r#"open(my $fh, "<", "file.txt");"#);
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL605")),
+            "normal 3-arg open should not be flagged as PL605: {diags:?}"
+        );
+    }
+
+    // --- readpipe() tests ---
+
+    #[test]
+    fn readpipe_call_is_flagged() {
+        let diags = security_diags(r#"my $out = readpipe("ls -la");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL606")),
+            "readpipe() should be flagged as PL606: {diags:?}"
         );
     }
 }

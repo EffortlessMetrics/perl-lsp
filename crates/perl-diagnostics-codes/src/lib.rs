@@ -175,6 +175,14 @@ pub enum DiagnosticCode {
     SecurityBacktickExec,
     /// Global assignment to `$SIG{__DIE__}` / `$SIG{__WARN__}`
     SecuritySignalHandler,
+    /// `system()` call executes shell commands
+    SecuritySystemCall,
+    /// `exec()` call replaces the current process with a shell command
+    SecurityExecCall,
+    /// Pipe-open `open(FH, "|-", ...)` / `open(FH, "-|", ...)` executes shell commands
+    SecurityPipeOpen,
+    /// `readpipe()` function call executes shell commands (equivalent to qx//)
+    SecurityReadpipe,
 
     // Import (PL700-PL799)
     /// Module appears to be unused
@@ -254,6 +262,10 @@ impl DiagnosticCode {
             DiagnosticCode::SecurityStringEval => "PL600",
             DiagnosticCode::SecurityBacktickExec => "PL601",
             DiagnosticCode::SecuritySignalHandler => "PL602",
+            DiagnosticCode::SecuritySystemCall => "PL603",
+            DiagnosticCode::SecurityExecCall => "PL604",
+            DiagnosticCode::SecurityPipeOpen => "PL605",
+            DiagnosticCode::SecurityReadpipe => "PL606",
             DiagnosticCode::UnusedImport => "PL700",
             DiagnosticCode::ModuleNotFound => "PL701",
             DiagnosticCode::HeredocInFormat => "PL800",
@@ -316,6 +328,10 @@ impl DiagnosticCode {
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
             "PL601" => "https://docs.perl-lsp.org/errors/PL601",
             "PL602" => "https://docs.perl-lsp.org/errors/PL602",
+            "PL603" => "https://docs.perl-lsp.org/errors/PL603",
+            "PL604" => "https://docs.perl-lsp.org/errors/PL604",
+            "PL605" => "https://docs.perl-lsp.org/errors/PL605",
+            "PL606" => "https://docs.perl-lsp.org/errors/PL606",
             "PL700" => "https://docs.perl-lsp.org/errors/PL700",
             "PL701" => "https://docs.perl-lsp.org/errors/PL701",
             "PL800" => "https://docs.perl-lsp.org/errors/PL800",
@@ -368,6 +384,10 @@ impl DiagnosticCode {
             | DiagnosticCode::SecurityStringEval
             | DiagnosticCode::SecurityBacktickExec
             | DiagnosticCode::SecuritySignalHandler
+            | DiagnosticCode::SecuritySystemCall
+            | DiagnosticCode::SecurityExecCall
+            | DiagnosticCode::SecurityPipeOpen
+            | DiagnosticCode::SecurityReadpipe
             | DiagnosticCode::ModuleNotFound
             | DiagnosticCode::VersionIncompatFeature
             | DiagnosticCode::EvalErrorFlow
@@ -556,6 +576,22 @@ impl DiagnosticCode {
                 "Assigning to $SIG{__DIE__} or $SIG{__WARN__} globally changes exception \
                 and warning handling for the whole process. Use `local` to scope the handler.",
             ),
+            DiagnosticCode::SecuritySystemCall => Some(
+                "`system()` executes a shell command. If the arguments include user input, \
+                use the list form `system($cmd, @args)` to avoid shell injection.",
+            ),
+            DiagnosticCode::SecurityExecCall => Some(
+                "`exec()` replaces the current process with a shell command. If arguments \
+                include user input, use the list form `exec($cmd, @args)` to avoid shell injection.",
+            ),
+            DiagnosticCode::SecurityPipeOpen => Some(
+                "Pipe-open executes a shell command. Pass a list to `open` for safe argument \
+                handling: `open(my $fh, '-|', $cmd, @args)` instead of `open(my $fh, \"|$cmd\")`.",
+            ),
+            DiagnosticCode::SecurityReadpipe => Some(
+                "`readpipe()` executes a shell command (equivalent to backticks/qx//). \
+                Use `open(my $fh, '-|', $cmd, @args)` or IPC::Run for safer command execution.",
+            ),
             DiagnosticCode::UnusedImport => Some(
                 "This module is imported but none of its exports appear to be used. \
                 Remove the `use` statement to reduce unnecessary dependencies.",
@@ -669,6 +705,10 @@ impl DiagnosticCode {
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
             "PL601" => Some(DiagnosticCode::SecurityBacktickExec),
             "PL602" => Some(DiagnosticCode::SecuritySignalHandler),
+            "PL603" => Some(DiagnosticCode::SecuritySystemCall),
+            "PL604" => Some(DiagnosticCode::SecurityExecCall),
+            "PL605" => Some(DiagnosticCode::SecurityPipeOpen),
+            "PL606" => Some(DiagnosticCode::SecurityReadpipe),
             "PL700" => Some(DiagnosticCode::UnusedImport),
             "PL701" => Some(DiagnosticCode::ModuleNotFound),
             "PL800" => Some(DiagnosticCode::HeredocInFormat),
@@ -765,10 +805,13 @@ impl DiagnosticCode {
                 DiagnosticCategory::Deprecated
             }
 
-            DiagnosticCode::SecurityStringEval | DiagnosticCode::SecurityBacktickExec => {
-                DiagnosticCategory::Security
-            }
-            DiagnosticCode::SecuritySignalHandler => DiagnosticCategory::Security,
+            DiagnosticCode::SecurityStringEval
+            | DiagnosticCode::SecurityBacktickExec
+            | DiagnosticCode::SecuritySignalHandler
+            | DiagnosticCode::SecuritySystemCall
+            | DiagnosticCode::SecurityExecCall
+            | DiagnosticCode::SecurityPipeOpen
+            | DiagnosticCode::SecurityReadpipe => DiagnosticCategory::Security,
 
             DiagnosticCode::UnusedImport | DiagnosticCode::ModuleNotFound => {
                 DiagnosticCategory::Import
