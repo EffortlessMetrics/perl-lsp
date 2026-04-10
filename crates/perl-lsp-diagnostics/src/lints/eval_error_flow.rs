@@ -178,16 +178,10 @@ fn inspect_node(node: &Node, facts: &mut StatementFacts) {
         NodeKind::ExpressionStatement { expression } => {
             inspect_node(expression, facts);
         }
-        NodeKind::VariableDeclaration {
-            initializer: Some(init),
-            ..
-        } => {
+        NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
             inspect_node(init, facts);
         }
-        NodeKind::VariableListDeclaration {
-            initializer: Some(init),
-            ..
-        } => {
+        NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
             inspect_node(init, facts);
         }
         NodeKind::Return { value: Some(value) } => {
