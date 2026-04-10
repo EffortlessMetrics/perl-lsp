@@ -3193,6 +3193,37 @@ CHECK {
     Ok(())
 }
 
+// ===========================================================================
+// AUTOLOAD special variable coverage (#3462)
+// ===========================================================================
+
+#[test]
+fn autoload_special_variable_is_not_undeclared_under_strict()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+
+package MyClass;
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    my $method = $AUTOLOAD;
+    return $method;
+}
+
+package main;
+MyClass->some_method();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "$AUTOLOAD"),
+        "$AUTOLOAD in AUTOLOAD context must not be flagged as undeclared; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
 // ---- Issue #3503: variables in print comma-separated args must be marked used ----
 
 #[test]
