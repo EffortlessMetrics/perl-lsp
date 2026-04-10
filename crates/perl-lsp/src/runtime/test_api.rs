@@ -319,4 +319,13 @@ impl LspServer {
         cfg.ai_completion.enabled = enabled;
         cfg.ai_completion.fallback = fallback;
     }
+
+    /// Returns `true` if a document with the given URI is currently in the
+    /// document store.
+    ///
+    /// Used in tests to verify that `workspace/didChangeWatchedFiles` DELETED
+    /// events remove files from the in-memory store.
+    pub fn test_has_document(&self, uri: &str) -> bool {
+        self.documents.lock().contains_key(uri)
+    }
 }
