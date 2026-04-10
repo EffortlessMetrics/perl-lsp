@@ -546,6 +546,7 @@ impl LspServer {
                     #[cfg(not(target_arch = "wasm32"))]
                     if critic_config_changed {
                         *self.critic_analyzer.lock() = None;
+                        self.critic_warning_once.lock().clear();
                     }
 
                     // Update workspace config (include paths, @INC)

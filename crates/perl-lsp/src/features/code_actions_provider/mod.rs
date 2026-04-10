@@ -143,6 +143,9 @@ impl CodeActionsProvider {
             {
                 fixes::fix_parse_error(self, diagnostic, "parse-error-missingsemicolon")
             }
+            Some(code) if code.starts_with("Perl::Critic::Policy::") => {
+                fixes::fix_perlcritic_policy(self, diagnostic, code)
+            }
             _ => Vec::new(),
         }
     }
@@ -251,6 +254,38 @@ mod tests {
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
         assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_perlcritic_require_use_strict_fix() {
+        let source = "print 'hello';\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+        let diagnostic = make_diagnostic(
+            (0, 5),
+            DiagnosticSeverity::Warning,
+            "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict",
+            "Code does not use strict",
+        );
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Add `use strict;` (Perl::Critic)");
+        assert_eq!(actions[0].edit.new_text, "use strict;\n");
+    }
+
+    #[test]
+    fn test_perlcritic_require_use_warnings_fix() {
+        let source = "use strict;\nprint 'hello';\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+        let diagnostic = make_diagnostic(
+            (12, 17),
+            DiagnosticSeverity::Warning,
+            "Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings",
+            "Code does not use warnings",
+        );
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Add `use warnings;` (Perl::Critic)");
+        assert_eq!(actions[0].edit.new_text, "use warnings;\n");
     }
 
     // ── Quick-fix: unused variable ──────────────────────────────────────

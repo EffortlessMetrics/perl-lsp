@@ -264,3 +264,40 @@ pub(super) fn fix_unquoted_bareword(
 
     actions
 }
+
+pub(super) fn fix_perlcritic_policy(
+    provider: &CodeActionsProvider,
+    diagnostic: &Diagnostic,
+    policy: &str,
+) -> Vec<CodeAction> {
+    match policy {
+        "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict" => {
+            if provider.source().contains("use strict;") {
+                return Vec::new();
+            }
+            let insert_pos = source_utils::find_declaration_position(provider, diagnostic.range.0);
+            vec![diagnostic_action(
+                diagnostic,
+                "Add `use strict;` (Perl::Critic)",
+                CodeActionKind::QuickFix,
+                TextEdit { range: (insert_pos, insert_pos), new_text: "use strict;\n".to_string() },
+            )]
+        }
+        "Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings" => {
+            if provider.source().contains("use warnings;") {
+                return Vec::new();
+            }
+            let insert_pos = source_utils::find_declaration_position(provider, diagnostic.range.0);
+            vec![diagnostic_action(
+                diagnostic,
+                "Add `use warnings;` (Perl::Critic)",
+                CodeActionKind::QuickFix,
+                TextEdit {
+                    range: (insert_pos, insert_pos),
+                    new_text: "use warnings;\n".to_string(),
+                },
+            )]
+        }
+        _ => Vec::new(),
+    }
+}

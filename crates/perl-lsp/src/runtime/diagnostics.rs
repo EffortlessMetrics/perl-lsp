@@ -344,6 +344,12 @@ impl LspServer {
                                 None => d.message.clone(),
                             };
 
+                            let source = match d.code.as_deref() {
+                                Some(code) if code.starts_with("Perl::Critic::Policy::") => {
+                                    "perlcritic"
+                                }
+                                _ => "perl-lsp",
+                            };
                             let mut diag = json!({
                                 "range": {
                                     "start": {
@@ -362,7 +368,7 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
                                 "code": d.code.clone(),
-                                "source": "perl-lsp",
+                                "source": source,
                                 "message": message,
                             });
 
@@ -579,6 +585,12 @@ impl LspServer {
                                     None => d.message.clone(),
                                 };
 
+                                let source = match d.code.as_deref() {
+                                    Some(code) if code.starts_with("Perl::Critic::Policy::") => {
+                                        "perlcritic"
+                                    }
+                                    _ => "perl-lsp",
+                                };
                                 let mut diag = json!({
                                     "range": {
                                         "start": {
@@ -597,7 +609,7 @@ impl LspServer {
                                         InternalDiagnosticSeverity::Hint => 4,
                                     },
                                     "code": d.code.clone(),
-                                    "source": "perl-lsp",
+                                    "source": source,
                                     "message": message,
                                 });
                                 if !d.tags.is_empty() {
@@ -670,6 +682,12 @@ impl LspServer {
                                 None => d.message.clone(),
                             };
 
+                            let source = match d.code.as_deref() {
+                                Some(code) if code.starts_with("Perl::Critic::Policy::") => {
+                                    "perlcritic"
+                                }
+                                _ => "perl-lsp",
+                            };
                             let mut diag = json!({
                                 "range": {
                                     "start": {
@@ -688,7 +706,7 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
                                 "code": d.code.clone(),
-                                "source": "perl-lsp",
+                                "source": source,
                                 "message": message,
                             });
                             if !d.tags.is_empty() {
@@ -797,7 +815,7 @@ impl LspServer {
             }
         };
 
-        // Silently skip if perlcritic is not installed.
+        // Warn once if perlcritic is enabled but the binary is not installed.
         // The `skip_perlcritic_command_check` flag is always `false` in production
         // and is only set to `true` through the test helper
         // `LspServer::test_bypass_perlcritic_command_check`, enabling mock-runtime
@@ -805,6 +823,15 @@ impl LspServer {
         let skip_check =
             self.skip_perlcritic_command_check.load(std::sync::atomic::Ordering::Relaxed);
         if !skip_check && !crate::execute_command::command_exists("perlcritic") {
+            let warning_key = "missing-binary".to_string();
+            let mut warned = self.critic_warning_once.lock();
+            if !warned.contains(&warning_key) {
+                warned.insert(warning_key);
+                let _ = self.show_message(
+                    crate::runtime::window::MessageType::Warning,
+                    "Perl::Critic diagnostics are enabled, but `perlcritic` was not found on PATH. Install Perl::Critic or disable perl.perlcritic.enabled.",
+                );
+            }
             return;
         }
 
@@ -822,7 +849,7 @@ impl LspServer {
                 // workspace root looking for `.perlcriticrc`.  Ensures that a
                 // repo-root config is found even when the file lives in a
                 // sub-directory.  Only runs when the analyzer needs (re-)init.
-                let resolved_profile = profile.or_else(|| {
+                let resolved_profile = profile.clone().or_else(|| {
                     let workspace_root = self.root_path.lock().clone();
                     let mut dir = file_path.parent().map(|p| p.to_path_buf());
                     while let Some(current) = dir {
@@ -840,6 +867,25 @@ impl LspServer {
                     }
                     None
                 });
+                if let Some(configured_profile) = profile {
+                    let configured_path = std::path::Path::new(&configured_profile);
+                    if !configured_path.exists() {
+                        let warning_key = format!("missing-profile:{configured_profile}");
+                        let mut warned = self.critic_warning_once.lock();
+                        if !warned.contains(&warning_key) {
+                            warned.insert(warning_key);
+                            let _ = self.show_message(
+                                crate::runtime::window::MessageType::Warning,
+                                &format!(
+                                    "Perl::Critic profile not found: {}. Fix perl.perlcritic.profile or remove it.",
+                                    configured_profile
+                                ),
+                            );
+                        }
+                        return;
+                    }
+                }
+
                 let critic_config = crate::perl_critic::CriticConfig {
                     severity,
                     profile: resolved_profile,
@@ -872,17 +918,16 @@ impl LspServer {
         match result {
             Some(Ok(violations)) => {
                 for v in violations {
-                    // Map Perl::Critic severity (1-5) to LSP DiagnosticSeverity:
-                    // Brutal(1)/Cruel(2) -> Error, Harsh(3) -> Warning,
-                    // Stern(4)/Gentle(5) -> Information
                     let internal_severity = match v.severity {
-                        crate::perl_critic::Severity::Brutal
-                        | crate::perl_critic::Severity::Cruel => InternalDiagnosticSeverity::Error,
-                        crate::perl_critic::Severity::Harsh => InternalDiagnosticSeverity::Warning,
+                        crate::perl_critic::Severity::Gentle => InternalDiagnosticSeverity::Error,
                         crate::perl_critic::Severity::Stern
-                        | crate::perl_critic::Severity::Gentle => {
+                        | crate::perl_critic::Severity::Harsh => {
+                            InternalDiagnosticSeverity::Warning
+                        }
+                        crate::perl_critic::Severity::Cruel => {
                             InternalDiagnosticSeverity::Information
                         }
+                        crate::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
                     };
 
                     // Convert 0-indexed line/column from CriticAnalyzer to byte offsets.
@@ -896,7 +941,7 @@ impl LspServer {
                     diagnostics.push(InternalDiagnostic {
                         range: (start_byte, end_byte),
                         severity: internal_severity,
-                        code: Some(format!("PC:{}", v.policy)),
+                        code: Some(v.policy),
                         message: v.description,
                         related_information: Vec::new(),
                         tags: Vec::new(),
@@ -906,6 +951,15 @@ impl LspServer {
             }
             Some(Err(e)) => {
                 tracing::warn!(uri, error = %e, "perlcritic failed");
+                let warning_key = format!("execution-error:{e}");
+                let mut warned = self.critic_warning_once.lock();
+                if !warned.contains(&warning_key) {
+                    warned.insert(warning_key);
+                    let _ = self.show_message(
+                        crate::runtime::window::MessageType::Warning,
+                        &format!("Perl::Critic failed to run: {e}"),
+                    );
+                }
             }
             None => {}
         }

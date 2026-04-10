@@ -53,8 +53,7 @@ fn test_a_violations_appear_in_pull_diagnostics_when_enabled() {
 
     // Install a mock runtime returning one severity-3 violation for the file.
     let runtime = Arc::new(MockSubprocessRuntime::new());
-    let mock_line =
-        b"test.pl:5:1:3:TestingAndDebugging::RequireUseStrict:Code does not use strict\n";
+    let mock_line = b"test.pl:5:1:3:Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict:Code does not use strict\n";
     runtime.add_response(MockResponse::success(mock_line.to_vec()));
     server.test_install_mock_critic_runtime(runtime);
     server.test_bypass_perlcritic_command_check();
@@ -68,23 +67,57 @@ fn test_a_violations_appear_in_pull_diagnostics_when_enabled() {
     let result = pull_diagnostics(&server, uri, "print 'hello';\n");
 
     // There must be at least one diagnostic with code
-    // "PC:TestingAndDebugging::RequireUseStrict" and severity 2 (Warning).
+    // "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict" and
+    // severity 2 (Warning).
     //
     // The pull-diagnostics response has the shape:
     //   { "kind": "full", "items": [ { "code": "...", "severity": N, ... } ], "resultId": "..." }
     let diags = result["items"].as_array().cloned().unwrap_or_default();
 
     let found = diags.iter().any(|d| {
-        d["code"].as_str() == Some("PC:TestingAndDebugging::RequireUseStrict")
+        d["code"].as_str() == Some("Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict")
             && d["severity"].as_u64() == Some(2)
     });
 
     assert!(
         found,
         "Expected a Warning diagnostic with code \
-         PC:TestingAndDebugging::RequireUseStrict in the pull response; \
+         Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict in the pull response; \
          got: {result}"
     );
+}
+
+#[test]
+fn test_a2_perlcritic_severity_extremes_map_to_error_and_hint() {
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 1, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let output = b"test.pl:1:1:5:Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict:strict missing\n\
+test.pl:2:1:1:Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings:warnings missing\n";
+    runtime.add_response(MockResponse::success(output.to_vec()));
+    server.test_install_mock_critic_runtime(runtime);
+    server.test_bypass_perlcritic_command_check();
+
+    #[cfg(windows)]
+    let uri = "file:///C:/tmp/test_extremes.pl";
+    #[cfg(not(windows))]
+    let uri = "file:///tmp/test_extremes.pl";
+
+    let result = pull_diagnostics(&server, uri, "print 'hello';\nprint 'world';\n");
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+
+    let sev_5_is_error = diags.iter().any(|d| {
+        d["code"].as_str() == Some("Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict")
+            && d["severity"].as_u64() == Some(1)
+    });
+    let sev_1_is_hint = diags.iter().any(|d| {
+        d["code"].as_str() == Some("Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings")
+            && d["severity"].as_u64() == Some(4)
+    });
+
+    assert!(sev_5_is_error, "Expected severity 5 to map to LSP Error; got: {result}");
+    assert!(sev_1_is_hint, "Expected severity 1 to map to LSP Hint; got: {result}");
 }
 
 // ── Test B ────────────────────────────────────────────────────────────────────
@@ -117,8 +150,8 @@ fn test_b_no_subprocess_invocation_when_perlcritic_disabled() {
 
 // ── Test C ────────────────────────────────────────────────────────────────────
 
-/// When the `perlcritic` binary is absent from PATH, diagnostics are empty and
-/// no error is surfaced.
+/// When the `perlcritic` binary is absent from PATH, diagnostics stay empty and
+/// the analyzer subprocess is not invoked.
 ///
 /// This test is skipped when perlcritic *is* installed because there is no
 /// portable way to temporarily hide a binary from PATH in a single test.
@@ -147,7 +180,13 @@ fn test_c_graceful_skip_when_perlcritic_not_installed() {
     let diags = result["items"].as_array().cloned().unwrap_or_default();
     let perlcritic_diags: Vec<_> = diags
         .iter()
-        .filter(|d| d["code"].as_str().map(|c| c.starts_with("PC:")).unwrap_or(false))
+        .filter(|d| {
+            d["source"].as_str() == Some("perlcritic")
+                || d["code"]
+                    .as_str()
+                    .map(|c| c.starts_with("Perl::Critic::Policy::"))
+                    .unwrap_or(false)
+        })
         .collect();
 
     assert_eq!(

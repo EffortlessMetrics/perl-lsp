@@ -273,6 +273,13 @@ pub struct LspServer {
     /// Initialized to `false`; only the test helper methods flip this.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_perlcritic_command_check: AtomicBool,
+    /// De-duplication set for workspace-level Perl::Critic environment warnings.
+    ///
+    /// Keys represent warning classes (for example "missing-binary" or
+    /// "missing-profile:/path/.perlcriticrc") so the user sees one actionable
+    /// message per condition instead of repeated popups on every diagnostics pass.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) critic_warning_once: Mutex<HashSet<String>>,
     /// Optional AI inline-completion backend.
     ///
     /// When `Some`, the `handle_inline_completion` handler will attempt

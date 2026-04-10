@@ -259,6 +259,9 @@ describe('package.json contributes', () => {
       const keys = Object.keys(editorSection.properties);
       expect(keys).toContain('perl-lsp.enableFormatting');
       expect(keys).toContain('perl-lsp.formatOnSave');
+      expect(keys).toContain('perl.perlcritic.enabled');
+      expect(keys).toContain('perl.perlcritic.severity');
+      expect(keys).toContain('perl.perlcritic.profile');
       expect(keys).toContain('perl-lsp.enableRefactoring');
       expect(keys).toContain('perl-lsp.enableTestIntegration');
     });
@@ -437,6 +440,7 @@ describe('package.json contributes', () => {
       // Per-file/workspace settings should be resource-scoped so they can be
       // overridden in workspace and folder settings.
       const resourceScoped = ['perl-lsp.includePaths', 'perl-lsp.enableDiagnostics', 'perl-lsp.enableSemanticTokens', 'perl-lsp.enableFormatting', 'perl-lsp.formatOnSave', 'perl-lsp.perltidyConfig', 'perl-lsp.enableRefactoring', 'perl-lsp.enableTestIntegration', 'perl-lsp.autoPopulateNewFiles'];
+      resourceScoped.push('perl.perlcritic.enabled', 'perl.perlcritic.severity', 'perl.perlcritic.profile');
       for (const key of resourceScoped) {
         expect(properties[key]?.scope).toBe('resource');
       }
