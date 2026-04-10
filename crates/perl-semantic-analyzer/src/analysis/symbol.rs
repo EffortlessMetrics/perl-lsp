@@ -1671,7 +1671,7 @@ impl SymbolExtractor {
             return;
         }
 
-        if module == "IO::Async" {
+        if module == "IO::Async" || module.starts_with("IO::Async::") {
             self.framework_flags.entry(pkg).or_default().async_framework =
                 Some(AsyncFrameworkKind::IOAsync);
             return;

@@ -51,6 +51,22 @@ my $handle = IO::Async::Handle->new;
 }
 
 #[test]
+fn io_async_namespace_import_enables_symbol_synthesis() {
+    let code = r#"
+use IO::Async::Loop;
+
+my $loop = IO::Async::Loop->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "IO::Async::Loop", SymbolKind::Class),
+        "expected namespace import to enable IO::Async class synthesis"
+    );
+}
+
+#[test]
 fn io_async_names_are_not_synthesized_without_framework_use() {
     let code = r#"
 my $loop = IO::Async::Loop->new;
