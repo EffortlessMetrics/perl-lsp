@@ -55,7 +55,25 @@ impl<'a> Parser<'a> {
         Ok((name, SourceLocation { start: name_start, end: name_end }))
     }
 
+    /// Built-in subroutine attributes defined by perlsub / the Perl core.
+    ///
+    /// Attributes not in this list are valid only if the caller has loaded the
+    /// `attributes` pragma or a framework that installs a custom `MODIFY_CODE_ATTRIBUTES`
+    /// handler.  Unknown attributes are warned about (pushed to `self.errors`) but do
+    /// **not** cause a hard parse failure — custom attribute usage is widespread in
+    /// CPAN code (e.g. Moose `:ro`, Catalyst `:Private`).
+    const BUILTIN_SUB_ATTRIBUTES: &'static [&'static str] = &["lvalue", "method", "prototype", "const"];
+
+    /// Return `true` if `name` is a known built-in subroutine attribute.
+    fn is_builtin_sub_attribute(name: &str) -> bool {
+        Self::BUILTIN_SUB_ATTRIBUTES.contains(&name)
+    }
+
     /// Parse declaration attributes like `:lvalue` or `:prototype($)`.
+    ///
+    /// Unknown attributes produce a soft warning pushed to `self.errors` but
+    /// parsing continues — custom attributes are legal in Perl via the
+    /// `attributes` module or framework hooks.
     fn parse_declaration_attributes(&mut self) -> ParseResult<Vec<String>> {
         let mut attributes = Vec::new();
 
@@ -76,7 +94,9 @@ impl<'a> Parser<'a> {
                 };
                 parsed_any = true;
 
-                let mut attr_name = attr_token.text.to_string();
+                let base_name = attr_token.text.to_string();
+                let attr_start = attr_token.start;
+                let mut attr_name = base_name.clone();
 
                 if self.peek_kind() == Some(TokenKind::LeftParen) {
                     self.consume_token()?; // consume (
@@ -100,6 +120,19 @@ impl<'a> Parser<'a> {
                             self.current_position(),
                         ));
                     }
+                }
+
+                // Warn (but do not error) if the attribute is not a known built-in.
+                // Custom attributes are valid when `attributes` or a framework hook is
+                // in scope, so a warning is the correct diagnostic level.
+                if !Self::is_builtin_sub_attribute(&base_name) {
+                    self.errors.push(ParseError::syntax(
+                        format!(
+                            "unknown subroutine attribute ':{base_name}'; \
+                             did you mean one of: lvalue, method, prototype, const?"
+                        ),
+                        attr_start,
+                    ));
                 }
 
                 attributes.push(attr_name);

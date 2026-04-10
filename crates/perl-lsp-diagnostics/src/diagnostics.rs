@@ -23,9 +23,11 @@ use crate::lints::strict_warnings::check_strict_warnings;
 use crate::lints::unreachable_code::check_unreachable_code;
 use crate::lints::unused_imports::check_unused_imports;
 use crate::lints::version_compat::check_version_compat;
+use crate::parse_errors::parse_error_severity;
 use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export diagnostic types from the shared SRP microcrate.
+#[allow(unused_imports)]
 pub use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 
 /// Diagnostics provider
@@ -112,7 +114,7 @@ impl DiagnosticsProvider {
 
             diagnostics.push(Diagnostic {
                 range: (range_start, range_end),
-                severity: DiagnosticSeverity::Error,
+                severity: parse_error_severity(error, &message),
                 code: Some(code.as_str().to_string()),
                 message,
                 related_information,

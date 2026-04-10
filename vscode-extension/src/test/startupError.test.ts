@@ -15,7 +15,7 @@
  * "corrupted or incompatible") and a specific remediation step.
  */
 
-import { classifyStartupError, StartupErrorKind } from '../startupDiagnosis';
+import { classifyStartupError, StartupErrorKind, selectBestDiagnosis } from '../startupDiagnosis';
 
 // ---------------------------------------------------------------------------
 // classifyStartupError — pure classification of stderr/stdout text
@@ -196,5 +196,49 @@ describe('classifyStartupError', () => {
       const result = classifyStartupError(stderr);
       expect(result.hint.length).toBeLessThanOrEqual(200);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// selectBestDiagnosis — fallback chaining for #3329
+//
+// When probeStartupFailure returns Unknown (binary probe was inconclusive),
+// selectBestDiagnosis must prefer the health-check string from
+// runStartupDiagnostics so the user gets the specific "Perl interpreter not
+// found" message instead of a generic hint.
+// ---------------------------------------------------------------------------
+
+describe('selectBestDiagnosis', () => {
+  test('returns probe diagnosis unchanged when kind is not Unknown', () => {
+    const probe = classifyStartupError(
+      '/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.35` not found',
+    );
+    // probe.kind === GlibcMismatch — health msg should be ignored
+    const result = selectBestDiagnosis(probe, 'Perl interpreter not found. Install Perl 5.10+');
+    expect(result.kind).toBe(StartupErrorKind.GlibcMismatch);
+    expect(result.hint).toContain('glibc');
+  });
+
+  test('falls back to health-check message when probe kind is Unknown', () => {
+    const probe = classifyStartupError('');  // Unknown
+    const healthMsg = 'Perl interpreter not found. Install Perl 5.10+ and reload the window.';
+    const result = selectBestDiagnosis(probe, healthMsg);
+    expect(result.hint).toContain('Perl');
+    expect(result.hint).toContain('Install');
+    // The fallback should not be the generic Unknown hint
+    expect(result.hint).not.toContain('LSP binary failed to start');
+  });
+
+  test('returns probe Unknown unchanged when no health message is provided', () => {
+    const probe = classifyStartupError('');  // Unknown
+    const result = selectBestDiagnosis(probe, undefined);
+    expect(result.kind).toBe(StartupErrorKind.Unknown);
+    expect(result.hint).toBeTruthy();
+  });
+
+  test('returns probe Unknown unchanged when health message is empty string', () => {
+    const probe = classifyStartupError('');  // Unknown
+    const result = selectBestDiagnosis(probe, '');
+    expect(result.kind).toBe(StartupErrorKind.Unknown);
   });
 });

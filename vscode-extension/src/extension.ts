@@ -19,7 +19,7 @@ import { handleFormattingError } from './formattingErrors';
 import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
 import { StreamingCompletionController } from './streamingCompletion';
-import { classifyStartupError } from './startupDiagnosis';
+import { classifyStartupError, selectBestDiagnosis, StartupErrorKind } from './startupDiagnosis';
 import type { StartupErrorDiagnosis } from './startupDiagnosis';
 
 let client: LanguageClient | undefined;
@@ -730,11 +730,19 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
         healthWidget?.onStateChange(ClientState.Stopped);
 
         // Probe the binary to get an actionable OS-level diagnosis (#3280).
+        // If the probe result is Unknown (binary gave no useful output), fall
+        // back to the health check (#3312) which can detect missing Perl etc.
         // lastStartupDiagnostic is updated so that serverNotRunningMessage() in
         // command handlers surfaces the specific root cause rather than a generic prompt.
-        const diagnosis = currentServerPath
+        const probeResult = currentServerPath
             ? await probeStartupFailure(currentServerPath)
             : classifyStartupError('');
+        let healthMsg: string | undefined;
+        if (probeResult.kind === StartupErrorKind.Unknown) {
+            const onboarding = new OnboardingManager(context, outputChannel);
+            healthMsg = await onboarding.runStartupDiagnostics(currentServerPath ?? null);
+        }
+        const diagnosis = selectBestDiagnosis(probeResult, healthMsg);
         lastStartupDiagnostic = `${diagnosis.hint} Suggestion: ${diagnosis.remediation}`;
         const dialogMessage =
             `Perl Language Server failed to start.\n\n${diagnosis.hint}\n\nSuggestion: ${diagnosis.remediation}`;

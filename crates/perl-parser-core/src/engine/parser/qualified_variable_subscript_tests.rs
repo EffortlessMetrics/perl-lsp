@@ -180,6 +180,80 @@ mod tests {
         }
     }
 
+    #[test]
+    fn scalar_ref_hash_slice_preserves_base_target() {
+        let code = "%$href{'a', 'b'};";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        match &expr.kind {
+            NodeKind::Binary { op, left, right } => {
+                assert_eq!(op, "{}", "Expected {{}} hash-slice operator, got: {op}");
+                match &left.kind {
+                    NodeKind::Variable { sigil, name } => {
+                        assert_eq!(sigil, "%", "Expected % sigil on hash-slice target");
+                        assert_eq!(name, "$href", "Expected scalar-ref hash target, got: {name}");
+                    }
+                    _ => panic!(
+                        "Expected Variable node as hash-slice target, got: {}",
+                        left.kind.kind_name()
+                    ),
+                }
+                match &right.kind {
+                    NodeKind::ArrayLiteral { elements } => {
+                        assert_eq!(elements.len(), 2, "Expected two hash-slice keys");
+                    }
+                    _ => panic!(
+                        "Expected ArrayLiteral slice key list, got: {}",
+                        right.kind.kind_name()
+                    ),
+                }
+            }
+            _ => panic!(
+                "Expected Binary hash-slice node, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
+    #[test]
+    fn scalar_ref_hash_slice_list_preserves_base_target() {
+        let code = "@$href{'a', 'b'};";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        match &expr.kind {
+            NodeKind::Binary { op, left, right } => {
+                assert_eq!(op, "{}", "Expected {{}} hash-slice operator, got: {op}");
+                match &left.kind {
+                    NodeKind::Variable { sigil, name } => {
+                        assert_eq!(sigil, "@", "Expected @ sigil on hash-slice target");
+                        assert_eq!(name, "$href", "Expected scalar-ref hash target, got: {name}");
+                    }
+                    _ => panic!(
+                        "Expected Variable node as hash-slice target, got: {}",
+                        left.kind.kind_name()
+                    ),
+                }
+                match &right.kind {
+                    NodeKind::ArrayLiteral { elements } => {
+                        assert_eq!(elements.len(), 2, "Expected two hash-slice keys");
+                    }
+                    _ => panic!(
+                        "Expected ArrayLiteral slice key list, got: {}",
+                        right.kind.kind_name()
+                    ),
+                }
+            }
+            _ => panic!(
+                "Expected Binary hash-slice node, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
     // ---------------------------------------------------------------
     // Multi-level qualified variable with hex subscript
     // Perl: $Text::Unidecode::Char[0xff]

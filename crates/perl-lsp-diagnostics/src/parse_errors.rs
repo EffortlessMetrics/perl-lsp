@@ -16,7 +16,7 @@ use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 ///
 /// Every diagnostic includes:
 /// - A clear human-readable message describing what went wrong
-/// - An appropriate severity level (always `Error` for parse errors)
+/// - An appropriate severity level
 /// - A diagnostic code (`syntax-error`) for IDE quick-fix integration
 /// - An optional suggestion describing how to fix the issue
 #[allow(dead_code)]
@@ -80,11 +80,25 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
 
     Diagnostic {
         range: (location, location + 1),
-        severity: DiagnosticSeverity::Error,
+        severity: parse_error_severity(error, &message),
         code: Some("syntax-error".to_string()),
         message,
         related_information: Vec::new(),
         tags: Vec::new(),
         suggestion,
     }
+}
+
+pub(crate) fn parse_error_severity(error: &ParseError, message: &str) -> DiagnosticSeverity {
+    if matches!(error, ParseError::SyntaxError { .. })
+        && is_unknown_subroutine_attribute_warning(message)
+    {
+        DiagnosticSeverity::Warning
+    } else {
+        DiagnosticSeverity::Error
+    }
+}
+
+fn is_unknown_subroutine_attribute_warning(message: &str) -> bool {
+    message.starts_with("unknown subroutine attribute ':")
 }

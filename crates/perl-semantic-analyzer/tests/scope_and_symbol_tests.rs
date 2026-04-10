@@ -176,6 +176,205 @@ print $client;
     Ok(())
 }
 
+#[test]
+fn scope_try_catch_binds_catch_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        "catch variable should be declared inside catch block: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        "used catch variable should not be reported as unused: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_shadowing_is_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+my $e = 1;
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    let shadowing = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::VariableShadowing && i.variable_name == "$e")
+        .ok_or("expected catch-variable shadowing issue")?;
+    assert!(
+        has_issue(&issues, IssueKind::VariableShadowing, "e"),
+        "catch variable should report shadowing against outer scope: {:?}",
+        issues
+    );
+    assert_eq!(
+        &code[shadowing.range.0..shadowing.range.1],
+        "$e",
+        "catch-variable shadowing range should target the catch parameter"
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::UndeclaredVariable && i.variable_name == "$e"),
+        "shadowed catch variable should still be bound in catch scope: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_variable_does_not_escape() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+print $e;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "$e"),
+        "catch variable should not be visible after the catch block: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_unused_variable_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print "handled";
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    let unused = issues
+        .iter()
+        .find(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e")
+        .ok_or("expected unused catch-variable issue")?;
+    assert!(
+        issues.iter().any(|i| i.kind == IssueKind::UnusedVariable && i.variable_name == "$e"),
+        "unused catch variable should be reported: {:?}",
+        issues
+    );
+    assert_eq!(
+        &code[unused.range.0..unused.range.1],
+        "$e",
+        "unused catch-variable range should target the catch parameter"
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_try_catch_inner_redeclaration_stays_same_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    my $e = "inner";
+    print $e;
+}
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.kind == IssueKind::VariableRedeclaration && i.variable_name == "$e"),
+        "inner catch declaration should be a same-scope redeclaration: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| i.kind == IssueKind::VariableShadowing && i.variable_name == "$e"),
+        "inner catch declaration should not be treated as nested shadowing: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_dbmopen_initializes_hash_at_position_0() -> Result<(), Box<dyn std::error::Error>> {
+    // `dbmopen %hash, $file, $mode` ties %hash to a DBM file.
+    // The hash at position 0 is initialized by the builtin and must not be
+    // flagged as undeclared or uninitialized when used afterwards.
+    let code = r#"
+use strict;
+dbmopen my %db, 'mydb', 0644;
+print $db{key};
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "%db"
+        }),
+        "dbmopen should declare, initialize, and consume %db (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn scope_shmread_initializes_buffer_at_position_1() -> Result<(), Box<dyn std::error::Error>> {
+    // `shmread $id, my $buffer, $pos, $size` reads shared memory into $buffer.
+    // The buffer at position 1 is initialized by the builtin and must not be
+    // flagged as undeclared or uninitialized when used afterwards.
+    let code = r#"
+use strict;
+my $id = 1;
+shmread $id, my $buffer, 0, 1024;
+print $buffer;
+"#;
+
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(
+                i.kind,
+                IssueKind::UndeclaredVariable
+                    | IssueKind::UninitializedVariable
+                    | IssueKind::UnusedVariable
+            ) && i.variable_name == "$buffer"
+        }),
+        "shmread should declare, initialize, and consume $buffer (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Variable Scope Resolution — our
 // ===========================================================================
@@ -806,6 +1005,10 @@ push @{$arrayref}, 2;
 my $hashref;
 $hashref->{k};
 
+my $hashslice_ref = { a => 1, b => 2 };
+my @vals = %$hashslice_ref{'a', 'b'};
+my @vals_list = @$hashslice_ref{'a', 'b'};
+
 my $value = 1;
 my $scalarref = \$value;
 $$scalarref;
@@ -827,6 +1030,17 @@ $arr[0];
         .count();
     assert_eq!(unused_hashref, 0, "$hashref used via arrow dereference should not be unused");
 
+    let unused_hashslice_ref = issues
+        .iter()
+        .filter(|i| {
+            i.kind == IssueKind::UnusedVariable && i.variable_name.contains("hashslice_ref")
+        })
+        .count();
+    assert_eq!(
+        unused_hashslice_ref, 0,
+        "$hashslice_ref used via hash slice dereference should not be unused"
+    );
+
     let unused_scalarref = issues
         .iter()
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("scalarref"))
@@ -838,6 +1052,71 @@ $arr[0];
         .filter(|i| i.kind == IssueKind::UnusedVariable && i.variable_name.contains("arr"))
         .count();
     assert_eq!(unused_arr, 0, "@arr used via direct indexing should not be unused");
+
+    Ok(())
+}
+
+#[test]
+fn unused_variable_used_via_coderef_and_glob_dereference_forms()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $cb = sub { 1 };
+&$cb();
+
+my $gref = *STDOUT{IO};
+print *$gref;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("cb")
+        }),
+        "$cb used via coderef invocation should not be flagged: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("gref")
+        }),
+        "$gref used via glob dereference should not be flagged: {:?}",
+        issues
+    );
+
+    Ok(())
+}
+
+#[test]
+fn unused_variable_used_via_dynamic_method_deref_forms() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my $obj = bless {}, 'Foo';
+my $method = 'method';
+$obj->${method}();
+$obj->${\'method'}();
+$obj->$method();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("obj")
+        }),
+        "$obj used via dynamic method deref should not be flagged: {:?}",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+                && i.variable_name.contains("method")
+        }),
+        "$method used via dynamic method selection should not be flagged: {:?}",
+        issues
+    );
 
     Ok(())
 }
@@ -1457,6 +1736,148 @@ fn edge_scope_issue_range_within_source() -> Result<(), Box<dyn std::error::Erro
         assert!(issue.range.0 <= code.len(), "range start should be within source");
         assert!(issue.range.1 <= code.len(), "range end should be within source");
         assert!(issue.range.0 <= issue.range.1, "range start should be <= end");
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// 17. Position-aware builtin declaration handling (read/sysread/recv at pos 1)
+// ===========================================================================
+
+#[test]
+fn read_buffer_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // `read $fh, my $buffer, 1024` — $buffer is declared at position 1, not 0.
+    // It should not be flagged as undeclared, uninitialized, or unused.
+    let code = r#"
+use strict;
+open my $fh, '<', 'file.txt';
+read $fh, my $buffer, 1024;
+print $buffer;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$buffer", "$fh"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "read buffer/handle should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn sysread_buffer_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // `sysread $fh, my $buf, 512` — position 1 is the declaration.
+    let code = r#"
+use strict;
+open my $fh, '<', 'file.txt';
+sysread $fh, my $buf, 512;
+print $buf;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$buf", "$fh"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "sysread buffer/handle should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn recv_buffer_declaration_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    // `recv $sock, my $data, 1024, 0` — position 1 is the declaration.
+    let code = r#"
+use strict;
+socket my $sock, 2, 1, 0;
+recv $sock, my $data, 1024, 0;
+print $data;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$data", "$sock"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "recv buffer/socket should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn read_position_zero_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    // Position 0 in `read` is an existing filehandle, NOT a declaration target.
+    // Passing a bare (non-declaration) variable at position 0 should not affect its
+    // declaration status — it must have been declared separately.
+    let code = r#"
+use strict;
+my $fh = \*STDIN;
+my $buffer;
+read $fh, $buffer, 1024;
+print $buffer;
+"#;
+    let issues = scope_issues_strict(code);
+    // $fh was declared with `my` — should not be flagged at all
+    assert!(
+        !issues.iter().any(|i| {
+            i.variable_name.contains("fh")
+                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+        }),
+        "existing $fh should not be flagged (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn socketpair_both_positions_declared() -> Result<(), Box<dyn std::error::Error>> {
+    // `socketpair my $a, my $b, ...` — positions 0 and 1 are both declarations.
+    let code = r#"
+use strict;
+socketpair my $a, my $b, 2, 1, 0;
+print $a;
+print $b;
+"#;
+    let issues = scope_issues_strict(code);
+    for var in ["$a", "$b"] {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == var
+            }),
+            "socketpair handle should not be flagged: {} (issues: {:?})",
+            var,
+            issues
+        );
     }
     Ok(())
 }

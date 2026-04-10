@@ -132,6 +132,29 @@ fn test_severity_parse_errors_are_error_level() -> Result<(), Box<dyn std::error
 }
 
 #[test]
+fn test_unknown_subroutine_attribute_is_warning() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "sub foo :Private { }\n";
+    let output = Parser::new(source).parse_with_recovery();
+    let ast = Arc::new(output.ast);
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diags = provider.get_diagnostics(&ast, &output.diagnostics, source, None);
+
+    let unknown_attr: Vec<_> = diags
+        .iter()
+        .filter(|d| d.message.contains("unknown subroutine attribute ':Private'"))
+        .collect();
+
+    assert_eq!(
+        unknown_attr.len(),
+        1,
+        "expected exactly one unknown-attribute diagnostic, got: {diags:?}"
+    );
+    assert_eq!(unknown_attr[0].severity, DiagnosticSeverity::Warning);
+    assert_eq!(unknown_attr[0].code.as_deref(), Some("PL002"));
+    Ok(())
+}
+
+#[test]
 fn test_severity_missing_strict_is_information() -> Result<(), Box<dyn std::error::Error>> {
     // A program with no strict/warnings should get Information-level diagnostics
     let source = "my $x = 1;\n";
@@ -170,6 +193,90 @@ fn test_severity_unused_variable_is_warning() -> Result<(), Box<dyn std::error::
             "unused-variable should carry DiagnosticTag::Unnecessary"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn test_try_catch_variable_is_declared_inside_catch() -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let diags = diagnostics_for(source);
+    let catch_var_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| {
+            matches!(d.code.as_deref(), Some("PL102") | Some("PL103") | Some("PL110"))
+                && d.message.contains("$e")
+        })
+        .collect();
+
+    assert!(
+        catch_var_diags.is_empty(),
+        "catch variable should not produce scope diagnostics inside catch: {:?}",
+        catch_var_diags
+    );
+    Ok(())
+}
+
+#[test]
+fn test_try_catch_variable_does_not_escape_into_outer_scope()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+use strict;
+use feature 'try';
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+print $e;
+"#;
+
+    let diags = diagnostics_for(source);
+    let undeclared: Vec<_> = diags
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("PL103") && d.message.contains("$e"))
+        .collect();
+
+    assert!(
+        !undeclared.is_empty(),
+        "catch variable should remain undeclared outside the catch block"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_try_catch_variable_diagnostic_range_targets_parameter()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+use strict;
+use feature 'try';
+my $e = 1;
+try {
+    die "boom";
+} catch ($e) {
+    print $e;
+}
+"#;
+
+    let diags = diagnostics_for(source);
+    let shadowing = diags
+        .iter()
+        .find(|d| d.message.contains("shadows") && d.message.contains("$e"))
+        .ok_or("expected catch-variable shadowing diagnostic")?;
+
+    assert_eq!(
+        &source[shadowing.range.0..shadowing.range.1],
+        "$e",
+        "catch-variable diagnostic range should target the catch parameter"
+    );
     Ok(())
 }
 
