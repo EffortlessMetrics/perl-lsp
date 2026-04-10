@@ -226,6 +226,24 @@ fn read_message_with_unicode_body() -> io::Result<()> {
 }
 
 #[test]
+fn read_message_replaces_invalid_utf8_in_json_strings() -> io::Result<()> {
+    let mut body = br#"{"jsonrpc":"2.0","id":1,"method":"test","params":{"text":"abc"#.to_vec();
+    body.push(0xFF);
+    body.extend_from_slice(br#""}}"#);
+
+    let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+    frame.extend_from_slice(&body);
+    let mut reader = BufReader::new(Cursor::new(frame));
+
+    let req = read_message(&mut reader)?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+    let params =
+        req.params.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
+    assert_eq!(params["text"], "abc\u{FFFD}");
+    Ok(())
+}
+
+#[test]
 fn read_message_large_body() -> io::Result<()> {
     let big_value = "x".repeat(100_000);
     let body =
