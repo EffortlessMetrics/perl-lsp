@@ -1181,7 +1181,8 @@ fn test_index_coordinator_check_limits_none_when_ok() {
 fn test_index_coordinator_check_limits_prefers_file_count_over_symbol_count()
 -> Result<(), Box<dyn std::error::Error>> {
     use perl_workspace_index::workspace::workspace_index::{
-        DegradationReason as IxDegradationReason, IndexPerformanceCaps, ResourceKind as IxResourceKind,
+        DegradationReason as IxDegradationReason, IndexPerformanceCaps,
+        ResourceKind as IxResourceKind,
     };
 
     let limits = IndexResourceLimits {
