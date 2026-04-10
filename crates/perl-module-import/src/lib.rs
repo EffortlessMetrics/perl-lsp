@@ -248,20 +248,14 @@ fn classify_use_import_list(rest: &str) -> ImportListForm {
         return ImportListForm::Default;
     }
 
-    if let Some(after_open) = trimmed.strip_prefix('(') {
-        if let Some(close_idx) = after_open.find(')') {
-            if after_open[..close_idx].trim().is_empty() {
-                let after_close = after_open[close_idx + 1..].trim_start();
-                if after_close.is_empty()
-                    || after_close.starts_with(';')
-                    || after_close.starts_with('#')
-                {
-                    return ImportListForm::Empty;
-                }
-            }
+    if let Some(after_open) = trimmed.strip_prefix('(')
+        && let Some(close_idx) = after_open.find(')')
+        && after_open[..close_idx].trim().is_empty()
+    {
+        let after_close = after_open[close_idx + 1..].trim_start();
+        if after_close.is_empty() || after_close.starts_with(';') || after_close.starts_with('#') {
+            return ImportListForm::Empty;
         }
-
-        return ImportListForm::Explicit;
     }
 
     ImportListForm::Explicit
