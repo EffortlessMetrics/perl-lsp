@@ -27,6 +27,9 @@ static PACKAGE_ARROW_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock
 static VAR_METHOD_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
+static SUPER_METHOD_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
 static MOJO_STRING_ROUTE_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
@@ -87,6 +90,18 @@ fn get_var_method_regex() -> Result<&'static regex::Regex, JsonRpcError> {
         .map_err(|err| {
             crate::protocol::internal_error(&format!(
                 "Failed to initialize variable method-call regex: {err}"
+            ))
+        })
+}
+
+#[cfg(feature = "workspace")]
+fn get_super_method_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    SUPER_METHOD_RE
+        .get_or_init(|| regex::Regex::new(r"\bSUPER::([A-Za-z_][A-Za-z0-9_]*)"))
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize SUPER method-call regex: {err}"
             ))
         })
 }
@@ -340,7 +355,7 @@ fn inherited_method_definition_location(
                         .class_models
                         .into_iter()
                         .find(|model| model.name == package_name)
-                        .map(|model| model.parents.into_iter().chain(model.roles).collect())
+                        .map(|model| model.parents)
                         .unwrap_or_default()
                 })
                 .clone();
@@ -687,6 +702,63 @@ impl LspServer {
                                     crate::workspace_index::lsp_adapter::to_lsp_location(
                                         &def_location,
                                     )
+                                {
+                                    return Ok(Some(json!([lsp_location])));
+                                }
+                            }
+                        }
+                    }
+
+                    // Attempt to resolve `SUPER::method` calls using the current package's
+                    // inheritance chain before falling back to generic fully-qualified lookup.
+                    let current_package = doc
+                        .ast
+                        .as_ref()
+                        .map(|ast| {
+                            let byte_offset = self.pos16_to_offset(doc, line, character);
+                            crate::declaration::current_package_at(ast, byte_offset)
+                        })
+                        .unwrap_or("main");
+
+                    let super_re = get_super_method_regex()?;
+                    for cap in super_re.captures_iter(&text_around) {
+                        if let Some(method_match) = cap.get(1)
+                            && cursor_in_text >= method_match.start()
+                            && cursor_in_text <= method_match.end()
+                        {
+                            if let Some(ref ast) = doc.ast {
+                                let analyzer =
+                                    crate::semantic::SemanticAnalyzer::analyze_with_source(
+                                        ast, &doc.text,
+                                    );
+                                if let Some(location) = analyzer.resolve_inherited_method_location(
+                                    &current_package,
+                                    method_match.as_str(),
+                                ) {
+                                    let lsp_start = self.offset_to_pos16(doc, location.start);
+                                    let lsp_end = self.offset_to_pos16(doc, location.end);
+                                    return Ok(Some(json!([{
+                                        "uri": uri,
+                                        "range": {
+                                            "start": {"line": lsp_start.0, "character": lsp_start.1},
+                                            "end": {"line": lsp_end.0, "character": lsp_end.1},
+                                        },
+                                    }])));
+                                }
+                            }
+
+                            #[cfg(feature = "workspace")]
+                            {
+                                if let Some(coordinator) = self.coordinator()
+                                    && let Some(def_location) = inherited_method_definition_location(
+                                        coordinator.index(),
+                                        &current_package,
+                                        method_match.as_str(),
+                                    )
+                                    && let Some(lsp_location) =
+                                        crate::workspace_index::lsp_adapter::to_lsp_location(
+                                            &def_location,
+                                        )
                                 {
                                     return Ok(Some(json!([lsp_location])));
                                 }

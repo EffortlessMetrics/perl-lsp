@@ -22,6 +22,16 @@ fn assert_valid_location(location: &serde_json::Value) {
     assert!(range.get("end").is_some(), "Range must have 'end' position");
 }
 
+fn find_line_char(code: &str, needle: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+    for (line_idx, line) in code.lines().enumerate() {
+        if let Some(char_idx) = line.find(needle) {
+            return Ok((line_idx as u32, char_idx as u32));
+        }
+    }
+
+    Err(format!("could not find '{needle}' in test source").into())
+}
+
 // ---------------------------------------------------------------------------
 // Test 1: Package::function() navigates to the function in Package.pm
 // ---------------------------------------------------------------------------
@@ -224,6 +234,125 @@ sub greet {
         let uri = first["uri"].as_str().ok_or("Expected URI")?;
         assert!(uri.contains("Animal.pm"), "Definition should point to Animal.pm, got: {}", uri);
     }
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_super_method_uses_parent_chain() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/Animal.pm",
+        r#"package Base;
+sub greet { "base" }
+
+package Child;
+use parent 'Base';
+sub greet {
+    my $self = shift;
+    return $self->SUPER::greet();
+}
+
+1;
+"#,
+    )?;
+
+    harness.barrier();
+
+    let (line, character) = find_line_char(
+        r#"package Base;
+sub greet { "base" }
+
+package Child;
+use parent 'Base';
+sub greet {
+    my $self = shift;
+    return $self->SUPER::greet();
+}
+
+1;
+"#,
+        "SUPER::greet",
+    )?;
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///lib/Animal.pm"},
+            "position": {"line": line, "character": character + 8}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected array result for SUPER definition")?;
+    assert!(!locations.is_empty(), "SUPER::greet should resolve to parent implementation");
+    let first = &locations[0];
+    assert_valid_location(first);
+    assert!(
+        first["uri"].as_str().unwrap_or("").contains("Animal.pm"),
+        "SUPER::greet should resolve within the current file, got: {first:?}"
+    );
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(1),
+        "SUPER::greet should navigate to Base::greet"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_super_method_respects_c3_mro() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let code = r#"package Root;
+sub greet { "root" }
+
+package Left;
+use parent 'Root';
+
+package Right;
+use parent 'Root';
+sub greet { "right" }
+
+package Child;
+use mro 'c3';
+use parent 'Left', 'Right';
+sub greet {
+    my $self = shift;
+    return $self->SUPER::greet();
+}
+
+1;
+"#;
+
+    harness.open("file:///lib/Animal.pm", code)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(code, "SUPER::greet")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///lib/Animal.pm"},
+            "position": {"line": line, "character": character + 8}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected array result for SUPER definition")?;
+    assert!(!locations.is_empty(), "SUPER::greet should resolve under C3 mro");
+    let first = &locations[0];
+    assert_valid_location(first);
+    assert!(
+        first["uri"].as_str().unwrap_or("").contains("Animal.pm"),
+        "SUPER::greet should resolve within the current file, got: {first:?}"
+    );
+    assert_eq!(
+        first["range"]["start"]["line"].as_u64(),
+        Some(8),
+        "C3 mro should resolve to Right::greet, not the Root fallback"
+    );
 
     Ok(())
 }
