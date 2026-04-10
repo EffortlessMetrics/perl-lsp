@@ -89,6 +89,17 @@ where
                 walk_node(finally, func);
             }
         }
+        NodeKind::Given { expr, body } => {
+            walk_node(expr, func);
+            walk_node(body, func);
+        }
+        NodeKind::When { condition, body } => {
+            walk_node(condition, func);
+            walk_node(body, func);
+        }
+        NodeKind::Default { body } => {
+            walk_node(body, func);
+        }
         NodeKind::Unary { operand, .. } => {
             walk_node(operand, func);
         }
