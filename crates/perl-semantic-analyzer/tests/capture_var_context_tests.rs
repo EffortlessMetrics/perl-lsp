@@ -246,3 +246,39 @@ fn dollar_zero_is_not_capture_var_no_warn() -> Result<(), Box<dyn std::error::Er
     );
     Ok(())
 }
+
+// ===========================================================================
+// 9. String interpolation edge case (Phase 1 limitation)
+// ===========================================================================
+
+#[test]
+fn capture_var_in_double_quoted_string_warns() -> Result<(), Box<dyn std::error::Error>> {
+    // Phase 1: $1 in a double-quoted string without prior regex match will warn.
+    // This is a Phase 1 limitation — interpolated $1 variables are flagged equally to direct use.
+    // Future: Flow-sensitive analysis may distinguish string context.
+    let code = r#"my $str = "matched: $1";"#;
+    let issues = scope_issues(code);
+    assert!(
+        has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
+        "Phase 1: $1 in string without regex match produces warning (acceptable limitation); issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn capture_var_in_string_after_match_no_warn() -> Result<(), Box<dyn std::error::Error>> {
+    // Even in a string, if a regex match has occurred in scope, no warn
+    let code = r#"
+my $str = "hello";
+$str =~ /(\w+)/;
+my $msg = "matched: $1";
+"#;
+    let issues = scope_issues(code);
+    assert!(
+        !has_issue(&issues, IssueKind::CaptureVarWithoutRegexMatch, "1"),
+        "Should NOT warn about $1 in string after regex match in scope; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
