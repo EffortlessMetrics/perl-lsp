@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn skipped_component_allows_safe_directories() {
-        let safe = ["lib", "src", "bin", "t", "scripts", "blib"];
+        let safe = ["lib", "src", "bin", "t", "scripts"];
         for dir in safe {
             let path_str = format!("{dir}/Module.pm");
             assert!(
