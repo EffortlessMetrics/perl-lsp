@@ -24,6 +24,15 @@ This directory contains comprehensive tests for the Perl LSP server implementati
 - `lsp_selection_range_tests.rs` - Smart selection
 - `lsp_on_type_formatting_tests.rs` - Auto-formatting
 
+
+### Behavior-Driven Parser Scenarios
+- `parser_bdd_scenarios.rs` - Given/When/Then coverage for parser stories:
+  - subroutine and assignment flow
+  - regex substitution with flags
+  - `given/when/default` control flow
+  - malformed input recovery behavior
+  - multi-statement realistic script stability
+
 ### Stress & Performance Tests
 - `lsp_stress_tests.rs` - Resource exhaustion tests
 - `lsp_memory_pressure.rs` - Memory limits testing
