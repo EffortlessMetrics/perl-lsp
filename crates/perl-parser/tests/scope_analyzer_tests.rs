@@ -735,3 +735,42 @@ print($a[0]); # Should resolve to @a
         issues
     );
 }
+
+#[test]
+fn test_open_my_declaration_is_tracked() {
+    let code = r#"
+use strict;
+use warnings;
+open my $fh, '<', 'file.txt' or die $!;
+print <$fh>;
+close $fh;
+"#;
+    let issues = analyze_code(code);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$fh"),
+        "Unexpected undeclared variable error for $fh declared via open my: {:?}",
+        issues
+    );
+}
+
+#[test]
+fn test_pipe_my_declarations_are_tracked() {
+    let code = r#"
+use strict;
+use warnings;
+pipe my $read_fh, my $write_fh or die $!;
+close $read_fh;
+close $write_fh;
+"#;
+    let issues = analyze_code(code);
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable)
+                && (i.variable_name == "$read_fh" || i.variable_name == "$write_fh")
+        }),
+        "Unexpected undeclared variable error for pipe my declarations: {:?}",
+        issues
+    );
+}
