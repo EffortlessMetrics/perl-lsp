@@ -30,6 +30,10 @@ Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CU
 | see what is true now | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) |
 | see the current release plan | [project/ROADMAP.md](project/ROADMAP.md) |
 | work on the codebase | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
+| understand crate boundaries before changing code | [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md) |
+| follow command recipes for build/test/dev workflows | [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md) |
+| implement or debug LSP behavior | [reference/LSP_IMPLEMENTATION_GUIDE.md](reference/LSP_IMPLEMENTATION_GUIDE.md) |
+| work on debugger flows (DAP) | [tutorials/DAP_USER_GUIDE.md](tutorials/DAP_USER_GUIDE.md) |
 | browse the full docs map | [INDEX.md](INDEX.md) |
 
 ## Docs by Type
@@ -50,3 +54,4 @@ just status-check
 - Put computed metrics in [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), not scattered through the docs tree.
 - Update [project/ROADMAP.md](project/ROADMAP.md) when the active milestone or release framing changes.
 - Keep top-level summary docs short and link back to the canonical project docs.
+- When adding a new guide, add at least one pointer from this front door so new contributors can discover it quickly.
