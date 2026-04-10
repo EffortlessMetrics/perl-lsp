@@ -338,6 +338,8 @@ pub enum WebFrameworkKind {
     Dancer2,
     /// `use Mojolicious::Lite;`
     MojoliciousLite,
+    /// `use Plack::Builder;`
+    PlackBuilder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -657,6 +659,8 @@ impl SymbolExtractor {
                     is_write: false,
                 };
                 self.table.add_reference(reference);
+
+                self.synthesize_plack_builder_symbols(name, args);
 
                 for arg in args {
                     self.visit_node(arg);
@@ -1563,6 +1567,145 @@ impl SymbolExtractor {
         Some(2)
     }
 
+    /// Synthesize Plack::Builder middleware and mount symbols from a builder block.
+    fn synthesize_plack_builder_symbols(&mut self, name: &str, args: &[Node]) {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return;
+        };
+        if flags.web_framework != Some(WebFrameworkKind::PlackBuilder) || name != "builder" {
+            return;
+        }
+
+        let Some(block) = args.first() else {
+            return;
+        };
+        let NodeKind::Block { statements } = &block.kind else {
+            return;
+        };
+
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for statement in statements {
+            let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+                continue;
+            };
+            let NodeKind::FunctionCall { name: stmt_name, args: stmt_args } = &expression.kind
+            else {
+                continue;
+            };
+
+            match stmt_name.as_str() {
+                "enable" => {
+                    self.synthesize_plack_enable_symbol(statement, stmt_args, scope_id, &package);
+                }
+                "mount" => {
+                    self.synthesize_plack_mount_symbol(statement, stmt_args, scope_id, &package);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn synthesize_plack_enable_symbol(
+        &mut self,
+        statement: &Node,
+        args: &[Node],
+        scope_id: ScopeId,
+        _package: &str,
+    ) {
+        let Some(first) = args.first() else {
+            return;
+        };
+        let Some(raw_name) = Self::single_symbol_name(first) else {
+            return;
+        };
+        let middleware_name = if raw_name.contains("::") {
+            raw_name
+        } else {
+            format!("Plack::Middleware::{raw_name}")
+        };
+        if middleware_name.is_empty() {
+            return;
+        }
+
+        if self.table.symbols.get(&middleware_name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Package
+                    && symbol.declaration.as_deref() == Some("enable")
+                    && symbol
+                        .attributes
+                        .iter()
+                        .any(|attr| attr == &format!("middleware={middleware_name}"))
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: middleware_name.clone(),
+            qualified_name: middleware_name.clone(),
+            kind: SymbolKind::Package,
+            location: statement.location,
+            scope_id,
+            declaration: Some("enable".to_string()),
+            documentation: Some(format!("PSGI middleware {middleware_name}")),
+            attributes: vec![
+                "framework=Plack::Builder".to_string(),
+                format!("middleware={middleware_name}"),
+            ],
+        });
+    }
+
+    fn synthesize_plack_mount_symbol(
+        &mut self,
+        statement: &Node,
+        args: &[Node],
+        scope_id: ScopeId,
+        _package: &str,
+    ) {
+        let Some(path_node) = args.first() else {
+            return;
+        };
+        let Some(path) = Self::single_symbol_name(path_node) else {
+            return;
+        };
+        if path.is_empty() {
+            return;
+        }
+
+        let target = args
+            .get(1)
+            .map(Self::value_summary)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "$app".to_string());
+
+        if self.table.symbols.get(&path).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some("mount")
+                    && symbol.attributes.iter().any(|attr| attr == &format!("mount_path={path}"))
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: path.clone(),
+            qualified_name: path.clone(),
+            kind: SymbolKind::Subroutine,
+            location: statement.location,
+            scope_id,
+            declaration: Some("mount".to_string()),
+            documentation: Some(format!("PSGI mount {path} -> {target}")),
+            attributes: vec![
+                "framework=Plack::Builder".to_string(),
+                format!("mount_path={path}"),
+                format!("mount_target={target}"),
+            ],
+        });
+    }
+
     /// Extract Class::Accessor generated accessors from `mk_*_accessors` calls.
     fn try_extract_class_accessor_declaration(&mut self, statement: &Node) -> bool {
         let NodeKind::ExpressionStatement { expression } = &statement.kind else {
@@ -1703,6 +1846,7 @@ impl SymbolExtractor {
         let web_kind = match module {
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
+            "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
             _ => None,
         };
         if let Some(kind) = web_kind {
@@ -2006,6 +2150,7 @@ impl SymbolExtractor {
                 Self::normalize_symbol_name(value).unwrap_or_else(|| value.clone())
             }
             NodeKind::Identifier { name } => name.clone(),
+            NodeKind::Variable { sigil, name } => format!("{sigil}{name}"),
             NodeKind::Number { value } => value.clone(),
             NodeKind::ArrayLiteral { elements } => {
                 let mut entries = Vec::new();

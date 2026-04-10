@@ -246,3 +246,85 @@ any '/multi' => sub { return 'multi' };
         "expected route symbol `/multi` from `any` route"
     );
 }
+
+// === Plack::Builder middleware chain detection ===
+
+#[test]
+fn plack_builder_enable_emits_middleware_symbol() {
+    let code = r#"
+use Plack::Builder;
+
+builder {
+    enable 'Static';
+    enable 'Plack::Middleware::Session';
+};
+"#;
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Plack::Middleware::Static", SymbolKind::Package),
+        "expected quoted middleware `Static` to normalize to `Plack::Middleware::Static`"
+    );
+    assert!(
+        has_symbol(&table, "Plack::Middleware::Session", SymbolKind::Package),
+        "expected quoted middleware `Plack::Middleware::Session` to be preserved"
+    );
+
+    let attrs = symbol_attrs(&table, "Plack::Middleware::Static", SymbolKind::Package);
+    assert!(
+        attrs.iter().any(|a| a == "framework=Plack::Builder"),
+        "expected Plack framework attribute on middleware symbol, got: {attrs:?}"
+    );
+
+    let doc = symbol_doc(&table, "Plack::Middleware::Static", SymbolKind::Package);
+    assert!(
+        doc.is_some_and(|d| d.contains("middleware") && d.contains("Static")),
+        "expected middleware documentation to mention the normalized module name"
+    );
+}
+
+#[test]
+fn plack_builder_mount_emits_mount_symbol() {
+    let code = r#"
+use Plack::Builder;
+
+builder {
+    mount '/api' => $api_app;
+    mount '/' => $app;
+};
+"#;
+    let table = extract_symbols(code);
+
+    assert!(has_symbol(&table, "/api", SymbolKind::Subroutine), "expected `/api` mount symbol");
+    assert!(has_symbol(&table, "/", SymbolKind::Subroutine), "expected `/` mount symbol");
+
+    let attrs = symbol_attrs(&table, "/api", SymbolKind::Subroutine);
+    assert!(
+        attrs.iter().any(|a| a == "mount_path=/api"),
+        "expected mount path attribute on `/api`, got: {attrs:?}"
+    );
+    assert!(
+        attrs.iter().any(|a| a == "mount_target=$api_app"),
+        "expected mount target attribute on `/api`, got: {attrs:?}"
+    );
+}
+
+#[test]
+fn plack_builder_without_use_is_not_synthesized() {
+    let code = r#"
+builder {
+    enable Static;
+    mount '/api' => $api_app;
+};
+"#;
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "Plack::Middleware::Static", SymbolKind::Package),
+        "bare `builder` should not synthesize Plack middleware symbols"
+    );
+    assert!(
+        !has_symbol(&table, "/api", SymbolKind::Subroutine),
+        "bare `builder` should not synthesize mount symbols"
+    );
+}
