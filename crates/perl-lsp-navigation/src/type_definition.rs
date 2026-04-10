@@ -41,8 +41,22 @@ impl TypeDefinitionProvider {
         // Find the node at the given position
         let target_node = self.find_node_at_position(ast, line, character, source_text)?;
 
-        // Get the type name from the node
-        let type_name = self.extract_type_name(&target_node)?;
+        // First try Moose/Moo `has(... isa => Type)` attribute forms.
+        let type_name = self
+            .extract_has_type_constraint_name(
+                ast,
+                target_node.location.start,
+                target_node.location.end,
+            )
+            // Fall back to generic class / object / `isa` expression handling.
+            .or_else(|| self.extract_type_name(&target_node))?;
+
+        // Try to resolve custom type declarations before package/class names.
+        if let Some(locations) =
+            self.find_custom_type_definition_in_docs(&type_name, uri, documents)
+        {
+            return Some(locations);
+        }
 
         // Find the package/class definition — search all open documents
         self.find_package_definition_in_docs(&type_name, uri, documents)
@@ -65,6 +79,39 @@ impl TypeDefinitionProvider {
         for (doc_uri, source_text) in documents {
             if let Ok(ast) = perl_parser_core::Parser::new(source_text).parse() {
                 self.find_package_in_node(&ast, package_name, doc_uri, source_text, &mut locations);
+            }
+        }
+
+        if !locations.is_empty() { Some(locations) } else { None }
+    }
+
+    /// Find a custom Moose/Type::Tiny type declaration across all open documents.
+    ///
+    /// Supports bounded type-declaration forms such as `type UserID, ...` and
+    /// `subtype PositiveInt, ...`, which are sufficient for MooseX::Types and
+    /// Type::Tiny libraries used by the editor-facing provider path.
+    #[cfg(feature = "lsp-compat")]
+    fn find_custom_type_definition_in_docs(
+        &self,
+        type_name: &str,
+        _origin_uri: &str,
+        documents: &HashMap<String, String>,
+    ) -> Option<Vec<LocationLink>> {
+        let mut locations = Vec::new();
+
+        for (doc_uri, source_text) in documents {
+            if let Ok(ast) = perl_parser_core::Parser::new(source_text).parse() {
+                self.find_custom_type_in_node(
+                    &ast,
+                    type_name,
+                    doc_uri,
+                    source_text,
+                    &mut locations,
+                );
+            }
+
+            if locations.is_empty() {
+                self.find_custom_type_in_source(type_name, doc_uri, source_text, &mut locations);
             }
         }
 
@@ -174,6 +221,179 @@ impl TypeDefinitionProvider {
         }
     }
 
+    /// Extract the type name from a Moose/Moo `has(... isa => Type)` attribute.
+    #[cfg(feature = "lsp-compat")]
+    fn extract_has_type_constraint_name(
+        &self,
+        node: &Node,
+        target_start: usize,
+        target_end: usize,
+    ) -> Option<String> {
+        match &node.kind {
+            NodeKind::FunctionCall { name, args } if name == "has" => {
+                for arg in args {
+                    if let Some(type_name) = self.extract_has_type_constraint_name_from_node(
+                        arg,
+                        target_start,
+                        target_end,
+                    ) {
+                        return Some(type_name);
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        let mut found = None;
+        self.visit_children(node, |child| {
+            if found.is_none() {
+                found = self.extract_has_type_constraint_name(child, target_start, target_end);
+            }
+        });
+        found
+    }
+
+    /// Search a node for the `isa => Type` value that encloses the cursor.
+    #[cfg(feature = "lsp-compat")]
+    fn extract_has_type_constraint_name_from_node(
+        &self,
+        node: &Node,
+        target_start: usize,
+        target_end: usize,
+    ) -> Option<String> {
+        match &node.kind {
+            NodeKind::HashLiteral { pairs } => {
+                for (key, pair_value) in pairs {
+                    if matches!(&key.kind, NodeKind::String { value: key_name, .. } if key_name == "isa")
+                        && target_start >= pair_value.location.start
+                        && target_end <= pair_value.location.end
+                    {
+                        return match &pair_value.kind {
+                            NodeKind::Identifier { name } => Some(name.clone()),
+                            NodeKind::String { value, .. } => Some(value.clone()),
+                            NodeKind::Variable { name, .. } => Some(name.clone()),
+                            _ => None,
+                        };
+                    }
+                }
+            }
+            NodeKind::Binary { op, left, right } if op == "=>" => {
+                if matches!(&left.kind, NodeKind::Identifier { name } if name == "isa")
+                    && target_start >= right.location.start
+                    && target_end <= right.location.end
+                {
+                    return match &right.kind {
+                        NodeKind::Identifier { name } => Some(name.clone()),
+                        NodeKind::String { value, .. } => Some(value.clone()),
+                        NodeKind::Variable { name, .. } => Some(name.clone()),
+                        _ => None,
+                    };
+                }
+            }
+            _ => {}
+        }
+
+        let mut found = None;
+        self.visit_children(node, |child| {
+            if found.is_none() {
+                found = self.extract_has_type_constraint_name_from_node(
+                    child,
+                    target_start,
+                    target_end,
+                );
+            }
+        });
+        found
+    }
+
+    /// Return `true` when a function call looks like a type declaration.
+    #[cfg(feature = "lsp-compat")]
+    fn is_type_declaration_call(name: &str) -> bool {
+        matches!(name, "type" | "subtype" | "class_type" | "role_type" | "enum" | "declare")
+    }
+
+    /// Extract a declared type name from the arguments of a type declaration call.
+    #[cfg(feature = "lsp-compat")]
+    fn declared_type_name(args: &[Node]) -> Option<String> {
+        args.first().and_then(|arg| match &arg.kind {
+            NodeKind::Identifier { name } => Some(name.clone()),
+            NodeKind::String { value, .. } => Some(value.clone()),
+            NodeKind::Variable { name, .. } => Some(name.clone()),
+            _ => None,
+        })
+    }
+
+    /// Fallback textual scan for custom type declarations when the AST does not
+    /// expose the MooseX::Types DSL shape directly.
+    #[cfg(feature = "lsp-compat")]
+    fn find_custom_type_in_source(
+        &self,
+        type_name: &str,
+        uri: &str,
+        source_text: &str,
+        locations: &mut Vec<LocationLink>,
+    ) {
+        let mut offset = 0usize;
+
+        for line in source_text.split_inclusive('\n') {
+            let line_end = offset + line.len();
+            let body = line.strip_suffix('\n').unwrap_or(line);
+            let body = body.strip_suffix('\r').unwrap_or(body);
+            let trimmed = body.trim_start();
+            let leading_ws = body.len().saturating_sub(trimmed.len());
+            let start_offset = offset + leading_ws;
+
+            if Self::line_declares_custom_type(trimmed, type_name) {
+                self.push_location_link_from_offsets(
+                    start_offset,
+                    line_end,
+                    uri,
+                    source_text,
+                    locations,
+                );
+                return;
+            }
+
+            offset = line_end;
+        }
+    }
+
+    /// Return `true` when a source line looks like a supported custom type declaration.
+    #[cfg(feature = "lsp-compat")]
+    fn line_declares_custom_type(line: &str, type_name: &str) -> bool {
+        let keywords = ["type", "subtype", "class_type", "role_type", "enum", "declare"];
+
+        keywords.iter().any(|keyword| {
+            let Some(rest) = line.strip_prefix(keyword) else {
+                return false;
+            };
+
+            Self::first_declared_name(rest).as_deref().is_some_and(|declared| declared == type_name)
+        })
+    }
+
+    /// Extract the first declared identifier or string from a type declaration tail.
+    #[cfg(feature = "lsp-compat")]
+    fn first_declared_name(text: &str) -> Option<String> {
+        let mut rest = text.trim_start();
+        while rest.starts_with([',', '(', ')']) {
+            rest = rest[1..].trim_start();
+        }
+
+        if let Some(quoted) = rest.strip_prefix('"').or_else(|| rest.strip_prefix('\'')) {
+            let quote = rest.chars().next()?;
+            let value_end = quoted.find(quote)?;
+            return Some(quoted[..value_end].to_string());
+        }
+
+        let name: String = rest
+            .chars()
+            .take_while(|ch| ch.is_alphanumeric() || matches!(ch, '_' | ':' | '-'))
+            .collect();
+
+        if name.is_empty() { None } else { Some(name) }
+    }
+
     /// Try to infer the type of an object from its declaration or assignment
     #[cfg(feature = "lsp-compat")]
     fn infer_object_type(&self, object: &Node) -> Option<String> {
@@ -225,36 +445,7 @@ impl TypeDefinitionProvider {
     ) {
         match &node.kind {
             NodeKind::Package { name, .. } if name == package_name => {
-                // Convert byte offsets to LSP range using perl-parser-core utilities
-                let (target_start_line, target_start_char) =
-                    perl_parser_core::engine::position::offset_to_utf16_line_col(
-                        source_text,
-                        node.location.start,
-                    );
-                let (target_end_line, target_end_char) =
-                    perl_parser_core::engine::position::offset_to_utf16_line_col(
-                        source_text,
-                        node.location.end,
-                    );
-
-                let target_range = lsp_types::Range {
-                    start: lsp_types::Position {
-                        line: target_start_line,
-                        character: target_start_char,
-                    },
-                    end: lsp_types::Position { line: target_end_line, character: target_end_char },
-                };
-
-                // Create typed LocationLink for better UI experience
-                // Parse URI - if invalid, skip this location
-                if let Ok(target_uri) = lsp_types::Uri::from_str(uri) {
-                    locations.push(LocationLink {
-                        origin_selection_range: None, // Could be filled with the reference range
-                        target_uri,
-                        target_range,
-                        target_selection_range: target_range,
-                    });
-                }
+                self.push_location_link(node, uri, source_text, locations);
             }
             _ => {}
         }
@@ -263,6 +454,95 @@ impl TypeDefinitionProvider {
         self.visit_children(node, |child| {
             self.find_package_in_node(child, package_name, uri, source_text, locations);
         });
+    }
+
+    /// Recursively find type declarations by matching the declared name.
+    #[cfg(feature = "lsp-compat")]
+    fn find_custom_type_in_node(
+        &self,
+        node: &Node,
+        type_name: &str,
+        uri: &str,
+        source_text: &str,
+        locations: &mut Vec<LocationLink>,
+    ) {
+        match &node.kind {
+            NodeKind::FunctionCall { name, args } if Self::is_type_declaration_call(name) => {
+                if Self::declared_type_name(args).as_deref() == Some(type_name) {
+                    self.push_location_link(node, uri, source_text, locations);
+                }
+            }
+            _ => {}
+        }
+
+        self.visit_children(node, |child| {
+            self.find_custom_type_in_node(child, type_name, uri, source_text, locations);
+        });
+    }
+
+    /// Convert the current node range into an LSP `LocationLink` and push it.
+    #[cfg(feature = "lsp-compat")]
+    fn push_location_link(
+        &self,
+        node: &Node,
+        uri: &str,
+        source_text: &str,
+        locations: &mut Vec<LocationLink>,
+    ) {
+        let (target_start_line, target_start_char) =
+            perl_parser_core::engine::position::offset_to_utf16_line_col(
+                source_text,
+                node.location.start,
+            );
+        let (target_end_line, target_end_char) =
+            perl_parser_core::engine::position::offset_to_utf16_line_col(
+                source_text,
+                node.location.end,
+            );
+
+        let target_range = lsp_types::Range {
+            start: lsp_types::Position { line: target_start_line, character: target_start_char },
+            end: lsp_types::Position { line: target_end_line, character: target_end_char },
+        };
+
+        if let Ok(target_uri) = lsp_types::Uri::from_str(uri) {
+            locations.push(LocationLink {
+                origin_selection_range: None,
+                target_uri,
+                target_range,
+                target_selection_range: target_range,
+            });
+        }
+    }
+
+    /// Convert raw byte offsets into an LSP `LocationLink` and push it.
+    #[cfg(feature = "lsp-compat")]
+    fn push_location_link_from_offsets(
+        &self,
+        start_offset: usize,
+        end_offset: usize,
+        uri: &str,
+        source_text: &str,
+        locations: &mut Vec<LocationLink>,
+    ) {
+        let (target_start_line, target_start_char) =
+            perl_parser_core::engine::position::offset_to_utf16_line_col(source_text, start_offset);
+        let (target_end_line, target_end_char) =
+            perl_parser_core::engine::position::offset_to_utf16_line_col(source_text, end_offset);
+
+        let target_range = lsp_types::Range {
+            start: lsp_types::Position { line: target_start_line, character: target_start_char },
+            end: lsp_types::Position { line: target_end_line, character: target_end_char },
+        };
+
+        if let Ok(target_uri) = lsp_types::Uri::from_str(uri) {
+            locations.push(LocationLink {
+                origin_selection_range: None,
+                target_uri,
+                target_range,
+                target_selection_range: target_range,
+            });
+        }
     }
 
     /// Helper to visit children of a node
@@ -303,6 +583,12 @@ impl TypeDefinitionProvider {
             NodeKind::FunctionCall { args, .. } => {
                 for arg in args {
                     f(arg);
+                }
+            }
+            NodeKind::HashLiteral { pairs } => {
+                for (key, value) in pairs {
+                    f(key);
+                    f(value);
                 }
             }
             NodeKind::Subroutine { body, .. } => {

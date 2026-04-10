@@ -211,6 +211,67 @@ if ($pet isa Animal) {
 }
 
 #[test]
+fn test_type_definition_moose_type_library_resolves_custom_type()
+-> Result<(), Box<dyn std::error::Error>> {
+    let types_uri = "file:///lib/MyApp/Types.pm";
+    let types_code = r#"
+package MyApp::Types;
+use MooseX::Types -declare => [qw(UserID)];
+type UserID, where { /\A\d+\z/ };
+
+1;
+"#;
+    let _types_ast = perl_parser::Parser::new(types_code).parse()?;
+
+    let user_uri = "file:///lib/MyApp/User.pm";
+    let user_code = r#"
+package MyApp::User;
+use Moose;
+use MyApp::Types qw(UserID);
+
+has 'id' => (is => 'ro', isa => UserID);
+
+1;
+"#;
+    let user_ast = perl_parser::Parser::new(user_code).parse()?;
+
+    let line = user_code
+        .lines()
+        .position(|line| line.contains("isa => UserID"))
+        .ok_or("type use line not found")?;
+    let character = user_code
+        .lines()
+        .nth(line)
+        .and_then(|line| line.find("UserID"))
+        .ok_or("type use column not found")?;
+
+    let mut documents = std::collections::HashMap::new();
+    documents.insert(types_uri.to_string(), types_code.to_string());
+    documents.insert(user_uri.to_string(), user_code.to_string());
+
+    let provider = perl_lsp_navigation::TypeDefinitionProvider::new();
+    let locations = provider
+        .find_type_definition(&user_ast, line as u32, character as u32, user_uri, &documents)
+        .ok_or("Expected array from type definition")?;
+    assert!(
+        !locations.is_empty(),
+        "Expected custom Moose type definition to resolve, got: {locations:?}"
+    );
+
+    let target_uri = locations[0].target_uri.as_str();
+    assert_eq!(target_uri, types_uri, "type definition should resolve into the type library");
+
+    let target_line = locations[0].target_range.start.line as u64;
+    let expected_line = types_code
+        .lines()
+        .position(|line| line.contains("type UserID"))
+        .ok_or("type declaration line missing")? as u64;
+    assert_eq!(target_line, expected_line, "type definition should land on `type UserID`");
+
+    Ok(())
+}
+
+#[test]
 fn test_type_definition_no_type() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
     let _init = harness.initialize(None)?;
