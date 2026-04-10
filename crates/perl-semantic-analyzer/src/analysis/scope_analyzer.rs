@@ -658,6 +658,13 @@ impl ScopeAnalyzer {
                 // Some builtins consume declaration-capable filehandle arguments directly,
                 // e.g. `open my $fh, ...` or `pipe my $r, my $w;`. Those declarations should
                 // count as used and initialized by the builtin itself.
+                //
+                // Builtins that default to $_ when called with zero arguments implicitly
+                // read (and in some cases modify) $_. Mark it as used so that any lexically-
+                // scoped `my $_` in scope is not reported as unused or uninitialized.
+                if args.is_empty() && is_topic_defaulting_builtin(name) {
+                    let _ = scope.use_variable_parts("$", "_");
+                }
                 ancestors.push(node);
                 for arg in args {
                     self.analyze_node(arg, scope, ancestors, issues, context);
@@ -1641,6 +1648,37 @@ fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
 
 fn is_declaration_capable_builtin(name: &str) -> bool {
     !builtin_declaration_arg_positions(name).is_empty()
+}
+
+/// Builtins that operate on `$_` by default when called with zero arguments.
+///
+/// When any of these is invoked as a bare call (no args), Perl implicitly reads
+/// (and in some cases modifies) `$_`. Marking `$_` as used at call sites prevents
+/// false "unused" or "uninitialized" diagnostics for lexically-scoped `my $_`.
+fn is_topic_defaulting_builtin(name: &str) -> bool {
+    matches!(
+        name,
+        "chomp"
+            | "chop"
+            | "chr"
+            | "hex"
+            | "lc"
+            | "lcfirst"
+            | "length"
+            | "oct"
+            | "ord"
+            | "uc"
+            | "ucfirst"
+            | "abs"
+            | "int"
+            | "log"
+            | "sqrt"
+            | "cos"
+            | "sin"
+            | "exp"
+            | "print"
+            | "say"
+    )
 }
 
 /// Check if an identifier is a known filehandle
