@@ -2185,11 +2185,10 @@ impl SymbolExtractor {
             }
         }
 
-        if kind
-            .as_deref()
-            .is_some_and(|kind| matches!(kind, "Path" | "Local" | "Global" | "Regex" | "Chained"))
+        if let Some(action_kind) = kind.as_deref()
+            && matches!(action_kind, "Path" | "Local" | "Global" | "Regex" | "Chained")
         {
-            details.retain(|attr| Self::attribute_base_name(attr) != kind.as_deref().unwrap());
+            details.retain(|attr| Self::attribute_base_name(attr) != action_kind);
         }
 
         kind.map(|kind| (kind, details))
