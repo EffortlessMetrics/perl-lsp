@@ -22,6 +22,7 @@ const ALL_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::MissingWarnings,
     DiagnosticCode::UnusedVariable,
     DiagnosticCode::UndefinedVariable,
+    DiagnosticCode::CaptureVarWithoutRegexMatch,
     DiagnosticCode::MissingPackageDeclaration,
     DiagnosticCode::DuplicatePackage,
     DiagnosticCode::DuplicateSubroutine,
@@ -177,6 +178,7 @@ fn code_as_str_strict_warnings_range() -> Result<(), Box<dyn std::error::Error>>
     assert_eq!(DiagnosticCode::MissingWarnings.as_str(), "PL101");
     assert_eq!(DiagnosticCode::UnusedVariable.as_str(), "PL102");
     assert_eq!(DiagnosticCode::UndefinedVariable.as_str(), "PL103");
+    assert_eq!(DiagnosticCode::CaptureVarWithoutRegexMatch.as_str(), "PL112");
     Ok(())
 }
 
@@ -299,6 +301,20 @@ fn severity_warning_codes() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn severity_information_codes() -> Result<(), Box<dyn std::error::Error>> {
+    let information_codes = [DiagnosticCode::CaptureVarWithoutRegexMatch];
+    for code in &information_codes {
+        assert_eq!(
+            code.severity(),
+            DiagnosticSeverity::Information,
+            "{} should be Information severity",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn severity_hint_codes() -> Result<(), Box<dyn std::error::Error>> {
     let hint_codes = [
         DiagnosticCode::CriticSeverity3,
@@ -330,6 +346,7 @@ fn documentation_url_pl_codes_have_urls() -> Result<(), Box<dyn std::error::Erro
         (DiagnosticCode::MissingWarnings, "PL101"),
         (DiagnosticCode::UnusedVariable, "PL102"),
         (DiagnosticCode::UndefinedVariable, "PL103"),
+        (DiagnosticCode::CaptureVarWithoutRegexMatch, "PL112"),
         (DiagnosticCode::MissingPackageDeclaration, "PL200"),
         (DiagnosticCode::DuplicatePackage, "PL201"),
         (DiagnosticCode::DuplicateSubroutine, "PL300"),
@@ -433,6 +450,7 @@ fn category_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
         DiagnosticCode::MissingWarnings,
         DiagnosticCode::UnusedVariable,
         DiagnosticCode::UndefinedVariable,
+        DiagnosticCode::CaptureVarWithoutRegexMatch,
     ];
     for code in &sw_codes {
         assert_eq!(
@@ -1070,16 +1088,12 @@ fn parser_category_codes_are_all_errors() {
 }
 
 #[test]
-fn no_information_severity_codes_exist() {
-    // Current API has no Information-level codes
-    for code in ALL_CODES {
-        assert_ne!(
-            code.severity(),
-            DiagnosticSeverity::Information,
-            "no codes should be Information severity currently: {}",
-            code.as_str()
-        );
-    }
+fn information_severity_codes_are_explicitly_tracked() {
+    let info_codes: Vec<_> = ALL_CODES
+        .iter()
+        .filter(|code| code.severity() == DiagnosticSeverity::Information)
+        .collect();
+    assert_eq!(info_codes, vec![&DiagnosticCode::CaptureVarWithoutRegexMatch]);
 }
 
 #[test]
@@ -1163,8 +1177,8 @@ fn unused_variable_tag_is_exactly_unnecessary() {
 // --- Cross-cutting: ALL_CODES count ---
 
 #[test]
-fn all_codes_count_is_22() {
-    assert_eq!(ALL_CODES.len(), 22, "expected 22 diagnostic codes total");
+fn all_codes_count_is_23() {
+    assert_eq!(ALL_CODES.len(), 23, "expected 23 diagnostic codes total");
 }
 
 // --- DiagnosticCode: parse_code boundary values ---
@@ -1194,8 +1208,8 @@ fn parse_code_gaps_return_none() {
     // Note: PL104-PL111, PL403-PL404, PL500-PL501, PL600-PL602, PL700, PL800-PL806
     // are now assigned; only truly unassigned gaps are listed here.
     let gaps = [
-        "PL004", "PL050", "PL099", "PL112", "PL150", "PL199", "PL202", "PL250", "PL303", "PL399",
-        "PL499", "PL502", "PL599", "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
+        "PL004", "PL050", "PL099", "PL150", "PL199", "PL202", "PL250", "PL303", "PL399", "PL499",
+        "PL502", "PL599", "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
     ];
     for s in &gaps {
         assert!(DiagnosticCode::parse_code(s).is_none(), "expected None for unassigned code {}", s);
