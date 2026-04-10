@@ -756,6 +756,36 @@ advertised = true
     Ok(())
 }
 
+#[test]
+fn vendored_feature_catalogs_match_workspace_root_catalog() -> Result<(), Box<dyn std::error::Error>>
+{
+    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = manifest_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or("perl-feature-catalog should live under crates/")?;
+    let workspace_catalog = perl_feature_catalog::read_catalog(&repo_root.join("features.toml"))?;
+
+    let vendored_paths = [
+        repo_root.join("crates/perl-lsp/features_sot.toml"),
+        repo_root.join("crates/perl-dap/features_sot.toml"),
+        repo_root.join("crates/perl-parser/features_sot.toml"),
+        repo_root.join("crates/perl-lsp-feature-contracts/features_sot.toml"),
+    ];
+
+    for vendored_path in vendored_paths {
+        let vendored_catalog = perl_feature_catalog::read_catalog(&vendored_path)?;
+        assert_eq!(
+            vendored_catalog,
+            workspace_catalog,
+            "vendored catalog should stay in lockstep with workspace features.toml: {}",
+            vendored_path.display()
+        );
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // render_lsp_feature_catalog_module
 // ---------------------------------------------------------------------------
