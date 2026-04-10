@@ -192,8 +192,12 @@ print $phase_local;
 
         let issues = scope_issues_strict(&code);
         assert!(
-            has_issue(&issues, IssueKind::UndeclaredVariable, "$phase_local"),
-            "{phase} block lexical should not leak into outer scope: {:?}",
+            issues.iter().any(|i| {
+                i.kind == IssueKind::UndeclaredVariable
+                    && i.variable_name == "$phase_local"
+                    && i.line == 7
+            }),
+            "{phase} block lexical should not leak into outer scope at line 7: {:?}",
             issues
         );
         assert!(
@@ -223,8 +227,12 @@ CHECK {
 
     let issues = scope_issues_strict(code);
     assert!(
-        has_issue(&issues, IssueKind::UndeclaredVariable, "$phase_local"),
-        "lexicals declared in one phase block should not be visible in sibling phase blocks: {:?}",
+        issues.iter().any(|i| {
+            i.kind == IssueKind::UndeclaredVariable
+                && i.variable_name == "$phase_local"
+                && i.line == 8
+        }),
+        "lexicals declared in one phase block should not be visible in sibling phase blocks at line 8: {:?}",
         issues
     );
     Ok(())
