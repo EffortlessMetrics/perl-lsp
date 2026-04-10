@@ -307,11 +307,14 @@ describe('package.json health check command', () => {
     expect(cmd.title.toLowerCase()).toContain('health');
   });
 
-  test('runHealthCheck has an activation event so it works without a Perl file open', () => {
+  test('runHealthCheck is declared as a command so VSCode auto-activates the extension', () => {
     // runHealthCheck is palette-global (no when clause restricting to editorLangId == perl).
-    // Without its own activation event, VSCode will not load the extension when the user
-    // triggers the command from the command palette if no Perl file is active.
-    expect(pkg.activationEvents).toContain('onCommand:perl-lsp.runHealthCheck');
+    // VSCode >= 1.75 automatically activates an extension when any of its declared commands are
+    // triggered — explicit onCommand:* activationEvents entries are redundant and have been
+    // removed. The guarantee is that the command exists in contributes.commands.
+    const commands = pkg.contributes.commands as Array<{ command: string; title: string }>;
+    const cmd = commands.find((c) => c.command === 'perl-lsp.runHealthCheck');
+    expect(cmd).toBeDefined();
   });
 
   test('runHealthCheck is listed in commandPalette without a language restriction', () => {

@@ -54,21 +54,6 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:perl",
-    "onCommand:perl-lsp.restart",
-    "onCommand:perl-lsp.showVersion",
-    "onCommand:perl-lsp.reinstall",
-    "onCommand:perl-lsp.checkSyntax",
-    "onCommand:perl-lsp.runCurrentTest",
-    "onCommand:perl-lsp.runAllTests",
-    "onCommand:perl-lsp.formatDocument",
-    "onCommand:perl-lsp.showIncPaths",
-    "onCommand:perl-lsp.openModule",
-    "onCommand:perl-lsp.showParserAst",
-    "onCommand:perl-lsp.checkForUpdate",
-    "onCommand:perl-lsp.createDebugConfig",
-    "onCommand:perl-lsp.runHealthCheck",
-    "onCommand:perl-lsp.openConfigurationGuide",
-    "onCommand:perl-lsp.previewPod",
     "onWalkthrough:perl-lsp.gettingStarted"
   ],
   "contributes": {
@@ -866,7 +851,7 @@
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.5.2",
+    "@types/node": "^20.x",
     "@types/tar": "^7.0.87",
     "@types/vscode": "^1.88.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",

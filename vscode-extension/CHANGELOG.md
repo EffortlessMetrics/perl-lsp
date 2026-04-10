@@ -2,6 +2,25 @@
 
 All notable changes to the Perl Language Server extension will be documented in this file.
 
+## [0.12.3] - 2026-04-09
+
+The 0.12.3 release line. Aligned with the workspace `v0.12.3` cut and consolidates
+the user-facing UX hardening work from April 2026.
+
+### Fixed
+- **Actionable error messages**: server startup errors now surface specific,
+  actionable messages instead of a generic "corrupted" fallback
+  (PR #3280, PR #3291).
+- **Perl interpreter detection**: distinct error shown when the Perl interpreter
+  is not found in PATH, with a clear install prompt (PR #3275).
+- **Binary download errors**: download failures include the underlying OS error
+  and a retry hint instead of a silent failure (PR #3274).
+- **Settings schema polish**: extension settings entries cleaned up for the
+  VS Code Settings UI — descriptions, defaults, and enum labels improved
+  (PR #3269).
+- **Enterprise/offline deployment**: documentation added for air-gapped binary
+  distribution and internal mirror configuration (PR #3276).
+
 ## [0.12.2] - 2026-04-04
 
 The 0.12.2 release line. Aligned with the workspace `v0.12.2` cut on 2026-04-04
