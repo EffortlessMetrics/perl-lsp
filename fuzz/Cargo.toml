@@ -47,6 +47,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "utf16_roundtrip"
+path = "fuzz_targets/utf16_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "lsp_navigation"
 path = "fuzz_targets/lsp_navigation.rs"
 test = false
