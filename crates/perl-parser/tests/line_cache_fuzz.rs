@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod fuzz {
     use perl_parser::position::LineStartsCache;
-
-    // Quick property test without proptest dependency for now
-    // Can upgrade to proptest later if desired
+    use proptest::prelude::*;
 
     /// Slow reference implementation for testing
     /// This matches the actual cache behavior: \r counts as a column before CRLF
@@ -42,6 +40,112 @@ mod fuzz {
         (line, col_utf16)
     }
 
+    fn sample_char_boundaries(content: &str) -> Vec<usize> {
+        let mut boundaries = vec![0];
+        if !content.is_empty() {
+            boundaries.push(content.len());
+            for (i, _) in content.char_indices() {
+                boundaries.push(i);
+            }
+            boundaries.push(content.len());
+        }
+        boundaries.sort_unstable();
+        boundaries.dedup();
+        boundaries
+    }
+
+    fn assert_cache_matches_reference(content: &str, offsets: &[usize]) {
+        let cache = LineStartsCache::new(content);
+
+        for &offset in offsets {
+            let cached = cache.offset_to_position(content, offset);
+            let slow = slow_offset_to_position(content, offset);
+
+            assert_eq!(
+                cached,
+                slow,
+                "Mismatch at offset {} in content {:?}",
+                offset,
+                content.chars().take(50).collect::<String>()
+            );
+
+            // Test round-trip (skip CRLF positions which don't round-trip correctly)
+            // Both \r and \n in CRLF sequence have issues:
+            // - \r at offset N maps to (line, col) but (line, col) maps back to N
+            // - \n at offset N+1 maps to (line, col+1) but (line, col+1) maps back to N
+            let is_crlf_r = content.as_bytes().get(offset) == Some(&b'\r')
+                && content.as_bytes().get(offset + 1) == Some(&b'\n');
+            let is_crlf_n = offset > 0
+                && content.as_bytes().get(offset - 1) == Some(&b'\r')
+                && content.as_bytes().get(offset) == Some(&b'\n');
+
+            if !is_crlf_r && !is_crlf_n {
+                let rt_offset = cache.position_to_offset(content, cached.0, cached.1);
+                assert_eq!(
+                    rt_offset,
+                    offset,
+                    "Round-trip failed for offset {} in content {:?}",
+                    offset,
+                    content.chars().take(50).collect::<String>()
+                );
+            }
+        }
+    }
+
+    fn fuzz_content_strategy() -> impl Strategy<Value = String> {
+        let token = prop_oneof![
+            Just("a".to_string()),
+            Just("Z".to_string()),
+            Just("0".to_string()),
+            Just(" ".to_string()),
+            Just("\t".to_string()),
+            Just("\n".to_string()),
+            Just("\r".to_string()),
+            Just("\r\n".to_string()),
+            Just("\u{FEFF}".to_string()),
+            Just("𝐀".to_string()),
+            Just("𝐁".to_string()),
+            Just("👨‍👩‍👧‍👦".to_string()),
+            "[a-zA-Z0-9_]{0,4}",
+        ];
+
+        proptest::collection::vec(token, 0..64).prop_map(|parts| parts.concat())
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn prop_line_cache_matches_reference(content in fuzz_content_strategy()) {
+            let all_boundaries = sample_char_boundaries(&content);
+
+            // Keep assertions per-case bounded while still spreading coverage.
+            let sampled: Vec<usize> = all_boundaries
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &offset)| if i % 3 == 0 { Some(offset) } else { None })
+                .collect();
+
+            let mut offsets = if sampled.is_empty() { vec![0] } else { sampled };
+            if !offsets.contains(&0) {
+                offsets.push(0);
+            }
+            if !offsets.contains(&content.len()) {
+                offsets.push(content.len());
+            }
+            offsets.sort_unstable();
+            offsets.dedup();
+
+            assert_cache_matches_reference(&content, &offsets);
+        }
+
+        #[test]
+        fn prop_all_boundaries_match_reference(content in fuzz_content_strategy()) {
+            let offsets = sample_char_boundaries(&content);
+            assert_cache_matches_reference(&content, &offsets);
+        }
+    }
+
     #[test]
     fn fuzz_mixed_content() {
         // Test various combinations manually for now
@@ -77,60 +181,25 @@ mod fuzz {
         ];
 
         for content in test_cases {
-            let cache = LineStartsCache::new(content);
-
-            // Test various offsets (only valid char boundaries)
-            let mut offsets = vec![0];
-            if !content.is_empty() {
-                offsets.push(content.len());
-
-                // Add char boundary offsets
-                let mut char_boundaries = vec![0];
-                for (i, _) in content.char_indices() {
-                    char_boundaries.push(i);
+            let mut offsets = sample_char_boundaries(content);
+            // Sample some more if content is large.
+            if offsets.len() > 20 {
+                offsets = offsets
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, &offset)| if i % 7 == 0 { Some(offset) } else { None })
+                    .collect();
+                if !offsets.contains(&0) {
+                    offsets.push(0);
                 }
-                char_boundaries.push(content.len());
-
-                // Sample some of them
-                for i in 0..char_boundaries.len().min(20) {
-                    let idx = (i * 7) % char_boundaries.len();
-                    offsets.push(char_boundaries[idx]);
+                if !offsets.contains(&content.len()) {
+                    offsets.push(content.len());
                 }
+                offsets.sort_unstable();
+                offsets.dedup();
             }
 
-            for offset in offsets {
-                let cached = cache.offset_to_position(content, offset);
-                let slow = slow_offset_to_position(content, offset);
-
-                assert_eq!(
-                    cached,
-                    slow,
-                    "Mismatch at offset {} in content {:?}",
-                    offset,
-                    content.chars().take(50).collect::<String>()
-                );
-
-                // Test round-trip (skip CRLF positions which don't round-trip correctly)
-                // Both \r and \n in CRLF sequence have issues:
-                // - \r at offset N maps to (line, col) but (line, col) maps back to N
-                // - \n at offset N+1 maps to (line, col+1) but (line, col+1) maps back to N
-                let is_crlf_r = content.as_bytes().get(offset) == Some(&b'\r')
-                    && content.as_bytes().get(offset + 1) == Some(&b'\n');
-                let is_crlf_n = offset > 0
-                    && content.as_bytes().get(offset - 1) == Some(&b'\r')
-                    && content.as_bytes().get(offset) == Some(&b'\n');
-
-                if !is_crlf_r && !is_crlf_n {
-                    let rt_offset = cache.position_to_offset(content, cached.0, cached.1);
-                    assert_eq!(
-                        rt_offset,
-                        offset,
-                        "Round-trip failed for offset {} in content {:?}",
-                        offset,
-                        content.chars().take(50).collect::<String>()
-                    );
-                }
-            }
+            assert_cache_matches_reference(content, &offsets);
         }
     }
 
@@ -146,20 +215,7 @@ mod fuzz {
         ];
 
         for (content, offsets) in cases {
-            let cache = LineStartsCache::new(content);
-
-            for offset in offsets {
-                if offset <= content.len() {
-                    let cached = cache.offset_to_position(content, offset);
-                    let slow = slow_offset_to_position(content, offset);
-
-                    assert_eq!(
-                        cached, slow,
-                        "Boundary mismatch at offset {} in {:?}",
-                        offset, content
-                    );
-                }
-            }
+            assert_cache_matches_reference(content, &offsets);
         }
     }
 }
