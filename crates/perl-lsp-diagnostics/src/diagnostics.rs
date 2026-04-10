@@ -4,7 +4,6 @@
 
 use std::path::Path;
 
-use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
@@ -24,7 +23,7 @@ use crate::lints::strict_warnings::check_strict_warnings;
 use crate::lints::unreachable_code::check_unreachable_code;
 use crate::lints::unused_imports::check_unused_imports;
 use crate::lints::version_compat::check_version_compat;
-use crate::parse_errors::parse_error_severity;
+use crate::parse_errors::{parse_error_code, parse_error_severity};
 use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export diagnostic types from the shared SRP microcrate.
@@ -107,15 +106,11 @@ impl DiagnosticsProvider {
                 })
                 .unwrap_or_default();
 
-            let code = match error {
-                ParseError::UnexpectedEof => DiagnosticCode::UnexpectedEof,
-                ParseError::SyntaxError { .. } => DiagnosticCode::SyntaxError,
-                _ => DiagnosticCode::ParseError,
-            };
+            let code = parse_error_code(error);
 
             diagnostics.push(Diagnostic {
                 range: (range_start, range_end),
-                severity: parse_error_severity(error, &message),
+                severity: parse_error_severity(error),
                 code: Some(code.as_str().to_string()),
                 message,
                 related_information,
