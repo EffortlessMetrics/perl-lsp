@@ -37,6 +37,14 @@ pub struct ServerConfig {
     /// Whether telemetry events are enabled.
     pub telemetry_enabled: bool,
 
+    /// Whether dynamic perldoc integration is enabled (opt-in).
+    ///
+    /// When enabled, hovering over a builtin not in the static docs will invoke
+    /// `perldoc -f <name>` as a subprocess. Results are cached in-process.
+    /// Requires `perldoc` installed; silently skipped otherwise.
+    /// Disabled by default for performance and reproducibility.
+    pub perldoc_enabled: bool,
+
     /// Whether external perlcritic diagnostics are enabled (opt-in).
     ///
     /// When enabled, the server will run `perlcritic` on open documents and
@@ -137,6 +145,7 @@ impl Default for ServerConfig {
             test_runner_args: vec![],
             test_runner_timeout: 60000,
             telemetry_enabled: false,
+            perldoc_enabled: false,
             perlcritic_enabled: false,
             perlcritic_severity: 3,
             perlcritic_profile: None,
@@ -186,6 +195,12 @@ impl ServerConfig {
             && let Some(enabled) = telemetry.get("enabled").and_then(|v| v.as_bool())
         {
             self.telemetry_enabled = enabled;
+        }
+
+        if let Some(perldoc) = settings.get("perldoc")
+            && let Some(enabled) = perldoc.get("enabled").and_then(|v| v.as_bool())
+        {
+            self.perldoc_enabled = enabled;
         }
 
         if let Some(critic) = settings.get("perlcritic") {

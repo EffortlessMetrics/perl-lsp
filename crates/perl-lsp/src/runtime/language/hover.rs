@@ -351,6 +351,23 @@ impl LspServer {
                 }));
             }
 
+            // If static docs don't cover this name, try dynamic perldoc lookup (opt-in).
+            let perldoc_enabled = self.config.lock().perldoc_enabled;
+            if perldoc_enabled {
+                if let Some(result) = crate::semantic::perldoc_lookup(bare) {
+                    return HoverExtracted::Complete(json!({
+                        "contents": {
+                            "kind": "markdown",
+                            "value": format!(
+                                "**Built-in Function** *(via perldoc)*\n\n```\n{}\n```\n\n{}",
+                                result.signature,
+                                result.description
+                            ),
+                        },
+                    }));
+                }
+            }
+
             // Check Test::More/Test2 function hover when source imports a test framework
             let is_test_source = text.contains("use Test::More") || text.contains("use Test2");
             if is_test_source {

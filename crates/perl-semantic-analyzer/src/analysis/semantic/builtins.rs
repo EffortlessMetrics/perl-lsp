@@ -789,6 +789,378 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
                           UNITCHECK runs before the requiring file's UNITCHECK.",
         }),
 
+        // I/O: additional file and directory operations
+        "fileno" => Some(BuiltinDoc {
+            signature: "fileno FILEHANDLE",
+            description: "Returns the file descriptor number for FILEHANDLE, or undef if the filehandle is not open.",
+        }),
+        "flock" => Some(BuiltinDoc {
+            signature: "flock FILEHANDLE, OPERATION",
+            description: "Calls flock(2) on FILEHANDLE. OPERATION is one of LOCK_SH, LOCK_EX, LOCK_UN, or LOCK_NB (from Fcntl). Returns true on success.",
+        }),
+        "select" => Some(BuiltinDoc {
+            signature: "select RBITS, WBITS, EBITS, TIMEOUT\nselect FILEHANDLE\nselect",
+            description: "With four args: calls select(2) to wait for input/output readiness. With one arg or no args: sets or returns the currently selected output filehandle.",
+        }),
+        "getc" => Some(BuiltinDoc {
+            signature: "getc FILEHANDLE\ngetc",
+            description: "Returns the next character from FILEHANDLE (STDIN if omitted), or undef at EOF.",
+        }),
+        "readline" => Some(BuiltinDoc {
+            signature: "readline EXPR\nreadline",
+            description: "Reads a line from the filehandle in EXPR. Equivalent to the angle-bracket operator <EXPR>. In list context, reads all remaining lines.",
+        }),
+        "readpipe" => Some(BuiltinDoc {
+            signature: "readpipe EXPR",
+            description: "Executes EXPR as a shell command and returns the standard output as a string in scalar context or as a list of lines in list context. Equivalent to `EXPR`.",
+        }),
+        "rewinddir" => Some(BuiltinDoc {
+            signature: "rewinddir DIRHANDLE",
+            description: "Sets the position of the directory at the beginning of a directory opened by opendir.",
+        }),
+        "seekdir" => Some(BuiltinDoc {
+            signature: "seekdir DIRHANDLE, POS",
+            description: "Sets the position of POS for the directory from telldir. DIRHANDLE must have been opened by opendir.",
+        }),
+        "telldir" => Some(BuiltinDoc {
+            signature: "telldir DIRHANDLE",
+            description: "Returns the current position of the readdir routines on DIRHANDLE.",
+        }),
+        "chroot" => Some(BuiltinDoc {
+            signature: "chroot FILENAME\nchroot",
+            description: "Changes the root directory for the current process to FILENAME. Requires root privileges.",
+        }),
+        "umask" => Some(BuiltinDoc {
+            signature: "umask EXPR\numask",
+            description: "Sets the umask for the process to EXPR and returns the previous value. If EXPR is omitted, returns the current umask.",
+        }),
+
+        // Socket functions
+        "socket" => Some(BuiltinDoc {
+            signature: "socket SOCKET, DOMAIN, TYPE, PROTOCOL",
+            description: "Opens a socket of the specified kind and attaches it to filehandle SOCKET. Use constants from Socket module (AF_INET, SOCK_STREAM, etc.).",
+        }),
+        "socketpair" => Some(BuiltinDoc {
+            signature: "socketpair SOCKET1, SOCKET2, DOMAIN, TYPE, PROTOCOL",
+            description: "Creates an unnamed pair of sockets in the specified domain, of the specified type. Returns true on success.",
+        }),
+        "bind" => Some(BuiltinDoc {
+            signature: "bind SOCKET, NAME",
+            description: "Binds an address (NAME) to an already-opened socket. NAME is a packed address string created with sockaddr_in().",
+        }),
+        "connect" => Some(BuiltinDoc {
+            signature: "connect SOCKET, NAME",
+            description: "Attempts to connect to a remote socket. NAME is a packed address (see sockaddr_in). Returns true on success.",
+        }),
+        "listen" => Some(BuiltinDoc {
+            signature: "listen SOCKET, QUEUESIZE",
+            description: "Listens for incoming connections on a socket. QUEUESIZE is the maximum number of pending connections.",
+        }),
+        "accept" => Some(BuiltinDoc {
+            signature: "accept NEWSOCKET, GENERICSOCKET",
+            description: "Accepts an incoming socket connect, returning the packed address if it succeeded, or false on failure.",
+        }),
+        "shutdown" => Some(BuiltinDoc {
+            signature: "shutdown SOCKET, HOW",
+            description: "Shuts down a socket. HOW: 0=stop receiving, 1=stop sending, 2=stop both.",
+        }),
+        "send" => Some(BuiltinDoc {
+            signature: "send SOCKET, MSG, FLAGS, TO\nsend SOCKET, MSG, FLAGS",
+            description: "Sends a message on a socket. Returns the number of characters sent, or undef on error.",
+        }),
+        "recv" => Some(BuiltinDoc {
+            signature: "recv SOCKET, SCALAR, LENGTH, FLAGS",
+            description: "Receives a message on a socket, placing the message into SCALAR. Returns the address of the sender, or undef on error.",
+        }),
+        "setsockopt" => Some(BuiltinDoc {
+            signature: "setsockopt SOCKET, LEVEL, OPTNAME, OPTVAL",
+            description: "Sets the socket option requested. Returns undefined if there is an error.",
+        }),
+        "getsockopt" => Some(BuiltinDoc {
+            signature: "getsockopt SOCKET, LEVEL, OPTNAME",
+            description: "Queries the socket option requested, returning the value or undef on error.",
+        }),
+        "getsockname" => Some(BuiltinDoc {
+            signature: "getsockname SOCKET",
+            description: "Returns the packed sockaddr address of this end of the SOCKET connection.",
+        }),
+        "getpeername" => Some(BuiltinDoc {
+            signature: "getpeername SOCKET",
+            description: "Returns the packed sockaddr address of the other end of the SOCKET connection.",
+        }),
+        "pipe" => Some(BuiltinDoc {
+            signature: "pipe READHANDLE, WRITEHANDLE",
+            description: "Opens a pair of connected pipes like the corresponding system call. Returns true on success.",
+        }),
+
+        // Low-level system calls
+        "syscall" => Some(BuiltinDoc {
+            signature: "syscall NUMBER, LIST",
+            description: "Calls the system call specified by NUMBER with the arguments in LIST.",
+        }),
+        "sysopen" => Some(BuiltinDoc {
+            signature: "sysopen FILEHANDLE, FILENAME, MODE\nsysopen FILEHANDLE, FILENAME, MODE, PERMS",
+            description: "Opens the file with the given FILENAME using C-level open(). MODE is a combination of O_RDONLY, O_WRONLY, O_RDWR, etc. from Fcntl.",
+        }),
+        "sysread" => Some(BuiltinDoc {
+            signature: "sysread FILEHANDLE, SCALAR, LENGTH, OFFSET\nsysread FILEHANDLE, SCALAR, LENGTH",
+            description: "Reads LENGTH bytes from FILEHANDLE using C-level read(), bypassing I/O buffering. Returns number of bytes read or undef on error.",
+        }),
+        "syswrite" => Some(BuiltinDoc {
+            signature: "syswrite FILEHANDLE, SCALAR, LENGTH, OFFSET\nsyswrite FILEHANDLE, SCALAR, LENGTH",
+            description: "Writes LENGTH bytes from SCALAR to FILEHANDLE using C-level write(), bypassing I/O buffering. Returns number of bytes written or undef on error.",
+        }),
+        "sysseek" => Some(BuiltinDoc {
+            signature: "sysseek FILEHANDLE, POSITION, WHENCE",
+            description: "Sets the position for FILEHANDLE and returns the new position in bytes. Uses C-level lseek(), bypassing stdio buffering.",
+        }),
+        "fcntl" => Some(BuiltinDoc {
+            signature: "fcntl FILEHANDLE, FUNCTION, SCALAR",
+            description: "Implements the fcntl(2) function. Requires Fcntl module for the function constants.",
+        }),
+        "ioctl" => Some(BuiltinDoc {
+            signature: "ioctl FILEHANDLE, FUNCTION, SCALAR",
+            description: "Implements the ioctl(2) function for device control.",
+        }),
+
+        // String and regex
+        "pos" => Some(BuiltinDoc {
+            signature: "pos SCALAR\npos",
+            description: "Returns the offset of where the last m//g search left off for the variable SCALAR (or $_ if omitted). Can be assigned to.",
+        }),
+        "reset" => Some(BuiltinDoc {
+            signature: "reset EXPR\nreset",
+            description: "Resets the ?? search state and clears package variables matching the pattern EXPR. Rarely used.",
+        }),
+        "study" => Some(BuiltinDoc {
+            signature: "study SCALAR\nstudy",
+            description: "Historically asked Perl to pre-analyze the string for faster repeated pattern matching. Now a no-op in modern Perl but still valid syntax.",
+        }),
+        "vec" => Some(BuiltinDoc {
+            signature: "vec EXPR, OFFSET, BITS",
+            description: "Treats EXPR as a bit vector and returns the element at OFFSET. BITS must be a power of 2 (1, 2, 4, 8, 16, 32, or 64). Can be used as an lvalue.",
+        }),
+
+        // Process and user info
+        "times" => Some(BuiltinDoc {
+            signature: "times",
+            description: "Returns a 4-element list (user, system, cuser, csystem) of the CPU times in seconds for this process and its children.",
+        }),
+        "getlogin" => Some(BuiltinDoc {
+            signature: "getlogin",
+            description: "Returns the current login name from /etc/utmp, or gives undef if not found.",
+        }),
+        "getppid" => Some(BuiltinDoc {
+            signature: "getppid",
+            description: "Returns the process ID of the parent process.",
+        }),
+        "getpgrp" => Some(BuiltinDoc {
+            signature: "getpgrp PID\ngetpgrp",
+            description: "Returns the current process group for PID (0 or omitted means the current process).",
+        }),
+        "setpgrp" => Some(BuiltinDoc {
+            signature: "setpgrp PID, PGRP",
+            description: "Sets the current process group for PID (0 means the current process).",
+        }),
+        "getpriority" => Some(BuiltinDoc {
+            signature: "getpriority WHICH, WHO",
+            description: "Returns the current priority for a process, process group, or user.",
+        }),
+        "setpriority" => Some(BuiltinDoc {
+            signature: "setpriority WHICH, WHO, PRIORITY",
+            description: "Sets the priority for a process, process group, or user.",
+        }),
+
+        // Password/group/host DB functions
+        "getpwnam" => Some(BuiltinDoc {
+            signature: "getpwnam NAME",
+            description: "Returns a 9-element list of information about the user NAME from the password database.",
+        }),
+        "getpwuid" => Some(BuiltinDoc {
+            signature: "getpwuid UID",
+            description: "Returns a 9-element list of information about the user with UID from the password database.",
+        }),
+        "getpwent" => Some(BuiltinDoc {
+            signature: "getpwent",
+            description: "Returns the next entry from the password database, one entry at a time.",
+        }),
+        "setpwent" => Some(BuiltinDoc {
+            signature: "setpwent",
+            description: "Rewinds the password database to the beginning for iteration with getpwent.",
+        }),
+        "endpwent" => Some(BuiltinDoc {
+            signature: "endpwent",
+            description: "Closes the password database after iterating with getpwent.",
+        }),
+        "getgrnam" => Some(BuiltinDoc {
+            signature: "getgrnam NAME",
+            description: "Returns a 4-element list of information about the group NAME from the group database.",
+        }),
+        "getgrgid" => Some(BuiltinDoc {
+            signature: "getgrgid GID",
+            description: "Returns a 4-element list of information about the group with GID from the group database.",
+        }),
+        "getgrent" => Some(BuiltinDoc {
+            signature: "getgrent",
+            description: "Returns the next entry from the group database, one entry at a time.",
+        }),
+        "setgrent" => Some(BuiltinDoc {
+            signature: "setgrent",
+            description: "Rewinds the group database to the beginning for iteration with getgrent.",
+        }),
+        "endgrent" => Some(BuiltinDoc {
+            signature: "endgrent",
+            description: "Closes the group database after iterating with getgrent.",
+        }),
+        "gethostbyname" => Some(BuiltinDoc {
+            signature: "gethostbyname NAME",
+            description: "Translates a network hostname NAME to its corresponding network addresses, returning a list (name, aliases, addrtype, length, @addrs).",
+        }),
+        "gethostbyaddr" => Some(BuiltinDoc {
+            signature: "gethostbyaddr ADDR, ADDRTYPE",
+            description: "Translates a network address to a hostname, returning a list (name, aliases, addrtype, length, @addrs).",
+        }),
+        "gethostent" => Some(BuiltinDoc {
+            signature: "gethostent",
+            description: "Returns the next entry from the hosts database, one entry at a time.",
+        }),
+        "sethostent" => Some(BuiltinDoc {
+            signature: "sethostent STAYOPEN",
+            description: "Opens or rewinds the hosts database. If STAYOPEN is true, the database is not closed between calls.",
+        }),
+        "endhostent" => Some(BuiltinDoc {
+            signature: "endhostent",
+            description: "Closes the hosts database after iterating with gethostent.",
+        }),
+        "getnetbyname" => Some(BuiltinDoc {
+            signature: "getnetbyname NAME",
+            description: "Returns information about the named network from the networks database.",
+        }),
+        "getnetbyaddr" => Some(BuiltinDoc {
+            signature: "getnetbyaddr ADDR, ADDRTYPE",
+            description: "Returns information about the network with the given address from the networks database.",
+        }),
+        "getnetent" => Some(BuiltinDoc {
+            signature: "getnetent",
+            description: "Returns the next entry from the networks database, one entry at a time.",
+        }),
+        "setnetent" => Some(BuiltinDoc {
+            signature: "setnetent STAYOPEN",
+            description: "Opens or rewinds the networks database.",
+        }),
+        "endnetent" => Some(BuiltinDoc {
+            signature: "endnetent",
+            description: "Closes the networks database after iterating with getnetent.",
+        }),
+        "getprotobyname" => Some(BuiltinDoc {
+            signature: "getprotobyname NAME",
+            description: "Returns information about the named protocol from the protocols database.",
+        }),
+        "getprotobynumber" => Some(BuiltinDoc {
+            signature: "getprotobynumber NUMBER",
+            description: "Returns information about the protocol with the given number from the protocols database.",
+        }),
+        "getprotoent" => Some(BuiltinDoc {
+            signature: "getprotoent",
+            description: "Returns the next entry from the protocols database, one entry at a time.",
+        }),
+        "setprotoent" => Some(BuiltinDoc {
+            signature: "setprotoent STAYOPEN",
+            description: "Opens or rewinds the protocols database.",
+        }),
+        "endprotoent" => Some(BuiltinDoc {
+            signature: "endprotoent",
+            description: "Closes the protocols database after iterating with getprotoent.",
+        }),
+        "getservbyname" => Some(BuiltinDoc {
+            signature: "getservbyname NAME, PROTO",
+            description: "Returns information about the named service from the services database.",
+        }),
+        "getservbyport" => Some(BuiltinDoc {
+            signature: "getservbyport PORT, PROTO",
+            description: "Returns information about the service at the given port from the services database.",
+        }),
+        "getservent" => Some(BuiltinDoc {
+            signature: "getservent",
+            description: "Returns the next entry from the services database, one entry at a time.",
+        }),
+        "setservent" => Some(BuiltinDoc {
+            signature: "setservent STAYOPEN",
+            description: "Opens or rewinds the services database.",
+        }),
+        "endservent" => Some(BuiltinDoc {
+            signature: "endservent",
+            description: "Closes the services database after iterating with getservent.",
+        }),
+
+        // IPC: message queues and shared memory
+        "msgget" => Some(BuiltinDoc {
+            signature: "msgget KEY, FLAGS",
+            description: "Calls the System V IPC function msgget(2). Returns the message queue ID or undef on error.",
+        }),
+        "msgctl" => Some(BuiltinDoc {
+            signature: "msgctl ID, CMD, ARG",
+            description: "Calls the System V IPC function msgctl(2). Performs control operations on the message queue ID.",
+        }),
+        "msgsnd" => Some(BuiltinDoc {
+            signature: "msgsnd ID, MSG, FLAGS",
+            description: "Calls the System V IPC function msgsnd(2). Sends MSG to the message queue ID.",
+        }),
+        "msgrcv" => Some(BuiltinDoc {
+            signature: "msgrcv ID, VAR, SIZE, TYPE, FLAGS",
+            description: "Calls the System V IPC function msgrcv(2). Reads a message from the message queue into VAR.",
+        }),
+        "semget" => Some(BuiltinDoc {
+            signature: "semget KEY, NSEMS, FLAGS",
+            description: "Calls the System V IPC function semget(2). Returns the semaphore set ID or undef.",
+        }),
+        "semctl" => Some(BuiltinDoc {
+            signature: "semctl ID, SEMNUM, CMD, ARG",
+            description: "Calls the System V IPC function semctl(2). Performs control on the semaphore.",
+        }),
+        "semop" => Some(BuiltinDoc {
+            signature: "semop KEY, OPSTRING",
+            description: "Calls the System V IPC function semop(2). Performs semaphore operations.",
+        }),
+        "shmget" => Some(BuiltinDoc {
+            signature: "shmget KEY, SIZE, FLAGS",
+            description: "Calls the System V IPC function shmget(2). Returns the shared memory segment ID or undef.",
+        }),
+        "shmctl" => Some(BuiltinDoc {
+            signature: "shmctl ID, CMD, ARG",
+            description: "Calls the System V IPC function shmctl(2). Performs control on the shared memory segment.",
+        }),
+        "shmread" => Some(BuiltinDoc {
+            signature: "shmread ID, VAR, POS, SIZE",
+            description: "Reads SIZE bytes from the shared memory segment ID at position POS into VAR.",
+        }),
+        "shmwrite" => Some(BuiltinDoc {
+            signature: "shmwrite ID, STRING, POS, SIZE",
+            description: "Writes SIZE bytes of STRING to the shared memory segment ID at position POS.",
+        }),
+
+        // Legacy/format
+        "format" => Some(BuiltinDoc {
+            signature: "format NAME =\n  FORMLIST\n.",
+            description: "Declares a picture format for use by the write() function. NAME defaults to the current package name. Uses `~` and `~~` for text fields.",
+        }),
+        "formline" => Some(BuiltinDoc {
+            signature: "formline PICTURE, LIST",
+            description: "An internal function used by write() for formatting. PICTURE is the format template; LIST provides values.",
+        }),
+        "dump" => Some(BuiltinDoc {
+            signature: "dump LABEL\ndump",
+            description: "Causes an immediate core dump. Now mostly obsolete. Jumps to the LABEL after restart if specified.",
+        }),
+        "dbmopen" => Some(BuiltinDoc {
+            signature: "dbmopen HASH, DBNAME, MODE",
+            description: "Opens a dbm file and ties it to HASH. Deprecated — use GDBM_File, DB_File, or similar tie-based alternatives.",
+        }),
+        "dbmclose" => Some(BuiltinDoc {
+            signature: "dbmclose HASH",
+            description: "Breaks the binding between a DBM file and a hash (deprecated; use untie instead).",
+        }),
+
         _ => None,
     }
 }
@@ -1042,9 +1414,190 @@ pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
     }
 }
 
+/// Validate that a function name is safe to pass to perldoc.
+///
+/// Accepts only names composed of ASCII alphanumeric characters and underscores.
+/// This rejects `::` package separators, path separators, shell metacharacters,
+/// and any other characters that could cause injection or path traversal.
+///
+/// Returns `true` if the name is safe to use in a perldoc subprocess call.
+pub(crate) fn is_safe_perldoc_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Result of a dynamic perldoc lookup, containing owned strings for caching.
+#[derive(Debug, Clone)]
+pub struct PerldocResult {
+    /// Function signature extracted from perldoc output.
+    pub signature: String,
+    /// Description extracted from perldoc output.
+    pub description: String,
+}
+
+/// Parse the raw text output of `perldoc -f <name>` into a structured result.
+///
+/// Extracts the first synopsis/signature line(s) and the following description.
+/// Returns `None` if the output is empty or doesn't look like valid perldoc.
+pub(crate) fn parse_perldoc_output(output: &str) -> Option<PerldocResult> {
+    let text = output.trim();
+    if text.is_empty() {
+        return None;
+    }
+
+    // Strip ANSI escape codes that some perldoc versions emit.
+    let clean: String = {
+        let mut cleaned = String::with_capacity(text.len());
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                // Skip until terminating alphabetic character of the escape sequence
+                for skip in chars.by_ref() {
+                    if skip.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            } else {
+                cleaned.push(c);
+            }
+        }
+        cleaned
+    };
+
+    let lines: Vec<&str> = clean.lines().collect();
+    if lines.is_empty() {
+        return None;
+    }
+
+    // The first non-empty line(s) are the synopsis/signature.
+    // Description follows after a blank line.
+    let mut sig_lines: Vec<&str> = Vec::new();
+    let mut desc_lines: Vec<&str> = Vec::new();
+    let mut in_desc = false;
+
+    for line in &lines {
+        if !in_desc {
+            if line.trim().is_empty() && !sig_lines.is_empty() {
+                in_desc = true;
+            } else if !line.trim().is_empty() {
+                sig_lines.push(line.trim());
+            }
+        } else if desc_lines.len() < 20 {
+            // Limit description to 20 lines for manageable hover tooltips
+            desc_lines.push(line.trim_end());
+        }
+    }
+
+    if sig_lines.is_empty() {
+        return None;
+    }
+
+    let signature = sig_lines.join("\n");
+    let description = desc_lines.join("\n").trim().to_string();
+
+    if description.is_empty() {
+        Some(PerldocResult { signature: signature.clone(), description: signature })
+    } else {
+        Some(PerldocResult { signature, description })
+    }
+}
+
+/// Look up documentation for a Perl function via the system `perldoc` command.
+///
+/// This is the dynamic fallback for builtins not covered by [`get_builtin_documentation`].
+/// It calls `perldoc -f <name>` with a 500ms timeout and caches results in a
+/// process-wide cache (up to 100 entries).
+///
+/// # Security
+///
+/// The function name is validated with [`is_safe_perldoc_name`] before being
+/// passed to the subprocess. Only `[a-zA-Z0-9_]` characters are accepted.
+///
+/// # Availability
+///
+/// Returns `None` if the name fails validation, `perldoc` is not installed,
+/// the subprocess times out, the exit code is non-zero, or the output
+/// cannot be parsed. This function is not available in WASM builds.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn perldoc_lookup(name: &str) -> Option<PerldocResult> {
+    use std::collections::HashMap;
+    use std::process::Command;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Duration;
+
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<PerldocResult>>>> = OnceLock::new();
+    const MAX_CACHE_ENTRIES: usize = 100;
+    const TIMEOUT_MS: u64 = 500;
+
+    if !is_safe_perldoc_name(name) {
+        return None;
+    }
+
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+
+    // Return cached result if available.
+    if let Ok(guard) = cache.lock() {
+        if let Some(cached) = guard.get(name) {
+            return cached.clone();
+        }
+    }
+
+    // Run perldoc -f <name> with a manual timeout loop.
+    let result = (|| {
+        let mut cmd = Command::new("perldoc");
+        cmd.arg("-f").arg(name);
+        // Disable interactive pager.
+        cmd.env("PERLDOC_PAGER", "").env("PAGER", "cat");
+
+        let mut child = cmd.spawn().ok()?;
+        let deadline = std::time::Instant::now() + Duration::from_millis(TIMEOUT_MS);
+
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if status.success() {
+                        let output = child.wait_with_output().ok()?;
+                        let text = String::from_utf8_lossy(&output.stdout).into_owned();
+                        return parse_perldoc_output(&text);
+                    } else {
+                        return None;
+                    }
+                }
+                Ok(None) => {
+                    if std::time::Instant::now() >= deadline {
+                        let _ = child.kill();
+                        return None;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => return None,
+            }
+        }
+    })();
+
+    // Store in cache (skip if cache is full to avoid unbounded growth).
+    if let Ok(mut guard) = cache.lock() {
+        if guard.len() < MAX_CACHE_ENTRIES {
+            guard.insert(name.to_string(), result.clone());
+        }
+    }
+
+    result
+}
+
+/// Look up documentation for a Perl function via the system `perldoc` command.
+///
+/// WASM stub: always returns `None` since subprocess execution is not available.
+#[cfg(target_arch = "wasm32")]
+pub fn perldoc_lookup(_name: &str) -> Option<PerldocResult> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
-    use super::get_builtin_documentation;
+    use super::{get_builtin_documentation, is_safe_perldoc_name, parse_perldoc_output};
 
     #[test]
     fn test_get_builtin_documentation_begin() -> Result<(), Box<dyn std::error::Error>> {
@@ -1099,5 +1652,220 @@ mod tests {
             doc.description
         );
         Ok(())
+    }
+
+    // --- Tests for newly added builtins ---
+
+    #[test]
+    fn test_socket_builtins_have_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let socket_fns = [
+            "socket",
+            "socketpair",
+            "bind",
+            "connect",
+            "listen",
+            "accept",
+            "shutdown",
+            "send",
+            "recv",
+            "setsockopt",
+            "getsockopt",
+            "getsockname",
+            "getpeername",
+            "pipe",
+        ];
+        for name in &socket_fns {
+            let doc = get_builtin_documentation(name)
+                .ok_or_else(|| format!("socket builtin '{}' should have docs", name))?;
+            assert!(
+                !doc.signature.is_empty(),
+                "socket builtin '{}' should have non-empty signature",
+                name
+            );
+            assert!(
+                !doc.description.is_empty(),
+                "socket builtin '{}' should have non-empty description",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_io_builtins_have_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let io_fns = [
+            "fileno",
+            "flock",
+            "select",
+            "getc",
+            "readline",
+            "readpipe",
+            "rewinddir",
+            "seekdir",
+            "telldir",
+            "chroot",
+            "umask",
+            "sysopen",
+            "sysread",
+            "syswrite",
+            "sysseek",
+            "syscall",
+            "fcntl",
+            "ioctl",
+        ];
+        for name in &io_fns {
+            let doc = get_builtin_documentation(name)
+                .ok_or_else(|| format!("I/O builtin '{}' should have docs", name))?;
+            assert!(!doc.signature.is_empty(), "I/O builtin '{}' should have a signature", name);
+            assert!(
+                !doc.description.is_empty(),
+                "I/O builtin '{}' should have a description",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_builtins_have_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let process_fns =
+            ["times", "getlogin", "getppid", "getpgrp", "setpgrp", "getpriority", "setpriority"];
+        for name in &process_fns {
+            let doc = get_builtin_documentation(name)
+                .ok_or_else(|| format!("process builtin '{}' should have docs", name))?;
+            assert!(
+                !doc.description.is_empty(),
+                "process builtin '{}' should have a description",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_db_builtins_have_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let db_fns = [
+            "getpwnam",
+            "getpwuid",
+            "getpwent",
+            "setpwent",
+            "endpwent",
+            "getgrnam",
+            "getgrgid",
+            "getgrent",
+            "setgrent",
+            "endgrent",
+            "gethostbyname",
+            "gethostbyaddr",
+            "getnetbyname",
+            "getnetbyaddr",
+            "getprotobyname",
+            "getprotobynumber",
+            "getservbyname",
+            "getservbyport",
+        ];
+        for name in &db_fns {
+            let doc = get_builtin_documentation(name)
+                .ok_or_else(|| format!("db lookup builtin '{}' should have docs", name))?;
+            assert!(
+                !doc.description.is_empty(),
+                "db lookup builtin '{}' should have a description",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_ipc_builtins_have_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let ipc_fns = [
+            "msgget", "msgctl", "msgsnd", "msgrcv", "semget", "semctl", "semop", "shmget",
+            "shmctl", "shmread", "shmwrite",
+        ];
+        for name in &ipc_fns {
+            let doc = get_builtin_documentation(name)
+                .ok_or_else(|| format!("IPC builtin '{}' should have docs", name))?;
+            assert!(
+                !doc.description.is_empty(),
+                "IPC builtin '{}' should have a description",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_misc_builtins_have_docs() -> Result<(), Box<dyn std::error::Error>> {
+        let misc_fns = ["pos", "reset", "study", "vec", "formline", "dump", "dbmopen", "dbmclose"];
+        for name in &misc_fns {
+            let doc = get_builtin_documentation(name)
+                .ok_or_else(|| format!("misc builtin '{}' should have docs", name))?;
+            assert!(
+                !doc.description.is_empty(),
+                "misc builtin '{}' should have a description",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    // --- Tests for perldoc_lookup helpers ---
+
+    #[test]
+    fn test_is_safe_perldoc_name_valid() {
+        assert!(is_safe_perldoc_name("print"));
+        assert!(is_safe_perldoc_name("open"));
+        assert!(is_safe_perldoc_name("my_function"));
+        assert!(is_safe_perldoc_name("chomp"));
+        assert!(is_safe_perldoc_name("AUTOLOAD"));
+    }
+
+    #[test]
+    fn test_is_safe_perldoc_name_invalid() {
+        assert!(!is_safe_perldoc_name(""));
+        assert!(!is_safe_perldoc_name("foo/bar"));
+        assert!(!is_safe_perldoc_name("../etc/passwd"));
+        assert!(!is_safe_perldoc_name("foo; rm -rf /"));
+        assert!(!is_safe_perldoc_name("foo bar"));
+        assert!(!is_safe_perldoc_name("foo::bar")); // :: rejected (colons)
+        assert!(!is_safe_perldoc_name(&"a".repeat(65))); // too long
+    }
+
+    #[test]
+    fn test_parse_perldoc_output_basic() {
+        let sample = "chomp VARIABLE\nchomp LIST\nchomp\n\n    This safer version of chop removes any trailing string that\n    corresponds to the current value of $/.";
+        let result = parse_perldoc_output(sample);
+        assert!(result.is_some(), "Should parse valid perldoc output");
+        let r = result.unwrap();
+        assert!(r.signature.contains("chomp"), "Signature should contain 'chomp'");
+        assert!(
+            r.description.contains("trailing") || r.description.contains("chop"),
+            "Description should contain meaningful content, got: {}",
+            r.description
+        );
+    }
+
+    #[test]
+    fn test_parse_perldoc_output_empty() {
+        assert!(parse_perldoc_output("").is_none());
+        assert!(parse_perldoc_output("   \n  \n  ").is_none());
+    }
+
+    #[test]
+    fn test_parse_perldoc_output_strips_ansi() {
+        // Simulate ANSI escape sequences that some perldoc versions emit
+        let with_ansi = "\x1b[1mprint\x1b[0m LIST\n\nPrints a string.";
+        let result = parse_perldoc_output(with_ansi);
+        assert!(result.is_some(), "Should parse output with ANSI codes");
+        let r = result.unwrap();
+        assert!(!r.signature.contains("\x1b"), "Signature should not contain ANSI codes");
+    }
+
+    #[test]
+    fn test_parse_perldoc_output_no_blank_line() {
+        // Some minimal perldoc outputs have no blank separator
+        let minimal = "chomp VARIABLE\n    Removes trailing newline.";
+        let result = parse_perldoc_output(minimal);
+        assert!(result.is_some(), "Should parse minimal perldoc output");
     }
 }
