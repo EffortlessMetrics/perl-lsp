@@ -72,10 +72,36 @@
 ## Next (v0.10.0 Readiness) - TODOs
 
 - [ ] Stability statement (versioning rules)
+  - [ ] Publish a short policy section in `docs/README.md` defining API stability for:
+    - `perllsp` CLI flags/config behavior
+    - LSP capability advertisement semantics (`features.toml` as source of truth)
+    - DAP surface (native adapter maturity + preview boundaries)
+  - [ ] Add explicit compatibility promises to `docs/how-to/UPGRADING.md`:
+    - patch/minor expectations
+    - deprecation notice window
+    - emergency-break process for security fixes
+  - [ ] Link the policy from `docs/project/ROADMAP.md` milestone notes so release framing and guarantees stay aligned.
 - [ ] Packaging stance (what ships; supported platforms)
+  - [ ] Add a single "Distribution Matrix" doc under `docs/project/` covering:
+    - published crates and intended consumers
+    - prebuilt artifact targets (if any)
+    - source-build-only paths
+  - [ ] Document current support tiers (e.g., tested, best-effort, unsupported) by OS/arch.
+  - [ ] Document install path expectations for editor integrations (PATH discovery, pinned versions, portable installs).
 - [ ] Benchmark receipts committed under `benchmarks/results/`
+  - [ ] Add a receipt template in `benchmarks/results/README.md`:
+    - command used
+    - machine/runtime metadata
+    - before/after commit SHAs
+    - artifact location
+  - [ ] Ensure each committed result links back to the initiating change/issue.
 - [ ] Upgrade notes from v0.8.x -> v0.9.x
+  - [ ] Document config key renames/removals and migration steps.
+  - [ ] Add "known behavior deltas" for parser/LSP/DAP to reduce surprise during roll-forward.
+  - [ ] Provide rollback guidance and cache-reset steps for editor clients.
 - [ ] Merge-gate work unblocked by CI pipeline cleanup (#211 -> #210)
+  - [ ] Capture dependency ordering and owners in `docs/project/CI_LOCAL_VALIDATION.md`.
+  - [ ] Add a short "what changed after #210 lands" checklist for contributors.
 
 ---
 
