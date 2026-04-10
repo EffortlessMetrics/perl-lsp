@@ -60,16 +60,21 @@ pub fn discover_perl_files(root: &Path) -> DiscoveryResult {
 /// Returns `true` if `path` should be considered discoverable by workspace
 /// indexing.
 ///
-/// This intentionally includes XS implementation files and embedded Perl
-/// templates so editor discovery can surface them even though they are not
-/// classified as Perl source files by the shared source-file helper.
+/// This intentionally includes XS implementation files and common Perl
+/// templating formats so editor discovery can surface them even though they are
+/// not classified as Perl source files by the shared source-file helper.
 #[must_use]
 pub fn is_perl_discovery_path(path: &Path) -> bool {
     is_perl_source_path(path)
         || path
             .extension()
             .and_then(|ext| ext.to_str())
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("xs") || ext.eq_ignore_ascii_case("ep"))
+            .is_some_and(|ext| {
+                ext.eq_ignore_ascii_case("xs")
+                    || ext.eq_ignore_ascii_case("ep")
+                    || ext.eq_ignore_ascii_case("tt")
+                    || ext.eq_ignore_ascii_case("tt2")
+            })
 }
 
 fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
