@@ -113,6 +113,7 @@ pub use self::test_more::get_test_more_documentation;
 
 use perl_parser_core::ast::Node;
 use perl_parser_core::ast::NodeKind;
+use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};
 use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_workspace_index::workspace_index::WorkspaceIndex;
@@ -161,6 +162,7 @@ const MOOSE_TYPE_CANDIDATES: &[&str] = &[
 /// Completion provider
 pub struct CompletionProvider {
     symbol_table: SymbolTable,
+    class_models: Vec<ClassModel>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
 }
@@ -243,9 +245,10 @@ impl CompletionProvider {
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
+        let class_models = ClassModelBuilder::new().build(ast);
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, workspace_index, import_map }
+        CompletionProvider { symbol_table, class_models, workspace_index, import_map }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -570,6 +573,8 @@ impl CompletionProvider {
             self.add_has_type_completions(&mut completions, &context);
         } else if self.is_has_options_key_context(source, position) {
             self.add_has_option_completions(&mut completions, &context);
+        } else if let Some(package_name) = self.object_pad_constructor_package(source, position) {
+            self.add_object_pad_constructor_completions(&mut completions, &context, &package_name);
         } else if (context.trigger_character == Some('>') || context.trigger_character == Some('-'))
             && context.prefix.ends_with("->")
             && context.prefix.len() > 2
@@ -1177,6 +1182,88 @@ impl CompletionProvider {
         Some(option_prefix.trim_start().to_string())
     }
 
+    fn object_pad_constructor_package(&self, source: &str, position: usize) -> Option<String> {
+        if position > source.len() {
+            return None;
+        }
+
+        let prefix = &source[..position];
+        let statement_start = prefix.rfind(';').map(|idx| idx + 1).unwrap_or(0);
+        let statement = &prefix[statement_start..];
+        let mut search_end = statement.len();
+
+        while let Some(new_idx) = statement[..search_end].rfind("->new") {
+            let mut open_paren_idx = new_idx + "->new".len();
+            while open_paren_idx < statement.len()
+                && statement.as_bytes()[open_paren_idx].is_ascii_whitespace()
+            {
+                open_paren_idx += 1;
+            }
+
+            if open_paren_idx >= statement.len() || statement.as_bytes()[open_paren_idx] != b'(' {
+                search_end = new_idx;
+                continue;
+            }
+
+            let receiver = statement[..new_idx].trim_end();
+            let receiver_start = receiver
+                .rfind(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != ':' && c != '\'')
+                .map(|idx| idx + 1)
+                .unwrap_or(0);
+            let package_name = receiver[receiver_start..].trim();
+            if package_name.is_empty()
+                || package_name.starts_with('$')
+                || package_name.starts_with('@')
+                || package_name.starts_with('%')
+            {
+                search_end = new_idx;
+                continue;
+            }
+
+            let args_text = &statement[open_paren_idx + 1..];
+            let mut paren_depth = 1i32;
+            let mut brace_depth = 0i32;
+            let mut bracket_depth = 0i32;
+            let mut segment_start = 0usize;
+
+            for (idx, ch) in args_text.char_indices() {
+                match ch {
+                    '(' => paren_depth += 1,
+                    ')' => {
+                        paren_depth -= 1;
+                        if paren_depth <= 0 {
+                            return None;
+                        }
+                    }
+                    '{' => brace_depth += 1,
+                    '}' => brace_depth -= 1,
+                    '[' => bracket_depth += 1,
+                    ']' => bracket_depth -= 1,
+                    ',' if paren_depth == 1 && brace_depth == 0 && bracket_depth == 0 => {
+                        segment_start = idx + 1;
+                    }
+                    _ => {}
+                }
+            }
+
+            let segment = args_text[segment_start..].trim_start();
+            if segment.is_empty() {
+                return Some(package_name.to_string());
+            }
+            if segment.contains("=>") {
+                return None;
+            }
+            if segment.chars().all(|ch| {
+                ch.is_ascii_alphanumeric() || ch == '_' || ch == ':' || ch.is_ascii_whitespace()
+            }) {
+                return Some(package_name.to_string());
+            }
+            return None;
+        }
+
+        None
+    }
+
     /// Add completions for Moo/Moose type constraint values inside `isa => ...`.
     fn add_has_type_completions(
         &self,
@@ -1306,6 +1393,41 @@ impl CompletionProvider {
                     commit_characters: None,
                 });
             }
+        }
+    }
+
+    fn add_object_pad_constructor_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+        package_name: &str,
+    ) {
+        let prefix = context.prefix.trim();
+        let Some(model) =
+            self.class_models.iter().rev().find(|model| {
+                model.name == package_name && model.framework == Framework::ObjectPad
+            })
+        else {
+            return;
+        };
+
+        for field_name in model.object_pad_param_field_names() {
+            if !prefix.is_empty() && !field_name.starts_with(prefix) {
+                continue;
+            }
+
+            completions.push(CompletionItem {
+                label: field_name.to_string(),
+                kind: CompletionItemKind::Property,
+                detail: Some("Object::Pad constructor parameter".to_string()),
+                documentation: Some(format!("`:param` field for `{package_name}->new(...)`.")),
+                insert_text: Some(format!("{field_name} => ")),
+                sort_text: Some(format!("0_{field_name}")),
+                filter_text: Some(field_name.to_string()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
         }
     }
 
@@ -1868,6 +1990,132 @@ has 'name' => (re
             completions.iter().any(|item| item.label == "reader"),
             "expected `reader` option completion inside has(...) context"
         );
+    }
+
+    #[test]
+    fn test_object_pad_constructor_param_completion() {
+        let code = r#"
+use Object::Pad;
+
+class Point {
+    field $x :param = 0;
+    field $y :param = 0;
+    field $cache = 1;
+}
+
+Point->new(
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "x"),
+            "expected `x` constructor completion inside Point->new(...)"
+        );
+        assert!(
+            completions.iter().any(|item| item.label == "y"),
+            "expected `y` constructor completion inside Point->new(...)"
+        );
+        assert!(
+            !completions.iter().any(|item| item.label == "cache"),
+            "non-:param fields should not appear in constructor completion"
+        );
+
+        let x_item = must_some(completions.iter().find(|item| item.label == "x"));
+        assert_eq!(x_item.insert_text.as_deref(), Some("x => "));
+    }
+
+    #[test]
+    fn test_object_pad_constructor_param_completion_honors_prefix_and_value_context() {
+        let prefix_code = r#"
+use Object::Pad;
+
+class Point {
+    field $name :param;
+    field $native_name :param;
+    field $age :param;
+}
+
+Point->new(na"#;
+
+        let mut parser = Parser::new(prefix_code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, prefix_code, None);
+        let completions = provider.get_completions(prefix_code, prefix_code.len());
+        let constructor_labels: Vec<&str> = completions
+            .iter()
+            .filter(|item| item.detail.as_deref() == Some("Object::Pad constructor parameter"))
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(constructor_labels.contains(&"name"), "expected `name` to match prefix `na`");
+        assert!(
+            constructor_labels.contains(&"native_name"),
+            "expected `native_name` to remain available when matching prefix"
+        );
+        assert!(
+            !constructor_labels.contains(&"age"),
+            "non-matching constructor params should be filtered by prefix"
+        );
+
+        let value_code = r#"
+use Object::Pad;
+
+class Point {
+    field $name :param;
+    field $native_name :param;
+}
+
+Point->new(name => "#;
+
+        let mut parser = Parser::new(value_code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, value_code, None);
+        let value_completions = provider.get_completions(value_code, value_code.len());
+        let value_constructor_labels: Vec<&str> = value_completions
+            .iter()
+            .filter(|item| item.detail.as_deref() == Some("Object::Pad constructor parameter"))
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(
+            !value_constructor_labels.contains(&"name"),
+            "constructor key completions should not appear in value position"
+        );
+        assert!(
+            !value_constructor_labels.contains(&"native_name"),
+            "constructor key completions should not appear after `=>`"
+        );
+    }
+
+    #[test]
+    fn test_object_pad_constructor_param_completion_supports_lowercase_class_names() {
+        let code = r#"
+use Object::Pad;
+
+class point {
+    field $name :param;
+    field $native_name :param;
+}
+
+point->new(na"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        let completions = provider.get_completions(code, code.len());
+        let constructor_labels: Vec<&str> = completions
+            .iter()
+            .filter(|item| item.detail.as_deref() == Some("Object::Pad constructor parameter"))
+            .map(|item| item.label.as_str())
+            .collect();
+
+        assert!(constructor_labels.contains(&"name"));
+        assert!(constructor_labels.contains(&"native_name"));
     }
 
     #[test]
