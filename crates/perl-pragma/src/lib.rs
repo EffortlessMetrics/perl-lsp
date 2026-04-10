@@ -33,6 +33,16 @@ pub struct PragmaState {
     pub strict_refs: bool,
     /// Whether warnings are enabled (globally)
     pub warnings: bool,
+    /// Whether `use utf8` is enabled.
+    pub utf8: bool,
+    /// Active source encoding from `use encoding`.
+    pub encoding: Option<String>,
+    /// Whether `use feature 'unicode_strings'` or a matching feature bundle is enabled.
+    pub unicode_strings: bool,
+    /// Whether locale-sensitive behavior is enabled.
+    pub locale: bool,
+    /// Locale scope from `use locale`, if any.
+    pub locale_scope: Option<String>,
     /// Warning categories explicitly disabled via `no warnings 'CATEGORY'`.
     ///
     /// When `no warnings` is used with specific category arguments (e.g.
@@ -59,6 +69,11 @@ impl PragmaState {
             strict_subs: true,
             strict_refs: true,
             warnings: false,
+            utf8: false,
+            encoding: None,
+            unicode_strings: false,
+            locale: false,
+            locale_scope: None,
             disabled_warning_categories: Vec::new(),
             features: Vec::new(),
             builtin_imports: Vec::new(),
@@ -229,6 +244,16 @@ fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
     }
 }
 
+fn pragma_arg_items(arg: &str) -> Vec<String> {
+    let trimmed = arg.trim().trim_matches('\'').trim_matches('"');
+
+    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+        return inner.split_whitespace().map(|item| item.to_string()).collect();
+    }
+
+    vec![trimmed.to_string()]
+}
+
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
@@ -306,29 +331,59 @@ impl PragmaTracker {
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
+                    "utf8" => {
+                        current_state.utf8 = true;
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "encoding" => {
+                        current_state.encoding = args
+                            .first()
+                            .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "locale" => {
+                        current_state.locale = true;
+                        current_state.locale_scope = args
+                            .first()
+                            .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
                     "feature" => {
-                        // `use feature 'signatures'` implicitly enables strict
-                        // (same effective behavior as `use v5.36` for strictness).
-                        // Accept quoted and unquoted args, and qw(...) bundles.
-                        let enables_signatures = args.iter().any(|arg| {
-                            let normalized = arg.trim_matches('\'').trim_matches('"');
-                            if normalized == "signatures" {
-                                return true;
+                        // Track the small set of feature pragma effects that this
+                        // crate currently needs for semantic consumers.
+                        let mut changed = false;
+                        for arg in args {
+                            for item in pragma_arg_items(arg) {
+                                match item.as_str() {
+                                    "signatures" => {
+                                        current_state.strict_vars = true;
+                                        current_state.strict_subs = true;
+                                        current_state.strict_refs = true;
+                                        changed = true;
+                                    }
+                                    "unicode_strings" => {
+                                        current_state.unicode_strings = true;
+                                        changed = true;
+                                    }
+                                    item if item.starts_with(':') => {
+                                        if let Some(version) =
+                                            parse_perl_version(item.trim_start_matches(':'))
+                                        {
+                                            if version >= PerlVersion::new(5, 12) {
+                                                current_state.unicode_strings = true;
+                                                changed = true;
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
                             }
+                        }
 
-                            if let Some(inner) =
-                                normalized.strip_prefix("qw(").and_then(|s| s.strip_suffix(')'))
-                            {
-                                return inner.split_whitespace().any(|item| item == "signatures");
-                            }
-
-                            false
-                        });
-
-                        if enables_signatures {
-                            current_state.strict_vars = true;
-                            current_state.strict_subs = true;
-                            current_state.strict_refs = true;
+                        if changed {
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -406,6 +461,22 @@ impl PragmaTracker {
                                 }
                             }
                         }
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "utf8" => {
+                        current_state.utf8 = false;
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "encoding" => {
+                        current_state.encoding = None;
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "locale" => {
+                        current_state.locale = false;
+                        current_state.locale_scope = None;
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
