@@ -1152,10 +1152,10 @@ impl SymbolExtractor {
         None
     }
 
-    /// Detect Moo/Moose method modifiers (`around`, `before`, `after`).
+    /// Detect Moo/Moose method modifiers (`before`, `after`, `around`, `override`, `augment`).
     ///
     /// Pattern (two statements):
-    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`)
+    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`/`override`/`augment`)
     /// 2. `ExpressionStatement(HashLiteral([ (method_name, Subroutine{...}) ]))`
     ///
     /// Also handles FunctionCall form: `around 'name' => sub { }` (post parser fix).
@@ -1165,7 +1165,7 @@ impl SymbolExtractor {
         // FunctionCall form: `around 'name' => sub { }` parsed as a bare call.
         if let NodeKind::ExpressionStatement { expression } = &first.kind
             && let NodeKind::FunctionCall { name, args } = &expression.kind
-            && matches!(name.as_str(), "around" | "before" | "after")
+            && Self::is_moose_method_modifier(name)
         {
             let modifier_name = name.as_str();
             let method_names: Vec<String> =
@@ -1197,12 +1197,10 @@ impl SymbolExtractor {
 
         let second = &statements[idx + 1];
 
-        // Check: first is ExpressionStatement(Identifier("around"|"before"|"after"))
+        // Check: first is ExpressionStatement(Identifier("before"|"after"|"around"|"override"|"augment"))
         let modifier_name = match &first.kind {
             NodeKind::ExpressionStatement { expression } => match &expression.kind {
-                NodeKind::Identifier { name }
-                    if matches!(name.as_str(), "around" | "before" | "after") =>
-                {
+                NodeKind::Identifier { name } if Self::is_moose_method_modifier(name) => {
                     name.as_str()
                 }
                 _ => return None,
@@ -1245,6 +1243,10 @@ impl SymbolExtractor {
         self.visit_node(second);
 
         Some(2)
+    }
+
+    fn is_moose_method_modifier(name: &str) -> bool {
+        matches!(name, "before" | "after" | "around" | "override" | "augment")
     }
 
     /// Detect Moo/Moose `extends 'Parent'` and `with 'Role'` declarations.

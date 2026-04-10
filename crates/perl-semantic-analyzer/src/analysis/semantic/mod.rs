@@ -212,7 +212,7 @@ impl SemanticAnalyzer {
 
     /// Redirect method modifier definitions to the underlying method they modify.
     ///
-    /// Method modifiers (`before`, `after`, `around`) are modeled as synthetic
+    /// Method modifiers (`before`, `after`, `around`, `override`, `augment`) are modeled as synthetic
     /// subroutine symbols so hover/navigation can describe them, but go-to-definition
     /// should land on the real method declaration when it exists.
     fn resolve_definition_target<'a>(&'a self, symbol: &'a Symbol) -> &'a Symbol {
@@ -221,7 +221,10 @@ impl SemanticAnalyzer {
 
     /// If `symbol` is a method modifier target, find the underlying method symbol.
     fn resolve_method_modifier_target<'a>(&'a self, symbol: &'a Symbol) -> Option<&'a Symbol> {
-        if !matches!(symbol.declaration.as_deref(), Some("before" | "after" | "around")) {
+        if !matches!(
+            symbol.declaration.as_deref(),
+            Some("before" | "after" | "around" | "override" | "augment")
+        ) {
             return None;
         }
 
@@ -232,7 +235,7 @@ impl SemanticAnalyzer {
                 candidate.location != symbol.location
                     && !matches!(
                         candidate.declaration.as_deref(),
-                        Some("before" | "after" | "around")
+                        Some("before" | "after" | "around" | "override" | "augment")
                     )
             })
     }
