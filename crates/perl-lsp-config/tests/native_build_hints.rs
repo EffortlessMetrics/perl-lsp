@@ -56,6 +56,25 @@ fn dynamic_native_build_hints_are_ignored() -> TestResult {
 }
 
 #[test]
+fn commented_or_quoted_native_build_hints_are_ignored() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    write_script(
+        &dir,
+        "Makefile.PL",
+        "# INC => '-Iignored-comment'\nmy $doc = \"INC => '-Iignored-string'\";\nWriteMakefile( INC => '-Iinclude' );\n",
+    )?;
+    write_script(
+        &dir,
+        "Build.PL",
+        "my $doc = \"include_dirs => ['ignored-string']\";\n# include_dirs => ['ignored-comment']\nModule::Build->new( include_dirs => ['module-include'] );\n",
+    )?;
+
+    let hints = detect_native_build_hints(dir.path());
+    assert_eq!(hints.include_dirs, vec!["include", "module-include"]);
+    Ok(())
+}
+
+#[test]
 fn workspace_config_refresh_native_build_hints_leaves_include_paths_untouched() -> TestResult {
     let dir = tempfile::tempdir()?;
     write_script(&dir, "Makefile.PL", "WriteMakefile( INC => '-Iinclude' );\n")?;

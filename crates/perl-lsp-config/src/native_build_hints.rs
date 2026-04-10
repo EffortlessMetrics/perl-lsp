@@ -87,30 +87,89 @@ fn extract_literal_values_after_key(source: &str, key: &str) -> Vec<String> {
 
 fn find_key_assignment(bytes: &[u8], key: &str, start: usize) -> Option<(usize, usize)> {
     let key_bytes = key.as_bytes();
-    let mut search_from = start;
+    let mut idx = start;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut in_comment = false;
 
-    while search_from < bytes.len() {
-        let haystack = &bytes[search_from..];
-        let rel = haystack.windows(key_bytes.len()).position(|window| window == key_bytes)?;
-        let key_pos = search_from + rel;
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+
+        if in_comment {
+            idx += 1;
+            if byte == b'\n' {
+                in_comment = false;
+            }
+            continue;
+        }
+
+        if in_single_quote {
+            idx += 1;
+            if byte == b'\\' && idx < bytes.len() {
+                idx += 1;
+                continue;
+            }
+            if byte == b'\'' {
+                in_single_quote = false;
+            }
+            continue;
+        }
+
+        if in_double_quote {
+            idx += 1;
+            if byte == b'\\' && idx < bytes.len() {
+                idx += 1;
+                continue;
+            }
+            if byte == b'"' {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        match byte {
+            b'#' => {
+                in_comment = true;
+                idx += 1;
+                continue;
+            }
+            b'\'' => {
+                in_single_quote = true;
+                idx += 1;
+                continue;
+            }
+            b'"' => {
+                in_double_quote = true;
+                idx += 1;
+                continue;
+            }
+            _ => {}
+        }
+
+        if !bytes[idx..].starts_with(key_bytes) {
+            idx += 1;
+            continue;
+        }
+
+        let key_pos = idx;
         if !is_key_boundary(bytes, key_pos, key_bytes.len()) {
-            search_from = key_pos + key_bytes.len();
+            idx = key_pos + key_bytes.len();
             continue;
         }
 
-        let mut idx = key_pos + key_bytes.len();
-        skip_ws_and_comments(bytes, &mut idx);
-        if idx + 1 >= bytes.len()
-            || bytes.get(idx) != Some(&b'=')
-            || bytes.get(idx + 1) != Some(&b'>')
+        let mut value_idx = key_pos + key_bytes.len();
+        skip_ws_and_comments(bytes, &mut value_idx);
+        if value_idx + 1 >= bytes.len()
+            || bytes.get(value_idx) != Some(&b'=')
+            || bytes.get(value_idx + 1) != Some(&b'>')
         {
-            search_from = idx.saturating_add(1);
+            idx = value_idx.saturating_add(1);
             continue;
         }
 
-        idx += 2;
-        skip_ws_and_comments(bytes, &mut idx);
-        return Some((key_pos, idx));
+        value_idx += 2;
+        skip_ws_and_comments(bytes, &mut value_idx);
+        return Some((key_pos, value_idx));
     }
 
     None
