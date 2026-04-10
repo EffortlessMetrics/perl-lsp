@@ -38,8 +38,8 @@ const FEATURE_VERSIONS: &[(&str, u32, u32)] = &[
     // experimental pragma (`use feature 'signatures'`).
     ("signatures", 5, 36),
     // defer block: experimental since v5.36.
-    // Currently detected via FunctionCall { name: "defer" } as the lexer/parser
-    // do not yet have a dedicated Defer keyword token.
+    // Detected only when the AST matches the parser's `defer { ... }` shape,
+    // not for arbitrary helpers/imports named `defer`.
     ("defer", 5, 36),
     ("class", 5, 38),
     ("field", 5, 38),
@@ -131,9 +131,10 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             }
 
             // `defer { }` block — requires v5.36 (`use feature 'defer'`).
-            // The lexer does not yet have a Defer keyword token so defer is
-            // currently parsed as a function call.  Gate on name == "defer".
-            NodeKind::FunctionCall { name, .. } if name == "defer" => {
+            // The parser currently models this as a FunctionCall with a single
+            // block argument. Ordinary helper calls named `defer` should not
+            // trigger PL900.
+            NodeKind::FunctionCall { name, args } if is_defer_feature_usage(name, args) => {
                 if !effective_features.contains(&"defer") {
                     let min = feature_min_version("defer");
                     diagnostics.push(make_diagnostic(n, "defer", declared_version, min));
@@ -207,6 +208,15 @@ fn feature_min_version(feature: &str) -> (u32, u32) {
         .find(|(name, _, _)| *name == feature)
         .map(|(_, maj, min)| (*maj, *min))
         .unwrap_or((5, 0))
+}
+
+/// Return `true` when a node represents the `defer { ... }` feature form.
+fn is_defer_feature_usage(name: &str, args: &[Node]) -> bool {
+    if name != "defer" || args.len() != 1 {
+        return false;
+    }
+
+    matches!(args.first().map(|arg| &arg.kind), Some(NodeKind::Block { .. }))
 }
 
 /// Build a PL900 diagnostic for a version-incompatible feature use.

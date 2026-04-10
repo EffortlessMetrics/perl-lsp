@@ -527,14 +527,27 @@ fn default_node() -> Node {
 }
 
 fn defer_call() -> Node {
-    // `defer` is currently parsed as a FunctionCall (the lexer has no Defer
-    // keyword token yet).  Model it the same way the parser would produce it.
+    // `defer` is currently parsed as a FunctionCall with a single block
+    // argument (the lexer has no Defer keyword token yet).
     Node::new(
         NodeKind::FunctionCall {
             name: "defer".to_string(),
             args: vec![Node::new(NodeKind::Block { statements: vec![] }, loc(26, 40))],
         },
         loc(20, 41),
+    )
+}
+
+fn defer_helper_call() -> Node {
+    Node::new(
+        NodeKind::FunctionCall {
+            name: "defer".to_string(),
+            args: vec![Node::new(
+                NodeKind::String { value: "cleanup".to_string(), interpolated: false },
+                loc(26, 35),
+            )],
+        },
+        loc(20, 36),
     )
 }
 
@@ -727,6 +740,24 @@ fn test_defer_ok_with_use_feature_defer() -> Result<(), Box<dyn std::error::Erro
     assert!(
         no_compat_warnings(&diagnostics),
         "Expected no PL900 warning when 'use feature 'defer'' is present on v5.34, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 24: ordinary helper call named defer is not treated as the feature
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_defer_helper_call_is_not_version_feature() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.34"), defer_helper_call()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning for ordinary helper call named 'defer', got: {:?}",
         diagnostics
     );
     Ok(())
