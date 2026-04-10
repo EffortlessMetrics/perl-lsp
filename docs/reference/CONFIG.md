@@ -88,7 +88,7 @@ your-project/
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `perlcritic` | `boolean` | (unset) | Enable perlcritic diagnostics. When unset, the server default (`false`) applies. Requires `perlcritic` installed on the system. |
-| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. 1 = most severe (gentle), 5 = everything (brutal). Must be in the range 1–5; values outside this range are a parse error. |
+| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum Perl::Critic severity threshold to report. `5` = only most severe violations, `1` = all violations. Must be in the range 1–5; values outside this range are a parse error. |
 
 #### `[features]` — LSP Feature Toggles
 
@@ -392,8 +392,8 @@ Controls optional Perl::Critic static analysis integration.
 | Default | `false` |
 
 **Opt-in.** When `true`, the server runs `perlcritic` on open documents and
-merges violations into the diagnostic stream. Silently skipped if `perlcritic`
-is not installed on the system.
+merges violations into the diagnostic stream. When `perlcritic` is missing,
+the server emits a workspace warning and records the issue in health output.
 
 #### `perl.perlcritic.severity`
 
@@ -402,9 +402,9 @@ is not installed on the system.
 | Type | `integer` (1–5) |
 | Default | `3` |
 
-Minimum severity level to report. `1` = most severe (Brutal), `5` = everything
-(Gentle). Values are clamped to the valid range. Equivalent to
-`perlcritic --severity N`.
+Minimum Perl::Critic severity threshold. `5` = only most severe violations
+(`Gentle`), `1` = all violations (`Brutal` and above). Values are clamped to
+the valid range. Equivalent to `perlcritic --severity N`.
 
 #### `perl.perlcritic.profile`
 

@@ -318,6 +318,32 @@
             "description": "Enable Test::More and Test2 integration for the VS Code Test Explorer panel.",
             "markdownDescription": "Enable `Test::More` and `Test2` integration for the VS Code Test Explorer panel."
           },
+          "perl.perlcritic.enabled": {
+            "type": "boolean",
+            "default": false,
+            "scope": "resource",
+            "order": 70,
+            "description": "Enable Perl::Critic diagnostics from the language server.",
+            "markdownDescription": "Enable Perl::Critic diagnostics from the language server (`perlcritic` must be installed)."
+          },
+          "perl.perlcritic.severity": {
+            "type": "integer",
+            "default": 3,
+            "minimum": 1,
+            "maximum": 5,
+            "scope": "resource",
+            "order": 80,
+            "description": "Perl::Critic severity threshold (5 = strictest, 1 = report all).",
+            "markdownDescription": "Perl::Critic severity threshold (`5` = only most severe, `1` = report all)."
+          },
+          "perl.perlcritic.profile": {
+            "type": "string",
+            "default": "",
+            "scope": "resource",
+            "order": 90,
+            "description": "Path to a .perlcriticrc profile file.",
+            "markdownDescription": "Path to a `.perlcriticrc` profile file. Leave empty to use auto-discovery."
+          },
           "perl-lsp.autoPopulateNewFiles": {
             "type": "boolean",
             "default": true,
@@ -811,7 +837,7 @@
           {
             "id": "verify-perl",
             "title": "Verify Your Perl Installation",
-            "description": "Run the health check to confirm Perl and perltidy are available.",
+            "description": "Run the health check to confirm Perl, perltidy, and perlcritic are available.",
             "media": {
               "image": "media/walkthrough/verify-perl.svg",
               "altText": "Verify Perl"

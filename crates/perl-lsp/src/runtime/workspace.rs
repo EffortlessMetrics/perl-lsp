@@ -546,6 +546,12 @@ impl LspServer {
                     #[cfg(not(target_arch = "wasm32"))]
                     if critic_config_changed {
                         *self.critic_analyzer.lock() = None;
+                        self.perlcritic_missing_tool_warned
+                            .store(false, std::sync::atomic::Ordering::Relaxed);
+                        self.perlcritic_missing_profile_warned
+                            .store(false, std::sync::atomic::Ordering::Relaxed);
+                        self.perlcritic_runtime_failure_warned
+                            .store(false, std::sync::atomic::Ordering::Relaxed);
                     }
 
                     // Update workspace config (include paths, @INC)

@@ -37,6 +37,39 @@ fn retain_requested_code_action_kinds(code_actions: &mut Vec<Value>, requested_k
     });
 }
 
+fn critic_quick_fix_for_policy(code: &str, uri: &str) -> Option<Value> {
+    let (title, new_text) = match code {
+        "TestingAndDebugging::RequireUseStrict" => ("Add `use strict;`", "use strict;\n"),
+        "TestingAndDebugging::RequireUseWarnings" => ("Add `use warnings;`", "use warnings;\n"),
+        _ => return None,
+    };
+
+    let mut changes = serde_json::Map::new();
+    changes.insert(
+        uri.to_string(),
+        json!([{
+            "range": {
+                "start": {"line": 0, "character": 0},
+                "end": {"line": 0, "character": 0}
+            },
+            "newText": new_text
+        }]),
+    );
+
+    Some(json!({
+        "title": title,
+        "kind": "quickfix",
+        "diagnostics": [{
+            "code": code,
+            "source": "perlcritic",
+            "message": format!("Perl::Critic policy violation: {code}"),
+        }],
+        "edit": {
+            "changes": changes
+        }
+    }))
+}
+
 fn display_diagnostic_message(diagnostic: &crate::features::diagnostics::Diagnostic) -> String {
     match &diagnostic.suggestion {
         Some(suggestion) => format!("{}\nSuggestion: {}", diagnostic.message, suggestion),
@@ -76,6 +109,22 @@ impl LspServer {
 
             // Get code actions from both providers
             let mut code_actions: Vec<Value> = Vec::new();
+
+            // Add external Perl::Critic quick fixes keyed by diagnostic policy code.
+            if let Some(context_diags) =
+                params.get("context").and_then(|c| c.get("diagnostics")).and_then(Value::as_array)
+            {
+                for diagnostic in context_diags {
+                    if diagnostic.get("source").and_then(Value::as_str) != Some("perlcritic") {
+                        continue;
+                    }
+                    if let Some(code) = diagnostic.get("code").and_then(Value::as_str)
+                        && let Some(action) = critic_quick_fix_for_policy(code, uri)
+                    {
+                        code_actions.push(action);
+                    }
+                }
+            }
 
             // Add Perl::Critic quick fixes
             let builtin_analyzer = BuiltInAnalyzer::new();

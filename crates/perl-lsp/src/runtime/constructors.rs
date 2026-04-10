@@ -63,6 +63,12 @@ impl LspServer {
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_missing_tool_warned: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_missing_profile_warned: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_runtime_failure_warned: AtomicBool::new(false),
             ai_inline_backend: Mutex::new(None),
         }
     }
@@ -166,6 +172,12 @@ impl LspServer {
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_missing_tool_warned: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_missing_profile_warned: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_runtime_failure_warned: AtomicBool::new(false),
             ai_inline_backend: Mutex::new(None),
         }
     }
@@ -232,6 +244,12 @@ impl LspServer {
             critic_runtime_override: Mutex::new(None),
             #[cfg(not(target_arch = "wasm32"))]
             skip_perlcritic_command_check: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_missing_tool_warned: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_missing_profile_warned: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            perlcritic_runtime_failure_warned: AtomicBool::new(false),
             ai_inline_backend: Mutex::new(None),
         }
     }

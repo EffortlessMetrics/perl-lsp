@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  * - Detect first run via `context.globalState` key `perl-lsp.welcomed`.
- * - Run a multi-step health check: Perl version, perltidy, LSP binary.
+ * - Run a multi-step health check: Perl version, perltidy, perlcritic, LSP binary.
  * - Expose individual check methods so tests can exercise them in isolation.
  */
 
@@ -204,6 +204,37 @@ export class OnboardingManager {
     }
   }
 
+
+  /**
+   * Check whether `perlcritic` is on PATH.
+   *
+   * Perl::Critic absence is a warning — core LSP features still work.
+   */
+  async checkPerlcriticInstalled(): Promise<HealthCheckResult> {
+    const label = 'perlcritic';
+    try {
+      const { stdout } = await this._execCheck('perlcritic', ['--version']);
+      const version = stdout.trim() || '(unknown)';
+      this.outputChannel.appendLine(`[onboarding] perlcritic: ${version}`);
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: `perlcritic found (${version})`,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.outputChannel.appendLine(`[onboarding] perlcritic not found: ${msg}`);
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Warning,
+        detail:
+          'perlcritic not found — Perl::Critic diagnostics will be unavailable. Install via: cpanm Perl::Critic',
+      };
+    }
+  }
+
   /**
    * Check whether the LSP binary has been downloaded / located.
    *
@@ -249,9 +280,10 @@ export class OnboardingManager {
   ): Promise<HealthCheckResult[]> {
     this.outputChannel.appendLine('[onboarding] Running setup health check...');
 
-    const [perlResult, perltidyResult] = await Promise.all([
+    const [perlResult, perltidyResult, perlcriticResult] = await Promise.all([
       this.checkPerlInstalled(),
       this.checkPerltidyInstalled(),
+      this.checkPerlcriticInstalled(),
     ]);
 
     const binaryResult = this.checkBinaryDownloaded(serverPath);
@@ -259,6 +291,7 @@ export class OnboardingManager {
     const results: HealthCheckResult[] = [
       perlResult,
       perltidyResult,
+      perlcriticResult,
       binaryResult,
     ];
 

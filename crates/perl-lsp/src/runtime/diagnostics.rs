@@ -11,6 +11,14 @@ use crate::features::diagnostics::{
 use perl_diagnostics_codes::DiagnosticCode;
 
 impl LspServer {
+    fn source_for_internal_diagnostic(diagnostic: &InternalDiagnostic) -> &'static str {
+        if diagnostic.code.as_deref().is_some_and(|code| code.contains("::")) {
+            "perlcritic"
+        } else {
+            "perl-lsp"
+        }
+    }
+
     /// Convert internal diagnostic tags to LSP tag values
     ///
     /// Maps internal `DiagnosticTag` variants to their LSP numeric equivalents:
@@ -161,7 +169,7 @@ impl LspServer {
                             InternalDiagnosticSeverity::Hint => 4,
                         },
                         "code": d.code,
-                        "source": "perl-parser",
+                        "source": Self::source_for_internal_diagnostic(&d),
                         "message": d.message,
                     });
                     if !d.tags.is_empty() {
@@ -362,7 +370,7 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
                                 "code": d.code.clone(),
-                                "source": "perl-lsp",
+                                "source": Self::source_for_internal_diagnostic(&d),
                                 "message": message,
                             });
 
@@ -597,7 +605,7 @@ impl LspServer {
                                         InternalDiagnosticSeverity::Hint => 4,
                                     },
                                     "code": d.code.clone(),
-                                    "source": "perl-lsp",
+                                    "source": Self::source_for_internal_diagnostic(&d),
                                     "message": message,
                                 });
                                 if !d.tags.is_empty() {
@@ -754,8 +762,8 @@ impl LspServer {
     /// Checks the `perlcritic_enabled` config flag and whether `perlcritic` is
     /// installed on the system. If both conditions are met, runs perlcritic on
     /// the file and appends violations with severity mapped from Perl::Critic's
-    /// 1-5 scale to LSP severity levels (Brutal/Cruel -> Error, Harsh ->
-    /// Warning, Stern/Gentle -> Information).
+    /// 1-5 scale to LSP severity levels (5->Error, 4/3->Warning,
+    /// 2->Information, 1->Hint).
     ///
     /// The `CriticAnalyzer` is reused across calls via `self.critic_analyzer`
     /// so that the per-file violation cache survives between `didChange` events.
@@ -763,9 +771,22 @@ impl LspServer {
     /// analyzer is reset to `None` from `didChangeConfiguration` whenever any
     /// critic-related setting changes.
     ///
-    /// Silently skips if perlcritic is not installed or the URI is not a file.
+    /// Skips non-file URIs; emits workspace-scoped warnings for missing tooling/config.
     /// The `doc_text` parameter is used to convert perlcritic's line/column
     /// positions into byte offsets for the internal diagnostic range.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn warn_perlcritic_once(&self, guard: &std::sync::atomic::AtomicBool, message: String) {
+        if !guard.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            let _ = self.show_message(super::window::MessageType::Warning, &message);
+            let _ = self.log_message(super::window::MessageType::Warning, &message);
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn note_perlcritic_health_issue(&self, message: &str) {
+        tracing::warn!("perlcritic health: {message}");
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn collect_external_perlcritic_diagnostics(
         &self,
@@ -805,6 +826,20 @@ impl LspServer {
         let skip_check =
             self.skip_perlcritic_command_check.load(std::sync::atomic::Ordering::Relaxed);
         if !skip_check && !crate::execute_command::command_exists("perlcritic") {
+            let message = "Perl::Critic is enabled but `perlcritic` was not found on PATH. Install it (for example: cpanm Perl::Critic) or disable `perl.perlcritic.enabled`.".to_string();
+            self.warn_perlcritic_once(&self.perlcritic_missing_tool_warned, message.clone());
+            self.note_perlcritic_health_issue(&message);
+            return;
+        }
+
+        if let Some(profile_path) = profile.as_deref()
+            && !std::path::Path::new(profile_path).exists()
+        {
+            let message = format!(
+                "Perl::Critic profile not found: {profile_path}. Update `perl.perlcritic.profile` or remove it to use auto-discovery."
+            );
+            self.warn_perlcritic_once(&self.perlcritic_missing_profile_warned, message.clone());
+            self.note_perlcritic_health_issue(&message);
             return;
         }
 
@@ -872,17 +907,18 @@ impl LspServer {
         match result {
             Some(Ok(violations)) => {
                 for v in violations {
-                    // Map Perl::Critic severity (1-5) to LSP DiagnosticSeverity:
-                    // Brutal(1)/Cruel(2) -> Error, Harsh(3) -> Warning,
-                    // Stern(4)/Gentle(5) -> Information
+                    // Map Perl::Critic severity to LSP DiagnosticSeverity:
+                    // 5 -> Error, 4/3 -> Warning, 2 -> Information, 1 -> Hint
                     let internal_severity = match v.severity {
-                        crate::perl_critic::Severity::Brutal
-                        | crate::perl_critic::Severity::Cruel => InternalDiagnosticSeverity::Error,
-                        crate::perl_critic::Severity::Harsh => InternalDiagnosticSeverity::Warning,
+                        crate::perl_critic::Severity::Gentle => InternalDiagnosticSeverity::Error,
                         crate::perl_critic::Severity::Stern
-                        | crate::perl_critic::Severity::Gentle => {
+                        | crate::perl_critic::Severity::Harsh => {
+                            InternalDiagnosticSeverity::Warning
+                        }
+                        crate::perl_critic::Severity::Cruel => {
                             InternalDiagnosticSeverity::Information
                         }
+                        crate::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
                     };
 
                     // Convert 0-indexed line/column from CriticAnalyzer to byte offsets.
@@ -896,8 +932,8 @@ impl LspServer {
                     diagnostics.push(InternalDiagnostic {
                         range: (start_byte, end_byte),
                         severity: internal_severity,
-                        code: Some(format!("PC:{}", v.policy)),
-                        message: v.description,
+                        code: Some(v.policy.clone()),
+                        message: format!("[{}] {}", v.policy, v.description),
                         related_information: Vec::new(),
                         tags: Vec::new(),
                         suggestion: None,
@@ -906,6 +942,11 @@ impl LspServer {
             }
             Some(Err(e)) => {
                 tracing::warn!(uri, error = %e, "perlcritic failed");
+                let message = format!(
+                    "Perl::Critic execution failed for workspace diagnostics: {e}. Check perlcritic installation/profile settings."
+                );
+                self.warn_perlcritic_once(&self.perlcritic_runtime_failure_warned, message.clone());
+                self.note_perlcritic_health_issue(&message);
             }
             None => {}
         }

@@ -75,14 +75,14 @@ fn test_a_violations_appear_in_pull_diagnostics_when_enabled() {
     let diags = result["items"].as_array().cloned().unwrap_or_default();
 
     let found = diags.iter().any(|d| {
-        d["code"].as_str() == Some("PC:TestingAndDebugging::RequireUseStrict")
+        d["code"].as_str() == Some("TestingAndDebugging::RequireUseStrict")
             && d["severity"].as_u64() == Some(2)
     });
 
     assert!(
         found,
         "Expected a Warning diagnostic with code \
-         PC:TestingAndDebugging::RequireUseStrict in the pull response; \
+         TestingAndDebugging::RequireUseStrict in the pull response; \
          got: {result}"
     );
 }
@@ -145,10 +145,8 @@ fn test_c_graceful_skip_when_perlcritic_not_installed() {
     let result = pull_diagnostics(&server, uri, "use strict;\n");
 
     let diags = result["items"].as_array().cloned().unwrap_or_default();
-    let perlcritic_diags: Vec<_> = diags
-        .iter()
-        .filter(|d| d["code"].as_str().map(|c| c.starts_with("PC:")).unwrap_or(false))
-        .collect();
+    let perlcritic_diags: Vec<_> =
+        diags.iter().filter(|d| d["source"].as_str() == Some("perlcritic")).collect();
 
     assert_eq!(
         perlcritic_diags.len(),
@@ -218,4 +216,49 @@ fn test_d_perlcriticrc_walkup_finds_workspace_root_config() {
          .perlcriticrc; args: {:?}",
         invocations[0].args
     );
+}
+
+#[test]
+fn test_e_perlcritic_severity_five_maps_to_lsp_error() {
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 5, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(
+        b"test.pl:3:1:5:TestingAndDebugging::RequireUseStrict:Code does not use strict\n".to_vec(),
+    ));
+    server.test_install_mock_critic_runtime(runtime);
+    server.test_bypass_perlcritic_command_check();
+
+    #[cfg(not(windows))]
+    let uri = "file:///tmp/test_severity_5.pl";
+    #[cfg(windows)]
+    let uri = "file:///C:/tmp/test_severity_5.pl";
+
+    let result = pull_diagnostics(&server, uri, "print 'x';\n");
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+    assert!(diags.iter().any(|d| d["severity"].as_u64() == Some(1)));
+}
+
+#[test]
+fn test_f_perlcritic_severity_one_maps_to_lsp_hint() {
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 1, None);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(
+        b"test.pl:3:1:1:ValuesAndExpressions::ProhibitNoisyQuotes:Noisy quote-like operator\n"
+            .to_vec(),
+    ));
+    server.test_install_mock_critic_runtime(runtime);
+    server.test_bypass_perlcritic_command_check();
+
+    #[cfg(not(windows))]
+    let uri = "file:///tmp/test_severity_1.pl";
+    #[cfg(windows)]
+    let uri = "file:///C:/tmp/test_severity_1.pl";
+
+    let result = pull_diagnostics(&server, uri, "print q{hello};\n");
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+    assert!(diags.iter().any(|d| d["severity"].as_u64() == Some(4)));
 }

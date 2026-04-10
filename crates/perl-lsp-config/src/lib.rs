@@ -50,9 +50,10 @@ pub struct ServerConfig {
     /// be installed on the system; silently skipped if not available.
     pub perlcritic_enabled: bool,
 
-    /// Minimum severity level to report (1-5, where 1 = most severe).
+    /// Minimum Perl::Critic severity threshold to report (1-5).
     ///
-    /// Violations below this threshold are suppressed. Default is 3 (Harsh).
+    /// Perl::Critic semantics: `5` reports only the most severe violations, while
+    /// `1` reports all severities (least restrictive). Default is `3` (Harsh).
     /// Equivalent to `perlcritic --severity`.
     pub perlcritic_severity: u8,
 
@@ -511,7 +512,9 @@ pub struct ProjectPerlConfig {
 pub struct ProjectDiagnosticsConfig {
     /// Whether perlcritic is enabled. Maps to `ServerConfig.perlcritic_enabled`.
     pub perlcritic: Option<bool>,
-    /// Minimum perlcritic severity (1-5). Maps to `ServerConfig.perlcritic_severity`.
+    /// Minimum Perl::Critic severity threshold (1-5). Maps to `ServerConfig.perlcritic_severity`.
+    ///
+    /// Perl::Critic semantics: `5` is strictest (only most severe), `1` reports all.
     pub perlcritic_severity: Option<u8>,
 }
 
