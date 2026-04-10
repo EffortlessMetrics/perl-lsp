@@ -114,3 +114,73 @@ my $redis = Mojo::Redis->new;
         "did not expect Mojo::Redis class synthesis without `use Mojo::Redis`"
     );
 }
+
+#[test]
+fn future_use_synthesizes_class_symbol_for_method_calls() {
+    let code = r#"
+use Future;
+
+my $future = Future->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Future", SymbolKind::Class),
+        "expected Future class symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "Future", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=Future"),
+        "expected `framework=Future` on Future, got {attrs:?}"
+    );
+}
+
+#[test]
+fn future_xs_use_synthesizes_class_symbol_for_method_calls() {
+    let code = r#"
+use Future::XS;
+
+my $future = Future::XS->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Future::XS", SymbolKind::Class),
+        "expected Future::XS class symbol when framework is in use"
+    );
+    let attrs = symbol_attrs(&table, "Future::XS", SymbolKind::Class);
+    assert!(
+        attrs.iter().any(|attr| attr == "framework=Future::XS"),
+        "expected `framework=Future::XS` on Future::XS, got {attrs:?}"
+    );
+}
+
+#[test]
+fn future_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $future = Future->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "Future", SymbolKind::Class),
+        "did not expect Future class synthesis without `use Future`"
+    );
+}
+
+#[test]
+fn future_xs_names_are_not_synthesized_without_framework_use() {
+    let code = r#"
+my $future = Future::XS->new;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "Future::XS", SymbolKind::Class),
+        "did not expect Future::XS class synthesis without `use Future::XS`"
+    );
+}
