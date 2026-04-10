@@ -194,6 +194,11 @@ impl ClassModel {
     pub fn has_framework(&self) -> bool {
         !matches!(self.framework, Framework::None)
     }
+
+    /// Return the names of Object::Pad fields that participate in constructor parameters.
+    pub fn object_pad_param_field_names(&self) -> impl Iterator<Item = &str> {
+        self.fields.iter().filter(|field| field.param).map(|field| field.name.as_str())
+    }
 }
 
 /// Builds `ClassModel` instances by walking an AST.
@@ -1793,6 +1798,27 @@ class Point {
         assert!(y.param);
         assert_eq!(y.writer.as_deref(), Some("set_y"));
         assert_eq!(y.default.as_deref(), Some("1"));
+
+        let param_names: Vec<_> = model.object_pad_param_field_names().collect();
+        assert_eq!(param_names, vec!["x", "y"]);
+    }
+
+    #[test]
+    fn object_pad_param_field_names_exclude_non_param_fields() {
+        let models = build_models(
+            r#"
+use Object::Pad;
+
+class Config {
+    field $name :param;
+    field $cache = 1;
+}
+"#,
+        );
+
+        let model = find_model(&models, "Config").expect("Config model");
+        let param_names: Vec<_> = model.object_pad_param_field_names().collect();
+        assert_eq!(param_names, vec!["name"]);
     }
 
     #[test]
