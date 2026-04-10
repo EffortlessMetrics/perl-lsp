@@ -36,6 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Label PR as in-review
         uses: actions/github-script@v8
