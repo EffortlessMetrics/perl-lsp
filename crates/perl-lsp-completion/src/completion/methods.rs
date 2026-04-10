@@ -213,42 +213,128 @@ pub fn infer_receiver_type(context: &CompletionContext, source: &str) -> Option<
 ///
 /// Attributes are stored as `key=value` strings (e.g. `"is=ro"`, `"isa=Str"`).
 /// This function formats them into a human-readable documentation string that
-/// surfaces the type constraint and access mode prominently.
+/// surfaces the attribute metadata prominently.
 fn moo_accessor_documentation(name: &str, attributes: &[String]) -> String {
-    let mut isa_value: Option<&str> = None;
-    let mut is_value: Option<&str> = None;
-    let mut extra_parts: Vec<&str> = Vec::new();
+    let isa = moo_accessor_value(attributes, "isa");
+    let access = moo_accessor_value(attributes, "is").map(moo_access_mode);
+    let required = moo_accessor_value(attributes, "required").map(moo_truthy);
+    let predicate = moo_accessor_method_name(name, attributes, "predicate", "has_");
+    let builder = moo_accessor_method_name(name, attributes, "builder", "_build_");
+    let clearer = moo_accessor_method_name(name, attributes, "clearer", "clear_");
+    let reader = moo_accessor_value(attributes, "reader");
+    let writer = moo_accessor_value(attributes, "writer");
+    let accessor = moo_accessor_value(attributes, "accessor");
+    let lazy = moo_accessor_value(attributes, "lazy").map(moo_truthy);
+    let default = moo_accessor_value(attributes, "default");
 
-    for attr in attributes {
-        if let Some((key, value)) = attr.split_once('=') {
-            match key {
-                "isa" => isa_value = Some(value),
-                "is" => is_value = Some(value),
-                _ => extra_parts.push(attr),
+    let mut doc = format!("Moo/Moose accessor `{name}`\n\n**Attribute**: `{name}`");
+
+    if let Some(isa) = isa {
+        doc.push_str(&format!("\n**Type**: `{isa}`"));
+    }
+    if let Some(access) = access {
+        doc.push_str(&format!("\n**Access**: {access}"));
+    }
+    if let Some(required) = required {
+        doc.push_str(&format!("\n**Required**: {required}"));
+    }
+    if let Some(predicate) = predicate {
+        doc.push_str(&format!("\n**Predicate**: `{predicate}`"));
+    }
+    if let Some(builder) = builder {
+        doc.push_str(&format!("\n**Builder**: `{builder}`"));
+    }
+    if let Some(clearer) = clearer {
+        doc.push_str(&format!("\n**Clearer**: `{clearer}`"));
+    }
+    if let Some(reader) = reader {
+        doc.push_str(&format!("\n**Reader**: `{reader}`"));
+    }
+    if let Some(writer) = writer {
+        doc.push_str(&format!("\n**Writer**: `{writer}`"));
+    }
+    if let Some(accessor) = accessor {
+        doc.push_str(&format!("\n**Accessor**: `{accessor}`"));
+    }
+    if let Some(lazy) = lazy {
+        doc.push_str(&format!("\n**Lazy**: {lazy}"));
+    }
+    if let Some(default) = default {
+        doc.push_str(&format!("\n**Default**: `{default}`"));
+    }
+
+    let extras: Vec<String> = attributes
+        .iter()
+        .filter_map(|attr| {
+            let (key, _) = attr.split_once('=')?;
+            if matches!(
+                key,
+                "isa"
+                    | "is"
+                    | "required"
+                    | "predicate"
+                    | "builder"
+                    | "clearer"
+                    | "reader"
+                    | "writer"
+                    | "accessor"
+                    | "lazy"
+                    | "default"
+            ) {
+                None
+            } else {
+                Some(attr.clone())
             }
-        }
-    }
-
-    let mut doc = format!("Moo/Moose accessor `{name}`");
-
-    if let Some(isa) = isa_value {
-        doc.push_str(&format!("\n\n**Type**: `{isa}`"));
-    }
-    if let Some(is) = is_value {
-        let mode = match is {
-            "ro" => "read-only",
-            "rw" => "read-write",
-            "rwp" => "read-write private",
-            "lazy" => "lazy",
-            other => other,
-        };
-        doc.push_str(&format!("\n\n**Access**: {mode}"));
-    }
-    if !extra_parts.is_empty() {
-        doc.push_str(&format!("\n\n**Options**: {}", extra_parts.join(", ")));
+        })
+        .collect();
+    if !extras.is_empty() {
+        doc.push_str(&format!("\n**Options**: {}", extras.join(", ")));
     }
 
     doc
+}
+
+fn moo_accessor_value<'a>(attributes: &'a [String], key: &str) -> Option<&'a str> {
+    attributes.iter().find_map(|attr| {
+        let (attr_key, value) = attr.split_once('=')?;
+        if attr_key == key { Some(value) } else { None }
+    })
+}
+
+fn moo_access_mode(value: &str) -> String {
+    match value {
+        "ro" => "read-only".to_string(),
+        "rw" => "read-write".to_string(),
+        "rwp" => "read-write private".to_string(),
+        "lazy" => "lazy".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn moo_truthy(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" => "yes".to_string(),
+        "0" | "false" | "no" => "no".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn moo_accessor_method_name(
+    name: &str,
+    attributes: &[String],
+    key: &str,
+    default_prefix: &str,
+) -> Option<String> {
+    let value = moo_accessor_value(attributes, key)?;
+    if moo_is_truthy(value) {
+        Some(format!("{default_prefix}{name}"))
+    } else {
+        Some(value.to_string())
+    }
+}
+
+fn moo_is_truthy(value: &str) -> bool {
+    matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes")
 }
 
 /// Add method completions
