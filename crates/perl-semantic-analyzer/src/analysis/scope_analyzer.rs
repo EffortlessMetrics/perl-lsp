@@ -598,9 +598,10 @@ impl ScopeAnalyzer {
                 }
             }
             NodeKind::Variable { sigil, name } => {
-                // Skip built-in global variables
-                // Optimization: Check built-ins first to avoid string scan for "::" on common globals
-                if is_builtin_global(sigil, name) {
+                // Skip built-in global variables — but only when no lexical declaration shadows
+                // them.  Variables like $a and $b are sort globals, but `my ($a, $b) = @_`
+                // creates a lexical shadow that must be tracked as used.
+                if is_builtin_global(sigil, name) && !scope.has_variable_parts(sigil, name) {
                     return;
                 }
 
@@ -830,8 +831,10 @@ impl ScopeAnalyzer {
 
                 ancestors.push(node);
 
-                // Declare the loop variable
+                // Declare the loop variable and immediately mark it initialized — the list
+                // provides its value at runtime so there is no uninitialized window.
                 self.analyze_node(variable, &loop_scope, ancestors, issues, context);
+                self.mark_initialized(variable, &loop_scope);
                 self.analyze_node(list, &loop_scope, ancestors, issues, context);
                 self.analyze_node(body, &loop_scope, ancestors, issues, context);
                 if let Some(cb) = continue_block {
