@@ -1356,7 +1356,7 @@ fn is_known_function(name: &str) -> bool {
 /// emits declaration nodes for the handle argument, and where treating that declaration as
 /// used avoids false diagnostics after the call.
 fn is_declaration_capable_builtin(name: &str) -> bool {
-    matches!(name, "open" | "opendir" | "sysopen" | "pipe" | "socket" | "accept")
+    matches!(name, "open" | "opendir" | "sysopen" | "pipe" | "socket" | "socketpair" | "accept")
 }
 
 /// Check if an identifier is a known filehandle

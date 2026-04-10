@@ -176,6 +176,39 @@ print $client;
     Ok(())
 }
 
+#[test]
+fn scope_socketpair_initializes_both_handles() -> Result<(), Box<dyn std::error::Error>> {
+    // socketpair creates a pair of connected sockets; both handles should be
+    // treated as declared and initialized, not flagged as undeclared/unused.
+    let code = r#"
+use strict;
+socketpair my $s1, my $s2, AF_UNIX, SOCK_STREAM, 0;
+print $s1;
+print $s2;
+"#;
+
+    let issues = scope_issues_strict(code);
+    let handled = ["$s1", "$s2"];
+
+    for variable_name in handled {
+        assert!(
+            !issues.iter().any(|i| {
+                matches!(
+                    i.kind,
+                    IssueKind::UndeclaredVariable
+                        | IssueKind::UninitializedVariable
+                        | IssueKind::UnusedVariable
+                ) && i.variable_name == variable_name
+            }),
+            "socketpair should declare and initialize both socket handles without false positives: {} (issues: {:?})",
+            variable_name,
+            issues
+        );
+    }
+
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Variable Scope Resolution — our
 // ===========================================================================
