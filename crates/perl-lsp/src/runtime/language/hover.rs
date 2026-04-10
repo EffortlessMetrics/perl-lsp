@@ -291,6 +291,24 @@ impl LspServer {
             }
         }
 
+        // Handle file test operators (`-e`, `-f`, `-M`, etc.) before the
+        // general token fallback, because the token scanner does not include
+        // the leading `-`.
+        if let Some(op) = Self::extract_file_test_operator(text, offset) {
+            if let Some(op_doc) = crate::semantic::get_operator_documentation(&op) {
+                return HoverExtracted::Complete(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**File Test Operator**\n\n```\n{}\n```\n\n{}",
+                            op_doc.signature,
+                            op_doc.description
+                        ),
+                    },
+                }));
+            }
+        }
+
         // Fall back to simple token display, with builtin docs
         let hover_text = self.get_token_at_position(text, offset);
 
@@ -1504,6 +1522,32 @@ impl LspServer {
                 '!' | '@' | '?' | '/' | '\\' | '$' | ';' | ',' | '.' | '&' | '\'' | '`' | '+' | '|'
             ) {
                 return Some(format!("${}", punct));
+            }
+        }
+
+        None
+    }
+
+    /// Extract a file test operator at the given byte offset.
+    ///
+    /// Recognizes operators like `-e`, `-f`, and `-M` when the cursor is on
+    /// either the `-` or the operator letter.
+    fn extract_file_test_operator(text: &str, offset: usize) -> Option<String> {
+        let bytes = text.as_bytes();
+        if bytes.is_empty() || offset >= bytes.len() {
+            return None;
+        }
+
+        for start in [offset, offset.saturating_sub(1)] {
+            if bytes.get(start) != Some(&b'-') {
+                continue;
+            }
+
+            if let Some(op_char) = bytes.get(start + 1) {
+                let op = format!("-{}", *op_char as char);
+                if crate::semantic::SemanticAnalyzer::is_file_test_operator(&op) {
+                    return Some(op);
+                }
             }
         }
 
