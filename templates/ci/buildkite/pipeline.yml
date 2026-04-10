@@ -1,0 +1,62 @@
+# Buildkite pipeline template for perl-lsp.
+#
+# This template assumes a Rust-capable Buildkite queue and a Docker image that
+# already contains the repo's runtime dependencies.
+
+steps:
+  - group: ":rust: PR smoke"
+    key: pr-smoke
+    steps:
+      - label: ":fmt: cargo fmt"
+        agents:
+          queue: rust
+        plugins:
+          - docker#v5.13.0:
+              image: "${BUILDKITE_DOCKER_IMAGE}"
+              always-pull: true
+              mount-buildkite-agent: true
+              workdir: /workdir
+        commands:
+          - cargo fmt --all --check
+
+      - label: ":clippy: just clippy-core"
+        agents:
+          queue: rust
+        plugins:
+          - docker#v5.13.0:
+              image: "${BUILDKITE_DOCKER_IMAGE}"
+              always-pull: true
+              mount-buildkite-agent: true
+              workdir: /workdir
+        commands:
+          - just clippy-core
+
+      - label: ":test_tube: just test-core"
+        agents:
+          queue: rust
+        plugins:
+          - docker#v5.13.0:
+              image: "${BUILDKITE_DOCKER_IMAGE}"
+              always-pull: true
+              mount-buildkite-agent: true
+              workdir: /workdir
+        commands:
+          - just test-core
+
+  - wait
+
+  - label: ":rocket: merge gate"
+    key: merge-gate
+    agents:
+      queue: rust
+    plugins:
+      - docker#v5.13.0:
+          image: "${BUILDKITE_DOCKER_IMAGE}"
+          always-pull: true
+          mount-buildkite-agent: true
+          workdir: /workdir
+    commands:
+      - mkdir -p artifacts
+      - nix develop -c just ci-gate
+    artifact_paths:
+      - artifacts/**
