@@ -16,6 +16,7 @@ use crate::lints::deprecated::check_deprecated_syntax;
 use crate::lints::duplicate_hash_keys::check_duplicate_hash_keys;
 use crate::lints::eval_error_flow::check_eval_error_flow;
 use crate::lints::ffi_checklib::check_ffi_checklib;
+use crate::lints::goto_label::check_goto_labels;
 use crate::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
@@ -146,6 +147,7 @@ impl DiagnosticsProvider {
 
         // Moo/Moose role conflict diagnostics (same-file only)
         check_role_conflicts(ast, &symbol_table, &mut diagnostics);
+        check_goto_labels(ast, &symbol_table, &mut diagnostics);
 
         // Security anti-pattern detection (string eval, two-arg open, backtick exec)
         check_security(ast, &mut diagnostics);

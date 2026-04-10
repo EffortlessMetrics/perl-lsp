@@ -13,6 +13,7 @@
 //! - **common_mistakes**: Frequent programming errors (assignment in conditions, etc.)
 //! - **security**: Security anti-patterns (two-arg open, string eval, backtick execution, global signal handlers)
 //! - **eval_error_flow**: Conservative `$@` / `$EVAL_ERROR` flow checks after `eval` / `try`
+//! - **goto_label**: Conservative `goto LABEL` validation when no matching label exists in-file
 //!
 //! # Diagnostic Code Reference
 //!
@@ -106,6 +107,12 @@
 //! |------|----------|-------------|
 //! | `PL408` | Warning | Hash key appears more than once in the same literal |
 //!
+//! ## Goto labels (`goto_label.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL409` | Warning | `goto LABEL` references a label that is not defined in the file |
+//!
 //! # Severity Levels
 //!
 //! Each lint produces diagnostics with appropriate severity:
@@ -131,6 +138,8 @@ pub mod duplicate_hash_keys;
 pub mod eval_error_flow;
 /// FFI::CheckLib native-library validation hints
 pub mod ffi_checklib;
+/// Conservative `goto LABEL` validation
+pub mod goto_label;
 /// Missing module detection (PL701)
 pub mod missing_module;
 /// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)
