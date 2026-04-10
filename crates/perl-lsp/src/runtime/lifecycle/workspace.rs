@@ -67,5 +67,71 @@ impl LspServer {
                 }
             }
         }
+
+        {
+            let mut workspace_config = self.workspace_config.lock();
+            workspace_config.refresh_native_build_hints(&root);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LspServer;
+    use parking_lot::Mutex;
+    use std::fs;
+    use std::io::Write;
+    use std::sync::Arc;
+    use tempfile::tempdir;
+    use url::Url;
+
+    struct CapturingWriter {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl CapturingWriter {
+        fn new(buffer: Arc<Mutex<Vec<u8>>>) -> Self {
+            Self { buffer }
+        }
+    }
+
+    impl Write for CapturingWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.buffer.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn load_and_apply_project_config_refreshes_native_build_hints_once() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("Makefile.PL"),
+            "WriteMakefile( INC => '-Iinclude -I. -Ilocal/lib/perl5' );\n",
+        )
+        .expect("write Makefile.PL");
+
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let writer = CapturingWriter::new(buffer);
+        let output: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(Box::new(writer)));
+        let server = LspServer::with_output(output);
+
+        let root_uri = Url::from_file_path(dir.path()).expect("file uri").to_string();
+        {
+            let mut folders = server.workspace_folders.lock();
+            folders.push(root_uri);
+        }
+
+        server.load_and_apply_project_config();
+
+        let workspace_config = server.workspace_config.lock();
+        assert_eq!(
+            workspace_config.native_build_hints.include_dirs,
+            vec!["include", ".", "local/lib/perl5"]
+        );
     }
 }
