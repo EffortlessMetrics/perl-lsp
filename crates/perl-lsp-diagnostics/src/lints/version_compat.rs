@@ -123,18 +123,19 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
 
                 for arg in args {
-                    let name = normalize_builtin_import(arg);
-                    if name.is_empty() {
-                        continue;
-                    }
+                    for name in builtin_import_names(arg) {
+                        if name.is_empty() {
+                            continue;
+                        }
 
-                    if name.starts_with(':') {
-                        builtin_bundle_declared = true;
-                        continue;
-                    }
+                        if name.starts_with(':') {
+                            builtin_bundle_declared = true;
+                            continue;
+                        }
 
-                    if !builtin_imports.contains(&name) {
-                        builtin_imports.push(name);
+                        if !builtin_imports.contains(&name) {
+                            builtin_imports.push(name);
+                        }
                     }
                 }
             }
@@ -259,20 +260,17 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
 
                 for arg in args {
-                    let name = normalize_builtin_import(arg);
-                    if name.is_empty() {
-                        continue;
-                    }
-
-                    let min = builtin_import_min_version(&name);
-                    if declared_version < min {
-                        let display = format!("use builtin {}", arg);
-                        diagnostics.push(make_diagnostic(
-                            n,
-                            &display,
-                            declared_version,
-                            (min.major, min.minor),
-                        ));
+                    for name in builtin_import_names(arg) {
+                        let min = builtin_import_min_version(&name);
+                        if declared_version < min {
+                            let display = format!("use builtin {}", arg);
+                            diagnostics.push(make_diagnostic(
+                                n,
+                                &display,
+                                declared_version,
+                                (min.major, min.minor),
+                            ));
+                        }
                     }
                 }
             }
@@ -347,8 +345,18 @@ fn builtin_import_min_version(name: &str) -> PerlVersion {
     builtin_min_version(name)
 }
 
-fn normalize_builtin_import(arg: &str) -> String {
-    arg.trim_matches(|c| c == '\'' || c == '"').to_string()
+fn builtin_import_names(arg: &str) -> Vec<String> {
+    let trimmed = arg.trim();
+
+    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+        return inner
+            .split_whitespace()
+            .filter(|name| !name.is_empty())
+            .map(|name| name.to_string())
+            .collect();
+    }
+
+    vec![trimmed.trim_matches(|c| c == '\'' || c == '"').to_string()]
 }
 
 /// Return `true` when a node represents the `defer { ... }` feature form.
