@@ -273,6 +273,9 @@ pub struct LspServer {
     /// Initialized to `false`; only the test helper methods flip this.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) skip_perlcritic_command_check: AtomicBool,
+    /// Ensures the missing perlcritic warning is only surfaced once.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) perlcritic_missing_warning_shown: AtomicBool,
     /// Optional AI inline-completion backend.
     ///
     /// When `Some`, the `handle_inline_completion` handler will attempt

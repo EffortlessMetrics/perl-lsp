@@ -110,7 +110,8 @@ impl LspServer {
                                 crate::perl_critic::Severity::Brutal |
                                 crate::perl_critic::Severity::Cruel => 1, // Error
                                 crate::perl_critic::Severity::Harsh => 2, // Warning
-                                _ => 3, // Information
+                                crate::perl_critic::Severity::Stern
+                                | crate::perl_critic::Severity::Gentle => 4, // Hint
                             },
                             "code": violation.policy.clone(),
                             "source": "Perl::Critic",

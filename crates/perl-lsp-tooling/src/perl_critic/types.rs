@@ -40,7 +40,7 @@ impl Severity {
         match self {
             Self::Brutal | Self::Cruel => lsp_types::DiagnosticSeverity::ERROR,
             Self::Harsh => lsp_types::DiagnosticSeverity::WARNING,
-            Self::Stern | Self::Gentle => lsp_types::DiagnosticSeverity::INFORMATION,
+            Self::Stern | Self::Gentle => lsp_types::DiagnosticSeverity::HINT,
         }
     }
 
