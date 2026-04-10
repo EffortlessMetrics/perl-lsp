@@ -2547,6 +2547,36 @@ print $buffer;
 }
 
 #[test]
+fn read_position_zero_declaration_not_consumed() -> Result<(), Box<dyn std::error::Error>> {
+    // Position 0 for `read` must not be treated as a declaration-capable output slot.
+    // If a declaration appears there, it should still be analyzed like a normal lexical
+    // declaration (and therefore may be reported as unused/uninitialized).
+    let code = r#"
+use strict;
+read my $fh, my $buffer, 1024;
+print $buffer;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            i.variable_name == "$fh"
+                && matches!(i.kind, IssueKind::UnusedVariable | IssueKind::UninitializedVariable)
+        }),
+        "read position-0 declaration should not be auto-consumed (issues: {:?})",
+        issues
+    );
+    assert!(
+        !issues.iter().any(|i| {
+            i.variable_name == "$buffer"
+                && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
+        }),
+        "read position-1 buffer declaration should still be consumed (issues: {:?})",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
 fn socketpair_both_positions_declared() -> Result<(), Box<dyn std::error::Error>> {
     // `socketpair my $a, my $b, ...` — positions 0 and 1 are both declarations.
     let code = r#"
