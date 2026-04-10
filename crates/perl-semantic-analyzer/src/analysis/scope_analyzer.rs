@@ -1573,6 +1573,9 @@ fn is_known_function(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
+    if matches!(name, "PL_sv_yes" | "PL_sv_no" | "PL_sv_undef") {
+        return true;
+    }
     // Optimization: All known functions are lowercase or start with non-uppercase chars
     if name.as_bytes()[0].is_ascii_uppercase() {
         return false;

@@ -140,6 +140,39 @@ fn test_hover_special_variables_return_markdown() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn test_hover_internal_pl_sv_special_variables() -> TestResult {
+    let doc = "print $PL_sv_yes; print $PL_sv_no; print $PL_sv_undef;\n";
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///pl_sv_internal.pl", doc)?;
+
+    for (needle, expected) in [
+        ("$PL_sv_yes", "true scalar"),
+        ("$PL_sv_no", "false scalar"),
+        ("$PL_sv_undef", "undefined scalar"),
+    ] {
+        let character = doc.find(needle).ok_or("needle not found")?;
+        let result = harness
+            .request(
+                "textDocument/hover",
+                json!({
+                    "textDocument": {"uri": "file:///pl_sv_internal.pl"},
+                    "position": {"line": 0, "character": character}
+                }),
+            )
+            .unwrap_or(json!(null));
+        let val = hover_value(&result).ok_or("Expected hover content for PL_sv_*")?;
+        let lower = val.to_lowercase();
+        assert!(
+            lower.contains(expected) || lower.contains("internal special variable"),
+            "{needle} hover should mention {expected}, got: {val}"
+        );
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // New tests for issue #2347 – extended special variable hover coverage
 // ---------------------------------------------------------------------------

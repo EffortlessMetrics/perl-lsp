@@ -20,6 +20,30 @@ enum HoverExtracted {
     None,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::LspServer;
+
+    #[test]
+    fn test_internal_pl_sv_yes_hover_from_sigiled_token() {
+        let text = "print $PL_sv_yes;\n";
+        let offset = text.find('$').expect("sigil should exist");
+
+        assert_eq!(
+            LspServer::extract_special_variable(text, offset).as_deref(),
+            Some("$PL_sv_yes")
+        );
+
+        let hover = LspServer::get_special_variable_hover("$PL_sv_yes")
+            .expect("hover should exist for $PL_sv_yes");
+        let value = hover["contents"]["value"].as_str().expect("markdown hover text");
+        assert!(
+            value.contains("true scalar"),
+            "hover should describe the shared true scalar: {value}"
+        );
+    }
+}
+
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display
     ///
@@ -1514,6 +1538,15 @@ impl LspServer {
             }
         }
 
+        // Internal Perl values used by XS/C code, e.g. $PL_sv_yes.
+        if sigil == '$' && bytes[next_pos..].starts_with(b"PL_sv_") {
+            let mut end = next_pos + "PL_sv_".len();
+            while end < len && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
+                end += 1;
+            }
+            return Some(text[sigil_pos..end].to_string());
+        }
+
         // Single punctuation character after $ (e.g. $!, $?, $/, $\, $$, $;, etc.)
         if sigil == '$' && !next_ch.is_ascii_alphanumeric() && next_ch != b'_' {
             let punct = next_ch as char;
@@ -1556,10 +1589,42 @@ impl LspServer {
 
     /// Return educational hover documentation for Perl special variables.
     ///
-    /// Covers the 20 most common special variables that every Perl developer
-    /// encounters.  Returns a JSON hover response with markdown content, or
-    /// `None` if the variable is not in the known set.
+    /// Covers the common special variables every Perl developer encounters,
+    /// plus a few internal `PL_sv_*` constants used by XS/C code. Returns a
+    /// JSON hover response with markdown content, or `None` if the variable is
+    /// not in the known set.
+    fn get_internal_special_variable_hover(name: &str) -> Option<Value> {
+        let (heading, description) = match name {
+            "$PL_sv_yes" | "PL_sv_yes" => (
+                "Internal Special Variable",
+                "The canonical true scalar used by Perl internals and XS/C code. It is an immutable shared value, so extensions can return or compare against it without allocating a fresh true scalar.",
+            ),
+            "$PL_sv_no" | "PL_sv_no" => (
+                "Internal Special Variable",
+                "The canonical false scalar used by Perl internals and XS/C code. It is an immutable shared value representing Perl's shared false value.",
+            ),
+            "$PL_sv_undef" | "PL_sv_undef" => (
+                "Internal Special Variable",
+                "The canonical undefined scalar used by Perl internals and XS/C code. It represents Perl's shared `undef` value.",
+            ),
+            _ => return None,
+        };
+
+        Some(json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**`{name}` \u{2014} {heading}**\n\n{description}\n\n```perl\n# XS/C internals typically treat this as a shared value\n```"
+                ),
+            },
+        }))
+    }
+
     fn get_special_variable_hover(name: &str) -> Option<Value> {
+        if let Some(hover) = Self::get_internal_special_variable_hover(name) {
+            return Some(hover);
+        }
+
         // Handle $1-$9 capture group variables with dynamic content.
         if let Some(digit) = name
             .strip_prefix('$')
