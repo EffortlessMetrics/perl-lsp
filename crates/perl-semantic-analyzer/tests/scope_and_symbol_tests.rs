@@ -2519,22 +2519,28 @@ print $data;
 #[test]
 fn read_position_zero_not_treated_as_declaration() -> Result<(), Box<dyn std::error::Error>> {
     // Position 0 in `read` is an existing filehandle, NOT a declaration target.
-    // Passing a bare (non-declaration) variable at position 0 should not affect its
-    // declaration status — it must have been declared separately.
+    // An undeclared handle at position 0 should still be flagged, while the
+    // position-1 buffer should be treated as the declaration/initialization target.
     let code = r#"
 use strict;
-my $fh = \*STDIN;
-my $buffer;
-read $fh, $buffer, 1024;
+read $undeclared_fh, my $buffer, 1024;
 print $buffer;
 "#;
     let issues = scope_issues_strict(code);
     assert!(
+        issues.iter().any(|i| {
+            i.variable_name.contains("undeclared_fh")
+                && matches!(i.kind, IssueKind::UndeclaredVariable)
+        }),
+        "undeclared read handle should still be flagged (issues: {:?})",
+        issues
+    );
+    assert!(
         !issues.iter().any(|i| {
-            i.variable_name.contains("fh")
+            i.variable_name.contains("buffer")
                 && matches!(i.kind, IssueKind::UndeclaredVariable | IssueKind::UnusedVariable)
         }),
-        "existing $fh should not be flagged (issues: {:?})",
+        "read buffer declaration should not be flagged (issues: {:?})",
         issues
     );
     Ok(())

@@ -1852,8 +1852,9 @@ fn is_known_function(name: &str) -> bool {
 /// used avoids false diagnostics after the call.
 ///
 /// Position semantics:
-/// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `socketpair`
-/// - Position 1: `read`, `sysread`, `recv`, `socketpair` (second handle)
+/// - Position 0: `open`, `opendir`, `sysopen`, `socket`, `accept`, `dbmopen`
+/// - Position 1: `read`, `sysread`, `recv`, `shmread`
+/// - Positions 0 and 1: `pipe`, `socketpair`
 fn builtin_declaration_arg_positions(name: &str) -> &'static [usize] {
     match name {
         // Position 0: the first argument is the new handle/socket
