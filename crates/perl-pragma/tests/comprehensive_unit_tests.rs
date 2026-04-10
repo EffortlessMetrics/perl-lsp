@@ -380,6 +380,18 @@ fn use_feature_bundle_5_12_sets_unicode_strings() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+#[test]
+fn use_feature_quoted_qw_items_are_parsed() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["'qw(signatures unicode_strings)'"], 0, 46)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1);
+    assert!(map[0].1.strict_vars, "signatures should imply strict vars");
+    assert!(map[0].1.strict_subs, "signatures should imply strict subs");
+    assert!(map[0].1.strict_refs, "signatures should imply strict refs");
+    assert!(map[0].1.unicode_strings, "unicode_strings should be enabled");
+    Ok(())
+}
+
 // ===========================================================================
 // Unknown / unrelated pragmas are ignored
 // ===========================================================================
@@ -1077,6 +1089,39 @@ fn v5_38_removes_switch() -> Result<(), Box<dyn std::error::Error>> {
     // switch (given/when) was removed from the bundle in v5.38
     let features = features_enabled_by_version(PerlVersion::new(5, 38));
     assert!(!features.contains(&"switch"), "v5.38 should not include 'switch' (removed)");
+    Ok(())
+}
+
+#[test]
+fn parse_perl_version_accepts_single_component_major_only() -> Result<(), Box<dyn std::error::Error>>
+{
+    let parsed = perl_pragma::parse_perl_version("v5");
+    assert_eq!(parsed, Some(PerlVersion::new(5, 0)));
+    Ok(())
+}
+
+#[test]
+fn parse_perl_version_ignores_patch_component() -> Result<(), Box<dyn std::error::Error>> {
+    let parsed = perl_pragma::parse_perl_version("v5.36.2");
+    assert_eq!(parsed, Some(PerlVersion::new(5, 36)));
+    Ok(())
+}
+
+#[test]
+fn parse_perl_version_rejects_non_numeric_input() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(perl_pragma::parse_perl_version("v5.bad"), None);
+    assert_eq!(perl_pragma::parse_perl_version("not-a-version"), None);
+    assert_eq!(perl_pragma::parse_perl_version(""), None);
+    Ok(())
+}
+
+#[test]
+fn version_implication_boundaries_match_expected_cutoffs() -> Result<(), Box<dyn std::error::Error>>
+{
+    assert!(!perl_pragma::version_implies_strict(PerlVersion::new(5, 11)));
+    assert!(perl_pragma::version_implies_strict(PerlVersion::new(5, 12)));
+    assert!(!perl_pragma::version_implies_warnings(PerlVersion::new(5, 34)));
+    assert!(perl_pragma::version_implies_warnings(PerlVersion::new(5, 35)));
     Ok(())
 }
 
