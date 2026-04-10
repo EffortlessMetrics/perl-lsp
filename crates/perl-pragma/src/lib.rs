@@ -286,6 +286,17 @@ impl PragmaTracker {
         if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() }
     }
 
+    fn build_scoped_body(
+        body: &Node,
+        current_state: &mut PragmaState,
+        ranges: &mut Vec<(Range<usize>, PragmaState)>,
+    ) {
+        let saved_state = current_state.clone();
+        Self::build_ranges(body, current_state, ranges);
+        *current_state = saved_state;
+        ranges.push((body.location.end..body.location.end, current_state.clone()));
+    }
+
     fn build_ranges(
         node: &Node,
         current_state: &mut PragmaState,
@@ -494,6 +505,7 @@ impl PragmaTracker {
 
                 // Restore state after block
                 *current_state = saved_state;
+                ranges.push((node.location.end..node.location.end, current_state.clone()));
             }
             NodeKind::Program { statements } => {
                 // Process all top-level statements
@@ -503,18 +515,54 @@ impl PragmaTracker {
             }
             // For subroutines and other container nodes, recurse into their bodies
             NodeKind::Subroutine { body, .. } => {
-                Self::build_ranges(body, current_state, ranges);
+                Self::build_scoped_body(body, current_state, ranges);
             }
-            NodeKind::If { then_branch, else_branch, .. } => {
-                Self::build_ranges(then_branch, current_state, ranges);
+            NodeKind::Method { body, .. } => {
+                Self::build_scoped_body(body, current_state, ranges);
+            }
+            NodeKind::Class { body, .. } => {
+                Self::build_scoped_body(body, current_state, ranges);
+            }
+            NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
+                Self::build_scoped_body(then_branch, current_state, ranges);
+                for (_, elsif_body) in elsif_branches {
+                    Self::build_scoped_body(elsif_body, current_state, ranges);
+                }
                 if let Some(else_b) = else_branch {
-                    Self::build_ranges(else_b, current_state, ranges);
+                    Self::build_scoped_body(else_b, current_state, ranges);
                 }
             }
-            NodeKind::While { body, .. }
-            | NodeKind::For { body, .. }
-            | NodeKind::Foreach { body, .. } => {
-                Self::build_ranges(body, current_state, ranges);
+            NodeKind::While { body, continue_block, .. }
+            | NodeKind::For { body, continue_block, .. }
+            | NodeKind::Foreach { body, continue_block, .. } => {
+                Self::build_scoped_body(body, current_state, ranges);
+                if let Some(continue_block) = continue_block {
+                    Self::build_scoped_body(continue_block, current_state, ranges);
+                }
+            }
+            NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
+                Self::build_scoped_body(block, current_state, ranges);
+            }
+            NodeKind::Given { body, .. }
+            | NodeKind::When { body, .. }
+            | NodeKind::Default { body } => {
+                Self::build_scoped_body(body, current_state, ranges);
+            }
+            NodeKind::Try { body, catch_blocks, finally_block } => {
+                Self::build_scoped_body(body, current_state, ranges);
+                for (_, catch_body) in catch_blocks {
+                    Self::build_scoped_body(catch_body, current_state, ranges);
+                }
+                if let Some(finally_block) = finally_block {
+                    Self::build_scoped_body(finally_block, current_state, ranges);
+                }
+            }
+            NodeKind::LabeledStatement { statement, .. } => {
+                Self::build_ranges(statement, current_state, ranges);
+            }
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                Self::build_ranges(statement, current_state, ranges);
+                Self::build_ranges(condition, current_state, ranges);
             }
             // `package Foo { ... }` — the block form is lexically scoped.
             // Save/restore state around the block so pragmas declared inside
@@ -523,9 +571,7 @@ impl PragmaTracker {
             // `package Foo;` (no block) has no inner scope to walk — its
             // siblings in `Program` already accumulate state normally.
             NodeKind::Package { block: Some(pkg_block), .. } => {
-                let saved_state = current_state.clone();
-                Self::build_ranges(pkg_block, current_state, ranges);
-                *current_state = saved_state;
+                Self::build_scoped_body(pkg_block, current_state, ranges);
             }
             // Other node types don't contain use/no statements
             _ => {}

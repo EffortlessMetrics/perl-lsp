@@ -546,6 +546,39 @@ fn if_branches_traversed() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn if_elsif_else_branches_restore_state() -> Result<(), Box<dyn std::error::Error>> {
+    let then_branch = block(vec![no_node("strict", &["refs"], 20, 35)], 18, 40);
+    let elsif_branch = block(vec![use_node("warnings", &[], 45, 60)], 43, 65);
+    let else_branch = block(vec![no_node("strict", &["subs"], 70, 85)], 68, 90);
+    let if_node = Node {
+        kind: NodeKind::If {
+            condition: Box::new(dummy_node(10, 15)),
+            then_branch: Box::new(then_branch),
+            elsif_branches: vec![(Box::new(dummy_node(41, 42)), Box::new(elsif_branch))],
+            else_branch: Some(Box::new(else_branch)),
+        },
+        location: loc(10, 90),
+    };
+    let ast =
+        program(vec![use_node("strict", &[], 0, 12), if_node, use_node("warnings", &[], 91, 106)]);
+    let map = PragmaTracker::build(&ast);
+
+    let then_state = PragmaTracker::state_for_offset(&map, 25);
+    assert!(!then_state.strict_refs, "then branch pragmas must be tracked");
+
+    let elsif_state = PragmaTracker::state_for_offset(&map, 50);
+    assert!(elsif_state.warnings, "elsif branch pragmas must be tracked");
+
+    let else_state = PragmaTracker::state_for_offset(&map, 75);
+    assert!(!else_state.strict_subs, "else branch pragmas must be tracked");
+
+    let after = PragmaTracker::state_for_offset(&map, 95);
+    assert!(after.strict_vars && after.strict_subs && after.strict_refs);
+    assert!(after.warnings);
+    Ok(())
+}
+
+#[test]
 fn while_body_traversed() -> Result<(), Box<dyn std::error::Error>> {
     let body = block(vec![use_node("warnings", &[], 20, 35)], 18, 40);
     let while_node = Node {
@@ -598,6 +631,83 @@ fn foreach_body_traversed() -> Result<(), Box<dyn std::error::Error>> {
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
     assert!(state.strict_vars && state.strict_subs && state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn modern_container_bodies_are_traversed_and_scoped() -> Result<(), Box<dyn std::error::Error>> {
+    let method = method_node(block(vec![no_node("strict", &["refs"], 20, 34)], 18, 36), 13, 40);
+    let class = class_node(block(vec![no_node("strict", &["subs"], 45, 60)], 43, 63), 41, 65);
+    let try_block = block(vec![no_node("strict", &["vars"], 70, 84)], 68, 86);
+    let catch_block = block(vec![use_node("warnings", &[], 90, 104)], 88, 106);
+    let finally_block = block(vec![no_node("strict", &["refs"], 110, 125)], 108, 128);
+    let try_stmt = try_node(try_block, vec![catch_block], Some(finally_block), 66, 130);
+    let eval_stmt = eval_node(block(vec![use_node("warnings", &[], 135, 148)], 133, 150), 131, 152);
+    let do_stmt = do_node(block(vec![no_node("strict", &["refs"], 155, 170)], 153, 172), 153, 174);
+    let defer_stmt =
+        defer_node(block(vec![no_node("strict", &["subs"], 178, 190)], 176, 192), 175, 194);
+    let given_body = block(
+        vec![
+            when_node(block(vec![no_node("strict", &["vars"], 200, 214)], 198, 216), 196, 218),
+            default_node(block(vec![use_node("warnings", &[], 220, 232)], 218, 234), 218, 236),
+        ],
+        196,
+        238,
+    );
+    let given_stmt = given_node(given_body, 195, 240);
+    let while_body = block(vec![no_node("strict", &["refs"], 245, 258)], 243, 260);
+    let continue_body = block(vec![use_node("warnings", &[], 262, 274)], 260, 276);
+    let while_stmt = while_node(while_body, Some(continue_body), 242, 278);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        method,
+        class,
+        try_stmt,
+        eval_stmt,
+        do_stmt,
+        defer_stmt,
+        given_stmt,
+        while_stmt,
+        use_node("warnings", &[], 280, 295),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let method_state = PragmaTracker::state_for_offset(&map, 25);
+    assert!(!method_state.strict_refs, "method bodies must be traversed");
+
+    let class_state = PragmaTracker::state_for_offset(&map, 50);
+    assert!(!class_state.strict_subs, "class bodies must be traversed");
+
+    let try_state = PragmaTracker::state_for_offset(&map, 75);
+    assert!(!try_state.strict_vars, "try bodies must be traversed");
+
+    let catch_state = PragmaTracker::state_for_offset(&map, 95);
+    assert!(catch_state.warnings, "catch blocks must be traversed");
+
+    let finally_state = PragmaTracker::state_for_offset(&map, 115);
+    assert!(!finally_state.strict_refs, "finally blocks must be traversed");
+
+    let eval_state = PragmaTracker::state_for_offset(&map, 140);
+    assert!(eval_state.warnings, "eval blocks must be traversed");
+
+    let do_state = PragmaTracker::state_for_offset(&map, 160);
+    assert!(!do_state.strict_refs, "do blocks must be traversed");
+
+    let defer_state = PragmaTracker::state_for_offset(&map, 182);
+    assert!(!defer_state.strict_subs, "defer blocks must be traversed");
+
+    let when_state = PragmaTracker::state_for_offset(&map, 205);
+    assert!(!when_state.strict_vars, "when bodies must be traversed");
+
+    let default_state = PragmaTracker::state_for_offset(&map, 225);
+    assert!(default_state.warnings, "default bodies must be traversed");
+
+    let continue_state = PragmaTracker::state_for_offset(&map, 266);
+    assert!(continue_state.warnings, "continue blocks must be traversed");
+
+    let after = PragmaTracker::state_for_offset(&map, 285);
+    assert!(after.strict_vars && after.strict_subs && after.strict_refs);
+    assert!(after.warnings);
     Ok(())
 }
 
@@ -1056,6 +1166,93 @@ fn package_node(name: &str, block_node: Option<Node>, start: usize, end: usize) 
             name: name.to_string(),
             name_span: loc(start, end),
             block: block_node.map(Box::new),
+        },
+        location: loc(start, end),
+    }
+}
+
+fn method_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::Method {
+            name: "foo".to_string(),
+            signature: None,
+            attributes: vec![],
+            body: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
+}
+
+fn class_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::Class {
+            name: "Foo".to_string(),
+            parents: vec![],
+            body: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
+}
+
+fn eval_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node { kind: NodeKind::Eval { block: Box::new(body_node) }, location: loc(start, end) }
+}
+
+fn do_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node { kind: NodeKind::Do { block: Box::new(body_node) }, location: loc(start, end) }
+}
+
+fn defer_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node { kind: NodeKind::Defer { block: Box::new(body_node) }, location: loc(start, end) }
+}
+
+fn try_node(
+    body_node: Node,
+    catch_bodies: Vec<Node>,
+    finally_node: Option<Node>,
+    start: usize,
+    end: usize,
+) -> Node {
+    Node {
+        kind: NodeKind::Try {
+            body: Box::new(body_node),
+            catch_blocks: catch_bodies.into_iter().map(|body| (None, Box::new(body))).collect(),
+            finally_block: finally_node.map(Box::new),
+        },
+        location: loc(start, end),
+    }
+}
+
+fn given_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::Given {
+            expr: Box::new(dummy_node(start + 1, start + 2)),
+            body: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
+}
+
+fn when_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::When {
+            condition: Box::new(dummy_node(start + 1, start + 2)),
+            body: Box::new(body_node),
+        },
+        location: loc(start, end),
+    }
+}
+
+fn default_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node { kind: NodeKind::Default { body: Box::new(body_node) }, location: loc(start, end) }
+}
+
+fn while_node(body_node: Node, continue_node: Option<Node>, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::While {
+            condition: Box::new(dummy_node(start + 1, start + 2)),
+            body: Box::new(body_node),
+            continue_block: continue_node.map(Box::new),
         },
         location: loc(start, end),
     }
