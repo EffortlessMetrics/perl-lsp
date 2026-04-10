@@ -1656,3 +1656,123 @@ sub main_func {}
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_prepare_rename_returns_range_for_keyword_token() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Prepare rename returns range for keyword token");
+
+    let code = r#"use strict;
+use warnings;
+
+my $value = 1;
+print $value;
+"#;
+
+    scenario.given("a Perl document and a cursor positioned on a keyword token");
+    let (mut harness, workspace) = setup_workspace(&[("rename_guard.pl", code)])?;
+    let uri = workspace.uri("rename_guard.pl");
+    harness.open(&uri, code)?;
+
+    let (line, character) = find_position(code, "print $value;");
+
+    scenario.when("requesting prepareRename on the `print` keyword token");
+    let response = harness.request_raw_with_timeout(
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/prepareRename",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": {
+                    "line": line,
+                    "character": character
+                }
+            }
+        }),
+        Duration::from_secs(2),
+    );
+
+    scenario.then("the server returns a valid range payload rather than crashing");
+    assert!(
+        response.get("error").is_none(),
+        "prepareRename should not hard-fail; got {response:?}"
+    );
+    assert!(
+        response.get("result").is_some_and(has_lsp_range),
+        "prepareRename should return a range-compatible result; got {response:?}"
+    );
+    assert_eq!(
+        response.pointer("/result/placeholder").and_then(Value::as_str),
+        Some("print"),
+        "prepareRename should surface the touched token as placeholder"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_references_toggle_include_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("References remain stable across includeDeclaration toggle");
+
+    let code = r#"use strict;
+use warnings;
+
+my $total = 1;
+print $total;
+$total += 2;
+"#;
+
+    scenario.given("a file with one lexical declaration and two usages");
+    let (mut harness, workspace) = setup_workspace(&[("references.pl", code)])?;
+    let uri = workspace.uri("references.pl");
+    harness.open(&uri, code)?;
+
+    let (line, character) = find_position(code, "$total += 2");
+
+    scenario.when("requesting references with includeDeclaration=true");
+    let with_declaration = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 1 },
+            "context": { "includeDeclaration": true }
+        }),
+    )?;
+
+    scenario.then("the response includes declaration and usages");
+    let with_decl_items = with_declaration.as_array().cloned().unwrap_or_default();
+    assert!(
+        with_decl_items.len() >= 3,
+        "expected declaration + 2 usages when includeDeclaration=true; got {with_decl_items:?}"
+    );
+
+    scenario.when("requesting references with includeDeclaration=false");
+    let without_declaration = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 1 },
+            "context": { "includeDeclaration": false }
+        }),
+    )?;
+
+    scenario.then("the response stays structurally valid and returns reference locations");
+    let without_decl_items = without_declaration.as_array().cloned().unwrap_or_default();
+    assert!(
+        !without_decl_items.is_empty(),
+        "reference lookup with includeDeclaration=false should still return locations"
+    );
+    assert!(
+        without_decl_items.len() >= with_decl_items.len().saturating_sub(1),
+        "includeDeclaration=false should not catastrophically reduce references (with={}, without={})",
+        with_decl_items.len(),
+        without_decl_items.len()
+    );
+    assert!(
+        without_decl_items.iter().all(|item| item.get("uri").is_some() && has_lsp_range(item)),
+        "reference entries should preserve uri + range fields; got {without_decl_items:?}"
+    );
+
+    Ok(())
+}
