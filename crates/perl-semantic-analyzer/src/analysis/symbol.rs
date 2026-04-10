@@ -683,6 +683,7 @@ impl SymbolExtractor {
                 });
 
                 self.synthesize_async_framework_class_symbol(object);
+                self.synthesize_future_api_symbols(object, method, node.location);
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -1892,6 +1893,68 @@ impl SymbolExtractor {
             declaration: Some("framework=EV".to_string()),
             documentation: Some(format!("Synthetic EV API `{ev_suffix}`")),
             attributes: vec!["framework=EV".to_string(), format!("ev_api={ev_suffix}")],
+        });
+
+        true
+    }
+
+    /// Synthesize a narrow Future/Future::XS promise-chain surface for common entrypoints.
+    ///
+    /// This intentionally avoids type inference. It only exposes the canonical
+    /// constructor / class methods and the common chain methods that are most
+    /// useful for navigation and references when a file opts into Future.
+    fn synthesize_future_api_symbols(
+        &mut self,
+        object: &Node,
+        method: &str,
+        location: SourceLocation,
+    ) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+
+        let (framework_name, root_name) = match flags.async_framework {
+            Some(AsyncFrameworkKind::Future) => ("Future", "Future"),
+            Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS"),
+            _ => return false,
+        };
+
+        let chain_methods = ["then", "catch", "finally", "get", "is_done", "is_ready"];
+        let class_entrypoints = ["new", "done", "fail", "wait_all", "needs_all", "needs_any"];
+
+        let object_name = Self::single_symbol_name(object);
+
+        let should_synthesize = if chain_methods.contains(&method) {
+            true
+        } else if class_entrypoints.contains(&method) {
+            object_name.is_some_and(|name| name == root_name)
+        } else {
+            false
+        };
+        if !should_synthesize {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(method).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
+                    && symbol.attributes.iter().any(|attr| attr == &format!("future_api={method}"))
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: method.to_string(),
+            qualified_name: format!("{framework_name}::{method}"),
+            kind: SymbolKind::Subroutine,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some(format!("framework={framework_name}")),
+            documentation: Some(format!("Synthetic {framework_name} API `{method}`")),
+            attributes: vec![format!("framework={framework_name}"), format!("future_api={method}")],
         });
 
         true
