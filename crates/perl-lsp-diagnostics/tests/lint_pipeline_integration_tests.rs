@@ -208,7 +208,54 @@ fn lint_pipeline_warnings_inside_end_suppresses_pl101() {
 }
 
 // =========================================================================
-// 9. use strict inside non-BEGIN phase block (INIT) suppresses PL100 (#2360)
+// 9. conditional `use if` pragmas conservatively suppress missing-pragmas
+// =========================================================================
+
+#[test]
+fn lint_pipeline_use_if_strict_suppresses_pl100() {
+    let source = "use if $^O eq 'MSWin32', 'strict';\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    assert!(
+        missing_strict.is_empty(),
+        "conditional use-if strict should conservatively suppress PL100, got {} missing-strict diags",
+        missing_strict.len()
+    );
+}
+
+#[test]
+fn lint_pipeline_use_if_warnings_suppresses_pl101() {
+    let source = "use strict;\nuse if $^O eq 'MSWin32', 'warnings';\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_warnings: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
+    assert!(
+        missing_warnings.is_empty(),
+        "conditional use-if warnings should conservatively suppress PL101, got {} missing-warnings diags",
+        missing_warnings.len()
+    );
+}
+
+#[test]
+fn lint_pipeline_use_if_nonpragma_version_condition_still_emits_missing_pragmas() {
+    let source = "use if $] >= 5.036, 'Some::Module';\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    let missing_warnings: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
+
+    assert!(!missing_strict.is_empty(), "non-pragma conditional use-if should not suppress PL100");
+    assert!(
+        !missing_warnings.is_empty(),
+        "non-pragma conditional use-if should not suppress PL101"
+    );
+}
+
+// =========================================================================
+// 10. use strict inside non-BEGIN phase block (INIT) suppresses PL100 (#2360)
 // =========================================================================
 
 #[test]
@@ -226,7 +273,7 @@ fn lint_pipeline_strict_inside_init_suppresses_pl100() {
 }
 
 // =========================================================================
-// 10. Security lint: string eval fires through the full pipeline (#2693)
+// 11. Security lint: string eval fires through the full pipeline (#2693)
 // =========================================================================
 
 #[test]
@@ -253,7 +300,7 @@ fn lint_pipeline_string_eval_emits_pl600() {
 }
 
 // =========================================================================
-// 11. Eval error flow lint fires through the full pipeline (#3380)
+// 12. Eval error flow lint fires through the full pipeline (#3380)
 // =========================================================================
 
 #[test]
@@ -274,7 +321,7 @@ fn lint_pipeline_eval_error_flow_emits_pl407() {
 }
 
 // =========================================================================
-// 12. Security lint: global SIG handlers fire through the full pipeline
+// 13. Security lint: global SIG handlers fire through the full pipeline
 // =========================================================================
 
 #[test]

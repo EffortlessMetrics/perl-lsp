@@ -254,6 +254,53 @@ fn pragma_arg_items(arg: &str) -> Vec<String> {
     vec![trimmed.to_string()]
 }
 
+fn normalized_pragma_token(arg: &str) -> &str {
+    arg.trim().trim_matches('\'').trim_matches('"')
+}
+
+fn is_tracked_pragma_module(module: &str) -> bool {
+    matches!(module, "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin")
+}
+
+fn valid_strict_args(args: &[String]) -> bool {
+    args.iter()
+        .flat_map(|arg| pragma_arg_items(arg))
+        .all(|item| matches!(item.as_str(), "vars" | "subs" | "refs"))
+}
+
+fn conditional_target_tail_is_valid(module: &str, tail: &[String]) -> bool {
+    if parse_perl_version(module).is_some() {
+        return tail.is_empty();
+    }
+
+    match module {
+        "strict" => tail.is_empty() || valid_strict_args(tail),
+        "warnings" => true,
+        "utf8" => tail.is_empty(),
+        "encoding" => tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty(),
+        "locale" => {
+            tail.is_empty() || (tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty())
+        }
+        "feature" => !tail.is_empty(),
+        "builtin" => tail.iter().any(|arg| !builtin_import_names(arg).is_empty()),
+        _ => false,
+    }
+}
+
+fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
+    args.iter().enumerate().find_map(|(idx, arg)| {
+        let module = normalized_pragma_token(arg);
+        let tail = &args[idx + 1..];
+        if (is_tracked_pragma_module(module) || parse_perl_version(module).is_some())
+            && conditional_target_tail_is_valid(module, tail)
+        {
+            Some((module, tail))
+        } else {
+            None
+        }
+    })
+}
+
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
@@ -304,6 +351,129 @@ impl PragmaTracker {
     ) {
         match &node.kind {
             NodeKind::Use { module, args, .. } => {
+                if (module == "if" || module == "unless")
+                    && let Some((conditional_module, conditional_args)) =
+                        conditional_pragma_target(args)
+                {
+                    match conditional_module {
+                        "strict" => {
+                            if conditional_args.is_empty() {
+                                current_state.strict_vars = true;
+                                current_state.strict_subs = true;
+                                current_state.strict_refs = true;
+                            } else {
+                                for arg in conditional_args {
+                                    match normalized_pragma_token(arg) {
+                                        "vars" => current_state.strict_vars = true,
+                                        "subs" => current_state.strict_subs = true,
+                                        "refs" => current_state.strict_refs = true,
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "warnings" => {
+                            current_state.warnings = true;
+                            current_state.disabled_warning_categories.clear();
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "utf8" => {
+                            current_state.utf8 = true;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "encoding" => {
+                            current_state.encoding = conditional_args
+                                .first()
+                                .map(|arg| normalized_pragma_token(arg).to_string());
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "locale" => {
+                            current_state.locale = true;
+                            current_state.locale_scope = conditional_args
+                                .first()
+                                .map(|arg| normalized_pragma_token(arg).to_string());
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "feature" => {
+                            let mut changed = false;
+                            for arg in conditional_args {
+                                for item in pragma_arg_items(arg) {
+                                    match item.as_str() {
+                                        "signatures" => {
+                                            current_state.strict_vars = true;
+                                            current_state.strict_subs = true;
+                                            current_state.strict_refs = true;
+                                            changed = true;
+                                        }
+                                        "unicode_strings" => {
+                                            current_state.unicode_strings = true;
+                                            changed = true;
+                                        }
+                                        item if item.starts_with(':') => {
+                                            if let Some(version) =
+                                                parse_perl_version(item.trim_start_matches(':'))
+                                            {
+                                                if version >= PerlVersion::new(5, 12) {
+                                                    current_state.unicode_strings = true;
+                                                    changed = true;
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+
+                            if changed {
+                                ranges.push((
+                                    node.location.start..node.location.end,
+                                    current_state.clone(),
+                                ));
+                            }
+                            return;
+                        }
+                        "builtin" => {
+                            apply_builtin_imports(current_state, conditional_args);
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        _ => {
+                            if let Some(version) = parse_perl_version(conditional_module) {
+                                enable_effective_version_semantics(current_state, version);
+                                ranges.push((
+                                    node.location.start..node.location.end,
+                                    current_state.clone(),
+                                ));
+                            }
+                            return;
+                        }
+                    }
+                }
+
                 // Handle use statements
                 match module.as_str() {
                     "strict" => {
