@@ -656,18 +656,19 @@ impl DebugAdapter {
                                         should_emit_stopped = true;
                                         let resume_mode = s.last_resume_mode.clone();
 
-                                        let breakpoint_outcome =
-                                            if matches!(resume_mode, ResumeMode::Continue)
-                                                && !current_file.is_empty()
-                                                && current_line > 0
-                                            {
-                                                breakpoints.register_breakpoint_hit(
-                                                    &current_file,
-                                                    i64::from(current_line),
-                                                )
-                                            } else {
-                                                BreakpointHitOutcome::default()
-                                            };
+                                        let breakpoint_outcome = if matches!(
+                                            resume_mode,
+                                            ResumeMode::Continue | ResumeMode::RunToBreakpoint
+                                        ) && !current_file.is_empty()
+                                            && current_line > 0
+                                        {
+                                            breakpoints.register_breakpoint_hit(
+                                                &current_file,
+                                                i64::from(current_line),
+                                            )
+                                        } else {
+                                            BreakpointHitOutcome::default()
+                                        };
 
                                         if exception_match || warning_match {
                                             stop_reason = "exception".to_string();
@@ -686,6 +687,21 @@ impl DebugAdapter {
                                                 s.last_resume_mode = ResumeMode::Continue;
                                                 should_auto_continue = true;
                                             }
+                                        } else if matches!(resume_mode, ResumeMode::RunToBreakpoint)
+                                        {
+                                            // Not at a user breakpoint while in RunToBreakpoint
+                                            // mode.  The `c` command sent by configurationDone is
+                                            // already driving the debugger toward the first
+                                            // breakpoint; the context line we just saw is the
+                                            // implicit first-line stop that appeared BEFORE that
+                                            // `c` was processed.  Do NOT send another `c` here —
+                                            // that would queue a second continue that runs past
+                                            // the eventual breakpoint, breaking subsequent steps.
+                                            // Simply keep state=Running and suppress the stopped
+                                            // event so the client never sees this implicit stop.
+                                            s.state = DebugState::Running;
+                                            // Keep RunToBreakpoint until we actually hit one.
+                                            should_auto_continue = true;
                                         } else {
                                             s.state = DebugState::Stopped;
                                         }
@@ -1364,13 +1380,33 @@ impl DebugAdapter {
 
     /// Handle configurationDone request
     pub(super) fn handle_configuration_done(&self, seq: i64, request_seq: i64) -> DapMessage {
-        // Send initial command to get the debugger started
+        // Determine whether stopOnEntry was requested in the launch args.
+        let stop_on_entry =
+            lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args")
+                .as_ref()
+                .and_then(|a| a.get("stopOnEntry"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
-            // Send initial 'l' command to list current location
-            let _ = stdin.write_all(b"l\n");
-            let _ = stdin.flush();
+            if stop_on_entry {
+                // The entry stopped event was already emitted during launch.
+                // List the current source location so the IDE can display it.
+                let _ = stdin.write_all(b"l\n");
+                let _ = stdin.flush();
+            } else {
+                // stopOnEntry is false: perl -d always stops at the first
+                // executable line.  Run to the first user-set breakpoint.
+                // ResumeMode::RunToBreakpoint signals the output reader to
+                // silently skip non-breakpoint stops (the implicit first-line
+                // stop) and auto-continue until a user breakpoint is hit.
+                session.state = DebugState::Running;
+                session.last_resume_mode = ResumeMode::RunToBreakpoint;
+                let _ = stdin.write_all(b"c\n");
+                let _ = stdin.flush();
+            }
         }
 
         DapMessage::Response {

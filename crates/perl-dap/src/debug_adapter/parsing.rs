@@ -5,7 +5,12 @@ use super::*;
 impl DebugAdapter {
     /// Normalize debugger output lines for deterministic parsing by:
     /// - removing ANSI escape sequences
-    /// - stripping debugger prompt prefixes (e.g. `DB<1>`)
+    /// - stripping all debugger prompt prefixes (e.g. `DB<1>`, `DB<2>`)
+    ///
+    /// A single output line from `perl -d` may contain multiple consecutive
+    /// prompt tokens when the debugger processes several commands between stops
+    /// (e.g. `  DB<1>   DB<2> main::(/path/file.pl:5):`).  All prompts must
+    /// be stripped so that the context pattern can match the tail of the line.
     pub(super) fn normalize_debugger_output_line(line: &str) -> String {
         let mut normalized = if let Some(re) = ansi_escape_re() {
             re.replace_all(line, "").into_owned()
@@ -13,7 +18,8 @@ impl DebugAdapter {
             line.to_string()
         };
 
-        if let Some(prompt_start) = normalized.find("DB<")
+        // Strip all occurrences of DB<N> prompt tokens from the line.
+        while let Some(prompt_start) = normalized.find("DB<")
             && let Some(prompt_end) = normalized[prompt_start..].find('>')
         {
             let content_start = prompt_start + prompt_end + 1;
