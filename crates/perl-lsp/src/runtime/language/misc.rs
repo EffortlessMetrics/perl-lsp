@@ -1562,11 +1562,17 @@ impl LspServer {
                             data: Some(json!({"file": file_path})),
                         })?;
 
+                    // Strip \\?\ extended-length prefix so perl.exe can accept the path.
+                    // resolve_debug_file_path calls canonicalize() which on Windows returns
+                    // paths with the \\?\ prefix that external programs cannot handle.
+                    let ext_resolved =
+                        crate::execute_command::normalize_path_for_external_command(&resolved);
+
                     // Launch perl -d as a detached child process
                     match std::process::Command::new("perl")
                         .arg("-d")
                         .arg("--")
-                        .arg(&resolved)
+                        .arg(&ext_resolved)
                         .stdin(std::process::Stdio::null())
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())

@@ -10,10 +10,24 @@ use std::process::Command;
 /// understood by Win32 APIs but not by external programs (e.g. `perl.exe`).  This
 /// helper strips that prefix so the resulting path is usable as a command-line
 /// argument.  On non-Windows platforms the function is a no-op identity.
+///
+/// Two prefix forms are handled:
+/// - `\\?\C:\...`         (local drive) → `C:\...`
+/// - `\\?\UNC\server\...` (network UNC) → `\\server\...`
+///
+/// The UNC form requires special treatment: stripping `\\?\` alone would leave
+/// `UNC\server\...` which is not a valid path.  Instead we replace `\\?\UNC\`
+/// with `\\` so the result is a conventional UNC path (`\\server\share\...`).
 pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
     #[cfg(windows)]
     {
         let s = path.to_string_lossy();
+        // Network UNC extended-length paths: \\?\UNC\server\share\...
+        // Must become \\server\share\... (not UNC\server\share\...)
+        if let Some(unc_rest) = s.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{}", unc_rest));
+        }
+        // Local drive extended-length paths: \\?\C:\... → C:\...
         if let Some(stripped) = s.strip_prefix(r"\\?\") {
             return PathBuf::from(stripped.to_string());
         }
@@ -981,5 +995,34 @@ mod normalize_path_tests {
         let path = Path::new(r"\\?\C:\foo\bar");
         let result = normalize_path_for_external_command(path);
         assert_eq!(result, PathBuf::from(r"\\?\C:\foo\bar"));
+    }
+
+    /// On Windows, the UNC extended-length form `\\?\UNC\server\share\...` must
+    /// become `\\server\share\...` — NOT `UNC\server\share\...`.
+    ///
+    /// `Path::canonicalize` on Windows returns `\\?\UNC\...` for network paths.
+    /// Simply stripping `\\?\` would leave `UNC\server\share\...` which perl.exe
+    /// cannot resolve.  The correct result is a plain UNC path `\\server\share\...`.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn strips_extended_length_unc_prefix_on_windows() {
+        let prefixed = Path::new(r"\\?\UNC\fileserver\share\project\test.pl");
+        let result = normalize_path_for_external_command(prefixed);
+        assert_eq!(
+            result,
+            PathBuf::from(r"\\fileserver\share\project\test.pl"),
+            "UNC extended-length prefix should become plain UNC path: got {:?}",
+            result
+        );
+    }
+
+    /// On non-Windows, a UNC extended-length string is also left untouched —
+    /// the conditional compilation means the entire stripping block is absent.
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn no_stripping_on_non_windows_even_for_unc_extended_string() {
+        let path = Path::new(r"\\?\UNC\fileserver\share\project\test.pl");
+        let result = normalize_path_for_external_command(path);
+        assert_eq!(result, PathBuf::from(r"\\?\UNC\fileserver\share\project\test.pl"));
     }
 }
