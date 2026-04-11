@@ -19,6 +19,7 @@ project docs when you need exact release facts, receipts, or milestone detail.
 - crates.io intentionally remains on `0.12.2` while the registry window is still deferred
 - Pre-announcement plumbing: license badge fix, Docker arm64 timeout fix, dependency triage, harness archival, SRP microcrate extractions
 - Distribution channel verification across GitHub Releases, VS Code Marketplace, Open VSX, Docker Hub, and the delayed crates.io line
+- Coroutine request #3539 is being re-scoped: defer speculative core syntax support and split follow-up into upstream-status tracking plus CPAN API IDE support
 - See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (post-v0.12.3 / pre-v0.13.0)" for the active item list
 
 ## Next (v0.13.0 — public alpha announcement)

@@ -20,6 +20,7 @@ evidence-backed status and release facts.
 - SRP microcrate extractions in flight (anti_pattern_detector, bench_parser) to free the dead `tree-sitter-perl-rs` harness for archival
 - Publishing the modern parsers as `tree-sitter-perl-c` (C tree-sitter FFI) and a new `tree-sitter-perl-rs` (Rust v3 facade with tree-sitter-compatible output)
 - Per-crate publish blockers cleared (perl-lsp-ai-provider unblocked, perl-heredoc-anti-patterns extraction in progress)
+- Coroutine request #3539 re-scope in progress: defer speculative core syntax support and split follow-up into upstream-status tracking plus CPAN coroutine API IDE support
 
 ## NEXT — v0.13.0 public alpha announcement
 
@@ -37,7 +38,7 @@ evidence-backed status and release facts.
 
 ## Working Rules
 
-- Last updated: `2026-04-09`
+- Last updated: `2026-04-11`
 - Keep “current release line” separate from “next milestone”.
 - Put receipts and computed metrics in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), not here.
 - Put detailed milestone criteria in [docs/project/ROADMAP.md](docs/project/ROADMAP.md), not here.

@@ -109,6 +109,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Test coverage gaps and broken integration tests
 - VSCode extension lint/quality audit (eslint v10 landed in #3179)
 - AI inline completion (#3018) shipped in the live 0.12.x line — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
+- Coroutine scope correction (#3539): defer core parser/AST syntax work until upstream Perl ships a documented coroutine feature contract; split follow-up into (1) upstream core-status tracking and (2) CPAN coroutine IDE support (e.g., Coro hover/completion) to deliver near-term user value
 
 ### Next (v0.13.0 — public alpha announcement)
 
@@ -193,4 +194,4 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-04-09 -->
+<!-- Last Updated: 2026-04-11 -->
