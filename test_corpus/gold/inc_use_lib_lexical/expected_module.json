@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "fixture": "inc_use_lib_lexical",
+  "resolution_mode": "lexical_use_lib",
+  "assertions": [
+    {
+      "kind": "resolves",
+      "module": "LexicalModule",
+      "expected_suffix": "lib/LexicalModule.pm",
+      "use_line": 3,
+      "use_col": 4,
+      "consumers": ["diagnostic_no_pl701", "goto_definition", "hover"],
+      "rationale": "in-source 'use lib lib' pragma resolves LexicalModule via all three consumers"
+    }
+  ]
+}
