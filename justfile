@@ -740,6 +740,7 @@ ci-gate:
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
+    just status-check && \
     just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
     just ci-unsafe-ratchet && \
