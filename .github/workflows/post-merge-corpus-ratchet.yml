@@ -17,19 +17,12 @@ name: Post-Merge Corpus Ratchet
 # See issue #2026 (automate corpus ratchet after parser fix merges).
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'crates/perl-parser/**'
-      - 'crates/perl-parser-core/**'
-      - 'crates/perl-parser-pest/**'
-      - 'xtask/src/main.rs'
-      - 'xtask/src/tasks/cpan_corpus.rs'
-      - 'xtask/src/tasks/parser_corpus_sweep.rs'
-      - 'justfile'
-      - '.ci/cpan-corpus-baseline.json'
-      - '.ci/cpan-corpus-manifest.txt'
+  schedule:
+    # Nightly at 08:00 UTC. The ratchet is periodic bookkeeping, not a
+    # per-merge gate (post-merge-status.yml handles per-merge regeneration).
+    # Nightly cadence avoids concurrency-cancel storms from rapid parser merges.
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 # Only one ratchet at a time; cancel stale runs if a new parser merge lands.
 concurrency:
@@ -73,7 +66,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: target/cpan-corpus
-          key: cpan-corpus-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          key: cpan-corpus-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-1000-distributions.txt') }}
           restore-keys: |
             cpan-corpus-${{ runner.os }}-
 
