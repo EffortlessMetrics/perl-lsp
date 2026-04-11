@@ -325,6 +325,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other test suites, continuing the long-running #3258 burn-down
   (#4030, #4032, #4035).
 
+<!-- 2026-04-11 session addendum: PRs merged after the initial changelog entry was written -->
+
+### Added (addendum)
+
+- **Phase-scoped pragma diagnostics** (`PL502`, `PL503`) — new diagnostics flag
+  `use strict` / `use warnings` placed inside phase blocks (`BEGIN`, `END`, `INIT`,
+  `CHECK`, `UNITCHECK`) where they have lexical block scope rather than file scope;
+  quick fixes move the pragmas to file scope preserving shebangs. (#4131)
+
+- **`cargo xtask check-test-wiring` CLI command wired** — PR #4119 added the
+  `check_test_wiring` module but omitted the `use` import in `main.rs`; the
+  subcommand was returning "unrecognized subcommand". Now fully wired; also fixes
+  one genuine orphan discovered by the guard: `crates/perl-lsp/tests/fixtures/integration_example.rs`.
+  (#4151)
+
+- **Cross-file `use constant` and parenthesized import lists** — `find_import_source()`
+  strips quotes from string args before comparison so `use Foo ('bar', 'baz')` resolves
+  via goto-def; `use constant` re-exports are followed across file boundaries. (#4133)
+
+### Changed (addendum)
+
+- **Multi-root workspace integration tests activated in nightly gate** — the 8
+  integration tests in `multi_root_workspace_tests.rs` (added in #3984, never run in CI)
+  are now wired via a new `ci-workspace-multiroot` justfile recipe, placed in the
+  nightly gate only until proven stable. (#4137)
+
+### Fixed (addendum)
+
+- **Hotfix: red master from `check_test_wiring` regex and clippy** — two runtime
+  `Regex::new(...).expect(...)` calls in `check_test_wiring.rs` migrated to
+  `LazyLock<Regex>` statics; `let_and_return` clippy warning in `parser_corpus_sweep`
+  removed; `RUSTSEC-2026-0097` suppressed in audit paths with follow-up in #4149.
+  (#4150)
+
+- **Status: feature maturity metadata restored** — valid `maturity` value reinstated
+  for the phase-scoped pragma diagnostic capability after #4131 introduced an
+  invalid value; `xtask update-status --check` green again. (#4148)
+
+- **DevEx: detect stale installed pre-push hooks** — `just status-check` now compares
+  the installed `.git/hooks/pre-push` against the canonical checked-in `hooks/pre-push`,
+  normalising CRLF and trailing-blank-line noise. (#4144)
+
+### Tests / Quality (addendum)
+
+- **Perl::Critic missing profile path test** — regression test for an explicitly
+  configured but missing Perl::Critic profile path; asserts subprocess is skipped and
+  no policy diagnostics are returned. (#4139)
+
+
 ## [0.12.3] - 2026-04-08
 
 <!-- Pipeline rehearsal release — validates the full publish + extension + Docker cycle before v0.13.0 public alpha -->
