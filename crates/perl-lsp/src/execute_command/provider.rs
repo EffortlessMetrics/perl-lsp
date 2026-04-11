@@ -1,5 +1,11 @@
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use serde_json::{Value, json};
+#[cfg(windows)]
+use std::ffi::OsString;
+#[cfg(windows)]
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+#[cfg(windows)]
+use std::path::{Component, Prefix};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -18,20 +24,35 @@ use std::process::Command;
 /// The UNC form requires special treatment: stripping `\\?\` alone would leave
 /// `UNC\server\...` which is not a valid path.  Instead we replace `\\?\UNC\`
 /// with `\\` so the result is a conventional UNC path (`\\server\share\...`).
+#[cfg(windows)]
 pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
-    #[cfg(windows)]
-    {
-        let s = path.to_string_lossy();
-        // Network UNC extended-length paths: \\?\UNC\server\share\...
-        // Must become \\server\share\... (not UNC\server\share\...)
-        if let Some(unc_rest) = s.strip_prefix(r"\\?\UNC\") {
-            return PathBuf::from(format!(r"\\{}", unc_rest));
+    let mut components = path.components();
+    let Some(Component::Prefix(prefix_component)) = components.next() else {
+        return path.to_path_buf();
+    };
+
+    match prefix_component.kind() {
+        Prefix::VerbatimDisk(drive) => {
+            let mut normalized = PathBuf::from(format!("{}:", char::from(drive)));
+            normalized.push(components.as_path());
+            normalized
         }
-        // Local drive extended-length paths: \\?\C:\... → C:\...
-        if let Some(stripped) = s.strip_prefix(r"\\?\") {
-            return PathBuf::from(stripped.to_string());
+        Prefix::VerbatimUNC(server, share) => {
+            let mut wide = vec![b'\\' as u16, b'\\' as u16];
+            wide.extend(server.encode_wide());
+            wide.push(b'\\' as u16);
+            wide.extend(share.encode_wide());
+
+            let mut normalized = PathBuf::from(OsString::from_wide(&wide));
+            normalized.push(components.as_path());
+            normalized
         }
+        _ => path.to_path_buf(),
     }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
     path.to_path_buf()
 }
 

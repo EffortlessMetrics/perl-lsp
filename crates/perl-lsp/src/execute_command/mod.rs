@@ -14,6 +14,6 @@ mod tests;
 mod types;
 
 pub use executor::CommandExecutor;
-pub use provider::{ExecuteCommandProvider, command_exists, get_supported_commands};
 pub(crate) use provider::normalize_path_for_external_command;
+pub use provider::{ExecuteCommandProvider, command_exists, get_supported_commands};
 pub use types::{CommandResult, PerlCommand};
