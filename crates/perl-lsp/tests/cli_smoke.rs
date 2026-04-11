@@ -3,7 +3,14 @@ use assert_cmd::cargo::cargo_bin_cmd;
 #[test]
 fn health_prints_ok() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.arg("--health").assert().success().stdout(predicates::str::contains("ok"));
+    cmd.arg("--health")
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("ok"))
+        .stdout(predicates::str::contains("Perl::Critic:"))
+        .stdout(predicates::str::contains("status:"))
+        .stdout(predicates::str::contains("enabled:"))
+        .stdout(predicates::str::contains("severity:"));
 }
 
 #[test]

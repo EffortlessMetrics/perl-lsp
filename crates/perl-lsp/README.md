@@ -42,7 +42,7 @@ perllsp --health
 ```bash
 perllsp --stdio           # stdio mode (default, for editor integration)
 perllsp --socket --port 9257   # TCP socket mode
-perllsp --health          # health check
+perllsp --health          # health check + Perl::Critic status
 perllsp --version         # version info
 ```
 

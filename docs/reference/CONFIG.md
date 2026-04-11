@@ -527,7 +527,7 @@ Flags passed when launching the `perl-lsp` binary. Source:
 
 | Flag | Description |
 |---|---|
-| `--health` | Print `ok <version>` and exit |
+| `--health` | Print `ok <version>` plus Perl::Critic health status (enabled, binary path, severity, profile resolution) and exit |
 | `--info` | Print version, parser, profile, feature count, and executable path |
 | `--version` | Print version string and exit |
 | `--features-json` | Print the active feature catalog as JSON and exit |

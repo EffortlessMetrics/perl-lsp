@@ -11,7 +11,7 @@ use perl_lsp_launcher::{
     logging_filter, parse_args, port_in_use_message, shell_completion, should_enable_logging,
 };
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -43,7 +43,7 @@ where
         }
         LaunchAction::Health => {
             let use_color = is_terminal_stdout();
-            println!("{}", format_health_output(env!("CARGO_PKG_VERSION"), use_color));
+            println!("{}", format_health_report(env!("CARGO_PKG_VERSION"), use_color));
             0
         }
         LaunchAction::Info => {
@@ -87,6 +87,129 @@ where
             0
         }
     }
+}
+
+fn format_health_report(version: &str, use_color: bool) -> String {
+    let mut lines = vec![format_health_output(version, use_color), String::new()];
+
+    let cwd = match env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(error) => {
+            lines.push(format!("Perl::Critic: unavailable (failed to read cwd: {error})"));
+            return lines.join("\n");
+        }
+    };
+
+    let mut config = perl_lsp_config::ServerConfig::default();
+    let mut config_error = None;
+    match perl_lsp_config::load_project_config(&cwd) {
+        Ok(Some(project)) => {
+            project.apply_to_server_config(&mut config);
+        }
+        Ok(None) => {}
+        Err(error) => {
+            config_error = Some(error);
+        }
+    }
+
+    let perlcritic_path = command_path("perlcritic");
+    let configured_profile =
+        config.perlcritic_profile.as_ref().map(|profile| resolve_profile_path(&cwd, profile));
+    let discovered_profile =
+        if configured_profile.is_none() { discover_perlcritic_profile(&cwd) } else { None };
+    let selected_profile = configured_profile
+        .as_ref()
+        .or(discovered_profile.as_ref())
+        .map(|path| path.display().to_string());
+
+    let status = if !config.perlcritic_enabled {
+        "disabled".to_string()
+    } else if perlcritic_path.is_none() {
+        "enabled (binary missing)".to_string()
+    } else if let Some(profile) = configured_profile.as_ref() {
+        if profile.exists() {
+            "enabled (healthy)".to_string()
+        } else {
+            "enabled (bad profile)".to_string()
+        }
+    } else {
+        "enabled (healthy)".to_string()
+    };
+
+    lines.push("Perl::Critic:".to_string());
+    lines.push(format!("  status: {status}"));
+    lines.push(format!("  enabled: {}", config.perlcritic_enabled));
+    lines.push(format!(
+        "  binary: {}",
+        perlcritic_path.unwrap_or_else(|| "not found on PATH".to_string())
+    ));
+    lines.push(format!("  severity: {}", config.perlcritic_severity));
+    lines.push(format!(
+        "  configured_profile: {}",
+        config.perlcritic_profile.unwrap_or_else(|| "<none>".to_string())
+    ));
+    lines.push(format!(
+        "  resolved_profile: {}",
+        selected_profile.unwrap_or_else(|| "<none>".to_string())
+    ));
+    lines.push(format!(
+        "  walkup_discovery: {}",
+        if discovered_profile.is_some() { "found" } else { "not used/found" }
+    ));
+
+    if let Some(profile) = configured_profile.as_ref() {
+        if !profile.exists() {
+            lines
+                .push(format!("  last_check: profile path does not exist ({})", profile.display()));
+        }
+    }
+
+    if let Some(error) = config_error {
+        lines.push(format!("  config_warning: {error}"));
+    }
+
+    lines.join("\n")
+}
+
+fn resolve_profile_path(cwd: &Path, profile: &str) -> PathBuf {
+    let configured = PathBuf::from(profile);
+    if configured.is_absolute() { configured } else { cwd.join(configured) }
+}
+
+fn discover_perlcritic_profile(start: &Path) -> Option<PathBuf> {
+    let mut current = Some(start.to_path_buf());
+    while let Some(dir) = current {
+        let candidate = dir.join(".perlcriticrc");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        current = dir.parent().map(std::path::Path::to_path_buf);
+    }
+    None
+}
+
+fn command_path(program: &str) -> Option<String> {
+    if Path::new(program).is_file() {
+        return Some(program.to_string());
+    }
+    env::var_os("PATH").and_then(|paths| {
+        env::split_paths(&paths).find_map(|path| {
+            #[cfg(windows)]
+            {
+                let exe = path.join(format!("{program}.exe"));
+                if exe.is_file() {
+                    return Some(exe.to_string_lossy().to_string());
+                }
+                let bat = path.join(format!("{program}.bat"));
+                if bat.is_file() {
+                    return Some(bat.to_string_lossy().to_string());
+                }
+            }
+
+            let candidate = path.join(program);
+            if candidate.is_file() { Some(candidate.to_string_lossy().to_string()) } else { None }
+        })
+    })
 }
 
 fn invocation_name(args: &[std::ffi::OsString]) -> String {
