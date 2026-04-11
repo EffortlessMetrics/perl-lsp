@@ -72,6 +72,13 @@ impl LspServer {
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
+                caps.workspace_configuration_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("workspace"))
+                    .and_then(|w| w.get("configuration"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
+
                 // Check if client supports snippet syntax in completion items
                 caps.snippet_support = params
                     .get("capabilities")
@@ -393,7 +400,9 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
+    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use serde_json::json;
 
     #[test]
     fn apply_disabled_feature_id_zeros_correct_field() {
@@ -452,5 +461,21 @@ mod tests {
                  apply_disabled_feature_id — add one to keep the two in sync"
             );
         }
+    }
+
+    #[test]
+    fn initialize_parses_workspace_configuration_capability() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "configuration": true
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(server.client_capabilities.lock().workspace_configuration_support);
     }
 }
