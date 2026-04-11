@@ -426,6 +426,7 @@ Use the right channel for the fastest response:
 > See [#2169](https://github.com/EffortlessMetrics/perl-lsp/issues/2169) for the tracking issue.
 
 - **Docs**: See `docs/` for detailed guides -- start with [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md)
+- **Verification policy**: See [VERIFICATION_LADDER.md](docs/contributing/VERIFICATION_LADDER.md) for claim verification requirements
 
 ## Code of Conduct
 

@@ -68,4 +68,26 @@ Logic: CORRECT / FIXED <what you changed>
 Tests: GOOD / IMPROVED <what you added>
 Regression risk: LOW / MEDIUM / HIGH (details)
 Research verification: SKIPPED (no external claims) / DISPATCHED / FALLBACK LABEL SET
+Attribution check: SKIPPED (no attribution claims) / VERIFIED / FLAGGED (needs-git-history-check added)
 ```
+
+## Attribution Check
+
+If the PR description or issue body contains ANY of the following phrases:
+- "fixed by PR #NNNN"
+- "already shipped in commit SHA"
+- "this issue is stale / superseded by #NNNN"
+- "closed by #NNNN"
+
+Run the git-history check before proceeding:
+
+```bash
+# Verify the PR actually merged and closed the right issue
+gh pr view <NNNN> --json state,mergedAt,closingIssuesReferences
+# Verify the fix is present in master
+git log --oneline master | grep -i <keyword>
+```
+
+**If claim checks out:** note `Attribution: VERIFIED` in your output.
+**If claim is wrong:** remove or correct the attribution on the PR branch. Add `needs-git-history-check` label to the original issue for ops sweep.
+**If uncertain:** add `needs-git-history-check` label, note it in the deep-review comment, and continue. Do not block on uncertainty — just flag it.
