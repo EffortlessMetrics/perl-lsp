@@ -266,23 +266,33 @@ fn strip_pod_formatting(text: &str) -> String {
     result
 }
 
-/// Extract display text from a POD L<> link.
+/// Extract a markdown link from a POD `L<>` formatting code.
 ///
-/// Handles common forms:
-/// - `L<Module::Name>` -> `Module::Name`
-/// - `L<text|Module::Name>` -> `text`
-/// - `L<text|Module::Name/section>` -> `text`
-/// - `L<Module::Name/section>` -> `Module::Name`
+/// Returns `[display](perl-module://target)` so LSP clients (VS Code) render
+/// the link as clickable in hover tooltips.
+///
+/// Handles all standard POD link forms:
+/// - `L<Module::Name>` → `[Module::Name](perl-module://Module::Name)`
+/// - `L<text|Module::Name>` → `[text](perl-module://Module::Name)`
+/// - `L<Module::Name/section>` → `[Module::Name](perl-module://Module::Name/section)`
+/// - `L<text|Module::Name/section>` → `[text](perl-module://Module::Name/section)`
 fn extract_link_display(link: &str) -> String {
-    // L<text|target> -> show text
+    // L<text|target> — explicit display text before the pipe
     if let Some(pipe_pos) = link.find('|') {
-        return strip_pod_formatting(&link[..pipe_pos]);
+        let display = strip_pod_formatting(&link[..pipe_pos]);
+        let target = link[pipe_pos + 1..].trim();
+        return format!("[{display}](perl-module://{target})");
     }
-    // L<Module/section> -> show Module
+    // L<Module/section> — module + section, display is just the module part
     if let Some(slash_pos) = link.find('/') {
-        return strip_pod_formatting(&link[..slash_pos]);
+        let module = strip_pod_formatting(&link[..slash_pos]);
+        let target = link.trim();
+        return format!("[{module}](perl-module://{target})");
     }
-    strip_pod_formatting(link)
+    // L<Module::Name> — simple module reference
+    let display = strip_pod_formatting(link);
+    let target = link.trim();
+    format!("[{display}](perl-module://{target})")
 }
 
 fn decode_pod_entity(entity: &str) -> String {
