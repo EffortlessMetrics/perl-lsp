@@ -103,9 +103,9 @@ just doctor     # Deeper workspace health check — finds drift, stale files, co
 just pr-fast    # Fastest checks: fmt + clippy + tests (~1-2 min). Run this often.
 ```
 
-### 4. Run the canonical pre-push gate
+### 4. Run the canonical merge gate
 
-This is required before opening a PR. It runs the same checks CI runs:
+This is the explicit full validation step before merge. It runs the same checks CI runs:
 
 ```bash
 nix develop -c just ci-gate   # Recommended: reproducible env (~3-5 min)
@@ -113,11 +113,14 @@ nix develop -c just ci-gate   # Recommended: reproducible env (~3-5 min)
 just ci-gate
 ```
 
-The pre-push git hook runs this automatically if you installed it:
+If you install the pre-push git hook, it runs the faster Tier A gate automatically on push:
 
 ```bash
 bash scripts/install-githooks.sh
 ```
+
+That hook runs `nix develop -c just pr-fast` (or `just pr-fast` without Nix).
+It is a quick push guard, not the full merge gate.
 
 ### 5. Expand for larger changes or release prep
 
