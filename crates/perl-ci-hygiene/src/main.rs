@@ -3020,7 +3020,7 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
 }
 
 fn is_allowlisted_prod_panic_hit(rel_path: &str, line: &str) -> bool {
-    rel_path == "crates/perl-heredoc-anti-patterns/src/lib.rs"
+    normalize_path_for_match(rel_path) == "crates/perl-heredoc-anti-patterns/src/lib.rs"
         && line.contains("regex failed to compile")
 }
 
@@ -4057,6 +4057,10 @@ mod tests {
     fn allowlisted_prod_panic_hit_matches_heredoc_regex_initializers() {
         assert!(is_allowlisted_prod_panic_hit(
             "crates/perl-heredoc-anti-patterns/src/lib.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(is_allowlisted_prod_panic_hit(
+            r"crates\perl-heredoc-anti-patterns\src\lib.rs",
             r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
         ));
         assert!(!is_allowlisted_prod_panic_hit(
