@@ -22,7 +22,7 @@ Perl has lacked a proper modern LSP implementation. Other languages — Rust, Ty
 
 ## What It Is
 
-`perl-lsp` is a workspace of Rust crates delivering a complete Perl 5 tooling stack: an LSP server (`perllsp`) implementing all 117 capabilities catalogued in `features.toml` (87 LSP + 24 DAP + 6 extension features), a DAP debug adapter, a recursive-descent parser, a context-aware lexer, and a semantic analyzer — packaged as a single native binary you can drop into any editor. It runs on Windows, macOS, and Linux.
+`perl-lsp` is a workspace of Rust crates delivering a complete Perl 5 tooling stack: an LSP server (`perllsp`) implementing all 118 capabilities catalogued in `features.toml` (87 LSP + 24 DAP + 7 extension features), a DAP debug adapter, a recursive-descent parser, a context-aware lexer, and a semantic analyzer — packaged as a single native binary you can drop into any editor. It runs on Windows, macOS, and Linux.
 
 ## Quick Start
 
@@ -148,7 +148,7 @@ The project tracks a few distinct metrics that are easy to conflate. Each one sc
 
 | Metric | Current | What it measures | What it does **not** measure |
 | --- | --- | --- | --- |
-| LSP/DAP capability coverage | 117 / 117 | Every capability catalogued in `features.toml` has an implementation wired up | Per-capability correctness, completeness on edge cases, or subjective UX quality |
+| LSP/DAP capability coverage | 118 / 118 | Every capability catalogued in `features.toml` has an implementation wired up | Per-capability correctness, completeness on edge cases, or subjective UX quality |
 | Parser corpus — CPAN top 1000 | 95.3% (8931 / 9372) | File-level clean parse rate: share of files the parser processes without recording errors | Semantic fidelity of the AST, cross-file analysis, or any LSP-level correctness |
 | Parser corpus — Ubuntu system Perl | 97.1% (6890 / 7095) | Same, against the Ubuntu system-installed Perl compatibility baseline | Same |
 | Parser corpus — project corpus | 100.0% (91 / 91) | Deterministic regression baseline that must stay clean | Same |
