@@ -3,6 +3,24 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Strip the Windows extended-length path prefix (`\\?\`) before passing a path
+/// to an external command such as `perl`, `prove`, or `yath`.
+///
+/// On Windows, `Path::canonicalize` returns paths prefixed with `\\?\`, which is
+/// understood by Win32 APIs but not by external programs (e.g. `perl.exe`).  This
+/// helper strips that prefix so the resulting path is usable as a command-line
+/// argument.  On non-Windows platforms the function is a no-op identity.
+pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let s = path.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix(r"\\?\") {
+            return PathBuf::from(stripped.to_string());
+        }
+    }
+    path.to_path_buf()
+}
+
 /// Execute command provider implementing the LSP executeCommand method.
 pub struct ExecuteCommandProvider {
     workspace_roots: Vec<PathBuf>,
@@ -88,11 +106,12 @@ impl ExecuteCommandProvider {
             self.command_exists("yath"),
             self.command_exists("prove"),
         );
+        let ext_path = normalize_path_for_external_command(file_path);
 
         match runner {
             TestRunner::Yath => {
                 let mut yath_cmd = Command::new("yath");
-                yath_cmd.arg("-v").arg("--").arg(file_path.as_os_str());
+                yath_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
                 match crate::util::run_command_with_timeout(yath_cmd, 30) {
                     Ok(result) => {
                         Ok(self.format_command_result(result, Some(("command", "yath".into()))))
@@ -100,7 +119,7 @@ impl ExecuteCommandProvider {
                     Err(error) => {
                         if self.command_exists("prove") {
                             let mut prove_cmd = Command::new("prove");
-                            prove_cmd.arg("-v").arg("--").arg(file_path.as_os_str());
+                            prove_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
                             match crate::util::run_command_with_timeout(prove_cmd, 30) {
                                 Ok(result) => Ok(self.format_command_result(
                                     result,
@@ -108,7 +127,7 @@ impl ExecuteCommandProvider {
                                 )),
                                 Err(fallback_error) => {
                                     let mut perl_cmd = Command::new("perl");
-                                    perl_cmd.arg("--").arg(file_path.as_os_str());
+                                    perl_cmd.arg("--").arg(ext_path.as_os_str());
                                     match crate::util::run_command_with_timeout(perl_cmd, 30) {
                                         Ok(result) => Ok(self.format_command_result(
                                             result,
@@ -125,7 +144,7 @@ impl ExecuteCommandProvider {
                             }
                         } else {
                             let mut perl_cmd = Command::new("perl");
-                            perl_cmd.arg("--").arg(file_path.as_os_str());
+                            perl_cmd.arg("--").arg(ext_path.as_os_str());
                             match crate::util::run_command_with_timeout(perl_cmd, 30) {
                                 Ok(result) => Ok(self
                                     .format_command_result(result, Some(("command", "perl".into())))),
@@ -142,14 +161,14 @@ impl ExecuteCommandProvider {
             }
             TestRunner::Prove => {
                 let mut prove_cmd = Command::new("prove");
-                prove_cmd.arg("-v").arg("--").arg(file_path.as_os_str());
+                prove_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
                 match crate::util::run_command_with_timeout(prove_cmd, 30) {
                     Ok(result) => {
                         Ok(self.format_command_result(result, Some(("command", "prove".into()))))
                     }
                     Err(error) => {
                         let mut perl_cmd = Command::new("perl");
-                        perl_cmd.arg("--").arg(file_path.as_os_str());
+                        perl_cmd.arg("--").arg(ext_path.as_os_str());
                         match crate::util::run_command_with_timeout(perl_cmd, 30) {
                             Ok(result) => Ok(self
                                 .format_command_result(result, Some(("command", "perl".into())))),
@@ -165,7 +184,7 @@ impl ExecuteCommandProvider {
             }
             TestRunner::Perl => {
                 let mut perl_cmd = Command::new("perl");
-                perl_cmd.arg("--").arg(file_path.as_os_str());
+                perl_cmd.arg("--").arg(ext_path.as_os_str());
                 match crate::util::run_command_with_timeout(perl_cmd, 30) {
                     Ok(result) => {
                         Ok(self.format_command_result(result, Some(("command", "perl".into()))))
@@ -190,9 +209,10 @@ impl ExecuteCommandProvider {
                 die "Subroutine $sub not found";
             }
         "#;
+        let ext_path = normalize_path_for_external_command(file_path);
 
         let mut perl_cmd = Command::new("perl");
-        perl_cmd.arg("-e").arg(perl_code).arg("--").arg(file_path.as_os_str()).arg(sub_name);
+        perl_cmd.arg("-e").arg(perl_code).arg("--").arg(ext_path.as_os_str()).arg(sub_name);
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => {
                 Ok(self.format_command_result(result, Some(("subroutine", sub_name.into()))))
@@ -205,8 +225,9 @@ impl ExecuteCommandProvider {
     }
 
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
+        let ext_path = normalize_path_for_external_command(file_path);
         let mut perl_cmd = Command::new("perl");
-        perl_cmd.arg("--").arg(file_path.as_os_str());
+        perl_cmd.arg("--").arg(ext_path.as_os_str());
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => Ok(self.format_command_result(result, None)),
             Err(error) => {
@@ -908,4 +929,57 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
     ]
+}
+
+#[cfg(test)]
+mod normalize_path_tests {
+    use super::normalize_path_for_external_command;
+    use std::path::{Path, PathBuf};
+
+    /// On Windows the `\\?\` extended-length prefix must be stripped so that
+    /// external commands (perl.exe, prove, yath) can accept the path.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn strips_extended_length_prefix_on_windows() {
+        let prefixed = Path::new(r"\\?\C:\Users\test\file.pl");
+        let result = normalize_path_for_external_command(prefixed);
+        assert_eq!(
+            result,
+            PathBuf::from(r"C:\Users\test\file.pl"),
+            "Extended-length prefix should be stripped: got {:?}",
+            result
+        );
+    }
+
+    /// On Windows, paths without the prefix are returned unchanged.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn passthrough_plain_windows_path() {
+        let plain = Path::new(r"C:\Users\test\file.pl");
+        let result = normalize_path_for_external_command(plain);
+        assert_eq!(result, PathBuf::from(r"C:\Users\test\file.pl"));
+    }
+
+    /// On non-Windows, the helper is a pass-through identity — paths are
+    /// returned exactly as given regardless of content.
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn passthrough_on_non_windows() {
+        let path = Path::new("/tmp/test_valid.pl");
+        let result = normalize_path_for_external_command(path);
+        assert_eq!(result, PathBuf::from("/tmp/test_valid.pl"));
+    }
+
+    /// Verify the helper handles a synthetic Windows extended-length prefix
+    /// as a string: even on non-Windows the conditional compilation means the
+    /// prefix is left untouched (since there is no `\\?\` on Unix paths).
+    /// This test documents the cross-platform contract.
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn no_stripping_on_non_windows_even_for_unc_like_string() {
+        // On Linux/macOS this is just a literal path string — no stripping.
+        let path = Path::new(r"\\?\C:\foo\bar");
+        let result = normalize_path_for_external_command(path);
+        assert_eq!(result, PathBuf::from(r"\\?\C:\foo\bar"));
+    }
 }
