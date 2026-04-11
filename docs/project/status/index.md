@@ -24,6 +24,7 @@
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
 | DAP debugger scorecard | [dap.md](dap.md) | Generator | Every DAP-touching merge |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |
+| Workspace & indexing scorecard | [workspace.md](workspace.md) | Generator | Every workspace-touching merge |
 
 ## What's Next
 

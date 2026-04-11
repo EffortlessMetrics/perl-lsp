@@ -1346,6 +1346,132 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
     }
 
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
+        /// Extract the module name from a `require Module;` statement node.
+        ///
+        /// Matches both `require Foo::Bar` (Identifier arg) and
+        /// `require "Foo/Bar.pm"` forms, returning the module name as a
+        /// `::` -separated string suitable for workspace lookup.
+        fn require_module_name(node: &Node) -> Option<String> {
+            let args = match &node.kind {
+                NodeKind::FunctionCall { name, args } if name == "require" => args,
+                _ => return None,
+            };
+            let arg = args.first()?;
+            match &arg.kind {
+                NodeKind::Identifier { name } => Some(name.clone()),
+                NodeKind::String { value, .. } => {
+                    // "Foo/Bar.pm" -> "Foo::Bar"
+                    let module = value.trim_end_matches(".pm").replace('/', "::");
+                    Some(module)
+                }
+                _ => None,
+            }
+        }
+
+        /// Check whether a MethodCall node is `Module->import(...)` and, if
+        /// so, whether its argument list contains `symbol`.  Handles four
+        /// argument forms:
+        /// - bare string literals:  `->import('foo', 'bar')`
+        /// - qw list as ArrayLit:   `->import(qw(foo bar))` → ArrayLiteral
+        /// - Identifier nodes:      `->import(foo)` (unusual but legal)
+        /// - String value trimming: quoted strings like `"'foo'"` from qw
+        fn import_call_exports(method_node: &Node, expected_module: &str, symbol: &str) -> bool {
+            let (object, method, args) = match &method_node.kind {
+                NodeKind::MethodCall { object, method, args } => (object, method, args),
+                _ => return false,
+            };
+            if method != "import" {
+                return false;
+            }
+            // The object must be the same module name.
+            let obj_name = match &object.kind {
+                NodeKind::Identifier { name } => name.as_str(),
+                _ => return false,
+            };
+            if obj_name != expected_module {
+                return false;
+            }
+            // Walk the argument list looking for the symbol.
+            for arg in args {
+                if arg_node_matches_symbol(arg, symbol) {
+                    return true;
+                }
+            }
+            false
+        }
+
+        /// Check whether a single AST argument node matches `symbol`.
+        /// Handles: String literals, Identifiers (including raw "qw(...)"),
+        /// and ArrayLiteral (the AST form produced by `qw(...)` in expression
+        /// context).
+        fn arg_node_matches_symbol(arg: &Node, symbol: &str) -> bool {
+            match &arg.kind {
+                NodeKind::String { value, .. } => {
+                    // Strip surrounding single/double quotes that some code
+                    // paths leave in the value (e.g. qw in quotes.rs).
+                    let bare = value.trim_matches('\'').trim_matches('"');
+                    bare == symbol
+                }
+                NodeKind::Identifier { name } => {
+                    if name == symbol {
+                        return true;
+                    }
+                    // qw(...) stored as a raw "qw(...)" Identifier string
+                    // (from the Use-node code path that reuses this helper).
+                    if name.starts_with("qw") {
+                        let content = name
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        return content.split_whitespace().any(|tok| tok == symbol);
+                    }
+                    false
+                }
+                NodeKind::ArrayLiteral { elements } => {
+                    // qw(...) in expression context → ArrayLiteral of String nodes
+                    elements.iter().any(|el| arg_node_matches_symbol(el, symbol))
+                }
+                _ => false,
+            }
+        }
+
+        /// Unwrap an ExpressionStatement to its inner expression, or return
+        /// the node unchanged (handles the case where we're already at the
+        /// expression level).
+        fn inner_expr(node: &Node) -> &Node {
+            if let NodeKind::ExpressionStatement { expression } = &node.kind {
+                expression.as_ref()
+            } else {
+                node
+            }
+        }
+
+        /// Scan a flat statement list for a `require M; M->import(...)` pair
+        /// that exports `symbol`.  The require and import calls do not have to
+        /// be adjacent — the import just needs to appear anywhere in the same
+        /// statement list after (or even before) the require.
+        fn scan_statements_for_require_import(stmts: &[Node], symbol: &str) -> Option<String> {
+            // Collect all `require Module` names present in this block.
+            let required_modules: Vec<String> =
+                stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
+
+            if required_modules.is_empty() {
+                return None;
+            }
+
+            // Check whether any `Module->import(...)` call in this block
+            // exports our symbol, using the set of required modules.
+            for stmt in stmts {
+                let expr = inner_expr(stmt);
+                for module in &required_modules {
+                    if import_call_exports(expr, module, symbol) {
+                        return Some(module.clone());
+                    }
+                }
+            }
+            None
+        }
+
         fn find(node: &Node, name: &str) -> Option<String> {
             if let NodeKind::Use { module, args, .. } = &node.kind {
                 // Skip `use constant` — constants are not import-list symbols
@@ -1384,6 +1510,18 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                             }
                         }
                     }
+                }
+            }
+
+            // Scan block/program statement lists for `require M; M->import(sym)` patterns.
+            let stmts = match &node.kind {
+                NodeKind::Program { statements } => Some(statements.as_slice()),
+                NodeKind::Block { statements } => Some(statements.as_slice()),
+                _ => None,
+            };
+            if let Some(statements) = stmts {
+                if let Some(module) = scan_statements_for_require_import(statements, name) {
+                    return Some(module);
                 }
             }
 

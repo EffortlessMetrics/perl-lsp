@@ -2843,6 +2843,7 @@ dependencies = [
  "serde",
  "tempfile",
  "url",
+ "walkdir",
 ]
 
 [[package]]
