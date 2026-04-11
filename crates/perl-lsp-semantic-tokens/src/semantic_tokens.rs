@@ -570,21 +570,13 @@ pub fn collect_semantic_tokens(
         }
     }
 
+    let const_fast_enabled = ast_uses_const_fast(ast);
+
     // 2a) Collect variable declaration spans for modifier tagging
-    let mut decl_spans: Vec<(usize, usize, bool)> = Vec::new(); // (start, end, is_our)
-    walk_ast_full(ast, &mut |node| {
-        if let NodeKind::VariableDeclaration { declarator, variable, .. } = &node.kind {
-            let is_our = declarator == "our";
-            decl_spans.push((variable.location.start, variable.location.end, is_our));
-        }
-        if let NodeKind::VariableListDeclaration { declarator, variables, .. } = &node.kind {
-            let is_our = declarator == "our";
-            for v in variables {
-                decl_spans.push((v.location.start, v.location.end, is_our));
-            }
-        }
-        true
-    });
+    let decl_spans = declaration_readonly_flags(ast)
+        .into_iter()
+        .map(|((start, end), is_readonly)| (start, end, is_readonly))
+        .collect::<Vec<_>>();
 
     // 2b) AST overlays: package/sub/variable with precise spans where available
     walk_ast_full(ast, &mut |node| {
@@ -719,6 +711,9 @@ pub fn collect_semantic_tokens(
 
         let (kind, mods): (&str, u32) = match &node.kind {
             NodeKind::FunctionCall { name, .. } => {
+                if const_fast_enabled && name == "const" {
+                    return true;
+                }
                 // Skip builtins that should remain as keywords from the lexer pass
                 match name.as_str() {
                     "eval" | "do" | "use" | "no" | "return" | "my" | "our" | "local" | "state"
@@ -1019,6 +1014,67 @@ where
     }
 
     true
+}
+
+fn declaration_readonly_flags(ast: &Node) -> FxHashMap<(usize, usize), bool> {
+    let mut flags = FxHashMap::default();
+    let const_fast_enabled = ast_uses_const_fast(ast);
+
+    walk_ast_full(ast, &mut |node| {
+        match &node.kind {
+            NodeKind::VariableDeclaration { declarator, variable, .. } => {
+                let is_readonly = declarator == "our";
+                flags
+                    .entry((variable.location.start, variable.location.end))
+                    .and_modify(|flag| *flag |= is_readonly)
+                    .or_insert(is_readonly);
+            }
+            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+                let is_readonly = declarator == "our";
+                for variable in variables {
+                    flags
+                        .entry((variable.location.start, variable.location.end))
+                        .and_modify(|flag| *flag |= is_readonly)
+                        .or_insert(is_readonly);
+                }
+            }
+            NodeKind::FunctionCall { name, args } if const_fast_enabled && name == "const" => {
+                mark_const_fast_decl_flags(args, &mut flags);
+            }
+            _ => {}
+        }
+        true
+    });
+
+    flags
+}
+
+fn ast_uses_const_fast(ast: &Node) -> bool {
+    let mut enabled = false;
+    walk_ast_full(ast, &mut |node| {
+        if matches!(&node.kind, NodeKind::Use { module, .. } if module == "Const::Fast") {
+            enabled = true;
+            return false;
+        }
+        true
+    });
+    enabled
+}
+
+fn mark_const_fast_decl_flags(args: &[Node], flags: &mut FxHashMap<(usize, usize), bool>) {
+    for arg in args {
+        match &arg.kind {
+            NodeKind::VariableDeclaration { variable, .. } => {
+                flags.insert((variable.location.start, variable.location.end), true);
+            }
+            NodeKind::VariableListDeclaration { variables, .. } => {
+                for variable in variables {
+                    flags.insert((variable.location.start, variable.location.end), true);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]

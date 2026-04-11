@@ -1044,6 +1044,28 @@ fn our_declaration_variable_has_readonly_modifier() {
 }
 
 #[test]
+fn const_fast_scalar_variable_has_readonly_modifier() {
+    let tokens = tokens_for("use Const::Fast; const my $PI => 3.14159;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    assert!(!var_tokens.is_empty(), "should have variable token");
+    let has_const_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
+    assert!(has_const_mods, "Const::Fast scalar should have declaration+readonly modifiers");
+}
+
+#[test]
+fn const_fast_array_variable_has_readonly_modifier() {
+    let tokens = tokens_for("use Const::Fast; const my @ARRAY => (1, 2, 3);");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    assert!(!var_tokens.is_empty(), "should have variable token");
+    let has_const_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
+    assert!(has_const_mods, "Const::Fast array should have declaration+readonly modifiers");
+}
+
+#[test]
 fn local_declaration_variable_has_declaration_modifier() {
     let tokens = tokens_for("local $/ = undef;");
     let leg = legend();
