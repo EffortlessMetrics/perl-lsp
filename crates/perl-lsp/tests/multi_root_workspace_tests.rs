@@ -1018,3 +1018,152 @@ fn test_folder_aware_ranking() -> TestResult {
 
     Ok(())
 }
+
+// =============================================================================
+// Test 9: workspace/symbol during Building state returns partial index results
+// Gap 2 — #4152
+// =============================================================================
+
+/// Verify that `workspace/symbol` returns results from the partially-indexed
+/// workspace even when the index coordinator is still in Building state.
+///
+/// Before the fix: the handler falls through to the open-documents-only path
+/// when the mode is `Partial`, returning empty results for files not yet opened.
+///
+/// After the fix: the handler queries the underlying index directly and returns
+/// whatever data it has accumulated so far.
+#[test]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
+fn test_workspace_symbol_during_building_state() -> TestResult {
+    use perl_lsp::LspServer;
+
+    // Create a server — the coordinator starts in Building/Idle state by default.
+    let server = LspServer::new();
+
+    // Index a file directly into the underlying index while forcing the coordinator
+    // to stay in Building/Indexing state (not transitioning to Ready).
+    // This simulates the background file scan path: files get indexed while the
+    // coordinator is still in Building state.
+    server
+        .test_index_file_in_building_state(
+            "file:///building_state_test/scanned_module.pm",
+            "package ScannedModule;\nsub building_func { return 42; }\n1;\n",
+        )
+        .map_err(|e| e)?;
+
+    // NO documents are open via didOpen — so the open-documents-only fallback
+    // returns nothing. This is the key condition: the file is indexed but not open.
+
+    // Query workspace/symbol for "building_func" while coordinator is in Building state.
+    // Before the fix: returns empty (Partial arm -> open-docs fallback -> nothing found).
+    // After the fix: returns results from the partial index.
+    let result = server
+        .test_handle_workspace_symbols(Some(serde_json::json!({"query": "building_func"})))
+        .map_err(|e| format!("{e:?}"))?;
+
+    let symbol_count = result.as_ref().and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+
+    // ASSERT: must find at least one result from the partial index.
+    // This fails before the fix (returns 0 results) and passes after (returns 1+).
+    assert!(
+        symbol_count > 0,
+        "workspace/symbol must return results from the partial index during Building state, \
+         but got 0 results. The open-document fallback alone is insufficient."
+    );
+
+    Ok(())
+}
+
+// =============================================================================
+// Test 10: workspace/symbol includes workspace_folder_uri for disambiguation
+// Gap 3 — #4152
+// =============================================================================
+
+/// Verify that `workspace/symbol` response includes `workspaceFolderUri` for each
+/// symbol so that clients can disambiguate same-named symbols across folders.
+///
+/// Before the fix: the `LspWorkspaceSymbol` struct omits the `workspace_folder_uri`
+/// field, so clients cannot distinguish which folder's symbol is which.
+///
+/// After the fix: each symbol in the response serializes `workspaceFolderUri`
+/// when the underlying `WorkspaceSymbol` has a populated `workspace_folder_uri`.
+#[test]
+#[cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
+fn test_workspace_symbol_includes_folder_uri_for_disambiguation() -> TestResult {
+    use url::Url;
+
+    // Build a standalone index with two workspace folders, each containing a `sub run`.
+    // This tests the wire format: after the Gap 3 fix, `workspaceFolderUri` must be
+    // included in `LspWorkspaceSymbol` so clients can distinguish same-named symbols.
+    use perl_parser::workspace_index::WorkspaceIndex;
+    let index = WorkspaceIndex::new();
+    index.set_workspace_folders(vec![
+        "file:///disambiguation_test/svc-a/".to_string(),
+        "file:///disambiguation_test/svc-b/".to_string(),
+    ]);
+    index
+        .index_file(
+            Url::parse("file:///disambiguation_test/svc-a/lib/Runner.pm")
+                .map_err(|e| e.to_string())?,
+            "package Runner;\nsub run { return 'from-a'; }\n1;\n".to_string(),
+        )
+        .map_err(|e| e)?;
+    index
+        .index_file(
+            Url::parse("file:///disambiguation_test/svc-b/lib/Runner.pm")
+                .map_err(|e| e.to_string())?,
+            "package Runner;\nsub run { return 'from-b'; }\n1;\n".to_string(),
+        )
+        .map_err(|e| e)?;
+
+    // Search for "run" — both folders define it.
+    let symbols = index.search_symbols("run");
+    assert!(symbols.len() >= 2, "Expected at least 2 'run' symbols, got {}", symbols.len());
+
+    // Each symbol from the index must have workspace_folder_uri set.
+    for sym in &symbols {
+        if sym.name == "run" {
+            assert!(
+                sym.workspace_folder_uri.is_some(),
+                "WorkspaceSymbol 'run' must have workspace_folder_uri set in index, got: {:?}",
+                sym
+            );
+        }
+    }
+
+    // Convert to LspWorkspaceSymbol (the wire format) and verify the field survives.
+    use perl_parser::workspace_index::LspWorkspaceSymbol;
+    let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols.iter().map(|s| s.into()).collect();
+
+    for lsp_sym in &lsp_symbols {
+        if lsp_sym.name == "run" {
+            // This is the key assertion: workspaceFolderUri must be present in the
+            // LspWorkspaceSymbol after the Gap 3 fix.
+            // FAILS before the fix (field is absent from the struct).
+            // PASSES after the fix (field is included and set to the folder URI).
+            assert!(
+                lsp_sym.workspace_folder_uri.is_some(),
+                "LspWorkspaceSymbol 'run' must include workspaceFolderUri for multi-folder \
+                 disambiguation, got: {:?}",
+                lsp_sym
+            );
+        }
+    }
+
+    // Also verify the JSON serialization includes the field.
+    let json_symbols = serde_json::to_value(&lsp_symbols).map_err(|e| e.to_string())?;
+    let json_array = json_symbols.as_array().ok_or("Expected array")?;
+
+    for json_sym in json_array {
+        if json_sym["name"].as_str() == Some("run") {
+            let folder_uri_field = json_sym.get("workspaceFolderUri");
+            assert!(
+                folder_uri_field.is_some() && !folder_uri_field.unwrap().is_null(),
+                "Serialized workspace symbol must include workspaceFolderUri, got: {:?}",
+                json_sym
+            );
+        }
+    }
+
+    Ok(())
+}

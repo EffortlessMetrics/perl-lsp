@@ -328,4 +328,31 @@ impl LspServer {
     pub fn test_has_document(&self, uri: &str) -> bool {
         self.documents.lock().contains_key(uri)
     }
+
+    /// Force the workspace coordinator into Building/Indexing state and index a
+    /// file directly into the underlying index, simulating the background scan
+    /// path without transitioning to Ready.
+    ///
+    /// This is used in tests for Gap 2 (#4152): workspace/symbol during Building
+    /// state should still return results from the partial index.
+    ///
+    /// # Parameters
+    /// - `uri`: File URI string (e.g. `"file:///project/lib/Foo.pm"`)
+    /// - `text`: Perl source text to index
+    ///
+    /// # Returns
+    /// `Ok(())` if the file was indexed; `Err` if URI parse failed or indexing failed.
+    #[cfg(feature = "workspace")]
+    pub fn test_index_file_in_building_state(&self, uri: &str, text: &str) -> Result<(), String> {
+        let Some(coordinator) = self.index_coordinator.as_ref() else {
+            return Err("No coordinator available".to_string());
+        };
+        // Move to Building/Indexing phase so the state machine won't auto-transition
+        // to Ready when index_file is called (simulates background scan in progress).
+        coordinator.transition_to_scanning();
+        coordinator.transition_to_indexing(10);
+
+        let url = url::Url::parse(uri).map_err(|e| e.to_string())?;
+        coordinator.index().index_file(url, text.to_string())
+    }
 }

@@ -114,6 +114,7 @@ pub fn extract_text_based_symbols(
                             ),
                         ),
                         container_name: None,
+                        workspace_folder_uri: None,
                     });
                 }
             }
@@ -143,6 +144,7 @@ pub fn extract_text_based_symbols(
                             ),
                         ),
                         container_name: None,
+                        workspace_folder_uri: None,
                     });
                 }
             }

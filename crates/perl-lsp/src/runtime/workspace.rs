@@ -218,7 +218,8 @@ impl LspServer {
     ///
     /// Uses routing helper for state-aware behavior:
     /// - **Ready state**: Full workspace index search with cooperative yielding
-    /// - **Building/Degraded state**: Open document search only (partial results)
+    /// - **Building/Degraded state**: Query partial index first; fall through to open-doc
+    ///   search only when the partial index is also empty (Gap 2 fix, issue #4152)
     pub(super) fn handle_workspace_symbols_v2(
         &self,
         params: Option<Value>,
@@ -263,7 +264,35 @@ impl LspServer {
                     // If index is empty, fall through to open-doc search
                 }
                 IndexAccessMode::Partial(reason) => {
-                    tracing::debug!(reason, "Workspace symbol: using open-doc fallback");
+                    // Building/Degraded: still query the partial index so users get
+                    // results from files already scanned.  Fall through to the
+                    // open-doc path only when the partial index is also empty.
+                    tracing::debug!(reason, "Workspace symbol: querying partial index");
+                    if let Some(coordinator) = self.coordinator() {
+                        let symbols = coordinator.index().search_symbols(query);
+                        let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
+                            .iter()
+                            .take(cap)
+                            .enumerate()
+                            .map(|(i, sym)| {
+                                if i & 0x3f == 0 {
+                                    std::thread::yield_now();
+                                }
+                                sym.into()
+                            })
+                            .collect();
+                        if !lsp_symbols.is_empty() {
+                            tracing::debug!(
+                                count = lsp_symbols.len(),
+                                "Workspace symbol: returned results from partial index"
+                            );
+                            return Ok(Some(json!(lsp_symbols)));
+                        }
+                    }
+                    tracing::debug!(
+                        reason,
+                        "Workspace symbol: partial index empty, falling back to open-docs"
+                    );
                 }
                 IndexAccessMode::None => {
                     tracing::debug!(
