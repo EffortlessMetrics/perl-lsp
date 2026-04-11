@@ -355,4 +355,33 @@ describe('serverNotRunningMessage diagnosis cache (#4193)', () => {
     expect(msg).toContain('stopped unexpectedly');
     expect(msg).toContain('Restart Server');
   });
+
+  test('healthMsg override: serverNotRunningMessage matches initial dialog content (#4193)', () => {
+    // This test guards against the divergence bug where the initial startup
+    // dialog showed healthMsg verbatim but subsequent serverNotRunningMessage()
+    // calls wrapped it with an extra "Perl Language Server failed to start" prefix.
+    //
+    // The fix uses selectBestDiagnosis() to derive a single canonical struct,
+    // then derives the dialog from that struct — so both paths produce the same
+    // output.
+    const unknownProbe = classifyStartupError(''); // kind: Unknown
+    const healthMsg = 'Perl interpreter not found. Install Perl 5.10+.';
+
+    // Simulate what initializeLanguageClient caches after the fix
+    const cachedDiagnosis = selectBestDiagnosis(unknownProbe, healthMsg);
+    _setLastStartupDiagnosisForTest(cachedDiagnosis);
+
+    const serverMsg = serverNotRunningMessage();
+    const dialogMsg = formatStartupFailureDialog(cachedDiagnosis, undefined);
+
+    // Both paths must produce identical text
+    expect(serverMsg).toBe(dialogMsg);
+
+    // The healthMsg content must appear in both
+    expect(serverMsg).toContain('Perl interpreter not found');
+    expect(serverMsg).toContain('Install Perl 5.10+');
+
+    // Must NOT show the generic "server not running" fallback
+    expect(serverMsg).not.toContain('Perl Language Server is not running');
+  });
 });

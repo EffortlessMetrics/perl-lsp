@@ -20,6 +20,7 @@ import { StreamingCompletionController } from './streamingCompletion';
 import {
     classifyStartupError,
     formatStartupFailureDialog,
+    selectBestDiagnosis,
     StartupErrorKind,
 } from './startupDiagnosis';
 import type { StartupErrorDiagnosis } from './startupDiagnosis';
@@ -1068,12 +1069,13 @@ async function initializeLanguageClient(context: vscode.ExtensionContext): Promi
             const onboarding = new OnboardingManager(context, outputChannel);
             healthMsg = await onboarding.runStartupDiagnostics(currentServerPath ?? null);
         }
-        // Cache the structured diagnosis so serverNotRunningMessage() can format
-        // it; when healthMsg overrides the hint, wrap it as a synthetic diagnosis.
-        lastStartupDiagnosis = healthMsg && probeResult.kind === StartupErrorKind.Unknown
-            ? { kind: StartupErrorKind.Unknown, hint: healthMsg, remediation: probeResult.remediation }
-            : probeResult;
-        const dialogMessage = formatStartupFailureDialog(probeResult, healthMsg);
+        // Cache the canonical merged diagnosis so serverNotRunningMessage() formats
+        // exactly the same text as the initial dialog. selectBestDiagnosis() merges
+        // the probe result with any healthMsg override into a single struct; we then
+        // derive dialogMessage from the cached struct so the initial dialog and all
+        // later serverNotRunningMessage() calls are identical in content.
+        lastStartupDiagnosis = selectBestDiagnosis(probeResult, healthMsg);
+        const dialogMessage = formatStartupFailureDialog(lastStartupDiagnosis, undefined);
 
         const choice = await vscode.window.showErrorMessage(
             dialogMessage,
