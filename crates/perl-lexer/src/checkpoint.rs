@@ -244,6 +244,52 @@ impl CheckpointCache {
         if idx == 0 { None } else { self.checkpoints.get(idx - 1).map(|(_, cp)| cp) }
     }
 
+    /// Find the nearest checkpoint at or after a given position.
+    ///
+    /// Uses binary search over the sorted `checkpoints` vector (invariant maintained by
+    /// [`Self::add`]) for O(log N) performance. This is the counterpart to
+    /// [`Self::find_before`] and is needed for two-sided checkpoint windows in
+    /// incremental parsing (#3527).
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The byte position to search from
+    ///
+    /// # Returns
+    ///
+    /// * `Some(&LexerCheckpoint)` - The checkpoint at or after the given position
+    /// * `None` - If no checkpoint exists at or after the position
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use perl_lexer::checkpoint::{CheckpointCache, LexerCheckpoint};
+    /// let mut cache = CheckpointCache::new(10);
+    /// cache.add(LexerCheckpoint::at_position(100));
+    /// cache.add(LexerCheckpoint::at_position(200));
+    /// cache.add(LexerCheckpoint::at_position(300));
+    ///
+    /// // Find checkpoint at or after position 150
+    /// let cp = cache.find_after(150);
+    /// assert!(cp.is_some());
+    /// assert_eq!(cp.unwrap().position, 200);
+    ///
+    /// // Find checkpoint at exact position
+    /// let cp = cache.find_after(200);
+    /// assert!(cp.is_some());
+    /// assert_eq!(cp.unwrap().position, 200);
+    ///
+    /// // Position beyond last checkpoint returns None
+    /// let cp = cache.find_after(400);
+    /// assert!(cp.is_none());
+    /// ```
+    pub fn find_after(&self, position: usize) -> Option<&LexerCheckpoint> {
+        // `partition_point` returns the index of the first element for which the
+        // predicate is false (i.e. the first entry with pos >= position).
+        let idx = self.checkpoints.partition_point(|(pos, _)| *pos < position);
+        self.checkpoints.get(idx).map(|(_, cp)| cp)
+    }
+
     /// Clear all cached checkpoints
     pub fn clear(&mut self) {
         self.checkpoints.clear();

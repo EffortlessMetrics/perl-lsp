@@ -9,10 +9,55 @@
 //!
 //! 1. `parse_with_checkpoints` collects **parser tokens** (trivia-filtered,
 //!    kind-converted) and caches them alongside the lexer checkpoints.
-//! 2. `reparse_from_checkpoint` assembles a mixed token list from cached tokens
-//!    (before the edit) + freshly-lexed tokens (affected region) + cached or
-//!    freshly-lexed tokens (after the edit), then calls `Parser::from_tokens`
-//!    to skip re-lexing the unchanged portions.
+//! 2. `reparse_from_checkpoint_two_sided` assembles a mixed token list from:
+//!    - cached tokens before the left checkpoint (unchanged prefix)
+//!    - freshly-lexed tokens between left and right checkpoints (affected region)
+//!    - cached tokens after the right checkpoint, with byte shift applied (unchanged suffix)
+//!    - Then calls `Parser::from_tokens` to skip re-lexing the unchanged portions.
+//!
+//! # Two-Sided Checkpoint Window
+//!
+//! The incremental parser uses a two-sided checkpoint window approach (#3527):
+//!
+//! - **Left checkpoint**: The nearest checkpoint at or before the edit start
+//! - **Right checkpoint**: The nearest checkpoint at or after the edit end
+//!
+//! This replaces the previous fixed heuristic (+100 bytes) with checkpoint-based
+//! bounds, providing more precise re-lexing regions and better cache utilization.
+//!
+//! The three-phase reparse algorithm ensures correctness by:
+//! 1. Reusing cached tokens from the start up to the left checkpoint
+//! 2. Re-lexing from the left checkpoint through the edit to the right checkpoint
+//! 3. Reusing cached tokens from the right checkpoint to the end
+//!
+//! Edge cases are handled gracefully:
+//! - No checkpoint before edit → relex from position 0
+//! - No checkpoint after edit → relex to `source.len()`
+//! - Checkpoint at edit boundary → minimal re-lexing scope
+//!
+//! # Segment-Level Metrics
+//!
+//! The incremental parser tracks segment-level metrics to diagnose cache efficiency
+//! and fallback behavior. These metrics help understand how well the segment-based
+//! caching system is working:
+//!
+//! - **`segments_reused_before`**: Count of segments reused before the edit.
+//!   A high value indicates good cache coverage for the unchanged prefix.
+//!
+//! - **`segments_reused_after`**: Count of segments reused after the edit.
+//!   A high value indicates good cache coverage for the unchanged suffix.
+//!
+//! - **`segments_invalidated`**: Count of segments invalidated during edit.
+//!   A high value indicates high cache churn, which may suggest the need for
+//!   more granular segments or different checkpoint placement strategies.
+//!
+//! - **`full_tail_fallbacks`**: Count of times we had to relex the entire tail
+//!   because no cache hit was found after the edit. A high value indicates
+//!   cache coverage gaps, which may suggest the need for more checkpoints
+//!   in the tail region.
+//!
+//! These metrics can be accessed via [`CheckpointedIncrementalParser::stats()`]
+//! and formatted using the `Display` implementation for debugging and monitoring.
 
 use crate::{ast::Node, edit::Edit as OriginalEdit, error::ParseResult, parser::Parser};
 use perl_lexer::{CheckpointCache, Checkpointable, LexerCheckpoint, PerlLexer};
@@ -32,59 +77,257 @@ pub struct CheckpointedIncrementalParser {
     stats: IncrementalStats,
 }
 
+/// A contiguous segment of cached parser tokens.
+///
+/// Each segment represents a range of source code that has been parsed and
+/// whose tokens can be reused during incremental reparses.
+#[derive(Debug, Clone)]
+struct TokenSegment {
+    /// Start byte position of this segment in the source.
+    start: usize,
+    /// End byte position of this segment in the source.
+    end: usize,
+    /// Parser tokens for this segment, in source order.
+    tokens: Vec<Token>,
+}
+
+impl TokenSegment {
+    /// Create a new token segment.
+    fn new(start: usize, end: usize, tokens: Vec<Token>) -> Self {
+        TokenSegment { start, end, tokens }
+    }
+
+    /// Check if this segment overlaps with the given range.
+    fn overlaps(&self, start: usize, end: usize) -> bool {
+        self.start < end && self.end > start
+    }
+
+    /// Check if this segment is completely before the given position.
+    fn is_before(&self, position: usize) -> bool {
+        self.end <= position
+    }
+
+    /// Check if this segment is completely after the given position.
+    fn is_after(&self, position: usize) -> bool {
+        self.start >= position
+    }
+}
+
 /// Cache for parser tokens to avoid re-lexing.
 ///
 /// Stores [`Token`] values (from `perl-token`) rather than raw lexer tokens so
 /// that the cached values can be fed directly to [`Parser::from_tokens`].
+///
+/// The cache is organized as a collection of independent segments, each
+/// covering a contiguous range of source code. This allows for partial
+/// invalidation when edits affect only part of the source, rather than
+/// clearing the entire cache.
+///
+/// Segments are maintained in sorted order by their start position for
+/// efficient binary search operations.
 struct TokenCache {
-    /// All cached parser tokens in source order.
-    tokens: Vec<Token>,
-    /// The byte range `[start, end)` that the cached tokens cover.
-    valid_range: Option<(usize, usize)>,
+    /// Cached token segments, sorted by start position.
+    segments: Vec<TokenSegment>,
 }
 
 impl TokenCache {
+    /// Create a new empty token cache.
     fn new() -> Self {
-        TokenCache { tokens: Vec::new(), valid_range: None }
+        TokenCache { segments: Vec::new() }
     }
 
-    /// Return a sub-slice of cached tokens whose `start` is `>= position`.
+    /// Return all segments that end at or before the given position.
     ///
-    /// Because tokens are stored in source order we can binary-search for the
-    /// first token at or after `position`.
-    fn get_tokens_from(&self, position: usize) -> Option<&[Token]> {
-        let (valid_start, valid_end) = self.valid_range?;
-        if position < valid_start || position >= valid_end {
-            return None;
-        }
-        let idx = self.tokens.partition_point(|t| t.start < position);
-        Some(&self.tokens[idx..])
+    /// This is used to retrieve cached tokens from the unchanged portion of
+    /// source code before an edit.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The byte position to search up to.
+    ///
+    /// # Returns
+    ///
+    /// A vector of segments ending at or before `position`, in source order.
+    fn get_segments_before(&self, position: usize) -> Vec<TokenSegment> {
+        self.segments.iter().filter(|seg| seg.is_before(position)).cloned().collect()
     }
 
-    /// Return a sub-slice of cached tokens that end at or before `position`.
-    fn get_tokens_before(&self, position: usize) -> Option<&[Token]> {
-        let (valid_start, _valid_end) = self.valid_range?;
-        if self.tokens.is_empty() || valid_start >= position {
-            return None;
-        }
-        let idx = self.tokens.partition_point(|t| t.end <= position);
-        if idx == 0 { None } else { Some(&self.tokens[..idx]) }
+    /// Return all segments that start at or after the given position.
+    ///
+    /// This is used to retrieve cached tokens from the unchanged portion of
+    /// source code after an edit.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The byte position to search from.
+    ///
+    /// # Returns
+    ///
+    /// A vector of segments starting at or after `position`, in source order.
+    fn get_segments_after(&self, position: usize) -> Vec<TokenSegment> {
+        self.segments.iter().filter(|seg| seg.is_after(position)).cloned().collect()
     }
 
-    /// Replace the entire cache with a new set of parser tokens.
-    fn cache_tokens(&mut self, start: usize, end: usize, tokens: Vec<Token>) {
-        self.tokens = tokens;
-        self.valid_range = Some((start, end));
+    /// Return all segments that overlap with the given range.
+    ///
+    /// This is useful for determining which segments would be affected by
+    /// an edit or for finding cached tokens in a specific region.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Start byte position of the range.
+    /// * `end` - End byte position of the range.
+    ///
+    /// # Returns
+    ///
+    /// A vector of segments overlapping the range `[start, end)`, in source order.
+    fn get_segments_in_range(&self, start: usize, end: usize) -> Vec<TokenSegment> {
+        self.segments.iter().filter(|seg| seg.overlaps(start, end)).cloned().collect()
     }
 
-    /// Invalidate the cache if the given byte range overlaps with the cached range.
+    /// Add a new segment to the cache, maintaining sorted order.
+    ///
+    /// If the new segment overlaps with existing segments, those segments are
+    /// removed before adding the new one. This ensures the cache maintains
+    /// non-overlapping segments.
+    ///
+    /// # Arguments
+    ///
+    /// * `segment` - The segment to add.
+    fn add_segment(&mut self, segment: TokenSegment) {
+        // Remove any overlapping segments
+        self.segments.retain(|seg| !seg.overlaps(segment.start, segment.end));
+
+        // Find insertion point to maintain sorted order
+        let idx = self.segments.partition_point(|seg| seg.start < segment.start);
+
+        self.segments.insert(idx, segment);
+    }
+
+    /// Invalidate segments that overlap with the given range.
+    ///
+    /// Unlike the monolithic cache which cleared entirely on any overlap,
+    /// this only removes the affected segments, preserving unrelated cached
+    /// tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Start byte position of the range to invalidate.
+    /// * `end` - End byte position of the range to invalidate.
     fn invalidate_range(&mut self, start: usize, end: usize) {
-        if let Some((valid_start, valid_end)) = self.valid_range {
-            if start <= valid_end && end >= valid_start {
-                self.valid_range = None;
-                self.tokens.clear();
+        self.segments.retain(|seg| !seg.overlaps(start, end));
+    }
+
+    /// Adjust segment positions after an edit.
+    ///
+    /// Segments that start after `edit_start` have their positions shifted
+    /// by the difference between `new_len` and `old_len`. This keeps the
+    /// cache consistent with the modified source.
+    ///
+    /// # Arguments
+    ///
+    /// * `edit_start` - Start byte position of the edit.
+    /// * `old_len` - Length of the removed text.
+    /// * `new_len` - Length of the inserted text.
+    fn adjust_positions(&mut self, edit_start: usize, old_len: usize, new_len: usize) {
+        let delta = new_len as isize - old_len as isize;
+
+        if delta == 0 {
+            return;
+        }
+
+        for segment in &mut self.segments {
+            if segment.start >= edit_start {
+                segment.start = (segment.start as isize + delta) as usize;
+                segment.end = (segment.end as isize + delta) as usize;
             }
         }
+    }
+
+    /// Return cached tokens whose `start` is `>= position`.
+    ///
+    /// This method maintains backward compatibility with the original
+    /// monolithic cache API by collecting tokens from all relevant segments.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The byte position to search from.
+    ///
+    /// # Returns
+    ///
+    /// A slice of tokens starting at or after `position`, or `None` if no
+    /// cached tokens exist in that range.
+    fn get_tokens_from(&self, position: usize) -> Option<Vec<Token>> {
+        let segments = self.get_segments_after(position);
+        if segments.is_empty() {
+            return None;
+        }
+
+        // Collect all tokens from segments after position
+        let mut all_tokens = Vec::new();
+        for segment in segments {
+            // Filter tokens within the segment that start at or after position
+            for token in &segment.tokens {
+                if token.start >= position {
+                    all_tokens.push(token.clone());
+                }
+            }
+        }
+
+        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+    }
+
+    /// Return cached tokens that end at or before `position`.
+    ///
+    /// This method maintains backward compatibility with the original
+    /// monolithic cache API by collecting tokens from all relevant segments.
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - The byte position to search up to.
+    ///
+    /// # Returns
+    ///
+    /// A slice of tokens ending at or before `position`, or `None` if no
+    /// cached tokens exist in that range.
+    fn get_tokens_before(&self, position: usize) -> Option<Vec<Token>> {
+        let segments = self.get_segments_before(position);
+        if segments.is_empty() {
+            return None;
+        }
+
+        // Collect all tokens from segments before position
+        let mut all_tokens = Vec::new();
+        for segment in segments {
+            // Filter tokens within the segment that end at or before position
+            for token in &segment.tokens {
+                if token.end <= position {
+                    all_tokens.push(token.clone());
+                }
+            }
+        }
+
+        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+    }
+
+    /// Add a new segment to the cache.
+    ///
+    /// This replaces the original `cache_tokens` method which replaced the
+    /// entire cache. The new implementation adds tokens as an independent
+    /// segment, allowing for partial invalidation.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Start byte position of the segment.
+    /// * `end` - End byte position of the segment.
+    /// * `tokens` - Parser tokens for this segment.
+    fn cache_tokens(&mut self, start: usize, end: usize, tokens: Vec<Token>) {
+        if tokens.is_empty() {
+            return;
+        }
+
+        let segment = TokenSegment::new(start, end, tokens);
+        self.add_segment(segment);
     }
 }
 
@@ -98,6 +341,41 @@ pub struct IncrementalStats {
     pub checkpoints_used: usize,
     pub cache_hits: usize,
     pub cache_misses: usize,
+    /// Distance from edit start to the left checkpoint (in bytes)
+    pub left_checkpoint_distance: usize,
+    /// Distance from edit end to the right checkpoint (in bytes)
+    pub right_checkpoint_distance: usize,
+    /// Total bytes relexed during incremental parsing
+    pub bytes_relexed: usize,
+    /// Count of segments reused before the edit (cache efficiency metric)
+    pub segments_reused_before: usize,
+    /// Count of segments reused after the edit (cache efficiency metric)
+    pub segments_reused_after: usize,
+    /// Count of segments invalidated during edit (cache churn metric)
+    pub segments_invalidated: usize,
+    /// Count of times we had to relex the entire tail (cache coverage gaps)
+    pub full_tail_fallbacks: usize,
+}
+
+impl std::fmt::Display for IncrementalStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Incremental Parsing Statistics:")?;
+        writeln!(f, "  Total parses: {}", self.total_parses)?;
+        writeln!(f, "  Incremental parses: {}", self.incremental_parses)?;
+        writeln!(f, "  Tokens reused: {}", self.tokens_reused)?;
+        writeln!(f, "  Tokens relexed: {}", self.tokens_relexed)?;
+        writeln!(f, "  Checkpoints used: {}", self.checkpoints_used)?;
+        writeln!(f, "  Cache hits: {}", self.cache_hits)?;
+        writeln!(f, "  Cache misses: {}", self.cache_misses)?;
+        writeln!(f, "  Left checkpoint distance: {} bytes", self.left_checkpoint_distance)?;
+        writeln!(f, "  Right checkpoint distance: {} bytes", self.right_checkpoint_distance)?;
+        writeln!(f, "  Bytes relexed: {}", self.bytes_relexed)?;
+        writeln!(f, "  Segments reused before edit: {}", self.segments_reused_before)?;
+        writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
+        writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
+        writeln!(f, "  Full tail fallbacks: {}", self.full_tail_fallbacks)?;
+        Ok(())
+    }
 }
 
 /// Simple edit structure for demos
@@ -162,6 +440,10 @@ impl CheckpointedIncrementalParser {
         let new_content = &edit.new_text;
         self.source.replace_range(edit.start..edit.end, new_content);
 
+        // Track segments that will be invalidated before invalidating
+        let invalidated_segments = self.token_cache.get_segments_in_range(edit.start, edit.end);
+        self.stats.segments_invalidated += invalidated_segments.len();
+
         // Invalidate token cache for edited range
         self.token_cache.invalidate_range(edit.start, edit.end);
 
@@ -170,12 +452,20 @@ impl CheckpointedIncrementalParser {
         let new_len = new_content.len();
         self.checkpoint_cache.apply_edit(edit.start, old_len, new_len);
 
-        // Find nearest checkpoint before edit
-        let checkpoint = self.checkpoint_cache.find_before(edit.start);
+        // Adjust token cache segment positions for the edit
+        self.token_cache.adjust_positions(edit.start, old_len, new_len);
 
-        if let Some(checkpoint) = checkpoint {
+        // Find nearest checkpoints before and after the edit for two-sided window
+        let left_checkpoint = self.checkpoint_cache.find_before(edit.start);
+        let right_checkpoint = self.checkpoint_cache.find_after(edit.start + new_len);
+
+        if left_checkpoint.is_some() || right_checkpoint.is_some() {
             self.stats.checkpoints_used += 1;
-            self.reparse_from_checkpoint(checkpoint.clone(), edit)
+            self.reparse_from_checkpoint_two_sided(
+                left_checkpoint.cloned(),
+                right_checkpoint.cloned(),
+                edit,
+            )
         } else {
             // No checkpoint found, full reparse
             self.parse_with_checkpoints()
@@ -229,41 +519,109 @@ impl CheckpointedIncrementalParser {
         parser.parse()
     }
 
-    /// Reparse from a lexer checkpoint using cached tokens where possible.
+    /// Reparse using two-sided checkpoint windows.
     ///
-    /// Assembles a parser-token stream that reuses cached tokens for the
-    /// unchanged regions and re-lexes only the portion affected by the edit,
-    /// then calls [`Parser::from_tokens`] to drive the parse without invoking
-    /// the lexer again.
-    fn reparse_from_checkpoint(
+    /// This method implements a two-sided checkpoint window approach for incremental
+    /// parsing, which provides more precise bounds for re-lexing than the previous
+    /// fixed heuristic (+100 bytes).
+    ///
+    /// # Two-Sided Checkpoint Window Algorithm
+    ///
+    /// The algorithm works in three phases:
+    ///
+    /// 1. **Phase 1 - Before the edit**: Find the nearest checkpoint before the edit
+    ///    and reuse all cached tokens from the beginning of the source up to that
+    ///    checkpoint position.
+    ///
+    /// 2. **Phase 2 - Between checkpoints**: Re-lex the region between the left
+    ///    checkpoint (before the edit) and the right checkpoint (after the edit).
+    ///    This ensures we capture any context-sensitive changes that might affect
+    ///    tokenization beyond the immediate edit region.
+    ///
+    /// 3. **Phase 3 - After the edit**: Reuse all cached tokens from the right
+    ///    checkpoint position to the end of the source, applying a byte shift to
+    ///    account for the edit's size change.
+    ///
+    /// # Edge Cases
+    ///
+    /// - **No checkpoint before edit**: The relex region starts at position 0.
+    /// - **No checkpoint after edit**: The relex region ends at `source.len()`.
+    /// - **Checkpoint at edit boundary**: The checkpoint is used as-is, providing
+    ///   minimal re-lexing scope.
+    /// - **Edit spans multiple checkpoint boundaries**: All affected segments are
+    ///   invalidated, and the relex region spans from the leftmost to rightmost
+    ///   checkpoint boundaries.
+    ///
+    /// # Correctness
+    ///
+    /// The two-sided checkpoint window ensures correctness by:
+    ///
+    /// - Re-lexing from a stable checkpoint state (left checkpoint) to capture
+    ///   context-sensitive tokenization changes.
+    /// - Re-lexing through the edit and continuing until the next checkpoint to
+    ///   ensure any ripple effects are captured.
+    /// - Reusing cached tokens only from regions that are guaranteed to be
+    ///   unaffected by the edit.
+    ///
+    /// # Arguments
+    ///
+    /// * `left_checkpoint` - Optional checkpoint before the edit (used to start re-lexing)
+    /// * `right_checkpoint` - Optional checkpoint after the edit (used to stop re-lexing)
+    /// * `edit` - The edit being applied
+    ///
+    /// # Returns
+    ///
+    /// The parsed AST node.
+    fn reparse_from_checkpoint_two_sided(
         &mut self,
-        checkpoint: LexerCheckpoint,
+        left_checkpoint: Option<LexerCheckpoint>,
+        right_checkpoint: Option<LexerCheckpoint>,
         edit: &SimpleEdit,
     ) -> ParseResult<Node> {
-        // Restore the lexer at the checkpoint position so we can re-lex the
-        // affected region.
-        let mut lexer = PerlLexer::new(&self.source);
-        lexer.restore(&checkpoint);
+        // Calculate relex bounds using checkpoint positions
+        let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
+        let relex_end =
+            right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
 
-        let relex_start = checkpoint.position;
-        let mut parser_tokens: Vec<Token> = Vec::new();
-
-        // --- Phase 1: reuse cached tokens before the checkpoint ---
-        if let Some(cached) = self.token_cache.get_tokens_before(relex_start) {
-            parser_tokens.extend_from_slice(cached);
-            self.stats.tokens_reused += cached.len();
+        // Track checkpoint distances for statistics
+        let edit_end = edit.start + edit.new_text.len();
+        if edit.start >= relex_start {
+            self.stats.left_checkpoint_distance = edit.start - relex_start;
+        }
+        if relex_end >= edit_end {
+            self.stats.right_checkpoint_distance = relex_end - edit_end;
         }
 
-        // --- Phase 2: re-lex the region from the checkpoint through the edit ---
-        let relex_end = edit.start + edit.new_text.len() + 100; // small lookahead
+        let mut parser_tokens: Vec<Token> = Vec::new();
+
+        // --- Phase 1: reuse cached tokens before the left checkpoint ---
+        let segments_before = self.token_cache.get_segments_before(relex_start);
+        self.stats.segments_reused_before += segments_before.len();
+        if let Some(cached) = self.token_cache.get_tokens_before(relex_start) {
+            let reused_count = cached.len();
+            parser_tokens.extend(cached);
+            self.stats.tokens_reused += reused_count;
+        }
+
+        // --- Phase 2: re-lex the region between checkpoints ---
+        // Restore lexer at left checkpoint position (or start of source)
+        let mut lexer = PerlLexer::new(&self.source);
+        if let Some(ref cp) = left_checkpoint {
+            lexer.restore(cp);
+        }
+
         let mut raw_relexed: Vec<perl_lexer::Token> = Vec::new();
+        let mut bytes_relexed_this_phase = 0usize;
+
         loop {
             match lexer.next_token() {
                 Some(token) if matches!(token.token_type, perl_lexer::TokenType::EOF) => break,
                 Some(token) => {
                     let token_end = token.end;
+                    let token_start = token.start;
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
+                    bytes_relexed_this_phase += token_end - token_start;
                     if token_end >= relex_end {
                         break;
                     }
@@ -271,14 +629,18 @@ impl CheckpointedIncrementalParser {
                 None => break,
             }
         }
+        self.stats.bytes_relexed += bytes_relexed_this_phase;
+
         let converted = TokenStream::lexer_tokens_to_parser_tokens(raw_relexed);
         parser_tokens.extend(converted);
 
-        // --- Phase 3: reuse cached tokens after the affected region ---
-        let after_edit_pos = edit.start + edit.new_text.len();
+        // --- Phase 3: reuse cached tokens after the right checkpoint ---
         let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
 
-        if let Some(cached) = self.token_cache.get_tokens_from(after_edit_pos) {
+        let segments_after = self.token_cache.get_segments_after(relex_end);
+        self.stats.segments_reused_after += segments_after.len();
+
+        if let Some(cached) = self.token_cache.get_tokens_from(relex_end) {
             self.stats.cache_hits += 1;
             for token in cached {
                 // Adjust byte positions to account for the inserted/removed bytes.
@@ -293,6 +655,10 @@ impl CheckpointedIncrementalParser {
             }
         } else {
             self.stats.cache_misses += 1;
+            // Track full tail fallback when no segments are found after relex_end
+            if segments_after.is_empty() {
+                self.stats.full_tail_fallbacks += 1;
+            }
             // No cache hit — lex the remainder of the source.
             let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
             while let Some(token) = lexer.next_token() {
