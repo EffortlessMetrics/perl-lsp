@@ -869,6 +869,9 @@ enum Commands {
         lsp_crate: String,
     },
 
+    /// Check that test-bearing Rust files are reachable from their module tree.
+    CheckTestWiring,
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -1392,6 +1395,7 @@ fn main() -> Result<()> {
         Commands::UnwiredScan { json, check, lsp_crate } => {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
         }
+        Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {
