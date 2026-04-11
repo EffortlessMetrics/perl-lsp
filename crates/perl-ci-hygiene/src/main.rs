@@ -1842,8 +1842,9 @@ fi
 # A push is doc-only if every changed file matches one of:
 #   *.md, *.txt, LICENSE*, CHANGELOG*, docs/**, .github/ISSUE_TEMPLATE/**,
 #   or */LICENSE* (crate-subdir license files, e.g. crates/*/LICENSE-APACHE)
-# Doc-only pushes run a lighter gate (fmt check only) instead of the full
-# ci-gate, since the test suite is pointless for prose-only changes.
+# Doc-only pushes skip code gates entirely instead of running the full
+# ci-gate, since the test suite and workspace-wide rustfmt check are
+# pointless for prose-only changes and can fail spuriously on Windows (#4047).
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 DOC_ONLY=true
 TEST_FILES_CHANGED=false
@@ -1880,16 +1881,8 @@ if [ "$HAS_DIFFABLE_REF" != true ]; then
 fi
 
 if [ "$DOC_ONLY" = true ]; then
-    echo "📝 Doc-only push — running lighter gate (fmt check only)"
+    echo "📝 Doc-only push — skipping code gates"
     echo "   (Skip with: git push --no-verify)"
-    if command -v cargo &>/dev/null; then
-        if ! cargo fmt --all -- --check; then
-            echo ""
-            echo "❌ cargo fmt --check failed even on a doc-only push."
-            echo "   Run: cargo fmt --all"
-            exit 1
-        fi
-    fi
     echo "✅ Doc-only fast-path gate passed"
     exit 0
 fi
@@ -4184,6 +4177,12 @@ mod tests {
         assert!(
             after_doc.contains("exit 0"),
             "doc-only branch must exit 0 without invoking the full gate"
+        );
+        let exit_idx = after_doc.find("exit 0").expect("doc-only branch must exit");
+        let doc_branch = &after_doc[..exit_idx];
+        assert!(
+            !doc_branch.contains("cargo fmt --all -- --check"),
+            "doc-only branch must not run workspace-wide rustfmt checks before exiting"
         );
     }
 
