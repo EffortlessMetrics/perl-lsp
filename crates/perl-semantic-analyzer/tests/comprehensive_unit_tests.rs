@@ -167,6 +167,28 @@ fn symbol_extraction_constant() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn symbol_extraction_const_fast_scalar_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Const::Fast;
+const my $PI => 3.14159;
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "PI", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_const_fast_array_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Const::Fast;
+const my @ARRAY => (1, 2, 3);
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "ARRAY", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
 fn symbol_extraction_documentation_comment() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 # This sub does amazing things

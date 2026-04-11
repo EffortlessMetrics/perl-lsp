@@ -93,7 +93,8 @@ pub struct SymbolDecl {
 /// subsequent top-level statements.
 pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<SymbolDecl> {
     let mut out = Vec::new();
-    let mut ctx = WalkCtx { current_package: current_package.map(str::to_owned) };
+    let mut ctx =
+        WalkCtx { current_package: current_package.map(str::to_owned), const_fast_enabled: false };
     walk(root, &mut ctx, &mut out);
     out
 }
@@ -102,6 +103,7 @@ pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<S
 
 struct WalkCtx {
     current_package: Option<String>,
+    const_fast_enabled: bool,
 }
 
 impl WalkCtx {
@@ -240,6 +242,16 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
             }
         }
 
+        NodeKind::Use { module, .. } if module == "Const::Fast" => {
+            ctx.const_fast_enabled = true;
+        }
+
+        NodeKind::FunctionCall { name, args } if ctx.const_fast_enabled && name == "const" => {
+            for arg in args {
+                push_const_fast_decl(arg, node, ctx, out);
+            }
+        }
+
         // ── Containers: recurse into children ─────────────────────────────
         NodeKind::Program { statements } | NodeKind::Block { statements } => {
             walk_statements(statements, ctx, out);
@@ -329,6 +341,50 @@ fn is_constant_name_candidate(arg: &str) -> bool {
 fn push_unique(names: &mut Vec<String>, name: String) {
     if !names.iter().any(|existing| existing == &name) {
         names.push(name);
+    }
+}
+
+fn push_const_fast_decl(arg: &Node, call_node: &Node, ctx: &WalkCtx, out: &mut Vec<SymbolDecl>) {
+    match &arg.kind {
+        NodeKind::VariableDeclaration { variable, .. } => {
+            if let Some(decl) = const_fast_decl_from_node(variable, call_node, ctx) {
+                out.push(decl);
+            }
+        }
+        NodeKind::VariableListDeclaration { variables, .. } => {
+            for variable in variables {
+                if let Some(decl) = const_fast_decl_from_node(variable, call_node, ctx) {
+                    out.push(decl);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn const_fast_decl_from_node(
+    var_node: &Node,
+    call_node: &Node,
+    ctx: &WalkCtx,
+) -> Option<SymbolDecl> {
+    match &var_node.kind {
+        NodeKind::Variable { name, .. } => {
+            let anchor_span = Some((var_node.location.start, var_node.location.end));
+            let container = ctx.current_package.clone();
+            Some(SymbolDecl {
+                kind: SymbolKind::Constant,
+                name: name.clone(),
+                qualified_name: ctx.qualify(name),
+                full_span: (call_node.location.start, call_node.location.end),
+                anchor_span,
+                container,
+                declarator: Some("const".to_string()),
+            })
+        }
+        NodeKind::VariableWithAttributes { variable, .. } => {
+            const_fast_decl_from_node(variable, call_node, ctx)
+        }
+        _ => None,
     }
 }
 

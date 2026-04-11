@@ -403,6 +403,8 @@ pub struct SymbolExtractor {
     source: String,
     /// Per-package framework detection flags, keyed by package name.
     framework_flags: HashMap<String, FrameworkFlags>,
+    /// Whether `use Const::Fast` has been seen in the current compilation unit.
+    const_fast_enabled: bool,
 }
 
 impl Default for SymbolExtractor {
@@ -420,6 +422,7 @@ impl SymbolExtractor {
             table: SymbolTable::new(),
             source: String::new(),
             framework_flags: HashMap::new(),
+            const_fast_enabled: false,
         }
     }
 
@@ -431,6 +434,7 @@ impl SymbolExtractor {
             table: SymbolTable::new(),
             source: source.to_string(),
             framework_flags: HashMap::new(),
+            const_fast_enabled: false,
         }
     }
 
@@ -700,6 +704,13 @@ impl SymbolExtractor {
             }
 
             NodeKind::FunctionCall { name, args } => {
+                if self.const_fast_enabled
+                    && name == "const"
+                    && self.try_extract_const_fast_declaration(args)
+                {
+                    return;
+                }
+
                 // Track function call as a reference
                 let reference = SymbolReference {
                     name: name.clone(),
@@ -787,6 +798,9 @@ impl SymbolExtractor {
 
             NodeKind::Use { module, args, .. } => {
                 self.update_framework_context(module, args);
+                if module == "Const::Fast" {
+                    self.const_fast_enabled = true;
+                }
                 if module == "EV" {
                     self.synthesize_ev_framework_symbol(node.location);
                 }
@@ -2737,6 +2751,56 @@ impl SymbolExtractor {
             };
 
             self.table.add_symbol(symbol);
+        }
+    }
+
+    fn try_extract_const_fast_declaration(&mut self, args: &[Node]) -> bool {
+        let mut matched = false;
+
+        for arg in args {
+            match &arg.kind {
+                NodeKind::VariableDeclaration { variable, .. } => {
+                    if self.add_const_fast_symbol(variable, &[]) {
+                        matched = true;
+                    }
+                }
+                NodeKind::VariableListDeclaration { variables, .. } => {
+                    let mut saw_decl = false;
+                    for variable in variables {
+                        if self.add_const_fast_symbol(variable, &[]) {
+                            saw_decl = true;
+                        }
+                    }
+                    matched |= saw_decl;
+                }
+                _ => self.visit_node(arg),
+            }
+        }
+
+        matched
+    }
+
+    fn add_const_fast_symbol(&mut self, variable: &Node, attributes: &[String]) -> bool {
+        match &variable.kind {
+            NodeKind::Variable { name, .. } => {
+                self.table.add_symbol(Symbol {
+                    name: name.clone(),
+                    qualified_name: name.clone(),
+                    kind: SymbolKind::Constant,
+                    location: variable.location,
+                    scope_id: self.table.current_scope(),
+                    declaration: Some("const".to_string()),
+                    documentation: Some("Const::Fast read-only variable".to_string()),
+                    attributes: attributes.to_vec(),
+                });
+                true
+            }
+            NodeKind::VariableWithAttributes { variable, attributes: inner_attributes } => {
+                let mut merged = attributes.to_vec();
+                merged.extend(inner_attributes.iter().cloned());
+                self.add_const_fast_symbol(variable, &merged)
+            }
+            _ => false,
         }
     }
 

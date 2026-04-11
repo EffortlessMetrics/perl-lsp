@@ -250,6 +250,86 @@ fn test_use_constant_qw_style_deduplicates_names() {
 }
 
 #[test]
+fn test_const_fast_my_scalar_produces_constant_decl() {
+    let use_node = Node::new(
+        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        loc(0, 16),
+    );
+    let variable = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "PI".to_string() },
+        loc(26, 29),
+    );
+    let decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(variable),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(20, 29),
+    );
+    let expr = Node::new(
+        NodeKind::FunctionCall {
+            name: "const".to_string(),
+            args: vec![
+                decl,
+                Node::new(NodeKind::Number { value: "3.14159".to_string() }, loc(33, 40)),
+            ],
+        },
+        loc(14, 40),
+    );
+    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 40));
+    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 40));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let decl = &decls[0];
+    assert_eq!(decl.kind, SymbolKind::Constant);
+    assert_eq!(decl.name, "PI");
+    assert_eq!(decl.qualified_name, "PI");
+    assert_eq!(decl.anchor_span, Some((26, 29)));
+    assert_eq!(decl.declarator.as_deref(), Some("const"));
+}
+
+#[test]
+fn test_const_fast_my_array_produces_constant_decl() {
+    let use_node = Node::new(
+        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        loc(0, 16),
+    );
+    let variable = Node::new(
+        NodeKind::Variable { sigil: "@".to_string(), name: "ARRAY".to_string() },
+        loc(26, 32),
+    );
+    let decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(variable),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(20, 32),
+    );
+    let expr = Node::new(
+        NodeKind::FunctionCall {
+            name: "const".to_string(),
+            args: vec![decl, Node::new(NodeKind::ArrayLiteral { elements: vec![] }, loc(36, 38))],
+        },
+        loc(14, 38),
+    );
+    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 38));
+    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 38));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].kind, SymbolKind::Constant);
+    assert_eq!(decls[0].name, "ARRAY");
+    assert_eq!(decls[0].anchor_span, Some((26, 32)));
+}
+
+#[test]
 fn test_variable_declaration_with_attributes_is_unwrapped() {
     // my $count :shared;
     let inner = Node::new(
