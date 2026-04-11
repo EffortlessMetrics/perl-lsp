@@ -258,7 +258,8 @@ gates:
     description: "Check dependencies for known security vulnerabilities"
     required: true
     # cargo-audit must be installed; CI installs it if missing
-    command: cargo audit --deny warnings --ignore RUSTSEC-2023-0089 2>/dev/null || cargo install cargo-audit --locked && cargo audit --deny warnings --ignore RUSTSEC-2023-0089
+    # Temporary ignore for rand unsoundness advisory tracked in #4149.
+    command: cargo audit --deny warnings --ignore RUSTSEC-2023-0089 --ignore RUSTSEC-2026-0097 2>/dev/null || cargo install cargo-audit --locked && cargo audit --deny warnings --ignore RUSTSEC-2023-0089 --ignore RUSTSEC-2026-0097
     timeout_seconds: 300
     retry_count: 1
     budgets:

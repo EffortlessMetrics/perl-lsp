@@ -513,8 +513,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
 
     let pm_files = if let Some(ref manifest) = config.manifest_path {
-        let files = resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?;
-        files
+        resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?
     } else {
         discover_pm_files(&config.corpus_roots)
     };
