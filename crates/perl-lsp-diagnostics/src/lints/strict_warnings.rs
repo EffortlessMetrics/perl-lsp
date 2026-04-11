@@ -33,6 +33,16 @@ const PRAGMA_TYPOS: &[(&str, &[&str])] = &[
     ("Carp", &["Carb", "Crap"]),
 ];
 
+const PHASE_PRAGMA_SCOPES: &[&str] = &["BEGIN", "END", "INIT", "CHECK", "UNITCHECK"];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PhaseScopedPragmaUse {
+    module: String,
+    phase: String,
+    use_range: (usize, usize),
+    phase_range: (usize, usize),
+}
+
 /// Check for common strict/warnings issues
 ///
 /// This function checks if 'use strict' and 'use warnings' pragmas are present
@@ -91,6 +101,8 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         }
     });
 
+    emit_phase_scoped_pragma_diagnostics(node, has_strict, has_warnings, diagnostics);
+
     // Add diagnostics if missing
     if !has_strict {
         diagnostics.push(Diagnostic {
@@ -132,6 +144,110 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             tags: Vec::new(),
             suggestion: Some("Add 'use warnings;' at the top of the file".to_string()),
         });
+    }
+}
+
+fn emit_phase_scoped_pragma_diagnostics(
+    node: &Node,
+    has_strict: bool,
+    has_warnings: bool,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for pragma_use in collect_phase_scoped_pragma_uses(node) {
+        match pragma_use.module.as_str() {
+            "strict" if !has_strict => diagnostics.push(phase_scoped_pragma_diagnostic(
+                &pragma_use,
+                DiagnosticCode::PhaseScopedStrictPragma,
+                "strict",
+            )),
+            "warnings" if !has_warnings => diagnostics.push(phase_scoped_pragma_diagnostic(
+                &pragma_use,
+                DiagnosticCode::PhaseScopedWarningsPragma,
+                "warnings",
+            )),
+            _ => {}
+        }
+    }
+}
+
+fn collect_phase_scoped_pragma_uses(node: &Node) -> Vec<PhaseScopedPragmaUse> {
+    let mut hits = Vec::new();
+    collect_phase_scoped_pragma_uses_inner(node, None, None, &mut hits);
+    hits
+}
+
+fn collect_phase_scoped_pragma_uses_inner(
+    node: &Node,
+    current_phase: Option<&str>,
+    current_phase_range: Option<(usize, usize)>,
+    hits: &mut Vec<PhaseScopedPragmaUse>,
+) {
+    match &node.kind {
+        NodeKind::PhaseBlock { phase, phase_span, block }
+            if PHASE_PRAGMA_SCOPES.contains(&phase.as_str()) =>
+        {
+            let phase_range = phase_span
+                .as_ref()
+                .map(|span| (span.start, span.end))
+                .unwrap_or((node.location.start, node.location.end));
+            collect_phase_scoped_pragma_uses_inner(
+                block,
+                Some(phase.as_str()),
+                Some(phase_range),
+                hits,
+            );
+        }
+        NodeKind::Use { module, .. } if matches!(module.as_str(), "strict" | "warnings") => {
+            if let (Some(phase), Some(phase_range)) = (current_phase, current_phase_range) {
+                hits.push(PhaseScopedPragmaUse {
+                    module: module.clone(),
+                    phase: phase.to_string(),
+                    use_range: (node.location.start, node.location.end),
+                    phase_range,
+                });
+            }
+        }
+        _ => {
+            for child in node.children() {
+                collect_phase_scoped_pragma_uses_inner(
+                    child,
+                    current_phase,
+                    current_phase_range,
+                    hits,
+                );
+            }
+        }
+    }
+}
+
+fn phase_scoped_pragma_diagnostic(
+    pragma_use: &PhaseScopedPragmaUse,
+    code: DiagnosticCode,
+    pragma_name: &str,
+) -> Diagnostic {
+    Diagnostic {
+        range: pragma_use.use_range,
+        severity: DiagnosticSeverity::Warning,
+        code: Some(code.as_str().to_string()),
+        message: format!(
+            "`use {pragma_name}` inside a {} block does not enable {pragma_name} for the rest of the file",
+            pragma_use.phase
+        ),
+        related_information: vec![
+            RelatedInformation {
+                location: pragma_use.phase_range,
+                message: format!(
+                    "Perl phase blocks are lexically scoped: `use {pragma_name}` only applies inside `{}` {{ ... }}.",
+                    pragma_use.phase
+                ),
+            },
+            RelatedInformation {
+                location: (0, 0),
+                message: format!("Move `use {pragma_name};` to file scope for file-wide effect."),
+            },
+        ],
+        tags: Vec::new(),
+        suggestion: Some(format!("Move `use {pragma_name};` to the top of the file")),
     }
 }
 
@@ -374,6 +490,42 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
             "sub-scoped strict must not suppress missing-strict (PL100)"
+        );
+    }
+
+    #[test]
+    fn begin_scoped_strict_emits_phase_scoped_strict_diagnostic() {
+        let diags = strict_warnings_diags("BEGIN { use strict; }\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL502")),
+            "BEGIN-scoped strict should emit PL502"
+        );
+    }
+
+    #[test]
+    fn begin_scoped_strict_with_top_level_strict_does_not_emit_phase_diagnostic() {
+        let diags = strict_warnings_diags("BEGIN { use strict; }\nuse strict;\nmy $x = 1;\n");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL502")),
+            "top-level strict should suppress PL502"
+        );
+    }
+
+    #[test]
+    fn end_scoped_warnings_emits_phase_scoped_warnings_diagnostic() {
+        let diags = strict_warnings_diags("use strict;\nEND { use warnings; }\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL503")),
+            "END-scoped warnings should emit PL503"
+        );
+    }
+
+    #[test]
+    fn phase_scoped_non_strict_pragma_does_not_emit_phase_diagnostic() {
+        let diags = strict_warnings_diags("BEGIN { use utf8; }\nmy $x = 1;\n");
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL502") | Some("PL503"))),
+            "non-strict pragmas inside phase blocks should not emit PL502/PL503"
         );
     }
 

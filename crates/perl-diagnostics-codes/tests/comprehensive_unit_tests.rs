@@ -20,6 +20,8 @@ const ALL_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::UnexpectedEof,
     DiagnosticCode::MissingStrict,
     DiagnosticCode::MissingWarnings,
+    DiagnosticCode::PhaseScopedStrictPragma,
+    DiagnosticCode::PhaseScopedWarningsPragma,
     DiagnosticCode::UnusedVariable,
     DiagnosticCode::UndefinedVariable,
     DiagnosticCode::CaptureVarWithoutRegexMatch,
@@ -180,6 +182,13 @@ fn code_as_str_strict_warnings_range() -> Result<(), Box<dyn std::error::Error>>
     assert_eq!(DiagnosticCode::UnusedVariable.as_str(), "PL102");
     assert_eq!(DiagnosticCode::UndefinedVariable.as_str(), "PL103");
     assert_eq!(DiagnosticCode::CaptureVarWithoutRegexMatch.as_str(), "PL112");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_phase_scoped_pragma_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::PhaseScopedStrictPragma.as_str(), "PL502");
+    assert_eq!(DiagnosticCode::PhaseScopedWarningsPragma.as_str(), "PL503");
     Ok(())
 }
 
@@ -454,6 +463,8 @@ fn category_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
     let sw_codes = [
         DiagnosticCode::MissingStrict,
         DiagnosticCode::MissingWarnings,
+        DiagnosticCode::PhaseScopedStrictPragma,
+        DiagnosticCode::PhaseScopedWarningsPragma,
         DiagnosticCode::UnusedVariable,
         DiagnosticCode::UndefinedVariable,
         DiagnosticCode::CaptureVarWithoutRegexMatch,
@@ -1192,7 +1203,7 @@ fn unused_variable_tag_is_exactly_unnecessary() {
 
 #[test]
 fn all_codes_count_is_24() {
-    assert_eq!(ALL_CODES.len(), 24, "expected 24 diagnostic codes total");
+    assert_eq!(ALL_CODES.len(), 26, "expected 26 diagnostic codes total");
 }
 
 // --- DiagnosticCode: parse_code boundary values ---
@@ -1201,7 +1212,7 @@ fn all_codes_count_is_24() {
 fn parse_code_all_valid_pl_codes() {
     let valid_pl = [
         "PL001", "PL002", "PL003", "PL100", "PL101", "PL102", "PL103", "PL200", "PL201", "PL300",
-        "PL301", "PL302", "PL303", "PL400", "PL401", "PL402", "PL602",
+        "PL301", "PL302", "PL303", "PL400", "PL401", "PL402", "PL602", "PL502", "PL503",
     ];
     for s in &valid_pl {
         assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
@@ -1219,11 +1230,11 @@ fn parse_code_all_valid_pc_codes() {
 #[test]
 fn parse_code_gaps_return_none() {
     // Codes that fall in valid ranges but aren't assigned.
-    // Note: PL104-PL111, PL303, PL403-PL404, PL500-PL501, PL600-PL602, PL700, PL800-PL806
+    // Note: PL104-PL111, PL303, PL403-PL404, PL500-PL503, PL600-PL602, PL700, PL800-PL806
     // are now assigned; only truly unassigned gaps are listed here.
     let gaps = [
-        "PL004", "PL050", "PL099", "PL150", "PL199", "PL202", "PL250", "PL399", "PL499", "PL502",
-        "PL599", "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
+        "PL004", "PL050", "PL099", "PL150", "PL199", "PL202", "PL250", "PL399", "PL499", "PL599",
+        "PL699", "PL702", "PL799", "PL807", "PL899", "PC006", "PC010",
     ];
     for s in &gaps {
         assert!(DiagnosticCode::parse_code(s).is_none(), "expected None for unassigned code {}", s);

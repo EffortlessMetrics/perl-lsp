@@ -967,6 +967,8 @@ fn is_fixable_diagnostic(code: &str) -> bool {
                 DiagnosticCode::ParseError
                     | DiagnosticCode::MissingStrict
                     | DiagnosticCode::MissingWarnings
+                    | DiagnosticCode::PhaseScopedStrictPragma
+                    | DiagnosticCode::PhaseScopedWarningsPragma
                     | DiagnosticCode::UnusedVariable
                     | DiagnosticCode::UndefinedVariable
                     | DiagnosticCode::VariableShadowing

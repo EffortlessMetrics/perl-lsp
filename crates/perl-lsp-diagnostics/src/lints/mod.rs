@@ -53,6 +53,8 @@
 //! |------|----------|-------------|
 //! | `missing-strict` | Information | `use strict` not found |
 //! | `missing-warnings` | Information | `use warnings` not found |
+//! | `PL502` | Warning | `use strict` only appears inside a phase block |
+//! | `PL503` | Warning | `use warnings` only appears inside a phase block |
 //! | `misspelled-pragma` | Warning | Pragma name appears misspelled |
 //!
 //! ## Common mistakes (`common_mistakes.rs`)

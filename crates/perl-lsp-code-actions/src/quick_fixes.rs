@@ -179,6 +179,78 @@ pub fn add_use_warnings() -> Vec<CodeAction> {
     }]
 }
 
+fn file_scope_pragma_insertion_offset(source: &str) -> usize {
+    if source.starts_with("#!") {
+        source.find('\n').map(|offset| offset + 1).unwrap_or(source.len())
+    } else {
+        0
+    }
+}
+
+/// Move a phase-scoped `use strict` pragma to file scope.
+pub fn move_use_strict_to_file_scope(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let insert_at = file_scope_pragma_insertion_offset(source);
+    let delete_end = if source.as_bytes().get(diagnostic.range.1).copied() == Some(b';') {
+        diagnostic.range.1 + 1
+    } else {
+        diagnostic.range.1
+    };
+
+    vec![CodeAction {
+        title: "Move 'use strict' to file scope".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::PhaseScopedStrictPragma.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![
+                TextEdit {
+                    location: SourceLocation { start: diagnostic.range.0, end: delete_end },
+                    new_text: String::new(),
+                },
+                TextEdit {
+                    location: SourceLocation { start: insert_at, end: insert_at },
+                    new_text: "use strict;\n".to_string(),
+                },
+            ],
+        },
+        is_preferred: true,
+    }]
+}
+
+/// Move a phase-scoped `use warnings` pragma to file scope.
+pub fn move_use_warnings_to_file_scope(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let insert_at = file_scope_pragma_insertion_offset(source);
+    let delete_end = if source.as_bytes().get(diagnostic.range.1).copied() == Some(b';') {
+        diagnostic.range.1 + 1
+    } else {
+        diagnostic.range.1
+    };
+
+    vec![CodeAction {
+        title: "Move 'use warnings' to file scope".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::PhaseScopedWarningsPragma.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![
+                TextEdit {
+                    location: SourceLocation { start: diagnostic.range.0, end: delete_end },
+                    new_text: String::new(),
+                },
+                TextEdit {
+                    location: SourceLocation { start: insert_at, end: insert_at },
+                    new_text: "use warnings;\n".to_string(),
+                },
+            ],
+        },
+        is_preferred: true,
+    }]
+}
+
 /// Fix deprecated 'defined @array' or 'defined %hash'
 pub fn fix_deprecated_defined(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
     let mut actions = Vec::new();

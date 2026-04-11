@@ -226,6 +226,18 @@ tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
 description = "Missing 'use warnings' pragma diagnostic (PL101) — warns when .pm/.pl files lack warnings enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
 
 [[feature]]
+id = "lsp.diagnostic.phase_scoped_pragmas"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "beta"
+advertised = true
+tests = [
+  "crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs",
+  "crates/perl-lsp-code-actions/src/code_actions.rs",
+]
+description = "Phase-scoped pragma misconception diagnostics (PL502/PL503) — warns when `use strict` or `use warnings` appears only inside BEGIN/END/INIT/CHECK/UNITCHECK and offers a quick fix to move it to file scope"
+
+[[feature]]
 id = "lsp.diagnostic.unreachable_code"
 spec = "perl-lsp"
 area = "text_document"
