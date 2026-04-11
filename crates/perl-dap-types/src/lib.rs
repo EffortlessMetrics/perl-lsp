@@ -51,10 +51,15 @@ impl Source {
     #[must_use]
     pub fn new(path: impl Into<String>) -> Self {
         let path = path.into();
-        let name = std::path::Path::new(&path)
+        let path_name = std::path::Path::new(&path)
             .file_name()
             .and_then(|name| name.to_str())
             .map(ToOwned::to_owned);
+        let name = if path_name.as_deref() == Some(path.as_str()) && path.contains('\\') {
+            path.rsplit('\\').find(|segment| !segment.is_empty()).map(ToOwned::to_owned)
+        } else {
+            path_name
+        };
 
         Self { name, path, source_reference: None }
     }
