@@ -5,6 +5,7 @@
 #   1. Not in draft state
 #   2. Has the merge-ready label
 #   3. Title contains an issue reference (#NNN)
+#   4. Has deep-review coverage, unless the PR is docs-only
 #
 # Usage:
 #   scripts/pre-merge-check.sh <pr-number>
@@ -21,13 +22,43 @@ set -euo pipefail
 
 PR="${1:?usage: $0 <pr-number>}"
 
+json_read() {
+    local filter="$1"
+    printf '%s' "$PR_JSON" | jq -r "$filter" | tr -d '\r'
+}
+
 # ── Fetch PR metadata ─────────────────────────────────────────────────────────
 
-PR_JSON="$(gh pr view "$PR" --json isDraft,labels,title)"
+PR_JSON="$(gh pr view "$PR" --json isDraft,labels,title,files)"
 
-IS_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.isDraft')"
-HAS_MERGE_READY="$(printf '%s' "$PR_JSON" | jq -r '[.labels[].name] | any(. == "merge-ready")')"
-TITLE="$(printf '%s' "$PR_JSON" | jq -r '.title')"
+IS_DRAFT="$(json_read '.isDraft')"
+HAS_MERGE_READY="$(json_read '[.labels[].name] | any(. == "merge-ready")')"
+HAS_REVIEWED_DEEP="$(json_read '[.labels[].name] | any(. == "reviewed-deep")')"
+TITLE="$(json_read '.title')"
+
+is_docs_only_path() {
+    local path="$1"
+    case "$path" in
+        docs/*) return 0 ;;
+        *.md|*.mdx|*.txt|*.rst|*.adoc) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+DOCS_ONLY=true
+FILE_COUNT=0
+while IFS= read -r changed_path; do
+    [[ -z "$changed_path" ]] && continue
+    FILE_COUNT=$((FILE_COUNT + 1))
+    if ! is_docs_only_path "$changed_path"; then
+        DOCS_ONLY=false
+        break
+    fi
+done < <(json_read '.files[]?.path // empty')
+
+if [[ "$FILE_COUNT" -eq 0 ]]; then
+    DOCS_ONLY=false
+fi
 
 # ── Run checks ────────────────────────────────────────────────────────────────
 
@@ -52,10 +83,20 @@ if ! printf '%s' "$TITLE" | grep -qE '\(#[0-9]+\)'; then
     FAILED=1
 fi
 
+# Check 4: Non-docs PRs require reviewed-deep
+if [[ "$HAS_REVIEWED_DEEP" != "true" && "$DOCS_ONLY" != "true" ]]; then
+    echo "FAIL PR #$PR: missing 'reviewed-deep' label on a non-docs PR — route through reviewer-deep first" >&2
+    FAILED=1
+fi
+
 # ── Result ────────────────────────────────────────────────────────────────────
 
 if [[ "$FAILED" -eq 0 ]]; then
-    echo "OK   PR #$PR: pre-merge checks passed (not draft, merge-ready label present, issue ref in title)"
+    if [[ "$DOCS_ONLY" == "true" && "$HAS_REVIEWED_DEEP" != "true" ]]; then
+        echo "OK   PR #$PR: pre-merge checks passed (docs-only fast track, merge-ready label present, issue ref in title)"
+    else
+        echo "OK   PR #$PR: pre-merge checks passed (not draft, merge-ready label present, issue ref in title, deep review covered)"
+    fi
     exit 0
 else
     exit 1

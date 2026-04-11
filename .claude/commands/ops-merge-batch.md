@@ -25,14 +25,16 @@ Merge up to 3 PRs from the candidates identified in step 1.
    - CI checks green on the current HEAD SHA
    - No blocking review comments
 
-3. **Deep review check (defense-in-depth)** — verify `reviewed-deep` label is present:
+3. **Policy gate (defense-in-depth)** — run the scripted pre-merge guard:
    ```bash
-   gh pr view <number> --json labels --jq '[.labels[].name] | contains(["reviewed-deep"])'
+   just pre-merge-check <number>
+   # or: bash scripts/pre-merge-check.sh <number>
    ```
-   If `false`, **skip this PR** with reason: "missing deep review signal — route to reviewer-deep."
-   This is a defense-in-depth check. The `pr-ready` gate should have already caught this, but
-   we verify again at merge time because labels can be manually removed or PRs can be
-   marked ready through non-standard paths.
+   This codifies the policy:
+   - non-docs PRs need `reviewed-deep`
+   - docs-only PRs may merge with `merge-ready` alone
+   - draft/title/label mistakes still fail loud
+   If it fails, **skip this PR** with the script's reason.
 
 4. **Build a good commit message** for each PR:
    ```bash
@@ -69,7 +71,7 @@ Merge up to 3 PRs from the candidates identified in step 1.
    - CI red or pending → skip, note "CI not green on current HEAD"
    - CI green on old SHA → skip, note "stale CI — needs rerun"
    - Draft → skip, note "still in review"
-   - Missing `reviewed-deep` → skip, note "missing deep review signal"
+   - Missing `reviewed-deep` on a non-docs PR → skip, note "missing deep review signal"
 
 ## Rules
 

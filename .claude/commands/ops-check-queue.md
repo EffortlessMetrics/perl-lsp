@@ -25,7 +25,7 @@ Find PRs that are ready to merge.
    ```
 
 4. Classify:
-   - **MERGE NOW**: MERGEABLE + CI green
+   - **MERGE NOW**: MERGEABLE + CI green + `just pre-merge-check <number>` passes
    - **WAIT**: CI still running
    - **BLOCKED**: CI failures — note which check failed
    - **NEEDS REBASE**: CONFLICTING

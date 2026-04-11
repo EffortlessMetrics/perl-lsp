@@ -43,10 +43,10 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `builder-ready` | plan-reviewer (/plan-review-improve) | Ready for builder pickup |
 | `in-build` | builder (/builder-read-spec) | Builder claimed this issue |
 | `in-review` | reviewer (/reviewer-read-handoff) | PR actively in review — set at review start |
-| `merge-ready` | reviewer (/pr-ready) | Ready for ops merge |
+| `merge-ready` | reviewer (/pr-ready) | Ready for ops merge; docs-only PRs may reach this without `reviewed-deep` |
 | `structural-blocker` | any agent | Architecture issue; blocks parallel work |
 | `needs-deep-review` | reviewer (/reviewer-decide) | Standards review done, awaiting deep correctness review |
-| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | Deep correctness review complete — required before merge |
+| `reviewed-deep` | reviewer-deep (/reviewer-deep-decide) | Deep correctness review complete — required before merge for non-docs PRs |
 | `follow-up-recommended` | wisdom or reviewer | Related follow-up issue needed |
 | `already-fixed` | plan-reviewer or scout | Close without build |
 

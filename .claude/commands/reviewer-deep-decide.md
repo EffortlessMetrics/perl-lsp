@@ -27,7 +27,7 @@ After approval, write a version-bound receipt:
 /label-receipt-write pr <number> reviewed-deep reviewer-deep
 ```
 
-The `reviewed-deep` label is **required** before a PR can be marked `merge-ready`. Without it, `/pr-ready` and `ops-merge-batch` will refuse to proceed.
+The `reviewed-deep` label is **required for non-docs PRs** before a PR can be marked `merge-ready`. Docs-only PRs may use the reviewer fast-track path instead; do not set `reviewed-deep` unless you actually performed the deep review.
 
 ### Logic issues → Fix them on the branch
 You're a sonnet agent on an isolated branch. If the logic is wrong but the approach is right, fix the logic yourself. Only send back if the approach is fundamentally wrong.
