@@ -200,28 +200,6 @@ Readonly my $PI => 3.14159;
 }
 
 #[test]
-fn symbol_extraction_readonly_hash_is_constant() -> Result<(), Box<dyn std::error::Error>> {
-    let code = r#"
-use Readonly;
-Readonly my %HASH => (answer => 42);
-"#;
-    let table = parse_and_extract(code);
-    assert!(has_symbol(&table, "HASH", SymbolKind::Constant));
-    Ok(())
-}
-
-#[test]
-fn symbol_extraction_readonly_scalar_is_constant() -> Result<(), Box<dyn std::error::Error>> {
-    let code = r#"
-use Readonly;
-Readonly my $PI => 3.14159;
-"#;
-    let table = parse_and_extract(code);
-    assert!(has_symbol(&table, "PI", SymbolKind::Constant));
-    Ok(())
-}
-
-#[test]
 fn symbol_extraction_readonly_array_is_constant() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use Readonly;
