@@ -349,7 +349,10 @@ fn bdd_feature_rows_are_correctly_sorted() {
                 );
             }
             std::cmp::Ordering::Greater => {
-                panic!("Areas not sorted: {current:?} vs {next:?}");
+                assert!(
+                    !matches!(area_cmp, std::cmp::Ordering::Greater),
+                    "Areas not sorted: {current:?} vs {next:?}"
+                );
             }
         }
     }
