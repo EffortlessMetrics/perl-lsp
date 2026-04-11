@@ -206,6 +206,32 @@ fn lint_pipeline_warnings_inside_end_emits_pl101() {
     );
 }
 
+#[test]
+fn lint_pipeline_strict_inside_begin_emits_pl502() {
+    let source = "BEGIN { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let phase_scoped: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL502")).collect();
+    assert!(
+        !phase_scoped.is_empty(),
+        "use strict inside BEGIN should emit PL502, got codes: {:?}",
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn lint_pipeline_warnings_inside_end_emits_pl503() {
+    let source = "use strict;\nEND { use warnings; }\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let phase_scoped: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL503")).collect();
+    assert!(
+        !phase_scoped.is_empty(),
+        "use warnings inside END should emit PL503, got codes: {:?}",
+        diags.iter().map(|d| d.code.as_deref().unwrap_or("none")).collect::<Vec<_>>()
+    );
+}
+
 // =========================================================================
 // 9. conditional `use if` pragmas conservatively suppress missing-pragmas
 // =========================================================================

@@ -134,6 +134,20 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::MissingWarnings.as_str() => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
+                    // PL502: Phase-scoped use strict misconception
+                    c if c == DiagnosticCode::PhaseScopedStrictPragma.as_str() => {
+                        actions.extend(quick_fixes::move_use_strict_to_file_scope(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
+                    // PL503: Phase-scoped use warnings misconception
+                    c if c == DiagnosticCode::PhaseScopedWarningsPragma.as_str() => {
+                        actions.extend(quick_fixes::move_use_warnings_to_file_scope(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
                     // PL500: Deprecated defined()
                     c if c == DiagnosticCode::DeprecatedDefined.as_str() => {
                         actions.extend(quick_fixes::fix_deprecated_defined(&self.source, &qf_diag));
@@ -258,6 +272,17 @@ mod tests {
             tags: Vec::new(),
             suggestion: None,
         }
+    }
+
+    fn apply_action(source: &str, action: &CodeAction) -> String {
+        let mut edits = action.edit.changes.clone();
+        edits.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+
+        let mut output = source.to_string();
+        for edit in edits {
+            output.replace_range(edit.location.start..edit.location.end, &edit.new_text);
+        }
+        output
     }
 
     #[test]
@@ -499,5 +524,57 @@ mod tests {
         assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
         assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
         assert!(actions.iter().any(|a| a.title.contains("Remove unused variable")));
+    }
+
+    #[test]
+    fn test_phase_scoped_strict_quick_fix_moves_pragma_to_file_scope() {
+        let source = "BEGIN { use strict; }\nmy $x = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find("use strict;").unwrap();
+        let end = start + "use strict;".len();
+        let diagnostics = vec![make_diagnostic(
+            start,
+            end,
+            "PL502",
+            "`use strict` inside a BEGIN block does not enable strict for the rest of the file",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+        let action = actions
+            .iter()
+            .find(|action| action.title == "Move 'use strict' to file scope")
+            .expect("phase-scoped strict quick fix");
+
+        let rewritten = apply_action(source, action);
+        assert!(rewritten.starts_with("use strict;\nBEGIN { "));
+        assert!(rewritten.contains("BEGIN {  }"));
+    }
+
+    #[test]
+    fn test_phase_scoped_warnings_quick_fix_preserves_shebang() {
+        let source = "#!/usr/bin/perl\nBEGIN { use warnings; }\nprint 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find("use warnings;").unwrap();
+        let end = start + "use warnings;".len();
+        let diagnostics = vec![make_diagnostic(
+            start,
+            end,
+            "PL503",
+            "`use warnings` inside a BEGIN block does not enable warnings for the rest of the file",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+        let action = actions
+            .iter()
+            .find(|action| action.title == "Move 'use warnings' to file scope")
+            .expect("phase-scoped warnings quick fix");
+
+        let rewritten = apply_action(source, action);
+        assert!(rewritten.starts_with("#!/usr/bin/perl\nuse warnings;\n"));
+        assert!(rewritten.contains("BEGIN {  }"));
     }
 }

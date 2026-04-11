@@ -166,11 +166,15 @@ pub enum DiagnosticCode {
     /// `goto LABEL` references a label that does not exist in this file
     GotoUndefinedLabel,
 
-    // Deprecated syntax (PL500-PL599)
+    // Pragma pitfalls / deprecated syntax (PL500-PL599)
     /// Use of deprecated defined(@array) / defined(%hash)
     DeprecatedDefined,
     /// Use of deprecated $[ array base variable
     DeprecatedArrayBase,
+    /// `use strict` appears only inside a phase block and does not affect file scope
+    PhaseScopedStrictPragma,
+    /// `use warnings` appears only inside a phase block and does not affect file scope
+    PhaseScopedWarningsPragma,
 
     // Security (PL600-PL699)
     /// String eval is a security risk
@@ -265,6 +269,8 @@ impl DiagnosticCode {
             DiagnosticCode::GotoUndefinedLabel => "PL409",
             DiagnosticCode::DeprecatedDefined => "PL500",
             DiagnosticCode::DeprecatedArrayBase => "PL501",
+            DiagnosticCode::PhaseScopedStrictPragma => "PL502",
+            DiagnosticCode::PhaseScopedWarningsPragma => "PL503",
             DiagnosticCode::SecurityStringEval => "PL600",
             DiagnosticCode::SecurityBacktickExec => "PL601",
             DiagnosticCode::SecuritySignalHandler => "PL602",
@@ -333,6 +339,8 @@ impl DiagnosticCode {
             "PL409" => "https://docs.perl-lsp.org/errors/PL409",
             "PL500" => "https://docs.perl-lsp.org/errors/PL500",
             "PL501" => "https://docs.perl-lsp.org/errors/PL501",
+            "PL502" => "https://docs.perl-lsp.org/errors/PL502",
+            "PL503" => "https://docs.perl-lsp.org/errors/PL503",
             "PL600" => "https://docs.perl-lsp.org/errors/PL600",
             "PL601" => "https://docs.perl-lsp.org/errors/PL601",
             "PL602" => "https://docs.perl-lsp.org/errors/PL602",
@@ -391,6 +399,8 @@ impl DiagnosticCode {
             | DiagnosticCode::GotoUndefinedLabel
             | DiagnosticCode::DeprecatedDefined
             | DiagnosticCode::DeprecatedArrayBase
+            | DiagnosticCode::PhaseScopedStrictPragma
+            | DiagnosticCode::PhaseScopedWarningsPragma
             | DiagnosticCode::SecurityStringEval
             | DiagnosticCode::SecurityBacktickExec
             | DiagnosticCode::SecuritySignalHandler
@@ -582,6 +592,14 @@ impl DiagnosticCode {
                 "The `$[` variable is deprecated. Array indices always start at 0 \
                 in modern Perl. Remove any assignment to `$[`.",
             ),
+            DiagnosticCode::PhaseScopedStrictPragma => Some(
+                "`use strict` inside a phase block only applies inside that block. \
+                Move `use strict;` to file scope for file-wide strict enforcement.",
+            ),
+            DiagnosticCode::PhaseScopedWarningsPragma => Some(
+                "`use warnings` inside a phase block only applies inside that block. \
+                Move `use warnings;` to file scope for file-wide warnings coverage.",
+            ),
             DiagnosticCode::SecurityStringEval => Some(
                 "String `eval` executes arbitrary code and is a security risk. \
                 Use block eval `eval { ... }` or safer alternatives.",
@@ -662,7 +680,15 @@ impl DiagnosticCode {
     /// Try to infer a diagnostic code from a message.
     pub fn from_message(msg: &str) -> Option<DiagnosticCode> {
         let msg_lower = msg.to_lowercase();
-        if msg_lower.contains("use strict") {
+        if msg_lower.contains("inside a begin block does not enable strict")
+            || msg_lower.contains("inside a phase block does not enable strict")
+        {
+            Some(DiagnosticCode::PhaseScopedStrictPragma)
+        } else if msg_lower.contains("inside a begin block does not enable warnings")
+            || msg_lower.contains("inside a phase block does not enable warnings")
+        {
+            Some(DiagnosticCode::PhaseScopedWarningsPragma)
+        } else if msg_lower.contains("use strict") {
             Some(DiagnosticCode::MissingStrict)
         } else if msg_lower.contains("use warnings") {
             Some(DiagnosticCode::MissingWarnings)
@@ -722,6 +748,8 @@ impl DiagnosticCode {
             "PL409" => Some(DiagnosticCode::GotoUndefinedLabel),
             "PL500" => Some(DiagnosticCode::DeprecatedDefined),
             "PL501" => Some(DiagnosticCode::DeprecatedArrayBase),
+            "PL502" => Some(DiagnosticCode::PhaseScopedStrictPragma),
+            "PL503" => Some(DiagnosticCode::PhaseScopedWarningsPragma),
             "PL600" => Some(DiagnosticCode::SecurityStringEval),
             "PL601" => Some(DiagnosticCode::SecurityBacktickExec),
             "PL602" => Some(DiagnosticCode::SecuritySignalHandler),
@@ -827,6 +855,10 @@ impl DiagnosticCode {
                 DiagnosticCategory::Deprecated
             }
 
+            DiagnosticCode::PhaseScopedStrictPragma | DiagnosticCode::PhaseScopedWarningsPragma => {
+                DiagnosticCategory::StrictWarnings
+            }
+
             DiagnosticCode::SecurityStringEval
             | DiagnosticCode::SecurityBacktickExec
             | DiagnosticCode::SecuritySignalHandler
@@ -870,6 +902,8 @@ mod tests {
         assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
         assert_eq!(DiagnosticCode::SecuritySignalHandler.as_str(), "PL602");
         assert_eq!(DiagnosticCode::GotoUndefinedLabel.as_str(), "PL409");
+        assert_eq!(DiagnosticCode::PhaseScopedStrictPragma.as_str(), "PL502");
+        assert_eq!(DiagnosticCode::PhaseScopedWarningsPragma.as_str(), "PL503");
     }
 
     #[test]
@@ -878,6 +912,7 @@ mod tests {
         assert_eq!(DiagnosticCode::UnusedVariable.severity(), DiagnosticSeverity::Warning);
         assert_eq!(DiagnosticCode::EvalErrorFlow.severity(), DiagnosticSeverity::Warning);
         assert_eq!(DiagnosticCode::CriticSeverity5.severity(), DiagnosticSeverity::Hint);
+        assert_eq!(DiagnosticCode::PhaseScopedStrictPragma.severity(), DiagnosticSeverity::Warning);
     }
 
     #[test]
@@ -885,6 +920,12 @@ mod tests {
         assert_eq!(
             DiagnosticCode::from_message("Missing 'use strict' pragma"),
             Some(DiagnosticCode::MissingStrict)
+        );
+        assert_eq!(
+            DiagnosticCode::from_message(
+                "`use strict` inside a BEGIN block does not enable strict for the rest of the file"
+            ),
+            Some(DiagnosticCode::PhaseScopedStrictPragma)
         );
         assert_eq!(
             DiagnosticCode::from_message("Unused variable $foo"),
@@ -899,6 +940,10 @@ mod tests {
             DiagnosticCode::parse_code("PL602"),
             Some(DiagnosticCode::SecuritySignalHandler)
         );
+        assert_eq!(
+            DiagnosticCode::parse_code("PL503"),
+            Some(DiagnosticCode::PhaseScopedWarningsPragma)
+        );
         assert_eq!(DiagnosticCode::parse_code("INVALID"), None);
     }
 
@@ -909,6 +954,10 @@ mod tests {
         assert_eq!(DiagnosticCode::SecuritySignalHandler.category(), DiagnosticCategory::Security);
         assert_eq!(DiagnosticCode::EvalErrorFlow.category(), DiagnosticCategory::BestPractices);
         assert_eq!(DiagnosticCode::CriticSeverity1.category(), DiagnosticCategory::PerlCritic);
+        assert_eq!(
+            DiagnosticCode::PhaseScopedStrictPragma.category(),
+            DiagnosticCategory::StrictWarnings
+        );
     }
 
     #[test]

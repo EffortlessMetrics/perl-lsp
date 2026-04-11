@@ -428,6 +428,8 @@ fn is_fixable_diagnostic(code: &str) -> bool {
             DiagnosticCode::ParseError
                 | DiagnosticCode::MissingStrict
                 | DiagnosticCode::MissingWarnings
+                | DiagnosticCode::PhaseScopedStrictPragma
+                | DiagnosticCode::PhaseScopedWarningsPragma
                 | DiagnosticCode::UnusedVariable
                 | DiagnosticCode::UndefinedVariable
                 | DiagnosticCode::VariableShadowing
@@ -581,6 +583,8 @@ mod tests {
 
     #[test]
     fn perlcritic_policy_codes_are_marked_fixable_in_diagnostic_data() {
+        assert!(is_fixable_diagnostic("PL502"));
+        assert!(is_fixable_diagnostic("PL503"));
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseStrict"));
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
         assert!(is_fixable_diagnostic("InputOutput::RequireThreeArgOpen"));
