@@ -110,8 +110,8 @@ fn symbol_extraction_method_preserves_attributes() -> Result<(), Box<dyn std::er
         table.symbols.get("size").ok_or("expected method symbol `size` to be extracted")?;
     let method = methods
         .iter()
-        .find(|symbol| symbol.kind == SymbolKind::Subroutine)
-        .ok_or("expected subroutine symbol for method `size`")?;
+        .find(|symbol| symbol.kind == SymbolKind::Method)
+        .ok_or("expected method symbol for method `size`")?;
 
     assert!(method.attributes.contains(&"method".to_string()));
     assert!(method.attributes.contains(&"lvalue".to_string()));
