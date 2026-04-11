@@ -1203,7 +1203,7 @@ mod tests {
         Ok(())
     }
 
-    /// The subsystem status files plus the UX planning scaffold must exist.
+    /// The subsystem status files, UX planning scaffold, and DAP scorecard must exist.
     #[test]
     fn test_subsystem_files_exist() -> Result<()> {
         let root = project_root()?;
@@ -1215,6 +1215,7 @@ mod tests {
             "quality.md",
             "editor_ux.json",
             "editor_ux.schema.json",
+            "dap.md",
         ] {
             let path = status_dir.join(name);
             assert!(path.exists(), "subsystem file missing: {}", path.display());
@@ -1298,6 +1299,54 @@ mod tests {
             "parser.md missing PARSER_STRICT_CLEAN_ROW block"
         );
 
+        let dap = fs::read_to_string(status_dir.join("dap.md"))?;
+        assert!(
+            dap.contains("<!-- BEGIN: DAP_TEST_COUNTS -->"),
+            "dap.md missing DAP_TEST_COUNTS block"
+        );
+
+        Ok(())
+    }
+
+    /// DAP generator: count_dap_tests counts [[test]] targets and scorecard fixtures correctly.
+    #[test]
+    fn test_count_dap_tests() -> Result<()> {
+        let root = project_root()?;
+        let counts = count_dap_tests(&root);
+        // perl-dap/Cargo.toml has many [[test]] targets; at minimum the scorecard harness itself
+        assert!(
+            counts.integration_test_targets >= 1,
+            "expected at least 1 [[test]] target in perl-dap/Cargo.toml, got {}",
+            counts.integration_test_targets
+        );
+        // The scorecard harness uses exactly 5 fixtures
+        assert_eq!(
+            counts.scorecard_fixtures, 5,
+            "expected 5 scorecard fixtures (hello, loops, eval, args, breakpoints_begin_end), got {}",
+            counts.scorecard_fixtures
+        );
+        Ok(())
+    }
+
+    /// DAP generator: generate_dap_status replaces DAP_TEST_COUNTS block correctly.
+    #[test]
+    fn test_generate_dap_status_roundtrip() -> Result<()> {
+        let counts = DapTestCounts { integration_test_targets: 20, scorecard_fixtures: 5 };
+        let template = "# DAP\n\
+                        <!-- BEGIN: DAP_TEST_COUNTS -->\n\
+                        old content\n\
+                        <!-- END: DAP_TEST_COUNTS -->\n\
+                        tail\n";
+        let result = generate_dap_status(&counts, template)?;
+        assert!(
+            result.contains("20 test targets"),
+            "expected '20 test targets' in output, got: {result}"
+        );
+        assert!(
+            result.contains("| Scorecard fixtures | 5 |"),
+            "expected scorecard fixture count row, got: {result}"
+        );
+        assert!(result.contains("tail"), "suffix text should be preserved");
         Ok(())
     }
 
