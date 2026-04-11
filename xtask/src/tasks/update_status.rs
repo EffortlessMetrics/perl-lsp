@@ -748,7 +748,7 @@ fn generate_parser_status(metrics: &ParserMetrics, original: &str) -> Result<Str
     let strict_clean_row = metrics.common_corpus_receipt.as_ref().map_or_else(
         || {
             format!(
-                "| **Strict-clean subset** | {pinned}/{pinned} (receipt pending) | {pinned} pinned modules — run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |"
+                "| **Strict-clean subset** | {pinned} modules (unverified) | run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |"
             )
         },
         |receipt| {
@@ -1136,6 +1136,43 @@ mod tests {
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
         assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
+        // No-receipt path: must show "unverified" not a misleading pass ratio.
+        assert!(
+            result.contains("unverified"),
+            "strict-clean no-receipt row should say 'unverified', not a false pass ratio"
+        );
+        assert!(
+            !result.contains("10/10"),
+            "strict-clean no-receipt row must not show 10/10 (implies verified pass)"
+        );
+        Ok(())
+    }
+
+    /// Parser scorecard: strict-clean row shows "unverified" when no receipt exists.
+    #[test]
+    fn test_parser_strict_clean_row_no_receipt() -> Result<()> {
+        let metrics = ParserMetrics {
+            syntax_sections: 611,
+            system_receipt: None,
+            cpan_receipt: None,
+            project_corpus: None,
+            common_corpus_receipt: None,
+            common_corpus_pinned: 10,
+        };
+        let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
+                        <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
+                        <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
+                        <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+        let result = generate_parser_status(&metrics, template)?;
+        assert!(
+            result.contains("10 modules (unverified)"),
+            "strict-clean no-receipt row must say '10 modules (unverified)'"
+        );
+        assert!(
+            result.contains("common-corpus-check"),
+            "strict-clean no-receipt row must mention the command"
+        );
         Ok(())
     }
 
