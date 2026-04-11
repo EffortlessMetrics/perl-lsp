@@ -22,13 +22,21 @@ use tempfile::tempdir;
 //   Line 1: use strict;
 //   Line 2: use warnings;
 //   Line 3: (blank)
-//   Line 4: my $x = 10;        <- BP_LINE_1
+//   Line 4: my $x = 10;        <- BP_LINE_1 (initial implicit stop — see note below)
 //   Line 5: my $y = $x + 5;    <- BP_LINE_2
-//   Line 6: my $z = $x * $y;
+//   Line 6: my $z = $x * $y;   <- BP_LINE_3
 //   Line 7: print "$z\n";
 //
-const BP_LINE_1: u64 = 4; // my $x = 10
+// IMPORTANT: BP_LINE_1 (line 4) is the first executable line where `perl -d`
+// always pauses implicitly before processing any stdin commands.  With
+// `stopOnEntry: false`, `configurationDone` sends `c` which runs FROM that
+// implicit stop.  The Perl debugger does NOT re-trigger a breakpoint set on
+// the line where execution is already paused, so a breakpoint at BP_LINE_1
+// will be skipped by the initial `c`.  Tests that need a reliably-hit first
+// breakpoint should use BP_LINE_2 or later.
+const BP_LINE_1: u64 = 4; // my $x = 10 — initial implicit stop (skipped by configurationDone)
 const BP_LINE_2: u64 = 5; // my $y = $x + 5
+const BP_LINE_3: u64 = 6; // my $z = $x * $y
 
 /// Minimal three-line body script.  Lines 1-3 are headers; executable code
 /// starts at line 4, matching BP_LINE_1/BP_LINE_2 above.
@@ -86,11 +94,15 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
 
     let thread_id = stopped.thread_id;
 
-    // Retrieve stack trace → top frame id and source path.
-    let (frame_id, source_path) = session.stack_trace(thread_id)?;
+    // Retrieve stack trace → top frame id, source path, and line.
+    let (frame_id, source_path, frame_line) = session.stack_trace(thread_id)?;
     assert!(
         source_path.contains("workflow_e2e"),
         "stack frame source path `{source_path}` should refer to the workflow fixture"
+    );
+    assert_eq!(
+        frame_line, BP_LINE_1 as i64,
+        "stack frame line must be {BP_LINE_1} (BP_LINE_1), got {frame_line}"
     );
 
     // Retrieve locals scope reference, then variables.
@@ -118,8 +130,13 @@ fn test_e2e_single_breakpoint_hit_inspect_continue() -> TestResult {
 
 // ─── Test 2: multi-breakpoint sequence ────────────────────────────────────────
 
-/// Validates that multiple breakpoints are hit in source order:
-/// set two breakpoints → hit first (BP_LINE_1) → continue → hit second (BP_LINE_2) → exit.
+/// Validates that multiple breakpoints are hit in source order.
+///
+/// Uses BP_LINE_2 and BP_LINE_3 (not BP_LINE_1) because BP_LINE_1 is the
+/// initial implicit stop line: `perl -d` pauses there before processing any
+/// stdin, and the initial `c` from `configurationDone` runs past it without
+/// re-triggering.  Breakpoints at BP_LINE_2 and BP_LINE_3 are reliably hit
+/// in sequence.
 #[test]
 fn test_e2e_multi_breakpoint_sequence() -> TestResult {
     if !perl_available() {
@@ -137,10 +154,10 @@ fn test_e2e_multi_breakpoint_sequence() -> TestResult {
     let mut session = DapWorkflowSession::new(timeout)?;
 
     session.launch(&script_str)?;
-    session.set_breakpoints(&script_str, &[BP_LINE_1, BP_LINE_2])?;
+    session.set_breakpoints(&script_str, &[BP_LINE_2, BP_LINE_3])?;
     session.configuration_done()?;
 
-    // First stop — must be at BP_LINE_1.
+    // First stop — must be at BP_LINE_2.
     let first_stop = session.wait_stopped()?;
     assert_eq!(
         first_stop.reason, "breakpoint",
@@ -148,10 +165,13 @@ fn test_e2e_multi_breakpoint_sequence() -> TestResult {
         first_stop.reason
     );
 
-    // If the stopped event carries a line number, validate it.
-    if let Some(line) = first_stop.line {
-        assert_eq!(line, BP_LINE_1, "first breakpoint should be at line {BP_LINE_1}, got {line}");
-    }
+    // Verify the stack frame line — the stopped event doesn't carry a line
+    // number, but stackTrace always does.
+    let (_, _, first_line) = session.stack_trace(first_stop.thread_id)?;
+    assert_eq!(
+        first_line, BP_LINE_2 as i64,
+        "first breakpoint must be at line {BP_LINE_2}, stack frame reports {first_line}"
+    );
 
     // Continue to second breakpoint.
     session.continue_exec(first_stop.thread_id)?;
@@ -162,9 +182,11 @@ fn test_e2e_multi_breakpoint_sequence() -> TestResult {
         second_stop.reason
     );
 
-    if let Some(line) = second_stop.line {
-        assert_eq!(line, BP_LINE_2, "second breakpoint should be at line {BP_LINE_2}, got {line}");
-    }
+    let (_, _, second_line) = session.stack_trace(second_stop.thread_id)?;
+    assert_eq!(
+        second_line, BP_LINE_3 as i64,
+        "second breakpoint must be at line {BP_LINE_3}, stack frame reports {second_line}"
+    );
 
     // Continue to script exit.
     session.continue_exec(second_stop.thread_id)?;

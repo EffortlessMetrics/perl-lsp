@@ -18,8 +18,6 @@ pub struct StoppedInfo {
     pub reason: String,
     /// Thread ID (from `stopped.body.threadId`).
     pub thread_id: i64,
-    /// Source line, if present in the stopped event body.
-    pub line: Option<u64>,
 }
 
 /// High-level handle for a DAP workflow test session.
@@ -100,7 +98,9 @@ impl DapWorkflowSession {
 
     /// Block until a `stopped` event arrives; drain and discard other events.
     ///
-    /// Returns `StoppedInfo` with `reason`, `thread_id`, and optional `line`.
+    /// Returns `StoppedInfo` with `reason` and `thread_id`.
+    /// Line information is not present in the `stopped` event body; use
+    /// `stack_trace()` to obtain the current source line after stopping.
     pub fn wait_stopped(&self) -> Result<StoppedInfo, String> {
         let msg = self.drain_until_event("stopped")?;
         let body = match &msg {
@@ -112,15 +112,15 @@ impl DapWorkflowSession {
 
         let thread_id = body.get("threadId").and_then(Value::as_i64).unwrap_or(1);
 
-        let line = body.get("line").and_then(Value::as_u64);
-
-        Ok(StoppedInfo { reason, thread_id, line })
+        Ok(StoppedInfo { reason, thread_id })
     }
 
     /// Retrieve the top stack frame for `thread_id`.
     ///
-    /// Returns `(frame_id, source_path_str)`.
-    pub fn stack_trace(&mut self, thread_id: i64) -> Result<(i64, String), String> {
+    /// Returns `(frame_id, source_path_str, frame_line)`.
+    /// `frame_line` is the 1-based source line reported by the debugger, or 0
+    /// if the frame does not carry line information.
+    pub fn stack_trace(&mut self, thread_id: i64) -> Result<(i64, String, i64), String> {
         let args = json!({"threadId": thread_id, "startFrame": 0, "levels": 1});
         let resp = self.request("stackTrace", Some(args));
         let body = self.expect_success(&resp, "stackTrace")?;
@@ -139,8 +139,9 @@ impl DapWorkflowSession {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
+        let frame_line = frame.get("line").and_then(Value::as_i64).unwrap_or(0);
 
-        Ok((frame_id, source_path))
+        Ok((frame_id, source_path, frame_line))
     }
 
     /// Retrieve the `variablesReference` for the `Locals` scope in `frame_id`.
