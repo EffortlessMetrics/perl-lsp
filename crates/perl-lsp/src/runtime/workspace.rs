@@ -218,7 +218,8 @@ impl LspServer {
     ///
     /// Uses routing helper for state-aware behavior:
     /// - **Ready state**: Full workspace index search with cooperative yielding
-    /// - **Building/Degraded state**: Open document search only (partial results)
+    /// - **Building/Degraded state**: Query partial index first; fall through to open-doc
+    ///   search only when the partial index is also empty (Gap 2 fix, issue #4152)
     pub(super) fn handle_workspace_symbols_v2(
         &self,
         params: Option<Value>,
