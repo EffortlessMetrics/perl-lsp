@@ -354,5 +354,9 @@ fn test_undef_values_safe() {
     // Undef renders as "undef" string
     assert_eq!(rendered.value, "undef");
     // Type should reflect it's undefined, not SCALAR
-    assert!(rendered.type_name.is_some(), "undef should have a type");
+    assert_eq!(
+        rendered.type_name,
+        Some("undef".to_string()),
+        "undef type_name should be 'undef', not 'SCALAR'"
+    );
 }
