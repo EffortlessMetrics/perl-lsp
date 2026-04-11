@@ -19,7 +19,10 @@ Scenarios currently include:
 - large-file handling,
 - shebang/encoding behavior,
 - multi-file workspace interactions,
-- hover, goto-definition, strict diagnostics, and document symbols flows.
+- hover, goto-definition, strict diagnostics, and document symbols flows, and
+- multi-root `workspace/symbol` disambiguation via `workspaceFolderUri`, and
+- workspace-folder removal evicting stale symbols from search results, and
+- deleted-file churn evicting stale search results and definition targets.
 
 ## Running the tests
 
@@ -28,6 +31,11 @@ From the workspace root:
 ```bash
 cargo test -p perl-lsp-ux-tests
 ```
+
+The local `just ux-tests` and `just ux-tests-full` recipes build
+`target/debug/perl-lsp` first and set `PERL_LSP_BIN` automatically. Raw
+`cargo test` runs still require a prebuilt binary or an explicit
+`PERL_LSP_BIN=/path/to/perl-lsp`.
 
 To force integration-gated tests (if present):
 

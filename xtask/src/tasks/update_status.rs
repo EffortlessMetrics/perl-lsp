@@ -910,9 +910,23 @@ fn format_crate_quality_table(
     lines.join("\n")
 }
 
+fn count_ux_scenarios(root: &Path) -> usize {
+    let tests_dir = root.join("crates/perl-lsp-ux-tests/tests");
+    let Ok(entries) = fs::read_dir(tests_dir) else {
+        return 0;
+    };
+
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.starts_with("ux_scenario_") && name.ends_with(".rs"))
+        .count()
+}
+
 fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
+    let ux_scenarios = count_ux_scenarios(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -923,6 +937,9 @@ fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
 
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
+         - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
+           `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
+           the integration-only 10k-line large-file case\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );

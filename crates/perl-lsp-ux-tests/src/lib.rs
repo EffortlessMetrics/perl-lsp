@@ -78,6 +78,9 @@ pub struct ScenarioConfig {
     pub extra_env: Vec<(String, Option<String>)>,
     /// Initial workspace files: (relative_path, content) pairs.
     pub workspace_files: Vec<(String, String)>,
+    /// Optional workspace folders for multi-root initialization.
+    /// Each entry is `(relative_path, name)`.
+    pub workspace_folders: Vec<(String, String)>,
 }
 
 impl Default for ScenarioConfig {
@@ -93,6 +96,7 @@ impl Default for ScenarioConfig {
             echo_stderr,
             extra_env: Vec::new(),
             workspace_files: Vec::new(),
+            workspace_folders: Vec::new(),
         }
     }
 }
@@ -125,6 +129,16 @@ impl ScenarioConfig {
         self.workspace_files.push((path.into(), content.into()));
         self
     }
+
+    /// Add a workspace folder for multi-root initialization.
+    pub fn with_workspace_folder(
+        mut self,
+        relative_path: impl Into<String>,
+        name: impl Into<String>,
+    ) -> Self {
+        self.workspace_folders.push((relative_path.into(), name.into()));
+        self
+    }
 }
 
 /// The main UX test harness.
@@ -146,6 +160,10 @@ impl UxHarness {
         // Write any pre-seeded workspace files.
         for (path, content) in &config.workspace_files {
             workspace.write(path, content)?;
+        }
+
+        for (path, _) in &config.workspace_folders {
+            workspace.ensure_dir(path)?;
         }
 
         let binary_path = resolve_binary()?;
@@ -258,6 +276,97 @@ impl UxHarness {
                 }
             }
         }
+    }
+
+    /// Request workspace symbols (`workspace/symbol`).
+    ///
+    /// Returns the flat list of workspace symbol objects, or an empty vec if
+    /// the server returned null/empty.
+    pub fn workspace_symbols(&self, query: &str) -> Result<Vec<Value>> {
+        let resp = self.client.request(
+            "workspace/symbol",
+            json!({
+                "query": query
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("workspace/symbol returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(symbols) => Ok(symbols.clone()),
+            None => {
+                if resp["result"].is_null() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(vec![resp["result"].clone()])
+                }
+            }
+        }
+    }
+
+    /// Notify the server that workspace folders changed.
+    ///
+    /// Each tuple is `(relative_path, name)` and is resolved relative to the
+    /// temporary workspace root.
+    pub fn change_workspace_folders(
+        &self,
+        added: &[(&str, &str)],
+        removed: &[(&str, &str)],
+    ) -> Result<()> {
+        let added = added
+            .iter()
+            .map(|(relative_path, name)| {
+                Ok(json!({
+                    "uri": self.workspace.dir_uri(relative_path)?,
+                    "name": name,
+                }))
+            })
+            .collect::<Result<Vec<Value>>>()?;
+
+        let removed = removed
+            .iter()
+            .map(|(relative_path, name)| {
+                Ok(json!({
+                    "uri": self.workspace.dir_uri(relative_path)?,
+                    "name": name,
+                }))
+            })
+            .collect::<Result<Vec<Value>>>()?;
+
+        self.client.notify(
+            "workspace/didChangeWorkspaceFolders",
+            json!({
+                "event": {
+                    "added": added,
+                    "removed": removed,
+                }
+            }),
+        )
+    }
+
+    /// Notify the server about file watcher changes.
+    ///
+    /// Each tuple is `(relative_path, change_type)` where `change_type`
+    /// follows the LSP `FileChangeType` numeric values:
+    /// 1 = Created, 2 = Changed, 3 = Deleted.
+    pub fn notify_watched_files(&self, changes: &[(&str, u32)]) -> Result<()> {
+        let changes = changes
+            .iter()
+            .map(|(relative_path, change_type)| {
+                json!({
+                    "uri": self.workspace.uri(relative_path),
+                    "type": change_type,
+                })
+            })
+            .collect::<Vec<Value>>();
+
+        self.client.notify(
+            "workspace/didChangeWatchedFiles",
+            json!({
+                "changes": changes,
+            }),
+        )
     }
 
     /// Wait up to `timeout` for a `textDocument/publishDiagnostics` notification
