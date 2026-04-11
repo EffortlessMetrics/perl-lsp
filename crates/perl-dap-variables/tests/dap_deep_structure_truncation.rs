@@ -154,6 +154,21 @@ fn test_render_cyclic_reference_safe() {
     assert_eq!(rendered.type_name, Some("HASH".to_string()));
     assert_eq!(rendered.named_variables, Some(1));
     assert!(rendered.value.len() < 500);
+
+    // Expanding children of the hash must also be safe
+    let children = renderer.render_children(&value, 0, 10);
+    assert_eq!(children.len(), 1, "hash has 1 child key");
+    assert_eq!(children[0].name, "self");
+    assert!(!children[0].value.is_empty(), "ref child should render a non-empty value");
+
+    // Expanding the Reference inner value (the Truncated sentinel) must not panic
+    let ref_value = PerlValue::Reference(Box::new(PerlValue::Truncated {
+        summary: "HASH(0x7f1234567890)".to_string(),
+        total_count: None,
+    }));
+    let ref_children = renderer.render_children(&ref_value, 0, 10);
+    assert_eq!(ref_children.len(), 1, "Reference expands to its single inner value");
+    assert!(!ref_children[0].value.is_empty(), "Truncated sentinel renders non-empty");
 }
 
 #[test]
@@ -243,6 +258,13 @@ fn test_large_array_child_access() {
     let children_end = renderer.render_children(&value, 990, 100);
     assert_eq!(children_end.len(), 10, "only 10 items from 990 to 1000");
     assert_eq!(children_end[9].name, "[999]");
+
+    // Past-end start: DAP may request a page beyond the array bounds — must return empty, not panic
+    let past_end = renderer.render_children(&value, 1000, 10);
+    assert_eq!(past_end.len(), 0, "start == len should return empty");
+
+    let way_past = renderer.render_children(&value, 9999, 10);
+    assert_eq!(way_past.len(), 0, "start far past len should return empty");
 }
 
 #[test]
