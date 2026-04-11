@@ -22,6 +22,8 @@ use perl_workspace_folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace_ignore::is_skipped_dir_name;
 #[cfg(feature = "workspace")]
+use std::collections::BTreeSet;
+#[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;
 #[cfg(feature = "workspace")]
@@ -927,6 +929,9 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        #[cfg(feature = "workspace")]
+        let mut unsafe_deletes: Vec<(String, usize, usize)> = Vec::new();
+
         if let Some(params) = params {
             if let Some(files) = params["files"].as_array() {
                 for file in files {
@@ -935,11 +940,35 @@ impl LspServer {
                     };
 
                     tracing::debug!(uri, "File will be deleted");
+
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        let index = coordinator.index();
+                        if let Some((reference_count, dependent_files)) =
+                            collect_cross_file_symbol_usages(index, uri)
+                        {
+                            unsafe_deletes.push((
+                                uri.to_string(),
+                                reference_count,
+                                dependent_files.len(),
+                            ));
+                        }
+                    }
                 }
             }
         }
 
-        // Return empty edit - no cleanup edits needed for now
+        #[cfg(feature = "workspace")]
+        for (uri, reference_count, dependent_file_count) in unsafe_deletes {
+            let msg = format!(
+                "Safe delete warning: '{uri}' has {reference_count} cross-file reference(s) across {dependent_file_count} file(s). Delete may break call sites."
+            );
+            if let Err(e) = self.show_message(crate::runtime::window::MessageType::Warning, &msg) {
+                tracing::debug!("Failed to send safe delete warning: {}", e);
+            }
+        }
+
+        // Return empty edit. Safe-delete diagnostics are surfaced through warning messages.
         Ok(Some(json!({"changes": {}})))
     }
 
@@ -1513,9 +1542,37 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
     file_path_to_module_name(&path)
 }
 
+#[cfg(feature = "workspace")]
+fn collect_cross_file_symbol_usages(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+) -> Option<(usize, BTreeSet<String>)> {
+    let mut total_references = 0usize;
+    let mut dependent_files: BTreeSet<String> = BTreeSet::new();
+
+    for symbol in index.file_symbols(uri) {
+        let symbol_name = symbol.qualified_name.as_deref().unwrap_or(symbol.name.as_str());
+        for location in index.find_references(symbol_name) {
+            if location.uri == uri {
+                continue;
+            }
+            total_references += 1;
+            dependent_files.insert(location.uri);
+        }
+    }
+
+    if total_references == 0 { None } else { Some((total_references, dependent_files)) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::module_name_appears_in_text;
+    #[cfg(feature = "workspace")]
+    use super::{collect_cross_file_symbol_usages, path_to_module_name};
+    #[cfg(feature = "workspace")]
+    use perl_parser::workspace_index::WorkspaceIndex;
+    #[cfg(feature = "workspace")]
+    use url::Url;
 
     #[test]
     fn test_module_name_appears_exact_match() {
@@ -1555,5 +1612,51 @@ mod tests {
     #[test]
     fn test_module_name_empty_returns_false() {
         assert!(!module_name_appears_in_text("anything", ""));
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_safe_delete_usage_detection_finds_cross_file_references() {
+        let index = WorkspaceIndex::new();
+        let producer = Url::parse("file:///ws/lib/Foo.pm").expect("valid producer url");
+        let consumer = Url::parse("file:///ws/bin/app.pl").expect("valid consumer url");
+
+        index
+            .index_file(producer, "package Foo;\nsub work { return 1; }\n1;\n".to_string())
+            .expect("index producer");
+        index.index_file(consumer, "use Foo;\nFoo::work();\n".to_string()).expect("index consumer");
+
+        let (reference_count, dependent_files) =
+            collect_cross_file_symbol_usages(&index, "file:///ws/lib/Foo.pm")
+                .expect("expected cross-file references");
+
+        assert!(reference_count > 0, "must report external references");
+        assert!(
+            dependent_files.contains("file:///ws/bin/app.pl"),
+            "consumer should be reported as dependent"
+        );
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_safe_delete_usage_detection_none_when_unreferenced() {
+        let index = WorkspaceIndex::new();
+        let producer = Url::parse("file:///ws/lib/Unused.pm").expect("valid producer url");
+
+        index
+            .index_file(producer, "package Unused;\nsub local_only { return 1; }\n1;\n".to_string())
+            .expect("index producer");
+
+        assert!(
+            collect_cross_file_symbol_usages(&index, "file:///ws/lib/Unused.pm").is_none(),
+            "no cross-file references expected"
+        );
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_path_to_module_name_converts_module_uri() {
+        let module = path_to_module_name("file:///workspace/lib/My/Module.pm");
+        assert_eq!(module, "My::Module");
     }
 }
