@@ -1,6 +1,5 @@
 # Strategic Documentation Index
 
-> **Last Updated**: 2026-03-19
 > **Purpose**: Navigation hub for all strategic planning documents
 
 ---
@@ -196,4 +195,4 @@ Deep technical understanding and design patterns:
 
 ---
 
-*This index is maintained alongside the strategic documents it references. Last updated: 2026-03-19*
+*This index is maintained alongside the strategic documents it references.*
