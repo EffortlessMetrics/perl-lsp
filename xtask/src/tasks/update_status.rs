@@ -954,7 +954,7 @@ fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; machine-readable receipt at \
+           the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -984,6 +984,7 @@ fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
 
     let receipt = serde_json::json!({
         "schema_version": 1,
+        "receipt_kind": "planning_scaffold",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -1091,18 +1092,32 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
+        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
         );
-        assert_eq!(receipt["top_line_metrics"].as_array().map(|rows| rows.len()), Some(3));
+        let top_line_names = receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
+            .iter()
+            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("top_line metric name missing")))
+            .collect::<Result<std::collections::BTreeSet<_>>>()?;
+        assert_eq!(
+            top_line_names,
+            std::collections::BTreeSet::from([
+                "workflow_pass_rate",
+                "workflow_stability_rate",
+                "p95_time_to_first_useful_result_ms",
+            ])
+        );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
         Ok(())
     }
 
-    /// The subsystem status files plus the UX scorecard artifact must exist.
+    /// The subsystem status files plus the UX planning scaffold must exist.
     #[test]
     fn test_subsystem_files_exist() -> Result<()> {
         let root = project_root()?;

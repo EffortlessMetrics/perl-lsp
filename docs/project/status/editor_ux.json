@@ -28,6 +28,7 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
+  "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [

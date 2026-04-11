@@ -5,6 +5,7 @@
   "type": "object",
   "required": [
     "schema_version",
+    "receipt_kind",
     "scorecard",
     "harness",
     "top_line_metrics",
@@ -14,6 +15,10 @@
     "schema_version": {
       "type": "integer",
       "const": 1
+    },
+    "receipt_kind": {
+      "type": "string",
+      "const": "planning_scaffold"
     },
     "scorecard": {
       "type": "string",
@@ -42,12 +47,54 @@
     },
     "top_line_metrics": {
       "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "workflow_pass_rate"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "workflow_stability_rate"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "p95_time_to_first_useful_result_ms"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
       "items": {
         "type": "object",
         "required": ["name", "state", "owner"],
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "workflow_pass_rate",
+              "workflow_stability_rate",
+              "p95_time_to_first_useful_result_ms"
+            ]
           },
           "state": {
             "type": "string",

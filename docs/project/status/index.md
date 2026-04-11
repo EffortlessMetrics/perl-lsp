@@ -23,7 +23,6 @@ The project tracks metrics across several dimensions that answer different quest
 | LSP coverage & compliance | [lsp.md](lsp.md) | Generator | Every LSP-touching merge |
 | Test counts & debt | [tests.md](tests.md) | Generator | Every merge |
 | Parser corpus & coverage | [parser.md](parser.md) | Generator | Every parser-touching merge |
-<<<<<<< HEAD
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
 | Editor UX planning scaffold | [editor_ux.json](editor_ux.json) | Generator | Every merge |
 | Module resolution conformance | [module_resolution.md](module_resolution.md) | Human | After module-resolution changes |
@@ -60,7 +59,7 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 
 ## How to Update
 
-1. Run `just status-update` to regenerate all four subsystem files and the UX receipt
+1. Run `just status-update` to regenerate all four subsystem files and the UX planning scaffold
 2. Run `just status-update parser` to regenerate only the parser subsystem (post-merge)
 3. Run `just status-check` to verify generated sections are current
 4. Run `just ci-gate` to verify the repo-level receipt still passes
