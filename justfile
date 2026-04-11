@@ -103,6 +103,7 @@ nightly: merge-gate
     echo "  NIGHTLY GATE (comprehensive validation)"
     echo "=============================================="
     START=$(date +%s)
+    just _timed "ci-workspace-multiroot" "just ci-workspace-multiroot" && \
     just _timed "mutation-subset" "just mutation-subset" && \
     just _timed "fuzz-bounded" "just fuzz-bounded" && \
     just _timed "benchmarks" "just benchmarks"
@@ -956,6 +957,28 @@ ci-semantic-frameworks:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-rs --test moo_semantics_e2e -- --test-threads=1
     @echo "✅ Framework semantic tests passed"
+
+# Multi-root workspace integration tests (timing-sensitive, nightly only)
+# Requires PERL_LSP_WORKSPACE=1 and features workspace,expose_lsp_test_api.
+# These tests use 15-second adaptive timeouts — proven stable before blocking merges.
+ci-workspace-multiroot:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=============================================="
+    echo "  Multi-Root Workspace Integration Tests"
+    echo "=============================================="
+    START=$(date +%s)
+    env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        PERL_LSP_WORKSPACE=1 \
+        cargo test -p perl-lsp-rs \
+            --features workspace,expose_lsp_test_api \
+            --test multi_root_workspace_tests \
+            -- --test-threads=1
+    END=$(date +%s)
+    echo ""
+    echo "=============================================="
+    echo "  Multi-root tests PASSED (total: $((END - START))s)"
+    echo "=============================================="
 
 # DAP smoke receipt (launch/breakpoint/step/stack/evaluate/disconnect)
 ci-dap-smoke-e2e:
