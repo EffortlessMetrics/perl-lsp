@@ -4806,6 +4806,7 @@ dependencies = [
  "notify",
  "peak_alloc",
  "perl-feature-catalog",
+ "perl-lsp-feature-governance",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",
