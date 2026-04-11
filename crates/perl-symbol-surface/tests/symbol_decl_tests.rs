@@ -330,6 +330,125 @@ fn test_const_fast_my_array_produces_constant_decl() {
 }
 
 #[test]
+fn test_readonly_my_scalar_produces_constant_decl() {
+    let use_node = Node::new(
+        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        loc(0, 13),
+    );
+    let variable = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "PI".to_string() },
+        loc(23, 26),
+    );
+    let decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(variable),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(17, 26),
+    );
+    let expr = Node::new(
+        NodeKind::FunctionCall {
+            name: "Readonly".to_string(),
+            args: vec![
+                decl,
+                Node::new(NodeKind::Number { value: "3.14159".to_string() }, loc(30, 37)),
+            ],
+        },
+        loc(14, 37),
+    );
+    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 37));
+    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 37));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let decl = &decls[0];
+    assert_eq!(decl.kind, SymbolKind::Constant);
+    assert_eq!(decl.name, "PI");
+    assert_eq!(decl.qualified_name, "PI");
+    assert_eq!(decl.anchor_span, Some((23, 26)));
+    assert_eq!(decl.declarator.as_deref(), Some("Readonly"));
+}
+
+#[test]
+fn test_readonly_hash_produces_constant_decl() {
+    let use_node = Node::new(
+        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        loc(0, 13),
+    );
+    let variable = Node::new(
+        NodeKind::Variable { sigil: "%".to_string(), name: "HASH".to_string() },
+        loc(23, 28),
+    );
+    let decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(variable),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(17, 28),
+    );
+    let expr = Node::new(
+        NodeKind::FunctionCall {
+            name: "Readonly".to_string(),
+            args: vec![decl, Node::new(NodeKind::HashLiteral { pairs: vec![] }, loc(32, 34))],
+        },
+        loc(14, 34),
+    );
+    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(14, 34));
+    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 34));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].kind, SymbolKind::Constant);
+    assert_eq!(decls[0].name, "HASH");
+    assert_eq!(decls[0].anchor_span, Some((23, 28)));
+}
+
+#[test]
+fn test_readonly_our_hash_produces_constant_decl() {
+    let use_node = Node::new(
+        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        loc(0, 12),
+    );
+    let variable = Node::new(
+        NodeKind::Variable { sigil: "%".to_string(), name: "HASH".to_string() },
+        loc(24, 29),
+    );
+    let decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "our".to_string(),
+            variable: Box::new(variable),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(20, 29),
+    );
+    let expr = Node::new(
+        NodeKind::FunctionCall {
+            name: "Readonly".to_string(),
+            args: vec![decl, Node::new(NodeKind::HashLiteral { pairs: vec![] }, loc(33, 35))],
+        },
+        loc(12, 35),
+    );
+    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(12, 35));
+    let program = Node::new(NodeKind::Program { statements: vec![use_node, stmt] }, loc(0, 35));
+
+    let decls = extract_symbol_decls(&program, Some("My::Pkg"));
+
+    assert_eq!(decls.len(), 1);
+    let decl = &decls[0];
+    assert_eq!(decl.kind, SymbolKind::Constant);
+    assert_eq!(decl.name, "HASH");
+    assert_eq!(decl.qualified_name, "My::Pkg::HASH");
+    assert_eq!(decl.declarator.as_deref(), Some("Readonly"));
+}
+
+#[test]
 fn test_variable_declaration_with_attributes_is_unwrapped() {
     // my $count :shared;
     let inner = Node::new(

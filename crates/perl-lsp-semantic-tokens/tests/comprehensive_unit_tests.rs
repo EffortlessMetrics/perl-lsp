@@ -1066,6 +1066,28 @@ fn const_fast_array_variable_has_readonly_modifier() {
 }
 
 #[test]
+fn readonly_scalar_variable_has_readonly_modifier() {
+    let tokens = tokens_for("use Readonly; Readonly my $PI => 3.14159;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    assert!(!var_tokens.is_empty(), "should have variable token");
+    let has_readonly_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
+    assert!(has_readonly_mods, "Readonly scalar should have declaration+readonly modifiers");
+}
+
+#[test]
+fn readonly_hash_variable_has_readonly_modifier() {
+    let tokens = tokens_for("use Readonly; Readonly my %HASH => (foo => 1);");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    assert!(!var_tokens.is_empty(), "should have variable token");
+    let has_readonly_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
+    assert!(has_readonly_mods, "Readonly hash should have declaration+readonly modifiers");
+}
+
+#[test]
 fn local_declaration_variable_has_declaration_modifier() {
     let tokens = tokens_for("local $/ = undef;");
     let leg = legend();
