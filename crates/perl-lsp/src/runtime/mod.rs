@@ -132,8 +132,10 @@ fn workspace_folder_matches_doc_uri(folder: &WorkspaceFolderState, doc_uri: &str
     match (doc_path, workspace_folder_path(folder)) {
         (Some(doc_path), Some(folder_path)) => doc_path.starts_with(folder_path),
         _ => {
+            let folder_uri = folder.uri.trim_end_matches('/');
             doc_uri == folder.uri
-                || doc_uri.strip_prefix(&folder.uri).is_some_and(|suffix| suffix.starts_with('/'))
+                || doc_uri == folder_uri
+                || doc_uri.strip_prefix(folder_uri).is_some_and(|suffix| suffix.starts_with('/'))
         }
     }
 }
@@ -813,6 +815,19 @@ mod tests {
         assert!(!workspace_folder_matches_doc_uri(
             &folder,
             "vscode-remote://ssh-remote+dev/other/lib/Foo.pm"
+        ));
+    }
+
+    #[test]
+    fn workspace_folder_matching_supports_non_file_uri_with_trailing_slash() {
+        let folder = WorkspaceFolderState::new("vscode-remote://ssh-remote+dev/workspace/".into());
+        assert!(workspace_folder_matches_doc_uri(
+            &folder,
+            "vscode-remote://ssh-remote+dev/workspace/lib/Foo.pm"
+        ));
+        assert!(!workspace_folder_matches_doc_uri(
+            &folder,
+            "vscode-remote://ssh-remote+dev/workspace-other/lib/Foo.pm"
         ));
     }
 
