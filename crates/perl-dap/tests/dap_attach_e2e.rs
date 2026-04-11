@@ -82,9 +82,6 @@ fn dap_attach_e2e_tcp_loopback() -> TestResult {
         let result = (|| -> Result<(), Box<dyn Error + Send + Sync>> {
             let (mut socket, _) = listener.accept()?;
 
-            // Give the adapter time to bring up the TCP reader and event handler.
-            thread::sleep(Duration::from_millis(50));
-
             let stopped_event = json!({
                 "type": "event",
                 "seq": 1,
