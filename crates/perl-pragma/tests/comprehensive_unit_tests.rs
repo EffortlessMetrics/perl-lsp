@@ -37,6 +37,17 @@ fn no_node(module: &str, args: &[&str], start: usize, end: usize) -> Node {
     }
 }
 
+fn function_call(name: &str, args: Vec<Node>, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::FunctionCall { name: name.to_string(), args },
+        location: loc(start, end),
+    }
+}
+
+fn number_node(value: &str, start: usize, end: usize) -> Node {
+    Node { kind: NodeKind::Number { value: value.to_string() }, location: loc(start, end) }
+}
+
 fn program(stmts: Vec<Node>) -> Node {
     let end = stmts.last().map_or(0, |n| n.location.end);
     Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
@@ -326,6 +337,18 @@ fn use_developer_version_enables_effective_strict_only() -> Result<(), Box<dyn s
     assert!(state.strict_subs);
     assert!(state.strict_refs);
     assert!(!state.warnings, "5.012_001 should not imply warnings");
+    Ok(())
+}
+
+#[test]
+fn require_version_does_not_enable_effective_pragmas() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![function_call("require", vec![number_node("5.36", 8, 12)], 0, 13)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 12);
+    assert!(!state.strict_vars, "require VERSION must not enable strict vars");
+    assert!(!state.strict_subs, "require VERSION must not enable strict subs");
+    assert!(!state.strict_refs, "require VERSION must not enable strict refs");
+    assert!(!state.warnings, "require VERSION must not enable warnings");
     Ok(())
 }
 
