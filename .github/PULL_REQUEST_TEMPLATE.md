@@ -9,6 +9,7 @@
 
 ## Verification
 - [ ] `cargo fmt --all` — clean
+- [ ] I used a narrow orthogonal pass first (freshness check, truth-check, or targeted repro) before the broader gate.
 - [ ] `cargo clippy -p <crate> --tests` — clean
 - [ ] `cargo test -p <crate>` — pass
 - [ ] This PR introduces UX-visible changes. I have verified that error messages are actionable and the UX test harness still passes.
