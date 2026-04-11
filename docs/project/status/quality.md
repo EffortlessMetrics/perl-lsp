@@ -6,6 +6,15 @@
 ## Quality Metrics
 
 <!-- BEGIN: QUALITY_METRICS_BULLETS -->
-- **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
+- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing
+- **Mutation testing**: mutation data pending first nightly CI run — run `just mutation-subset` locally to populate
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
 <!-- END: QUALITY_METRICS_BULLETS -->
+
+## Per-Crate Engineering Health
+
+<!-- BEGIN: QUALITY_CRATE_TABLE -->
+| Crate | Mutants listed | Tests (lib) |
+|-------|---------------|-------------|
+| — | no data yet | no data yet |
+<!-- END: QUALITY_CRATE_TABLE -->
