@@ -995,8 +995,11 @@ fn is_fixable_perlcritic_policy(code: &str) -> bool {
         "InputOutput::ProhibitBarewordFileHandles"
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"
+            | "InputOutput::ProhibitTwoArgOpen"
             | "TestingAndDebugging::RequireUseStrict"
+            | "TestingAndDebugging::ProhibitNoStrict"
             | "TestingAndDebugging::RequireUseWarnings"
+            | "TestingAndDebugging::ProhibitNoWarnings"
             | "Variables::ProhibitUnusedVariables"
     )
 }

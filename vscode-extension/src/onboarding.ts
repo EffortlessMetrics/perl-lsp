@@ -209,14 +209,20 @@ export class OnboardingManager {
     const label = 'perlcritic';
     const perlcriticConfig = vscode.workspace.getConfiguration('perl-lsp').get<any>('perlcritic', {});
     const enabled = Boolean(perlcriticConfig?.enabled);
+    const severity = Number.isFinite(perlcriticConfig?.severity)
+      ? Number(perlcriticConfig.severity)
+      : 3;
     const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+    let profileState = profile
+      ? `profile: ${profile}`
+      : 'profile: auto-discovery (.perlcriticrc walk-up)';
 
     if (!enabled) {
       return {
         label,
         ok: true,
         status: HealthCheckStatus.Ok,
-        detail: 'Perl::Critic is disabled',
+        detail: `Perl::Critic disabled (severity: ${severity}; ${profileState})`,
       };
     }
 
@@ -225,17 +231,23 @@ export class OnboardingManager {
         label,
         ok: false,
         status: HealthCheckStatus.Warning,
-        detail: `Configured perlcritic profile was not found: ${profile}`,
+        detail:
+          `Perl::Critic enabled but configured profile was not found: ${profile} ` +
+          `(severity: ${severity}; walk-up disabled while explicit profile is set)`,
       };
     }
 
     try {
-      await this._execCheck('perlcritic', ['--version']);
+      const { stdout } = await this._execCheck('perlcritic', ['--version']);
+      const version = stdout.trim() || '(unknown version)';
+      if (profile) {
+        profileState = `profile: ${profile}`;
+      }
       return {
         label,
         ok: true,
         status: HealthCheckStatus.Ok,
-        detail: 'perlcritic found',
+        detail: `Perl::Critic enabled (binary: ${version}; severity: ${severity}; ${profileState})`,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -244,8 +256,8 @@ export class OnboardingManager {
         ok: false,
         status: HealthCheckStatus.Warning,
         detail:
-          `Perl::Critic is enabled but perlcritic was not found on PATH. (${msg}) ` +
-          'Install via: cpanm Perl::Critic',
+          `Perl::Critic enabled but perlcritic was not found on PATH (${msg}). ` +
+          `Current settings: severity ${severity}; ${profileState}. Install via: cpanm Perl::Critic`,
       };
     }
   }

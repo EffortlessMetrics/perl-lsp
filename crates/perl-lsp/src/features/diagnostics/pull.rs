@@ -413,10 +413,13 @@ fn is_fixable_diagnostic(code: &str) -> bool {
     if matches!(
         code,
         "TestingAndDebugging::RequireUseStrict"
+            | "TestingAndDebugging::ProhibitNoStrict"
             | "TestingAndDebugging::RequireUseWarnings"
+            | "TestingAndDebugging::ProhibitNoWarnings"
             | "InputOutput::ProhibitBarewordFileHandles"
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"
+            | "InputOutput::ProhibitTwoArgOpen"
             | "Variables::ProhibitUnusedVariables"
     ) {
         return true;
@@ -586,8 +589,11 @@ mod tests {
         assert!(is_fixable_diagnostic("PL502"));
         assert!(is_fixable_diagnostic("PL503"));
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseStrict"));
+        assert!(is_fixable_diagnostic("TestingAndDebugging::ProhibitNoStrict"));
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
+        assert!(is_fixable_diagnostic("TestingAndDebugging::ProhibitNoWarnings"));
         assert!(is_fixable_diagnostic("InputOutput::RequireThreeArgOpen"));
+        assert!(is_fixable_diagnostic("InputOutput::ProhibitTwoArgOpen"));
         assert!(is_fixable_diagnostic("Variables::ProhibitUnusedVariables"));
     }
 

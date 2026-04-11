@@ -192,14 +192,18 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     // Perl::Critic policy aliases for two-arg open.
-                    "InputOutput::RequireBriefOpen" | "InputOutput::RequireThreeArgOpen" => {
+                    "InputOutput::RequireBriefOpen"
+                    | "InputOutput::RequireThreeArgOpen"
+                    | "InputOutput::ProhibitTwoArgOpen" => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     // Perl::Critic policies for missing strict/warnings.
-                    "TestingAndDebugging::RequireUseStrict" => {
+                    "TestingAndDebugging::RequireUseStrict"
+                    | "TestingAndDebugging::ProhibitNoStrict" => {
                         actions.extend(quick_fixes::add_use_strict());
                     }
-                    "TestingAndDebugging::RequireUseWarnings" => {
+                    "TestingAndDebugging::RequireUseWarnings"
+                    | "TestingAndDebugging::ProhibitNoWarnings" => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
                     // Perl::Critic policy alias for unused variables.
@@ -524,6 +528,49 @@ mod tests {
         assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
         assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
         assert!(actions.iter().any(|a| a.title.contains("Remove unused variable")));
+    }
+
+    #[test]
+    fn test_additional_perlcritic_aliases_route_to_existing_safe_fixes() {
+        let source = "open FH, $path;\nprint $unused;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![
+            Diagnostic {
+                range: (0, 4),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("InputOutput::ProhibitTwoArgOpen".to_string()),
+                message: "Two-argument open used".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, source.len()),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::ProhibitNoStrict".to_string()),
+                message: "Code disables strict".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, source.len()),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::ProhibitNoWarnings".to_string()),
+                message: "Code disables warnings".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+        ];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+        assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
+        assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
     }
 
     #[test]

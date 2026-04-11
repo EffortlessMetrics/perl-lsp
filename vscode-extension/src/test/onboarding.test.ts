@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import {
   OnboardingManager,
   HealthCheckResult,
@@ -142,6 +143,53 @@ describe('OnboardingManager.checkPerltidyInstalled', () => {
     const result = await mgr.checkPerltidyInstalled();
     expect(result.ok).toBe(false);
     expect(result.status).toBe(HealthCheckStatus.Warning);
+  });
+});
+
+describe('OnboardingManager.checkPerlcriticSetup', () => {
+  const workspaceGetConfiguration = vscode.workspace
+    .getConfiguration as jest.MockedFunction<typeof vscode.workspace.getConfiguration>;
+
+  afterEach(() => {
+    workspaceGetConfiguration.mockReset();
+  });
+
+  test('reports disabled state with config summary', async () => {
+    workspaceGetConfiguration.mockReturnValue({
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        if (key === 'perlcritic') {
+          return { enabled: false, severity: 4, profile: '' };
+        }
+        return defaultValue;
+      }),
+    } as any);
+
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    const result = await mgr.checkPerlcriticSetup();
+
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain('Perl::Critic disabled');
+    expect(result.detail).toContain('severity: 4');
+  });
+
+  test('reports explicit profile-missing warning when enabled', async () => {
+    const missingProfile = '/tmp/definitely-missing-perlcriticrc';
+    workspaceGetConfiguration.mockReturnValue({
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        if (key === 'perlcritic') {
+          return { enabled: true, severity: 2, profile: missingProfile };
+        }
+        return defaultValue;
+      }),
+    } as any);
+
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel());
+    const result = await mgr.checkPerlcriticSetup();
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(HealthCheckStatus.Warning);
+    expect(result.detail).toContain('configured profile was not found');
+    expect(result.detail).toContain(missingProfile);
   });
 });
 
