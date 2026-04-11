@@ -362,7 +362,7 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
                                 "code": d.code.clone(),
-                                "source": "perl-lsp",
+                                "source": diagnostic_source(d.code.as_deref()),
                                 "message": message,
                             });
 
@@ -597,7 +597,7 @@ impl LspServer {
                                         InternalDiagnosticSeverity::Hint => 4,
                                     },
                                     "code": d.code.clone(),
-                                    "source": "perl-lsp",
+                                    "source": diagnostic_source(d.code.as_deref()),
                                     "message": message,
                                 });
                                 if !d.tags.is_empty() {
@@ -688,7 +688,7 @@ impl LspServer {
                                     InternalDiagnosticSeverity::Hint => 4,
                                 },
                                 "code": d.code.clone(),
-                                "source": "perl-lsp",
+                                "source": diagnostic_source(d.code.as_deref()),
                                 "message": message,
                             });
                             if !d.tags.is_empty() {
@@ -960,30 +960,52 @@ impl LspServer {
 /// Mirrors the list in `crates/perl-lsp/src/features/diagnostics/pull.rs`.
 /// The authoritative source is `crates/perl-lsp-code-actions/src/code_actions.rs`.
 fn is_fixable_diagnostic(code: &str) -> bool {
-    matches!(
-        DiagnosticCode::parse_code(code),
-        Some(
-            DiagnosticCode::ParseError
-                | DiagnosticCode::MissingStrict
-                | DiagnosticCode::MissingWarnings
-                | DiagnosticCode::UnusedVariable
-                | DiagnosticCode::UndefinedVariable
-                | DiagnosticCode::VariableShadowing
-                | DiagnosticCode::UnusedParameter
-                | DiagnosticCode::UnquotedBareword
-                | DiagnosticCode::BarewordFilehandle
-                | DiagnosticCode::TwoArgOpen
-                | DiagnosticCode::AssignmentInCondition
-                | DiagnosticCode::NumericComparisonWithUndef
-                | DiagnosticCode::DeprecatedDefined
-                | DiagnosticCode::MissingPackageDeclaration
-                | DiagnosticCode::VariableRedeclaration
-                | DiagnosticCode::MisspelledPragma
-                | DiagnosticCode::UnreachableCode
-                | DiagnosticCode::DuplicateSubroutine
-                | DiagnosticCode::MissingReturn
+    is_fixable_perlcritic_policy(code)
+        || matches!(
+            DiagnosticCode::parse_code(code),
+            Some(
+                DiagnosticCode::ParseError
+                    | DiagnosticCode::MissingStrict
+                    | DiagnosticCode::MissingWarnings
+                    | DiagnosticCode::UnusedVariable
+                    | DiagnosticCode::UndefinedVariable
+                    | DiagnosticCode::VariableShadowing
+                    | DiagnosticCode::UnusedParameter
+                    | DiagnosticCode::UnquotedBareword
+                    | DiagnosticCode::BarewordFilehandle
+                    | DiagnosticCode::TwoArgOpen
+                    | DiagnosticCode::AssignmentInCondition
+                    | DiagnosticCode::NumericComparisonWithUndef
+                    | DiagnosticCode::DeprecatedDefined
+                    | DiagnosticCode::MissingPackageDeclaration
+                    | DiagnosticCode::VariableRedeclaration
+                    | DiagnosticCode::MisspelledPragma
+                    | DiagnosticCode::UnreachableCode
+                    | DiagnosticCode::DuplicateSubroutine
+                    | DiagnosticCode::MissingReturn
+            )
         )
+}
+
+fn is_fixable_perlcritic_policy(code: &str) -> bool {
+    matches!(
+        code,
+        "InputOutput::ProhibitBarewordFileHandles"
+            | "InputOutput::RequireBriefOpen"
+            | "InputOutput::RequireThreeArgOpen"
+            | "TestingAndDebugging::RequireUseStrict"
+            | "TestingAndDebugging::RequireUseWarnings"
+            | "Variables::ProhibitUnusedVariables"
     )
+}
+
+fn diagnostic_source(code: Option<&str>) -> &'static str {
+    match code {
+        Some(code) if code.contains("::") && DiagnosticCode::parse_code(code).is_none() => {
+            "perlcritic"
+        }
+        _ => "perl-lsp",
+    }
 }
 
 /// Convert a built-in analyzer violation to an internal diagnostic.
