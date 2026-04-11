@@ -106,6 +106,9 @@ For issues labeled `needs-plan-review` or `research-verified`:
 ```
 Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your todo list.", name: "plan-review-NNN")
 ```
+Keep the `plan-review-NNN` naming shape stable. The stop hook uses that
+canonical agent name as a fallback issue binding when `ISSUE_NUMBER` or
+`issue_number` are not provided explicitly.
 
 ### Building (implement)
 For issues labeled `builder-ready`:

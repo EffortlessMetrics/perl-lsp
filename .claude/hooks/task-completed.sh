@@ -6,11 +6,25 @@
 # Read stdin once at the top -- stdin can only be consumed once, so capture before any subshells.
 # Hook tests may invoke this script without piped input; avoid blocking forever on an open stdin.
 INPUT='{}'
-if read -t 0 2>/dev/null; then
-  # Input is available; consume it all at once.
-  INPUT="$(cat 2>/dev/null)" || INPUT='{}'
-  [[ -z "${INPUT}" ]] && INPUT='{}'
+if [[ ! -t 0 ]]; then
+  FIRST_CHAR=''
+  if IFS= read -r -t 1 -n 1 FIRST_CHAR 2>/dev/null; then
+    # Once the first byte arrives, consume the rest of the payload.
+    INPUT="${FIRST_CHAR}$(cat 2>/dev/null || true)"
+    [[ -z "${INPUT}" ]] && INPUT='{}'
+  fi
 fi
+
+payload_field() {
+  local query="$1"
+  echo "${INPUT}" | jq -r "${query}" 2>/dev/null | tr -d '\r'
+}
+
+receipt_field() {
+  local receipt="$1"
+  local query="$2"
+  jq -r "${query}" "${receipt}" 2>/dev/null | tr -d '\r'
+}
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
 
@@ -92,9 +106,9 @@ if [[ "${RS_CHANGED}" -eq 1 ]]; then
     fi
 
     # Fix #6: validate receipt JSON structure before trusting fields
-    EXIT_CODE="$(jq -r '.exit_code // empty' "${RECEIPT}" 2>/dev/null)"
-    TS_STR="$(jq -r '.timestamp // empty' "${RECEIPT}" 2>/dev/null)"
-    DURATION="$(jq -r '.duration_s // empty' "${RECEIPT}" 2>/dev/null)"
+    EXIT_CODE="$(receipt_field "${RECEIPT}" '.exit_code // empty')"
+    TS_STR="$(receipt_field "${RECEIPT}" '.timestamp // empty')"
+    DURATION="$(receipt_field "${RECEIPT}" '.duration_s // empty')"
 
     # Structural validation: must have exit_code and timestamp, timestamp must match UTC pattern
     if ! jq -e '(.exit_code | type) == "number" and (.timestamp | type) == "string"' "${RECEIPT}" &>/dev/null; then
@@ -183,8 +197,8 @@ OPS_DIR="${OPS_DIR:-${REPO_ROOT}/.ops-perl-lsp}"
 METRICS_FILE="${OPS_DIR}/swarm-metrics.jsonl"
 
 if command -v jq &>/dev/null; then
-  SESSION_ID="$(echo "${INPUT}" | jq -r '.session_id // empty' 2>/dev/null || echo '')"
-  CWD="$(echo "${INPUT}" | jq -r '.cwd // empty' 2>/dev/null || echo '')"
+  SESSION_ID="$(payload_field '.session_id // empty' || echo '')"
+  CWD="$(payload_field '.cwd // empty' || echo '')"
   TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   mkdir -p "${OPS_DIR}" 2>/dev/null || true
   jq -nc \

@@ -175,7 +175,8 @@ rm -rf "${TMP_OPS_SS}" 2>/dev/null || true
 # ---------------------------------------------------------------------------
 # Regression tests for issue #4044: branch-name digit extraction produced
 # garbage issue numbers for generic worktree slots (worktree-agent-<8hexchars>).
-# The hook must now require an explicit ISSUE_NUMBER env var or JSON field.
+# The hook must now require explicit issue context: ISSUE_NUMBER env var,
+# issue_number JSON field, or canonical plan-review-NNN agent name.
 # ---------------------------------------------------------------------------
 
 echo ""
@@ -186,7 +187,7 @@ TMP_OPS_PR="$(mktemp -d)"
 # Test 1: plan-reviewer with no ISSUE_NUMBER and no issue_number JSON field
 # must exit 3 (fail loud) and NOT touch issue #71 (the bug: branch
 # "worktree-agent-a071b609" used to extract "71" from the hex suffix)
-PR_PAYLOAD_NO_NUM='{"subagent_type":"plan-reviewer","cwd":"/repo/worktrees/agent-a071b609","session_id":"sess-pr"}'
+PR_PAYLOAD_NO_NUM='{"subagent_name":"plan-reviewer","subagent_type":"plan-reviewer","cwd":"/repo/worktrees/agent-a071b609","session_id":"sess-pr"}'
 assert_exit 3 "plan-reviewer without ISSUE_NUMBER exits 3 (fail loud, not silent)"   bash -c "echo '${PR_PAYLOAD_NO_NUM}' | OPS_DIR='${TMP_OPS_PR}' bash '${HOOKS_DIR}/subagent-stop.sh'"
 
 # Test 2: plan-reviewer with ISSUE_NUMBER=0 (invalid, not a positive integer) exits 3
@@ -202,9 +203,8 @@ assert_exit 0 "builder agent (non-plan-reviewer) with hex branch exits 0 (gate s
 
 # Test 5: JSONL metrics are still written even when the plan-review gate fails
 PR_METRICS_FILE="${TMP_OPS_PR}/swarm-metrics.jsonl"
-if [[ -f "${PR_METRICS_FILE}" ]]; then
-  assert_contains "$(tail -1 "${PR_METRICS_FILE}")" '"event":"subagent_stop"' "JSONL metrics written even when plan-review gate exits 3"
-fi
+assert_file_exists "${PR_METRICS_FILE}" "Metrics file exists after plan-review gate failure"
+assert_contains "$(tail -1 "${PR_METRICS_FILE}")" '"event":"subagent_stop"' "JSONL metrics written even when plan-review gate exits 3"
 
 # Test 6: plan-reviewer with valid ISSUE_NUMBER via env var accepts the env var
 # (gh call will fail in test env, but exit from gate is 0 or 2 -- not 3)
@@ -233,6 +233,18 @@ if [[ "${ACTUAL_EXIT_JSON}" -ne 3 ]]; then
   PASS=$(( PASS + 1 ))
 else
   echo "  FAIL: plan-reviewer with issue_number in JSON payload should not exit 3" >&2
+  FAIL=$(( FAIL + 1 ))
+fi
+
+# Test 8: canonical agent name plan-review-NNN is accepted as a fallback
+PR_PAYLOAD_NAME_NUM='{"subagent_name":"plan-review-4044","subagent_type":"plan-reviewer","session_id":"sess-pr5"}'
+ACTUAL_EXIT_NAME=0
+bash -c "echo '${PR_PAYLOAD_NAME_NUM}' | OPS_DIR='${TMP_OPS_PR}' bash '${HOOKS_DIR}/subagent-stop.sh'" || ACTUAL_EXIT_NAME=$?
+if [[ "${ACTUAL_EXIT_NAME}" -ne 3 ]]; then
+  echo "  PASS: canonical plan-review-NNN agent name does not exit 3 (got ${ACTUAL_EXIT_NAME})"
+  PASS=$(( PASS + 1 ))
+else
+  echo "  FAIL: canonical plan-review-NNN agent name should not exit 3" >&2
   FAIL=$(( FAIL + 1 ))
 fi
 
