@@ -485,7 +485,8 @@ mod tests {
         let paths =
             vec![UseLibPath { path: inside.to_string_lossy().to_string(), from_findbin: false }];
         let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
-        assert_eq!(resolved, vec![inside.to_string_lossy().to_string()]);
+        let expected = inside.to_string_lossy().replace('\\', "/");
+        assert_eq!(resolved, vec![expected]);
         Ok(())
     }
 
@@ -498,7 +499,8 @@ mod tests {
             from_findbin: false,
         }];
         let resolved = resolve_use_lib_paths(&paths, workspace.path(), None);
-        assert_eq!(resolved, vec![outside.path().join("lib").to_string_lossy().to_string()]);
+        let expected = outside.path().join("lib").to_string_lossy().replace('\\', "/");
+        assert_eq!(resolved, vec![expected]);
         Ok(())
     }
 
