@@ -186,6 +186,11 @@ name = "dap_syntax_check_tests"
 path = "tests/dap_syntax_check_tests.rs"
 # AC:3477 Pre-launch syntax check using perl -c, clear error messages before debug start
 
+[[test]]
+name = "dap_e2e_workflow_tests"
+path = "tests/dap_e2e_workflow_tests.rs"
+# AC:3486 End-to-end workflow: launch -> breakpoint -> inspect -> step -> continue -> exit
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"

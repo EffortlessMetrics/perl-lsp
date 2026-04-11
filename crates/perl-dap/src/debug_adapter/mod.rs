@@ -117,7 +117,16 @@ const DEBUGGER_FRAME_POLL_MS: u64 = 10;
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
         .get_or_init(|| {
-            Regex::new(r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)")
+            // Match Perl debugger context lines of the form:
+            //   Func::Name(/path/to/file.pl:42):
+            //   main::(/path/to/file.pl:42):
+            //   main::(C:\Windows\path\file.pl:42):
+            //
+            // File paths may contain `:` on Windows (drive letter prefix such as `C:\`).
+            // The path-capturing groups allow a `:` only when it is immediately followed
+            // by a non-digit, non-space character — matching `C:\path` but not the `:42`
+            // line-number separator.
+            Regex::new(r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)\s]+(?::[^:)\d\s][^:)\s]*)*):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+(?::[^:)\d\s][^:)\s]*)*)(?:\))?:(?P<line2>\d+):?)")
         })
         .as_ref()
         .ok()
@@ -463,6 +472,11 @@ enum DebugState {
 #[derive(Debug, Clone, PartialEq)]
 enum ResumeMode {
     Continue,
+    /// Like `Continue` but auto-continues past any non-breakpoint stop.
+    /// Used when `configurationDone` runs with `stopOnEntry: false` to
+    /// silently skip the debugger's implicit first-line stop and run to
+    /// the first user-set breakpoint.
+    RunToBreakpoint,
     Goto,
     Next,
     StepIn,
