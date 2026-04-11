@@ -392,9 +392,9 @@ Controls optional Perl::Critic static analysis integration.
 | Default | `false` |
 
 **Opt-in.** When `true`, the server runs `perlcritic` on open documents and
-merges violations into the diagnostic stream. If `perlcritic` is not installed
-or the configured profile path is invalid, perl-lsp surfaces a workspace
-warning and reports the issue through health-check output.
+merges violations into the diagnostic stream. If `perlcritic` is missing,
+profile resolution fails, or the command execution fails, the server emits a
+workspace warning instead of silently skipping.
 
 #### `perl.perlcritic.severity`
 
