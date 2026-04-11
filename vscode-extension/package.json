@@ -927,7 +927,7 @@
           {
             "id": "verify-perl",
             "title": "Verify Your Perl Installation",
-            "description": "Run the health check to confirm Perl and perltidy are available.",
+            "description": "Run the health check to confirm Perl, perltidy, and optional perlcritic setup are available.",
             "media": {
               "image": "media/walkthrough/verify-perl.svg",
               "altText": "Verify Perl"

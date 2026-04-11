@@ -130,8 +130,16 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::MissingStrict.as_str() => {
                         actions.extend(quick_fixes::add_use_strict());
                     }
+                    // Perl::Critic policy alias for missing strict.
+                    "TestingAndDebugging::RequireUseStrict" => {
+                        actions.extend(quick_fixes::add_use_strict());
+                    }
                     // PL101: Missing use warnings
                     c if c == DiagnosticCode::MissingWarnings.as_str() => {
+                        actions.extend(quick_fixes::add_use_warnings());
+                    }
+                    // Perl::Critic policy alias for missing warnings.
+                    "TestingAndDebugging::RequireUseWarnings" => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
                     // PL500: Deprecated defined()
@@ -439,11 +447,31 @@ mod tests {
                 related_information: Vec::new(),
                 tags: Vec::new(),
             },
+            Diagnostic {
+                range: (0, 1),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseStrict".to_string()),
+                message: "Code does not use strict".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, 1),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseWarnings".to_string()),
+                message: "Code does not use warnings".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
         ];
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
         assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
         assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+        assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
+        assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
     }
 }
