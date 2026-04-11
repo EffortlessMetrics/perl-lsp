@@ -229,7 +229,7 @@ description = "Missing 'use warnings' pragma diagnostic (PL101) — warns when .
 id = "lsp.diagnostic.phase_scoped_pragmas"
 spec = "perl-lsp"
 area = "text_document"
-maturity = "beta"
+maturity = "ga"
 advertised = true
 tests = [
   "crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs",
