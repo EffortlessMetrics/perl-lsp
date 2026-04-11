@@ -770,33 +770,31 @@ impl LspServer {
                         let dependents = Vec::<String>::new();
 
                         for dependent_uri in dependents {
-                            // Get the document content
-                            let documents = self.documents.lock();
-                            if let Some(doc) = documents.get(&dependent_uri) {
+                            if let Some(text) = self.read_workspace_text(&dependent_uri) {
                                 let planned =
-                                    plan_module_rename_edits(&doc.text, &old_module, &new_module);
-                                let edits: Vec<Value> = planned
-                                    .into_iter()
-                                    .map(|edit| {
-                                        json!({
-                                            "range": {
-                                                "start": {
-                                                    "line": edit.line,
-                                                    "character": edit.start_character,
+                                    plan_module_rename_edits(&text, &old_module, &new_module);
+                                self.append_workspace_edits(
+                                    &mut workspace_edit,
+                                    &dependent_uri,
+                                    planned
+                                        .into_iter()
+                                        .map(|edit| {
+                                            json!({
+                                                "range": {
+                                                    "start": {
+                                                        "line": edit.line,
+                                                        "character": edit.start_character,
+                                                    },
+                                                    "end": {
+                                                        "line": edit.line,
+                                                        "character": edit.end_character,
+                                                    }
                                                 },
-                                                "end": {
-                                                    "line": edit.line,
-                                                    "character": edit.end_character,
-                                                }
-                                            },
-                                            "newText": edit.new_text
+                                                "newText": edit.new_text
+                                            })
                                         })
-                                    })
-                                    .collect();
-
-                                if !edits.is_empty() {
-                                    workspace_edit["changes"][dependent_uri] = json!(edits);
-                                }
+                                        .collect(),
+                                );
                             }
                         }
                     }
@@ -935,6 +933,51 @@ impl LspServer {
                     };
 
                     tracing::debug!(uri, "File will be deleted");
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        let idx = coordinator.index();
+                        let mut external_refs: std::collections::BTreeSet<String> =
+                            std::collections::BTreeSet::new();
+                        let symbols = idx.file_symbols(uri);
+
+                        for symbol in symbols {
+                            let refs = idx.find_references(&symbol.name);
+                            for location in refs {
+                                if location.uri != uri {
+                                    external_refs.insert(location.uri);
+                                }
+                            }
+                        }
+
+                        if !external_refs.is_empty() {
+                            let mut examples: Vec<String> =
+                                external_refs.into_iter().take(3).collect();
+                            let example_suffix = if examples.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" Example references: {}.", examples.join(", "))
+                            };
+                            let msg = format!(
+                                "Safe delete warning: '{}' has cross-file references. \
+                                 Deleting may break callers.{}",
+                                short_uri(uri),
+                                example_suffix
+                            );
+                            if let Err(e) = self
+                                .show_message(crate::runtime::window::MessageType::Warning, &msg)
+                            {
+                                tracing::debug!("Failed to send safe-delete warning: {}", e);
+                            }
+                            // Keep a bounded amount of logging for triage.
+                            examples.truncate(3);
+                            tracing::warn!(
+                                uri,
+                                symbol_count = idx.file_symbols(uri).len(),
+                                external_reference_files = examples.len(),
+                                "Safe delete detected external references"
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -1457,6 +1500,45 @@ impl LspServer {
 
         Ok(Some(json!({"applied": false, "failureReason": "Invalid parameters"})))
     }
+}
+
+impl LspServer {
+    #[cfg(feature = "workspace")]
+    fn append_workspace_edits(&self, workspace_edit: &mut Value, uri: &str, mut edits: Vec<Value>) {
+        if edits.is_empty() {
+            return;
+        }
+        if let Some(existing) = workspace_edit["changes"][uri].as_array_mut() {
+            existing.append(&mut edits);
+        } else {
+            workspace_edit["changes"][uri] = Value::Array(edits);
+        }
+    }
+
+    #[cfg(feature = "workspace")]
+    fn read_workspace_text(&self, uri: &str) -> Option<String> {
+        if let Some(doc) = self.documents.lock().get(uri) {
+            return Some(doc.text.clone());
+        }
+
+        if let Some(coordinator) = self.coordinator() {
+            if let Some(doc) = coordinator.index().document_store().get(uri) {
+                return Some(doc.text.clone());
+            }
+        }
+
+        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+    }
+}
+
+fn short_uri(uri: &str) -> String {
+    Url::parse(uri)
+        .ok()
+        .and_then(|parsed| {
+            parsed.path_segments().and_then(|mut s| s.next_back().map(str::to_owned))
+        })
+        .filter(|tail| !tail.is_empty())
+        .unwrap_or_else(|| uri.to_string())
 }
 
 /// Return `true` if `module_name` appears in `text` as a whole-identifier token.
