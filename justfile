@@ -546,8 +546,19 @@ doctor:
     # Check 5: pre-push hook installed
     # ------------------------------------------------------------------
     hook_path="$main_git_dir/hooks/pre-push"
+    expected_hook="$main_root/hooks/pre-push"
     if [ -f "$hook_path" ] && [ -x "$hook_path" ]; then
-        echo "✅ pre-push hook installed"
+        if [ -f "$expected_hook" ] && diff -q \
+            <(awk '{ sub(/\r$/, ""); lines[NR]=$0 } END { last=NR; while (last > 0 && lines[last] == "") last--; for (i = 1; i <= last; i++) print lines[i] }' "$hook_path") \
+            <(awk '{ sub(/\r$/, ""); lines[NR]=$0 } END { last=NR; while (last > 0 && lines[last] == "") last--; for (i = 1; i <= last; i++) print lines[i] }' "$expected_hook") >/dev/null; then
+            echo "✅ pre-push hook installed and current"
+        elif [ -f "$expected_hook" ]; then
+            echo "⚠️  pre-push hook installed but stale: $hook_path"
+            echo "   Fix: cargo xtask ci-hygiene install-githooks   # refresh from hooks/pre-push"
+            issues=$((issues + 1))
+        else
+            echo "✅ pre-push hook installed"
+        fi
     elif [ -f "$hook_path" ]; then
         echo "⚠️  pre-push hook present but not executable: $hook_path"
         echo "   Fix: chmod +x \"$hook_path\""
