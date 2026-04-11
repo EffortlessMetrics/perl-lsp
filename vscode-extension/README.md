@@ -147,6 +147,8 @@ For environments without internet access, set `perl-lsp.downloadBaseUrl` to an i
 
 ## Keyboard Shortcuts
 
+Use `Ctrl+Shift+P` (Command Palette) and search "Perl" to see all available commands.
+
 | Action | Shortcut |
 |--------|----------|
 | Organize Imports | `Shift+Alt+O` |
@@ -234,6 +236,8 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 - [Source Code](https://github.com/EffortlessMetrics/perl-lsp)
 - [Issue Tracker](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)
 - [Changelog](https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/CHANGELOG.md)
+- [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs) — alternative marketplace for VSCodium and other open-source VS Code derivatives
+- [Sponsor this project](https://github.com/EffortlessMetrics/perl-lsp) — support continued development
 
 ## License
 
