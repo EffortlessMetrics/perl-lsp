@@ -69,6 +69,10 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 DOC_ONLY=true
 TEST_FILES_CHANGED=false
 HAS_DIFFABLE_REF=false
+# Track unique crate names for the single-crate tier.
+# We use a newline-separated string rather than an array for POSIX compat.
+SINGLE_CRATE_NAMES=""
+SINGLE_CRATE_ALL_UNDER_CRATES=true
 for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
     read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
     # For new branches, compare against merge-base with origin/master
@@ -86,6 +90,23 @@ for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
                 ;;
             *)
                 DOC_ONLY=false
+                # Track whether this code file lives under crates/<name>/
+                case "$changed" in
+                    crates/*/*)
+                        # Extract the crate directory name: crates/<name>/...
+                        crate_name="${changed#crates/}"
+                        crate_name="${crate_name%%/*}"
+                        # Append to list if not already present
+                        if ! printf '%s\n' "$SINGLE_CRATE_NAMES" | grep -qxF "$crate_name" 2>/dev/null; then
+                            SINGLE_CRATE_NAMES="${SINGLE_CRATE_NAMES}${crate_name}
+"
+                        fi
+                        ;;
+                    *)
+                        # File is outside crates/ — can't be single-crate
+                        SINGLE_CRATE_ALL_UNDER_CRATES=false
+                        ;;
+                esac
                 ;;
         esac
     done <<< "$CHANGED_FILES"
@@ -104,6 +125,38 @@ if [ "$DOC_ONLY" = true ]; then
     echo "📝 Doc-only push — skipping code gates"
     echo "   (Skip with: git push --no-verify)"
     echo "✅ Doc-only fast-path gate passed"
+    exit 0
+fi
+
+# --- Single-crate proportional gate ---
+# If every code change is under a single crates/<name>/ directory, run a
+# targeted cargo fmt/clippy/test -p <name> instead of the full workspace gate.
+# Falls back to the full gate if classification is ambiguous.
+SINGLE_CRATE_COUNT="$(printf '%s' "$SINGLE_CRATE_NAMES" | grep -c . 2>/dev/null || echo 0)"
+if [ "$SINGLE_CRATE_ALL_UNDER_CRATES" = true ] && [ "$SINGLE_CRATE_COUNT" = "1" ]; then
+    SINGLE_CRATE_NAME="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
+    echo "Single-crate push (${SINGLE_CRATE_NAME}) — running targeted gate"
+    echo "   (Skip with: git push --no-verify)"
+    echo ""
+    run_single_crate_gate() {
+        cargo fmt -p "$SINGLE_CRATE_NAME" -- --check && \
+        cargo clippy -p "$SINGLE_CRATE_NAME" -- -D warnings && \
+        cargo test -p "$SINGLE_CRATE_NAME"
+    }
+    GATE_LOG="$(mktemp -t perl-lsp-prepush.XXXXXX.log 2>/dev/null || mktemp)"
+    trap 'rm -f "$GATE_LOG"' EXIT
+    set +e
+    run_single_crate_gate 2>&1 | tee "$GATE_LOG"
+    GATE_STATUS=${PIPESTATUS[0]}
+    set -e
+    if [ "$GATE_STATUS" -ne 0 ]; then
+        echo ""
+        echo "❌ Single-crate gate failed (exit $GATE_STATUS)"
+        echo "   See bypass policy at the top of .git/hooks/pre-push for when"
+        echo "   --no-verify is appropriate."
+        exit "$GATE_STATUS"
+    fi
+    echo "✅ Single-crate gate passed"
     exit 0
 fi
 

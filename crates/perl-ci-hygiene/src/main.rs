@@ -1849,6 +1849,10 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 DOC_ONLY=true
 TEST_FILES_CHANGED=false
 HAS_DIFFABLE_REF=false
+# Track unique crate names for the single-crate tier.
+# We use a newline-separated string rather than an array for POSIX compat.
+SINGLE_CRATE_NAMES=""
+SINGLE_CRATE_ALL_UNDER_CRATES=true
 for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
     read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
     # For new branches, compare against merge-base with origin/master
@@ -1866,6 +1870,23 @@ for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
                 ;;
             *)
                 DOC_ONLY=false
+                # Track whether this code file lives under crates/<name>/
+                case "$changed" in
+                    crates/*/*)
+                        # Extract the crate directory name: crates/<name>/...
+                        crate_name="${changed#crates/}"
+                        crate_name="${crate_name%%/*}"
+                        # Append to list if not already present
+                        if ! printf '%s\n' "$SINGLE_CRATE_NAMES" | grep -qxF "$crate_name" 2>/dev/null; then
+                            SINGLE_CRATE_NAMES="${SINGLE_CRATE_NAMES}${crate_name}
+"
+                        fi
+                        ;;
+                    *)
+                        # File is outside crates/ — can't be single-crate
+                        SINGLE_CRATE_ALL_UNDER_CRATES=false
+                        ;;
+                esac
                 ;;
         esac
     done <<< "$CHANGED_FILES"
@@ -1884,6 +1905,38 @@ if [ "$DOC_ONLY" = true ]; then
     echo "📝 Doc-only push — skipping code gates"
     echo "   (Skip with: git push --no-verify)"
     echo "✅ Doc-only fast-path gate passed"
+    exit 0
+fi
+
+# --- Single-crate proportional gate ---
+# If every code change is under a single crates/<name>/ directory, run a
+# targeted cargo fmt/clippy/test -p <name> instead of the full workspace gate.
+# Falls back to the full gate if classification is ambiguous.
+SINGLE_CRATE_COUNT="$(printf '%s' "$SINGLE_CRATE_NAMES" | grep -c . 2>/dev/null || echo 0)"
+if [ "$SINGLE_CRATE_ALL_UNDER_CRATES" = true ] && [ "$SINGLE_CRATE_COUNT" = "1" ]; then
+    SINGLE_CRATE_NAME="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
+    echo "Single-crate push (${SINGLE_CRATE_NAME}) — running targeted gate"
+    echo "   (Skip with: git push --no-verify)"
+    echo ""
+    run_single_crate_gate() {
+        cargo fmt -p "$SINGLE_CRATE_NAME" -- --check && \
+        cargo clippy -p "$SINGLE_CRATE_NAME" -- -D warnings && \
+        cargo test -p "$SINGLE_CRATE_NAME"
+    }
+    GATE_LOG="$(mktemp -t perl-lsp-prepush.XXXXXX.log 2>/dev/null || mktemp)"
+    trap 'rm -f "$GATE_LOG"' EXIT
+    set +e
+    run_single_crate_gate 2>&1 | tee "$GATE_LOG"
+    GATE_STATUS=${PIPESTATUS[0]}
+    set -e
+    if [ "$GATE_STATUS" -ne 0 ]; then
+        echo ""
+        echo "❌ Single-crate gate failed (exit $GATE_STATUS)"
+        echo "   See bypass policy at the top of .git/hooks/pre-push for when"
+        echo "   --no-verify is appropriate."
+        exit "$GATE_STATUS"
+    fi
+    echo "✅ Single-crate gate passed"
     exit 0
 fi
 
@@ -4212,6 +4265,59 @@ mod tests {
         assert_eq!(
             checked_in, generated,
             "checked-in hooks/pre-push must stay in sync with the generated ci-hygiene hook"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_single_crate_tier() {
+        let hook = pre_push_hook_script();
+        // When all changed files are under crates/<name>/, run a targeted
+        // cargo fmt/clippy/test -p <name> instead of the workspace-wide
+        // just pr-fast.  This is the single-crate proportional tier.
+        assert!(
+            hook.contains("SINGLE_CRATE") || hook.contains("single_crate"),
+            "hook must detect single-crate diffs"
+        );
+        assert!(
+            hook.contains("cargo test -p"),
+            "hook must run targeted 'cargo test -p <crate>' for single-crate pushes"
+        );
+        assert!(
+            hook.contains("cargo clippy -p") || hook.contains("cargo clippy --package"),
+            "hook must run targeted clippy for single-crate pushes"
+        );
+        assert!(
+            hook.contains("cargo fmt -p") || hook.contains("cargo fmt --package"),
+            "hook must run targeted fmt for single-crate pushes"
+        );
+        // The single-crate path must announce itself so the contributor knows
+        // why the gate is faster than usual.
+        assert!(
+            hook.contains("Single-crate") || hook.contains("single-crate"),
+            "hook must announce when it picks the single-crate fast path"
+        );
+        // The single-crate path must exit before reaching just pr-fast
+        let single_idx = hook
+            .find("Single-crate")
+            .or_else(|| hook.find("single-crate"))
+            .expect("single-crate message must exist");
+        let after_single = &hook[single_idx..];
+        assert!(
+            after_single.contains("exit 0"),
+            "single-crate branch must exit 0 without invoking just pr-fast"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_single_crate_tier_falls_back_on_cross_crate() {
+        let hook = pre_push_hook_script();
+        // When files span multiple crates, we must NOT run the single-crate
+        // path — it must fall through to the full just pr-fast gate.
+        // The safest way to verify this is: the hook must still invoke
+        // just pr-fast for the cross-crate (default) case.
+        assert!(
+            hook.contains("just pr-fast"),
+            "hook must still invoke just pr-fast for cross-crate pushes"
         );
     }
 
