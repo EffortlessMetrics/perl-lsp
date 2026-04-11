@@ -387,6 +387,18 @@ fn find_workspace_definition_location(
 }
 
 #[cfg(feature = "workspace")]
+fn autoload_definition_location(
+    workspace_index: &crate::workspace_index::WorkspaceIndex,
+    receiver_pkg: &str,
+    include_receiver: bool,
+) -> Option<crate::workspace_index::Location> {
+    include_receiver
+        .then(|| find_workspace_definition_location(workspace_index, receiver_pkg, "AUTOLOAD"))
+        .flatten()
+        .or_else(|| inherited_method_definition_location(workspace_index, receiver_pkg, "AUTOLOAD"))
+}
+
+#[cfg(feature = "workspace")]
 fn find_plack_middleware_definition_location(
     workspace_index: &crate::workspace_index::WorkspaceIndex,
     module_name: &str,
@@ -1074,11 +1086,19 @@ impl LspServer {
                             #[cfg(feature = "workspace")]
                             {
                                 if let Some(coordinator) = self.coordinator()
-                                    && let Some(def_location) = inherited_method_definition_location(
-                                        coordinator.index(),
-                                        current_package,
-                                        method_match.as_str(),
-                                    )
+                                    && let Some(def_location) =
+                                        inherited_method_definition_location(
+                                            coordinator.index(),
+                                            current_package,
+                                            method_match.as_str(),
+                                        )
+                                        .or_else(|| {
+                                            autoload_definition_location(
+                                                coordinator.index(),
+                                                current_package,
+                                                false,
+                                            )
+                                        })
                                     && let Some(lsp_location) =
                                         crate::workspace_index::lsp_adapter::to_lsp_location(
                                             &def_location,
@@ -1134,6 +1154,22 @@ impl LspServer {
                                 ) {
                                     return Ok(Some(result));
                                 }
+                                #[cfg(feature = "workspace")]
+                                {
+                                    if let Some(coordinator) = self.coordinator()
+                                        && let Some(def_location) = autoload_definition_location(
+                                            coordinator.index(),
+                                            package_name,
+                                            true,
+                                        )
+                                        && let Some(lsp_location) =
+                                            crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                &def_location,
+                                            )
+                                    {
+                                        return Ok(Some(json!([lsp_location])));
+                                    }
+                                }
                                 if is_universal_method(method_name)
                                     && let Some(result) = lookup_workspace_definition(
                                         self.coordinator(),
@@ -1178,6 +1214,23 @@ impl LspServer {
                                             Some(uri),
                                         ) {
                                             return Ok(Some(result));
+                                        }
+                                        #[cfg(feature = "workspace")]
+                                        {
+                                            if let Some(coordinator) = self.coordinator()
+                                                && let Some(def_location) =
+                                                    autoload_definition_location(
+                                                        coordinator.index(),
+                                                        current_package,
+                                                        true,
+                                                    )
+                                                && let Some(lsp_location) =
+                                                    crate::workspace_index::lsp_adapter::to_lsp_location(
+                                                        &def_location,
+                                                    )
+                                            {
+                                                return Ok(Some(json!([lsp_location])));
+                                            }
                                         }
                                     }
                                 }
