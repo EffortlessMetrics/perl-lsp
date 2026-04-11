@@ -105,7 +105,7 @@ pub use resolve::{find_symbol_at_position, get_symbol_range_at_position};
 pub use types::{RenameOptions, RenameResult, TextEdit};
 pub use validate::{can_rename_symbol, validate_name};
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use perl_parser_core::Node;
 use perl_semantic_analyzer::symbol::{ScopeId, SymbolExtractor, SymbolKind, SymbolTable};
@@ -341,19 +341,31 @@ impl RenameProvider {
     }
 
     /// Collect all scope IDs that are descendants of `root_scope_id`.
+    ///
+    /// Builds a parent→children map in O(n) then BFS iteratively from the root.
+    /// This avoids the O(n×d) parent-chain walk of the previous implementation
+    /// and is safe for arbitrarily deep nesting (no recursion).
     fn collect_descendant_scopes(&self, root_scope_id: ScopeId) -> HashSet<ScopeId> {
-        let mut descendants = HashSet::new();
+        // Build direct-children map: parent_id → [child_id, ...]
+        let mut children: HashMap<ScopeId, Vec<ScopeId>> = HashMap::new();
         for (&scope_id, scope) in &self.symbol_table.scopes {
-            if scope_id == root_scope_id {
-                continue;
+            if let Some(parent_id) = scope.parent {
+                children.entry(parent_id).or_default().push(scope_id);
             }
-            let mut current = scope.parent;
-            while let Some(parent_id) = current {
-                if parent_id == root_scope_id {
-                    descendants.insert(scope_id);
-                    break;
+        }
+
+        // Iterative BFS from root — guards against cycles from parser error recovery
+        let mut descendants = HashSet::new();
+        let mut queue = VecDeque::new();
+        if let Some(direct_children) = children.get(&root_scope_id) {
+            queue.extend(direct_children.iter().copied());
+        }
+        while let Some(scope_id) = queue.pop_front() {
+            if descendants.insert(scope_id) {
+                // Only visit if not already seen (cycle guard)
+                if let Some(kids) = children.get(&scope_id) {
+                    queue.extend(kids.iter().copied());
                 }
-                current = self.symbol_table.scopes.get(&parent_id).and_then(|s| s.parent);
             }
         }
         descendants
@@ -554,5 +566,152 @@ mod tests {
         let result = provider.scoped_rename(pos, "123invalid", &RenameOptions::default());
         assert!(!result.is_valid);
         assert!(result.error.is_some());
+    }
+
+    /// Correctness: deeply nested blocks with a variable reference at the innermost level.
+    /// The iterative BFS must collect all descendant scopes from the declaration scope.
+    /// Uses 50 levels to stay within the parser's MAX_RECURSION_DEPTH of 128.
+    #[test]
+    fn test_collect_descendant_scopes_deep_nesting_correctness() {
+        // Build: my $x = 1; if(1){if(1){...50 levels...{$x = 2;}...}}
+        let mut code = "my $x = 1;\n".to_string();
+        for _ in 0..50 {
+            code.push_str("if (1) {\n");
+        }
+        code.push_str("    $x = 2;\n");
+        for _ in 0..50 {
+            code.push_str("}\n");
+        }
+        code.push_str("print $x;\n");
+
+        let ast = must(Parser::new(&code).parse());
+        let provider = RenameProvider::new(&ast, code.clone());
+        // Position of the declaration $x (after 'my ')
+        let pos = must_some(code.find("my $x")) + 4;
+        let result = provider.scoped_rename(pos, "y", &RenameOptions::default());
+        assert!(result.is_valid, "scoped_rename must succeed on 50-deep nesting");
+        let new_code = apply_rename_edits(&code, &result.edits);
+        assert!(new_code.contains("my $y = 1"), "declaration should be renamed");
+        assert!(new_code.contains("$y = 2"), "deep reference should be renamed");
+        assert!(new_code.contains("print $y"), "outer reference should be renamed");
+        assert!(!new_code.contains("$x"), "no original name should remain");
+    }
+
+    /// Cycle guard: construct a scope table with a self-referential parent link
+    /// (parent == self). The iterative BFS must terminate without infinite loop.
+    #[test]
+    fn test_collect_descendant_scopes_cycle_guard() {
+        use perl_parser_core::SourceLocation;
+        use perl_semantic_analyzer::symbol::{Scope, ScopeKind};
+        use std::collections::{HashMap, HashSet as ScopeSymbolSet};
+
+        let root_id: ScopeId = 0;
+        let child_id: ScopeId = 1;
+        let cyclic_id: ScopeId = 2;
+
+        let mut scopes: HashMap<ScopeId, Scope> = HashMap::new();
+        scopes.insert(
+            root_id,
+            Scope {
+                id: root_id,
+                parent: None,
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 0, end: 100 },
+                symbols: ScopeSymbolSet::new(),
+            },
+        );
+        scopes.insert(
+            child_id,
+            Scope {
+                id: child_id,
+                parent: Some(root_id),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 1, end: 50 },
+                symbols: ScopeSymbolSet::new(),
+            },
+        );
+        // Self-referential: parent == self (simulates parser error recovery edge case)
+        scopes.insert(
+            cyclic_id,
+            Scope {
+                id: cyclic_id,
+                parent: Some(cyclic_id),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 5, end: 10 },
+                symbols: ScopeSymbolSet::new(),
+            },
+        );
+
+        // Construct a minimal provider and replace its scope table
+        let code = "my $x = 1;";
+        let ast = must(Parser::new(code).parse());
+        let mut provider = RenameProvider::new(&ast, code.to_string());
+        // Replace scopes with our synthetic table
+        provider.symbol_table.scopes = scopes;
+
+        // Must terminate (not infinite loop) and return child_id (direct child of root)
+        // cyclic_id has parent==cyclic_id, not root, so it's NOT a descendant of root
+        let descendants = provider.collect_descendant_scopes(root_id);
+        assert!(descendants.contains(&child_id), "direct child must be in descendants");
+        assert!(
+            !descendants.contains(&cyclic_id),
+            "self-referential scope with unrelated parent not in descendants"
+        );
+        assert!(!descendants.contains(&root_id), "root itself must not be in descendants");
+    }
+
+    /// Performance: a synthetic 1000-scope linear chain must complete in under 10ms.
+    /// Uses a hand-built scope table to bypass the parser's nesting depth limit.
+    /// Catches any accidental regression back to O(n*d) behavior.
+    #[test]
+    fn test_collect_descendant_scopes_linear_chain_performance() {
+        use perl_parser_core::SourceLocation;
+        use perl_semantic_analyzer::symbol::{Scope, ScopeKind};
+        use std::collections::{HashMap, HashSet as ScopeSymbolSet};
+        use std::time::Instant;
+
+        const CHAIN_LEN: usize = 1000;
+        let root_id: ScopeId = 0;
+
+        // Build a linear parent chain: 0 -> 1 -> 2 -> ... -> 999
+        let mut scopes: HashMap<ScopeId, Scope> = HashMap::new();
+        scopes.insert(
+            root_id,
+            Scope {
+                id: root_id,
+                parent: None,
+                kind: ScopeKind::Global,
+                location: SourceLocation { start: 0, end: 10000 },
+                symbols: ScopeSymbolSet::new(),
+            },
+        );
+        for i in 1..CHAIN_LEN {
+            scopes.insert(
+                i,
+                Scope {
+                    id: i,
+                    parent: Some(i - 1),
+                    kind: ScopeKind::Block,
+                    location: SourceLocation { start: i * 10, end: i * 10 + 9 },
+                    symbols: ScopeSymbolSet::new(),
+                },
+            );
+        }
+
+        let code = "my $x = 1;";
+        let ast = must(Parser::new(code).parse());
+        let mut provider = RenameProvider::new(&ast, code.to_string());
+        provider.symbol_table.scopes = scopes;
+
+        let start = Instant::now();
+        let descendants = provider.collect_descendant_scopes(root_id);
+        let elapsed = start.elapsed();
+
+        assert_eq!(descendants.len(), CHAIN_LEN - 1, "all non-root scopes should be descendants");
+        assert!(
+            elapsed.as_millis() < 10,
+            "collect_descendant_scopes on 1000-scope chain took {}ms, expected <10ms",
+            elapsed.as_millis()
+        );
     }
 }
