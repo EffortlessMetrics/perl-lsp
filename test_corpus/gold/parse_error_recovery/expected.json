@@ -1,0 +1,9 @@
+{
+  "diagnostics": [
+    {
+      "assertion": "diagnostic_present",
+      "code": "PL001",
+      "byte_offset": 73
+    }
+  ]
+}

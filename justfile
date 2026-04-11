@@ -1172,6 +1172,15 @@ corpus-audit-fresh:
     @cd xtask && cargo run --no-default-features -- corpus-audit --fresh
 
 # ============================================================================
+# Diagnostics Metrics Commands
+# ============================================================================
+
+# Run gold corpus diagnostics test suite (precision/recall validation)
+metrics-diagnostics:
+    @echo "📊 Running diagnostics gold suite..."
+    @cargo test -p perl-lsp-diagnostics --test diagnostics_gold_suite -- --nocapture
+
+# ============================================================================
 # Parser Feature Coverage Commands (Issue #180)
 # ============================================================================
 
