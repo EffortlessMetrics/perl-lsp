@@ -395,7 +395,7 @@ issue #4062.
 | [#4046](https://github.com/EffortlessMetrics/perl-lsp/pull/4046) | README scoping pass — added "what the numbers mean (and don't)" table, entry-points table, known-gaps section | `README.md` | Merged |
 | [#4107](https://github.com/EffortlessMetrics/perl-lsp/pull/4107) | Catalog 14 DAP handlers missing from `features.toml`; 102 → 116 | 4 files, +148/-8 | Merged |
 | [#4114](https://github.com/EffortlessMetrics/perl-lsp/issues/4114) | Tracking issue for 8 undersold substrate subsystems (refactoring, hover, completion, code-actions, inlay-hints, semantic-tokens, benchmarks, workspace) | Tracking only; Stage 1 builder spec attached | Open, Stage 1 in flight |
-| [#4121](https://github.com/EffortlessMetrics/perl-lsp/issues/4121) | Propagate the 102 → 116 correction across 7 stale hand-edited files, rewrite stale known-gaps bullets | README, status/index.md, RELEASE_NOTES_DRAFT, announcement draft, FEATURE_CATALOG, PRE_ANNOUNCEMENT_CHECKLIST, ARTICLE_OUTLINES | Open |
+| [#4121](https://github.com/EffortlessMetrics/perl-lsp/pull/4121) | Propagate the 102 → 116 correction across 7 stale hand-edited files, rewrite stale known-gaps bullets | README, status/index.md, RELEASE_NOTES_DRAFT, announcement draft, FEATURE_CATALOG, PRE_ANNOUNCEMENT_CHECKLIST, ARTICLE_OUTLINES | Open |
 
 Notable: #4107 was a pure metadata PR — no code changes, no new tests,
 no behavior change. It was the smallest possible PR that corrected the
@@ -559,7 +559,7 @@ and file a tracking issue for every drift you find.
   — DAP catalog undercount fix, 102 → 116
 - **Substrate tracking**: [#4114](https://github.com/EffortlessMetrics/perl-lsp/issues/4114)
   — 8 more undersold subsystems
-- **Docs sweep**: [#4121](https://github.com/EffortlessMetrics/perl-lsp/issues/4121)
+- **Docs sweep**: [#4121](https://github.com/EffortlessMetrics/perl-lsp/pull/4121)
   — propagate 116 across stale hand-edited files
 - **README scoping pass**: [#4046](https://github.com/EffortlessMetrics/perl-lsp/pull/4046)
   — scoped the *existing* numbers honestly; did not audit whether the
