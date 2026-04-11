@@ -129,11 +129,19 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
 ## Contributing
 
+**New contributor?** Start with [docs/contributing/FIRST_PR.md](docs/contributing/FIRST_PR.md) — clone to PR in five minutes.
+
 ```bash
 cargo test --workspace --lib
 cargo fmt --all
 cargo clippy --workspace
 nix develop -c just ci-gate   # required before merge
+```
+
+Find beginner-friendly issues:
+
+```bash
+gh issue list --label "good-first-issue" --state open
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
