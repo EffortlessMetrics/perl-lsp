@@ -810,8 +810,7 @@ DB<1>"#;
     #[test]
     pub(super) fn test_normalize_three_prompts_in_sequence() {
         // Three consecutive prompts — verifies loop handles arbitrary depth.
-        let result =
-            DebugAdapter::normalize_debugger_output_line("DB<1> DB<2> DB<3> my $x = 10;");
+        let result = DebugAdapter::normalize_debugger_output_line("DB<1> DB<2> DB<3> my $x = 10;");
         assert_eq!(result, "my $x = 10;");
     }
 }

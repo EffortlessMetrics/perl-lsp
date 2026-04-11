@@ -1695,14 +1695,10 @@ mod tests {
     fn apply_context_re(line: &str) -> Option<(String, String)> {
         let re = context_re()?;
         let caps = re.captures(line)?;
-        let file = caps
-            .name("file")
-            .or_else(|| caps.name("file2"))
-            .map(|m| m.as_str().to_string())?;
-        let line_num = caps
-            .name("line")
-            .or_else(|| caps.name("line2"))
-            .map(|m| m.as_str().to_string())?;
+        let file =
+            caps.name("file").or_else(|| caps.name("file2")).map(|m| m.as_str().to_string())?;
+        let line_num =
+            caps.name("line").or_else(|| caps.name("line2")).map(|m| m.as_str().to_string())?;
         Some((file, line_num))
     }
 
