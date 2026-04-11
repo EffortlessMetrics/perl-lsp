@@ -1,6 +1,6 @@
 # perl-lsp Feature Catalog
 
-perl-lsp implements 98 LSP and DAP features, all at GA maturity, tracked in [`features.toml`](../../features.toml). This catalog describes what each capability area does and why it matters for Perl development.
+perl-lsp implements 116 LSP and DAP features, all at GA maturity, tracked in [`features.toml`](../../features.toml). This catalog describes what each capability area does and why it matters for Perl development.
 
 This is not a marketing summary — it is a structured tour of the actual implementation, grouped by what you use it for.
 
@@ -200,8 +200,8 @@ perl-lsp includes a built-in Debug Adapter Protocol server in `crates/perl-dap/`
 
 ## Feature Count
 
-98 features: 88 LSP features across text document, workspace, window, notebook, and protocol areas, plus 10 DAP debug features. All are at GA maturity. The canonical list is in [`features.toml`](../../features.toml).
+116 features: 87 LSP features across text document, workspace, window, notebook, and protocol areas, plus 24 DAP debug features and 5 perl-lsp extension features. All are at GA maturity. The canonical list is in [`features.toml`](../../features.toml). The DAP subsystem's 14 previously uncatalogued handlers were added in PR #4107 after a direct audit of `dispatch.rs`.
 
 ---
 
-*All features verified against `features.toml` version 0.12.0. Feature descriptions derived from `features.toml` descriptions and test files.*
+*All features verified against `features.toml` version 0.12.3. Feature descriptions derived from `features.toml` descriptions and test files.*
