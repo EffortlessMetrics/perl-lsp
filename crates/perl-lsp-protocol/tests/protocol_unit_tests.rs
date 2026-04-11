@@ -509,10 +509,7 @@ fn enhanced_error_has_correct_code() {
 #[test]
 fn req_uri_with_file_scheme() {
     let params = json!({"textDocument": {"uri": "file:///home/user/test.pl"}});
-    match req_uri(&params) {
-        Ok(uri) => assert_eq!(uri, "file:///home/user/test.pl"),
-        Err(e) => panic!("Expected Ok, got Err: {}", e),
-    }
+    assert!(matches!(req_uri(&params), Ok("file:///home/user/test.pl")));
 }
 
 #[test]
@@ -575,13 +572,7 @@ fn req_uri_empty_params() {
 #[test]
 fn req_position_typical_values() {
     let params = json!({"position": {"line": 10, "character": 25}});
-    match req_position(&params) {
-        Ok((line, character)) => {
-            assert_eq!(line, 10);
-            assert_eq!(character, 25);
-        }
-        Err(e) => panic!("Expected Ok, got Err: {}", e),
-    }
+    assert!(matches!(req_position(&params), Ok((10, 25))));
 }
 
 #[test]
@@ -645,13 +636,7 @@ fn req_range_typical_values() {
             "end": {"line": 5, "character": 20}
         }
     });
-    match req_range(&params) {
-        Ok(((sl, sc), (el, ec))) => {
-            assert_eq!((sl, sc), (5, 10));
-            assert_eq!((el, ec), (5, 20));
-        }
-        Err(e) => panic!("Expected Ok, got Err: {}", e),
-    }
+    assert!(matches!(req_range(&params), Ok(((5, 10), (5, 20)))));
 }
 
 #[test]
@@ -662,13 +647,7 @@ fn req_range_single_point_range() {
             "end": {"line": 0, "character": 0}
         }
     });
-    match req_range(&params) {
-        Ok(((sl, sc), (el, ec))) => {
-            assert_eq!((sl, sc), (0, 0));
-            assert_eq!((el, ec), (0, 0));
-        }
-        Err(e) => panic!("Expected Ok, got Err: {}", e),
-    }
+    assert!(matches!(req_range(&params), Ok(((0, 0), (0, 0)))));
 }
 
 #[test]
@@ -728,15 +707,7 @@ fn req_range_max_u32_values() {
             "end": {"line": max, "character": max}
         }
     });
-    match req_range(&params) {
-        Ok(((sl, sc), (el, ec))) => {
-            assert_eq!(sl, u32::MAX);
-            assert_eq!(sc, u32::MAX);
-            assert_eq!(el, u32::MAX);
-            assert_eq!(ec, u32::MAX);
-        }
-        Err(e) => panic!("Expected Ok, got Err: {}", e),
-    }
+    assert!(matches!(req_range(&params), Ok(((u32::MAX, u32::MAX), (u32::MAX, u32::MAX)))));
 }
 
 // ============================================================================
