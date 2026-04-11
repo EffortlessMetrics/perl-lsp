@@ -40,6 +40,7 @@ perl-lsp-color-provider = { workspace = true }
 perl-lsp-input-validation = { workspace = true }
 perl-lsp-limits = { workspace = true }
 perl-lsp-uri = { workspace = true }
+perl-uri = { workspace = true }
 perl-lsp-feature-governance = { workspace = true }
 perl-lsp-tooling = { workspace = true }
 perl-subprocess-runtime = { workspace = true }

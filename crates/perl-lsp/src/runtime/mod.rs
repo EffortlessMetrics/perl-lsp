@@ -96,6 +96,7 @@ use crate::{
 };
 use md5;
 use parking_lot::Mutex;
+use perl_uri::VfsUri;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -118,11 +119,11 @@ use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use crate::fallback::text::extract_text_based_symbols;
 
 pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
-    Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
+    VfsUri::parse(uri).ok().and_then(|value| value.as_file_path().map(std::path::Path::to_path_buf))
 }
 
 fn workspace_folder_path(folder: &WorkspaceFolderState) -> Option<PathBuf> {
-    folder.path.clone().or_else(|| Url::parse(&folder.uri).ok().and_then(|u| u.to_file_path().ok()))
+    folder.path.clone().or_else(|| source_path_from_uri(&folder.uri))
 }
 
 fn workspace_folder_matches_doc_uri(folder: &WorkspaceFolderState, doc_uri: &str) -> bool {

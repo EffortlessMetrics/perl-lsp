@@ -2272,6 +2272,7 @@ dependencies = [
  "perl-subprocess-runtime",
  "perl-symbol-cursor",
  "perl-tdd-support",
+ "perl-uri",
  "perl-workspace-discovery",
  "perl-workspace-folder",
  "perl-workspace-ignore",

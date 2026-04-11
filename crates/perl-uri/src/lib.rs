@@ -34,6 +34,49 @@
 
 use url::Url;
 
+/// URI abstraction for file-backed and virtual documents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VfsUri {
+    /// Local filesystem URI (`file://`).
+    File(std::path::PathBuf),
+    /// Any non-file URI scheme (e.g. `untitled:`, `vscode-remote://`, `git:`).
+    Virtual(Url),
+}
+
+impl VfsUri {
+    /// Parse an LSP URI into a virtual-filesystem aware representation.
+    pub fn parse(uri: &str) -> Result<Self, url::ParseError> {
+        let parsed = Url::parse(uri)?;
+        if parsed.scheme() == "file" {
+            if let Ok(path) = parsed.to_file_path() {
+                return Ok(Self::File(path));
+            }
+            if let Some(path) = windows_rooted_file_uri_to_path(&parsed) {
+                return Ok(Self::File(path));
+            }
+        }
+        Ok(Self::Virtual(parsed))
+    }
+
+    /// Return the URI scheme.
+    #[must_use]
+    pub fn scheme(&self) -> &str {
+        match self {
+            Self::File(_) => "file",
+            Self::Virtual(url) => url.scheme(),
+        }
+    }
+
+    /// Return the local filesystem path when available.
+    #[must_use]
+    pub fn as_file_path(&self) -> Option<&std::path::Path> {
+        match self {
+            Self::File(path) => Some(path.as_path()),
+            Self::Virtual(_) => None,
+        }
+    }
+}
+
 /// Convert a `file://` URI to a filesystem path.
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,
@@ -291,6 +334,20 @@ mod tests {
     fn test_is_special_scheme() {
         assert!(is_special_scheme("untitled:Untitled-1"));
         assert!(!is_special_scheme("file:///tmp/test.pl"));
+    }
+
+    #[test]
+    fn test_vfs_uri_parse_file() {
+        let parsed = VfsUri::parse("file:///tmp/test.pl").expect("valid URI");
+        assert_eq!(parsed.scheme(), "file");
+        assert!(parsed.as_file_path().is_some());
+    }
+
+    #[test]
+    fn test_vfs_uri_parse_virtual() {
+        let parsed = VfsUri::parse("untitled:Untitled-1").expect("valid URI");
+        assert_eq!(parsed.scheme(), "untitled");
+        assert!(parsed.as_file_path().is_none());
     }
 
     #[test]

@@ -18,6 +18,7 @@ use perl_module_rename::plan_module_rename_edits;
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
 #[cfg(feature = "workspace")]
 use perl_source_file::{is_perl_source_path, is_perl_source_uri};
+use perl_uri::VfsUri;
 use perl_workspace_folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace_ignore::is_skipped_dir_name;
@@ -1127,10 +1128,10 @@ impl LspServer {
                             super::workspace_folder::WorkspaceFolderState::new(uri.clone());
 
                         // Resolve the folder path
-                        if let Ok(url) = Url::parse(uri) {
-                            if let Ok(path) = url.to_file_path() {
-                                folder_state = folder_state.with_path(path);
-                            }
+                        if let Ok(vfs_uri) = VfsUri::parse(uri)
+                            && let Some(path) = vfs_uri.as_file_path()
+                        {
+                            folder_state = folder_state.with_path(path.to_path_buf());
                         }
 
                         workspace_folders.push(folder_state);

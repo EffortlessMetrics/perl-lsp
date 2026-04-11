@@ -3,6 +3,7 @@
 //! Handles client capability parsing and server capabilities construction.
 
 use super::super::*;
+use perl_uri::VfsUri;
 use perl_workspace_folder::{extract_workspace_folder_uris, root_path_to_file_uri};
 use serde_json::{Value, json};
 
@@ -186,15 +187,27 @@ impl LspServer {
                 let mut folders = self.workspace_folders.lock();
                 for uri in extract_workspace_folder_uris(workspace_folders) {
                     tracing::debug!(uri, "Initialized with workspace folder");
-                    folders.push(super::super::workspace_folder::WorkspaceFolderState::new(uri));
+                    let mut folder =
+                        super::super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+                    if let Ok(vfs_uri) = VfsUri::parse(&uri)
+                        && let Some(path) = vfs_uri.as_file_path()
+                    {
+                        folder = folder.with_path(path.to_path_buf());
+                    }
+                    folders.push(folder);
                 }
             } else if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
                 // Fallback to rootUri if workspaceFolders is not provided
                 let mut folders = self.workspace_folders.lock();
                 tracing::debug!(root_uri, "Initialized with root URI");
-                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
-                    root_uri.to_string(),
-                ));
+                let mut folder =
+                    super::super::workspace_folder::WorkspaceFolderState::new(root_uri.to_string());
+                if let Ok(vfs_uri) = VfsUri::parse(root_uri)
+                    && let Some(path) = vfs_uri.as_file_path()
+                {
+                    folder = folder.with_path(path.to_path_buf());
+                }
+                folders.push(folder);
                 // Also set the root path for module resolution
                 self.set_root_uri(root_uri);
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {

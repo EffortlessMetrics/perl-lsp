@@ -4,12 +4,14 @@
 
 use super::super::*;
 use perl_lsp_config::WorkspaceConfig;
-use url::Url;
+use perl_uri::VfsUri;
 
 impl LspServer {
     /// Set the root path from the root URI during initialization
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
-        let root_path = Url::parse(root_uri).ok().and_then(|u| u.to_file_path().ok());
+        let root_path = VfsUri::parse(root_uri)
+            .ok()
+            .and_then(|uri| uri.as_file_path().map(std::path::Path::to_path_buf));
         *self.root_path.lock() = root_path;
     }
 
@@ -87,6 +89,13 @@ mod tests {
         let server = LspServer::new();
         // Should not panic with empty workspace folders
         server.load_and_apply_project_config();
+    }
+
+    #[test]
+    fn set_root_uri_ignores_virtual_scheme() {
+        let server = LspServer::new();
+        server.set_root_uri("untitled:workspace");
+        assert!(server.root_path.lock().is_none());
     }
 
     #[test]
