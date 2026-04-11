@@ -478,6 +478,12 @@ impl CheckpointedIncrementalParser {
     /// set of **parser** tokens (trivia-filtered) so they can be reused during
     /// subsequent incremental reparses.
     fn parse_with_checkpoints(&mut self) -> ParseResult<Node> {
+        // A full reparse must rebuild both caches from the current source
+        // state; carrying forward shifted checkpoints from a prior incremental
+        // edit can poison later checkpoint selection.
+        self.checkpoint_cache.clear();
+        self.token_cache = TokenCache::new();
+
         let mut lexer = PerlLexer::new(&self.source);
         let mut raw_tokens = Vec::new();
         let mut checkpoint_positions = vec![0, 100, 500, 1000, 5000];
@@ -611,6 +617,7 @@ impl CheckpointedIncrementalParser {
         }
 
         if let Some(cached) = cached_before {
+            self.stats.cache_hits += 1;
             let reused_count = cached.len();
             parser_tokens.extend(cached);
             self.stats.tokens_reused += reused_count;
@@ -793,5 +800,33 @@ mod tests {
             "expected either reused or relexed tokens, got {:?}",
             stats
         );
+    }
+
+    #[test]
+    fn test_full_fallback_rebuilds_checkpoint_cache() {
+        let source = "my $value = 1;\n".repeat(80);
+        let edit = SimpleEdit { start: 125, end: 126, new_text: "999".to_string() };
+
+        let mut edited_source = source.clone();
+        edited_source.replace_range(edit.start..edit.end, &edit.new_text);
+
+        let mut incremental = CheckpointedIncrementalParser::new();
+        must(incremental.parse(source));
+        must(incremental.apply_edit(&edit));
+
+        let mut full = CheckpointedIncrementalParser::new();
+        must(full.parse(edited_source.clone()));
+
+        for query in (0..=edited_source.len()).step_by(17) {
+            let incremental_before =
+                incremental.checkpoint_cache.find_before(query).map(|cp| cp.position);
+            let full_before = full.checkpoint_cache.find_before(query).map(|cp| cp.position);
+            assert_eq!(incremental_before, full_before, "mismatched left checkpoint at {query}");
+
+            let incremental_after =
+                incremental.checkpoint_cache.find_after(query).map(|cp| cp.position);
+            let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
+            assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
+        }
     }
 }
