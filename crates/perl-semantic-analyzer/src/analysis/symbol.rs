@@ -986,9 +986,21 @@ impl SymbolExtractor {
             | NodeKind::MissingStatement
             | NodeKind::MissingIdentifier
             | NodeKind::MissingBlock
-            | NodeKind::UnknownRest
-            | NodeKind::Error { .. } => {
+            | NodeKind::UnknownRest => {
                 // No symbols to extract
+            }
+
+            NodeKind::Error { partial, .. } => {
+                // Descend into the partial sub-tree if present. The parser stores
+                // the partially-parsed node inside Error when it managed to build
+                // some structure before failing (e.g. a variable expression whose
+                // postfix chain was truncated). Visiting it keeps symbol.rs in
+                // parity with every other traversal in the codebase (semantic
+                // tokens, class model, scope analyzer via children()) that already
+                // descends into partial.
+                if let Some(partial_node) = partial {
+                    self.visit_node(partial_node);
+                }
             }
 
             _ => {
