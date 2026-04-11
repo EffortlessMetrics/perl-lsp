@@ -2947,11 +2947,7 @@ impl IndexVisitor {
                 // fully-qualified constant references (e.g. `My::Config::PI`) resolve
                 // via the workspace index just like subroutines.
                 if module == "constant" {
-                    let pkg = self
-                        .current_package
-                        .as_deref()
-                        .unwrap_or("main")
-                        .to_string();
+                    let pkg = self.current_package.as_deref().unwrap_or("main").to_string();
                     let const_node_range = self.node_to_range(node);
                     for const_name in extract_constant_names_from_use_args(args) {
                         let qualified_name = format!("{pkg}::{const_name}");
@@ -2966,15 +2962,13 @@ impl IndexVisitor {
                             has_body: true,
                             workspace_folder_uri: self.workspace_folder_uri.clone(),
                         });
-                        file_index
-                            .references
-                            .entry(const_name)
-                            .or_default()
-                            .push(SymbolReference {
+                        file_index.references.entry(const_name).or_default().push(
+                            SymbolReference {
                                 uri: self.uri.clone(),
                                 range: self.node_to_range(node),
                                 kind: ReferenceKind::Definition,
-                            });
+                            },
+                        );
                     }
                 }
 

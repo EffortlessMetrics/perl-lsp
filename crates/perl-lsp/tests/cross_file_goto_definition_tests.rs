@@ -2284,9 +2284,8 @@ sub helper_b {
     harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let module_uri = workspace.uri("lib/My/Utils.pm");
-    let module_content =
-        std::fs::read_to_string(workspace.dir.path().join("lib/My/Utils.pm"))
-            .map_err(|e| format!("failed to read module: {e}"))?;
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Utils.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
     harness.open(&module_uri, &module_content)?;
 
     // Use parenthesized import list (not qw form)
@@ -2310,10 +2309,7 @@ my $result = helper_a();
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(
-        !locations.is_empty(),
-        "expected definition result for paren-list imported function"
-    );
+    assert!(!locations.is_empty(), "expected definition result for paren-list imported function");
 
     let first = &locations[0];
     assert_valid_location(first);
@@ -2354,9 +2350,8 @@ use constant {
     harness.initialize_with_root(&workspace.root_uri, None)?;
 
     let module_uri = workspace.uri("lib/My/Config.pm");
-    let module_content =
-        std::fs::read_to_string(workspace.dir.path().join("lib/My/Config.pm"))
-            .map_err(|e| format!("failed to read module: {e}"))?;
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Config.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
     harness.open(&module_uri, &module_content)?;
 
     // Consumer uses qualified constant reference: My::Config::PI
@@ -2381,10 +2376,7 @@ print My::Config::MAX_RETRIES;
     )?;
 
     let locations = result.as_array().ok_or("expected location array")?;
-    assert!(
-        !locations.is_empty(),
-        "expected definition result for cross-file use constant PI"
-    );
+    assert!(!locations.is_empty(), "expected definition result for cross-file use constant PI");
 
     let first = &locations[0];
     assert_valid_location(first);
