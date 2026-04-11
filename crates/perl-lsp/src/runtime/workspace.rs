@@ -142,6 +142,78 @@ impl Drop for IndexingGuard {
 }
 
 impl LspServer {
+    /// Request `workspace/configuration` for each workspace folder (if supported).
+    pub(crate) fn request_workspace_configuration_for_folders(&self) {
+        if !self.client_capabilities.lock().workspace_configuration_support {
+            tracing::debug!("Client does not support workspace/configuration; using local config");
+            return;
+        }
+
+        let folder_uris: Vec<String> =
+            self.workspace_folders.lock().iter().map(|folder| folder.uri.clone()).collect();
+        if folder_uris.is_empty() {
+            return;
+        }
+
+        let items: Vec<Value> =
+            folder_uris.iter().map(|uri| json!({ "scopeUri": uri, "section": "perl" })).collect();
+        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
+
+        if let Err(error) = self.outbound.send_request(
+            request_id,
+            "workspace/configuration",
+            json!({ "items": items }),
+        ) {
+            tracing::warn!(%error, "Failed to send workspace/configuration request");
+            return;
+        }
+
+        self.pending_workspace_configuration_requests.lock().insert(request_id, folder_uris);
+    }
+
+    /// Apply a `workspace/configuration` response for a previously sent request.
+    pub(crate) fn handle_client_response(&self, params: Option<Value>) {
+        let Some(params) = params else {
+            return;
+        };
+        let Some(id) = params.get("id").and_then(|value| value.as_i64()) else {
+            return;
+        };
+
+        let maybe_folder_uris = self.pending_workspace_configuration_requests.lock().remove(&id);
+        let Some(folder_uris) = maybe_folder_uris else {
+            return;
+        };
+
+        if params.get("error").is_some() {
+            tracing::debug!(
+                request_id = id,
+                "workspace/configuration request failed; keeping TOML/default config"
+            );
+            return;
+        }
+
+        let results = params.get("result").and_then(Value::as_array).cloned().unwrap_or_default();
+
+        let mut folders = self.workspace_folders.lock();
+        for (idx, folder_uri) in folder_uris.iter().enumerate() {
+            let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
+                continue;
+            };
+
+            let mut effective_config = perl_lsp_config::WorkspaceConfig::default();
+            if let Some(project_config) = &folder.project_config {
+                project_config.apply_to_workspace_config(&mut effective_config);
+            }
+
+            if let Some(perl_settings) = results.get(idx) {
+                effective_config.update_from_value(perl_settings);
+            }
+
+            folder.effective_workspace_config = effective_config;
+        }
+    }
+
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
     ///
     /// Uses routing helper for state-aware behavior:
@@ -566,6 +638,10 @@ impl LspServer {
                 }
             }
         }
+
+        // Invalidate client-provided workspace/configuration values and re-fetch.
+        self.pending_workspace_configuration_requests.lock().clear();
+        self.request_workspace_configuration_for_folders();
     }
 
     /// Handle workspace/didChangeWatchedFiles notification

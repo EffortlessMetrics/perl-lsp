@@ -219,6 +219,8 @@ pub struct LspServer {
     workspace_config: Arc<Mutex<WorkspaceConfig>>,
     /// Atomic counter for generating unique request IDs
     next_request_id: Arc<AtomicI64>,
+    /// Pending workspace/configuration reverse requests keyed by request ID.
+    pending_workspace_configuration_requests: Arc<Mutex<HashMap<i64, Vec<String>>>>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
     /// Maps progress tokens to their originating request IDs for cancellation routing

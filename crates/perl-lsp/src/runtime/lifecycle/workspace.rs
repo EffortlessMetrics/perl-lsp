@@ -74,6 +74,11 @@ impl LspServer {
                 }
             }
         }
+
+        // Pull client-scoped workspace settings (if supported) and merge them
+        // as the highest-precedence layer over TOML-derived folder config.
+        drop(folders);
+        self.request_workspace_configuration_for_folders();
     }
 }
 
@@ -193,5 +198,53 @@ include_paths = ["other_lib"]
         assert!(folder_state.project_config.is_none());
         // Should have default include paths
         assert!(!folder_state.effective_workspace_config.include_paths.is_empty());
+    }
+
+    #[test]
+    fn handle_client_response_applies_per_folder_workspace_config() {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir().expect("failed to create temp dir");
+        let folder1 = temp.path().join("folder1");
+        let folder2 = temp.path().join("folder2");
+        std::fs::create_dir_all(&folder1).expect("failed to create folder1");
+        std::fs::create_dir_all(&folder2).expect("failed to create folder2");
+
+        let uri1 =
+            url::Url::from_directory_path(&folder1).expect("failed to create uri1").to_string();
+        let uri2 =
+            url::Url::from_directory_path(&folder2).expect("failed to create uri2").to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri1.clone())
+                .with_path(folder1.clone()),
+        );
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri2.clone())
+                .with_path(folder2.clone()),
+        );
+
+        server
+            .pending_workspace_configuration_requests
+            .lock()
+            .insert(11, vec![uri1.clone(), uri2.clone()]);
+
+        server.handle_client_response(Some(serde_json::json!({
+            "id": 11,
+            "result": [
+                { "workspace": { "includePaths": ["api_lib"] } },
+                { "workspace": { "includePaths": ["ui_lib"] } }
+            ]
+        })));
+
+        let folders = server.workspace_folders.lock();
+        let folder1_state = folders.iter().find(|f| f.uri == uri1).expect("missing folder1");
+        let folder2_state = folders.iter().find(|f| f.uri == uri2).expect("missing folder2");
+
+        assert!(
+            folder1_state.effective_workspace_config.include_paths.contains(&"api_lib".to_string())
+        );
+        assert!(
+            folder2_state.effective_workspace_config.include_paths.contains(&"ui_lib".to_string())
+        );
     }
 }
