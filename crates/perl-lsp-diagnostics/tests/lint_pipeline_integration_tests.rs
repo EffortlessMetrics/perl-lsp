@@ -170,39 +170,48 @@ fn lint_pipeline_moose_suppresses_pl100_pl101() {
 }
 
 // =========================================================================
-// 7. use strict inside BEGIN block suppresses missing-strict (issue #2360)
+// 7. use strict inside BEGIN block does NOT suppress missing-strict (issue #4100)
+//
+// Perl phase blocks are lexically scoped for pragmas.  A `use strict` inside
+// `BEGIN { }` applies only to the body of that block, not to the surrounding
+// file scope.  Verified against Perl 5.38.2:
+//   $ perl -e 'BEGIN { use strict; } $x = 1; print "ok: strict not active\n"'
+//   ok: strict not active
+// The LSP must match this behavior: PL100 (missing-strict) should fire.
 // =========================================================================
 
 #[test]
-fn lint_pipeline_strict_inside_begin_suppresses_pl100() {
-    // use strict declared inside BEGIN { } must still suppress the missing-strict advisory.
-    // This tests the walker.rs PhaseBlock recursion fix.
+fn lint_pipeline_strict_inside_begin_reports_missing_strict() {
+    // use strict declared inside BEGIN { } is lexically scoped to that block.
+    // The file still lacks top-level strict — PL100 must fire.
     let source = "BEGIN { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
     let diags = diagnostics_for(source);
     let missing_strict: Vec<_> =
         diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
     assert!(
-        missing_strict.is_empty(),
-        "use strict inside BEGIN should suppress PL100, got {} missing-strict diags",
+        !missing_strict.is_empty(),
+        "use strict inside BEGIN must NOT suppress PL100: the file lacks top-level strict. \
+         Got {} missing-strict diags (expected at least 1)",
         missing_strict.len()
     );
 }
 
 // =========================================================================
-// 8. use warnings inside END block suppresses missing-warnings (issue #2360)
+// 8. use warnings inside END block does NOT suppress missing-warnings (issue #4100)
 // =========================================================================
 
 #[test]
-fn lint_pipeline_warnings_inside_end_suppresses_pl101() {
-    // use warnings declared inside END { } must still suppress PL101.
-    // All 5 phase keyword bodies are walked by the PhaseBlock fix.
+fn lint_pipeline_warnings_inside_end_reports_missing_warnings() {
+    // use warnings declared inside END { } is lexically scoped to that block.
+    // The file still lacks top-level warnings — PL101 must fire.
     let source = "use strict;\nEND { use warnings; }\nmy $x = 42;\nprint $x;\n";
     let diags = diagnostics_for(source);
     let missing_warnings: Vec<_> =
         diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
     assert!(
-        missing_warnings.is_empty(),
-        "use warnings inside END should suppress PL101, got {} missing-warnings diags",
+        !missing_warnings.is_empty(),
+        "use warnings inside END must NOT suppress PL101: the file lacks top-level warnings. \
+         Got {} missing-warnings diags (expected at least 1)",
         missing_warnings.len()
     );
 }
@@ -255,19 +264,22 @@ fn lint_pipeline_use_if_nonpragma_version_condition_still_emits_missing_pragmas(
 }
 
 // =========================================================================
-// 10. use strict inside non-BEGIN phase block (INIT) suppresses PL100 (#2360)
+// 10. use strict inside non-BEGIN phase block (INIT) does NOT suppress PL100 (#4100)
 // =========================================================================
 
 #[test]
-fn lint_pipeline_strict_inside_init_suppresses_pl100() {
-    // All phase block keywords (not just BEGIN) must be recursed into.
+fn lint_pipeline_strict_inside_init_reports_missing_strict() {
+    // All phase block keywords share the same lexical scoping rule.
+    // use strict inside INIT { } is scoped to that block; the file still needs
+    // top-level strict and PL100 must fire.
     let source = "INIT { use strict; }\nuse warnings;\nmy $x = 42;\nprint $x;\n";
     let diags = diagnostics_for(source);
     let missing_strict: Vec<_> =
         diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
     assert!(
-        missing_strict.is_empty(),
-        "use strict inside INIT should suppress PL100, got {} missing-strict diags",
+        !missing_strict.is_empty(),
+        "use strict inside INIT must NOT suppress PL100: the file lacks top-level strict. \
+         Got {} missing-strict diags (expected at least 1)",
         missing_strict.len()
     );
 }

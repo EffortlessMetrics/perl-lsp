@@ -456,6 +456,25 @@ impl PragmaTracker {
         ranges.push((body.location.end..body.location.end, current_state.clone()));
     }
 
+    /// Recursively walk `node` and populate `ranges` with `(offset_range, state)` entries.
+    ///
+    /// # Phase block semantics
+    ///
+    /// Phase blocks (`BEGIN`, `END`, `INIT`, `CHECK`, `UNITCHECK`) execute at different
+    /// compile/runtime phases but share **normal lexical pragma scope** — pragmas declared
+    /// inside a phase block body apply only to that body, not to the surrounding file.
+    ///
+    /// This matches Perl's actual behavior, verified against Perl 5.38.2:
+    ///
+    /// ```text
+    /// $ perl -e 'BEGIN { use strict; } $x = 1; print "ok: strict not active\n"'
+    /// ok: strict not active
+    /// ```
+    ///
+    /// The common misconception that `BEGIN { use strict; }` enables strict file-wide is
+    /// **incorrect**.  `PragmaTracker` correctly treats phase blocks as opaque — their
+    /// body is not walked, so pragmas inside cannot leak to file scope.  This is the
+    /// `_ => {}` arm at the bottom of the match, which implicitly covers `NodeKind::PhaseBlock`.
     fn build_ranges(
         node: &Node,
         current_state: &mut PragmaState,
@@ -832,7 +851,11 @@ impl PragmaTracker {
             NodeKind::Package { block: Some(pkg_block), .. } => {
                 Self::build_scoped_body(pkg_block, current_state, ranges);
             }
-            // Other node types don't contain use/no statements
+            // Other node types — including `NodeKind::PhaseBlock` — are intentionally
+            // not recursed into.  Phase blocks (BEGIN/END/INIT/CHECK/UNITCHECK) have
+            // normal lexical pragma scope: pragmas inside their body do not propagate
+            // to file scope.  Treating them as opaque here is the correct behavior.
+            // See the doc comment on `build_ranges` for Perl 5.38.2 verification.
             _ => {}
         }
     }
