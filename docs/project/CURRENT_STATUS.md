@@ -13,6 +13,7 @@
 | Test counts & tracked debt | [status/tests.md](status/tests.md) |
 | Parser corpus & coverage | [status/parser.md](status/parser.md) |
 | Quality metrics | [status/quality.md](status/quality.md) |
+| Editor UX planning scaffold | [status/editor_ux.json](status/editor_ux.json) |
 | Release readiness & blockers | [status/release.md](status/release.md) |
 | Verification protocol | [protocols/verification.md](protocols/verification.md) |
 | Planning & roadmap | [ROADMAP.md](ROADMAP.md) |
@@ -30,11 +31,12 @@
 | **Test counts** | See [status/tests.md](status/tests.md) | Generated per-merge |
 | **Parser coverage** | See [status/parser.md](status/parser.md) | Generated per-merge |
 | **Quality metrics** | See [status/quality.md](status/quality.md) | Generated per-merge |
+| **Editor UX planning scaffold** | See [status/editor_ux.json](status/editor_ux.json) | Generated per-merge |
 
 ## How to Update Metrics
 
 ```bash
-just status-update            # regenerate all 4 subsystem files
+just status-update            # regenerate all 4 subsystem files plus the UX planning scaffold
 just status-update lsp        # regenerate only LSP metrics (fast)
 just status-check             # verify subsystem files are current
 ```
