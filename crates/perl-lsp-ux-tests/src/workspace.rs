@@ -41,6 +41,24 @@ impl FakeWorkspace {
         Ok(())
     }
 
+    /// Ensure a directory exists at `relative_path`.
+    pub fn ensure_dir(&self, relative_path: &str) -> Result<()> {
+        let path = self.dir.path().join(relative_path);
+        fs::create_dir_all(&path)
+            .with_context(|| format!("Failed to create workspace directory {:?}", path))?;
+        Ok(())
+    }
+
+    /// Delete a file at `relative_path` if it exists.
+    pub fn delete(&self, relative_path: &str) -> Result<()> {
+        let path = self.dir.path().join(relative_path);
+        if path.exists() {
+            fs::remove_file(&path)
+                .with_context(|| format!("Failed to delete workspace file {:?}", path))?;
+        }
+        Ok(())
+    }
+
     /// Get the full `file://` URI for a relative path.
     pub fn uri(&self, relative_path: &str) -> String {
         let path = self.dir.path().join(relative_path);
@@ -51,6 +69,14 @@ impl FakeWorkspace {
                 format!("{}/{}", self.root_uri.trim_end_matches('/'), relative_path)
             }
         }
+    }
+
+    /// Get the full `file://` URI for a relative directory path.
+    pub fn dir_uri(&self, relative_path: &str) -> Result<String> {
+        let path = self.dir.path().join(relative_path);
+        Url::from_directory_path(&path)
+            .map(|url| url.to_string())
+            .map_err(|_| anyhow::anyhow!("Failed to produce file:// URI for directory {:?}", path))
     }
 
     /// Get the filesystem path for a relative path.

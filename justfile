@@ -791,6 +791,7 @@ ci-full:
     @just ci-test-lsp
     @just ci-lsp-microcrates
     @just ci-lsp-bdd
+    @just ux-tests
     @just ci-docs
     @echo "✅ Full CI passed!"
 
@@ -915,19 +916,26 @@ ci-lsp-smoke-e2e:
     @echo "✅ LSP smoke E2E passed"
 
 # UX regression test harness — systematic first-5-minutes scenario testing.
-# Runs all 9 base scenarios (scenarios 01-09, excluding the large-file integration-test tier).
-# For the full large-file tier: just ux-tests-full
+# Runs all default `perl-lsp-ux-tests` scenarios (currently 17 scenario files).
+# `ux-tests-full` adds the integration-only 10k-line large-file coverage.
 ux-tests:
     @echo "Running UX regression test harness (base scenarios)..."
+    @env -u RUSTC_WRAPPER CARGO_BUILD_JOBS=1 \
+        cargo build -p perl-lsp-rs --bin perl-lsp
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        PERL_LSP_BIN={{justfile_directory()}}/target/debug/perl-lsp \
         cargo test -p perl-lsp-ux-tests -- --test-threads=1
     @echo "UX tests passed"
 
-# UX regression test harness — full suite including large-file scenario.
-# Slower (~5-10 min).  Run before releases or after large LSP changes.
+# UX regression test harness — full suite including the integration-only
+# 10k-line large-file scenario. Slower (~5-10 min). Run before releases or
+# after large LSP changes.
 ux-tests-full:
     @echo "Running UX regression test harness (full, including large-file)..."
+    @env -u RUSTC_WRAPPER CARGO_BUILD_JOBS=1 \
+        cargo build -p perl-lsp-rs --bin perl-lsp
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        PERL_LSP_BIN={{justfile_directory()}}/target/debug/perl-lsp \
         cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
     @echo "UX tests (full) passed"
 
