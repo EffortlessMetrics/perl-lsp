@@ -64,14 +64,12 @@ fn prepend_use_lib_paths(
 }
 
 fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -> Option<PathBuf> {
-    let doc_path =
-        doc_uri.and_then(|u| url::Url::parse(u).ok()).and_then(|u| u.to_file_path().ok());
+    let doc_path = doc_uri.and_then(super::super::source_path_from_uri);
 
     if let Some(doc_path) = doc_path {
         let mut best_match: Option<(PathBuf, usize)> = None;
         for folder in workspace_folders {
-            let Some(candidate) = url::Url::parse(folder).ok().and_then(|u| u.to_file_path().ok())
-            else {
+            let Some(candidate) = super::super::source_path_from_uri(folder) else {
                 continue;
             };
             if doc_path.starts_with(&candidate) {
@@ -87,10 +85,7 @@ fn workspace_root_for_doc(workspace_folders: &[String], doc_uri: Option<&str>) -
         }
     }
 
-    workspace_folders
-        .first()
-        .and_then(|u| url::Url::parse(u).ok())
-        .and_then(|u| u.to_file_path().ok())
+    workspace_folders.first().and_then(|u| super::super::source_path_from_uri(u))
 }
 
 fn workspace_config_for_doc(
@@ -239,8 +234,7 @@ impl LspServer {
 
         if let Some(text) = doc_text {
             let file_dir = doc_uri
-                .and_then(|u| url::Url::parse(u).ok())
-                .and_then(|u| u.to_file_path().ok())
+                .and_then(super::super::source_path_from_uri)
                 .and_then(|p| p.parent().map(|d| d.to_path_buf()));
             if file_dir.is_none() && doc_uri.is_some() {
                 tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
@@ -356,8 +350,7 @@ impl LspServer {
         let mut lexical_paths = Vec::new();
         if let Some(text) = doc_text {
             let file_dir = doc_uri
-                .and_then(|u| url::Url::parse(u).ok())
-                .and_then(|u| u.to_file_path().ok())
+                .and_then(super::super::source_path_from_uri)
                 .and_then(|p| p.parent().map(|d| d.to_path_buf()));
             if file_dir.is_none() && doc_uri.is_some() {
                 tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);

@@ -1246,7 +1246,13 @@ impl LspServer {
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
 
             'scan: for folder_state in workspace_folders {
-                let Some(root) = uri_to_fs_path(&folder_state.uri) else {
+                let Some(root) =
+                    folder_state.path.clone().or_else(|| uri_to_fs_path(&folder_state.uri))
+                else {
+                    tracing::debug!(
+                        uri = %folder_state.uri,
+                        "Skipping non-filesystem workspace folder during indexing scan"
+                    );
                     continue;
                 };
 
