@@ -226,3 +226,116 @@ fn add_parameter_signature_edit_inserts_before_closing_paren() {
     );
     assert!(result.contains("foo(1, {})"), "Expected call updated, got:\n{}", result);
 }
+
+// ---------------------------------------------------------------------------
+// Edge cases — added by deep reviewer
+// ---------------------------------------------------------------------------
+
+#[test]
+fn add_parameter_only_updates_matching_sub_calls_not_other_subs() {
+    // Regression guard: call sites of a *different* sub must not be modified.
+    let source = concat!(
+        "use feature 'signatures';\n",
+        "sub foo ($x) { $x }\n",
+        "sub bar ($y) { $y }\n",
+        "foo(1);\n",
+        "bar(2);\n",
+        "foo(3);\n",
+    );
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    // Cursor on `sub foo`
+    let sub_start = source.find("sub foo").unwrap_or(0);
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
+
+    let Some(action) = actions.iter().find(|a| a.title == "Add parameter to signature") else {
+        panic!("Expected add-parameter action for sub foo");
+    };
+
+    let result = apply_edits(source, action);
+
+    // foo calls updated
+    assert!(result.contains("foo(1, {})"), "foo(1) not updated in:\n{}", result);
+    assert!(result.contains("foo(3, {})"), "foo(3) not updated in:\n{}", result);
+    // bar call NOT touched
+    assert!(result.contains("bar(2)"), "bar(2) was wrongly modified in:\n{}", result);
+    assert!(!result.contains("bar(2, {})"), "bar(2) should not be modified in:\n{}", result);
+}
+
+#[test]
+fn add_parameter_sub_with_default_value_appends_correctly() {
+    // sub foo ($x, $y = 1) { } — existing optional param: new param appends AFTER
+    // Result should be: sub foo ($x, $y = 1, $options = {})
+    let source = "use feature 'signatures';\nsub foo ($x, $y = 1) { $x + $y }\nfoo(1, 2);\n";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let sub_start = source.find("sub foo").expect("sub foo in source");
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
+
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+        .expect("Expected add-parameter action");
+
+    let result = apply_edits(source, action);
+
+    assert!(
+        result.contains("sub foo ($x, $y = 1, $options = {})"),
+        "Expected optional param preserved, got:\n{}",
+        result
+    );
+    assert!(result.contains("foo(1, 2, {})"), "Expected call updated, got:\n{}", result);
+}
+
+#[test]
+fn add_parameter_qualified_call_sites_are_updated() {
+    // Both foo(...) and main::foo(...) should be updated when sub name is `foo`
+    let source = concat!(
+        "use feature 'signatures';\n",
+        "sub foo ($x) { $x }\n",
+        "foo(1);\n",
+        "main::foo(2);\n",
+    );
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let sub_start = source.find("sub foo").expect("sub foo in source");
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
+
+    let action = actions
+        .iter()
+        .find(|a| a.title == "Add parameter to signature")
+        .expect("Expected add-parameter action");
+
+    // At minimum the bare call foo(1) must appear in edits (signature + 1 call = 2 edits)
+    assert!(
+        action.edit.changes.len() >= 2,
+        "Expected at least 2 edits (sig + bare call), got {}",
+        action.edit.changes.len()
+    );
+    let result = apply_edits(source, action);
+    assert!(result.contains("foo(1, {})"), "bare call not updated in:\n{}", result);
+}
+
+#[test]
+fn add_parameter_no_action_for_hash_slurpy_last() {
+    // sub foo ($x, %opts) — %opts is hash slurpy and must also be rejected
+    let source = "use feature 'signatures';\nsub foo ($x, %opts) { }\nfoo(1, a => 2);\n";
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+
+    let sub_start = source.find("sub foo").expect("sub foo in source");
+    let provider = EnhancedCodeActionsProvider::new(source.to_string());
+    let actions = provider.get_enhanced_refactoring_actions(&ast, (sub_start, sub_start + 1));
+
+    let action = actions.iter().find(|a| a.title == "Add parameter to signature");
+    assert!(
+        action.is_none(),
+        "Should not offer add-parameter when last param is hash slurpy (%opts)"
+    );
+}
