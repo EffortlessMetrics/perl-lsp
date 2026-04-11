@@ -1,20 +1,17 @@
 name: Post-Merge Corpus Ratchet
 
 # Automatically refreshes the CPAN full-corpus baseline and ratchets the
-# known-clean CPAN manifest after merges that touch parser crates.
+# known-clean CPAN manifest on a nightly schedule.
 # This prevents the stale-baseline problem: parser fixes sit unrecorded,
 # making it look like the corpus clean rate and strict-clean set did not improve.
 #
-# Triggers only when pushes to master touch:
-#   - crates/perl-parser/
-#   - crates/perl-parser-core/
-#   - crates/perl-parser-pest/
-#   - The justfile (ratchet recipe changes)
-#   - xtask corpus sweep / ratchet plumbing
-#   - .ci/cpan-corpus-baseline.json (full-corpus receipt)
-#   - .ci/cpan-corpus-manifest.txt (strict known-clean receipt)
+# Runs nightly at 08:00 UTC (not on every push). The ratchet is periodic
+# bookkeeping; post-merge-status.yml handles per-merge status regeneration.
+# Nightly cadence avoids the concurrency-cancel storms that killed ~40% of
+# per-merge runs (exit 143, runner shutdown) when rapid parser merges triggered
+# concurrent 18-min cold CPAN installs. Manual runs available via workflow_dispatch.
 #
-# See issue #2026 (automate corpus ratchet after parser fix merges).
+# See issue #4186 (corpus ratchet fails intermittently on cold cache).
 
 on:
   schedule:
@@ -24,7 +21,7 @@ on:
     - cron: '0 8 * * *'
   workflow_dispatch:
 
-# Only one ratchet at a time; cancel stale runs if a new parser merge lands.
+# Only one ratchet at a time; cancel stale in-progress runs on re-trigger.
 concurrency:
   group: post-merge-corpus-ratchet-${{ github.ref }}
   cancel-in-progress: true
