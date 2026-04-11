@@ -597,7 +597,20 @@ impl CheckpointedIncrementalParser {
         // --- Phase 1: reuse cached tokens before the left checkpoint ---
         let segments_before = self.token_cache.get_segments_before(relex_start);
         self.stats.segments_reused_before += segments_before.len();
-        if let Some(cached) = self.token_cache.get_tokens_before(relex_start) {
+        let cached_before = self.token_cache.get_tokens_before(relex_start);
+
+        // The cache is still populated as a single whole-file segment. After an
+        // interior edit, invalidation can remove that entire segment and leave us
+        // with no prefix tokens for a nonzero checkpoint window. In that state,
+        // feeding a suffix-only token stream into `Parser::from_tokens` would
+        // drop the unchanged prefix, so preserve correctness by falling back to a
+        // full reparse until the cache becomes genuinely segment-granular.
+        if relex_start > 0 && cached_before.is_none() {
+            self.stats.cache_misses += 1;
+            return self.parse_with_checkpoints();
+        }
+
+        if let Some(cached) = cached_before {
             let reused_count = cached.len();
             parser_tokens.extend(cached);
             self.stats.tokens_reused += reused_count;
