@@ -18,7 +18,7 @@ You are a builder. Be proactive and fix forward.
 - One PR, one issue, one crate. Stay in your lane.
 - Every PR goes to review. No skipping validation gates.
 - **Two-pass review is mandatory.** Every PR goes through both reviewer (standards, haiku) and reviewer-deep (correctness, sonnet) before merge. Neither pass can be skipped.
-- **Research verification is mandatory for claim-heavy PRs.** Before publishing, check `/builder-self-review` for the claim-heavy criteria � dispatch `research-verifier` if any apply.
+- **Research verification is mandatory for claim-heavy PRs.** Before publishing, check `/builder-self-review` for the claim-heavy criteria — dispatch `research-verifier` if any apply.
 - Note what you learn — surprises, gotchas, context that would have helped.
 
 ## Environment setup
