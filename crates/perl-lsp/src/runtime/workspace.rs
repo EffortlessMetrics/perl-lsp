@@ -263,7 +263,35 @@ impl LspServer {
                     // If index is empty, fall through to open-doc search
                 }
                 IndexAccessMode::Partial(reason) => {
-                    tracing::debug!(reason, "Workspace symbol: using open-doc fallback");
+                    // Building/Degraded: still query the partial index so users get
+                    // results from files already scanned.  Fall through to the
+                    // open-doc path only when the partial index is also empty.
+                    tracing::debug!(reason, "Workspace symbol: querying partial index");
+                    if let Some(coordinator) = self.coordinator() {
+                        let symbols = coordinator.index().search_symbols(query);
+                        let lsp_symbols: Vec<LspWorkspaceSymbol> = symbols
+                            .iter()
+                            .take(cap)
+                            .enumerate()
+                            .map(|(i, sym)| {
+                                if i & 0x3f == 0 {
+                                    std::thread::yield_now();
+                                }
+                                sym.into()
+                            })
+                            .collect();
+                        if !lsp_symbols.is_empty() {
+                            tracing::debug!(
+                                count = lsp_symbols.len(),
+                                "Workspace symbol: returned results from partial index"
+                            );
+                            return Ok(Some(json!(lsp_symbols)));
+                        }
+                    }
+                    tracing::debug!(
+                        reason,
+                        "Workspace symbol: partial index empty, falling back to open-docs"
+                    );
                 }
                 IndexAccessMode::None => {
                     tracing::debug!(

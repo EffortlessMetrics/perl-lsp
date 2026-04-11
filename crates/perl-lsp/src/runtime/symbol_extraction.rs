@@ -62,6 +62,7 @@ impl LspServer {
                         ),
                         container_name: container
                             .map(|s| normalize_package_separator(s).into_owned()),
+                        workspace_folder_uri: None,
                     });
 
                     // Recurse into body with this subroutine as container
@@ -91,6 +92,7 @@ impl LspServer {
                         ),
                     ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                    workspace_folder_uri: None,
                 });
 
                 // Recurse into block with this package as container
@@ -121,6 +123,7 @@ impl LspServer {
                         ),
                     ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                    workspace_folder_uri: None,
                 });
 
                 // Recurse into body with this class as container
@@ -143,6 +146,7 @@ impl LspServer {
                         ),
                     ),
                     container_name: container.map(|s| normalize_package_separator(s).into_owned()),
+                    workspace_folder_uri: None,
                 });
 
                 // Recurse into body with this method as container

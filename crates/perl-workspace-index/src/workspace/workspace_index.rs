@@ -1069,6 +1069,9 @@ pub struct LspWorkspaceSymbol {
     /// Name of the containing symbol (package, class)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
+    /// Workspace folder URI this symbol belongs to (for multi-root workspace disambiguation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_folder_uri: Option<String>,
 }
 
 impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
@@ -1083,6 +1086,7 @@ impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
             kind: sym.kind.to_lsp_kind(),
             location: WireLocation { uri: sym.uri.clone(), range },
             container_name: sym.container_name.clone(),
+            workspace_folder_uri: sym.workspace_folder_uri.clone(),
         }
     }
 }
