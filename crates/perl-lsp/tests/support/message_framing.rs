@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use parking_lot::{Condvar, Mutex};
+use perl_content_length_framing::ContentLengthFramer;
 use perl_lsp::LspServer;
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -24,10 +25,18 @@ unsafe impl Send for SendableServer {}
 ///
 /// Every byte written by the LSP server flows through this writer. In
 /// addition to buffering the raw bytes (so that `LspHarness` can apply
-/// content-length framing), the writer eagerly parses the payload and
-/// routes server-initiated notifications and requests into dedicated
-/// queues so that `drain_notifications` / `wait_for_notification` can
-/// consume them without re-parsing.
+/// content-length framing), the writer eagerly parses ALL framed messages
+/// in each write call and routes server-initiated notifications and requests
+/// into dedicated queues so that `drain_notifications` / `wait_for_notification`
+/// can consume them without re-parsing.
+///
+/// # Correctness note
+///
+/// The outbound writer may coalesce multiple messages into a single `write()`
+/// call (batched I/O optimisation).  Previously the classification only parsed
+/// the FIRST JSON object it found, silently discarding subsequent messages in
+/// the same batch.  The fix is to use a `ContentLengthFramer` to extract every
+/// complete frame from the incoming bytes before classifying.
 pub(super) struct TestWriter {
     pub(super) buffer: Arc<Mutex<Vec<u8>>>,
     pub(super) signal: Arc<Condvar>,
@@ -41,23 +50,35 @@ impl Write for TestWriter {
             let mut buffer = self.buffer.lock();
             buffer.extend_from_slice(buf);
         }
-        // Parse and classify message outside buffer lock to avoid contention
-        let content = String::from_utf8_lossy(buf);
-        if let Some(json_start) = content.find('{') {
-            let json_str = &content[json_start..];
-            if let Ok(value) = serde_json::from_str::<Value>(json_str) {
-                let has_method = value.get("method").is_some();
-                let has_id = value.get("id").is_some();
-                if has_method && !has_id {
-                    // Server-initiated notification (no id)
-                    self.notifications.lock().push_back(value);
-                } else if has_method && has_id {
-                    // Server-initiated request (e.g., workspace/configuration)
-                    self.server_requests.lock().push_back(value);
+
+        // Parse and classify ALL framed messages in this batch.
+        // Using a ContentLengthFramer ensures that when the outbound writer
+        // coalesces multiple messages into one write() call, every message
+        // gets classified — not just the first one.
+        let mut framer = ContentLengthFramer::new();
+        framer.push(buf);
+
+        loop {
+            match framer.try_next() {
+                Ok(Some(body)) => {
+                    if let Ok(value) = serde_json::from_slice::<Value>(&body) {
+                        let has_method = value.get("method").is_some();
+                        let has_id = value.get("id").is_some();
+                        if has_method && !has_id {
+                            // Server-initiated notification (no id)
+                            self.notifications.lock().push_back(value);
+                        } else if has_method && has_id {
+                            // Server-initiated request (e.g., workspace/configuration)
+                            self.server_requests.lock().push_back(value);
+                        }
+                        // Responses (has id, no method) stay in the raw buffer only
+                    }
                 }
-                // Responses (has id, no method) stay in the raw buffer only
+                Ok(None) => break, // No more complete frames in this batch
+                Err(_) => break,   // Framing error — stop parsing this batch
             }
         }
+
         self.signal.notify_all();
         Ok(buf.len())
     }
