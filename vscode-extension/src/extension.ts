@@ -15,6 +15,7 @@ import { HealthWidget, ClientState } from './healthWidget';
 import { registerPodPreview } from './podPreview';
 import { registerGherkinProviders } from './gherkinProviders';
 import { registerGherkinStepDefinitionSupport } from './gherkinStepDefinitions';
+import { selectTestCommandAtPosition } from './runTestAtCursor';
 import { StreamingCompletionController } from './streamingCompletion';
 import {
     classifyStartupError,
@@ -511,6 +512,38 @@ export async function activate(context: vscode.ExtensionContext) {
         await runCurrentTestWithProve();
     });
 
+    const runTestAtCursorCommand = vscode.commands.registerCommand('perl-lsp.runTestAtCursor', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'perl') {
+            vscode.window.showErrorMessage('Run Test at Cursor requires an active Perl file');
+            return;
+        }
+
+        if (editor.document.isDirty) {
+            await editor.document.save();
+        }
+
+        if (!client) {
+            vscode.window.showWarningMessage(serverNotRunningMessage());
+            return;
+        }
+
+        const lenses = await client.sendRequest<Array<{
+            range?: { start: { line: number; character: number }; end: { line: number; character: number } };
+            command?: { command: string; arguments?: unknown[] };
+        }> | null>('textDocument/codeLens', {
+            textDocument: { uri: editor.document.uri.toString() },
+        });
+
+        const command = selectTestCommandAtPosition(lenses ?? [], editor.selection.active);
+        if (!command) {
+            vscode.window.showWarningMessage('No runnable test was found at the cursor position');
+            return;
+        }
+
+        await vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
+    });
+
     const runAllTestsCommand = vscode.commands.registerCommand('perl-lsp.runAllTests', async () => {
         await runAllTestsWithProve();
     });
@@ -832,6 +865,7 @@ export async function activate(context: vscode.ExtensionContext) {
         setPerlCriticSeverityCommand,
         checkSyntaxCommand,
         runCurrentTestCommand,
+        runTestAtCursorCommand,
         runAllTestsCommand,
         formatDocumentCommand,
         showIncPathsCommand,
