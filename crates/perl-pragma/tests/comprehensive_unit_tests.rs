@@ -298,9 +298,7 @@ fn use_feature_signatures_enables_all_strict_categories() -> Result<(), Box<dyn 
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 1);
     let state = &map[0].1;
-    assert!(state.strict_vars);
-    assert!(state.strict_subs);
-    assert!(state.strict_refs);
+    assert!(state.signatures_strict);
     Ok(())
 }
 
@@ -311,9 +309,7 @@ fn use_feature_qw_signatures_enables_all_strict_categories()
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 1);
     let state = &map[0].1;
-    assert!(state.strict_vars);
-    assert!(state.strict_subs);
-    assert!(state.strict_refs);
+    assert!(state.signatures_strict);
     Ok(())
 }
 
@@ -469,10 +465,55 @@ fn use_feature_quoted_qw_items_are_parsed() -> Result<(), Box<dyn std::error::Er
     let ast = program(vec![use_node("feature", &["'qw(signatures unicode_strings)'"], 0, 46)]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 1);
-    assert!(map[0].1.strict_vars, "signatures should imply strict vars");
-    assert!(map[0].1.strict_subs, "signatures should imply strict subs");
-    assert!(map[0].1.strict_refs, "signatures should imply strict refs");
+    assert!(map[0].1.signatures_strict, "signatures should imply strictness");
     assert!(map[0].1.unicode_strings, "unicode_strings should be enabled");
+    Ok(())
+}
+
+#[test]
+fn use_feature_bundle_5_10_enables_switch_and_say() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["':5.10'"], 0, 22)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("state"));
+    assert!(state.has_feature("switch"));
+    Ok(())
+}
+
+#[test]
+fn no_feature_switch_disables_switch_after_version_bundle() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast =
+        program(vec![use_node("v5.10", &[], 0, 12), no_node("feature", &["'switch'"], 13, 31)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 2);
+    let state = &map[1].1;
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("state"));
+    assert!(!state.has_feature("switch"));
+    Ok(())
+}
+
+#[test]
+fn no_feature_all_clears_bundle_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40", &[], 0, 12), no_node("feature", &["':all'"], 13, 31)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.has_feature("say"));
+    assert!(!state.has_feature("switch"));
+    assert!(!state.has_feature("builtin"));
+    Ok(())
+}
+
+#[test]
+fn no_feature_without_args_clears_bundle_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40", &[], 0, 12), no_node("feature", &[], 13, 23)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.has_feature("say"));
+    assert!(!state.has_feature("switch"));
+    assert!(!state.has_feature("builtin"));
     Ok(())
 }
 

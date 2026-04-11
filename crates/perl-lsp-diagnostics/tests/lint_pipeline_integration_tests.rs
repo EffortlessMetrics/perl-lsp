@@ -272,8 +272,24 @@ fn lint_pipeline_strict_inside_init_suppresses_pl100() {
     );
 }
 
+// 11. signatures feature suppresses missing-strict
 // =========================================================================
-// 11. Security lint: string eval fires through the full pipeline (#2693)
+
+#[test]
+fn lint_pipeline_feature_signatures_suppresses_pl100() {
+    let source = "use feature 'signatures';\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    assert!(
+        missing_strict.is_empty(),
+        "use feature 'signatures' should suppress PL100, got {} missing-strict diags",
+        missing_strict.len()
+    );
+}
+
+// =========================================================================
+// 12. Security lint: string eval fires through the full pipeline (#2693)
 // =========================================================================
 
 #[test]
@@ -300,7 +316,7 @@ fn lint_pipeline_string_eval_emits_pl600() {
 }
 
 // =========================================================================
-// 12. Eval error flow lint fires through the full pipeline (#3380)
+// 13. Eval error flow lint fires through the full pipeline (#3380)
 // =========================================================================
 
 #[test]
@@ -321,7 +337,7 @@ fn lint_pipeline_eval_error_flow_emits_pl407() {
 }
 
 // =========================================================================
-// 13. Security lint: global SIG handlers fire through the full pipeline
+// 14. Security lint: global SIG handlers fire through the full pipeline
 // =========================================================================
 
 #[test]
@@ -356,7 +372,7 @@ fn lint_pipeline_lexical_sig_shadow_does_not_emit_pl602() {
 }
 
 // =========================================================================
-// 13. Unused imports lint fires through the full pipeline (#2694)
+// 15. Unused imports lint fires through the full pipeline (#2694)
 // =========================================================================
 
 #[test]
@@ -386,7 +402,7 @@ fn lint_pipeline_unused_import_emits_pl700() {
 }
 
 // =========================================================================
-// 14. Used import does NOT fire PL700 (#2694)
+// 16. Used import does NOT fire PL700 (#2694)
 // =========================================================================
 
 #[test]
@@ -406,7 +422,7 @@ fn lint_pipeline_used_import_no_pl700() {
 }
 
 // =========================================================================
-// 15. Dedup removes duplicate diagnostics (#2696)
+// 17. Dedup removes duplicate diagnostics (#2696)
 // =========================================================================
 
 #[test]
@@ -432,7 +448,7 @@ fn lint_pipeline_dedup_removes_exact_duplicates() {
 }
 
 // =========================================================================
-// 16. FFI::CheckLib hints surface through the full pipeline
+// 18. FFI::CheckLib hints surface through the full pipeline
 // =========================================================================
 
 #[test]

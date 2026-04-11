@@ -48,9 +48,9 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     }
 
     let pragma_map = PragmaTracker::build(node);
-    let mut has_strict = pragma_map
-        .iter()
-        .any(|(_, state)| state.strict_vars || state.strict_subs || state.strict_refs);
+    let mut has_strict = pragma_map.iter().any(|(_, state)| {
+        state.strict_vars || state.strict_subs || state.strict_refs || state.signatures_strict
+    });
     let mut has_warnings = pragma_map.iter().any(|(_, state)| state.warnings);
 
     // OO frameworks that implicitly provide strict+warnings
