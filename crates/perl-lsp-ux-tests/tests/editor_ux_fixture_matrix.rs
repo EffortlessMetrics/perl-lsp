@@ -20,16 +20,11 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
     let matrix: Value = serde_json::from_str(&matrix_text)
         .with_context(|| format!("parsing {}", matrix_path.display()))?;
 
-    let schema_version = matrix
-        .get("schema_version")
-        .and_then(Value::as_u64)
-        .context("schema_version missing")?;
+    let schema_version =
+        matrix.get("schema_version").and_then(Value::as_u64).context("schema_version missing")?;
     assert_eq!(schema_version, 1, "fixture matrix schema version drifted");
 
-    let subsystem = matrix
-        .get("subsystem")
-        .and_then(Value::as_str)
-        .context("subsystem missing")?;
+    let subsystem = matrix.get("subsystem").and_then(Value::as_str).context("subsystem missing")?;
     assert_eq!(subsystem, "editor_ux");
 
     let top_line_metrics = collect_string_set(
@@ -49,15 +44,11 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
         matrix.get("component_metrics").context("component_metrics missing")?,
         "component_metrics",
     )?;
-    let allowed_metrics = top_line_metrics
-        .union(&component_metrics)
-        .cloned()
-        .collect::<BTreeSet<_>>();
+    let allowed_metrics =
+        top_line_metrics.union(&component_metrics).cloned().collect::<BTreeSet<_>>();
 
-    let workflows = matrix
-        .get("workflows")
-        .and_then(Value::as_array)
-        .context("workflows missing")?;
+    let workflows =
+        matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
 
     let mut scenarios_in_matrix = BTreeSet::new();
     for workflow in workflows {
@@ -114,14 +105,11 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
 }
 
 fn collect_string_set(value: &Value, context_label: &str) -> Result<BTreeSet<String>> {
-    let values = value
-        .as_array()
-        .with_context(|| format!("{context_label} must be an array"))?;
+    let values = value.as_array().with_context(|| format!("{context_label} must be an array"))?;
     let mut out = BTreeSet::new();
     for entry in values {
-        let item = entry
-            .as_str()
-            .with_context(|| format!("{context_label} entries must be strings"))?;
+        let item =
+            entry.as_str().with_context(|| format!("{context_label} entries must be strings"))?;
         out.insert(item.to_string());
     }
     Ok(out)
