@@ -97,7 +97,7 @@ The `expected.json` file follows this schema:
 
 ### 9. use_if_strict
 
-**Purpose**: Conditional pragma loading via `use if` (strict disabled).
+**Purpose**: Conditional pragma loading via `use if $] >= 5.020, 'strict'` — validates that the `use if` idiom for runtime-conditional strict enablement is recognized and does not trigger PL100.
 
 ### 10. parse_error_recovery
 

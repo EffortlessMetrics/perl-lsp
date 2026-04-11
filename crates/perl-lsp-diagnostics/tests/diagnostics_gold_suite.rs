@@ -1,4 +1,4 @@
-use perl_corpus::{GoldAssertion, load_gold_fixtures};
+use perl_corpus::{load_gold_fixtures, GoldAssertion};
 use perl_lsp_diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;
 use std::fs;
@@ -43,14 +43,20 @@ fn validate_fixture(
                 let has_code = diagnostics.iter().any(|d| d.code.as_ref() == Some(code));
                 if has_code {
                     all_passed = false;
-                    report
-                        .push_str(&format!("  FAIL: Diagnostic {} should not be present\n", code));
+                    report.push_str(&format!(
+                        "  FAIL: Diagnostic {} should not be present\n",
+                        code
+                    ));
                 } else {
                     report.push_str(&format!("  PASS: Diagnostic {} not present\n", code));
                 }
             }
 
-            GoldAssertion::DiagnosticPresent { code, byte_offset, message_contains } => {
+            GoldAssertion::DiagnosticPresent {
+                code,
+                byte_offset,
+                message_contains,
+            } => {
                 let found = diagnostics.iter().find(|d| {
                     d.code.as_ref() == Some(code)
                         && byte_offset.map(|off| d.range.0 == off).unwrap_or(true)
@@ -97,6 +103,7 @@ fn validate_fixture(
 
 #[test]
 #[allow(clippy::expect_used)]
+#[allow(clippy::panic)]
 fn gold_fixtures_diagnostics_suite() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = Path::new(manifest_dir)
@@ -109,16 +116,19 @@ fn gold_fixtures_diagnostics_suite() {
     let fixtures = match load_gold_fixtures(&gold_dir) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("Failed to load gold fixtures: {}", e);
-            eprintln!("Looked in: {}", gold_dir.display());
-            return;
+            panic!(
+                "Failed to load gold fixtures from {}: {}",
+                gold_dir.display(),
+                e
+            );
         }
     };
 
-    if fixtures.is_empty() {
-        eprintln!("Warning: No gold fixtures found in {}", gold_dir.display());
-        return;
-    }
+    assert!(
+        !fixtures.is_empty(),
+        "No gold fixtures found in {} — corpus was deleted or path is wrong",
+        gold_dir.display()
+    );
 
     eprintln!("\n=== Gold Corpus Diagnostics Test Suite ===");
     eprintln!("Testing {} fixtures\n", fixtures.len());
@@ -170,8 +180,15 @@ fn gold_fixtures_diagnostics_suite() {
     eprintln!("Total:  {}", passed + failed);
 
     if failed > 0 {
-        eprintln!("\nPrecision: {:.1}%", (passed as f64 / (passed + failed) as f64) * 100.0);
+        eprintln!(
+            "\nPrecision: {:.1}%",
+            (passed as f64 / (passed + failed) as f64) * 100.0
+        );
     }
 
-    assert_eq!(failed, 0, "Gold corpus diagnostics suite failed: {} failures", failed);
+    assert_eq!(
+        failed, 0,
+        "Gold corpus diagnostics suite failed: {} failures",
+        failed
+    );
 }
