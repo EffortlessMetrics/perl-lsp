@@ -74,6 +74,7 @@
     "onCommand:perl-lsp.runHealthCheck",
     "onCommand:perl-lsp.checkSyntax",
     "onCommand:perl-lsp.runCurrentTest",
+    "onCommand:perl-lsp.runTestAtCursor",
     "onCommand:perl-lsp.runAllTests",
     "onCommand:perl-lsp.formatDocument",
     "onCommand:perl-lsp.showIncPaths",
@@ -659,6 +660,12 @@
         "icon": "$(play)"
       },
       {
+        "command": "perl-lsp.runTestAtCursor",
+        "title": "Run Test at Cursor",
+        "category": "Perl",
+        "icon": "$(run)"
+      },
+      {
         "command": "perl-lsp.runAllTests",
         "title": "Run All Tests",
         "category": "Perl",
@@ -750,6 +757,10 @@
           "when": "editorLangId == perl"
         },
         {
+          "command": "perl-lsp.runTestAtCursor",
+          "when": "editorLangId == perl"
+        },
+        {
           "command": "perl-lsp.runAllTests",
           "when": "workspaceFolderCount >= 1"
         },
@@ -817,16 +828,21 @@
         }
       ],
       "editor/context": [
-        {
-          "command": "perl-lsp.runTests",
-          "when": "editorLangId == perl",
-          "group": "navigation"
-        },
-        {
-          "command": "perl-lsp.runPerlCritic",
-          "when": "editorLangId == perl",
-          "group": "navigation"
-        }
+      {
+        "command": "perl-lsp.runTests",
+        "when": "editorLangId == perl",
+        "group": "navigation"
+      },
+      {
+        "command": "perl-lsp.runTestAtCursor",
+        "when": "editorLangId == perl",
+        "group": "navigation"
+      },
+      {
+        "command": "perl-lsp.runPerlCritic",
+        "when": "editorLangId == perl",
+        "group": "navigation"
+      }
       ]
     },
     "keybindings": [
@@ -838,6 +854,11 @@
       {
         "command": "perl-lsp.runTests",
         "key": "shift+alt+t",
+        "when": "editorTextFocus && editorLangId == perl"
+      },
+      {
+        "command": "perl-lsp.runTestAtCursor",
+        "key": "ctrl+alt+shift+t",
         "when": "editorTextFocus && editorLangId == perl"
       },
       {
