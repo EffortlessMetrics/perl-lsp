@@ -24,6 +24,18 @@ Scenarios currently include:
 - workspace-folder removal evicting stale symbols from search results, and
 - deleted-file churn evicting stale search results and definition targets.
 
+The harness is now also the source of truth for the workflow UX scorecard
+inventory:
+
+- `.ci/schemas/editor-ux.schema.json` defines the eventual measured
+  `editor_ux.json` contract.
+- `docs/project/metrics/WORKFLOW_SCORECARDS.md` explains how that workflow layer
+  fits above the subsystem scorecards.
+- `crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json` maps each
+  executable scenario to scorecard rows and subsystem ownership.
+- `tests/editor_ux_fixture_matrix.rs` keeps that matrix aligned with the actual
+  `ux_scenario_*.rs` files.
+
 ## Running the tests
 
 From the workspace root:

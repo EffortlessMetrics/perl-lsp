@@ -35,6 +35,7 @@ Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CU
 | check known limitations and parser support | [reference/KNOWN_LIMITATIONS.md](reference/KNOWN_LIMITATIONS.md), [reference/PARSER_FEATURE_MATRIX.md](reference/PARSER_FEATURE_MATRIX.md) |
 | see what is true now | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) |
 | see the current release plan | [project/ROADMAP.md](project/ROADMAP.md) |
+| inspect the workflow UX scorecard contract | [project/metrics/WORKFLOW_SCORECARDS.md](project/metrics/WORKFLOW_SCORECARDS.md), [reference/UX_TESTING.md](reference/UX_TESTING.md) |
 | work on the codebase | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | browse the full docs map | [INDEX.md](INDEX.md) |
 

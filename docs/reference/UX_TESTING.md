@@ -50,6 +50,22 @@ either a prebuilt binary or an explicit `PERL_LSP_BIN=/path/to/perl-lsp`.
 `just ux-tests` runs every default scenario above. `just ux-tests-full` adds the
 feature-gated 10k-line large-file case from Scenario 06.
 
+## Workflow Scorecard Contract
+
+The UX harness is also the fixture source for the planned `editor_ux`
+scorecard:
+
+- `docs/project/metrics/WORKFLOW_SCORECARDS.md` describes the workflow layer and
+  the top-line/component rows it owns.
+- `.ci/schemas/editor-ux.schema.json` defines the measured scorecard shape.
+- `crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json` maps each
+  workflow fixture to scorecard rows and subsystem ownership.
+- `crates/perl-lsp-ux-tests/tests/editor_ux_fixture_matrix.rs` prevents the
+  matrix from drifting away from the executable scenario files.
+
+This keeps the workflow scorecard grounded in real harness coverage instead of a
+manually curated checklist.
+
 ## How to Add a New Scenario
 
 1. Create `crates/perl-lsp-ux-tests/tests/ux_scenario_NN_my_scenario.rs`.
