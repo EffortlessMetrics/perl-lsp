@@ -389,3 +389,100 @@ fn test_unclosed_nested_block_inside_sub() {
         "Should have errors about unclosed nested block inside sub"
     );
 }
+
+/// Unclosed `until` loop body should recover at EOF.
+/// `until` is `while !cond` — a distinct parse path from `while`.
+#[test]
+fn test_unclosed_until_loop_body() {
+    let code = "until ($done) { process_item();";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from unclosed until loop body");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(
+            !statements.is_empty(),
+            "Should have at least one statement (the until loop). Got: {:?}",
+            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+        );
+    } else {
+        panic!("Expected Program node");
+    }
+
+    assert!(!parser.errors().is_empty(), "Should have errors about unclosed until loop body");
+}
+
+/// Unclosed `eval { }` block should recover at EOF.
+/// `eval` blocks are extremely common in Perl error-handling patterns; the LSP
+/// must not cascade errors when a user is typing inside an `eval` body.
+#[test]
+fn test_unclosed_eval_block_at_eof() {
+    let code = "eval { my $result = dangerous_call();";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from unclosed eval block");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(
+            !statements.is_empty(),
+            "Should have at least one statement (the eval). Got: {:?}",
+            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+        );
+    } else {
+        panic!("Expected Program node");
+    }
+
+    assert!(!parser.errors().is_empty(), "Should have errors about unclosed eval block");
+}
+
+/// Unclosed `do { }` block should recover at EOF.
+/// `do { }` blocks are used for scoped variable lifetimes and as expression blocks.
+#[test]
+fn test_unclosed_do_block_at_eof() {
+    let code = "my $result = do { my $tmp = compute();";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from unclosed do block");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(
+            !statements.is_empty(),
+            "Should have at least one statement. Got: {:?}",
+            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+        );
+    } else {
+        panic!("Expected Program node");
+    }
+
+    assert!(!parser.errors().is_empty(), "Should have errors about unclosed do block");
+}
+
+/// A bare open brace at EOF (empty unclosed block) should not crash the parser.
+/// This is the minimal possible unclosed-block scenario.
+#[test]
+fn test_bare_open_brace_at_eof() {
+    let code = "{";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover from a bare open brace at EOF");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(
+            !statements.is_empty(),
+            "Should have at least one statement. Got: {:?}",
+            statements.iter().map(|s| s.kind.kind_name()).collect::<Vec<_>>()
+        );
+    } else {
+        panic!("Expected Program node");
+    }
+
+    assert!(!parser.errors().is_empty(), "Should have errors about unclosed bare block");
+}
