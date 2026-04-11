@@ -3,6 +3,7 @@
 //! Each method checks the relevant client capability before sending.
 
 use super::*;
+use lsp_types::{ConfigurationItem, Uri};
 
 #[allow(dead_code)]
 impl LspServer {
@@ -10,6 +11,35 @@ impl LspServer {
     pub(crate) fn send_request(&self, method: &str, params: Value) -> io::Result<()> {
         let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
         self.outbound.send_request(request_id, method, params)
+    }
+
+    /// Request client-scoped Perl configuration for all known workspace folders.
+    ///
+    /// When the client does not advertise `workspace.configuration`, this is a
+    /// no-op and returns `Ok(())`.
+    pub(crate) fn request_workspace_configuration_for_all_folders(&self) -> io::Result<()> {
+        if !self.client_capabilities.lock().workspace_configuration_support {
+            return Ok(());
+        }
+
+        let items: Vec<ConfigurationItem> = self
+            .all_workspace_folders()
+            .into_iter()
+            .filter_map(|folder| {
+                folder.uri.parse::<Uri>().ok().map(|scope_uri| ConfigurationItem {
+                    scope_uri: Some(scope_uri),
+                    section: Some("perl".to_string()),
+                })
+            })
+            .collect();
+
+        if items.is_empty() {
+            return Ok(());
+        }
+
+        self.send_request("workspace/configuration", json!({ "items": items }))?;
+        tracing::debug!(count = items.len(), "Requested workspace/configuration overlays");
+        Ok(())
     }
 
     /// Request client to refresh code lenses (workspace/codeLens/refresh)

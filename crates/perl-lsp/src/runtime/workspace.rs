@@ -556,6 +556,14 @@ impl LspServer {
                         tracing::debug!("Updated workspace config from perl settings");
                     }
 
+                    // Invalidate and refresh per-folder client-scoped overlays.
+                    if let Err(error) = self.request_workspace_configuration_for_all_folders() {
+                        tracing::debug!(
+                            %error,
+                            "Unable to refresh workspace/configuration after didChangeConfiguration"
+                        );
+                    }
+
                     // Refresh AI backend when config changes (constructs or clears provider)
                     self.refresh_ai_backend();
 

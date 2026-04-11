@@ -147,6 +147,12 @@ impl LspServer {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
 
+                    // workspace/configuration
+                    caps.workspace_configuration_support = cap_val
+                        .pointer("/workspace/configuration")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
                     // textDocument/inlayHint resolveSupport.properties
                     // Collect the property names the client can resolve (e.g. "label.location")
                     if let Some(properties) =
@@ -219,6 +225,11 @@ impl LspServer {
 
         // Load .perl-lsp.toml from workspace root (base layer; LSP config overrides later)
         self.load_and_apply_project_config();
+
+        // Request client-scoped workspace configuration overlays when supported.
+        if let Err(error) = self.request_workspace_configuration_for_all_folders() {
+            tracing::debug!(%error, "Unable to request workspace/configuration overlays");
+        }
 
         // Construct the AI inline-completion backend if enabled in config
         self.refresh_ai_backend();
@@ -393,7 +404,10 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
+    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use serde_json::json;
+    use std::io::Cursor;
 
     #[test]
     fn apply_disabled_feature_id_zeros_correct_field() {
@@ -452,5 +466,37 @@ mod tests {
                  apply_disabled_feature_id — add one to keep the two in sync"
             );
         }
+    }
+
+    #[test]
+    fn initialize_parses_workspace_configuration_capability() {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "configuration": true
+                }
+            }
+        });
+
+        server.handle_initialize(Some(params)).expect("initialize must not error");
+        assert!(
+            server.client_capabilities.lock().workspace_configuration_support,
+            "workspace.configuration support should be captured from initialize capabilities"
+        );
+    }
+
+    #[test]
+    fn initialize_defaults_workspace_configuration_capability_to_false() {
+        let server =
+            LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
+        server
+            .handle_initialize(Some(json!({ "capabilities": {} })))
+            .expect("initialize must not error");
+        assert!(
+            !server.client_capabilities.lock().workspace_configuration_support,
+            "workspace.configuration support should default to false"
+        );
     }
 }

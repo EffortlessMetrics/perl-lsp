@@ -307,6 +307,8 @@ pub struct ClientCapabilities {
     pub show_document_support: bool,
     /// Supports window/workDoneProgress/create request
     pub work_done_progress_support: bool,
+    /// Supports workspace/configuration reverse request
+    pub workspace_configuration_support: bool,
     /// Properties the client can resolve via inlayHint/resolve
     ///
     /// Parsed from `capabilities.textDocument.inlayHint.resolveSupport.properties`.
