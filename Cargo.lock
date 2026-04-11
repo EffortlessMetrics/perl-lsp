@@ -1796,7 +1796,6 @@ name = "perl-lsp-ai-provider"
 version = "0.12.3"
 dependencies = [
  "perl-lsp-inline-completion",
- "perl-tdd-support",
  "serde_json",
  "ureq",
 ]
