@@ -181,6 +181,17 @@ impl CodeActionsProvider {
                     "InputOutput::RequireBriefOpen" | "InputOutput::RequireThreeArgOpen" => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
+                    // Perl::Critic policies for missing strict/warnings.
+                    "TestingAndDebugging::RequireUseStrict" => {
+                        actions.extend(quick_fixes::add_use_strict());
+                    }
+                    "TestingAndDebugging::RequireUseWarnings" => {
+                        actions.extend(quick_fixes::add_use_warnings());
+                    }
+                    // Perl::Critic policy alias for unused variables.
+                    "Variables::ProhibitUnusedVariables" => {
+                        actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
+                    }
                     // PL200: Missing package declaration
                     c if c == DiagnosticCode::MissingPackageDeclaration.as_str() => {
                         actions.extend(quick_fixes::fix_missing_package_declaration(&self.source));
@@ -445,5 +456,48 @@ mod tests {
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
         assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
         assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+    }
+
+    #[test]
+    fn test_perlcritic_policy_aliases_for_strict_warnings_and_unused_variable() {
+        let source = "print $unused;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![
+            Diagnostic {
+                range: (0, source.len()),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseStrict".to_string()),
+                message: "Code does not use strict".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, source.len()),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseWarnings".to_string()),
+                message: "Code does not use warnings".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (6, 13),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("Variables::ProhibitUnusedVariables".to_string()),
+                message: "Unused variable '$unused'".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+        ];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
+        assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
+        assert!(actions.iter().any(|a| a.title.contains("Remove unused variable")));
     }
 }

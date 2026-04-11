@@ -68,7 +68,8 @@ fn test_a_violations_appear_in_pull_diagnostics_when_enabled() {
     let result = pull_diagnostics(&server, uri, "print 'hello';\n");
 
     // There must be at least one diagnostic with code
-    // "TestingAndDebugging::RequireUseStrict" and severity 2 (Warning).
+    // "TestingAndDebugging::RequireUseStrict", severity 2 (Warning),
+    // perlcritic source attribution, and fixable=true metadata.
     //
     // The pull-diagnostics response has the shape:
     //   { "kind": "full", "items": [ { "code": "...", "severity": N, ... } ], "resultId": "..." }
@@ -77,6 +78,8 @@ fn test_a_violations_appear_in_pull_diagnostics_when_enabled() {
     let found = diags.iter().any(|d| {
         d["code"].as_str() == Some("TestingAndDebugging::RequireUseStrict")
             && d["severity"].as_u64() == Some(2)
+            && d["source"].as_str() == Some("perlcritic")
+            && d["data"]["fixable"].as_bool() == Some(true)
     });
 
     assert!(
@@ -169,7 +172,7 @@ fn test_b_no_subprocess_invocation_when_perlcritic_disabled() {
 // ── Test C ────────────────────────────────────────────────────────────────────
 
 /// When the `perlcritic` binary is absent from PATH, diagnostics are empty and
-/// no error is surfaced.
+/// no subprocess runs.
 ///
 /// This test is skipped when perlcritic *is* installed because there is no
 /// portable way to temporarily hide a binary from PATH in a single test.

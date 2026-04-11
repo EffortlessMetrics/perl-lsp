@@ -69,7 +69,7 @@ For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/G
 - **Fast native parser** — recursive-descent v3 parser with a context-aware lexer; validated against a curated CPAN corpus
 - **Semantic analysis** — symbol resolution, scope tracking, Moose/Moo method modifiers and role composition
 - **Refactoring** — extract variable, extract subroutine, workspace-scoped rename, subroutine inlining
-- **Diagnostics** — dead code highlighting, strict/warnings diagnostics, perlcritic integration with walk-up discovery
+- **Diagnostics** — dead code highlighting, strict/warnings diagnostics, perlcritic integration with walk-up discovery and explicit tooling warnings
 - **Zero-Perl dependency** for IDE features — the server is a single native binary
 - **Windows first-class** — install, path handling, and shell interactions are part of the release surface
 

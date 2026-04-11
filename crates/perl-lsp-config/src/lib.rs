@@ -47,7 +47,8 @@ pub struct ServerConfig {
     ///
     /// When enabled, the server will run `perlcritic` on open documents and
     /// merge violations into the diagnostic stream. Requires `perlcritic` to
-    /// be installed on the system; silently skipped if not available.
+    /// be installed on the system; missing tool/profile failures are surfaced
+    /// through workspace warning messages.
     pub perlcritic_enabled: bool,
 
     /// Minimum Perl::Critic severity level to report (1-5, where 5 = most severe).
