@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.3"
 lsp_version = "3.18"
-compliance_percent = 100  # 117 total features (87 LSP + 24 DAP + 6 perl-lsp extensions), 53/53 advertised
+compliance_percent = 100  # 118 total features (87 LSP + 24 DAP + 7 perl-lsp extensions), 53/53 advertised
 
 # Text Document Features
 
