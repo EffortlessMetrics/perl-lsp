@@ -704,24 +704,30 @@ fn interpolated_string_preserves_complex_tails() -> R {
 
     for (input, expected_parts) in cases {
         let tok = first_token(input).ok_or_else(|| format!("no token for {input:?}"))?;
-        match tok.token_type {
-            TokenType::InterpolatedString(parts) => assert_eq!(parts, expected_parts),
-            other => panic!("expected interpolated string token for {input:?}, got {other:?}"),
-        }
+        assert!(
+            matches!(
+                &tok.token_type,
+                TokenType::InterpolatedString(parts) if parts == &expected_parts
+            ),
+            "expected interpolated string token for {input:?}, got {:?}",
+            tok.token_type
+        );
     }
 
     let simple = first_token(r#""hello $x world""#).ok_or("no token")?;
-    match simple.token_type {
-        TokenType::InterpolatedString(parts) => assert_eq!(
-            parts,
-            vec![
-                StringPart::Literal(Arc::from("hello ")),
-                StringPart::Variable(Arc::from("$x")),
-                StringPart::Literal(Arc::from(" world")),
-            ]
+    assert!(
+        matches!(
+            &simple.token_type,
+            TokenType::InterpolatedString(parts) if parts
+                == &vec![
+                    StringPart::Literal(Arc::from("hello ")),
+                    StringPart::Variable(Arc::from("$x")),
+                    StringPart::Literal(Arc::from(" world")),
+                ]
         ),
-        other => panic!("expected interpolated string token, got {other:?}"),
-    }
+        "expected interpolated string token, got {:?}",
+        simple.token_type
+    );
 
     Ok(())
 }
