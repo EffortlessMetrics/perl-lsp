@@ -32,7 +32,7 @@ inventory:
 - `docs/project/metrics/WORKFLOW_SCORECARDS.md` explains how that workflow layer
   fits above the subsystem scorecards.
 - `crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json` maps each
-  executable scenario to scorecard rows and subsystem ownership.
+  executable scenario to current scorecard rows and subsystem ownership.
 - `tests/editor_ux_fixture_matrix.rs` keeps that matrix aligned with the actual
   `ux_scenario_*.rs` files.
 

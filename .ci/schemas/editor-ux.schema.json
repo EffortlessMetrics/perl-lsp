@@ -51,50 +51,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "hover_correctness_rate",
-        "hover_declaration_context_accuracy",
-        "completion_top5_usefulness_rate",
-        "completion_empty_when_should_not_be_empty_rate",
-        "goto_definition_exact_hit_rate",
-        "cross_workspace_definition_success_rate",
-        "rename_success_rate",
-        "settled_diagnostics_correctness_rate",
+        "cross_file_definition_success_rate",
         "module_resolution_workflow_success_rate",
-        "multi_root_workspace_navigation_success_rate",
-        "dap_happy_path_success_rate"
+        "multi_root_workspace_navigation_success_rate"
       ],
       "properties": {
-        "hover_correctness_rate": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "hover_declaration_context_accuracy": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "completion_top5_usefulness_rate": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "completion_empty_when_should_not_be_empty_rate": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "goto_definition_exact_hit_rate": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "cross_workspace_definition_success_rate": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "rename_success_rate": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "settled_diagnostics_correctness_rate": {
+        "cross_file_definition_success_rate": {
           "$ref": "#/definitions/rateMetric"
         },
         "module_resolution_workflow_success_rate": {
           "$ref": "#/definitions/rateMetric"
         },
         "multi_root_workspace_navigation_success_rate": {
-          "$ref": "#/definitions/rateMetric"
-        },
-        "dap_happy_path_success_rate": {
           "$ref": "#/definitions/rateMetric"
         }
       }

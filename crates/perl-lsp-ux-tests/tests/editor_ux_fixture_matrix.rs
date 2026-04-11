@@ -51,6 +51,7 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
         matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
 
     let mut scenarios_in_matrix = BTreeSet::new();
+    let mut component_metrics_exercised = BTreeSet::new();
     for workflow in workflows {
         let scenario_file = workflow
             .get("scenario_file")
@@ -69,6 +70,9 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
                 allowed_metrics.contains(measure),
                 "workflow `{scenario_file}` references unknown metric `{measure}`"
             );
+            if component_metrics.contains(measure) {
+                component_metrics_exercised.insert(measure.clone());
+            }
         }
 
         let expected_outcomes = workflow
@@ -99,6 +103,10 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
     assert_eq!(
         scenarios_in_matrix, scenarios_on_disk,
         "fixture matrix must stay in lockstep with the executable UX scenarios"
+    );
+    assert_eq!(
+        component_metrics_exercised, component_metrics,
+        "every declared component metric must be exercised by at least one workflow"
     );
 
     Ok(())

@@ -7,17 +7,9 @@
     "p95_time_to_first_useful_result_ms"
   ],
   "component_metrics": [
-    "hover_correctness_rate",
-    "hover_declaration_context_accuracy",
-    "completion_top5_usefulness_rate",
-    "completion_empty_when_should_not_be_empty_rate",
-    "goto_definition_exact_hit_rate",
-    "cross_workspace_definition_success_rate",
-    "rename_success_rate",
-    "settled_diagnostics_correctness_rate",
+    "cross_file_definition_success_rate",
     "module_resolution_workflow_success_rate",
-    "multi_root_workspace_navigation_success_rate",
-    "dap_happy_path_success_rate"
+    "multi_root_workspace_navigation_success_rate"
   ],
   "workflows": [
     {
@@ -28,9 +20,7 @@
       "user_journey": "open a simple Perl file and verify hover and completion work without crashing",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "hover_correctness_rate",
-        "completion_empty_when_should_not_be_empty_rate"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
         "server starts cleanly",
@@ -61,8 +51,7 @@
       "user_journey": "start the server without perl on PATH and perform basic editor actions",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "hover_correctness_rate"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
         "server starts in degraded mode",
@@ -77,8 +66,7 @@
       "user_journey": "publish diagnostics when perlcritic is unavailable",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "settled_diagnostics_correctness_rate"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
         "diagnostics degrade gracefully",
@@ -124,11 +112,10 @@
       "user_journey": "open multiple files in a workspace and navigate across them",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "cross_workspace_definition_success_rate"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
-        "cross-file definition works",
+        "cross-file definition request completes without error",
         "workspace interactions remain stable"
       ]
     },
@@ -169,8 +156,7 @@
       "user_journey": "run goto-definition inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "goto_definition_exact_hit_rate"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
         "definition request returns a location or clean empty result",
@@ -185,9 +171,7 @@
       "user_journey": "run hover over names and variables in a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "hover_correctness_rate",
-        "hover_declaration_context_accuracy"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
         "hover request returns useful structure or clean empty result",
@@ -202,12 +186,11 @@
       "user_journey": "open a strict warnings file and wait for settled diagnostics",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "settled_diagnostics_correctness_rate"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
         "publishDiagnostics arrives",
-        "diagnostic codes and shapes are valid"
+        "diagnostic payload shape stays valid"
       ]
     },
     {
@@ -218,8 +201,7 @@
       "user_journey": "request document symbols for parsable and empty files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate",
-        "multi_root_workspace_navigation_success_rate"
+        "workflow_stability_rate"
       ],
       "expected_outcomes": [
         "document symbols return valid structure",
@@ -281,7 +263,7 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "cross_workspace_definition_success_rate"
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "deleted symbols disappear from workspace/symbol",
