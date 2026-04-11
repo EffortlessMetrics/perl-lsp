@@ -6,13 +6,13 @@
 ## LSP Coverage
 
 <!-- BEGIN: LSP_COVERAGE -->
-| **LSP Coverage** | 100% (58/58 advertised features, `features.toml`) | 100% | PASS |
+| **LSP Coverage** | 100% (59/59 advertised features, `features.toml`) | 100% | PASS |
 <!-- END: LSP_COVERAGE -->
 
 ## Computed Metrics
 
 <!-- BEGIN: LSP_METRICS_BULLETS -->
-- **LSP Coverage**: 100% user-visible feature coverage (58/58 advertised features from `features.toml`)
+- **LSP Coverage**: 100% user-visible feature coverage (59/59 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% overall LSP protocol support (117/117 including plumbing)
 
 **Target**: maintain 100% LSP coverage (no regressions)
