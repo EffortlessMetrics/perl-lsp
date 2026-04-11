@@ -7,7 +7,323 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- To be populated before announcement -->
+<!-- 2026-04-11 session: 46 PRs merged across navigation, pragma scoping, incremental parsing, workspace refactoring, Windows hardening, and CI hygiene -->
+
+### Headlines
+
+- **Inherited and role method navigation now works end-to-end** — `goto-definition`,
+  hover, and workspace completion all BFS through Moo/Moose `with 'Role'` and
+  `extends`/`use parent` chains. Previously only direct-method navigation worked;
+  inherited methods from parent classes or composed roles returned nothing.
+  AUTOLOAD-backed method calls also resolve through the fallback path, and hover
+  surfaces the AUTOLOAD resolution. (#4077, #4091)
+
+- **Pragma tracker correctness sweep** — four independent false-negative paths
+  in `PragmaTracker` / `check_strict_warnings` fixed in one wave:
+  - eval- and sub-scoped `use strict`/`use warnings` no longer suppress
+    file-level PL100/PL101 diagnostics; `state_for_offset` is now the single
+    source of truth for top-level pragma state (#4052)
+  - conditional `use if` / `use unless` pragmas are tracked via suffix
+    matching on the flattened argument list (#4050)
+  - explicit `use feature` / `no feature` state (including `qw(...)` and
+    `:X.Y` version bundles) drives lint decisions about `switch` and other
+    feature-gated constructs (#4038)
+  - phase-block (`BEGIN`/`END`/`INIT`/`UNITCHECK`/`CHECK`) pragmas are kept
+    lexically scoped instead of leaking to the enclosing file; the bad
+    `strict_warnings` phase-block override that suppressed PL100/PL101 is
+    gone (#4108)
+
+- **Incremental parsing: segment-based token cache + two-sided checkpoint
+  window** — replaces the monolithic `TokenCache` with sorted segment storage
+  so edits only invalidate overlapping segments, and `CheckpointCache::find_after()`
+  bounds the re-lex region by the nearest left and right checkpoints instead of
+  a fixed +100-byte heuristic. New `IncrementalStats` counters surface
+  segment reuse, invalidation, and relex distance. 23 new correctness tests
+  plus a 13-group Criterion benchmark suite. A follow-up correctness fix
+  forces a full reparse when a nonzero checkpoint window has no cached prefix
+  tokens, preventing a suffix-only token stream from being fed to the parser.
+  (#4029, #4048, #4076)
+
+- **Workspace-wide file-operations refactoring** — `workspace/willRenameFiles`
+  now plans edits across unopened files by reading from the open-doc cache,
+  the workspace index, and finally the filesystem; `workspace/willDeleteFiles`
+  emits a user-visible `Warning` when deletion would break cross-file
+  references discovered via `index.file_symbols()` + `find_references()`.
+  Multi-file rename batches are merged per-URI via a new `append_workspace_edits`
+  helper. (#4056, #4098)
+
+- **`workspace/configuration` reverse-request flow** — the server now parses
+  the client's `workspace.configuration` capability and, when advertised,
+  issues a `workspace/configuration` reverse request per folder after
+  `.perl-lsp.toml` is loaded, merging returned overlays into each folder's
+  `effective_workspace_config` (TOML stays the base layer). Re-fetched on
+  `workspace/didChangeConfiguration`. JSON-RPC responses without `method`
+  are routed as an internal `$/perl-lsp/clientResponse` pseudo-notification
+  through the existing dispatch system. Non-`file://` workspace folder URIs
+  (`vscode-remote://`, `untitled:`, etc.) are tolerated end-to-end —
+  `to_file_path()` calls are routed through a file-only URI helper and
+  non-filesystem folders are skipped during indexing scans. (#4093, #4059)
+
+- **Windows extended-length path fix for external commands** — `Path::canonicalize`
+  on Windows returns paths with the `\\?\` prefix, which Win32 APIs accept but
+  `perl.exe` / `prove` / `yath` do not. `normalize_path_for_external_command`
+  strips the prefix before every spawn site in `execute_command::provider`.
+  Unblocks Run Tests, Run File, and Run Test Sub on Windows. (#4089)
+
+- **Perl::Critic diagnostics UX overhaul** — Critic policy codes now carry
+  `source: "perlcritic"` in the LSP surface and an explicit `data.fixable`
+  list; three more policy aliases route to existing quick-fixes
+  (`RequireUseStrict`, `RequireUseWarnings`, `ProhibitUnusedVariables`);
+  missing `perlcritic` binary and invalid profiles surface as workspace
+  warnings and health-check output instead of silently skipping. (#4113)
+
+### Added
+
+- **Workspace `workspace/configuration` reverse-request flow** with client
+  capability gating, per-folder scoping, and JSON-RPC response routing via
+  `$/perl-lsp/clientResponse` (#4093).
+
+- **`workspace/willRenameFiles` workspace-wide planning** — reads text from
+  open-doc cache, workspace index, or filesystem, and merges multi-URI edits
+  via a new `append_workspace_edits` helper (#4056).
+
+- **`workspace/willDeleteFiles` safe-delete warnings** — emits `Warning`
+  severity diagnostic when the delete would break cross-file references
+  discovered via `index.file_symbols()` + `find_references()` (#4056).
+
+- **`HoverExtracted::InheritedMethod` variant** with Phase 2 workspace BFS
+  over parents and roles; `collect_all_package_members` BFS for workspace
+  completion; `workspace_document_text` exposed as `pub(super)` so hover can
+  reuse it (#4077).
+
+- **AUTOLOAD fallback in goto-definition and hover** — explicit method-call
+  navigation resolves through `AUTOLOAD` when the named method is absent;
+  inherited-method hover surfaces the AUTOLOAD resolution (#4091).
+
+- **`Readonly` and `Const::Fast` wrapper declarations** are now surfaced as
+  constant symbols by `perl-symbol-surface` and `perl-semantic-analyzer`;
+  declaration tokens are marked readonly in semantic-tokens output, including
+  package-qualified `our` constants. Scalar, array, hash, and package
+  regression coverage added. (#4040, #4043)
+
+- **LSP semantic token delta support advertised** — `semanticTokens.full`
+  switched from the legacy boolean form to the structured delta form.
+  The delta handler already existed; the advertised capability is now
+  aligned with LSP 3.16+ expectations. Capability-snapshot tests
+  regenerated. (#4026, #4041, #4042)
+
+- **VS Code: Run Test at Cursor** — new `perl-lsp.runTestAtCursor` command
+  palette / context-menu entry that resolves the active cursor position
+  against existing code lenses and runs the nearest test subroutine,
+  subtest, or file-level run lens (#4025).
+
+- **VS Code: Gherkin step-definition navigation and stubs** — navigation
+  from `.feature` steps to Perl `Given`/`When`/`Then` definitions plus a
+  quick-fix command that generates step-definition stubs. Unit coverage
+  for matching, generation, and registration. (#4024)
+
+- **VS Code test runner now prefers `yath` for test files** when present
+  on PATH, with `prove` and `perl` fallbacks intact. Unit tests pin the
+  runner preference order without depending on local tool availability.
+  (#4031)
+
+- **Segment-based incremental token cache + two-sided checkpoint window**
+  — `TokenSegment` sorted storage, `CheckpointCache::find_after()`, and
+  `reparse_from_checkpoint_two_sided`; new `IncrementalStats` metrics
+  (`segments_reused_before`, `segments_reused_after`, `segments_invalidated`,
+  `full_tail_fallbacks`, `left_checkpoint_distance`,
+  `right_checkpoint_distance`, `bytes_relexed`); 23 correctness tests and
+  a 13-group Criterion benchmark suite (#4029).
+
+- **Orphaned unclosed-block recovery tests wired into `perl-parser-core`**
+  — the `unclosed_block_recovery_tests` module existed on disk with six
+  well-written tests but was never registered in `mod.rs` and had never
+  compiled. Now wired with six additional edge-case tests covering C-style
+  `for`, `foreach`, `unless`, `BEGIN` phase blocks, doubly-nested unclosed
+  blocks, and nested blocks inside `sub`. (#4079)
+
+- **Symbol visibility regression tests** for Error-partial recursion in
+  `perl-semantic-analyzer`, covering arrow-truncation errors, unclosed-sub
+  recovery, and missing-RHS recovery (#4071).
+
+- **Per-edit checkpoint and cache delta assertions** for incremental
+  parsing, replacing cumulative-counter assertions with per-edit deltas
+  and tree-equivalence checks against a fresh full parse (#4076).
+
+- **`require VERSION` pragma semantics test** guarding that `require 5.x`
+  does not enable strict or warnings in `PragmaTracker` (#4023).
+
+### Changed
+
+- **Pre-push hook switched from `ci-gate` to `pr-fast`** (Tier A). The
+  generated `hooks/pre-push` file is regenerated from `perl-ci-hygiene` and
+  a regression test keeps the generated text and checked-in hook file in
+  sync. `ci-gate` remains documented as the explicit full merge gate.
+  (#4088, #4110)
+
+- **Doc-only pre-push fast path skips code gates entirely** instead of
+  running workspace-wide `cargo fmt --all -- --check`. Avoids a Windows
+  long-path rustfmt crash on prose-only pushes. Regression test asserts
+  the doc-only branch exits before any workspace-wide rustfmt check.
+  (#4061)
+
+- **Docs-only merge fast-track** added to the review/merge policy so
+  doc-only PRs no longer falsely require `reviewed-deep`. Enforced by
+  `scripts/pre-merge-check.sh` with shell-test coverage; reviewer / ops
+  docs and label automation updated to match. (#4103)
+
+- **`PragmaTracker::state_for_offset(&map, usize::MAX)`** is now the
+  single authoritative source of truth for top-level pragma state in
+  `check_strict_warnings`; the scope-unaware `walk_node` closure arms
+  that scanned eval/sub interiors are removed (#4052).
+
+- **`SymbolExtractor::visit_node()` Error arm** now recurses into
+  `partial: Option<Box<Node>>` instead of treating Error as an opaque
+  leaf, bringing symbol extraction into parity with every other
+  traversal in the codebase (`semantic_tokens`, `class_model`,
+  `scope_analyzer`, `for_each_child`) (#4071).
+
+- **Metric framing scoped down** across README, VSCode marketplace
+  listing, and v0.13.0 announcement draft — capabilities are now framed
+  as advertised surface, not claimed conformance; entry-points table
+  added to README; known UX gaps listed explicitly (#4045,
+  #4046, #4049, #4051).
+
+### Fixed
+
+- **Navigation: inherited and role methods in goto-def, hover, and
+  completion** — BFS traversal now chains `model.roles` alongside
+  `model.parents` in `inherited_method_definition_location`; hover
+  wires the previously dead-code `resolve_inherited_method_hover` path;
+  workspace completion uses a new `collect_all_package_members` BFS that
+  replaces the direct `get_package_members` call in
+  `add_workspace_method_completions` (#4077).
+
+- **Navigation: AUTOLOAD-backed method calls** resolve through
+  `AUTOLOAD` fallback in both goto-definition and hover when the named
+  method is absent (#4091).
+
+- **Diagnostics: eval- and sub-scoped pragmas no longer suppress
+  file-level PL100/PL101** — `pragma_map.iter().any()` replaced with
+  `PragmaTracker::state_for_offset` at `usize::MAX`; `walk_node` closure
+  arms that descended into `NodeKind::Eval` / `NodeKind::Subroutine`
+  bodies and falsely set `has_strict = true` are removed. 4 new tests
+  cover eval-scoped and sub-scoped false-negative paths. (#4052)
+
+- **Pragma: phase-block pragmas kept lexically scoped** — `BEGIN`, `END`,
+  `INIT`, `UNITCHECK`, and `CHECK` block pragmas no longer leak to file
+  scope; the bad `strict_warnings` phase-block override that suppressed
+  PL100/PL101 is removed. Replaced with behavior-spec and integration
+  coverage for block-local semantics. (#4108)
+
+- **Pragma: conditional `use if` / `use unless`** — `PragmaTracker`
+  recognises `use if CONDITION, MODULE, ...` forms and conservatively
+  applies the tracked pragma semantics from the suffix target. Lint
+  pipeline regressions confirm conditional strict/warnings suppress the
+  missing-pragma hints. (#4050)
+
+- **Pragma: explicit `use feature qw(...)` and `:X.Y` bundles** tracked
+  in `PragmaTracker`; `version_compat` understands feature bundles; 
+  `no feature` lexical disablement is honored. Regressions cover
+  `switch` enablement via bundles and lexical disablement. (#4038)
+
+- **Incremental parsing: prefix correctness at checkpoint boundaries** —
+  when a nonzero checkpoint window has no cached prefix tokens, fall
+  back to a full reparse instead of assembling a suffix-only token
+  stream for `Parser::from_tokens`. Regression compares incremental vs
+  full parse for an edit past the first checkpoint boundary. (#4048)
+
+- **Semantic analyzer: symbol extraction descends into Error partial
+  nodes** (#4071). The arrow-truncation recovery path will start
+  producing new symbols if the parser begins wrapping declarations in
+  `Error { partial: Some(...) }`.
+
+- **Workspace: non-`file://` URIs tolerated as workspace roots** —
+  `vscode-remote://`, `untitled:`, and other virtual schemes are kept
+  in LSP string form; direct `to_file_path()` calls are routed through
+  a file-only URI helper; workspace folder matching normalises trailing
+  slashes; non-filesystem folders are skipped during indexing scans.
+  (#4059)
+
+- **Execute-command: Windows extended-length path prefix stripped** —
+  `normalize_path_for_external_command` removes the `\\?\` prefix on
+  Windows at every spawn site in `execute_command::provider` (yath,
+  prove, perl primary and fallback paths, `run_test_sub`, `run_file`).
+  Non-Windows is a zero-cost identity via `#[cfg(windows)]`. Closes
+  the Windows Run Tests regression. (#4089)
+
+- **DAP types: basename derivation for Windows-style source paths** —
+  `Source::new()` adds a narrow fallback when `Path::file_name()` returns
+  the entire input string (as it does for backslash-separated paths on
+  Unix hosts), so `C:\Users\dev\project\lib\Module.pm` now derives
+  `Module.pm` correctly. Unblocks the previously-failing
+  `source_with_windows_path` regression. (#4028)
+
+- **Xtask `features verify` repaired** — catalog test paths are now
+  resolved from repo root, the advertised-vs-caps snapshot is read from
+  `crates/perl-lsp/tests/snapshots/...`, the two-document Insta snapshot
+  format is parsed correctly, and the verifier compares against the
+  capability-backed advertised LSP subset (#4033).
+
+- **Clippy hygiene: hover/navigation `let_and_return` and
+  `needless_borrow`** warnings cleared, plus a follow-up
+  `needless_borrow` fix in workspace file-ops after #4052 and #4088
+  landed (#4037, #4098).
+
+- **Plan-review hook IO hardened** — `subagent-stop.sh` binds issue
+  context from `ISSUE_NUMBER`, payload `issue_number`, or the canonical
+  `plan-review-NNN` agent name (in that precedence), instead of the
+  broken branch-digit scan that silently labeled random historical
+  issues. Fail-loud exit 3 when no valid issue context exists. Both
+  `subagent-stop.sh` and `task-completed.sh` normalise payload / receipt
+  fields with `tr -d '\r'` so JSONL metrics and CRLF-sensitive receipt
+  parsing no longer reject valid UTC timestamps. Canonical
+  `plan-review-NNN` naming documented in `.claude/commands/swarm.md`.
+  Regression coverage added in both `.ci/scripts/test-hooks.sh` and
+  `cargo xtask hook-tests`. (#4064)
+
+- **CI hygiene: allowlisted production panic paths normalised** before
+  matching so both Unix and Windows-style relative paths are recognised
+  (#4081).
+
+- **CI hygiene: doc-only pre-push fast path skips code gates** entirely
+  instead of running workspace-wide rustfmt (#4061).
+
+- **Semantic-analyzer: stale method attribute assertion** fixed to look
+  up extracted methods via the current symbol contract while keeping the
+  attribute-preservation assertion intact (#4082).
+
+- **Agent definitions: terminal skills made explicit** — `scout-lsp.md`
+  gains the missing step 9 `/agent-wrapup` (every other scout variant
+  already had it); `reviewer-deep.md` restructures step 4 and adds a
+  new step 5 making `/pr-ready` an explicit required follow-up when
+  the deep-review decision is "approve". Root cause for the earlier
+  incidents where deep reviewers set `reviewed-deep` but forgot to
+  call `/pr-ready`, leaving PRs stuck in draft. (#4087)
+
+### Docs
+
+- **Metric framing scoped down** — README, VSCode marketplace listing,
+  and v0.13.0 announcement draft now frame capabilities as advertised
+  surface, not claimed conformance. README gains an entry-points table
+  and an explicit list of known UX gaps. (#4045, #4046, #4049, #4051)
+
+### Tests / Quality
+
+- **Test-side P0 idiom + dependency findings burned down** — three
+  `.or_insert_with(Vec::new)` occurrences migrated to `.or_default()`
+  in `lsp_cancellation_performance_tests.rs`,
+  `test_infrastructure_mocks.rs`, and
+  `documentation_validation_mutation_hardening.rs`; explicit
+  `HashMap<String, Vec<Duration>>` / `HashMap<String, Vec<usize>>` type
+  annotations added where inference became ambiguous;
+  `perl-tdd-support` added to `[dev-dependencies]` in `perl-dap-types`,
+  `perl-symbol-surface`, and `perl-ast-utils`. (#4002)
+
+- **Match-arm panic asserts burned down** in test code across
+  `perl-dap-variables`, `perl-lexer` interpolation tests, and several
+  other test suites, continuing the long-running #3258 burn-down
+  (#4030, #4032, #4035).
 
 ## [0.12.3] - 2026-04-08
 
