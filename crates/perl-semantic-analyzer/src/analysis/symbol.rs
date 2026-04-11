@@ -403,8 +403,8 @@ pub struct SymbolExtractor {
     source: String,
     /// Per-package framework detection flags, keyed by package name.
     framework_flags: HashMap<String, FrameworkFlags>,
-    /// Whether `use Const::Fast` has been seen in the current compilation unit.
-    const_fast_enabled: bool,
+    /// Packages that imported `Const::Fast`.
+    const_fast_packages: HashSet<String>,
 }
 
 impl Default for SymbolExtractor {
@@ -422,7 +422,7 @@ impl SymbolExtractor {
             table: SymbolTable::new(),
             source: String::new(),
             framework_flags: HashMap::new(),
-            const_fast_enabled: false,
+            const_fast_packages: HashSet::new(),
         }
     }
 
@@ -434,7 +434,7 @@ impl SymbolExtractor {
             table: SymbolTable::new(),
             source: source.to_string(),
             framework_flags: HashMap::new(),
-            const_fast_enabled: false,
+            const_fast_packages: HashSet::new(),
         }
     }
 
@@ -464,6 +464,10 @@ impl SymbolExtractor {
                 }
             }
         }
+    }
+
+    fn const_fast_enabled(&self) -> bool {
+        self.const_fast_packages.contains(&self.table.current_package)
     }
 
     /// Visit a node and extract symbols
@@ -704,7 +708,7 @@ impl SymbolExtractor {
             }
 
             NodeKind::FunctionCall { name, args } => {
-                if self.const_fast_enabled
+                if self.const_fast_enabled()
                     && name == "const"
                     && self.try_extract_const_fast_declaration(args)
                 {
@@ -799,7 +803,7 @@ impl SymbolExtractor {
             NodeKind::Use { module, args, .. } => {
                 self.update_framework_context(module, args);
                 if module == "Const::Fast" {
-                    self.const_fast_enabled = true;
+                    self.const_fast_packages.insert(self.table.current_package.clone());
                 }
                 if module == "EV" {
                     self.synthesize_ev_framework_symbol(node.location);

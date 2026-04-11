@@ -330,6 +330,91 @@ fn test_const_fast_my_array_produces_constant_decl() {
 }
 
 #[test]
+fn test_const_fast_requires_prior_import_in_same_package() {
+    let variable = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "EARLY".to_string() },
+        loc(9, 15),
+    );
+    let decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(variable),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(3, 15),
+    );
+    let expr = Node::new(
+        NodeKind::FunctionCall {
+            name: "const".to_string(),
+            args: vec![decl, Node::new(NodeKind::Number { value: "1".to_string() }, loc(19, 20))],
+        },
+        loc(0, 20),
+    );
+    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(0, 20));
+    let use_node = Node::new(
+        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        loc(22, 38),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![stmt, use_node] }, loc(0, 38));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert!(
+        !decls.iter().any(|decl| decl.kind == SymbolKind::Constant && decl.name == "EARLY"),
+        "const call before `use Const::Fast` should not be projected as a constant declaration"
+    );
+}
+
+#[test]
+fn test_const_fast_does_not_bleed_into_later_packages() {
+    let foo_pkg = Node::new(
+        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        loc(0, 12),
+    );
+    let use_node = Node::new(
+        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        loc(13, 29),
+    );
+    let bar_pkg = Node::new(
+        NodeKind::Package { name: "Bar".to_string(), name_span: loc(38, 41), block: None },
+        loc(30, 42),
+    );
+    let variable = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "LATE".to_string() },
+        loc(52, 57),
+    );
+    let decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(variable),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(46, 57),
+    );
+    let expr = Node::new(
+        NodeKind::FunctionCall {
+            name: "const".to_string(),
+            args: vec![decl, Node::new(NodeKind::Number { value: "1".to_string() }, loc(61, 62))],
+        },
+        loc(43, 62),
+    );
+    let stmt = Node::new(NodeKind::ExpressionStatement { expression: Box::new(expr) }, loc(43, 62));
+    let program = Node::new(
+        NodeKind::Program { statements: vec![foo_pkg, use_node, bar_pkg, stmt] },
+        loc(0, 62),
+    );
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert!(
+        !decls.iter().any(|decl| decl.kind == SymbolKind::Constant && decl.name == "LATE"),
+        "Const::Fast import in Foo should not project constants in package Bar"
+    );
+}
+
+#[test]
 fn test_variable_declaration_with_attributes_is_unwrapped() {
     // my $count :shared;
     let inner = Node::new(

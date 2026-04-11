@@ -1066,6 +1066,37 @@ fn const_fast_array_variable_has_readonly_modifier() {
 }
 
 #[test]
+fn const_fast_before_import_keeps_function_call_highlighting() {
+    let tokens = tokens_for("const my $EARLY => 1; use Const::Fast;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let fn_idx = must_some(leg.map.get("function"));
+
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    let has_readonly_decl = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
+    assert!(!has_readonly_decl, "const call before import should not mark variable readonly");
+
+    let has_function = tokens.iter().any(|t| t[3] == *fn_idx);
+    assert!(has_function, "const call before import should still be tokenized as a function call");
+}
+
+#[test]
+fn const_fast_import_does_not_bleed_into_later_packages() {
+    let code = "package Foo; use Const::Fast; package Bar; const my $LATE => 1;";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let fn_idx = must_some(leg.map.get("function"));
+
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    let has_readonly_decl = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
+    assert!(!has_readonly_decl, "Const::Fast import in Foo should not mark Bar variables readonly");
+
+    let has_function = tokens.iter().any(|t| t[3] == *fn_idx);
+    assert!(has_function, "const call in package Bar should still be tokenized as a function call");
+}
+
+#[test]
 fn local_declaration_variable_has_declaration_modifier() {
     let tokens = tokens_for("local $/ = undef;");
     let leg = legend();

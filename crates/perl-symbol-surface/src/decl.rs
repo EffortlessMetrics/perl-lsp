@@ -12,6 +12,7 @@
 
 use perl_ast::{Node, NodeKind};
 use perl_symbol_types::{SymbolKind, VarKind};
+use std::collections::HashSet;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -93,8 +94,10 @@ pub struct SymbolDecl {
 /// subsequent top-level statements.
 pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<SymbolDecl> {
     let mut out = Vec::new();
-    let mut ctx =
-        WalkCtx { current_package: current_package.map(str::to_owned), const_fast_enabled: false };
+    let mut ctx = WalkCtx {
+        current_package: current_package.map(str::to_owned),
+        const_fast_packages: HashSet::new(),
+    };
     walk(root, &mut ctx, &mut out);
     out
 }
@@ -103,7 +106,7 @@ pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<S
 
 struct WalkCtx {
     current_package: Option<String>,
-    const_fast_enabled: bool,
+    const_fast_packages: HashSet<String>,
 }
 
 impl WalkCtx {
@@ -112,6 +115,18 @@ impl WalkCtx {
             Some(pkg) => format!("{}::{}", pkg, name),
             None => name.to_owned(),
         }
+    }
+
+    fn current_package_key(&self) -> String {
+        self.current_package.clone().unwrap_or_else(|| "main".to_string())
+    }
+
+    fn enable_const_fast(&mut self) {
+        self.const_fast_packages.insert(self.current_package_key());
+    }
+
+    fn const_fast_enabled(&self) -> bool {
+        self.const_fast_packages.contains(&self.current_package_key())
     }
 }
 
@@ -243,10 +258,10 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         NodeKind::Use { module, .. } if module == "Const::Fast" => {
-            ctx.const_fast_enabled = true;
+            ctx.enable_const_fast();
         }
 
-        NodeKind::FunctionCall { name, args } if ctx.const_fast_enabled && name == "const" => {
+        NodeKind::FunctionCall { name, args } if ctx.const_fast_enabled() && name == "const" => {
             for arg in args {
                 push_const_fast_decl(arg, node, ctx, out);
             }

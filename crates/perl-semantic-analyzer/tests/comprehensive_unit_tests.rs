@@ -189,6 +189,35 @@ const my @ARRAY => (1, 2, 3);
 }
 
 #[test]
+fn symbol_extraction_const_fast_before_import_is_not_constant()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+const my $EARLY => 1;
+use Const::Fast;
+"#;
+    let table = parse_and_extract(code);
+    assert!(!has_symbol(&table, "EARLY", SymbolKind::Constant));
+    assert!(has_symbol(&table, "EARLY", SymbolKind::scalar()));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_const_fast_does_not_cross_package_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+package Foo;
+use Const::Fast;
+
+package Bar;
+const my $LATE => 1;
+"#;
+    let table = parse_and_extract(code);
+    assert!(!has_symbol(&table, "LATE", SymbolKind::Constant));
+    assert!(has_symbol(&table, "LATE", SymbolKind::scalar()));
+    Ok(())
+}
+
+#[test]
 fn symbol_extraction_documentation_comment() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 # This sub does amazing things

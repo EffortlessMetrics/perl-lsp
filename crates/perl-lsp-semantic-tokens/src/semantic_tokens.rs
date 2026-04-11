@@ -107,7 +107,7 @@
 use perl_lexer::{PerlLexer, StringPart, TokenType};
 use perl_parser_core::ast::{Node, NodeKind};
 use regex::Regex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::sync::LazyLock;
 
@@ -570,10 +570,10 @@ pub fn collect_semantic_tokens(
         }
     }
 
-    let const_fast_enabled = ast_uses_const_fast(ast);
+    let (decl_readonly_flags, const_fast_call_spans) = const_fast_decl_state(ast);
 
     // 2a) Collect variable declaration spans for modifier tagging
-    let decl_spans = declaration_readonly_flags(ast)
+    let decl_spans = decl_readonly_flags
         .into_iter()
         .map(|((start, end), is_readonly)| (start, end, is_readonly))
         .collect::<Vec<_>>();
@@ -711,7 +711,9 @@ pub fn collect_semantic_tokens(
 
         let (kind, mods): (&str, u32) = match &node.kind {
             NodeKind::FunctionCall { name, .. } => {
-                if const_fast_enabled && name == "const" {
+                if name == "const"
+                    && const_fast_call_spans.contains(&(node.location.start, node.location.end))
+                {
                     return true;
                 }
                 // Skip builtins that should remain as keywords from the lexer pass
@@ -832,7 +834,19 @@ where
         return false;
     }
 
-    let children: Vec<&Node> = match &node.kind {
+    let children = ast_children(node);
+
+    for child in children {
+        if !walk_ast_full(child, visitor) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn ast_children(node: &Node) -> Vec<&Node> {
+    match &node.kind {
         NodeKind::Program { statements } | NodeKind::Block { statements } => {
             statements.iter().collect()
         }
@@ -1005,60 +1019,91 @@ where
         }
         // Leaf nodes with no children
         _ => vec![],
-    };
-
-    for child in children {
-        if !walk_ast_full(child, visitor) {
-            return false;
-        }
     }
-
-    true
 }
 
-fn declaration_readonly_flags(ast: &Node) -> FxHashMap<(usize, usize), bool> {
-    let mut flags = FxHashMap::default();
-    let const_fast_enabled = ast_uses_const_fast(ast);
+#[derive(Default)]
+struct ConstFastWalkCtx {
+    current_package: Option<String>,
+    enabled_packages: FxHashSet<String>,
+}
 
-    walk_ast_full(ast, &mut |node| {
-        match &node.kind {
-            NodeKind::VariableDeclaration { declarator, variable, .. } => {
-                let is_readonly = declarator == "our";
+impl ConstFastWalkCtx {
+    fn current_package_key(&self) -> String {
+        self.current_package.clone().unwrap_or_else(|| "main".to_string())
+    }
+
+    fn enable_const_fast(&mut self) {
+        self.enabled_packages.insert(self.current_package_key());
+    }
+
+    fn const_fast_enabled(&self) -> bool {
+        self.enabled_packages.contains(&self.current_package_key())
+    }
+}
+
+fn const_fast_decl_state(
+    ast: &Node,
+) -> (FxHashMap<(usize, usize), bool>, FxHashSet<(usize, usize)>) {
+    let mut flags = FxHashMap::default();
+    let mut call_spans = FxHashSet::default();
+    let mut ctx = ConstFastWalkCtx::default();
+    walk_const_fast_state(ast, &mut ctx, &mut flags, &mut call_spans);
+    (flags, call_spans)
+}
+
+fn walk_const_fast_state(
+    node: &Node,
+    ctx: &mut ConstFastWalkCtx,
+    flags: &mut FxHashMap<(usize, usize), bool>,
+    call_spans: &mut FxHashSet<(usize, usize)>,
+) {
+    match &node.kind {
+        NodeKind::Package { name, block: Some(block), .. } => {
+            let saved = ctx.current_package.replace(name.clone());
+            walk_const_fast_state(block, ctx, flags, call_spans);
+            ctx.current_package = saved;
+            return;
+        }
+        NodeKind::Package { name, block: None, .. } => {
+            ctx.current_package = Some(name.clone());
+            return;
+        }
+        NodeKind::Class { name, body, .. } => {
+            let saved = ctx.current_package.replace(name.clone());
+            walk_const_fast_state(body, ctx, flags, call_spans);
+            ctx.current_package = saved;
+            return;
+        }
+        NodeKind::Use { module, .. } if module == "Const::Fast" => {
+            ctx.enable_const_fast();
+        }
+        NodeKind::VariableDeclaration { declarator, variable, .. } => {
+            let is_readonly = declarator == "our";
+            flags
+                .entry((variable.location.start, variable.location.end))
+                .and_modify(|flag| *flag |= is_readonly)
+                .or_insert(is_readonly);
+        }
+        NodeKind::VariableListDeclaration { declarator, variables, .. } => {
+            let is_readonly = declarator == "our";
+            for variable in variables {
                 flags
                     .entry((variable.location.start, variable.location.end))
                     .and_modify(|flag| *flag |= is_readonly)
                     .or_insert(is_readonly);
             }
-            NodeKind::VariableListDeclaration { declarator, variables, .. } => {
-                let is_readonly = declarator == "our";
-                for variable in variables {
-                    flags
-                        .entry((variable.location.start, variable.location.end))
-                        .and_modify(|flag| *flag |= is_readonly)
-                        .or_insert(is_readonly);
-                }
-            }
-            NodeKind::FunctionCall { name, args } if const_fast_enabled && name == "const" => {
-                mark_const_fast_decl_flags(args, &mut flags);
-            }
-            _ => {}
         }
-        true
-    });
-
-    flags
-}
-
-fn ast_uses_const_fast(ast: &Node) -> bool {
-    let mut enabled = false;
-    walk_ast_full(ast, &mut |node| {
-        if matches!(&node.kind, NodeKind::Use { module, .. } if module == "Const::Fast") {
-            enabled = true;
-            return false;
+        NodeKind::FunctionCall { name, args } if name == "const" && ctx.const_fast_enabled() => {
+            call_spans.insert((node.location.start, node.location.end));
+            mark_const_fast_decl_flags(args, flags);
         }
-        true
-    });
-    enabled
+        _ => {}
+    }
+
+    for child in ast_children(node) {
+        walk_const_fast_state(child, ctx, flags, call_spans);
+    }
 }
 
 fn mark_const_fast_decl_flags(args: &[Node], flags: &mut FxHashMap<(usize, usize), bool>) {
