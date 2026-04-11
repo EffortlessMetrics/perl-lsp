@@ -2943,6 +2943,35 @@ impl IndexVisitor {
                     }
                 }
 
+                // Index `use constant` declarations as subroutine-like symbols so that
+                // fully-qualified constant references (e.g. `My::Config::PI`) resolve
+                // via the workspace index just like subroutines.
+                if module == "constant" {
+                    let pkg = self.current_package.as_deref().unwrap_or("main").to_string();
+                    let const_node_range = self.node_to_range(node);
+                    for const_name in extract_constant_names_from_use_args(args) {
+                        let qualified_name = format!("{pkg}::{const_name}");
+                        file_index.symbols.push(WorkspaceSymbol {
+                            name: const_name.clone(),
+                            kind: SymbolKind::Subroutine,
+                            uri: self.uri.clone(),
+                            range: const_node_range,
+                            qualified_name: Some(qualified_name),
+                            documentation: None,
+                            container_name: Some(pkg.clone()),
+                            has_body: true,
+                            workspace_folder_uri: self.workspace_folder_uri.clone(),
+                        });
+                        file_index.references.entry(const_name).or_default().push(
+                            SymbolReference {
+                                uri: self.uri.clone(),
+                                range: self.node_to_range(node),
+                                kind: ReferenceKind::Definition,
+                            },
+                        );
+                    }
+                }
+
                 // Track as import
                 file_index.references.entry(module_name).or_default().push(SymbolReference {
                     uri: self.uri.clone(),
@@ -3310,6 +3339,81 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// Extract constant names from the `args` field of a `use constant` `NodeKind::Use` node.
+///
+/// The parser serialises `use constant` args in two distinct forms:
+///
+/// **Scalar form** — `use constant FOO => 42;`
+///   → args: `["FOO", "42"]`  (the `=>` is consumed by the parser, not stored)
+///   → The first arg is the constant name; remaining args are the value.
+///
+/// **Hash form** — `use constant { FOO => 1, BAR => 2 };`
+///   → args: `["{", "FOO", "=>", "1", ",", "BAR", "=>", "2", "}"]`
+///   → Identifiers immediately followed by `=>` are constant names.
+///
+/// **qw form** — `use constant qw(FOO BAR);`
+///   → args: `["qw(FOO BAR)"]`
+///   → Words inside the qw list are constant names.
+///
+/// Returns a deduplicated list of bare constant names (e.g. `["FOO", "BAR"]`).
+fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
+    let mut names = Vec::new();
+
+    // Scalar form (most common): args = ["FOO", <value...>]
+    // The first arg is a plain identifier with no `=>` in args at all.
+    // Hash form starts with `{`; qw form starts with `qw`.
+    let first = match args.first() {
+        Some(f) => f.as_str(),
+        None => return names,
+    };
+
+    // qw form: single arg starting with "qw"
+    if first.starts_with("qw") {
+        let content = first
+            .trim_start_matches("qw")
+            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+        for word in content.split_whitespace() {
+            if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                names.push(word.to_string());
+            }
+        }
+        return names;
+    }
+
+    // Hash form: args start with "{"
+    if first == "{" {
+        let mut iter = args.iter().peekable();
+        while let Some(arg) = iter.next() {
+            if arg == "{" || arg == "}" || arg == "," || arg == "=>" {
+                continue;
+            }
+            // Skip -option flags
+            if arg.starts_with('-') {
+                continue;
+            }
+            let is_plain_ident =
+                !arg.is_empty() && arg.chars().all(|c| c.is_alphanumeric() || c == '_');
+            if is_plain_ident && iter.peek().map(|s| s.as_str()) == Some("=>") {
+                names.push(arg.clone());
+            }
+        }
+        return names;
+    }
+
+    // Scalar form: first arg is the constant name (if it is a plain identifier)
+    // Remaining args are the value and are skipped.
+    // Skip -option flags
+    if !first.starts_with('-')
+        && !first.is_empty()
+        && first.chars().all(|c| c.is_alphanumeric() || c == '_')
+    {
+        names.push(first.to_string());
+    }
+
+    names
+}
+
 impl Default for WorkspaceIndex {
     fn default() -> Self {
         Self::new()
@@ -3408,6 +3512,40 @@ pub mod lsp_adapter {
 mod tests {
     use super::*;
     use perl_tdd_support::{must, must_some};
+
+    #[test]
+    fn test_use_constant_indexed_as_subroutine() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/My/Config.pm";
+        let code = r#"package My::Config;
+use constant PI => 3.14159;
+use constant {
+    MAX_RETRIES => 3,
+    TIMEOUT     => 30,
+};
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let symbols = index.file_symbols(uri);
+        assert!(
+            symbols.iter().any(|s| s.name == "PI" && s.kind == SymbolKind::Subroutine),
+            "PI should be indexed as a Subroutine symbol; got: {:?}",
+            symbols.iter().map(|s| (&s.name, &s.kind)).collect::<Vec<_>>()
+        );
+        assert!(
+            symbols.iter().any(|s| s.name == "MAX_RETRIES" && s.kind == SymbolKind::Subroutine),
+            "MAX_RETRIES should be indexed"
+        );
+        assert!(
+            symbols.iter().any(|s| s.name == "TIMEOUT" && s.kind == SymbolKind::Subroutine),
+            "TIMEOUT should be indexed"
+        );
+
+        // Qualified lookup should also work
+        let def = index.find_definition("My::Config::PI");
+        assert!(def.is_some(), "find_definition('My::Config::PI') should succeed");
+    }
 
     #[test]
     fn test_basic_indexing() {

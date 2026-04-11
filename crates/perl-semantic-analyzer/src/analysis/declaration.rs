@@ -1348,22 +1348,38 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
         fn find(node: &Node, name: &str) -> Option<String> {
             if let NodeKind::Use { module, args, .. } = &node.kind {
-                for arg in args {
-                    if arg == name {
-                        return Some(module.clone());
-                    }
-                    if tag_imports_symbol(module, arg, name) {
-                        return Some(module.clone());
-                    }
-                    if arg.starts_with("qw") {
-                        let content = arg
-                            .trim_start_matches("qw")
-                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                        for import_token in content.split_whitespace() {
-                            if import_token == name
-                                || tag_imports_symbol(module, import_token, name)
-                            {
+                // Skip `use constant` — constants are not import-list symbols
+                if module == "constant" {
+                    // Fall through to children
+                } else {
+                    for arg in args {
+                        if arg == name {
+                            return Some(module.clone());
+                        }
+                        if tag_imports_symbol(module, arg, name) {
+                            return Some(module.clone());
+                        }
+                        if arg.starts_with("qw") {
+                            let content = arg
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            for import_token in content.split_whitespace() {
+                                if import_token == name
+                                    || tag_imports_symbol(module, import_token, name)
+                                {
+                                    return Some(module.clone());
+                                }
+                            }
+                        } else {
+                            // Parenthesized import list: use Foo ('bar', 'baz')
+                            // The parser emits each token as a separate arg including commas
+                            // and string literals with their surrounding quotes.
+                            let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
+                            if bare == name {
+                                return Some(module.clone());
+                            }
+                            if tag_imports_symbol(module, bare, name) {
                                 return Some(module.clone());
                             }
                         }

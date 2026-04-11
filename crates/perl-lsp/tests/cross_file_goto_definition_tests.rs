@@ -2315,3 +2315,138 @@ $c->greet();
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Test: issue #3472 gap (a) — parenthesized import list: use Utils ('helper_a')
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_parens_list_imported_function_navigates_to_source_module() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Utils.pm",
+        r#"package My::Utils;
+use strict;
+use warnings;
+
+sub helper_a {
+    return 'result_a';
+}
+
+sub helper_b {
+    return 'result_b';
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Utils.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Utils.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    // Use parenthesized import list (not qw form)
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use My::Utils ('helper_a', 'helper_b');
+
+my $result = helper_a();
+"#;
+    harness.open(&workspace.uri("app.pl"), caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "helper_a()")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for paren-list imported function");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Utils.pm") || uri.contains("My%2FUtils.pm"),
+        "Definition should point to My/Utils.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test: issue #3475 — use constant cross-file resolution
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_cross_file_use_constant_navigates_to_definition() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Config.pm",
+        r#"package My::Config;
+use strict;
+use warnings;
+
+use constant PI => 3.14159;
+use constant {
+    MAX_RETRIES => 3,
+    TIMEOUT     => 30,
+};
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Config.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Config.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    // Consumer uses qualified constant reference: My::Config::PI
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use My::Config;
+
+my $circumference = 2 * My::Config::PI * 5;
+print My::Config::MAX_RETRIES;
+"#;
+    harness.open(&workspace.uri("main.pl"), caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "My::Config::PI")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": line, "character": character + "My::Config::".len() as u32}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for cross-file use constant PI");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Config.pm") || uri.contains("My%2FConfig.pm"),
+        "Definition for My::Config::PI should point to My/Config.pm, got: {uri}"
+    );
+
+    Ok(())
+}
