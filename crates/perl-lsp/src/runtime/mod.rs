@@ -118,15 +118,15 @@ use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use crate::fallback::text::extract_text_based_symbols;
 
 pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
-    Url::parse(uri).ok().and_then(|value| value.to_file_path().ok())
+    perl_uri::uri_to_fs_path(uri)
 }
 
 fn workspace_folder_path(folder: &WorkspaceFolderState) -> Option<PathBuf> {
-    folder.path.clone().or_else(|| Url::parse(&folder.uri).ok().and_then(|u| u.to_file_path().ok()))
+    folder.path.clone().or_else(|| perl_uri::uri_to_fs_path(&folder.uri))
 }
 
 fn workspace_folder_matches_doc_uri(folder: &WorkspaceFolderState, doc_uri: &str) -> bool {
-    let doc_path = Url::parse(doc_uri).ok().and_then(|u| u.to_file_path().ok());
+    let doc_path = perl_uri::uri_to_fs_path(doc_uri);
     match (doc_path, workspace_folder_path(folder)) {
         (Some(doc_path), Some(folder_path)) => doc_path.starts_with(folder_path),
         _ => doc_uri == folder.uri,

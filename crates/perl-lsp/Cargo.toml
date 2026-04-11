@@ -89,6 +89,7 @@ perl-module-import = { workspace = true }
 perl-pod = { workspace = true }
 perl-module-resolution = { workspace = true }
 perl-source-file = { workspace = true }
+perl-uri = { workspace = true }
 perl-workspace-discovery = { workspace = true }
 perl-workspace-folder = { workspace = true }
 perl-workspace-ignore = { workspace = true }

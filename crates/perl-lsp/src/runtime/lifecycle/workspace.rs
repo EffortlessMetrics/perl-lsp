@@ -4,12 +4,17 @@
 
 use super::super::*;
 use perl_lsp_config::WorkspaceConfig;
-use url::Url;
 
 impl LspServer {
     /// Set the root path from the root URI during initialization
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
-        let root_path = Url::parse(root_uri).ok().and_then(|u| u.to_file_path().ok());
+        let root_path = perl_uri::uri_to_fs_path(root_uri);
+        if root_path.is_none() {
+            tracing::debug!(
+                root_uri,
+                "Workspace root URI is non-file; filesystem root path disabled"
+            );
+        }
         *self.root_path.lock() = root_path;
     }
 
@@ -187,5 +192,12 @@ include_paths = ["other_lib"]
         assert!(folder_state.project_config.is_none());
         // Should have default include paths
         assert!(!folder_state.effective_workspace_config.include_paths.is_empty());
+    }
+
+    #[test]
+    fn set_root_uri_non_file_scheme_keeps_root_path_none() {
+        let server = LspServer::new();
+        server.set_root_uri("vscode-remote://ssh-remote+devbox/workspace");
+        assert!(server.root_path.lock().is_none());
     }
 }

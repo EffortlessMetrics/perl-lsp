@@ -186,15 +186,23 @@ impl LspServer {
                 let mut folders = self.workspace_folders.lock();
                 for uri in extract_workspace_folder_uris(workspace_folders) {
                     tracing::debug!(uri, "Initialized with workspace folder");
-                    folders.push(super::super::workspace_folder::WorkspaceFolderState::new(uri));
+                    let mut folder_state =
+                        super::super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+                    if let Some(path) = super::super::source_path_from_uri(&uri) {
+                        folder_state.path = Some(path);
+                    }
+                    folders.push(folder_state);
                 }
             } else if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
                 // Fallback to rootUri if workspaceFolders is not provided
                 let mut folders = self.workspace_folders.lock();
                 tracing::debug!(root_uri, "Initialized with root URI");
-                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
-                    root_uri.to_string(),
-                ));
+                let mut folder_state =
+                    super::super::workspace_folder::WorkspaceFolderState::new(root_uri.to_string());
+                if let Some(path) = super::super::source_path_from_uri(root_uri) {
+                    folder_state.path = Some(path);
+                }
+                folders.push(folder_state);
                 // Also set the root path for module resolution
                 self.set_root_uri(root_uri);
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
