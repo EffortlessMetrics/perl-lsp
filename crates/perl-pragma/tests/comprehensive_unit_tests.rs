@@ -200,6 +200,30 @@ fn use_strict_quoted_args_double_quotes() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
+fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$^O", "eq", "'MSWin32'", "'strict'"], 0, 35)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn use_if_version_uses_last_recognized_target() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$]", ">=", "5.034", "v5.40"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert!(state.strict_vars, "v5.40 should imply strict");
+    assert!(state.warnings, "v5.40 should imply warnings");
+    assert!(state.has_feature("builtin"), "v5.40 should imply builtin feature bundle");
+    Ok(())
+}
+
+#[test]
 fn no_strict_disables_all() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("strict", &[], 0, 12), no_node("strict", &[], 13, 23)]);
     let map = PragmaTracker::build(&ast);
