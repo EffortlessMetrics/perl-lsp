@@ -109,12 +109,18 @@ impl LspServer {
             let resolver = |module: &str| {
                 self.resolve_module_to_path_with_doc(module, Some(&text), Some(uri)).is_some()
             };
+            let search_paths: Vec<String> = self
+                .include_paths_for_doc(uri)
+                .into_iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
             let source_path = source_path_from_uri(uri);
             let mut diagnostics = provider.get_diagnostics_with_path(
                 ast,
                 &parse_errors,
                 &text,
                 Some(&resolver),
+                &search_paths,
                 source_path.as_deref(),
             );
 
@@ -280,12 +286,18 @@ impl LspServer {
                         self.resolve_module_to_path_with_doc(module, Some(&doc.text), Some(uri))
                             .is_some()
                     };
+                    let search_paths: Vec<String> = self
+                        .include_paths_for_doc(uri)
+                        .into_iter()
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .collect();
                     let source_path = source_path_from_uri(uri);
                     let mut diagnostics = provider.get_diagnostics_with_path(
                         ast,
                         &doc.parse_errors,
                         &doc.text,
                         Some(&resolver),
+                        &search_paths,
                         source_path.as_deref(),
                     );
 
@@ -521,12 +533,18 @@ impl LspServer {
                     self.resolve_module_to_path_with_doc(module, Some(&doc.text), Some(uri_str))
                         .is_some()
                 };
+                let search_paths: Vec<String> = self
+                    .include_paths_for_doc(uri_str)
+                    .into_iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
                 let source_path = source_path_from_uri(uri_str);
                 let mut diagnostics = provider.get_diagnostics_with_path(
                     ast,
                     &doc.parse_errors,
                     &doc.text,
                     Some(&resolver),
+                    &search_paths,
                     source_path.as_deref(),
                 );
 
