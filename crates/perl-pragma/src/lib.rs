@@ -262,11 +262,39 @@ fn is_tracked_pragma_module(module: &str) -> bool {
     matches!(module, "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin")
 }
 
+fn valid_strict_args(args: &[String]) -> bool {
+    args.iter()
+        .flat_map(|arg| pragma_arg_items(arg))
+        .all(|item| matches!(item.as_str(), "vars" | "subs" | "refs"))
+}
+
+fn conditional_target_tail_is_valid(module: &str, tail: &[String]) -> bool {
+    if parse_perl_version(module).is_some() {
+        return tail.is_empty();
+    }
+
+    match module {
+        "strict" => tail.is_empty() || valid_strict_args(tail),
+        "warnings" => true,
+        "utf8" => tail.is_empty(),
+        "encoding" => tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty(),
+        "locale" => {
+            tail.is_empty() || (tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty())
+        }
+        "feature" => !tail.is_empty(),
+        "builtin" => tail.iter().any(|arg| !builtin_import_names(arg).is_empty()),
+        _ => false,
+    }
+}
+
 fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
-    args.iter().enumerate().rev().find_map(|(idx, arg)| {
+    args.iter().enumerate().find_map(|(idx, arg)| {
         let module = normalized_pragma_token(arg);
-        if is_tracked_pragma_module(module) || parse_perl_version(module).is_some() {
-            Some((module, &args[idx + 1..]))
+        let tail = &args[idx + 1..];
+        if (is_tracked_pragma_module(module) || parse_perl_version(module).is_some())
+            && conditional_target_tail_is_valid(module, tail)
+        {
+            Some((module, tail))
         } else {
             None
         }
@@ -335,16 +363,10 @@ impl PragmaTracker {
                                 current_state.strict_refs = true;
                             } else {
                                 for arg in conditional_args {
-                                    match arg.as_str() {
-                                        "vars" | "'vars'" | "\"vars\"" => {
-                                            current_state.strict_vars = true
-                                        }
-                                        "subs" | "'subs'" | "\"subs\"" => {
-                                            current_state.strict_subs = true
-                                        }
-                                        "refs" | "'refs'" | "\"refs\"" => {
-                                            current_state.strict_refs = true
-                                        }
+                                    match normalized_pragma_token(arg) {
+                                        "vars" => current_state.strict_vars = true,
+                                        "subs" => current_state.strict_subs = true,
+                                        "refs" => current_state.strict_refs = true,
                                         _ => {}
                                     }
                                 }
@@ -373,9 +395,9 @@ impl PragmaTracker {
                             return;
                         }
                         "encoding" => {
-                            current_state.encoding = conditional_args.first().map(|arg| {
-                                arg.trim().trim_matches('\'').trim_matches('"').to_string()
-                            });
+                            current_state.encoding = conditional_args
+                                .first()
+                                .map(|arg| normalized_pragma_token(arg).to_string());
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -384,9 +406,9 @@ impl PragmaTracker {
                         }
                         "locale" => {
                             current_state.locale = true;
-                            current_state.locale_scope = conditional_args.first().map(|arg| {
-                                arg.trim().trim_matches('\'').trim_matches('"').to_string()
-                            });
+                            current_state.locale_scope = conditional_args
+                                .first()
+                                .map(|arg| normalized_pragma_token(arg).to_string());
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),

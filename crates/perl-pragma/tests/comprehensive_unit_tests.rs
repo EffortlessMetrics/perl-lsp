@@ -212,7 +212,7 @@ fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error
 }
 
 #[test]
-fn use_if_version_uses_last_recognized_target() -> Result<(), Box<dyn std::error::Error>> {
+fn use_if_version_target_applies_version_semantics() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("if", &["$]", ">=", "5.034", "v5.40"], 0, 28)]);
     let map = PragmaTracker::build(&ast);
     let state = &map[0].1;
@@ -220,6 +220,32 @@ fn use_if_version_uses_last_recognized_target() -> Result<(), Box<dyn std::error
     assert!(state.strict_vars, "v5.40 should imply strict");
     assert!(state.warnings, "v5.40 should imply warnings");
     assert!(state.has_feature("builtin"), "v5.40 should imply builtin feature bundle");
+    Ok(())
+}
+
+#[test]
+fn use_if_version_condition_does_not_apply_version_semantics()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$]", ">=", "5.036", "Some::Module"], 0, 38)]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 20);
+
+    assert!(!state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(!state.strict_refs);
+    assert!(!state.warnings);
+    assert!(!state.has_feature("builtin"));
+    Ok(())
+}
+
+#[test]
+fn use_if_encoding_targets_encoding_not_argument() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$cond", "encoding", "'utf8'"], 0, 32)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert_eq!(state.encoding.as_deref(), Some("utf8"));
+    assert!(!state.utf8, "encoding pragma should not be mistaken for utf8 pragma");
     Ok(())
 }
 

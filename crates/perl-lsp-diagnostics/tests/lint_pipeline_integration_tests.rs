@@ -237,6 +237,23 @@ fn lint_pipeline_use_if_warnings_suppresses_pl101() {
     );
 }
 
+#[test]
+fn lint_pipeline_use_if_nonpragma_version_condition_still_emits_missing_pragmas() {
+    let source = "use if $] >= 5.036, 'Some::Module';\nmy $x = 42;\nprint $x;\n";
+    let diags = diagnostics_for(source);
+
+    let missing_strict: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL100")).collect();
+    let missing_warnings: Vec<_> =
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL101")).collect();
+
+    assert!(!missing_strict.is_empty(), "non-pragma conditional use-if should not suppress PL100");
+    assert!(
+        !missing_warnings.is_empty(),
+        "non-pragma conditional use-if should not suppress PL101"
+    );
+}
+
 // =========================================================================
 // 10. use strict inside non-BEGIN phase block (INIT) suppresses PL100 (#2360)
 // =========================================================================
@@ -304,7 +321,7 @@ fn lint_pipeline_eval_error_flow_emits_pl407() {
 }
 
 // =========================================================================
-// 12. Security lint: global SIG handlers fire through the full pipeline
+// 13. Security lint: global SIG handlers fire through the full pipeline
 // =========================================================================
 
 #[test]
