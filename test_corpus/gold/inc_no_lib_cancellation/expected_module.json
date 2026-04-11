@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "fixture": "inc_no_lib_cancellation",
+  "resolution_mode": "no_lib_cancellation",
+  "assertions": [
+    {
+      "kind": "not_resolved",
+      "module": "GoneModule",
+      "use_line": 4,
+      "use_col": 4,
+      "consumers": ["diagnostic_pl701_fires", "goto_definition_empty", "hover_not_resolved"],
+      "rationale": "'no lib' at line 3 cancels the 'use lib' at line 2; GoneModule must not resolve from any consumer even though lib/GoneModule.pm exists on disk"
+    }
+  ]
+}

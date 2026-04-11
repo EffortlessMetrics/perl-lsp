@@ -931,6 +931,16 @@ ux-tests-full:
         cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
     @echo "UX tests (full) passed"
 
+# @INC consumer-consistency conformance harness.
+# Verifies that goto-definition, hover, and PL701 diagnostic agree on module resolution
+# across 5 resolution modes: relative includePaths, lexical use lib, no lib cancellation,
+# FindBin-relative, and system @INC (PERL5LIB).
+metrics-inc-conformance:
+    @echo "Running @INC consumer-consistency conformance harness..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-ux-tests --test ux_scenario_14_inc_conformance -- --test-threads=1 --nocapture
+    @echo "@INC conformance harness passed"
+
 # LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
 ci-lsp-bdd:
     @echo "🎭 Running LSP BDD workflow tests..."
