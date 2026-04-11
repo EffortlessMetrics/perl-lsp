@@ -410,6 +410,17 @@ pub struct DiagnosticData {
 ///
 /// The authoritative source is `crates/perl-lsp-code-actions/src/code_actions.rs`.
 fn is_fixable_diagnostic(code: &str) -> bool {
+    if matches!(
+        code,
+        "TestingAndDebugging::RequireUseStrict"
+            | "TestingAndDebugging::RequireUseWarnings"
+            | "InputOutput::ProhibitBarewordFileHandles"
+            | "InputOutput::RequireBriefOpen"
+            | "InputOutput::RequireThreeArgOpen"
+    ) {
+        return true;
+    }
+
     matches!(
         DiagnosticCode::parse_code(code),
         Some(
@@ -586,5 +597,12 @@ mod tests {
         let data = diagnostic.data.as_ref().ok_or("data should be populated")?;
         assert_eq!(data["code"], "PL002");
         Ok(())
+    }
+
+    #[test]
+    fn perlcritic_policy_codes_are_marked_fixable_in_diagnostic_data() {
+        assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseStrict"));
+        assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
+        assert!(is_fixable_diagnostic("InputOutput::RequireThreeArgOpen"));
     }
 }

@@ -169,7 +169,7 @@ fn test_b_no_subprocess_invocation_when_perlcritic_disabled() {
 // ── Test C ────────────────────────────────────────────────────────────────────
 
 /// When the `perlcritic` binary is absent from PATH, diagnostics are empty and
-/// no error is surfaced.
+/// no file-local perlcritic diagnostics are emitted.
 ///
 /// This test is skipped when perlcritic *is* installed because there is no
 /// portable way to temporarily hide a binary from PATH in a single test.
@@ -209,6 +209,45 @@ fn test_c_graceful_skip_when_perlcritic_not_installed() {
         runtime.invocations().len(),
         0,
         "Mock runtime must not be called when perlcritic binary is absent"
+    );
+}
+
+#[test]
+fn test_c1_missing_configured_profile_skips_subprocess_and_file_diagnostics() {
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().to_path_buf();
+    let module_path = root.join("MyModule.pm");
+    std::fs::write(&module_path, "package MyModule;\n1;\n").expect("write MyModule.pm");
+
+    let missing_profile = root.join("does-not-exist.perlcriticrc");
+
+    let server = LspServer::new();
+    server.test_set_root_path(root);
+    server.test_configure_perlcritic(true, 3, Some(missing_profile.to_string_lossy().to_string()));
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(
+        b"MyModule.pm:2:1:3:Custom::ExternalOnly:only-from-external-runtime\n"
+            .to_vec(),
+    ));
+    server.test_install_mock_critic_runtime(runtime.clone());
+    server.test_bypass_perlcritic_command_check();
+
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    let result = pull_diagnostics(&server, &uri, "package MyModule;\n1;\n");
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+    let external_mock_diag = diags.iter().find(|d| d["code"].as_str() == Some("Custom::ExternalOnly"));
+
+    assert!(
+        external_mock_diag.is_none(),
+        "No external perlcritic diagnostics expected when configured profile path is missing; got: {result}"
+    );
+    assert_eq!(
+        runtime.invocations().len(),
+        0,
+        "perlcritic subprocess must not run when configured profile is missing"
     );
 }
 

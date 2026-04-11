@@ -392,8 +392,10 @@ Controls optional Perl::Critic static analysis integration.
 | Default | `false` |
 
 **Opt-in.** When `true`, the server runs `perlcritic` on open documents and
-merges violations into the diagnostic stream. Silently skipped if `perlcritic`
-is not installed on the system.
+merges violations into the diagnostic stream.
+
+If `perlcritic` is missing from `PATH`, the server emits a workspace warning and
+skips file-local Perl::Critic diagnostics until the tool is available.
 
 #### `perl.perlcritic.severity`
 
@@ -416,6 +418,9 @@ valid range. Equivalent to `perlcritic --severity N`.
 Path to a `.perlcriticrc` profile file. When set, passes `--profile=<path>` to
 perlcritic. When absent, perlcritic's standard auto-discovery looks for
 `.perlcriticrc` in the workspace root.
+
+If a configured profile path does not exist, the server emits a workspace
+warning and skips file-local Perl::Critic diagnostics until the path is fixed.
 
 ```json
 {

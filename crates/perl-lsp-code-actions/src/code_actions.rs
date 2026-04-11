@@ -130,8 +130,16 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::MissingStrict.as_str() => {
                         actions.extend(quick_fixes::add_use_strict());
                     }
+                    // Perl::Critic policy alias for missing `use strict`.
+                    "TestingAndDebugging::RequireUseStrict" => {
+                        actions.extend(quick_fixes::add_use_strict());
+                    }
                     // PL101: Missing use warnings
                     c if c == DiagnosticCode::MissingWarnings.as_str() => {
+                        actions.extend(quick_fixes::add_use_warnings());
+                    }
+                    // Perl::Critic policy alias for missing `use warnings`.
+                    "TestingAndDebugging::RequireUseWarnings" => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
                     // PL500: Deprecated defined()
@@ -417,12 +425,30 @@ mod tests {
 
     #[test]
     fn test_perlcritic_policy_aliases_produce_quick_fixes() {
-        let source = "open FH, $path;\n";
+        let source = "print 'x';\nopen FH, $path;\n";
         let mut parser = Parser::new(source);
         let ast = must(parser.parse());
         let diagnostics = vec![
             Diagnostic {
-                range: (0, 4),
+                range: (0, 5),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseStrict".to_string()),
+                message: "Code does not use strict".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, 5),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("TestingAndDebugging::RequireUseWarnings".to_string()),
+                message: "Code does not use warnings".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (11, 15),
                 severity: DiagnosticSeverity::Warning,
                 code: Some("InputOutput::ProhibitBarewordFileHandles".to_string()),
                 message: "Bareword filehandle 'FH'".to_string(),
@@ -431,7 +457,7 @@ mod tests {
                 tags: Vec::new(),
             },
             Diagnostic {
-                range: (0, 4),
+                range: (11, 15),
                 severity: DiagnosticSeverity::Warning,
                 code: Some("InputOutput::RequireThreeArgOpen".to_string()),
                 message: "Use 3-arg open".to_string(),
@@ -443,6 +469,8 @@ mod tests {
 
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+        assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
+        assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
         assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
         assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
     }

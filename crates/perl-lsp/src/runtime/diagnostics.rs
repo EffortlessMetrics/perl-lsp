@@ -892,37 +892,7 @@ impl LspServer {
         match result {
             Some(Ok(violations)) => {
                 for v in violations {
-                    // Map Perl::Critic severity (1-5) to LSP DiagnosticSeverity:
-                    // 5 -> Error, 4/3 -> Warning, 2 -> Information, 1 -> Hint
-                    let internal_severity = match v.severity {
-                        crate::perl_critic::Severity::Gentle => InternalDiagnosticSeverity::Error,
-                        crate::perl_critic::Severity::Stern
-                        | crate::perl_critic::Severity::Harsh => {
-                            InternalDiagnosticSeverity::Warning
-                        }
-                        crate::perl_critic::Severity::Cruel => {
-                            InternalDiagnosticSeverity::Information
-                        }
-                        crate::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
-                    };
-
-                    // Convert 0-indexed line/column from CriticAnalyzer to byte offsets.
-                    let line_0 = v.range.start.line;
-                    let col_0 = v.range.start.column;
-                    let start_byte = position_to_offset(doc_text, line_0, col_0).unwrap_or(0);
-                    let end_byte =
-                        position_to_offset(doc_text, v.range.end.line, v.range.end.column)
-                            .unwrap_or(start_byte.saturating_add(1));
-
-                    diagnostics.push(InternalDiagnostic {
-                        range: (start_byte, end_byte),
-                        severity: internal_severity,
-                        code: Some(v.policy),
-                        message: v.description,
-                        related_information: Vec::new(),
-                        tags: Vec::new(),
-                        suggestion: None,
-                    });
+                    diagnostics.push(perlcritic_violation_to_diagnostic(&v, doc_text));
                 }
             }
             Some(Err(e)) => {
@@ -960,6 +930,17 @@ impl LspServer {
 /// Mirrors the list in `crates/perl-lsp/src/features/diagnostics/pull.rs`.
 /// The authoritative source is `crates/perl-lsp-code-actions/src/code_actions.rs`.
 fn is_fixable_diagnostic(code: &str) -> bool {
+    if matches!(
+        code,
+        "TestingAndDebugging::RequireUseStrict"
+            | "TestingAndDebugging::RequireUseWarnings"
+            | "InputOutput::ProhibitBarewordFileHandles"
+            | "InputOutput::RequireBriefOpen"
+            | "InputOutput::RequireThreeArgOpen"
+    ) {
+        return true;
+    }
+
     matches!(
         DiagnosticCode::parse_code(code),
         Some(
@@ -984,6 +965,41 @@ fn is_fixable_diagnostic(code: &str) -> bool {
                 | DiagnosticCode::MissingReturn
         )
     )
+}
+
+/// Convert an external Perl::Critic violation to an internal diagnostic.
+fn perlcritic_violation_to_diagnostic(
+    violation: &crate::perl_critic::Violation,
+    doc_text: &str,
+) -> InternalDiagnostic {
+    // Map Perl::Critic severity (1-5) to LSP DiagnosticSeverity:
+    // 5 -> Error, 4/3 -> Warning, 2 -> Information, 1 -> Hint
+    let internal_severity = match violation.severity {
+        crate::perl_critic::Severity::Gentle => InternalDiagnosticSeverity::Error,
+        crate::perl_critic::Severity::Stern | crate::perl_critic::Severity::Harsh => {
+            InternalDiagnosticSeverity::Warning
+        }
+        crate::perl_critic::Severity::Cruel => InternalDiagnosticSeverity::Information,
+        crate::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
+    };
+
+    // Convert 0-indexed line/column from CriticAnalyzer to byte offsets.
+    let line_0 = violation.range.start.line;
+    let col_0 = violation.range.start.column;
+    let start_byte = position_to_offset(doc_text, line_0, col_0).unwrap_or(0);
+    let end_byte =
+        position_to_offset(doc_text, violation.range.end.line, violation.range.end.column)
+            .unwrap_or(start_byte.saturating_add(1));
+
+    InternalDiagnostic {
+        range: (start_byte, end_byte),
+        severity: internal_severity,
+        code: Some(violation.policy.clone()),
+        message: violation.description.clone(),
+        related_information: Vec::new(),
+        tags: Vec::new(),
+        suggestion: None,
+    }
 }
 
 /// Convert a built-in analyzer violation to an internal diagnostic.
@@ -1030,5 +1046,31 @@ mod tests {
         let diagnostic = builtin_violation_to_diagnostic(&violation);
         assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Error);
         assert_eq!(diagnostic.code.as_deref(), Some("GentlePolicy"));
+    }
+
+    #[test]
+    fn perlcritic_violation_maps_brutal_to_hint_with_policy_code() {
+        let violation = crate::perl_critic::Violation {
+            policy: "InputOutput::ProhibitBarewordFileHandles".to_string(),
+            description: "Bareword filehandle 'FH'".to_string(),
+            explanation: String::new(),
+            severity: crate::perl_critic::Severity::Brutal,
+            range: perl_parser::position::Range {
+                start: perl_parser::position::Position { byte: 0, line: 0, column: 0 },
+                end: perl_parser::position::Position { byte: 2, line: 0, column: 2 },
+            },
+            file: "test.pl".to_string(),
+        };
+
+        let diagnostic = perlcritic_violation_to_diagnostic(&violation, "FH\n");
+        assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Hint);
+        assert_eq!(diagnostic.code.as_deref(), Some("InputOutput::ProhibitBarewordFileHandles"));
+    }
+
+    #[test]
+    fn perlcritic_policy_codes_are_marked_fixable() {
+        assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseStrict"));
+        assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
+        assert!(is_fixable_diagnostic("InputOutput::RequireBriefOpen"));
     }
 }
