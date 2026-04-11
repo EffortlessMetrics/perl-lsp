@@ -1688,4 +1688,78 @@ mod tests {
         let adapter = DebugAdapter::new();
         assert!(!adapter.send_interrupt_signal(999_999));
     }
+
+    // ── context_re unit tests ─────────────────────────────────────────────────
+
+    /// Helper: apply context_re to `line` and return (file, line_num) if matched.
+    fn apply_context_re(line: &str) -> Option<(String, String)> {
+        let re = context_re()?;
+        let caps = re.captures(line)?;
+        let file = caps
+            .name("file")
+            .or_else(|| caps.name("file2"))
+            .map(|m| m.as_str().to_string())?;
+        let line_num = caps
+            .name("line")
+            .or_else(|| caps.name("line2"))
+            .map(|m| m.as_str().to_string())?;
+        Some((file, line_num))
+    }
+
+    #[test]
+    fn test_context_re_unix_path() {
+        let result = apply_context_re("main::(/path/to/file.pl:42):");
+        assert_eq!(result, Some(("/path/to/file.pl".to_string(), "42".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_windows_drive_letter_backslash() {
+        // Windows drive-letter path: colon followed by backslash must be captured
+        // as part of the file path, not treated as a line-number separator.
+        let result = apply_context_re(r"main::(C:\Users\name\file.pl:42):");
+        assert_eq!(result, Some((r"C:\Users\name\file.pl".to_string(), "42".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_windows_drive_letter_forward_slash() {
+        // Forward-slash Windows path from Git Bash / cross-platform tools.
+        let result = apply_context_re("main::(C:/Users/file.pl:7):");
+        assert_eq!(result, Some(("C:/Users/file.pl".to_string(), "7".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_unc_path() {
+        // UNC path (Windows network share).
+        let result = apply_context_re(r"main::(\\server\share\file.pl:5):");
+        assert_eq!(result, Some((r"\\server\share\file.pl".to_string(), "5".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_named_function() {
+        // Func::Name context line.
+        let result = apply_context_re("Foo::Bar::(/path/script.pl:10):");
+        assert_eq!(result, Some(("/path/script.pl".to_string(), "10".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_windows_path_named_function() {
+        // Func::Name context line with Windows path.
+        let result = apply_context_re(r"Foo::Bar::(C:\path\script.pl:10):");
+        assert_eq!(result, Some((r"C:\path\script.pl".to_string(), "10".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_no_match_path_with_spaces() {
+        // Paths with spaces do not match — the character class excludes \s.
+        let result = apply_context_re("main::(/path with spaces/file.pl:5):");
+        assert!(result.is_none(), "paths with spaces should not match");
+    }
+
+    #[test]
+    fn test_context_re_colon_digit_is_line_separator() {
+        // Colon followed by digit is the line-number separator, not a path component.
+        // "/path/file.pl:42" should yield file="/path/file.pl", line="42".
+        let result = apply_context_re("main::(/path/file.pl:42):");
+        assert_eq!(result, Some(("/path/file.pl".to_string(), "42".to_string())));
+    }
 }
