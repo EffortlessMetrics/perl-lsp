@@ -392,8 +392,9 @@ Controls optional Perl::Critic static analysis integration.
 | Default | `false` |
 
 **Opt-in.** When `true`, the server runs `perlcritic` on open documents and
-merges violations into the diagnostic stream. Silently skipped if `perlcritic`
-is not installed on the system.
+merges violations into the diagnostic stream. If `perlcritic` is missing,
+profile resolution fails, or the command execution fails, the server emits a
+workspace warning instead of silently skipping.
 
 #### `perl.perlcritic.severity`
 

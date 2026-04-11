@@ -313,3 +313,41 @@ fn test_e_empty_profile_falls_back_to_walkup_config() {
         invocations[0].args
     );
 }
+
+#[test]
+fn test_f_missing_configured_profile_skips_subprocess_and_diagnostics() {
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().to_path_buf();
+    let missing_profile = root.join("missing.perlcriticrc");
+    let module_path = root.join("NoProfile.pm");
+    std::fs::write(&module_path, "package NoProfile;\n1;\n").expect("write module");
+
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 3, Some(missing_profile.to_string_lossy().to_string()));
+    server.test_set_root_path(root);
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+    server.test_bypass_perlcritic_command_check();
+
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    let result = pull_diagnostics(&server, &uri, "package NoProfile;\n1;\n");
+
+    let diags = result["items"].as_array().cloned().unwrap_or_default();
+    let critic_diags: Vec<_> = diags
+        .iter()
+        .filter(|d| d["code"].as_str().is_some_and(|code| code.contains("::")))
+        .collect();
+    assert!(
+        critic_diags.is_empty(),
+        "no perlcritic diagnostics expected when profile path is invalid; got: {result}"
+    );
+    assert_eq!(
+        runtime.invocations().len(),
+        0,
+        "subprocess should not run when configured profile path does not exist"
+    );
+}
