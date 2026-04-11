@@ -152,6 +152,9 @@ The project tracks a few distinct metrics that are easy to conflate. Each one sc
 | Parser corpus — CPAN top 1000 | 95.3% (8931 / 9372) | File-level clean parse rate: share of files the parser processes without recording errors | Semantic fidelity of the AST, cross-file analysis, or any LSP-level correctness |
 | Parser corpus — Ubuntu system Perl | 97.1% (6890 / 7095) | Same, against the Ubuntu system-installed Perl compatibility baseline | Same |
 | Parser corpus — project corpus | 100.0% (91 / 91) | Deterministic regression baseline that must stay clean | Same |
+| End-to-end UX confidence | *qualitative* | Currently covered by manual editor smoke workflows and open-issue burn-down — not a published number | Anything about parser breadth, protocol catalog size, or capability count |
+
+The last row is the important one: *none* of the automated metrics above measure whether a real editing session feels good. That's validated through workflow smoke tests and the list of known gaps below, not by a dashboard.
 
 Live numbers live in [docs/project/status/parser.md](docs/project/status/parser.md); this table may lag a merge cycle.
 
@@ -162,7 +165,7 @@ In-flight structural work for the v0.13.0 alpha. None of these block basic use, 
 - **Parser error recovery while typing** — incomplete `sub`/`if`/`while` blocks and unclosed delimiters cascade into spurious errors; scope visibility is limited after an error node ([#3496](https://github.com/EffortlessMetrics/perl-lsp/issues/3496), [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499))
 - **Symbol visibility across imports and inheritance** — parent-class methods (`@ISA` / `use parent` / `use base`), dynamic `require` and `Module->import`, tag imports (`POSIX :tag`), and `use constant` aren't fully resolved by the workspace index ([#3482](https://github.com/EffortlessMetrics/perl-lsp/issues/3482), [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472), [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475), [#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476))
 - **Pragma tracker** — conditional pragmas (`use if CONDITION, PRAGMA`), dynamic pragmas inside `eval STRING`, and `use feature 'switch'` don't yet flow into diagnostics ([#3485](https://github.com/EffortlessMetrics/perl-lsp/issues/3485), [#3489](https://github.com/EffortlessMetrics/perl-lsp/issues/3489), [#3398](https://github.com/EffortlessMetrics/perl-lsp/issues/3398))
-- **Marketplace demo assets** — GIFs and screenshots for the v0.13.0 listing are not yet recorded ([#3302](https://github.com/EffortlessMetrics/perl-lsp/issues/3302))
+- **Workspace / multi-root correctness** — in a multi-root VS Code workspace the server still behaves as "first folder wins" for config loading, indexing, module resolution, and symbol search; `workspace/configuration` isn't implemented yet, so per-folder config and dynamic scoping don't propagate ([#3513](https://github.com/EffortlessMetrics/perl-lsp/issues/3513), [#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
 
 ## Security
 
