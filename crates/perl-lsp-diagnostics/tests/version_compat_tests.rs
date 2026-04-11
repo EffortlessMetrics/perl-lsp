@@ -30,6 +30,13 @@ fn use_node(module: &str) -> Node {
     )
 }
 
+fn use_node_at(module: &str, start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        loc(start, end),
+    )
+}
+
 fn use_feature(feature: &str) -> Node {
     Node::new(
         NodeKind::Use {
@@ -52,6 +59,17 @@ fn use_feature_arg(arg: &str) -> Node {
     )
 }
 
+fn use_feature_arg_at(arg: &str, start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::Use {
+            module: "feature".to_string(),
+            args: vec![arg.to_string()],
+            has_filter_risk: false,
+        },
+        loc(start, end),
+    )
+}
+
 fn no_feature(feature: &str) -> Node {
     Node::new(
         NodeKind::No {
@@ -60,6 +78,17 @@ fn no_feature(feature: &str) -> Node {
             has_filter_risk: false,
         },
         loc(0, 20),
+    )
+}
+
+fn no_feature_at(feature: &str, start: usize, end: usize) -> Node {
+    Node::new(
+        NodeKind::No {
+            module: "feature".to_string(),
+            args: vec![format!("'{}'", feature)],
+            has_filter_risk: false,
+        },
+        loc(start, end),
     )
 }
 
@@ -1138,7 +1167,8 @@ fn test_smartmatch_warns_after_no_feature_switch() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-fn test_smartmatch_warns_after_no_feature_switch_disables_bundle() -> Result<(), Box<dyn std::error::Error>> {
+fn test_smartmatch_warns_after_no_feature_switch_disables_bundle()
+-> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![
         use_node("v5.8"),
         use_feature_arg("':5.10'"),
@@ -1151,6 +1181,46 @@ fn test_smartmatch_warns_after_no_feature_switch_disables_bundle() -> Result<(),
     assert!(
         diagnostics_have_code(&diagnostics, "PL900"),
         "Expected PL900 warning when 'no feature \"switch\"' disables the ':5.10' bundle on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_given_warns_after_no_feature_switch_disables_bundle()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node_at("v5.8", 0, 8),
+        use_feature_arg_at("':5.10'", 9, 18),
+        no_feature_at("switch", 19, 29),
+        issue_3344_given_node(),
+    ]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning when 'no feature \"switch\"' disables the ':5.10' bundle for given/when/default on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_warns_after_no_feature_switch_disables_qw_imports()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node_at("v5.8", 0, 8),
+        use_feature_arg_at("qw(switch say)", 9, 18),
+        no_feature_at("switch", 19, 29),
+        smartmatch_node(),
+    ]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning when 'no feature \"switch\"' disables grouped feature imports for smartmatch on v5.8, got: {:?}",
         diagnostics
     );
     Ok(())
