@@ -189,6 +189,31 @@ fn test_source_length_decrease_correctness() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// Test that an interior edit past the first checkpoint still matches a full parse.
+#[test]
+fn test_interior_edit_past_checkpoint_matches_full_parse() -> Result<(), Box<dyn std::error::Error>>
+{
+    let source = "my $value = 1;\n".repeat(20);
+    let edit = SimpleEdit { start: 125, end: 126, new_text: "9".to_string() };
+
+    let mut expected_source = source.clone();
+    expected_source.replace_range(edit.start..edit.end, &edit.new_text);
+
+    let mut incremental_parser = CheckpointedIncrementalParser::new();
+    incremental_parser.parse(source)?;
+    let incremental_tree = incremental_parser.apply_edit(&edit)?;
+
+    let mut full_parser = CheckpointedIncrementalParser::new();
+    let full_tree = full_parser.parse(expected_source)?;
+
+    assert_eq!(
+        format!("{:?}", incremental_tree),
+        format!("{:?}", full_tree),
+        "incremental parse should match a full parse for edits past the first checkpoint"
+    );
+    Ok(())
+}
+
 // =========================================================================
 // 2. Reuse Behavior Tests
 // =========================================================================
