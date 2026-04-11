@@ -72,6 +72,14 @@ impl LspServer {
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
+                // Check if client supports workspace/configuration reverse requests
+                caps.workspace_configuration_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("workspace"))
+                    .and_then(|w| w.get("configuration"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
+
                 // Check if client supports snippet syntax in completion items
                 caps.snippet_support = params
                     .get("capabilities")
@@ -219,6 +227,10 @@ impl LspServer {
 
         // Load .perl-lsp.toml from workspace root (base layer; LSP config overrides later)
         self.load_and_apply_project_config();
+
+        // Request client-scoped configuration per workspace folder when supported.
+        // This complements `.perl-lsp.toml` with dynamic editor/workspace settings.
+        self.request_workspace_configuration_for_folders();
 
         // Construct the AI inline-completion backend if enabled in config
         self.refresh_ai_backend();

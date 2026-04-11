@@ -563,6 +563,10 @@ impl LspServer {
                     if let Err(e) = self.refresh_controller.refresh_all(self) {
                         tracing::warn!(error = %e, "Failed to refresh client after config change");
                     }
+
+                    // Invalidate dynamic client-scoped config by re-requesting
+                    // per-folder workspace/configuration values.
+                    self.request_workspace_configuration_for_folders();
                 }
             }
         }

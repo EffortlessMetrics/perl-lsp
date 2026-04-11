@@ -282,6 +282,8 @@ pub struct ClientCapabilities {
     pub implementation_link_support: bool,
     /// Supports dynamic registration for file watching
     pub dynamic_registration_support: bool,
+    /// Supports `workspace/configuration` reverse requests (server -> client)
+    pub workspace_configuration_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
     /// Supports markdown message content in diagnostics (LSP 3.18)

@@ -285,3 +285,69 @@ fn test_workspace_configuration_request_contract() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_server_requests_workspace_configuration_on_initialize_when_supported() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "workspace": {
+            "configuration": true
+        }
+    })))?;
+
+    let requests = harness.drain_server_requests(500);
+    let config_request = requests
+        .iter()
+        .find(|req| req.get("method").and_then(|m| m.as_str()) == Some("workspace/configuration"))
+        .ok_or("expected workspace/configuration request from server")?;
+
+    let items = config_request
+        .pointer("/params/items")
+        .and_then(|v| v.as_array())
+        .ok_or("workspace/configuration params.items must be an array")?;
+    assert_eq!(items.len(), 1, "single-root initialize should request one scoped item");
+    assert_eq!(items[0]["scopeUri"], json!("file:///workspace"));
+    assert_eq!(items[0]["section"], json!("perl"));
+
+    Ok(())
+}
+
+#[test]
+fn test_did_change_configuration_re_requests_workspace_configuration() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "workspace": {
+            "configuration": true
+        }
+    })))?;
+
+    // Drain initialize-time request.
+    let _ = harness.drain_server_requests(500);
+
+    harness.notify(
+        "workspace/didChangeConfiguration",
+        json!({
+            "settings": {
+                "perl": {
+                    "workspace": {
+                        "includePaths": ["custom/lib"]
+                    }
+                }
+            }
+        }),
+    );
+
+    let requests = harness.drain_server_requests(500);
+    let config_request = requests
+        .iter()
+        .find(|req| req.get("method").and_then(|m| m.as_str()) == Some("workspace/configuration"))
+        .ok_or("expected workspace/configuration re-request after didChangeConfiguration")?;
+    let items_len = config_request
+        .pointer("/params/items")
+        .and_then(|v| v.as_array())
+        .map(std::vec::Vec::len)
+        .ok_or("workspace/configuration params.items must be an array")?;
+    assert_eq!(items_len, 1);
+
+    Ok(())
+}

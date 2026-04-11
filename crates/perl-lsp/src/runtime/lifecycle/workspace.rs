@@ -3,7 +3,9 @@
 //! Handles workspace folders and root URI/path management.
 
 use super::super::*;
+use lsp_types::ConfigurationItem;
 use perl_lsp_config::WorkspaceConfig;
+use serde_json::json;
 
 impl LspServer {
     /// Set the root path from the root URI during initialization
@@ -74,6 +76,53 @@ impl LspServer {
                 }
             }
         }
+    }
+
+    /// Request `workspace/configuration` for each workspace folder.
+    ///
+    /// This sends a server->client reverse request (when supported by the client)
+    /// so each folder can provide scoped `perl` configuration values.
+    ///
+    /// Current behavior is intentionally non-blocking and fallback-friendly:
+    /// - If unsupported, no request is sent and `.perl-lsp.toml` remains authoritative.
+    /// - If sending fails, the server logs and continues with local config.
+    pub(crate) fn request_workspace_configuration_for_folders(&self) {
+        if !self.client_capabilities.lock().workspace_configuration_support {
+            tracing::debug!(
+                "Client does not advertise workspace.configuration support; skipping reverse request"
+            );
+            return;
+        }
+
+        let folders = self.workspace_folders.lock().clone();
+        if folders.is_empty() {
+            return;
+        }
+
+        let items: Vec<ConfigurationItem> = folders
+            .iter()
+            .map(|folder| ConfigurationItem {
+                scope_uri: folder.uri.parse().ok(),
+                section: Some("perl".to_string()),
+            })
+            .collect();
+
+        let params = json!({ "items": items });
+        let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
+        if let Err(error) = self.outbound.send_request(
+            request_id,
+            perl_lsp_protocol::methods::WORKSPACE_CONFIGURATION,
+            params,
+        ) {
+            tracing::warn!(%error, "Failed to send workspace/configuration request");
+            return;
+        }
+
+        tracing::debug!(
+            request_id,
+            item_count = folders.len(),
+            "Requested per-folder workspace configuration from client"
+        );
     }
 }
 
