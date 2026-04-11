@@ -929,12 +929,39 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(files) = params["files"].as_array() {
+                #[cfg(feature = "workspace")]
+                let deleting_uris: std::collections::HashSet<String> = files
+                    .iter()
+                    .filter_map(|file| file["uri"].as_str().map(ToString::to_string))
+                    .collect();
+
                 for file in files {
                     let Some(uri) = file["uri"].as_str() else {
                         continue;
                     };
 
                     tracing::debug!(uri, "File will be deleted");
+
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        let index = coordinator.index();
+                        let safe_delete_report =
+                            collect_cross_file_delete_references(index, uri, &deleting_uris);
+                        if !safe_delete_report.is_empty() {
+                            let msg = format!(
+                                "Deleting '{}' may break references in {}: {}. \
+                                 Consider renaming/moving instead and applying workspace edits first.",
+                                uri,
+                                safe_delete_report.len(),
+                                safe_delete_report.join(", ")
+                            );
+                            if let Err(e) = self
+                                .show_message(crate::runtime::window::MessageType::Warning, &msg)
+                            {
+                                tracing::debug!(error = %e, "Failed to send safe-delete warning");
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1513,9 +1540,48 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
     file_path_to_module_name(&path)
 }
 
+/// Collect cross-file references that would be impacted by deleting a file.
+///
+/// Returns a list of `"symbol -> uri"` summaries for user-facing warnings.
+#[cfg(feature = "workspace")]
+fn collect_cross_file_delete_references(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+) -> Vec<String> {
+    use std::collections::BTreeSet;
+
+    let mut impacted: BTreeSet<String> = BTreeSet::new();
+    let module_name = path_to_module_name(uri);
+
+    if !module_name.is_empty() {
+        for dependent_uri in index.find_dependents(&module_name) {
+            if dependent_uri != uri && !deleting_uris.contains(&dependent_uri) {
+                impacted.insert(format!("{module_name} -> {dependent_uri}"));
+            }
+        }
+    }
+
+    for symbol in index.file_symbols(uri) {
+        let symbol_name = symbol.qualified_name.unwrap_or(symbol.name);
+        if symbol_name.is_empty() {
+            continue;
+        }
+        for reference in index.find_references(&symbol_name) {
+            if reference.uri != uri && !deleting_uris.contains(&reference.uri) {
+                impacted.insert(format!("{symbol_name} -> {}", reference.uri));
+            }
+        }
+    }
+
+    impacted.into_iter().take(12).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::module_name_appears_in_text;
+    #[cfg(feature = "workspace")]
+    use super::{collect_cross_file_delete_references, path_to_module_name};
 
     #[test]
     fn test_module_name_appears_exact_match() {
@@ -1555,5 +1621,49 @@ mod tests {
     #[test]
     fn test_module_name_empty_returns_false() {
         assert!(!module_name_appears_in_text("anything", ""));
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn safe_delete_report_includes_dependents() -> Result<(), Box<dyn std::error::Error>> {
+        use std::collections::HashSet;
+        use url::Url;
+
+        let index = perl_parser::workspace_index::WorkspaceIndex::new();
+        let module_uri = "file:///workspace/lib/Old.pm";
+        let dependent_uri = "file:///workspace/bin/main.pl";
+
+        index
+            .index_file(Url::parse(module_uri)?, "package Old;\nsub run { 1 }\n1;\n".to_string())?;
+        index.index_file(Url::parse(dependent_uri)?, "use Old;\nOld::run();\n".to_string())?;
+
+        let report = collect_cross_file_delete_references(&index, module_uri, &HashSet::new());
+        let module_name = path_to_module_name(module_uri);
+        assert!(
+            report.iter().any(|entry| entry.starts_with(&format!("{module_name} -> "))),
+            "expected dependent entry for module in report: {report:?}"
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn safe_delete_report_ignores_files_deleted_together() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use std::collections::HashSet;
+        use url::Url;
+
+        let index = perl_parser::workspace_index::WorkspaceIndex::new();
+        let module_uri = "file:///workspace/lib/Old.pm";
+        let dependent_uri = "file:///workspace/bin/main.pl";
+
+        index
+            .index_file(Url::parse(module_uri)?, "package Old;\nsub run { 1 }\n1;\n".to_string())?;
+        index.index_file(Url::parse(dependent_uri)?, "use Old;\nOld::run();\n".to_string())?;
+
+        let deleting = HashSet::from([dependent_uri.to_string(), module_uri.to_string()]);
+        let report = collect_cross_file_delete_references(&index, module_uri, &deleting);
+        assert!(report.is_empty(), "expected no warnings when both files are deleted together");
+        Ok(())
     }
 }
