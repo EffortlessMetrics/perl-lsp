@@ -14,7 +14,7 @@
 
 ## TL;DR
 
-A plausible-sounding PR claimed `BEGIN { use strict; }` propagates strict file-wide "per perlmod/perlop," wired `PragmaTracker` to match, passed through scout, build, first-pass review, and deep review, got `reviewed-deep`, got `merge-ready`, and was cleared for the ops queue. A research-verifier dispatched in parallel ran `perl -e 'BEGIN { use strict; } $x = 1; print "ok\n"'`, got `ok`, and proved the premise wrong in a single invocation. The PR was stopped ~9 minutes before ops would have picked it up. The correct fix (revert + invert the tests) landed in [#4108](https://github.com/EffortlessMetrics/perl-lsp/pull/4108) at 11:39 UTC, ~35 minutes after the catch. This is a clean example of a **multi-reviewer shared blind spot** being broken by **reference-implementation verification** — the only class of check that could have caught it.
+A plausible-sounding PR claimed `BEGIN { use strict; }` propagates strict file-wide "per perlmod/perlop," wired `PragmaTracker` to match, passed through scout, build, first-pass review, and deep review, got `reviewed-deep`, got `merge-ready`, and was cleared for the ops queue. A research-verifier dispatched in parallel ran `perl -e 'BEGIN { use strict; } $x = 1; print "ok\n"'`, got `ok`, and proved the premise wrong in a single invocation. The PR was stopped ~9 minutes before ops would have picked it up. The correct fix (revert + invert the tests) landed in [#4108](https://github.com/EffortlessMetrics/perl-lsp/pull/4108) at 11:39 UTC, ~38 minutes after the catch. This is a clean example of a **multi-reviewer shared blind spot** being broken by **reference-implementation verification** — the only class of check that could have caught it.
 
 ---
 
