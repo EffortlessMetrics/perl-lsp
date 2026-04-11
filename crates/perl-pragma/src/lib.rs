@@ -832,6 +832,22 @@ impl PragmaTracker {
             NodeKind::Package { block: Some(pkg_block), .. } => {
                 Self::build_scoped_body(pkg_block, current_state, ranges);
             }
+            // Phase blocks (BEGIN/END/INIT/CHECK/UNITCHECK) share compile-time
+            // scope with the enclosing file.  Per Perl semantics (perlmod,
+            // perlop), pragmas declared inside a phase block propagate outward
+            // to the surrounding compilation unit.  We bypass the inner
+            // `Block` node's save/restore semantics by walking its statements
+            // directly, so pragmas escape into the surrounding scope.
+            NodeKind::PhaseBlock { block, .. } => {
+                if let NodeKind::Block { statements } = &block.kind {
+                    for stmt in statements {
+                        Self::build_ranges(stmt, current_state, ranges);
+                    }
+                } else {
+                    // Fallback: recurse normally (non-Block inner node is unusual)
+                    Self::build_ranges(block, current_state, ranges);
+                }
+            }
             // Other node types don't contain use/no statements
             _ => {}
         }

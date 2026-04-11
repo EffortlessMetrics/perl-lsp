@@ -48,6 +48,17 @@ fn package_block(name: &str, body: Node, start: usize, end: usize) -> Node {
     }
 }
 
+fn phase_block(phase: &str, inner_block: Node, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::PhaseBlock {
+            phase: phase.to_string(),
+            phase_span: None,
+            block: Box::new(inner_block),
+        },
+        location: loc(start, end),
+    }
+}
+
 fn program(stmts: Vec<Node>) -> Node {
     let end = stmts.last().map_or(0, |n| n.location.end);
     Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
@@ -171,4 +182,121 @@ fn given_package_block_with_inner_no_strict_when_execution_continues_then_outer_
     let after_package = PragmaTracker::state_for_offset(&map, 50);
     assert!(after_package.strict_subs);
     assert!(after_package.warnings);
+}
+
+// ---------------------------------------------------------------------------
+// Phase block (BEGIN/END/INIT/CHECK/UNITCHECK) pragma propagation
+// ---------------------------------------------------------------------------
+//
+// Per Perl semantics (perlmod, perlop): all phase blocks execute at compile
+// time with respect to pragma state.  Pragmas declared inside a phase block
+// propagate to the surrounding file scope — they are NOT lexically scoped like
+// a regular subroutine body.
+
+#[test]
+fn given_begin_block_with_use_strict_when_querying_after_block_then_strict_is_active() {
+    // BEGIN { use strict; }
+    // <code at offset 40>
+    let ast = program(vec![phase_block(
+        "BEGIN",
+        block(vec![use_node("strict", &[], 10, 22)], 8, 24),
+        0,
+        25,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    // Strict should be active after the BEGIN block
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.strict_vars, "strict_vars should propagate out of BEGIN block");
+    assert!(state.strict_subs, "strict_subs should propagate out of BEGIN block");
+    assert!(state.strict_refs, "strict_refs should propagate out of BEGIN block");
+}
+
+#[test]
+fn given_end_block_with_use_strict_when_querying_after_block_then_strict_is_active() {
+    // END { use strict; }
+    // <code at offset 40>
+    let ast = program(vec![phase_block(
+        "END",
+        block(vec![use_node("strict", &[], 8, 20)], 6, 22),
+        0,
+        23,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    // Pragmas in END blocks share compile-time scope with the surrounding file
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.strict_vars, "strict_vars should propagate out of END block");
+    assert!(state.strict_subs, "strict_subs should propagate out of END block");
+    assert!(state.strict_refs, "strict_refs should propagate out of END block");
+}
+
+#[test]
+fn given_init_block_with_use_strict_when_querying_after_block_then_strict_is_active() {
+    // INIT { use strict; }
+    // <code at offset 40>
+    let ast = program(vec![phase_block(
+        "INIT",
+        block(vec![use_node("strict", &[], 9, 21)], 7, 23),
+        0,
+        24,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.strict_vars, "strict_vars should propagate out of INIT block");
+    assert!(state.strict_subs, "strict_subs should propagate out of INIT block");
+    assert!(state.strict_refs, "strict_refs should propagate out of INIT block");
+}
+
+#[test]
+fn given_check_block_with_use_strict_when_querying_after_block_then_strict_is_active() {
+    // CHECK { use strict; }
+    // <code at offset 40>
+    let ast = program(vec![phase_block(
+        "CHECK",
+        block(vec![use_node("strict", &[], 10, 22)], 8, 24),
+        0,
+        25,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.strict_vars, "strict_vars should propagate out of CHECK block");
+    assert!(state.strict_subs, "strict_subs should propagate out of CHECK block");
+    assert!(state.strict_refs, "strict_refs should propagate out of CHECK block");
+}
+
+#[test]
+fn given_unitcheck_block_with_use_strict_when_querying_after_block_then_strict_is_active() {
+    // UNITCHECK { use strict; }
+    // <code at offset 40>
+    let ast = program(vec![phase_block(
+        "UNITCHECK",
+        block(vec![use_node("strict", &[], 14, 26)], 12, 28),
+        0,
+        29,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.strict_vars, "strict_vars should propagate out of UNITCHECK block");
+    assert!(state.strict_subs, "strict_subs should propagate out of UNITCHECK block");
+    assert!(state.strict_refs, "strict_refs should propagate out of UNITCHECK block");
+}
+
+#[test]
+fn given_begin_block_with_use_warnings_when_querying_after_block_then_warnings_is_active() {
+    // BEGIN { use warnings; }
+    // <code at offset 40>
+    let ast = program(vec![phase_block(
+        "BEGIN",
+        block(vec![use_node("warnings", &[], 10, 24)], 8, 26),
+        0,
+        27,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.warnings, "warnings should propagate out of BEGIN block");
 }
