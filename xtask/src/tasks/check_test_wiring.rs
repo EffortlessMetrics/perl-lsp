@@ -221,9 +221,17 @@ fn test_candidate_files(dir: &Path) -> Vec<PathBuf> {
         .filter(|entry| entry.file_type().is_file())
         .map(|entry| entry.into_path())
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
+        .filter(|path| !should_ignore_candidate(path))
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
+}
+
+fn should_ignore_candidate(path: &Path) -> bool {
+    let path_str = path.to_string_lossy();
+
+    path.components().any(|component| component.as_os_str() == "fixtures")
+        || path_str.contains("/src/gen/")
 }
 
 fn reachable_files(roots: &[PathBuf]) -> Result<HashSet<PathBuf>> {
@@ -445,5 +453,41 @@ fn direct_root() {}
 
         let report = scan(root).unwrap();
         assert!(report.offenders.is_empty(), "{:#?}", report.offenders);
+    }
+
+    #[test]
+    fn ignores_fixture_and_generated_candidates() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+
+        write(
+            root,
+            "src/real.rs",
+            r#"
+#[test]
+fn real_test() {}
+"#,
+        );
+        write(
+            root,
+            "src/fixtures/fixture_case.rs",
+            r#"
+#[test]
+fn fixture_test() {}
+"#,
+        );
+        write(
+            root,
+            "src/gen/generated_case.rs",
+            r#"
+#[test]
+fn generated_test() {}
+"#,
+        );
+
+        let candidates = test_candidate_files(&root.join("src"));
+
+        assert_eq!(candidates.len(), 1);
+        assert!(candidates[0].ends_with("src/real.rs"));
     }
 }
