@@ -41,6 +41,28 @@ fn use_feature(feature: &str) -> Node {
     )
 }
 
+fn use_feature_arg(arg: &str) -> Node {
+    Node::new(
+        NodeKind::Use {
+            module: "feature".to_string(),
+            args: vec![arg.to_string()],
+            has_filter_risk: false,
+        },
+        loc(0, 20),
+    )
+}
+
+fn no_feature(feature: &str) -> Node {
+    Node::new(
+        NodeKind::No {
+            module: "feature".to_string(),
+            args: vec![format!("'{}'", feature)],
+            has_filter_risk: false,
+        },
+        loc(0, 20),
+    )
+}
+
 fn class_node(name: &str) -> Node {
     Node::new(
         NodeKind::Class { name: name.to_string(), parents: vec![], body: Box::new(block(vec![])) },
@@ -974,6 +996,21 @@ fn test_given_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+#[test]
+fn test_given_ok_with_use_feature_qw_switch() -> Result<(), Box<dyn std::error::Error>> {
+    let ast =
+        program(vec![use_node("v5.8"), use_feature_arg("qw(switch say)"), issue_3344_given_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning when 'use feature qw(switch say)' is present on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Tests for smartmatch (`~~`) (#3396)
 // ---------------------------------------------------------------------------
@@ -1067,6 +1104,34 @@ fn test_smartmatch_ok_with_use_feature_switch() -> Result<(), Box<dyn std::error
     assert!(
         no_compat_warnings(&diagnostics),
         "Expected no PL900 warning when 'use feature \\'switch\\'' is present on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_ok_with_use_feature_bundle_5_10() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.8"), use_feature_arg("':5.10'"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        no_compat_warnings(&diagnostics),
+        "Expected no PL900 warning when 'use feature \":5.10\"' is present on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_warns_after_no_feature_switch() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.10"), no_feature("switch"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning when 'no feature \"switch\"' disables smartmatch on v5.10, got: {:?}",
         diagnostics
     );
     Ok(())

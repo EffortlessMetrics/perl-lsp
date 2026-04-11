@@ -50,12 +50,10 @@ pub struct PragmaState {
     /// and the disabled categories are recorded here.  Only bare `no warnings`
     /// (no arguments) clears the global `warnings` flag.
     pub disabled_warning_categories: Vec<String>,
-    /// Language features implicitly enabled by a `use vX.Y` version declaration.
+    /// Effective language features enabled in the current lexical scope.
     ///
-    /// Populated by [`features_enabled_by_version`] when a version pragma is
-    /// encountered. Entries are static string slices from the known feature
-    /// table. `use feature` declarations are **not** tracked here — only
-    /// version-bundle implications.
+    /// This starts with any features implied by `use vX.Y` declarations and is
+    /// then updated by explicit `use feature` / `no feature` pragmas.
     pub features: Vec<&'static str>,
     /// Lexically imported builtin short names from `use builtin`.
     pub builtin_imports: Vec<String>,
@@ -94,10 +92,7 @@ impl PragmaState {
         self.warnings && !self.disabled_warning_categories.iter().any(|c| c == category)
     }
 
-    /// Returns `true` if the given feature name is in the version-implied feature set.
-    ///
-    /// This only reflects features implied by `use vX.Y` version declarations.
-    /// Explicit `use feature 'X'` calls are not tracked here.
+    /// Returns `true` if the given feature name is currently enabled.
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {
         self.features.contains(&feature)
@@ -165,8 +160,8 @@ pub fn features_enabled_by_version(version: PerlVersion) -> Vec<&'static str> {
         features.extend_from_slice(&["say", "state", "switch"]);
     }
 
-    // v5.14 bundle adds: unicode_strings
-    if version >= PerlVersion::new(5, 14) {
+    // v5.12 bundle adds: unicode_strings
+    if version >= PerlVersion::new(5, 12) {
         features.push("unicode_strings");
     }
 
@@ -217,6 +212,95 @@ fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVers
     // Populate the version-implied feature set.
     // Replace (not merge) so the highest `use vX.Y` wins if multiple appear.
     state.features = features_enabled_by_version(version);
+    state.unicode_strings = state.has_feature("unicode_strings");
+}
+
+fn feature_items(arg: &str) -> Vec<String> {
+    pragma_arg_items(arg)
+}
+
+fn known_feature_name(name: &str) -> Option<&'static str> {
+    match name {
+        "say" => Some("say"),
+        "state" => Some("state"),
+        "switch" => Some("switch"),
+        "unicode_strings" => Some("unicode_strings"),
+        "unicode_eval" => Some("unicode_eval"),
+        "evalbytes" => Some("evalbytes"),
+        "current_sub" => Some("current_sub"),
+        "fc" => Some("fc"),
+        "postfix_deref" => Some("postfix_deref"),
+        "try" => Some("try"),
+        "signatures" => Some("signatures"),
+        "defer" => Some("defer"),
+        "isa" => Some("isa"),
+        "class" => Some("class"),
+        "field" => Some("field"),
+        "method" => Some("method"),
+        "builtin" => Some("builtin"),
+        _ => None,
+    }
+}
+
+fn enable_feature_name(state: &mut PragmaState, name: &str) -> bool {
+    if name == "signatures" {
+        state.strict_vars = true;
+        state.strict_subs = true;
+        state.strict_refs = true;
+    }
+    if name == "unicode_strings" {
+        state.unicode_strings = true;
+    }
+
+    if let Some(feature) = known_feature_name(name) {
+        if state.features.iter().all(|existing| existing != &feature) {
+            state.features.push(feature);
+        }
+        true
+    } else {
+        false
+    }
+}
+
+fn disable_feature_name(state: &mut PragmaState, name: &str) -> bool {
+    if name == "unicode_strings" {
+        state.unicode_strings = false;
+    }
+
+    if let Some(feature) = known_feature_name(name) {
+        let before = state.features.len();
+        state.features.retain(|existing| *existing != feature);
+        before != state.features.len()
+    } else {
+        false
+    }
+}
+
+fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) -> bool {
+    let mut changed = false;
+
+    for arg in args {
+        for item in feature_items(arg) {
+            if let Some(version) = item.strip_prefix(':').and_then(parse_perl_version) {
+                for feature in features_enabled_by_version(version) {
+                    changed |= if enabled {
+                        enable_feature_name(state, feature)
+                    } else {
+                        disable_feature_name(state, feature)
+                    };
+                }
+                continue;
+            }
+
+            changed |= if enabled {
+                enable_feature_name(state, &item)
+            } else {
+                disable_feature_name(state, &item)
+            };
+        }
+    }
+
+    changed
 }
 
 fn builtin_import_names(arg: &str) -> Vec<String> {
@@ -533,38 +617,7 @@ impl PragmaTracker {
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "feature" => {
-                        // Track the small set of feature pragma effects that this
-                        // crate currently needs for semantic consumers.
-                        let mut changed = false;
-                        for arg in args {
-                            for item in pragma_arg_items(arg) {
-                                match item.as_str() {
-                                    "signatures" => {
-                                        current_state.strict_vars = true;
-                                        current_state.strict_subs = true;
-                                        current_state.strict_refs = true;
-                                        changed = true;
-                                    }
-                                    "unicode_strings" => {
-                                        current_state.unicode_strings = true;
-                                        changed = true;
-                                    }
-                                    item if item.starts_with(':') => {
-                                        if let Some(version) =
-                                            parse_perl_version(item.trim_start_matches(':'))
-                                        {
-                                            if version >= PerlVersion::new(5, 12) {
-                                                current_state.unicode_strings = true;
-                                                changed = true;
-                                            }
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-
-                        if changed {
+                        if apply_feature_state(current_state, args, true) {
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -660,6 +713,14 @@ impl PragmaTracker {
                         current_state.locale_scope = None;
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "feature" => {
+                        if apply_feature_state(current_state, args, false) {
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                        }
                     }
                     _ => {}
                 }

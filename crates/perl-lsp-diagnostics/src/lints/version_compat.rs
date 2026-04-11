@@ -4,10 +4,10 @@
 //!
 //! # How it works
 //!
-//! 1. First pass over top-level statements: collect declared version (`use vN.NN`
-//!    or `use N.NNN`) and any explicit `use feature 'X'` calls.
-//! 2. Derive the effective feature set from the declared version (bundle
-//!    implication — `use v5.36` implicitly enables all features available in 5.36).
+//! 1. First pass over top-level statements: collect the declared version (`use vN.NN`
+//!    or `use N.NNN`) and any builtin imports that affect version checks.
+//! 2. Build lexical pragma state with `PragmaTracker`, so explicit `use feature`
+//!    and `no feature` pragmas are honored at each AST node.
 //! 3. Second pass (via walker): detect version-gated AST constructs and emit
 //!    `PL900` warnings for those not covered by the effective feature set.
 //!
@@ -16,7 +16,7 @@
 
 use perl_diagnostics_codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, features_enabled_by_version, parse_perl_version};
+use perl_pragma::{PerlVersion, PragmaTracker, parse_perl_version};
 
 use super::super::walker::walk_node;
 use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
@@ -89,14 +89,13 @@ const SMARTMATCH_REMOVAL_VERSION: PerlVersion = PerlVersion::new(5, 42);
 /// Walks the AST looking for uses of version-gated features and emits
 /// `PL900` warnings when the declared version does not support them.
 pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
-    // Collect version declaration and explicit `use feature` calls from top-level statements.
+    // Collect the declared version and builtin imports from top-level statements.
     let statements = match &node.kind {
         NodeKind::Program { statements } => statements,
         _ => return,
     };
 
     let mut declared_version: Option<PerlVersion> = None;
-    let mut explicit_features: Vec<String> = Vec::new();
     let mut builtin_imports: Vec<String> = Vec::new();
     let mut builtin_bundle_declared = false;
 
@@ -109,14 +108,6 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                     None => declared_version = Some(version),
                     Some(existing) if version > existing => declared_version = Some(version),
                     _ => {}
-                }
-            }
-            // Check for `use feature 'X'` or `use feature qw(X Y)`
-            if module == "feature" {
-                for arg in args {
-                    // Args may be bare names or quoted: 'say', "say"
-                    let name = arg.trim_matches(|c| c == '\'' || c == '"');
-                    explicit_features.push(name.to_string());
                 }
             }
             if module == "builtin" {
@@ -150,28 +141,16 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         None => return,
     };
 
-    // Derive effective feature set from declared version.
-    let mut effective_features = features_enabled_by_version(declared_version);
-
-    // Explicit `use feature 'X'` additions override version.
-    for feat in &explicit_features {
-        if !effective_features.contains(&feat.as_str()) {
-            // We only need to track features we check for.
-            // Store them as references to our known list if possible.
-            for (known, _, _) in FEATURE_VERSIONS {
-                if *known == feat.as_str() && !effective_features.contains(known) {
-                    effective_features.push(known);
-                }
-            }
-        }
-    }
+    let pragma_map = PragmaTracker::build(node);
 
     // Second pass: walk AST for version-gated constructs.
     walk_node(node, &mut |n| {
+        let pragma_state = PragmaTracker::state_for_offset(&pragma_map, n.location.start);
+
         match &n.kind {
             // `class Foo { }` — requires v5.38
             NodeKind::Class { .. } => {
-                if !effective_features.contains(&"class") {
+                if !pragma_state.has_feature("class") {
                     let min = feature_min_version("class");
                     diagnostics.push(make_diagnostic(n, "class", declared_version, min));
                 }
@@ -200,7 +179,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                         declared_version,
                         DiagnosticSeverity::Warning,
                     ));
-                } else if !effective_features.contains(&"switch") {
+                } else if !pragma_state.has_feature("switch") {
                     let min = feature_min_version("switch");
                     diagnostics.push(make_diagnostic(n, construct, declared_version, min));
                 }
@@ -208,7 +187,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
             // `try { } catch { }` — requires v5.34
             NodeKind::Try { .. } => {
-                if !effective_features.contains(&"try") {
+                if !pragma_state.has_feature("try") {
                     let min = feature_min_version("try");
                     diagnostics.push(make_diagnostic(n, "try/catch", declared_version, min));
                 }
@@ -216,7 +195,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
             // `say` function call — requires v5.10
             NodeKind::FunctionCall { name, .. } if name == "say" => {
-                if !effective_features.contains(&"say") {
+                if !pragma_state.has_feature("say") {
                     let min = feature_min_version("say");
                     diagnostics.push(make_diagnostic(n, "say", declared_version, min));
                 }
@@ -224,7 +203,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
             // `defer { }` block — requires v5.36 (`use feature 'defer'`).
             NodeKind::Defer { .. } => {
-                if !effective_features.contains(&"defer") {
+                if !pragma_state.has_feature("defer") {
                     let min = feature_min_version("defer");
                     diagnostics.push(make_diagnostic(n, "defer", declared_version, min));
                 }
@@ -276,7 +255,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
             // `state $x` declaration — requires v5.10
             NodeKind::VariableDeclaration { declarator, .. } if declarator == "state" => {
-                if !effective_features.contains(&"state") {
+                if !pragma_state.has_feature("state") {
                     let min = feature_min_version("state");
                     diagnostics.push(make_diagnostic(n, "state", declared_version, min));
                 }
@@ -286,7 +265,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             NodeKind::Unary { op, .. }
                 if op == "->@*" || op == "->%*" || op == "->$*" || op == "->@[" || op == "->@{" =>
             {
-                if !effective_features.contains(&"postfix_deref") {
+                if !pragma_state.has_feature("postfix_deref") {
                     let min = feature_min_version("postfix_deref");
                     diagnostics.push(make_diagnostic(n, "postfix deref", declared_version, min));
                 }
@@ -294,7 +273,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
             // Subroutine with a signature — requires v5.20
             NodeKind::Subroutine { signature: Some(_), .. } => {
-                if !effective_features.contains(&"signatures") {
+                if !pragma_state.has_feature("signatures") {
                     let min = feature_min_version("signatures");
                     diagnostics.push(make_diagnostic(
                         n,
@@ -307,7 +286,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
             // `$obj isa 'ClassName'` — infix operator; stable at v5.36
             NodeKind::Binary { op, .. } if op == "isa" => {
-                if !effective_features.contains(&"isa") {
+                if !pragma_state.has_feature("isa") {
                     let min = feature_min_version("isa");
                     diagnostics.push(make_diagnostic(n, "isa", declared_version, min));
                 }
@@ -328,7 +307,7 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                         declared_version,
                         DiagnosticSeverity::Warning,
                     ));
-                } else if !effective_features.contains(&"switch") {
+                } else if !pragma_state.has_feature("switch") {
                     diagnostics.push(make_smartmatch_feature_diagnostic(n, declared_version));
                 }
             }
