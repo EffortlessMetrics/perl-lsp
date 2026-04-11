@@ -2324,6 +2324,24 @@ cpan-corpus-check:
 cpan-corpus-ratchet:
     cargo run -p xtask -- cpan-corpus ratchet
 
+# ============================================================================
+# Scorecard Metrics Ratchet
+# ============================================================================
+
+# Check scorecard floor metrics for a single subsystem (soft gate: warn, not block)
+ci-metrics-ratchet-check subsystem:
+    @echo "Checking scorecard floor metrics for {{subsystem}}..."
+    cargo run -p xtask -- metrics ratchet-check {{subsystem}}
+    @echo "Scorecard ratchet passed for {{subsystem}}"
+
+# Check all committed scorecard baselines (parser + engineering_health).
+# Soft gate: run after ci-gate, warns on violation, does not block PR in v1.
+ci-metrics-ratchet:
+    @echo "Checking scorecard floor metrics..."
+    cargo run -p xtask -- metrics ratchet-check parser
+    cargo run -p xtask -- metrics ratchet-check engineering_health
+    @echo "Scorecard ratchet passed"
+
 # Tier C: full suite (nightly, all integration tests)
 lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."

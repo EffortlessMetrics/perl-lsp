@@ -1148,6 +1148,28 @@ enum MetricsCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Check scorecard floor metrics against the committed baseline.
+    ///
+    /// Loads `.ci/metrics/baselines/<subsystem>.json` and compares against the
+    /// current metric receipt.  Exits nonzero on any floor breach.
+    RatchetCheck {
+        /// Subsystem name (e.g. "parser", "engineering_health").
+        subsystem: String,
+        /// Path to current-metrics JSON (default: target/receipts/metrics/<subsystem>.json).
+        #[arg(long)]
+        current: Option<PathBuf>,
+        /// Record this run in target/metrics/stable_wins/<subsystem>.json.
+        #[arg(long)]
+        record: bool,
+    },
+    /// Show which improvement metrics are stable enough to raise the floor baseline.
+    PromoteBaseline {
+        /// Subsystem name.
+        subsystem: String,
+        /// Minimum fractional improvement required (default: 1%).
+        #[arg(long, default_value_t = 0.01)]
+        delta_pct: f64,
+    },
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1442,6 +1464,14 @@ fn main() -> Result<()> {
             MetricsCommand::Memory => metrics::memory::run(),
             MetricsCommand::ReleaseHealth { days, json } => {
                 metrics::release_health::run(days, json)
+            }
+            MetricsCommand::RatchetCheck { subsystem, current, record } => {
+                let root = utils::project_root()?;
+                metrics::ratchet::run_ratchet_check(&root, &subsystem, current, record)
+            }
+            MetricsCommand::PromoteBaseline { subsystem, delta_pct } => {
+                let root = utils::project_root()?;
+                metrics::ratchet::run_promote_baseline(&root, &subsystem, delta_pct)
             }
         },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
