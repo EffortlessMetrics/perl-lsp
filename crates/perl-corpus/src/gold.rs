@@ -147,4 +147,40 @@ mod tests {
         let expected: GoldExpected = serde_json::from_str(json).unwrap();
         assert_eq!(expected.diagnostics.len(), 1);
     }
+
+    #[test]
+    fn test_malformed_json_returns_error() {
+        // Malformed expected.json must produce a serde error, not panic
+        let bad_json = r#"{"diagnostics": [{"assertion": "unknown_variant"}]}"#;
+        let result: Result<GoldExpected, _> = serde_json::from_str(bad_json);
+        assert!(result.is_err(), "unknown assertion variant should fail to deserialize");
+    }
+
+    #[test]
+    fn test_empty_diagnostics_array_deserializes() {
+        // empty array is valid JSON but the harness will catch it as vacuous
+        let json = r#"{"diagnostics": []}"#;
+        let expected: GoldExpected = serde_json::from_str(json).unwrap();
+        assert_eq!(expected.diagnostics.len(), 0);
+    }
+
+    #[test]
+    fn test_no_diagnostic_deserialization() {
+        let json = r#"{"assertion": "no_diagnostic", "code": "PL100"}"#;
+        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(&assertion, GoldAssertion::NoDiagnostic { code } if code == "PL100"),
+            "Expected NoDiagnostic variant with code PL100"
+        );
+    }
+
+    #[test]
+    fn test_diagnostic_count_deserialization() {
+        let json = r#"{"assertion": "diagnostic_count", "code": "PL001", "count": 3}"#;
+        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(&assertion, GoldAssertion::DiagnosticCount { code, count: 3 } if code == "PL001"),
+            "Expected DiagnosticCount variant with code PL001 and count 3"
+        );
+    }
 }

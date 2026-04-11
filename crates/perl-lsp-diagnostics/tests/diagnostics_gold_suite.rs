@@ -18,6 +18,16 @@ fn validate_fixture(
 
     let diagnostics = provider.get_diagnostics(&ast, &parse_output.diagnostics, perl_code, None);
 
+    // Guard against vacuous pass: an empty assertions list would pass trivially
+    // and provide no regression coverage.
+    if expected.diagnostics.is_empty() {
+        return Ok((
+            false,
+            "  FAIL: expected.json has no assertions — every fixture must assert something\n"
+                .to_string(),
+        ));
+    }
+
     let mut all_passed = true;
     let mut report = String::new();
 
@@ -117,6 +127,21 @@ fn gold_fixtures_diagnostics_suite() {
     assert!(
         !fixtures.is_empty(),
         "No gold fixtures found in {} — corpus was deleted or path is wrong",
+        gold_dir.display()
+    );
+
+    // Count subdirectories in the gold dir to detect silently-skipped broken fixtures.
+    // load_gold_fixtures silently drops dirs that fail to parse; this catches that.
+    let dir_count = std::fs::read_dir(&gold_dir)
+        .map(|rd| rd.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).count())
+        .unwrap_or(0);
+    assert_eq!(
+        fixtures.len(),
+        dir_count,
+        "Loaded {} fixtures but found {} subdirectories in {} — some fixtures failed to load \
+         (malformed expected.json?). Run with RUST_LOG=warn to see details.",
+        fixtures.len(),
+        dir_count,
         gold_dir.display()
     );
 
