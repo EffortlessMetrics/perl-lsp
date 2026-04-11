@@ -120,3 +120,38 @@ fn test_plain_array_ref_trailing_comma() {
     assert_clean_parse(r#"my $arr = [1, 2, 3,];"#);
     assert_eq!(count_array_elements(r#"my $arr = [1, 2, 3,];"#), 3);
 }
+
+#[test]
+fn test_fat_arrow_chained_in_array_ref() {
+    // Chained fat arrows: ['a' => 'b' => 'c'] — valid Perl producing 3 elements.
+    // The fat arrow auto-quotes the left side; `b` is both the value of the first
+    // pair and the auto-quoted key of the second pair.
+    // Verified: `perl -e 'my $r = ["a" => "b" => "c"]; print scalar @$r'` prints 3.
+    assert_clean_parse(r#"my $arr = ['a' => 'b' => 'c'];"#);
+    assert_eq!(
+        count_array_elements(r#"my $arr = ['a' => 'b' => 'c'];"#),
+        3,
+        "['a' => 'b' => 'c'] should produce 3 elements"
+    );
+}
+
+#[test]
+fn test_hash_ref_still_works() {
+    // Regression: {$k => $v} must still be parsed as a hash ref, not an array ref.
+    // The LeftBracket fix must not leak into LeftBrace/hash-literal parsing.
+    assert_clean_parse(r#"my $h = {key => 'val'};"#);
+}
+
+#[test]
+fn test_empty_array_ref_still_works() {
+    // [] must still parse as an empty array ref.
+    assert_clean_parse(r#"my $e = [];"#);
+    assert_eq!(count_array_elements(r#"my $e = [];"#), 0, "[] should be empty");
+}
+
+#[test]
+fn test_single_value_array_ref_no_fat_arrow() {
+    // [$k] with no fat arrow should still parse as a 1-element array ref.
+    assert_clean_parse(r#"my $arr = [$k];"#);
+    assert_eq!(count_array_elements(r#"my $arr = [$k];"#), 1, "[$k] should produce 1 element");
+}

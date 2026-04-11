@@ -747,10 +747,30 @@ impl<'a> Parser<'a> {
                         elements.push(elem);
                     }
 
-                    // Consume comma or fat-arrow separator; fat-arrow will be
-                    // handled at the top of the next iteration.
+                    // Consume comma separator; a fat-arrow separator is left
+                    // for the top of the next iteration to handle as a key.
+                    // e.g. `[a => b => c]` — after pushing `a` and `b`, the
+                    // next peek is `=>`, so we do NOT break; we let the loop
+                    // re-enter and treat `b` (already pushed) as the key for
+                    // the implicit next pair.  Actually `b` is already in
+                    // elements — the chained `=>` makes `c` a new element too.
+                    // We consume `=>` here so the loop-top `parse_assignment`
+                    // picks up `c` as the value.
                     if self.peek_kind() == Some(TokenKind::Comma) {
                         self.consume_token()?; // consume ,
+                    } else if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        // Chained fat arrow: the value we just pushed becomes
+                        // the auto-quoted key for the next pair.  Autoquote the
+                        // last element and consume the `=>`.
+                        if let Some(last) = elements.last_mut() {
+                            Self::autoquote_fat_arrow_key(last);
+                        }
+                        self.consume_token()?; // consume chained =>
+                        // Parse the value that follows the chained =>
+                        if self.peek_kind() != Some(TokenKind::RightBracket) && !self.tokens.is_eof() {
+                            elements.push(self.parse_assignment()?);
+                        }
+                        // Continue loop — there may be more separators
                     } else {
                         break;
                     }
