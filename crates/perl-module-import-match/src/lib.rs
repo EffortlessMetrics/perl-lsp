@@ -23,16 +23,23 @@ pub fn line_references_module_import(line: &str, module_name: &str) -> bool {
         return false;
     }
 
-    let Some(parsed) = parse_module_import_head(line) else {
-        return false;
-    };
-
-    match parsed.kind {
-        ModuleImportKind::Use | ModuleImportKind::Require => parsed.token == module_name,
-        ModuleImportKind::UseParent | ModuleImportKind::UseBase => {
-            contains_standalone_module_token(line, module_name)
+    line.split(';').any(|statement| {
+        let statement = statement.trim();
+        if statement.is_empty() {
+            return false;
         }
-    }
+
+        let Some(parsed) = parse_module_import_head(statement) else {
+            return false;
+        };
+
+        match parsed.kind {
+            ModuleImportKind::Use | ModuleImportKind::Require => parsed.token == module_name,
+            ModuleImportKind::UseParent | ModuleImportKind::UseBase => {
+                contains_standalone_module_token(statement, module_name)
+            }
+        }
+    })
 }
 
 #[cfg(test)]
@@ -61,6 +68,12 @@ mod tests {
     fn rejects_non_import_contexts() {
         assert!(!line_references_module_import("my $x = Foo::Bar->new();", "Foo::Bar"));
         assert!(!line_references_module_import("package Foo::Bar;", "Foo::Bar"));
+    }
+
+    #[test]
+    fn matches_later_import_statement_on_same_line() {
+        assert!(line_references_module_import("use Foo::Bar; use Foo::Baz;", "Foo::Baz"));
+        assert!(line_references_module_import("my $x = 1; require Foo::Bar;", "Foo::Bar"));
     }
 
     #[test]

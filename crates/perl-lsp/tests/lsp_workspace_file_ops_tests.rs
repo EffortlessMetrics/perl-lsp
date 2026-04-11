@@ -3,12 +3,85 @@
 use parking_lot::Mutex;
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
+use std::io::Write;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+#[derive(Clone)]
+struct OutputCapture {
+    buffer: Arc<Mutex<Vec<u8>>>,
+}
+
+impl OutputCapture {
+    fn new() -> Self {
+        Self { buffer: Arc::new(Mutex::new(Vec::new())) }
+    }
+
+    fn clear(&self) {
+        self.buffer.lock().clear();
+    }
+
+    fn messages(&self) -> Vec<Value> {
+        let buffer = self.buffer.lock();
+        let content = String::from_utf8_lossy(&buffer);
+        let mut messages = Vec::new();
+
+        for chunk in content.split("\r\n\r\n") {
+            if chunk.trim().is_empty() {
+                continue;
+            }
+            if let Some(json_str) = chunk.lines().nth(1) {
+                if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
+                    messages.push(msg);
+                }
+            } else if !chunk.starts_with("Content-Length") {
+                if let Ok(msg) = serde_json::from_str::<Value>(chunk) {
+                    messages.push(msg);
+                }
+            }
+        }
+
+        messages
+    }
+}
+
+impl Write for OutputCapture {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.buffer.lock().write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.buffer.lock().flush()
+    }
+}
+
+fn wait_for_method(output: &OutputCapture, method: &str) -> Option<Value> {
+    let deadline = Instant::now() + Duration::from_millis(250);
+    loop {
+        if let Some(message) =
+            output.messages().into_iter().find(|message| message["method"].as_str() == Some(method))
+        {
+            return Some(message);
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
 
 /// Helper to create a test LSP server
 fn create_test_server() -> LspServer {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
     LspServer::with_output(output)
+}
+
+fn create_test_server_with_output() -> (LspServer, OutputCapture) {
+    let output = OutputCapture::new();
+    let server = LspServer::with_output(Arc::new(Mutex::new(
+        Box::new(output.clone()) as Box<dyn Write + Send>
+    )));
+    (server, output)
 }
 
 /// Helper to make a request to the server
@@ -545,6 +618,84 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
 }
 
 #[test]
+fn test_will_rename_files_coalesces_multi_rename_edits_per_line()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    let first_module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Foo/Bar.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Foo::Bar;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(first_module_open));
+
+    let second_module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Foo/Baz.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Foo::Baz;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(second_module_open));
+
+    let dependent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/main.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use Foo::Bar; use Foo::Baz;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+
+    let params = json!({
+        "files": [
+            {
+                "oldUri": "file:///test/workspace/lib/Foo/Bar.pm",
+                "newUri": "file:///test/workspace/lib/Renamed/Bar.pm"
+            },
+            {
+                "oldUri": "file:///test/workspace/lib/Foo/Baz.pm",
+                "newUri": "file:///test/workspace/lib/Renamed/Baz.pm"
+            }
+        ]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+    let main_changes = changes
+        .get("file:///test/workspace/main.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for dependent main.pl")?;
+
+    assert_eq!(
+        main_changes.len(),
+        1,
+        "expected one coalesced edit for the dependent line, got: {main_changes:?}"
+    );
+    assert_eq!(
+        main_changes[0].get("newText").and_then(Value::as_str),
+        Some("use Renamed::Bar; use Renamed::Baz;")
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
 
@@ -643,6 +794,137 @@ fn test_did_delete_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>>
     // Should handle gracefully
     assert!(result.is_ok());
     assert_eq!(result?, None);
+    Ok(())
+}
+
+#[test]
+fn test_will_delete_files_skips_warnings_for_co_deleted_dependents()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (server, output) = create_test_server_with_output();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+    output.clear();
+
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/MyModule.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package MyModule;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    let dependent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/main.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use MyModule;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
+    output.clear();
+
+    let params = json!({
+        "files": [
+            { "uri": "file:///test/workspace/lib/MyModule.pm" },
+            { "uri": "file:///test/workspace/main.pl" }
+        ]
+    });
+
+    let edit = make_request(&server, "workspace/willDeleteFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    assert!(edit.is_object());
+    assert!(
+        wait_for_method(&output, "window/showMessage").is_none(),
+        "co-deleted dependents should not trigger a safe-delete warning"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_will_delete_files_aggregates_warning_for_multiple_unsafe_deletes()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (server, output) = create_test_server_with_output();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+    output.clear();
+
+    let first_module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Alpha.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Alpha;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(first_module_open));
+
+    let second_module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Beta.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Beta;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(second_module_open));
+
+    let first_dependent = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/app.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use Alpha;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(first_dependent));
+
+    let second_dependent = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/bin/tool.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use Beta;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(second_dependent));
+    output.clear();
+
+    let params = json!({
+        "files": [
+            { "uri": "file:///test/workspace/lib/Alpha.pm" },
+            { "uri": "file:///test/workspace/lib/Beta.pm" }
+        ]
+    });
+
+    let edit = make_request(&server, "workspace/willDeleteFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    assert!(edit.is_object());
+
+    let message = wait_for_method(&output, "window/showMessage")
+        .ok_or("expected aggregated safe-delete warning notification")?;
+    let message_text =
+        message["params"]["message"].as_str().ok_or("expected warning message text")?;
+    assert!(
+        message_text.contains("2 files have dependent workspace files"),
+        "expected aggregated safe-delete warning, got: {message_text}"
+    );
+
     Ok(())
 }
 

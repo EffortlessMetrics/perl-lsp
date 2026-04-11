@@ -54,6 +54,41 @@ fn test_will_rename_files_single_module() -> TestResult {
 }
 
 #[test]
+fn test_will_delete_files_response_structure() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    let result = harness.request(
+        "workspace/willDeleteFiles",
+        json!({
+            "files": [
+                {
+                    "uri": "file:///workspace/lib/OldName.pm"
+                }
+            ]
+        }),
+    );
+
+    match result {
+        Ok(edit) => {
+            assert!(edit.is_object(), "willDeleteFiles must return a WorkspaceEdit object");
+            assert!(
+                edit.get("changes").is_some() || edit.get("documentChanges").is_some(),
+                "workspace edit should provide changes or documentChanges"
+            );
+        }
+        Err(e) => {
+            assert!(
+                e.contains("-32601") || e.contains("not found") || e.contains("not supported"),
+                "unexpected error from willDeleteFiles: {e}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_will_rename_files_multiple_files() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
