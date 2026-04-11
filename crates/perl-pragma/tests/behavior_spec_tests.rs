@@ -48,6 +48,17 @@ fn package_block(name: &str, body: Node, start: usize, end: usize) -> Node {
     }
 }
 
+fn phase_block(phase: &str, body: Node, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::PhaseBlock {
+            phase: phase.to_string(),
+            phase_span: Some(loc(start, start + phase.len())),
+            block: Box::new(body),
+        },
+        location: loc(start, end),
+    }
+}
+
 fn program(stmts: Vec<Node>) -> Node {
     let end = stmts.last().map_or(0, |n| n.location.end);
     Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
@@ -171,4 +182,112 @@ fn given_package_block_with_inner_no_strict_when_execution_continues_then_outer_
     let after_package = PragmaTracker::state_for_offset(&map, 50);
     assert!(after_package.strict_subs);
     assert!(after_package.warnings);
+}
+
+#[test]
+fn given_begin_block_with_use_strict_when_querying_inside_block_then_strict_is_active() {
+    let ast = program(vec![phase_block(
+        "BEGIN",
+        block(vec![use_node("strict", &[], 8, 20)], 6, 22),
+        0,
+        22,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let inside_begin = PragmaTracker::state_for_offset(&map, 12);
+    assert!(inside_begin.strict_vars);
+    assert!(inside_begin.strict_subs);
+    assert!(inside_begin.strict_refs);
+}
+
+#[test]
+fn given_begin_block_with_use_strict_when_querying_after_block_then_strict_is_not_active() {
+    let ast = program(vec![phase_block(
+        "BEGIN",
+        block(vec![use_node("strict", &[], 8, 20)], 6, 22),
+        0,
+        22,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let after_begin = PragmaTracker::state_for_offset(&map, 24);
+    assert!(!after_begin.strict_vars);
+    assert!(!after_begin.strict_subs);
+    assert!(!after_begin.strict_refs);
+}
+
+#[test]
+fn given_begin_block_with_use_warnings_when_querying_after_block_then_warnings_is_not_active() {
+    let ast = program(vec![phase_block(
+        "BEGIN",
+        block(vec![use_node("warnings", &[], 8, 22)], 6, 24),
+        0,
+        24,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let after_begin = PragmaTracker::state_for_offset(&map, 26);
+    assert!(!after_begin.warnings);
+}
+
+#[test]
+fn given_end_block_with_use_warnings_when_querying_after_block_then_warnings_is_not_active() {
+    let ast = program(vec![phase_block(
+        "END",
+        block(vec![use_node("warnings", &[], 6, 20)], 4, 22),
+        0,
+        22,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let after_end = PragmaTracker::state_for_offset(&map, 24);
+    assert!(!after_end.warnings);
+}
+
+#[test]
+fn given_init_block_with_use_strict_when_querying_after_block_then_strict_is_not_active() {
+    let ast = program(vec![phase_block(
+        "INIT",
+        block(vec![use_node("strict", &[], 7, 19)], 5, 21),
+        0,
+        21,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let after_init = PragmaTracker::state_for_offset(&map, 23);
+    assert!(!after_init.strict_vars);
+    assert!(!after_init.strict_subs);
+    assert!(!after_init.strict_refs);
+}
+
+#[test]
+fn given_check_block_with_use_strict_when_querying_after_block_then_strict_is_not_active() {
+    let ast = program(vec![phase_block(
+        "CHECK",
+        block(vec![use_node("strict", &[], 8, 20)], 6, 22),
+        0,
+        22,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let after_check = PragmaTracker::state_for_offset(&map, 24);
+    assert!(!after_check.strict_vars);
+    assert!(!after_check.strict_subs);
+    assert!(!after_check.strict_refs);
+}
+
+#[test]
+fn given_unitcheck_block_with_use_strict_when_querying_after_block_then_strict_is_not_active() {
+    let ast = program(vec![phase_block(
+        "UNITCHECK",
+        block(vec![use_node("strict", &[], 12, 24)], 10, 26),
+        0,
+        26,
+    )]);
+    let map = PragmaTracker::build(&ast);
+
+    let after_unitcheck = PragmaTracker::state_for_offset(&map, 28);
+    assert!(!after_unitcheck.strict_vars);
+    assert!(!after_unitcheck.strict_subs);
+    assert!(!after_unitcheck.strict_refs);
 }

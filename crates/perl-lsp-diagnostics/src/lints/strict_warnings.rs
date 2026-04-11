@@ -72,31 +72,10 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         "Mojo::Base",
     ];
 
-    // Phase blocks (BEGIN/END/INIT/CHECK/UNITCHECK) run at compile time and their
-    // pragma effects are semantically file-level, but PragmaTracker does not model them
-    // as scoped bodies.  Scan phase block bodies directly so that
-    // `BEGIN { use strict; }` still suppresses PL100.
-    if let NodeKind::Program { statements } = &node.kind {
-        for stmt in statements {
-            if let NodeKind::PhaseBlock { block, .. } = &stmt.kind {
-                walk_node(block, &mut |n| {
-                    if let NodeKind::Use { module, .. } = &n.kind {
-                        if module == "strict" {
-                            has_strict = true;
-                        } else if module == "warnings" {
-                            has_warnings = true;
-                        }
-                    }
-                });
-            }
-        }
-    }
-
     // Detect OO implicit strict modules and misspelled pragmas.
     // The strict/warnings arms are intentionally absent: state_for_offset above
     // is the authoritative source of truth. Walking the full AST for strict/warnings
     // would bypass lexical scoping (finding eval-block or sub-scoped pragmas).
-    // Phase block bodies are handled above via the targeted PhaseBlock scan.
     walk_node(node, &mut |n| {
         if let NodeKind::Use { module, .. } = &n.kind {
             if module.starts_with('v') || module.chars().next().is_some_and(|c| c.is_ascii_digit())
