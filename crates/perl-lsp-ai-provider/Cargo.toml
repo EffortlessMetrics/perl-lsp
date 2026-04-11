@@ -22,8 +22,6 @@ ureq = { version = "3", features = ["json"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-perl-tdd-support = { workspace = true }
-
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
