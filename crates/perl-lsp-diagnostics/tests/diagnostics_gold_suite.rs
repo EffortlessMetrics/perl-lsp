@@ -1,4 +1,4 @@
-use perl_corpus::{load_gold_fixtures, GoldAssertion};
+use perl_corpus::{GoldAssertion, load_gold_fixtures};
 use perl_lsp_diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;
 use std::fs;
@@ -31,7 +31,7 @@ fn validate_fixture(
                         diagnostics.len()
                     ));
                     for diag in &diagnostics {
-                        let code_str = diag.code.as_ref().map(|s| s.as_str()).unwrap_or("unknown");
+                        let code_str = diag.code.as_deref().unwrap_or("unknown");
                         report.push_str(&format!("    - [{}] {}\n", code_str, diag.message));
                     }
                 } else {
@@ -43,20 +43,14 @@ fn validate_fixture(
                 let has_code = diagnostics.iter().any(|d| d.code.as_ref() == Some(code));
                 if has_code {
                     all_passed = false;
-                    report.push_str(&format!(
-                        "  FAIL: Diagnostic {} should not be present\n",
-                        code
-                    ));
+                    report
+                        .push_str(&format!("  FAIL: Diagnostic {} should not be present\n", code));
                 } else {
                     report.push_str(&format!("  PASS: Diagnostic {} not present\n", code));
                 }
             }
 
-            GoldAssertion::DiagnosticPresent {
-                code,
-                byte_offset,
-                message_contains,
-            } => {
+            GoldAssertion::DiagnosticPresent { code, byte_offset, message_contains } => {
                 let found = diagnostics.iter().find(|d| {
                     d.code.as_ref() == Some(code)
                         && byte_offset.map(|off| d.range.0 == off).unwrap_or(true)
@@ -102,6 +96,7 @@ fn validate_fixture(
 }
 
 #[test]
+#[allow(clippy::expect_used)]
 fn gold_fixtures_diagnostics_suite() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let workspace_root = Path::new(manifest_dir)
@@ -175,15 +170,8 @@ fn gold_fixtures_diagnostics_suite() {
     eprintln!("Total:  {}", passed + failed);
 
     if failed > 0 {
-        eprintln!(
-            "\nPrecision: {:.1}%",
-            (passed as f64 / (passed + failed) as f64) * 100.0
-        );
+        eprintln!("\nPrecision: {:.1}%", (passed as f64 / (passed + failed) as f64) * 100.0);
     }
 
-    assert_eq!(
-        failed, 0,
-        "Gold corpus diagnostics suite failed: {} failures",
-        failed
-    );
+    assert_eq!(failed, 0, "Gold corpus diagnostics suite failed: {} failures", failed);
 }

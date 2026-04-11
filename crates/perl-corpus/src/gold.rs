@@ -121,20 +121,24 @@ mod tests {
     fn test_gold_assertion_deserialization() {
         let json = r#"{"assertion": "no_diagnostics"}"#;
         let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
-        matches!(assertion, GoldAssertion::NoDiagnostics);
+        assert!(matches!(assertion, GoldAssertion::NoDiagnostics));
     }
 
     #[test]
     fn test_gold_assertion_diagnostic_present() {
         let json = r#"{"assertion": "diagnostic_present", "code": "PL100", "byte_offset": 24}"#;
         let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
-        match assertion {
-            GoldAssertion::DiagnosticPresent { code, byte_offset, .. } => {
-                assert_eq!(code, "PL100");
-                assert_eq!(byte_offset, Some(24));
-            }
-            _ => panic!("Expected DiagnosticPresent"),
-        }
+        assert!(
+            matches!(
+                &assertion,
+                GoldAssertion::DiagnosticPresent {
+                    code,
+                    byte_offset: Some(24),
+                    ..
+                } if code == "PL100"
+            ),
+            "Expected DiagnosticPresent variant with code PL100 and byte_offset 24"
+        );
     }
 
     #[test]
