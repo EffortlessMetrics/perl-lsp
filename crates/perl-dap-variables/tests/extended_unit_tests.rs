@@ -26,15 +26,11 @@ fn perl_value_scalar_empty_string() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_scalar_with_special_chars() -> Result<(), Box<dyn std::error::Error>> {
     let special_str = "hello\nworld\t\"quotes\"";
     let val = PerlValue::scalar(special_str);
-    match val {
-        PerlValue::Scalar(s) => {
-            assert_eq!(s, special_str);
-            assert!(s.contains('\n'));
-            assert!(s.contains('\t'));
-            assert!(s.contains('"'));
-        }
-        _ => panic!("Expected scalar value"),
-    }
+    assert!(matches!(
+        &val,
+        PerlValue::Scalar(s)
+            if s == special_str && s.contains('\n') && s.contains('\t') && s.contains('"')
+    ));
     Ok(())
 }
 
@@ -50,10 +46,7 @@ fn perl_value_number_zero() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_number_negative() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Number(-123.456);
     assert_eq!(val.type_name(), "SCALAR");
-    match val {
-        PerlValue::Number(n) => assert!((n - (-123.456)).abs() < 0.001),
-        _ => panic!("Expected number value"),
-    }
+    assert!(matches!(val, PerlValue::Number(n) if (n - (-123.456)).abs() < 0.001));
     Ok(())
 }
 
@@ -61,10 +54,7 @@ fn perl_value_number_negative() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_number_infinity() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Number(f64::INFINITY);
     assert_eq!(val.type_name(), "SCALAR");
-    match val {
-        PerlValue::Number(n) => assert!(n.is_infinite()),
-        _ => panic!("Expected number value"),
-    }
+    assert!(matches!(val, PerlValue::Number(n) if n.is_infinite()));
     Ok(())
 }
 
@@ -80,30 +70,21 @@ fn perl_value_integer_zero() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_integer_negative() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Integer(-999);
     assert_eq!(val.type_name(), "SCALAR");
-    match val {
-        PerlValue::Integer(i) => assert_eq!(i, -999),
-        _ => panic!("Expected integer value"),
-    }
+    assert!(matches!(val, PerlValue::Integer(i) if i == -999));
     Ok(())
 }
 
 #[test]
 fn perl_value_integer_max() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Integer(i64::MAX);
-    match val {
-        PerlValue::Integer(i) => assert_eq!(i, i64::MAX),
-        _ => panic!("Expected integer value"),
-    }
+    assert!(matches!(val, PerlValue::Integer(i) if i == i64::MAX));
     Ok(())
 }
 
 #[test]
 fn perl_value_integer_min() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Integer(i64::MIN);
-    match val {
-        PerlValue::Integer(i) => assert_eq!(i, i64::MIN),
-        _ => panic!("Expected integer value"),
-    }
+    assert!(matches!(val, PerlValue::Integer(i) if i == i64::MIN));
     Ok(())
 }
 
@@ -151,10 +132,7 @@ fn perl_value_hash_single_pair() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_hash_empty_key() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::hash(vec![("".to_string(), PerlValue::Integer(42))]);
     assert_eq!(val.child_count(), Some(1));
-    match val {
-        PerlValue::Hash(pairs) => assert_eq!(pairs[0].0, ""),
-        _ => panic!("Expected hash"),
-    }
+    assert!(matches!(&val, PerlValue::Hash(pairs) if pairs[0].0.is_empty()));
     Ok(())
 }
 
@@ -217,13 +195,12 @@ fn perl_value_object_with_empty_hash() -> Result<(), Box<dyn std::error::Error>>
     let val = PerlValue::object("Empty::Class", PerlValue::Hash(vec![]));
     assert!(val.is_expandable());
     assert_eq!(val.type_name(), "OBJECT");
-    match val {
-        PerlValue::Object { class, value } => {
-            assert_eq!(class, "Empty::Class");
-            assert!(matches!(*value, PerlValue::Hash(ref h) if h.is_empty()));
-        }
-        _ => panic!("Expected object"),
-    }
+    assert!(matches!(
+        &val,
+        PerlValue::Object { class, value }
+            if class == "Empty::Class"
+                && matches!(value.as_ref(), PerlValue::Hash(h) if h.is_empty())
+    ));
     Ok(())
 }
 
@@ -252,10 +229,10 @@ fn perl_value_code_with_name() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Code { name: Some("my_function".to_string()) };
     assert!(!val.is_expandable());
     assert_eq!(val.type_name(), "CODE");
-    match val {
-        PerlValue::Code { name } => assert_eq!(name, Some("my_function".to_string())),
-        _ => panic!("Expected code"),
-    }
+    assert!(matches!(
+        &val,
+        PerlValue::Code { name } if name.as_deref() == Some("my_function")
+    ));
     Ok(())
 }
 
@@ -271,10 +248,10 @@ fn perl_value_code_anonymous() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_code_qualified_name() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Code { name: Some("Package::function".to_string()) };
     assert!(!val.is_expandable());
-    match val {
-        PerlValue::Code { name } => assert_eq!(name, Some("Package::function".to_string())),
-        _ => panic!("Expected code"),
-    }
+    assert!(matches!(
+        &val,
+        PerlValue::Code { name } if name.as_deref() == Some("Package::function")
+    ));
     Ok(())
 }
 
@@ -290,10 +267,7 @@ fn perl_value_glob_simple() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_glob_qualified() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Glob("Package::varname".to_string());
     assert!(!val.is_expandable());
-    match val {
-        PerlValue::Glob(name) => assert_eq!(name, "Package::varname"),
-        _ => panic!("Expected glob"),
-    }
+    assert!(matches!(&val, PerlValue::Glob(name) if name == "Package::varname"));
     Ok(())
 }
 
@@ -309,10 +283,10 @@ fn perl_value_regex_simple() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_regex_complex() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Regex(r"[a-z]+\d{2,4}".to_string());
     assert!(!val.is_expandable());
-    match val {
-        PerlValue::Regex(pattern) => assert!(pattern.contains('[') && pattern.contains('}')),
-        _ => panic!("Expected regex"),
-    }
+    assert!(matches!(
+        &val,
+        PerlValue::Regex(pattern) if pattern.contains('[') && pattern.contains('}')
+    ));
     Ok(())
 }
 
@@ -367,10 +341,7 @@ fn perl_value_error_simple() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Error("Variable not found".to_string());
     assert!(!val.is_expandable());
     assert_eq!(val.type_name(), "ERROR");
-    match val {
-        PerlValue::Error(msg) => assert_eq!(msg, "Variable not found"),
-        _ => panic!("Expected error"),
-    }
+    assert!(matches!(&val, PerlValue::Error(msg) if msg == "Variable not found"));
     Ok(())
 }
 
@@ -378,10 +349,7 @@ fn perl_value_error_simple() -> Result<(), Box<dyn std::error::Error>> {
 fn perl_value_error_with_context() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::Error("Cannot dereference: SCALAR at file.pl line 42".to_string());
     assert!(!val.is_expandable());
-    match val {
-        PerlValue::Error(msg) => assert!(msg.contains("line 42")),
-        _ => panic!("Expected error"),
-    }
+    assert!(matches!(&val, PerlValue::Error(msg) if msg.contains("line 42")));
     Ok(())
 }
 
