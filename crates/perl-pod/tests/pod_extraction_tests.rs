@@ -463,6 +463,34 @@ fn link_display_text_with_section_target_renders_markdown() {
     );
 }
 
+/// `L<Module::Name/Section With Spaces>` — section names with spaces must be
+/// percent-encoded in the URL so the markdown link is well-formed.
+/// This is common in CPAN POD: `L<perlfunc/"use Module LIST">`.
+#[test]
+fn link_section_with_spaces_encodes_url() {
+    let doc = extract_pod("=head1 NAME\n\nL<File::Find/The wanted function>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[File::Find]"), "expected '[File::Find]' but got: {name}");
+    // Spaces must be encoded — a raw space makes the markdown URL malformed
+    assert!(
+        name.contains("perl-module://File::Find/The%20wanted%20function"),
+        "expected percent-encoded URL but got: {name}"
+    );
+    assert!(!name.contains("The wanted function"), "raw space in URL — should be encoded: {name}");
+}
+
+/// `L<click here|Module/Section With Spaces>` — pipe form with spaces in section.
+#[test]
+fn link_pipe_with_spaced_section_encodes_url() {
+    let doc = extract_pod("=head1 NAME\n\nL<click here|File::Find/The wanted function>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[click here]"), "expected '[click here]' but got: {name}");
+    assert!(
+        name.contains("perl-module://File::Find/The%20wanted%20function"),
+        "expected percent-encoded URL but got: {name}"
+    );
+}
+
 #[test]
 fn multiple_pod_blocks() {
     let source = r#"
