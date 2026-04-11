@@ -61,7 +61,8 @@
     ]
   },
   "experimental": {
-    "inlineCompletionProvider": {}
+    "inlineCompletionProvider": {},
+    "typeHierarchyProvider": true
   },
   "foldingRangeProvider": true,
   "hoverProvider": true,
@@ -91,7 +92,9 @@
   },
   "selectionRangeProvider": true,
   "semanticTokensProvider": {
-    "full": true,
+    "full": {
+      "delta": true
+    },
     "legend": {
       "tokenModifiers": [
         "declaration",
