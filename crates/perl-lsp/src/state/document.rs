@@ -272,6 +272,8 @@ pub fn normalize_package_separator(s: &str) -> Cow<'_, str> {
 /// Client capabilities received during initialization
 #[derive(Debug, Clone, Default)]
 pub struct ClientCapabilities {
+    /// Supports server-to-client `workspace/configuration` requests.
+    pub workspace_configuration_support: bool,
     /// Supports LocationLink for goto declaration
     pub declaration_link_support: bool,
     /// Supports LocationLink for goto definition

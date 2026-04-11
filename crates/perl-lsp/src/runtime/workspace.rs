@@ -142,6 +142,43 @@ impl Drop for IndexingGuard {
 }
 
 impl LspServer {
+    /// Request client-scoped configuration for each workspace folder.
+    ///
+    /// This is a best-effort reverse request. If unsupported or failed, the
+    /// server continues using local/default configuration.
+    pub(crate) fn request_workspace_configuration(&self) {
+        if !self.client_capabilities.lock().workspace_configuration_support {
+            return;
+        }
+
+        let items: Vec<Value> = self
+            .workspace_folders
+            .lock()
+            .iter()
+            .filter_map(|folder| {
+                url::Url::parse(&folder.uri).ok().map(|scope_uri| {
+                    json!({
+                        "scopeUri": scope_uri.to_string(),
+                        "section": "perl",
+                    })
+                })
+            })
+            .collect();
+
+        if items.is_empty() {
+            return;
+        }
+
+        let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
+        if let Err(error) = self.outbound.send_request(
+            request_id,
+            crate::protocol::methods::WORKSPACE_CONFIGURATION,
+            json!({ "items": items }),
+        ) {
+            tracing::warn!(%error, "Failed to send workspace/configuration request");
+        }
+    }
+
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
     ///
     /// Uses routing helper for state-aware behavior:
@@ -558,6 +595,7 @@ impl LspServer {
 
                     // Refresh AI backend when config changes (constructs or clears provider)
                     self.refresh_ai_backend();
+                    self.request_workspace_configuration();
 
                     // Trigger client refresh for configuration-dependent features
                     if let Err(e) = self.refresh_controller.refresh_all(self) {
@@ -1163,6 +1201,7 @@ impl LspServer {
 
                 // Load config for all folders after changes
                 self.load_and_apply_project_config();
+                self.request_workspace_configuration();
 
                 // Update workspace index with new folder list
                 #[cfg(feature = "workspace")]

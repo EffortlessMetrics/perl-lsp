@@ -55,6 +55,46 @@ fn test_did_change_configuration_empty_settings() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn test_initialize_requests_workspace_configuration_when_supported() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "workspace": {
+            "configuration": true
+        }
+    })))?;
+
+    let requests = harness.drain_server_requests(1_000);
+    let config_request = requests
+        .iter()
+        .find(|request| request["method"] == "workspace/configuration")
+        .ok_or("expected workspace/configuration request")?;
+
+    assert_eq!(config_request["jsonrpc"], "2.0");
+    assert!(config_request.get("id").is_some());
+    let items = config_request["params"]["items"].as_array().ok_or("items must be array")?;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["section"], "perl");
+    assert_eq!(items[0]["scopeUri"], "file:///workspace");
+    Ok(())
+}
+
+#[test]
+fn test_initialize_skips_workspace_configuration_when_unsupported() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({
+        "workspace": {
+            "configuration": false
+        }
+    })))?;
+
+    let requests = harness.drain_server_requests(300);
+    let has_workspace_config =
+        requests.iter().any(|request| request["method"] == "workspace/configuration");
+    assert!(!has_workspace_config);
+    Ok(())
+}
+
 // ==================== didChangeWatchedFiles ====================
 
 #[test]
