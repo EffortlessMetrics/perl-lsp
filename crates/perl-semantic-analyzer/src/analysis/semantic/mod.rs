@@ -381,6 +381,25 @@ impl SemanticAnalyzer {
                 details,
             });
         }
+        if model.methods.iter().any(|m| m.name == "AUTOLOAD") {
+            let is_direct = model.name == receiver_class;
+            let details = if is_direct {
+                vec![
+                    format!("Resolved via AUTOLOAD in {}", model.name),
+                    format!("Requested method: {method_name}"),
+                ]
+            } else {
+                vec![
+                    format!("Resolved via inherited AUTOLOAD from {}", model.name),
+                    format!("Requested method: {method_name}"),
+                ]
+            };
+            return Some(HoverInfo {
+                signature: format!("sub {}::AUTOLOAD", model.name),
+                documentation: None,
+                details,
+            });
+        }
         None
     }
 
@@ -389,7 +408,12 @@ impl SemanticAnalyzer {
         model: &ClassModel,
         method_name: &str,
     ) -> Option<SourceLocation> {
-        model.methods.iter().find(|method| method.name == method_name).map(|method| method.location)
+        model
+            .methods
+            .iter()
+            .find(|method| method.name == method_name)
+            .or_else(|| model.methods.iter().find(|method| method.name == "AUTOLOAD"))
+            .map(|method| method.location)
     }
 
     fn resolve_plain_package_method_hover(
@@ -410,6 +434,25 @@ impl SemanticAnalyzer {
                 signature: format!("sub {}::{}", package_name, method_name),
                 documentation: None,
                 details: vec![format!("Inherited from {}", package_name)],
+            });
+        }
+
+        let qualified_autoload = format!("{}::AUTOLOAD", package_name);
+        let autoload_in_table = self.symbol_table.symbols.get("AUTOLOAD").is_some_and(|syms| {
+            syms.iter().any(|s| {
+                matches!(s.kind, crate::symbol::SymbolKind::Subroutine)
+                    && s.qualified_name == qualified_autoload
+            })
+        }) || self.symbol_table.symbols.contains_key(&qualified_autoload);
+
+        if autoload_in_table {
+            return Some(HoverInfo {
+                signature: format!("sub {}::AUTOLOAD", package_name),
+                documentation: None,
+                details: vec![
+                    format!("Resolved via AUTOLOAD in {}", package_name),
+                    format!("Requested method: {}", method_name),
+                ],
             });
         }
 
@@ -681,6 +724,39 @@ sub new { bless {}, shift }
         assert!(
             hover.details.iter().any(|detail| detail.contains("UNIVERSAL")),
             "expected UNIVERSAL hover details, got: {:?}",
+            hover.details
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_autoload_hover_fallback() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package Foo;
+sub AUTOLOAD { 1 }
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let hover = analyzer
+            .resolve_inherited_method_hover("Foo", "dynamic_method")
+            .ok_or("expected AUTOLOAD hover fallback")?;
+
+        assert!(
+            hover.signature.contains("Foo::AUTOLOAD"),
+            "expected AUTOLOAD hover signature, got: {}",
+            hover.signature
+        );
+        assert!(
+            hover.details.iter().any(|detail| detail.contains("AUTOLOAD")),
+            "expected AUTOLOAD hover details, got: {:?}",
+            hover.details
+        );
+        assert!(
+            hover.details.iter().any(|detail| detail.contains("dynamic_method")),
+            "expected requested method detail, got: {:?}",
             hover.details
         );
         Ok(())

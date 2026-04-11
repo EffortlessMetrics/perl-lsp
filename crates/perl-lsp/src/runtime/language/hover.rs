@@ -978,6 +978,49 @@ impl LspServer {
         let mut queue = VecDeque::new();
         let mut related_package_cache: HashMap<String, Vec<String>> = HashMap::new();
 
+        let build_package_hover = |package_name: &str| -> Option<Value> {
+            let members = workspace_index.get_package_members(package_name);
+            if members.iter().any(|symbol| symbol.name == method_name) {
+                let detail = if package_name == receiver_pkg {
+                    format!("Defined in `{package_name}`")
+                } else {
+                    format!("Inherited from `{package_name}`")
+                };
+                return Some(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Method**\n\n`sub {}::{}`\n\n{}",
+                            package_name, method_name, detail
+                        ),
+                    },
+                }));
+            }
+
+            if members.iter().any(|symbol| symbol.name == "AUTOLOAD") {
+                let detail = if package_name == receiver_pkg {
+                    format!("Resolved via `AUTOLOAD` in `{package_name}`")
+                } else {
+                    format!("Resolved via inherited `AUTOLOAD` in `{package_name}`")
+                };
+                return Some(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Method**\n\n`sub {}::AUTOLOAD`\n\n{}\n\nRequested method: `{}`",
+                            package_name, detail, method_name
+                        ),
+                    },
+                }));
+            }
+
+            None
+        };
+
+        if let Some(hover) = build_package_hover(receiver_pkg) {
+            return Some(hover);
+        }
+
         // Inner closure: enqueue parent and role packages not yet visited.
         // Mirrors the logic in `inherited_method_definition_location` (navigation.rs)
         // but also includes model.roles so that composed roles are traversed.
@@ -1033,18 +1076,8 @@ impl LspServer {
                 continue;
             }
 
-            // Check if this package defines the method
-            let members = workspace_index.get_package_members(&package_name);
-            if members.iter().any(|s| s.name == method_name) {
-                return Some(json!({
-                    "contents": {
-                        "kind": "markdown",
-                        "value": format!(
-                            "**Method**\n\n`sub {}::{}`\n\nInherited from `{}`",
-                            package_name, method_name, package_name
-                        ),
-                    },
-                }));
+            if let Some(hover) = build_package_hover(&package_name) {
+                return Some(hover);
             }
 
             enqueue_related(&package_name, &mut queue, &visited);

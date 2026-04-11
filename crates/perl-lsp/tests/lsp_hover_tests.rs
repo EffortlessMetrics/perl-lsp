@@ -776,3 +776,54 @@ $c->hover_greet();
 
     Ok(())
 }
+
+#[test]
+fn hover_shows_autoload_resolution_for_missing_method() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/HoverAuto.pm",
+        r#"package HoverAuto;
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    return $AUTOLOAD;
+}
+
+1;
+"#,
+    )?;
+
+    let main_content = r#"#!/usr/bin/perl
+use lib 'lib';
+use HoverAuto;
+HoverAuto->dynamic_hover();
+"#;
+    harness.open("file:///app.pl", main_content)?;
+
+    harness.barrier();
+
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///app.pl"},
+                "position": {"line": 3, "character": 13}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "AUTOLOAD-backed method hover should not be null");
+
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+
+    assert!(value.contains("AUTOLOAD"), "hover should mention AUTOLOAD resolution, got: {value}");
+    assert!(
+        value.contains("dynamic_hover"),
+        "hover should mention the requested method name, got: {value}"
+    );
+
+    Ok(())
+}

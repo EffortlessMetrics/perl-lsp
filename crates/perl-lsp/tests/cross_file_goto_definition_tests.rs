@@ -1802,6 +1802,68 @@ MyModule->process();
     Ok(())
 }
 
+#[test]
+fn go_to_definition_cross_file_package_method_falls_back_to_autoload() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open(
+        "file:///lib/AutoDispatch.pm",
+        r#"package AutoDispatch;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    return $AUTOLOAD;
+}
+
+1;
+"#,
+    )?;
+
+    harness.open(
+        "file:///app.pl",
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use AutoDispatch;
+
+AutoDispatch->dynamic_method();
+"#,
+    )?;
+
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///app.pl"},
+            "position": {"line": 6, "character": 16}
+        }),
+    )?;
+
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("expected goto-def array for AUTOLOAD fallback, got: {result:?}"))?;
+    assert!(!locations.is_empty(), "AUTOLOAD-backed method call should resolve to a definition");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+
+    let uri = first["uri"].as_str().ok_or("expected URI in goto-def result")?;
+    assert!(
+        uri.contains("AutoDispatch.pm"),
+        "AUTOLOAD fallback should point to AutoDispatch.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Tests for issue #3482: plain OO inheritance goto-def (use parent / use base / @ISA)
 // ---------------------------------------------------------------------------
