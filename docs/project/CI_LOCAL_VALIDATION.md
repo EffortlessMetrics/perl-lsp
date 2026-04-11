@@ -48,19 +48,25 @@ replacement for `nix develop -c just ci-gate`.
 
 ## Gate Tiers
 
-### Tier A: Merge Gate
+### Tier A: PR-Fast / Push Guard
+
+- **Command:** `just pr-fast`
+- **Use when:** during normal iteration and before every push (the pre-push hook runs this tier)
+- **Checks:** fast formatting/lint/test coverage meant to catch obvious regressions quickly
+
+### Tier B: Merge Gate
 
 - **Command:** `just ci-gate`
-- **Use when:** before every push
+- **Use when:** before merge, or any time you need the full local merge receipt
 - **Checks:** formatting, library Clippy, library tests, policy checks, LSP semantic definition tests, parser feature checks, and the hooks that CI relies on
 
-### Tier B: Release Confidence
+### Tier C: Release Confidence
 
 - **Command:** `just ci-full`
 - **Use when:** the change is broad, touches several crates, or needs release-level confidence
-- **Checks:** everything from Tier A, plus the broader Clippy/test/doc coverage used by the full local pipeline
+- **Checks:** everything from Tier B, plus the broader Clippy/test/doc coverage used by the full local pipeline
 
-### Tier C: Manual Smoke Test
+### Tier D: Manual Smoke Test
 
 - **Command:** build and run the release binary, then verify it in the editor you care about
 - **Use when:** editor behavior changed, parser behavior changed, or you are validating release readiness
@@ -77,9 +83,9 @@ replacement for `nix develop -c just ci-gate`.
 bash scripts/install-githooks.sh
 ```
 
-The hook runs `nix develop -c just ci-gate` when Nix is available, or
-`just ci-gate` otherwise. Use `git push --no-verify` only if you intentionally
-need to bypass the local gate.
+The hook runs `nix develop -c just pr-fast` when Nix is available, or
+`just pr-fast` otherwise. Use `git push --no-verify` only if you intentionally
+need to bypass the fast local push guard.
 
 ---
 
@@ -354,9 +360,10 @@ just ci-workflow-audit
 The practical order is:
 
 1. `just pr-fast` while iterating.
-2. `nix develop -c just ci-gate` before pushing.
-3. `just ci-full` for large refactors or release confidence.
-4. `just release-check` before tagging a release.
+2. Let the pre-push hook re-run `just pr-fast` on push, or run it manually first.
+3. `nix develop -c just ci-gate` before merge.
+4. `just ci-full` for large refactors or release confidence.
+5. `just release-check` before tagging a release.
 
 ### Test Lanes
 

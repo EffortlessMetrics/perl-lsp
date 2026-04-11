@@ -77,7 +77,8 @@ Note: `needs-accuracy-scout` and `accuracy-reviewed` are reserved for the accura
 
 ```bash
 just doctor                           # Workspace health check (run before any agent-spawning session)
-nix develop -c just ci-gate           # Canonical local gate (REQUIRED before push)
+just pr-fast                          # Canonical fast push guard
+nix develop -c just ci-gate           # Canonical local merge gate (before merge)
 cargo build -p perl-lsp-rs --release     # Build LSP server
 cargo test --workspace --lib          # Run all tests
 ```
@@ -168,8 +169,8 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 
 | Tier | Command | Time | When |
 |------|---------|------|------|
-| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration |
-| **B (Merge gate)** | `just ci-gate` | ~3-5 min | Before pushing (required) |
+| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration and pre-push hook |
+| **B (Merge gate)** | `just ci-gate` | ~3-5 min | Before merge |
 | **C (Nightly)** | `just ci-full` | ~15-30 min | Mutation, fuzzing, benchmarks |
 
 ## Parser Versions
@@ -242,7 +243,7 @@ Invoke `/coding-standards` for full detail.
 
 ## Contributing
 
-Run `nix develop -c just ci-gate` before pushing. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Run `just pr-fast` while iterating and `nix develop -c just ci-gate` before merge. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Continuous Swarm Development
 
