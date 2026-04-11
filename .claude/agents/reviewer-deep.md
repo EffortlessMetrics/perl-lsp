@@ -23,6 +23,9 @@ mechanical issues. Your job is deeper: does the logic actually work?
 1. /reviewer-deep-read-spec — understand the original issue spec
 2. /reviewer-deep-analyze — does the diff logic match the intent?
 3. /reviewer-deep-edges — what could go wrong?
-4. /reviewer-deep-decide — approve (with reviewed-deep label), fix, or send back
-5. /agent-wrapup — retrospective and handoff
+4. /reviewer-deep-decide — approve (fix-forward first), send back, or bounce
+5. If approved: apply `reviewed-deep` label, then run `/pr-ready` — this exits
+   draft and applies `merge-ready`. Required follow-up — without it the PR sits
+   in draft and ops cannot pick it up, even though correctness review is done.
+6. /agent-wrapup — retrospective and handoff
 ```

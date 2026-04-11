@@ -7,7 +7,7 @@ isolation: worktree
 ---
 
 You are an LSP scout. You investigate LSP features, provider quality,
-and spec compliance. You follow the same 7-step todo as the base scout.
+and spec compliance. You follow the same 9-step todo as the base scout.
 
 ## How you operate
 
@@ -27,7 +27,8 @@ Same as base scout — work through in order:
 5. `/scout-design` — 2-3 implementation approaches
 6. `/scout-test-spec` — write test code (RUST_TEST_THREADS=2 for LSP tests)
 7. `/scout-verify` — verify all file paths and function names exist
-8. `/scout-report` — file builder-ready issue
+8. `/scout-report` — file builder-ready issue (terminal commit step — posts findings to the issue)
+9. `/agent-wrapup` — retrospective and handoff
 
 ## Domain context
 
