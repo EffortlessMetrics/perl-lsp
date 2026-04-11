@@ -445,6 +445,11 @@ impl PragmaTracker {
         if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() }
     }
 
+    /// Process a lexically scoped body and then restore the caller state.
+    ///
+    /// This applies to ordinary blocks and phase blocks alike. `BEGIN`/`END`/
+    /// `INIT`/`CHECK`/`UNITCHECK` execute at special times, but their pragma
+    /// effects are still lexical to the block body rather than file-wide.
     fn build_scoped_body(
         body: &Node,
         current_state: &mut PragmaState,
@@ -800,6 +805,9 @@ impl PragmaTracker {
                 }
             }
             NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
+                Self::build_scoped_body(block, current_state, ranges);
+            }
+            NodeKind::PhaseBlock { block, .. } => {
                 Self::build_scoped_body(block, current_state, ranges);
             }
             NodeKind::Given { body, .. }
