@@ -13,6 +13,7 @@ mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
+use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
 use tasks::*;
@@ -873,6 +874,12 @@ enum Commands {
     /// Check that test-bearing Rust files are reachable from their module tree.
     CheckTestWiring,
 
+    /// Emit per-subsystem engineering-health metrics.
+    Metrics {
+        #[command(subcommand)]
+        command: MetricsCommand,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -1111,6 +1118,36 @@ enum FeaturesCommand {
 
     /// Generate compliance report
     Report,
+}
+
+#[derive(Subcommand)]
+enum MetricsCommand {
+    /// Emit parser phase timings and benchmark summary.
+    ParserStats {
+        /// Path to benchmark JSON (default: most recent in benchmarks/results/)
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Write output to .ci/metrics/parser.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// [stub] LSP request latency statistics.
+    LspStats,
+    /// [stub] Workspace index memory and timing statistics.
+    WorkspaceStats,
+    /// [stub] Diagnostics accuracy and latency statistics.
+    DiagnosticsStats,
+    /// [stub] Hierarchical memory breakdown across LSP subsystems.
+    Memory,
+    /// [stub] Release-health dashboard.
+    ReleaseHealth {
+        /// Number of days of history to analyze
+        #[arg(long, default_value_t = 30)]
+        days: u64,
+        /// Write output to .ci/metrics/release-health.json
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1397,6 +1434,16 @@ fn main() -> Result<()> {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
         }
         Commands::CheckTestWiring => check_test_wiring::run(),
+        Commands::Metrics { command } => match command {
+            MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
+            MetricsCommand::LspStats => metrics::lsp_stats::run(),
+            MetricsCommand::WorkspaceStats => metrics::workspace_stats::run(),
+            MetricsCommand::DiagnosticsStats => metrics::diagnostics_stats::run(),
+            MetricsCommand::Memory => metrics::memory::run(),
+            MetricsCommand::ReleaseHealth { days, json } => {
+                metrics::release_health::run(days, json)
+            }
+        },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {
