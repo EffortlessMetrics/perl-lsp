@@ -107,7 +107,10 @@ pub fn check_floor_metrics(
 
         let regression_pct = if is_lower_better {
             // Higher current value = regression.
-            if cv > *bv { (cv - bv) / bv.max(1.0) } else { 0.0 }
+            // Use bv.max(f64::EPSILON) so that sub-1.0 baselines (e.g. an
+            // error_rate of 0.05) produce a correct fractional regression rather
+            // than being attenuated by a hard floor of 1.0.
+            if cv > *bv { (cv - bv) / bv.max(f64::EPSILON) } else { 0.0 }
         } else {
             // Lower current value = regression.
             if cv < *bv { (bv - cv) / bv.max(f64::EPSILON) } else { 0.0 }
@@ -475,5 +478,57 @@ mod tests {
 
         let violations = check_floor_metrics(&baseline, &current);
         assert!(violations.is_empty(), "count decrease is an improvement, not a violation");
+    }
+
+    // -------------------------------------------------------------------------
+    // Lower-is-better with sub-1.0 baseline: doubling must be a violation.
+    // Previously bv.max(1.0) attenuated this to ~0.1 % — below any tolerance.
+    // After fix to bv.max(f64::EPSILON), it registers as 100 % regression.
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_ratchet_lower_is_better_sub_one_baseline_regression() {
+        let mut baseline =
+            make_baseline(BTreeMap::from([("error_rate_count".to_string(), Some(0.05))]));
+        baseline.tolerance_pct = 0.005; // 0.5 % band
+
+        // Doubling 0.05 -> 0.10 is a 100 % regression; must exceed tolerance.
+        let current = BTreeMap::from([("error_rate_count".to_string(), Some(0.10))]);
+
+        let violations = check_floor_metrics(&baseline, &current);
+        assert_eq!(violations.len(), 1, "doubling a sub-1.0 lower-is-better metric must violate");
+        assert_eq!(violations[0].metric, "error_rate_count");
+        // regression_pct = (0.10 - 0.05) / 0.05 = 1.0 (100 %)
+        assert!(
+            violations[0].regression_pct > 0.5,
+            "regression_pct should be ~1.0 (100%), got {}",
+            violations[0].regression_pct
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Schema version mismatch must return an error.
+    // load_baseline is tested here via a temp file since it reads from disk.
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_load_baseline_schema_version_mismatch() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let baselines_dir = dir.path().join(".ci/metrics/baselines");
+        std::fs::create_dir_all(&baselines_dir).unwrap();
+        let path = baselines_dir.join("test.json");
+        let mut f = std::fs::File::create(&path).unwrap();
+        write!(
+            f,
+            r#"{{"schema_version":99,"measured_at":"2026-01-01T00:00:00Z","subsystem":"test","commit":"abc","floor_metrics":{{}},"improvement_metrics":{{}}}}"#
+        )
+        .unwrap();
+
+        let result = load_baseline(dir.path(), "test");
+        assert!(result.is_err(), "schema version mismatch must return Err");
+        let msg = format!("{}", result.unwrap_err());
+        assert!(
+            msg.contains("schema version mismatch"),
+            "error message must mention schema version mismatch; got: {msg}"
+        );
     }
 }
