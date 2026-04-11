@@ -1127,10 +1127,8 @@ impl LspServer {
                             super::workspace_folder::WorkspaceFolderState::new(uri.clone());
 
                         // Resolve the folder path
-                        if let Ok(url) = Url::parse(uri) {
-                            if let Ok(path) = url.to_file_path() {
-                                folder_state = folder_state.with_path(path);
-                            }
+                        if let Some(path) = super::source_path_from_uri(uri) {
+                            folder_state = folder_state.with_path(path);
                         }
 
                         workspace_folders.push(folder_state);
