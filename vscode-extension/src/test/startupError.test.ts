@@ -13,7 +13,18 @@
  *
  * The user-visible error message must include an actionable hint (not just
  * "corrupted or incompatible") and a specific remediation step.
+ *
+ * Also covers the diagnosis cache introduced in #4193:
+ *   - serverNotRunningMessage() returns the cached diagnosis hint when set
+ *   - serverNotRunningMessage() returns the generic fallback when no cache
+ *   - Cache can be cleared (simulates successful server restart)
  */
+
+jest.mock('vscode-languageclient/node', () => ({
+  LanguageClient: class {},
+  Trace: { Off: 'off', Messages: 'messages', Verbose: 'verbose' },
+  TransportKind: { stdio: 0 },
+}));
 
 import {
   classifyStartupError,
@@ -21,6 +32,10 @@ import {
   StartupErrorKind,
   selectBestDiagnosis,
 } from '../startupDiagnosis';
+import {
+  serverNotRunningMessage,
+  _setLastStartupDiagnosisForTest,
+} from '../extension';
 
 // ---------------------------------------------------------------------------
 // classifyStartupError — pure classification of stderr/stdout text
@@ -272,5 +287,72 @@ describe('formatStartupFailureDialog', () => {
     expect(message).toContain('Perl Language Server failed to start.');
     expect(message).toContain('glibc');
     expect(message).not.toContain('Perl interpreter not found...');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// serverNotRunningMessage — diagnosis cache integration (#4193)
+//
+// When a StartupErrorDiagnosis is cached via lastStartupDiagnosis,
+// serverNotRunningMessage() must format and return it so users see the
+// specific root cause (e.g. "glibc mismatch") rather than a generic hint.
+// When no diagnosis is cached, the generic fallback must be returned.
+// ---------------------------------------------------------------------------
+
+describe('serverNotRunningMessage diagnosis cache (#4193)', () => {
+  afterEach(() => {
+    // Reset cache after each test to prevent state leak
+    _setLastStartupDiagnosisForTest(undefined);
+  });
+
+  test('returns generic fallback when no diagnosis is cached', () => {
+    _setLastStartupDiagnosisForTest(undefined);
+    const msg = serverNotRunningMessage();
+    expect(msg).toContain('Perl Language Server is not running');
+    expect(msg).toContain('Health Check');
+  });
+
+  test('returns formatted diagnosis when glibc mismatch is cached', () => {
+    const diagnosis = classifyStartupError(
+      "error while loading shared libraries: libc.so.6: version `GLIBC_2.32' not found",
+    );
+    _setLastStartupDiagnosisForTest(diagnosis);
+
+    const msg = serverNotRunningMessage();
+    expect(msg).toContain('glibc');
+    expect(msg).toContain('cargo install');
+    // Must not show generic fallback when diagnosis is present
+    expect(msg).not.toBe('Perl Language Server is not running. Run the Health Check (Command Palette: "Perl: Run Health Check") to diagnose the issue.');
+  });
+
+  test('returns formatted diagnosis when permission denied is cached', () => {
+    const diagnosis = classifyStartupError('Permission denied');
+    _setLastStartupDiagnosisForTest(diagnosis);
+
+    const msg = serverNotRunningMessage();
+    expect(msg).toContain('permission');
+    expect(msg).toContain('chmod');
+  });
+
+  test('returns generic fallback after cache is cleared (simulates successful restart)', () => {
+    // Set a diagnosis, then clear it (as initializeLanguageClient does on success)
+    _setLastStartupDiagnosisForTest(classifyStartupError('Permission denied'));
+    _setLastStartupDiagnosisForTest(undefined);
+
+    const msg = serverNotRunningMessage();
+    expect(msg).toContain('Perl Language Server is not running');
+  });
+
+  test('mid-session crash diagnosis is surfaced via serverNotRunningMessage', () => {
+    // Simulate what bindClientState sets when server stops unexpectedly
+    _setLastStartupDiagnosisForTest({
+      kind: StartupErrorKind.Unknown,
+      hint: 'The Perl Language Server stopped unexpectedly. Check the Output panel for details.',
+      remediation: 'Try restarting the server (Command Palette: "Perl: Restart Server") or run the Health Check.',
+    });
+
+    const msg = serverNotRunningMessage();
+    expect(msg).toContain('stopped unexpectedly');
+    expect(msg).toContain('Restart Server');
   });
 });
