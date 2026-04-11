@@ -10,6 +10,7 @@ use std::path::PathBuf;
 mod tasks;
 mod types;
 mod utils;
+use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
 use tasks::targeted_checks::CheckMode;

@@ -12,6 +12,10 @@
 //! - Thread-safe fixture loading with adaptive threading support
 //! - Unicode-safe test data with UTF-8/UTF-16 boundary validation
 
+// Example integration tests — wired by check-test-wiring guard (#4102).
+#[cfg(test)]
+mod integration_example;
+
 // Module declarations for fixture categories
 pub mod parser {
     pub mod comprehensive_syntax_fixtures;
