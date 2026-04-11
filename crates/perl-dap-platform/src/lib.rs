@@ -260,7 +260,11 @@ fn plenv_root() -> PathBuf {
     home_dir().join(".plenv")
 }
 
-/// Return the user home directory, falling back to the system temp directory.
+/// Return the user home directory, falling back to the OS temp directory.
+///
+/// Checks `HOME` (Unix) then `USERPROFILE` (Windows) before falling back to
+/// [`std::env::temp_dir`]. The old fallback of `PathBuf::from("/tmp")` broke
+/// on Windows where `/tmp` does not exist.
 fn home_dir() -> PathBuf {
     if let Ok(home) = env::var("HOME") {
         if !home.is_empty() {
@@ -516,5 +520,45 @@ mod tests {
             windows_perl_rank(active) < windows_perl_rank(msys),
             "ActiveState should rank better than msys perl"
         );
+    }
+
+    #[test]
+    fn home_dir_fallback_is_not_slash_tmp() {
+        // When both HOME and USERPROFILE are absent, home_dir() must NOT return
+        // PathBuf::from("/tmp") because /tmp does not exist on Windows.
+        // It should return std::env::temp_dir() instead.
+        //
+        // We test the fallback by temporarily unsetting both env vars.
+        // This is safe because home_dir() is a pure function with no side effects.
+        let original_home = std::env::var("HOME").ok();
+        let original_userprofile = std::env::var("USERPROFILE").ok();
+
+        // SAFETY: single-threaded test; no other threads reading these vars.
+        unsafe {
+            std::env::remove_var("HOME");
+            std::env::remove_var("USERPROFILE");
+        }
+
+        let result = home_dir();
+
+        // Restore env vars.
+        unsafe {
+            if let Some(val) = original_home {
+                std::env::set_var("HOME", val);
+            }
+            if let Some(val) = original_userprofile {
+                std::env::set_var("USERPROFILE", val);
+            }
+        }
+
+        // The fallback must NOT be the literal "/tmp".
+        assert_ne!(
+            result,
+            std::path::PathBuf::from("/tmp"),
+            "home_dir() fallback must not return /tmp (broken on Windows): got {:?}",
+            result
+        );
+        // The fallback must be non-empty.
+        assert!(!result.as_os_str().is_empty(), "home_dir() must return a non-empty path");
     }
 }
