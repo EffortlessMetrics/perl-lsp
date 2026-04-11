@@ -601,6 +601,42 @@ impl<'a> Parser<'a> {
                     }
                 }
 
+                // `undef(LIST)` — undef with explicit argument list undefines variables.
+                // `EXPR(args)` where EXPR is a subscript or dereference — implicit coderef call.
+                // In Perl: `$h{cb}($arg)` and `$arr[0]($arg)` are valid coderef invocations
+                // without a mandatory `->`.  We handle this for the patterns that arise in
+                // real CPAN code; the test cases are driven by the expected_colon error bucket.
+                Some(TokenKind::LeftParen)
+                    if matches!(&expr.kind, NodeKind::Undef | NodeKind::Binary { .. }) =>
+                {
+                    // Disambiguate: `Undef` → `undef(LIST)` builtin call.
+                    // Everything else (subscript / deref Binary) → implicit coderef call.
+                    let args = self.parse_args()?;
+                    let start = expr.location.start;
+                    let end = self.previous_position();
+
+                    record_postfix_layer()?;
+                    expr = if matches!(&expr.kind, NodeKind::Undef) {
+                        Node::new(
+                            NodeKind::FunctionCall {
+                                name: "undef".to_string(),
+                                args,
+                            },
+                            SourceLocation { start, end },
+                        )
+                    } else {
+                        let mut all_args = vec![expr];
+                        all_args.extend(args);
+                        Node::new(
+                            NodeKind::FunctionCall {
+                                name: "->()".to_string(),
+                                args: all_args,
+                            },
+                            SourceLocation { start, end },
+                        )
+                    };
+                }
+
                 _ => {
                     // Check if this is a builtin function that can take bare arguments
                     if let NodeKind::Identifier { name } = &expr.kind {
