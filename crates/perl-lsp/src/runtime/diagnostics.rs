@@ -990,11 +990,13 @@ fn is_fixable_diagnostic(code: &str) -> bool {
 }
 
 fn is_fixable_perlcritic_policy(code: &str) -> bool {
+    let normalized = code.strip_prefix("Perl::Critic::Policy::").unwrap_or(code);
     matches!(
-        code,
+        normalized,
         "InputOutput::ProhibitBarewordFileHandles"
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"
+            | "InputOutput::ProhibitTwoArgOpen"
             | "TestingAndDebugging::RequireUseStrict"
             | "TestingAndDebugging::RequireUseWarnings"
             | "Variables::ProhibitUnusedVariables"

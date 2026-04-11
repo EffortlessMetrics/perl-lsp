@@ -410,13 +410,15 @@ pub struct DiagnosticData {
 ///
 /// The authoritative source is `crates/perl-lsp-code-actions/src/code_actions.rs`.
 fn is_fixable_diagnostic(code: &str) -> bool {
+    let normalized = code.strip_prefix("Perl::Critic::Policy::").unwrap_or(code);
     if matches!(
-        code,
+        normalized,
         "TestingAndDebugging::RequireUseStrict"
             | "TestingAndDebugging::RequireUseWarnings"
             | "InputOutput::ProhibitBarewordFileHandles"
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"
+            | "InputOutput::ProhibitTwoArgOpen"
             | "Variables::ProhibitUnusedVariables"
     ) {
         return true;
@@ -588,6 +590,10 @@ mod tests {
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseStrict"));
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
         assert!(is_fixable_diagnostic("InputOutput::RequireThreeArgOpen"));
+        assert!(is_fixable_diagnostic("InputOutput::ProhibitTwoArgOpen"));
+        assert!(is_fixable_diagnostic(
+            "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict"
+        ));
         assert!(is_fixable_diagnostic("Variables::ProhibitUnusedVariables"));
     }
 
