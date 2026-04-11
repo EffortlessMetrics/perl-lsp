@@ -93,8 +93,11 @@ pub struct SymbolDecl {
 /// subsequent top-level statements.
 pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<SymbolDecl> {
     let mut out = Vec::new();
-    let mut ctx =
-        WalkCtx { current_package: current_package.map(str::to_owned), const_fast_enabled: false };
+    let mut ctx = WalkCtx {
+        current_package: current_package.map(str::to_owned),
+        const_fast_enabled: false,
+        readonly_enabled: false,
+    };
     walk(root, &mut ctx, &mut out);
     out
 }
@@ -104,6 +107,7 @@ pub fn extract_symbol_decls(root: &Node, current_package: Option<&str>) -> Vec<S
 struct WalkCtx {
     current_package: Option<String>,
     const_fast_enabled: bool,
+    readonly_enabled: bool,
 }
 
 impl WalkCtx {
@@ -246,9 +250,19 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
             ctx.const_fast_enabled = true;
         }
 
+        NodeKind::Use { module, .. } if module == "Readonly" => {
+            ctx.readonly_enabled = true;
+        }
+
         NodeKind::FunctionCall { name, args } if ctx.const_fast_enabled && name == "const" => {
             for arg in args {
                 push_const_fast_decl(arg, node, ctx, out);
+            }
+        }
+
+        NodeKind::FunctionCall { name, args } if ctx.readonly_enabled && name == "Readonly" => {
+            for arg in args {
+                push_readonly_decl(arg, node, ctx, out);
             }
         }
 
@@ -347,13 +361,15 @@ fn push_unique(names: &mut Vec<String>, name: String) {
 fn push_const_fast_decl(arg: &Node, call_node: &Node, ctx: &WalkCtx, out: &mut Vec<SymbolDecl>) {
     match &arg.kind {
         NodeKind::VariableDeclaration { variable, .. } => {
-            if let Some(decl) = const_fast_decl_from_node(variable, call_node, ctx) {
+            if let Some(decl) = constant_wrapper_decl_from_node(variable, call_node, ctx, "const") {
                 out.push(decl);
             }
         }
         NodeKind::VariableListDeclaration { variables, .. } => {
             for variable in variables {
-                if let Some(decl) = const_fast_decl_from_node(variable, call_node, ctx) {
+                if let Some(decl) =
+                    constant_wrapper_decl_from_node(variable, call_node, ctx, "const")
+                {
                     out.push(decl);
                 }
             }
@@ -362,10 +378,33 @@ fn push_const_fast_decl(arg: &Node, call_node: &Node, ctx: &WalkCtx, out: &mut V
     }
 }
 
-fn const_fast_decl_from_node(
+fn push_readonly_decl(arg: &Node, call_node: &Node, ctx: &WalkCtx, out: &mut Vec<SymbolDecl>) {
+    match &arg.kind {
+        NodeKind::VariableDeclaration { variable, .. } => {
+            if let Some(decl) =
+                constant_wrapper_decl_from_node(variable, call_node, ctx, "Readonly")
+            {
+                out.push(decl);
+            }
+        }
+        NodeKind::VariableListDeclaration { variables, .. } => {
+            for variable in variables {
+                if let Some(decl) =
+                    constant_wrapper_decl_from_node(variable, call_node, ctx, "Readonly")
+                {
+                    out.push(decl);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn constant_wrapper_decl_from_node(
     var_node: &Node,
     call_node: &Node,
     ctx: &WalkCtx,
+    declarator: &str,
 ) -> Option<SymbolDecl> {
     match &var_node.kind {
         NodeKind::Variable { name, .. } => {
@@ -378,11 +417,11 @@ fn const_fast_decl_from_node(
                 full_span: (call_node.location.start, call_node.location.end),
                 anchor_span,
                 container,
-                declarator: Some("const".to_string()),
+                declarator: Some(declarator.to_string()),
             })
         }
         NodeKind::VariableWithAttributes { variable, .. } => {
-            const_fast_decl_from_node(variable, call_node, ctx)
+            constant_wrapper_decl_from_node(variable, call_node, ctx, declarator)
         }
         _ => None,
     }

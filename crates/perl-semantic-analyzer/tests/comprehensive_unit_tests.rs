@@ -189,6 +189,71 @@ const my @ARRAY => (1, 2, 3);
 }
 
 #[test]
+fn symbol_extraction_readonly_scalar_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Readonly;
+Readonly my $PI => 3.14159;
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "PI", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_readonly_hash_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Readonly;
+Readonly my %HASH => (answer => 42);
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "HASH", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_readonly_scalar_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Readonly;
+Readonly my $PI => 3.14159;
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "PI", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_readonly_array_is_constant() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use Readonly;
+Readonly my @ARRAY => (1, 2, 3);
+"#;
+    let table = parse_and_extract(code);
+    assert!(has_symbol(&table, "ARRAY", SymbolKind::Constant));
+    Ok(())
+}
+
+#[test]
+fn symbol_extraction_readonly_our_uses_package_qualified_name()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+package My::Pkg;
+use Readonly;
+Readonly our $PACKAGE_CONSTANT => 'foo';
+"#;
+    let table = parse_and_extract(code);
+    let symbols = table.symbols.get("PACKAGE_CONSTANT").ok_or("PACKAGE_CONSTANT not found")?;
+    assert!(
+        symbols.iter().any(|symbol| {
+            symbol.kind == SymbolKind::Constant
+                && symbol.qualified_name == "My::Pkg::PACKAGE_CONSTANT"
+        }),
+        "expected package-qualified Readonly constant symbol, got: {:?}",
+        symbols.iter().map(|symbol| &symbol.qualified_name).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
 fn symbol_extraction_documentation_comment() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 # This sub does amazing things

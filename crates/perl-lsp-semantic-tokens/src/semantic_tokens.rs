@@ -571,6 +571,7 @@ pub fn collect_semantic_tokens(
     }
 
     let const_fast_enabled = ast_uses_const_fast(ast);
+    let readonly_enabled = ast_uses_readonly(ast);
 
     // 2a) Collect variable declaration spans for modifier tagging
     let decl_spans = declaration_readonly_flags(ast)
@@ -711,7 +712,9 @@ pub fn collect_semantic_tokens(
 
         let (kind, mods): (&str, u32) = match &node.kind {
             NodeKind::FunctionCall { name, .. } => {
-                if const_fast_enabled && name == "const" {
+                if (const_fast_enabled && name == "const")
+                    || (readonly_enabled && name == "Readonly")
+                {
                     return true;
                 }
                 // Skip builtins that should remain as keywords from the lexer pass
@@ -1019,6 +1022,7 @@ where
 fn declaration_readonly_flags(ast: &Node) -> FxHashMap<(usize, usize), bool> {
     let mut flags = FxHashMap::default();
     let const_fast_enabled = ast_uses_const_fast(ast);
+    let readonly_enabled = ast_uses_readonly(ast);
 
     walk_ast_full(ast, &mut |node| {
         match &node.kind {
@@ -1041,6 +1045,9 @@ fn declaration_readonly_flags(ast: &Node) -> FxHashMap<(usize, usize), bool> {
             NodeKind::FunctionCall { name, args } if const_fast_enabled && name == "const" => {
                 mark_const_fast_decl_flags(args, &mut flags);
             }
+            NodeKind::FunctionCall { name, args } if readonly_enabled && name == "Readonly" => {
+                mark_readonly_decl_flags(args, &mut flags);
+            }
             _ => {}
         }
         true
@@ -1061,7 +1068,35 @@ fn ast_uses_const_fast(ast: &Node) -> bool {
     enabled
 }
 
+fn ast_uses_readonly(ast: &Node) -> bool {
+    let mut enabled = false;
+    walk_ast_full(ast, &mut |node| {
+        if matches!(&node.kind, NodeKind::Use { module, .. } if module == "Readonly") {
+            enabled = true;
+            return false;
+        }
+        true
+    });
+    enabled
+}
+
 fn mark_const_fast_decl_flags(args: &[Node], flags: &mut FxHashMap<(usize, usize), bool>) {
+    for arg in args {
+        match &arg.kind {
+            NodeKind::VariableDeclaration { variable, .. } => {
+                flags.insert((variable.location.start, variable.location.end), true);
+            }
+            NodeKind::VariableListDeclaration { variables, .. } => {
+                for variable in variables {
+                    flags.insert((variable.location.start, variable.location.end), true);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn mark_readonly_decl_flags(args: &[Node], flags: &mut FxHashMap<(usize, usize), bool>) {
     for arg in args {
         match &arg.kind {
             NodeKind::VariableDeclaration { variable, .. } => {

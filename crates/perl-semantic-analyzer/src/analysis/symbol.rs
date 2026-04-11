@@ -405,6 +405,8 @@ pub struct SymbolExtractor {
     framework_flags: HashMap<String, FrameworkFlags>,
     /// Whether `use Const::Fast` has been seen in the current compilation unit.
     const_fast_enabled: bool,
+    /// Whether `use Readonly` has been seen in the current compilation unit.
+    readonly_enabled: bool,
 }
 
 impl Default for SymbolExtractor {
@@ -423,6 +425,7 @@ impl SymbolExtractor {
             source: String::new(),
             framework_flags: HashMap::new(),
             const_fast_enabled: false,
+            readonly_enabled: false,
         }
     }
 
@@ -435,6 +438,7 @@ impl SymbolExtractor {
             source: source.to_string(),
             framework_flags: HashMap::new(),
             const_fast_enabled: false,
+            readonly_enabled: false,
         }
     }
 
@@ -710,6 +714,12 @@ impl SymbolExtractor {
                 {
                     return;
                 }
+                if self.readonly_enabled
+                    && name == "Readonly"
+                    && self.try_extract_readonly_declaration(args)
+                {
+                    return;
+                }
 
                 // Track function call as a reference
                 let reference = SymbolReference {
@@ -800,6 +810,9 @@ impl SymbolExtractor {
                 self.update_framework_context(module, args);
                 if module == "Const::Fast" {
                     self.const_fast_enabled = true;
+                }
+                if module == "Readonly" {
+                    self.readonly_enabled = true;
                 }
                 if module == "EV" {
                     self.synthesize_ev_framework_symbol(node.location);
@@ -2759,15 +2772,27 @@ impl SymbolExtractor {
 
         for arg in args {
             match &arg.kind {
-                NodeKind::VariableDeclaration { variable, .. } => {
-                    if self.add_const_fast_symbol(variable, &[]) {
+                NodeKind::VariableDeclaration { declarator, variable, .. } => {
+                    if self.add_constant_wrapper_symbol(
+                        variable,
+                        &[],
+                        declarator,
+                        "const",
+                        "Const::Fast read-only variable",
+                    ) {
                         matched = true;
                     }
                 }
-                NodeKind::VariableListDeclaration { variables, .. } => {
+                NodeKind::VariableListDeclaration { declarator, variables, attributes, .. } => {
                     let mut saw_decl = false;
                     for variable in variables {
-                        if self.add_const_fast_symbol(variable, &[]) {
+                        if self.add_constant_wrapper_symbol(
+                            variable,
+                            attributes,
+                            declarator,
+                            "const",
+                            "Const::Fast read-only variable",
+                        ) {
                             saw_decl = true;
                         }
                     }
@@ -2780,17 +2805,66 @@ impl SymbolExtractor {
         matched
     }
 
-    fn add_const_fast_symbol(&mut self, variable: &Node, attributes: &[String]) -> bool {
+    fn try_extract_readonly_declaration(&mut self, args: &[Node]) -> bool {
+        let mut matched = false;
+
+        for arg in args {
+            match &arg.kind {
+                NodeKind::VariableDeclaration { declarator, variable, attributes, .. } => {
+                    if self.add_constant_wrapper_symbol(
+                        variable,
+                        attributes,
+                        declarator,
+                        "Readonly",
+                        "Readonly read-only variable",
+                    ) {
+                        matched = true;
+                    }
+                }
+                NodeKind::VariableListDeclaration { declarator, variables, attributes, .. } => {
+                    let mut saw_decl = false;
+                    for variable in variables {
+                        if self.add_constant_wrapper_symbol(
+                            variable,
+                            attributes,
+                            declarator,
+                            "Readonly",
+                            "Readonly read-only variable",
+                        ) {
+                            saw_decl = true;
+                        }
+                    }
+                    matched |= saw_decl;
+                }
+                _ => self.visit_node(arg),
+            }
+        }
+
+        matched
+    }
+
+    fn add_constant_wrapper_symbol(
+        &mut self,
+        variable: &Node,
+        attributes: &[String],
+        scope_declarator: &str,
+        declarator: &str,
+        documentation: &str,
+    ) -> bool {
         match &variable.kind {
             NodeKind::Variable { name, .. } => {
                 self.table.add_symbol(Symbol {
                     name: name.clone(),
-                    qualified_name: name.clone(),
+                    qualified_name: if scope_declarator == "our" {
+                        format!("{}::{}", self.table.current_package, name)
+                    } else {
+                        name.clone()
+                    },
                     kind: SymbolKind::Constant,
                     location: variable.location,
                     scope_id: self.table.current_scope(),
-                    declaration: Some("const".to_string()),
-                    documentation: Some("Const::Fast read-only variable".to_string()),
+                    declaration: Some(declarator.to_string()),
+                    documentation: Some(documentation.to_string()),
                     attributes: attributes.to_vec(),
                 });
                 true
@@ -2798,7 +2872,13 @@ impl SymbolExtractor {
             NodeKind::VariableWithAttributes { variable, attributes: inner_attributes } => {
                 let mut merged = attributes.to_vec();
                 merged.extend(inner_attributes.iter().cloned());
-                self.add_const_fast_symbol(variable, &merged)
+                self.add_constant_wrapper_symbol(
+                    variable,
+                    &merged,
+                    scope_declarator,
+                    declarator,
+                    documentation,
+                )
             }
             _ => false,
         }
