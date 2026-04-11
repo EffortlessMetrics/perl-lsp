@@ -1137,6 +1137,25 @@ fn test_smartmatch_warns_after_no_feature_switch() -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+#[test]
+fn test_smartmatch_warns_after_no_feature_switch_disables_bundle() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("v5.8"),
+        use_feature_arg("':5.10'"),
+        no_feature("switch"),
+        smartmatch_node(),
+    ]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning when 'no feature \"switch\"' disables the ':5.10' bundle on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Test 21: defer block in v5.34 -> warns (requires v5.36+)
 // ---------------------------------------------------------------------------
