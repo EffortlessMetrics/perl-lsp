@@ -1,7 +1,7 @@
 {
   "name": "perl-lsp-rs",
   "displayName": "Perl Language Server (perl-lsp)",
-  "description": "Native Perl 5 LSP: go-to-definition, completions, diagnostics, refactoring, debugging, 98 features. Binary auto-downloaded on first activation; set perl-lsp.serverPath for offline/enterprise use.",
+  "description": "Native Perl 5 language server. Fast. Feature-rich. Zero dependencies.",
   "version": "0.12.3",
   "publisher": "EffortlessMetrics",
   "preview": true,
@@ -51,38 +51,14 @@
     "theme": "dark"
   },
   "license": "MIT",
+  "sponsor": {
+    "url": "https://github.com/EffortlessMetrics/perl-lsp"
+  },
   "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:perl",
     "onLanguage:gherkin",
-    "onWalkthrough:perl-lsp.gettingStarted",
-    "onCommand:perl-lsp.restart",
-    "onCommand:perl-lsp.showVersion",
-    "onCommand:perl-lsp.showOutput",
-    "onCommand:perl-lsp.showStatusMenu",
-    "onCommand:perl-lsp.reinstall",
-    "onCommand:perl-lsp.checkForUpdate",
-    "onCommand:perl-lsp.organizeImports",
-    "onCommand:perl-lsp.runTests",
-    "onCommand:perl-lsp.runPerlCritic",
-    "onCommand:perl-lsp.setPerlCriticSeverity",
-    "onCommand:perl-lsp.extractVariable",
-    "onCommand:perl-lsp.extractMethod",
-    "onCommand:perl-lsp.showRefactoringOptions",
-    "onCommand:perl-lsp.showWhatsNew",
-    "onCommand:perl-lsp.createDebugConfig",
-    "onCommand:perl-lsp.runHealthCheck",
-    "onCommand:perl-lsp.checkSyntax",
-    "onCommand:perl-lsp.runCurrentTest",
-    "onCommand:perl-lsp.runTestAtCursor",
-    "onCommand:perl-lsp.runAllTests",
-    "onCommand:perl-lsp.formatDocument",
-    "onCommand:perl-lsp.showIncPaths",
-    "onCommand:perl-lsp.openModule",
-    "onCommand:perl-lsp.showParserAst",
-    "onCommand:perl-lsp.openConfigurationGuide",
-    "onCommand:perl-lsp.reportIssue",
-    "onCommand:perl-lsp.previewPod"
+    "onWalkthrough:perl-lsp.gettingStarted"
   ],
   "contributes": {
     "languages": [
