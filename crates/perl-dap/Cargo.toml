@@ -127,6 +127,11 @@ path = "tests/dap_golden_transcript_tests.rs"
 # AC13: Comprehensive integration tests with golden transcripts
 
 [[test]]
+name = "dap_attach_e2e"
+path = "tests/dap_attach_e2e.rs"
+# AC13: TCP attach e2e happy-path coverage
+
+[[test]]
 name = "dap_breakpoint_matrix_tests"
 path = "tests/dap_breakpoint_matrix_tests.rs"
 # AC13, AC14: Breakpoint validation edge cases
