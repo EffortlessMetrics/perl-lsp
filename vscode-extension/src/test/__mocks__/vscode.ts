@@ -38,12 +38,18 @@ export enum ProgressLocation {
 }
 
 export class Range {
+  public start: { line: number; character: number };
+  public end: { line: number; character: number };
+
   constructor(
     public startLine: number,
     public startCharacter: number,
     public endLine: number,
     public endCharacter: number,
-  ) {}
+  ) {
+    this.start = { line: startLine, character: startCharacter };
+    this.end = { line: endLine, character: endCharacter };
+  }
 }
 
 export enum SymbolKind {
@@ -144,7 +150,10 @@ export const workspace = {
   onDidChangeConfiguration: jest.fn(),
   textDocuments: [],
   findFiles: jest.fn(async () => []),
-  openTextDocument: jest.fn(async (p: string) => ({ uri: { fsPath: p } })),
+  openTextDocument: jest.fn(async (value: any) => ({
+    uri: typeof value === 'string' ? { fsPath: value } : value,
+    getText: jest.fn(() => ''),
+  })),
   workspaceFolders: undefined as any[] | undefined,
 };
 
@@ -236,4 +245,6 @@ export const languages = {
   getDiagnostics: jest.fn(() => [] as Array<[any, any[]]>),
   registerDocumentSymbolProvider: jest.fn(() => ({ dispose: jest.fn() })),
   registerFoldingRangeProvider: jest.fn(() => ({ dispose: jest.fn() })),
+  registerCodeActionsProvider: jest.fn(() => ({ dispose: jest.fn() })),
+  registerDefinitionProvider: jest.fn(() => ({ dispose: jest.fn() })),
 };

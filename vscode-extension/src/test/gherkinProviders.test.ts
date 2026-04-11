@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import {
   provideGherkinDocumentSymbols,
   provideGherkinFoldingRanges,
+  provideGherkinStepDefinitionLinks,
   registerGherkinProviders,
 } from '../gherkinProviders';
 
@@ -10,11 +11,12 @@ describe('gherkin outline providers', () => {
     jest.clearAllMocks();
   });
 
-  test('registers document symbol and folding providers for gherkin', () => {
+  test('registers document symbol, folding, and definition providers for gherkin', () => {
     registerGherkinProviders();
 
     expect(vscode.languages.registerDocumentSymbolProvider).toHaveBeenCalledTimes(1);
     expect(vscode.languages.registerFoldingRangeProvider).toHaveBeenCalledTimes(1);
+    expect(vscode.languages.registerDefinitionProvider).toHaveBeenCalledTimes(1);
     expect((vscode.languages.registerDocumentSymbolProvider as jest.Mock).mock.calls[0][0]).toEqual([
       { language: 'gherkin' },
     ]);
@@ -71,5 +73,99 @@ describe('gherkin outline providers', () => {
         expect.objectContaining({ start: 3, end: 5 }),
       ])
     );
+  });
+
+  test('finds regex-based Perl step definitions for Given steps', () => {
+    const featureText = [
+      'Feature: Login',
+      '  Scenario: Successful login',
+      '    Given a user exists with username "alice"',
+    ].join('\n');
+
+    const links = provideGherkinStepDefinitionLinks(
+      featureText,
+      { line: 2, character: 15 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/features/step_definitions/user_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/a user exists with username "([^"]+)"/, sub {',
+            '    my $username = $1;',
+            '};',
+          ].join('\n'),
+        },
+      ]
+    );
+
+    expect(links).toHaveLength(1);
+    expect(links[0].targetUri.fsPath).toBe('/project/features/step_definitions/user_steps.pm');
+    expect(links[0].targetSelectionRange?.start.line).toBe(2);
+  });
+
+  test('resolves And steps using the previous Given/When/Then context', () => {
+    const featureText = [
+      'Feature: Checkout',
+      '  Scenario: Purchase',
+      '    Given I am authenticated',
+      '    And the cart is empty',
+    ].join('\n');
+
+    const links = provideGherkinStepDefinitionLinks(
+      featureText,
+      { line: 3, character: 12 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/t/steps/cart_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/the cart is empty/, sub {',
+            '};',
+          ].join('\n'),
+        },
+      ]
+    );
+
+    expect(links).toHaveLength(1);
+    expect(links[0].targetSelectionRange?.start.line).toBe(2);
+  });
+
+  test('uses the registered definition provider to scan workspace step files', async () => {
+    registerGherkinProviders();
+
+    const provider = (vscode.languages.registerDefinitionProvider as jest.Mock).mock.calls[0][1];
+    (vscode.workspace.findFiles as jest.Mock)
+      .mockResolvedValueOnce([vscode.Uri.file('/project/features/step_definitions/login_steps.pm')])
+      .mockResolvedValue([]);
+    (vscode.workspace.openTextDocument as jest.Mock).mockResolvedValue({
+      uri: vscode.Uri.file('/project/features/step_definitions/login_steps.pm'),
+      getText: () => [
+        'use Test::BDD::Cucumber::StepFile;',
+        '',
+        'When qr/the user logs in with valid credentials/, sub {',
+        '};',
+      ].join('\n'),
+    });
+
+    const links = await provider.provideDefinition(
+      {
+        getText: () => [
+          'Feature: Login',
+          '  Scenario: Happy path',
+          '    When the user logs in with valid credentials',
+        ].join('\n'),
+      } as vscode.TextDocument,
+      { line: 2, character: 12 } as vscode.Position,
+      { isCancellationRequested: false } as vscode.CancellationToken
+    );
+
+    expect(vscode.workspace.findFiles).toHaveBeenCalled();
+    expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ fsPath: '/project/features/step_definitions/login_steps.pm' })
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0].targetUri.fsPath).toBe('/project/features/step_definitions/login_steps.pm');
   });
 });
