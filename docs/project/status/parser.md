@@ -13,6 +13,20 @@
 | **Project corpus** | 100.0% clean (`91/91`) | Deterministic regression baseline; `69` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
+## Parser Scorecard
+
+| Metric | Value | Notes | Source |
+| --- | --- | --- | --- |
+<!-- BEGIN: PARSER_NODEKIND_ROW -->
+| **Node-kind coverage** | 65/69 (94.2%) | 4 never-seen node kinds | `corpus_audit` |
+<!-- END: PARSER_NODEKIND_ROW -->
+<!-- BEGIN: PARSER_RELIABILITY_ROW -->
+| **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
+<!-- END: PARSER_RELIABILITY_ROW -->
+<!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
+| **Strict-clean subset** | 10/10 (receipt pending) | 10 pinned modules — run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
+<!-- END: PARSER_STRICT_CLEAN_ROW -->
+
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.
 - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.

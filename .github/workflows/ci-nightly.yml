@@ -73,6 +73,13 @@ jobs:
           key: ${{ runner.os }}-mutation-${{ hashFiles('Cargo.lock') }}
       - run: cargo install cargo-mutants --locked || true
       - run: cargo mutants --timeout 60 --no-shuffle || true
+      - name: Upload mutation results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-results-${{ github.sha }}
+          path: mutants.out/mutants.json
+          retention-days: 30
 
   benchmark:
     name: Performance Benchmarks
