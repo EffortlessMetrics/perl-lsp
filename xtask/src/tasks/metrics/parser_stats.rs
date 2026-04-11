@@ -208,6 +208,7 @@ fn write_json_output(root: &Path, file: &BenchmarkFile) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_parse_benchmark_entry() -> Result<()> {
@@ -235,5 +236,84 @@ mod tests {
         // print_table must not panic even with missing source_lines
         print_table(&file);
         Ok(())
+    }
+
+    /// Verify the JSON output schema: correct keys, schema_version=1, subsystem="parser",
+    /// benchmark_count reflects total entries, and slowest is sorted descending by mean_us.
+    #[test]
+    fn test_write_json_output_schema() -> Result<()> {
+        let json = r#"{"benchmarks":{
+            "fast":{"mean":{"nanoseconds":1000.0,"microseconds":1.0},"median":{"nanoseconds":900.0,"microseconds":0.9},"std_dev":{"nanoseconds":50.0,"microseconds":0.05},"source_lines":10},
+            "slow":{"mean":{"nanoseconds":50000.0,"microseconds":50.0},"median":{"nanoseconds":48000.0,"microseconds":48.0},"std_dev":{"nanoseconds":2000.0,"microseconds":2.0},"source_lines":null},
+            "incomplete":{"source_lines":42}
+        }}"#;
+        let file: BenchmarkFile = serde_json::from_str(json)?;
+        let tmp = TempDir::new()?;
+        write_json_output(tmp.path(), &file)?;
+
+        let out_path = tmp.path().join(".ci").join("metrics").join("parser.json");
+        let raw = fs::read_to_string(&out_path)?;
+        let parsed: serde_json::Value = serde_json::from_str(&raw)?;
+
+        // Schema contract checks
+        assert_eq!(parsed["schema_version"], 1, "schema_version must be 1");
+        assert_eq!(parsed["subsystem"], "parser", "subsystem must be 'parser'");
+        assert!(parsed["measured_at"].is_string(), "measured_at must be a string");
+        assert_eq!(
+            parsed["metrics"]["benchmark_count"], 3,
+            "benchmark_count must include incomplete entries"
+        );
+
+        // slowest must contain only timed entries, sorted descending by mean_us
+        let slowest = parsed["metrics"]["slowest"].as_array().expect("slowest must be an array");
+        assert_eq!(slowest.len(), 2, "slowest must only contain timed entries");
+        assert_eq!(slowest[0]["name"], "slow", "first entry must be the slowest benchmark");
+        assert!(
+            (slowest[0]["mean_us"].as_f64().unwrap() - 50.0).abs() < 0.01,
+            "mean_us must match"
+        );
+        assert_eq!(slowest[1]["name"], "fast", "second entry must be the faster benchmark");
+
+        Ok(())
+    }
+
+    /// When all benchmark entries are incomplete (real-world scenario: 3 of 4 current benchmarks),
+    /// write_json_output must succeed and emit an empty slowest list, not panic or emit wrong data.
+    #[test]
+    fn test_write_json_output_all_incomplete() -> Result<()> {
+        let json = r#"{"benchmarks":{
+            "a":{"source_lines":10},
+            "b":{"source_lines":null},
+            "c":{}
+        }}"#;
+        let file: BenchmarkFile = serde_json::from_str(json)?;
+        let tmp = TempDir::new()?;
+        write_json_output(tmp.path(), &file)?;
+
+        let out_path = tmp.path().join(".ci").join("metrics").join("parser.json");
+        let raw = fs::read_to_string(&out_path)?;
+        let parsed: serde_json::Value = serde_json::from_str(&raw)?;
+
+        assert_eq!(parsed["metrics"]["benchmark_count"], 3);
+        let slowest = parsed["metrics"]["slowest"].as_array().expect("slowest must be an array");
+        assert!(slowest.is_empty(), "slowest must be empty when no entries have timing data");
+
+        Ok(())
+    }
+
+    /// When benchmarks/results/ exists but contains no JSON files, the error message must
+    /// mention the directory path so the user knows where to look.
+    #[test]
+    fn test_find_latest_benchmark_json_empty_dir() {
+        let tmp = TempDir::new().expect("tempdir");
+        let results_dir = tmp.path().join("benchmarks").join("results");
+        fs::create_dir_all(&results_dir).expect("create results dir");
+        // No JSON files in results_dir
+        let err = find_latest_benchmark_json(tmp.path()).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("no *.json files found"),
+            "error must mention 'no *.json files found', got: {msg}"
+        );
     }
 }
