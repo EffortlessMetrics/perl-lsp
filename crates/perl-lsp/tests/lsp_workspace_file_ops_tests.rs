@@ -3,6 +3,7 @@
 use parking_lot::Mutex;
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
+use std::io::Write;
 use std::sync::Arc;
 
 /// Helper to create a test LSP server
@@ -47,6 +48,49 @@ fn send_initialized(server: &LspServer) {
     server.handle_request(initialized_notification);
 }
 
+#[derive(Clone)]
+struct OutputCapture {
+    buffer: Arc<Mutex<Vec<u8>>>,
+}
+
+impl OutputCapture {
+    fn new() -> Self {
+        Self { buffer: Arc::new(Mutex::new(Vec::new())) }
+    }
+
+    fn get_messages(&self) -> Vec<Value> {
+        let buffer = self.buffer.lock();
+        let content = String::from_utf8_lossy(&buffer);
+        let mut messages = Vec::new();
+
+        for chunk in content.split("\r\n\r\n") {
+            if chunk.trim().is_empty() {
+                continue;
+            }
+            if let Some(json_str) = chunk.lines().nth(1) {
+                if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
+                    messages.push(msg);
+                }
+            } else if !chunk.starts_with("Content-Length")
+                && let Ok(msg) = serde_json::from_str::<Value>(chunk)
+            {
+                messages.push(msg);
+            }
+        }
+        messages
+    }
+}
+
+impl Write for OutputCapture {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.buffer.lock().write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.buffer.lock().flush()
+    }
+}
+
 #[test]
 fn test_did_change_watched_files_created() -> Result<(), Box<dyn std::error::Error>> {
     let server = create_test_server();
@@ -75,6 +119,76 @@ fn test_did_change_watched_files_created() -> Result<(), Box<dyn std::error::Err
     // This is a notification, should return None
     assert!(result.is_ok());
     assert_eq!(result?, None);
+    Ok(())
+}
+
+#[test]
+fn test_will_delete_files_warns_when_cross_file_references_exist()
+-> Result<(), Box<dyn std::error::Error>> {
+    let output = OutputCapture::new();
+    let output_box: Box<dyn Write + Send> = Box::new(output.clone());
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    let module_uri = "file:///test/workspace/lib/Legacy.pm";
+    let module_text = "package Legacy;\nsub process { return 1; }\n1;\n";
+    let _ = make_request(
+        &server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": module_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": module_text
+            }
+        })),
+    );
+
+    let user_uri = "file:///test/workspace/bin/run.pl";
+    let user_text = "use Legacy;\nLegacy::process();\n";
+    let _ = make_request(
+        &server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": user_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": user_text
+            }
+        })),
+    );
+
+    let edit = make_request(
+        &server,
+        "workspace/willDeleteFiles",
+        Some(json!({
+            "files": [
+                { "uri": module_uri }
+            ]
+        })),
+    )?;
+    assert!(edit.is_some(), "willDeleteFiles should return a WorkspaceEdit object");
+
+    let messages = output.get_messages();
+    let warning = messages
+        .into_iter()
+        .find(|m| {
+            m["method"].as_str() == Some("window/showMessage")
+                && m["params"]["message"]
+                    .as_str()
+                    .is_some_and(|msg| msg.contains("Safe delete check"))
+        })
+        .ok_or("Expected safe-delete warning notification")?;
+    assert_eq!(warning["params"]["type"], 2, "warning severity should be MessageType::Warning");
     Ok(())
 }
 

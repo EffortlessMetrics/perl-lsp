@@ -935,6 +935,41 @@ impl LspServer {
                     };
 
                     tracing::debug!(uri, "File will be deleted");
+
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        let index = coordinator.index();
+                        let symbols = index.file_symbols(uri);
+                        let mut external_reference_count = 0usize;
+                        let mut checked_symbols = std::collections::HashSet::new();
+
+                        for symbol in symbols {
+                            let candidate_names =
+                                [symbol.qualified_name.clone(), Some(symbol.name.clone())];
+
+                            for candidate in candidate_names.into_iter().flatten() {
+                                if !checked_symbols.insert(candidate.clone()) {
+                                    continue;
+                                }
+                                let refs = index.find_references(&candidate);
+                                external_reference_count +=
+                                    refs.into_iter().filter(|loc| loc.uri != uri).count();
+                            }
+                        }
+
+                        if external_reference_count > 0 {
+                            let message = format!(
+                                "Safe delete check: '{}' has {external_reference_count} references in other files. Deleting may break workspace references.",
+                                uri
+                            );
+                            if let Err(e) = self.show_message(
+                                crate::runtime::window::MessageType::Warning,
+                                &message,
+                            ) {
+                                tracing::debug!("Failed to send safe-delete warning: {}", e);
+                            }
+                        }
+                    }
                 }
             }
         }
