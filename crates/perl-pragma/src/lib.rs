@@ -50,6 +50,12 @@ pub struct PragmaState {
     /// and the disabled categories are recorded here.  Only bare `no warnings`
     /// (no arguments) clears the global `warnings` flag.
     pub disabled_warning_categories: Vec<String>,
+    /// Whether explicit `use feature 'signatures'` currently implies strictness.
+    ///
+    /// This is tracked separately from the raw strict flags so `no feature
+    /// 'signatures'` can unwind the feature-driven implication without
+    /// clobbering explicit `use strict` or version-implied strict state.
+    pub signatures_strict: bool,
     /// Effective language features enabled in the current lexical scope.
     ///
     /// This starts with any features implied by `use vX.Y` declarations and is
@@ -73,6 +79,7 @@ impl PragmaState {
             locale: false,
             locale_scope: None,
             disabled_warning_categories: Vec::new(),
+            signatures_strict: false,
             features: Vec::new(),
             builtin_imports: Vec::new(),
         }
@@ -213,6 +220,7 @@ fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVers
     // Replace (not merge) so the highest `use vX.Y` wins if multiple appear.
     state.features = features_enabled_by_version(version);
     state.unicode_strings = state.has_feature("unicode_strings");
+    state.signatures_strict = false;
 }
 
 fn feature_items(arg: &str) -> Vec<String> {
@@ -244,9 +252,7 @@ fn known_feature_name(name: &str) -> Option<&'static str> {
 
 fn enable_feature_name(state: &mut PragmaState, name: &str) -> bool {
     if name == "signatures" {
-        state.strict_vars = true;
-        state.strict_subs = true;
-        state.strict_refs = true;
+        state.signatures_strict = true;
     }
     if name == "unicode_strings" {
         state.unicode_strings = true;
@@ -263,6 +269,9 @@ fn enable_feature_name(state: &mut PragmaState, name: &str) -> bool {
 }
 
 fn disable_feature_name(state: &mut PragmaState, name: &str) -> bool {
+    if name == "signatures" {
+        state.signatures_strict = false;
+    }
     if name == "unicode_strings" {
         state.unicode_strings = false;
     }
@@ -277,10 +286,29 @@ fn disable_feature_name(state: &mut PragmaState, name: &str) -> bool {
 }
 
 fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) -> bool {
+    if !enabled && args.is_empty() {
+        let changed =
+            !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
+        state.features.clear();
+        state.unicode_strings = false;
+        state.signatures_strict = false;
+        return changed;
+    }
+
     let mut changed = false;
 
     for arg in args {
         for item in feature_items(arg) {
+            if !enabled && item == ":all" {
+                let had_features =
+                    !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
+                state.features.clear();
+                state.unicode_strings = false;
+                state.signatures_strict = false;
+                changed |= had_features;
+                continue;
+            }
+
             if let Some(version) = item.strip_prefix(':').and_then(parse_perl_version) {
                 for feature in features_enabled_by_version(version) {
                     changed |= if enabled {

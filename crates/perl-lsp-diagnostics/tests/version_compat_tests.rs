@@ -92,6 +92,17 @@ fn no_feature_at(feature: &str, start: usize, end: usize) -> Node {
     )
 }
 
+fn no_feature_arg(arg: &str) -> Node {
+    Node::new(
+        NodeKind::No {
+            module: "feature".to_string(),
+            args: vec![arg.to_string()],
+            has_filter_risk: false,
+        },
+        loc(0, 20),
+    )
+}
+
 fn class_node(name: &str) -> Node {
     Node::new(
         NodeKind::Class { name: name.to_string(), parents: vec![], body: Box::new(block(vec![])) },
@@ -1181,6 +1192,20 @@ fn test_smartmatch_warns_after_no_feature_switch_disables_bundle()
     assert!(
         diagnostics_have_code(&diagnostics, "PL900"),
         "Expected PL900 warning when 'no feature \"switch\"' disables the ':5.10' bundle on v5.8, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+#[test]
+fn test_smartmatch_warns_after_no_feature_all() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.10"), no_feature_arg("':all'"), smartmatch_node()]);
+    let mut diagnostics = vec![];
+    check_version_compat(&ast, &mut diagnostics);
+
+    assert!(
+        diagnostics_have_code(&diagnostics, "PL900"),
+        "Expected PL900 warning when 'no feature \":all\"' clears the v5.10 bundle, got: {:?}",
         diagnostics
     );
     Ok(())
