@@ -187,7 +187,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_semantic_tokens.rs"]
-description = "Enhanced syntax highlighting"
+description = "Semantic syntax highlighting via 23 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
 
 [[feature]]
 id = "lsp.inlay_hint"
@@ -196,7 +196,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_inlay_hints.rs"]
-description = "Parameter names and type hints"
+description = "Inlay hints with parameter-name labels for 14 Perl built-in functions (open, split, substr, push, map, grep, sort, join, sprintf, printf, index, rindex, splice, pack/unpack) and lightweight type labels for literal expressions (Num, Str, Hash, Array, Regex, CodeRef). Hints are range-scoped to the visible editor region and support label.location (jump-to-definition) via resolve; tooltip text deferred to inlayHint/resolve per LSP 3.17"
 
 [[feature]]
 id = "lsp.type_hierarchy"
@@ -336,7 +336,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_workspace_symbol_tests.rs"]
-description = "Search symbols across workspace"
+description = "Workspace symbol search across all indexed files with substring and prefix matching, proximity-ranked results (search_symbols_ranked prioritises symbols in the active document's package hierarchy), multi-root workspace support (folder_uri attribution per symbol), incremental re-index with content-hash early-exit (unchanged files skip re-parse), stale-index detection and cleanup on file removal, and parse-storm throttling for large batch indexing. Supports searching packages, subroutines, variables, classes, and methods across CPAN-scale workspaces (validated to 10k+ files)"
 
 [[feature]]
 id = "lsp.workspace_diagnostics"
