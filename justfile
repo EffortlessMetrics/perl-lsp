@@ -316,9 +316,9 @@ benchmarks: bench
 # CI Aliases and Convenience Targets
 # ============================================================================
 
-# Canonical local gate via Nix (recommended for pre-push)
+# Canonical local merge gate via Nix (use before merge, not as the push hook)
 ci-local:
-    @echo "Running ci-gate via Nix shell..."
+    @echo "Running merge gate via Nix shell..."
     @if command -v nix >/dev/null 2>&1; then \
         nix develop -c just ci-gate; \
     else \
@@ -720,7 +720,7 @@ ci-workflow-audit:
     @cargo xtask ci-audit-workflows
 
 # Fast merge gate (~2-5 min) - REQUIRED for all merges
-# This is the canonical pre-push check (same as merge-gate with legacy checks)
+# The pre-push hook runs `just pr-fast`; this is the broader local merge gate.
 ci-gate:
     @echo "Running fast merge gate..."
     just ci-workflow-audit && \

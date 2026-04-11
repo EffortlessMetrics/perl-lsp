@@ -64,7 +64,10 @@ just devex          # Alias: just doctor-env
 # Fast validation while iterating
 just pr-fast
 
-# Canonical pre-push gate
+# Canonical fast push guard
+just pr-fast
+
+# Canonical local merge gate
 nix develop -c just ci-gate
 ```
 

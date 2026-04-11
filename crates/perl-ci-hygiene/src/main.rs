@@ -4204,6 +4204,18 @@ mod tests {
     }
 
     #[test]
+    fn checked_in_pre_push_hook_matches_generated_hook() {
+        let checked_in = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../hooks/pre-push"))
+            .replace("\r\n", "\n");
+        let generated = pre_push_hook_script().replace("\r\n", "\n");
+
+        assert_eq!(
+            checked_in, generated,
+            "checked-in hooks/pre-push must stay in sync with the generated ci-hygiene hook"
+        );
+    }
+
+    #[test]
     fn pre_push_hook_explains_known_failure_modes() {
         let hook = pre_push_hook_script();
         // When the gate fails, the hook should hint at known issues so
