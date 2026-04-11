@@ -1,5 +1,5 @@
 use super::get_supported_commands;
-use super::provider::ExecuteCommandProvider;
+use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
 use serde_json::Value;
 use std::fs;
@@ -886,6 +886,39 @@ fn test_run_tests_logic_operators() -> Result<(), Box<dyn std::error::Error>> {
     assert!(result_value["output"].is_string(), "Should have string output");
 
     Ok(())
+}
+
+#[test]
+fn test_select_test_runner_prefers_yath_for_test_files() {
+    assert_eq!(
+        select_test_runner(true, true, true),
+        TestRunner::Yath,
+        "yath should win for test files when available"
+    );
+    assert_eq!(
+        select_test_runner(true, true, false),
+        TestRunner::Yath,
+        "yath should still win when prove is unavailable"
+    );
+}
+
+#[test]
+fn test_select_test_runner_falls_back_to_prove_then_perl() {
+    assert_eq!(
+        select_test_runner(true, false, true),
+        TestRunner::Prove,
+        "prove should be used when yath is unavailable"
+    );
+    assert_eq!(
+        select_test_runner(true, false, false),
+        TestRunner::Perl,
+        "perl fallback should be used when no test runner is available"
+    );
+    assert_eq!(
+        select_test_runner(false, true, true),
+        TestRunner::Perl,
+        "non-test files should always use perl"
+    );
 }
 
 #[test]
