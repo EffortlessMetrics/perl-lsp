@@ -2214,6 +2214,7 @@ dependencies = [
  "perl-ast-utils",
  "perl-content-length-framing",
  "perl-dap",
+ "perl-dap-platform",
  "perl-diagnostics-codes",
  "perl-incremental-parsing",
  "perl-keywords",
