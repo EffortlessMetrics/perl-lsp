@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.3"
 lsp_version = "3.18"
-compliance_percent = 100  # 116 total features (87 LSP + 24 DAP + 5 perl-lsp extensions), 53/53 advertised
+compliance_percent = 100  # 117 total features (87 LSP + 24 DAP + 6 perl-lsp extensions), 53/53 advertised
 
 # Text Document Features
 
@@ -16,7 +16,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_completion_tests.rs"]
-description = "Code completion with 150+ built-in functions"
+description = "Code completion with 150+ built-in functions, DBI type inference (db/st handle methods), Moo option-key completion, file-path completion, method completion from workspace symbols, auto-import suggestions, XS API completion, and test helper (Test::More) completions"
 
 [[feature]]
 id = "lsp.hover"
@@ -25,7 +25,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_hover_tests.rs"]
-description = "Hover information with documentation"
+description = "Hover information with POD markdown rendering, XS::Typemap integration, Moo/Moose attribute display (isa, is, required, predicate, builder, clearer), inherited method resolution across the class hierarchy, pragma documentation, special variable explanations, regex explainer, and file-test operator reference"
 
 [[feature]]
 id = "lsp.signature_help"
@@ -79,7 +79,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_code_actions_tests.rs"]
-description = "Code actions and quick fixes"
+description = "Code actions with 9 action kinds: QuickFix (diagnostic fixes for undefined/unused variables, missing strict/warnings, deprecated patterns), Refactor, RefactorExtract (extract variable/subroutine), RefactorInline, RefactorRewrite (C-style for to foreach, postfix if conversion), Source, SourceOrganizeImports, SourceFixAll, SourceModernize (legacy pattern modernization)"
 
 [[feature]]
 id = "lsp.code_lens"
@@ -134,6 +134,24 @@ maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_rename_tests.rs"]
 description = "Rename symbol across files"
+
+[[feature]]
+id = "lsp.refactoring"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = [
+  "crates/perl-refactoring/tests/comprehensive_unit_tests.rs",
+  "crates/perl-refactoring/tests/comprehensive_unit_tests_v2.rs",
+  "crates/perl-refactoring/tests/workspace_rename_tests.rs",
+  "crates/perl-refactoring/tests/bdd_refactoring_workflows.rs",
+  "crates/perl-refactoring/tests/subroutine_inline_tests.rs",
+  "crates/perl-refactoring/tests/rename_extract_coverage.rs",
+  "crates/perl-refactoring/tests/edge_case_coverage.rs",
+  "crates/perl-refactoring/tests/scoped_rename_integration.rs",
+]
+description = "Perl-specific refactoring engine (264 tests) providing workspace-wide atomic symbol rename with rollback, import optimization (analyze and rewrite use/require statements), code modernization (bareword filehandles, two-arg open, missing pragmas), extract-module, move-subroutine, inline-variable, and inline-subroutine — all via the RefactoringEngine with backup/rollback support"
 
 [[feature]]
 id = "lsp.document_link"

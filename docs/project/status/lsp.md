@@ -13,7 +13,7 @@
 
 <!-- BEGIN: LSP_METRICS_BULLETS -->
 - **LSP Coverage**: 100% user-visible feature coverage (58/58 advertised features from `features.toml`)
-- **Protocol Compliance**: 100% overall LSP protocol support (116/116 including plumbing)
+- **Protocol Compliance**: 100% overall LSP protocol support (117/117 including plumbing)
 
 **Target**: maintain 100% LSP coverage (no regressions)
 <!-- END: LSP_METRICS_BULLETS -->
@@ -26,8 +26,8 @@
 | debug | 24 | 24 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
-| text_document | 46 | 46 | 100% |
+| text_document | 47 | 47 | 100% |
 | window | 9 | 9 | 100% |
 | workspace | 26 | 26 | 100% |
-| **Overall** | **116** | **116** | **100%** |
+| **Overall** | **117** | **117** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
