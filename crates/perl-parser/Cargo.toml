@@ -49,13 +49,6 @@ rustc-hash = "2.1.2"
 # Core dependencies for position mapping (unconditional, all targets)
 ropey = "1.6.1"
 
-# Filesystem traversal is only available on non-wasm targets.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-walkdir.workspace = true
-
-# Unix-only dependency for signal handling
-[target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.1", features = ["signal"] }
 
 # Optional dependencies for incremental parsing
 anyhow = { workspace = true, optional = true }
