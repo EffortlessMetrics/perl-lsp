@@ -1127,10 +1127,8 @@ impl LspServer {
                             super::workspace_folder::WorkspaceFolderState::new(uri.clone());
 
                         // Resolve the folder path
-                        if let Ok(url) = Url::parse(uri) {
-                            if let Ok(path) = url.to_file_path() {
-                                folder_state = folder_state.with_path(path);
-                            }
+                        if let Some(path) = super::source_path_from_uri(uri) {
+                            folder_state = folder_state.with_path(path);
                         }
 
                         workspace_folders.push(folder_state);
@@ -1248,7 +1246,13 @@ impl LspServer {
             let mut early_exit: Option<(EarlyExitReason, u64, usize, usize)> = None;
 
             'scan: for folder_state in workspace_folders {
-                let Some(root) = uri_to_fs_path(&folder_state.uri) else {
+                let Some(root) =
+                    folder_state.path.clone().or_else(|| uri_to_fs_path(&folder_state.uri))
+                else {
+                    tracing::debug!(
+                        uri = %folder_state.uri,
+                        "Skipping non-filesystem workspace folder during indexing scan"
+                    );
                     continue;
                 };
 
