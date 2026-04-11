@@ -1,0 +1,274 @@
+{
+  "schema_version": 1,
+  "subsystem": "editor_ux",
+  "top_line_metrics": [
+    "workflow_pass_rate",
+    "workflow_stability_rate",
+    "p95_time_to_first_useful_result_ms"
+  ],
+  "component_metrics": [
+    "cross_file_definition_success_rate",
+    "module_resolution_workflow_success_rate",
+    "multi_root_workspace_navigation_success_rate"
+  ],
+  "workflows": [
+    {
+      "id": "simple_file_smoke",
+      "scenario_file": "ux_scenario_01_simple_file.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "open a simple Perl file and verify hover and completion work without crashing",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "server starts cleanly",
+        "hover returns useful structure or empty without crashing",
+        "completion request succeeds"
+      ]
+    },
+    {
+      "id": "missing_perltidy_graceful_degradation",
+      "scenario_file": "ux_scenario_02_missing_perltidy.rs",
+      "subsystem_owner": "engineering_health",
+      "ci_tier": "pr",
+      "user_journey": "request formatting when perltidy is unavailable",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "format request degrades gracefully",
+        "server stays responsive"
+      ]
+    },
+    {
+      "id": "missing_perl_graceful_degradation",
+      "scenario_file": "ux_scenario_03_missing_perl.rs",
+      "subsystem_owner": "engineering_health",
+      "ci_tier": "pr",
+      "user_journey": "start the server without perl on PATH and perform basic editor actions",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "server starts in degraded mode",
+        "hover or completion remain available where possible"
+      ]
+    },
+    {
+      "id": "missing_perlcritic_graceful_degradation",
+      "scenario_file": "ux_scenario_04_missing_perlcritic.rs",
+      "subsystem_owner": "engineering_health",
+      "ci_tier": "pr",
+      "user_journey": "publish diagnostics when perlcritic is unavailable",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "diagnostics degrade gracefully",
+        "no crash or panic-style messaging"
+      ]
+    },
+    {
+      "id": "bad_config_resilience",
+      "scenario_file": "ux_scenario_05_bad_config.rs",
+      "subsystem_owner": "engineering_health",
+      "ci_tier": "pr",
+      "user_journey": "open a workspace with invalid tool configuration",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "invalid config does not crash the server",
+        "user-visible feedback is actionable"
+      ]
+    },
+    {
+      "id": "large_file_open",
+      "scenario_file": "ux_scenario_06_large_file.rs",
+      "subsystem_owner": "engineering_health",
+      "ci_tier": "nightly",
+      "user_journey": "open a large file and wait for the first useful response",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "large files do not crash the server",
+        "large-file workflow stays within latency budget"
+      ]
+    },
+    {
+      "id": "multi_file_workspace_navigation",
+      "scenario_file": "ux_scenario_07_multi_file_workspace.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "user_journey": "open multiple files in a workspace and navigate across them",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "cross-file definition request completes without error",
+        "workspace interactions remain stable"
+      ]
+    },
+    {
+      "id": "shebang_detection",
+      "scenario_file": "ux_scenario_08_shebang_detection.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "open a Perl file without a .pl extension",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "languageId-perl files without extensions still behave like Perl"
+      ]
+    },
+    {
+      "id": "encoding_and_bom_resilience",
+      "scenario_file": "ux_scenario_09_encoding.rs",
+      "subsystem_owner": "engineering_health",
+      "ci_tier": "pr",
+      "user_journey": "open files with BOMs, utf8 pragmas, and Unicode text",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "encoding edge cases do not crash the server",
+        "user workflow remains intact"
+      ]
+    },
+    {
+      "id": "goto_definition_core",
+      "scenario_file": "ux_scenario_10_goto_definition.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "run goto-definition inside a representative file",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "definition request returns a location or clean empty result",
+        "request does not error"
+      ]
+    },
+    {
+      "id": "hover_core",
+      "scenario_file": "ux_scenario_11_hover.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "run hover over names and variables in a representative file",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "hover request returns useful structure or clean empty result",
+        "request does not error"
+      ]
+    },
+    {
+      "id": "strict_diagnostics",
+      "scenario_file": "ux_scenario_12_diagnostics_strict.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "open a strict warnings file and wait for settled diagnostics",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "publishDiagnostics arrives",
+        "diagnostic payload shape stays valid"
+      ]
+    },
+    {
+      "id": "document_symbols_core",
+      "scenario_file": "ux_scenario_13_document_symbols.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "user_journey": "request document symbols for parsable and empty files",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "document symbols return valid structure",
+        "rich files surface known sub names"
+      ]
+    },
+    {
+      "id": "inc_conformance",
+      "scenario_file": "ux_scenario_14_inc_conformance.rs",
+      "subsystem_owner": "module_resolution",
+      "ci_tier": "pr",
+      "user_journey": "resolve modules across multiple @INC modes and compare hover, goto-definition, and diagnostics",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "module_resolution_workflow_success_rate"
+      ],
+      "expected_outcomes": [
+        "PL701, hover, and goto-definition agree across supported modes"
+      ]
+    },
+    {
+      "id": "multi_root_workspace_symbols",
+      "scenario_file": "ux_scenario_15_workspace_symbols.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "user_journey": "search workspace symbols across multiple folders with same-named definitions",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "multi_root_workspace_navigation_success_rate"
+      ],
+      "expected_outcomes": [
+        "workspace/symbol returns same-named symbols from multiple roots",
+        "results include workspaceFolderUri"
+      ]
+    },
+    {
+      "id": "workspace_folder_removal_freshness",
+      "scenario_file": "ux_scenario_16_workspace_folder_removal.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "user_journey": "remove a workspace folder after indexing and re-run workspace symbol search",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "multi_root_workspace_navigation_success_rate"
+      ],
+      "expected_outcomes": [
+        "removed folder symbols disappear from search results"
+      ]
+    },
+    {
+      "id": "deleted_file_churn_freshness",
+      "scenario_file": "ux_scenario_17_deleted_file_churn.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "user_journey": "delete a module file after indexing and verify stale symbol and definition results are evicted",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "deleted symbols disappear from workspace/symbol",
+        "definition no longer resolves to deleted targets"
+      ]
+    }
+  ]
+}
