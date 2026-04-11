@@ -13,9 +13,9 @@ use super::*;
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 use perl_module_path::file_path_to_module_name;
-use perl_module_rename::plan_module_rename_edits;
+use perl_module_rename::{apply_module_rename_edits, plan_module_rename_edits};
 #[cfg(feature = "workspace")]
-use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
+use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind, SymbolKind};
 #[cfg(feature = "workspace")]
 use perl_source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace_folder::extract_workspace_folder_change;
@@ -741,6 +741,10 @@ impl LspServer {
                 let mut workspace_edit = json!({
                     "changes": {}
                 });
+                let mut planned_workspace_texts: std::collections::BTreeMap<
+                    String,
+                    (String, String),
+                > = std::collections::BTreeMap::new();
 
                 for file in files {
                     let Some(old_uri) = file["oldUri"].as_str() else {
@@ -770,31 +774,26 @@ impl LspServer {
                         let dependents = Vec::<String>::new();
 
                         for dependent_uri in dependents {
-                            if let Some(text) = self.read_workspace_text(&dependent_uri) {
-                                let planned =
-                                    plan_module_rename_edits(&text, &old_module, &new_module);
-                                self.append_workspace_edits(
-                                    &mut workspace_edit,
-                                    &dependent_uri,
-                                    planned
-                                        .into_iter()
-                                        .map(|edit| {
-                                            json!({
-                                                "range": {
-                                                    "start": {
-                                                        "line": edit.line,
-                                                        "character": edit.start_character,
-                                                    },
-                                                    "end": {
-                                                        "line": edit.line,
-                                                        "character": edit.end_character,
-                                                    }
-                                                },
-                                                "newText": edit.new_text
-                                            })
-                                        })
-                                        .collect(),
+                            if !planned_workspace_texts.contains_key(&dependent_uri) {
+                                let Some(text) = self.read_workspace_text(&dependent_uri) else {
+                                    continue;
+                                };
+                                planned_workspace_texts
+                                    .insert(dependent_uri.clone(), (text.clone(), text));
+                            }
+
+                            if let Some((_, current_text)) =
+                                planned_workspace_texts.get_mut(&dependent_uri)
+                            {
+                                let planned = plan_module_rename_edits(
+                                    current_text,
+                                    &old_module,
+                                    &new_module,
                                 );
+                                if !planned.is_empty() {
+                                    *current_text =
+                                        apply_module_rename_edits(current_text, &planned);
+                                }
                             }
                         }
                     }
@@ -830,11 +829,11 @@ impl LspServer {
                     // qualified function calls). These are known gaps tracked in
                     // docs/reference/KNOWN_LIMITATIONS.md.
                     if !old_module.is_empty() {
+                        #[cfg(feature = "workspace")]
                         let updated_uris: std::collections::HashSet<&str> =
-                            workspace_edit["changes"]
-                                .as_object()
-                                .map(|m| m.keys().map(|k| k.as_str()).collect())
-                                .unwrap_or_default();
+                            planned_workspace_texts.keys().map(String::as_str).collect();
+                        #[cfg(not(feature = "workspace"))]
+                        let updated_uris = std::collections::HashSet::<&str>::new();
                         // Build a word-boundary pattern so "Base" does not match "Database".
                         // Perl module names consist of \w and ::, so we check that any match
                         // of old_module in the document text is not immediately preceded or
@@ -869,6 +868,15 @@ impl LspServer {
                             }
                         }
                     }
+                }
+
+                #[cfg(feature = "workspace")]
+                for (uri, (original_text, current_text)) in planned_workspace_texts {
+                    self.append_workspace_edits(
+                        &mut workspace_edit,
+                        &uri,
+                        build_module_rename_workspace_edits(&original_text, &current_text),
+                    );
                 }
 
                 return Ok(Some(workspace_edit));
@@ -927,55 +935,73 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
             if let Some(files) = params["files"].as_array() {
-                for file in files {
-                    let Some(uri) = file["uri"].as_str() else {
-                        continue;
+                #[cfg(feature = "workspace")]
+                if let Some(coordinator) = self.coordinator() {
+                    let idx = coordinator.index();
+                    let open_documents: Vec<(String, String)> = {
+                        let documents = self.documents.lock();
+                        documents.iter().map(|(uri, doc)| (uri.clone(), doc.text.clone())).collect()
                     };
+                    let deleting_uris: std::collections::HashSet<String> = files
+                        .iter()
+                        .filter_map(|file| {
+                            file["uri"].as_str().map(|uri| self.normalize_uri_key(uri))
+                        })
+                        .collect();
+                    let mut unsafe_deletes: Vec<(String, usize, Vec<String>)> = Vec::new();
 
-                    tracing::debug!(uri, "File will be deleted");
-                    #[cfg(feature = "workspace")]
-                    if let Some(coordinator) = self.coordinator() {
-                        let idx = coordinator.index();
-                        let mut external_refs: std::collections::BTreeSet<String> =
-                            std::collections::BTreeSet::new();
-                        let symbols = idx.file_symbols(uri);
+                    for file in files {
+                        let Some(uri) = file["uri"].as_str() else {
+                            continue;
+                        };
 
-                        for symbol in symbols {
-                            let refs = idx.find_references(&symbol.name);
-                            for location in refs {
-                                if location.uri != uri {
-                                    external_refs.insert(location.uri);
-                                }
-                            }
+                        tracing::debug!(uri, "File will be deleted");
+                        let mut dependents: std::collections::BTreeSet<String> =
+                            collect_cross_file_delete_dependents(&idx, uri, &deleting_uris);
+                        dependents.extend(collect_open_document_delete_dependents(
+                            &idx,
+                            uri,
+                            &deleting_uris,
+                            &open_documents,
+                        ));
+                        let dependents: Vec<String> = dependents.into_iter().collect();
+
+                        if !dependents.is_empty() {
+                            let examples: Vec<String> =
+                                dependents.iter().take(3).map(|uri| short_uri(uri)).collect();
+                            tracing::warn!(
+                                uri,
+                                dependent_file_count = dependents.len(),
+                                "Safe delete detected dependent workspace files"
+                            );
+                            unsafe_deletes.push((short_uri(uri), dependents.len(), examples));
                         }
+                    }
 
-                        if !external_refs.is_empty() {
-                            let mut examples: Vec<String> =
-                                external_refs.into_iter().take(3).collect();
+                    if !unsafe_deletes.is_empty() {
+                        let msg = if unsafe_deletes.len() == 1 {
+                            let (uri, dependent_count, examples) = &unsafe_deletes[0];
                             let example_suffix = if examples.is_empty() {
                                 String::new()
                             } else {
-                                format!(" Example references: {}.", examples.join(", "))
+                                format!(" Example dependents: {}.", examples.join(", "))
                             };
-                            let msg = format!(
-                                "Safe delete warning: '{}' has cross-file references. \
-                                 Deleting may break callers.{}",
-                                short_uri(uri),
-                                example_suffix
-                            );
-                            if let Err(e) = self
-                                .show_message(crate::runtime::window::MessageType::Warning, &msg)
-                            {
-                                tracing::debug!("Failed to send safe-delete warning: {}", e);
-                            }
-                            // Keep a bounded amount of logging for triage.
-                            examples.truncate(3);
-                            tracing::warn!(
-                                uri,
-                                symbol_count = idx.file_symbols(uri).len(),
-                                external_reference_files = examples.len(),
-                                "Safe delete detected external references"
-                            );
+                            format!(
+                                "Safe delete warning: '{}' has {} dependent workspace file(s). \
+                                 Delete may break callers.{}",
+                                uri, dependent_count, example_suffix
+                            )
+                        } else {
+                            format!(
+                                "Safe delete warning: {} files have dependent workspace files. \
+                                 Delete may break callers.",
+                                unsafe_deletes.len()
+                            )
+                        };
+                        if let Err(e) =
+                            self.show_message(crate::runtime::window::MessageType::Warning, &msg)
+                        {
+                            tracing::debug!("Failed to send safe-delete warning: {}", e);
                         }
                     }
                 }
@@ -1529,6 +1555,116 @@ impl LspServer {
 
         uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
     }
+}
+
+#[cfg(feature = "workspace")]
+fn build_module_rename_workspace_edits(original: &str, updated: &str) -> Vec<Value> {
+    let original_lines: Vec<&str> = original.split('\n').collect();
+    let updated_lines: Vec<&str> = updated.split('\n').collect();
+
+    debug_assert_eq!(
+        original_lines.len(),
+        updated_lines.len(),
+        "module rename planning should not change line counts"
+    );
+
+    original_lines
+        .iter()
+        .zip(updated_lines.iter())
+        .enumerate()
+        .filter_map(|(line, (old_line, new_line))| {
+            if old_line == new_line {
+                return None;
+            }
+
+            Some(json!({
+                "range": {
+                    "start": {
+                        "line": line,
+                        "character": 0,
+                    },
+                    "end": {
+                        "line": line,
+                        "character": old_line.len(),
+                    }
+                },
+                "newText": new_line
+            }))
+        })
+        .collect()
+}
+
+#[cfg(feature = "workspace")]
+fn collect_delete_target_module_names(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+) -> std::collections::BTreeSet<String> {
+    let mut module_names = std::collections::BTreeSet::new();
+    let path_module_name = path_to_module_name(uri);
+    if !path_module_name.is_empty() {
+        module_names.insert(path_module_name);
+    }
+
+    for symbol in index.file_symbols(uri) {
+        if matches!(symbol.kind, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role) {
+            if let Some(module_name) = symbol
+                .qualified_name
+                .clone()
+                .or_else(|| (!symbol.name.is_empty()).then_some(symbol.name.clone()))
+            {
+                module_names.insert(module_name);
+            }
+        }
+    }
+
+    module_names
+}
+
+#[cfg(feature = "workspace")]
+fn collect_cross_file_delete_dependents(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+) -> std::collections::BTreeSet<String> {
+    let normalized_uri = perl_parser::workspace_index::uri_key(uri);
+    let module_names = collect_delete_target_module_names(index, uri);
+    let mut dependents = std::collections::BTreeSet::new();
+    for module_name in module_names {
+        for dependent_uri in index.find_dependents(&module_name) {
+            if dependent_uri != normalized_uri && !deleting_uris.contains(&dependent_uri) {
+                dependents.insert(dependent_uri);
+            }
+        }
+    }
+
+    dependents
+}
+
+#[cfg(feature = "workspace")]
+fn collect_open_document_delete_dependents(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    uri: &str,
+    deleting_uris: &std::collections::HashSet<String>,
+    open_documents: &[(String, String)],
+) -> std::collections::BTreeSet<String> {
+    let normalized_uri = perl_parser::workspace_index::uri_key(uri);
+    let module_names = collect_delete_target_module_names(index, uri);
+    let mut dependents = std::collections::BTreeSet::new();
+
+    for (doc_uri, text) in open_documents {
+        let normalized_doc_uri = perl_parser::workspace_index::uri_key(doc_uri);
+        if normalized_doc_uri == normalized_uri || deleting_uris.contains(&normalized_doc_uri) {
+            continue;
+        }
+
+        if module_names.iter().any(|module_name| {
+            !plan_module_rename_edits(text, module_name, "__PerlLspDeleteProbe__").is_empty()
+        }) {
+            dependents.insert(normalized_doc_uri);
+        }
+    }
+
+    dependents
 }
 
 fn short_uri(uri: &str) -> String {

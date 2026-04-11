@@ -309,6 +309,15 @@ mod tests {
     }
 
     #[test]
+    fn rewrites_later_import_statement_on_same_line() {
+        let source = "use Foo::Bar; use Foo::Baz;\n";
+        let edits = plan_module_rename_edits(source, "Foo::Baz", "Renamed::Baz");
+        let rewritten = apply_module_rename_edits(source, &edits);
+
+        assert_eq!(rewritten, "use Foo::Bar; use Renamed::Baz;\n");
+    }
+
+    #[test]
     fn plans_parent_and_base_edits() {
         let source = "use parent 'Foo::Bar';\nuse base \"Foo::Bar\";\nuse parent qw(Foo::Bar Other::Base);\n";
         let edits = plan_module_rename_edits(source, "Foo::Bar", "Renamed::Base");
