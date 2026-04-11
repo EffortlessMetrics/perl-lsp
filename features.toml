@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.3"
 lsp_version = "3.18"
-compliance_percent = 100  # 102 total features (87 LSP + 10 DAP + 5 perl-lsp extensions), 53/53 advertised
+compliance_percent = 100  # 116 total features (87 LSP + 24 DAP + 5 perl-lsp extensions), 53/53 advertised
 
 # Text Document Features
 
@@ -525,6 +525,146 @@ advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_warn_exception_tests.rs"]
 description = "Exception breakpoint handling for warn/carp/cluck warnings"
+
+[[feature]]
+id = "dap.threads"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_adapter_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Thread listing (threads request); Perl is single-threaded so returns one synthetic thread"
+
+[[feature]]
+id = "dap.pause"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/control_flow_handlers_tests.rs", "crates/perl-dap/tests/dap_comprehensive_test.rs"]
+description = "Pause execution of a running debug session"
+
+[[feature]]
+id = "dap.breakpoints.function"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Function breakpoints (setFunctionBreakpoints) by subroutine name"
+
+[[feature]]
+id = "dap.breakpoint_locations"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Query valid breakpoint positions within a source range (breakpointLocations)"
+
+[[feature]]
+id = "dap.source"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Retrieve source content by reference (source request)"
+
+[[feature]]
+id = "dap.loaded_sources"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "List all sources loaded in the current debug session (loadedSources)"
+
+[[feature]]
+id = "dap.restart"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Restart the debug session (restart request)"
+
+[[feature]]
+id = "dap.set_expression"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs"]
+description = "Assign a value to an expression in the current scope (setExpression)"
+
+[[feature]]
+id = "dap.cancel"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Cancel a pending or running request (cancel)"
+
+[[feature]]
+id = "dap.step_in_targets"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "List callable step-in targets for the current frame (stepInTargets)"
+
+[[feature]]
+id = "dap.goto_targets"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "List valid goto targets for the current frame (gotoTargets)"
+
+[[feature]]
+id = "dap.goto"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs"]
+description = "Jump execution to a target location (goto request)"
+
+[[feature]]
+id = "dap.restart_frame"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Restart execution from the beginning of a stack frame (restartFrame)"
+
+[[feature]]
+id = "dap.terminate_threads"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Terminate one or more threads (terminateThreads)"
 
 # Protocol / Lifecycle Features
 
