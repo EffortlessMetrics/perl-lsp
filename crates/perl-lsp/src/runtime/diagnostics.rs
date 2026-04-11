@@ -998,6 +998,12 @@ fn is_fixable_perlcritic_policy(code: &str) -> bool {
             | "TestingAndDebugging::RequireUseStrict"
             | "TestingAndDebugging::RequireUseWarnings"
             | "Variables::ProhibitUnusedVariables"
+            | "Perl::Critic::Policy::InputOutput::ProhibitBarewordFileHandles"
+            | "Perl::Critic::Policy::InputOutput::RequireBriefOpen"
+            | "Perl::Critic::Policy::InputOutput::RequireThreeArgOpen"
+            | "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict"
+            | "Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings"
+            | "Perl::Critic::Policy::Variables::ProhibitUnusedVariables"
     )
 }
 

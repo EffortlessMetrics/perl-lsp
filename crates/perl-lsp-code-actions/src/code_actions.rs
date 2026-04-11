@@ -184,7 +184,8 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
                     }
                     // Perl::Critic policy alias for bareword filehandle.
-                    "InputOutput::ProhibitBarewordFileHandles" => {
+                    "InputOutput::ProhibitBarewordFileHandles"
+                    | "Perl::Critic::Policy::InputOutput::ProhibitBarewordFileHandles" => {
                         actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
                     }
                     // PL401: Two-arg open
@@ -192,18 +193,24 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     // Perl::Critic policy aliases for two-arg open.
-                    "InputOutput::RequireBriefOpen" | "InputOutput::RequireThreeArgOpen" => {
+                    "InputOutput::RequireBriefOpen"
+                    | "InputOutput::RequireThreeArgOpen"
+                    | "Perl::Critic::Policy::InputOutput::RequireBriefOpen"
+                    | "Perl::Critic::Policy::InputOutput::RequireThreeArgOpen" => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     // Perl::Critic policies for missing strict/warnings.
-                    "TestingAndDebugging::RequireUseStrict" => {
+                    "TestingAndDebugging::RequireUseStrict"
+                    | "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict" => {
                         actions.extend(quick_fixes::add_use_strict());
                     }
-                    "TestingAndDebugging::RequireUseWarnings" => {
+                    "TestingAndDebugging::RequireUseWarnings"
+                    | "Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings" => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
                     // Perl::Critic policy alias for unused variables.
-                    "Variables::ProhibitUnusedVariables" => {
+                    "Variables::ProhibitUnusedVariables"
+                    | "Perl::Critic::Policy::Variables::ProhibitUnusedVariables" => {
                         actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
                     }
                     // PL200: Missing package declaration
@@ -475,6 +482,17 @@ mod tests {
                 related_information: Vec::new(),
                 tags: Vec::new(),
             },
+            Diagnostic {
+                range: (0, 4),
+                severity: DiagnosticSeverity::Warning,
+                code: Some(
+                    "Perl::Critic::Policy::InputOutput::ProhibitBarewordFileHandles".to_string(),
+                ),
+                message: "Bareword filehandle alias".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
         ];
 
         let provider = CodeActionsProvider::new(source.to_string());
@@ -503,6 +521,17 @@ mod tests {
                 severity: DiagnosticSeverity::Warning,
                 code: Some("TestingAndDebugging::RequireUseWarnings".to_string()),
                 message: "Code does not use warnings".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, source.len()),
+                severity: DiagnosticSeverity::Warning,
+                code: Some(
+                    "Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict".to_string(),
+                ),
+                message: "Code does not use strict (FQ policy)".to_string(),
                 suggestion: None,
                 related_information: Vec::new(),
                 tags: Vec::new(),
