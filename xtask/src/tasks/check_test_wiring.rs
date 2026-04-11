@@ -20,8 +20,19 @@ use regex::Regex;
 use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 use walkdir::WalkDir;
+
+static PATH_ATTR_RE: LazyLock<Regex> = LazyLock::new(|| {
+    #[allow(clippy::expect_used)]
+    Regex::new(r#"#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]"#).expect("static path attr regex compiles")
+});
+
+static MODULE_DECL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    #[allow(clippy::expect_used)]
+    Regex::new(r#"\b(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;"#)
+        .expect("static module regex compiles")
+});
 
 /// Report for a file that contains tests but is not reachable from the module tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -302,20 +313,11 @@ fn strip_line_comment(line: &str) -> &str {
 }
 
 fn extract_path_attr(line: &str) -> Option<PathBuf> {
-    static PATH_RE: OnceLock<Regex> = OnceLock::new();
-    let re = PATH_RE.get_or_init(|| {
-        Regex::new(r#"#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]"#).expect("compile path attr regex")
-    });
-    re.captures(line).and_then(|caps| caps.get(1)).map(|m| PathBuf::from(m.as_str()))
+    PATH_ATTR_RE.captures(line).and_then(|caps| caps.get(1)).map(|m| PathBuf::from(m.as_str()))
 }
 
 fn extract_module_name(line: &str) -> Option<String> {
-    static MOD_RE: OnceLock<Regex> = OnceLock::new();
-    let re = MOD_RE.get_or_init(|| {
-        Regex::new(r#"\b(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;"#)
-            .expect("compile module regex")
-    });
-    re.captures(line).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
+    MODULE_DECL_RE.captures(line).and_then(|caps| caps.get(1)).map(|m| m.as_str().to_string())
 }
 
 fn contains_test_markers(content: &str) -> bool {
@@ -337,6 +339,12 @@ fn missing_module_reason(file: &Path) -> String {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn regex_helpers_initialize() {
+        assert!(extract_path_attr(r#"#[path = "child.rs"]"#).is_some());
+        assert_eq!(extract_module_name("mod child;").as_deref(), Some("child"));
+    }
 
     fn write(root: &Path, rel: &str, content: &str) {
         let path = root.join(rel);

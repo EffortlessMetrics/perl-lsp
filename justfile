@@ -187,10 +187,11 @@ lsp-smoke:
     @echo "LSP smoke tests passed"
 
 # Security audit (non-blocking, warns on issues)
+# Temporary ignore for rand unsoundness advisory tracked in #4149.
 security-audit:
     @echo "Running security audit..."
     @if command -v cargo-audit >/dev/null 2>&1; then \
-        cargo audit 2>&1 || echo "Audit warnings (non-blocking)"; \
+        cargo audit --ignore RUSTSEC-2026-0097 2>&1 || echo "Audit warnings (non-blocking)"; \
     else \
         echo "SKIP: cargo-audit not installed (run: cargo install cargo-audit)"; \
     fi

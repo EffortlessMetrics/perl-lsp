@@ -69,7 +69,8 @@ jobs:
         id: audit
         run: |
           set +e
-          cargo audit --json > audit-results.json 2>&1
+          # Temporary ignore tracked in #4149 until upstream rand fixes land.
+          cargo audit --ignore RUSTSEC-2026-0097 --json > audit-results.json 2>&1
           AUDIT_EXIT=$?
           echo "exit_code=$AUDIT_EXIT" >> $GITHUB_OUTPUT
 
