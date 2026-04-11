@@ -9,6 +9,7 @@
 //!   - docs/project/status/tests.md   (test counts + tracked debt)
 //!   - docs/project/status/parser.md  (parser corpus tracking)
 //!   - docs/project/status/quality.md (mutation score, perf)
+//!   - docs/project/status/editor_ux.json (UX scorecard receipt)
 //!
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
@@ -146,6 +147,13 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         let updated_quality = generate_quality_status(&root, &original_quality)?;
         if updated_quality != original_quality {
             files_to_update.push(("docs/project/status/quality.md", quality_path, updated_quality));
+        }
+
+        let ux_path = root.join("docs/project/status/editor_ux.json");
+        let original_ux = fs::read_to_string(&ux_path).unwrap_or_default();
+        let updated_ux = generate_editor_ux_receipt(&root)?;
+        if updated_ux != original_ux {
+            files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
         }
     }
 
@@ -910,17 +918,24 @@ fn format_crate_quality_table(
     lines.join("\n")
 }
 
-fn count_ux_scenarios(root: &Path) -> usize {
+fn collect_ux_scenario_files(root: &Path) -> Vec<String> {
     let tests_dir = root.join("crates/perl-lsp-ux-tests/tests");
     let Ok(entries) = fs::read_dir(tests_dir) else {
-        return 0;
+        return Vec::new();
     };
 
-    entries
+    let mut files: Vec<String> = entries
         .filter_map(Result::ok)
         .filter_map(|entry| entry.file_name().into_string().ok())
         .filter(|name| name.starts_with("ux_scenario_") && name.ends_with(".rs"))
-        .count()
+        .map(|name| format!("crates/perl-lsp-ux-tests/tests/{name}"))
+        .collect();
+    files.sort();
+    files
+}
+
+fn count_ux_scenarios(root: &Path) -> usize {
+    collect_ux_scenario_files(root).len()
 }
 
 fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
@@ -939,7 +954,8 @@ fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case\n\
+           the integration-only 10k-line large-file case; machine-readable receipt at \
+           `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -960,6 +976,46 @@ fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
         &crate_table,
     )?;
     Ok(text)
+}
+
+fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
+    let scenario_files = collect_ux_scenario_files(root);
+    let scenario_count = scenario_files.len();
+
+    let receipt = serde_json::json!({
+        "schema_version": 1,
+        "scorecard": "editor_ux",
+        "harness": {
+            "crate": "crates/perl-lsp-ux-tests",
+            "scenario_count": scenario_count,
+            "scenario_files": scenario_files,
+        },
+        "top_line_metrics": [
+            {
+                "name": "workflow_pass_rate",
+                "state": "planned",
+                "owner": "perl-lsp-ux-tests",
+            },
+            {
+                "name": "workflow_stability_rate",
+                "state": "planned",
+                "owner": "perl-lsp-ux-tests",
+            },
+            {
+                "name": "p95_time_to_first_useful_result_ms",
+                "state": "planned",
+                "owner": "perl-lsp-ux-tests",
+            },
+        ],
+        "integration_points": {
+            "ci_lane": "just ux-tests",
+            "release_lane": "just ux-tests-full",
+            "status_update": "cargo xtask update-status --only quality",
+            "quality_surface": "docs/project/status/quality.md",
+        },
+    });
+
+    serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,12 +1085,36 @@ mod tests {
         Ok(())
     }
 
-    /// All four subsystem status files must exist.
+    #[test]
+    fn test_editor_ux_receipt_shape() -> Result<()> {
+        let root = project_root()?;
+        let receipt_raw = generate_editor_ux_receipt(&root)?;
+        let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
+        assert_eq!(receipt["schema_version"], 1);
+        assert_eq!(receipt["scorecard"], "editor_ux");
+        assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
+        assert_eq!(
+            receipt["harness"]["scenario_count"].as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
+        assert_eq!(receipt["top_line_metrics"].as_array().map(|rows| rows.len()), Some(3));
+        assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    /// The subsystem status files plus the UX scorecard artifact must exist.
     #[test]
     fn test_subsystem_files_exist() -> Result<()> {
         let root = project_root()?;
         let status_dir = root.join("docs/project/status");
-        for name in &["lsp.md", "tests.md", "parser.md", "quality.md"] {
+        for name in &[
+            "lsp.md",
+            "tests.md",
+            "parser.md",
+            "quality.md",
+            "editor_ux.json",
+            "editor_ux.schema.json",
+        ] {
             let path = status_dir.join(name);
             assert!(path.exists(), "subsystem file missing: {}", path.display());
         }
