@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 `perl-lsp-semantic-tokens` is a **Tier 2 LSP feature crate** providing semantic token generation for Perl syntax highlighting.
 
-**Purpose**: Combines lexer token classification with AST overlays to produce delta-encoded semantic tokens per the LSP 3.17+ specification.
+**Purpose**: Combines lexer token classification with AST overlays to produce delta-encoded semantic tokens per the LSP 3.18 `semanticTokensLegend` specification.
 
 **Version**: workspace (currently 0.12.3)
 
@@ -35,7 +35,7 @@ cargo doc -p perl-lsp-semantic-tokens --open # View documentation
 |------|----------|-------------|
 | `EncodedToken` | `semantic_tokens.rs` | `[u32; 5]` delta-encoded token format |
 | `TokensLegend` | `semantic_tokens.rs` | Token type/modifier registry with `FxHashMap` lookup |
-| `legend()` | `semantic_tokens.rs` | Builds the standard 15-type, 7-modifier legend |
+| `legend()` | `semantic_tokens.rs` | Builds the standard 23-type, 13-modifier legend |
 | `collect_semantic_tokens()` | `semantic_tokens.rs` | Main entry point: lexer pass + AST overlay + dedup + encode |
 | `SemanticTokensProvider` | `lib.rs` | Placeholder struct (unit struct, `Default` impl) |
 
@@ -46,13 +46,17 @@ cargo doc -p perl-lsp-semantic-tokens --open # View documentation
 3. **Dedup** — `remove_overlapping_tokens` resolves conflicts (longer token wins on same line)
 4. **Encode** — `encode_raw_tokens_to_deltas` produces relative-position `[u32; 5]` arrays
 
-### Token Types (15)
+### Token Types (23)
 
-namespace, class, function, method, variable, parameter, property, keyword, comment, string, number, regexp, operator, type, macro
+namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, sql_string, sql_heredoc_keyword, json_heredoc_key
 
-### Token Modifiers (7)
+Indices 20–22 are Perl-specific extensions: `sql_string` classifies DBI/SQL string contexts (issue #2337); `sql_heredoc_keyword` and `json_heredoc_key` classify heredoc language injections (issue #2059).
 
-declaration, definition, readonly, defaultLibrary, deprecated, static, async
+### Token Modifiers (13)
+
+declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable
+
+Bits 10–12 (`scalarVariable`, `arrayVariable`, `hashVariable`) are Perl-specific modifier extensions encoding sigil-level variable type.
 
 ## Usage
 
