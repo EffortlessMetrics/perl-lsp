@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.3"
 lsp_version = "3.18"
-compliance_percent = 100  # 102 total features (87 LSP + 10 DAP + 5 perl-lsp extensions), 53/53 advertised
+compliance_percent = 100  # 118 total features (87 LSP + 24 DAP + 7 perl-lsp extensions), 53/53 advertised
 
 # Text Document Features
 
@@ -16,7 +16,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_completion_tests.rs"]
-description = "Code completion with 150+ built-in functions"
+description = "Code completion with 150+ built-in functions, DBI type inference (db/st handle methods), Moo option-key completion, file-path completion, method completion from workspace symbols, auto-import suggestions, XS API completion, and test helper (Test::More) completions"
 
 [[feature]]
 id = "lsp.hover"
@@ -25,7 +25,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_hover_tests.rs"]
-description = "Hover information with documentation"
+description = "Hover information with POD markdown rendering, XS::Typemap integration, Moo/Moose attribute display (isa, is, required, predicate, builder, clearer), inherited method resolution across the class hierarchy, pragma documentation, special variable explanations, regex explainer, and file-test operator reference"
 
 [[feature]]
 id = "lsp.signature_help"
@@ -79,7 +79,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_code_actions_tests.rs"]
-description = "Code actions and quick fixes"
+description = "Code actions with 9 action kinds: QuickFix (diagnostic fixes for undefined/unused variables, missing strict/warnings, deprecated patterns), Refactor, RefactorExtract (extract variable/subroutine), RefactorInline, RefactorRewrite (C-style for to foreach, postfix if conversion), Source, SourceOrganizeImports, SourceFixAll, SourceModernize (legacy pattern modernization)"
 
 [[feature]]
 id = "lsp.code_lens"
@@ -136,6 +136,24 @@ tests = ["crates/perl-lsp/tests/lsp_rename_tests.rs"]
 description = "Rename symbol across files"
 
 [[feature]]
+id = "lsp.refactoring"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = [
+  "crates/perl-refactoring/tests/comprehensive_unit_tests.rs",
+  "crates/perl-refactoring/tests/comprehensive_unit_tests_v2.rs",
+  "crates/perl-refactoring/tests/workspace_rename_tests.rs",
+  "crates/perl-refactoring/tests/bdd_refactoring_workflows.rs",
+  "crates/perl-refactoring/tests/subroutine_inline_tests.rs",
+  "crates/perl-refactoring/tests/rename_extract_coverage.rs",
+  "crates/perl-refactoring/tests/edge_case_coverage.rs",
+  "crates/perl-refactoring/tests/scoped_rename_integration.rs",
+]
+description = "Perl-specific refactoring engine (264 tests) providing workspace-wide atomic symbol rename with rollback, import optimization (analyze and rewrite use/require statements), code modernization (bareword filehandles, two-arg open, missing pragmas), extract-module, move-subroutine, inline-variable, and inline-subroutine — all via the RefactoringEngine with backup/rollback support"
+
+[[feature]]
 id = "lsp.document_link"
 spec = "LSP 3.0"
 area = "text_document"
@@ -169,7 +187,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_semantic_tokens.rs"]
-description = "Enhanced syntax highlighting"
+description = "Semantic syntax highlighting via 23 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format. Supports full and delta (textDocument/semanticTokens/full/delta) requests per LSP 3.16+"
 
 [[feature]]
 id = "lsp.inlay_hint"
@@ -178,7 +196,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_inlay_hints.rs"]
-description = "Parameter names and type hints"
+description = "Inlay hints with parameter-name labels for 14 Perl built-in functions (open, split, substr, push, map, grep, sort, join, sprintf, printf, index, rindex, splice, pack/unpack) and lightweight type labels for literal expressions (Num, Str, Hash, Array, Regex, CodeRef). Hints are range-scoped to the visible editor region and support label.location (jump-to-definition) via resolve; tooltip text deferred to inlayHint/resolve per LSP 3.17"
 
 [[feature]]
 id = "lsp.type_hierarchy"
@@ -224,6 +242,18 @@ maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
 description = "Missing 'use warnings' pragma diagnostic (PL101) — warns when .pm/.pl files lack warnings enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
+
+[[feature]]
+id = "lsp.diagnostic.phase_scoped_pragmas"
+spec = "perl-lsp"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = [
+  "crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs",
+  "crates/perl-lsp-code-actions/src/code_actions.rs",
+]
+description = "Phase-scoped pragma misconception diagnostics (PL502/PL503) — warns when `use strict` or `use warnings` appears only inside BEGIN/END/INIT/CHECK/UNITCHECK and offers a quick fix to move it to file scope"
 
 [[feature]]
 id = "lsp.diagnostic.unreachable_code"
@@ -306,7 +336,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 tests = ["crates/perl-lsp/tests/lsp_workspace_symbol_tests.rs"]
-description = "Search symbols across workspace"
+description = "Workspace symbol search across all indexed files with substring and prefix matching, proximity-ranked results (search_symbols_ranked prioritises symbols in the active document's package hierarchy), multi-root workspace support (folder_uri attribution per symbol), incremental re-index with content-hash early-exit (unchanged files skip re-parse), stale-index detection and cleanup on file removal, and parse-storm throttling for large batch indexing. Supports searching packages, subroutines, variables, classes, and methods across CPAN-scale workspaces (validated to 10k+ files)"
 
 [[feature]]
 id = "lsp.workspace_diagnostics"
@@ -525,6 +555,146 @@ advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_warn_exception_tests.rs"]
 description = "Exception breakpoint handling for warn/carp/cluck warnings"
+
+[[feature]]
+id = "dap.threads"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_adapter_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Thread listing (threads request); Perl is single-threaded so returns one synthetic thread"
+
+[[feature]]
+id = "dap.pause"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/control_flow_handlers_tests.rs", "crates/perl-dap/tests/dap_comprehensive_test.rs"]
+description = "Pause execution of a running debug session"
+
+[[feature]]
+id = "dap.breakpoints.function"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Function breakpoints (setFunctionBreakpoints) by subroutine name"
+
+[[feature]]
+id = "dap.breakpoint_locations"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Query valid breakpoint positions within a source range (breakpointLocations)"
+
+[[feature]]
+id = "dap.source"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Retrieve source content by reference (source request)"
+
+[[feature]]
+id = "dap.loaded_sources"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "List all sources loaded in the current debug session (loadedSources)"
+
+[[feature]]
+id = "dap.restart"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_non_regression_tests.rs"]
+description = "Restart the debug session (restart request)"
+
+[[feature]]
+id = "dap.set_expression"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs"]
+description = "Assign a value to an expression in the current scope (setExpression)"
+
+[[feature]]
+id = "dap.cancel"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Cancel a pending or running request (cancel)"
+
+[[feature]]
+id = "dap.step_in_targets"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "List callable step-in targets for the current frame (stepInTargets)"
+
+[[feature]]
+id = "dap.goto_targets"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs", "crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "List valid goto targets for the current frame (gotoTargets)"
+
+[[feature]]
+id = "dap.goto"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_protocol_compliance_tests.rs"]
+description = "Jump execution to a target location (goto request)"
+
+[[feature]]
+id = "dap.restart_frame"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Restart execution from the beginning of a stack frame (restartFrame)"
+
+[[feature]]
+id = "dap.terminate_threads"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_step_through_tests.rs"]
+description = "Terminate one or more threads (terminateThreads)"
 
 # Protocol / Lifecycle Features
 
