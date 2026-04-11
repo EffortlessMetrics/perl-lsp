@@ -35,6 +35,8 @@ pub enum StatusSubsystem {
     Tests,
     Parser,
     Quality,
+    /// DAP debugger scorecard (launch success, latency, test counts).
+    Dap,
 }
 
 impl StatusSubsystem {
@@ -45,6 +47,7 @@ impl StatusSubsystem {
             StatusSubsystem::Tests => "tests",
             StatusSubsystem::Parser => "parser",
             StatusSubsystem::Quality => "quality",
+            StatusSubsystem::Dap => "dap",
         }
     }
 }
@@ -72,6 +75,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
             StatusSubsystem::Tests,
             StatusSubsystem::Parser,
             StatusSubsystem::Quality,
+            StatusSubsystem::Dap,
         ],
     };
 
@@ -82,6 +86,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
     let need_tests = subsystems.contains(&StatusSubsystem::Tests);
     let need_parser = subsystems.contains(&StatusSubsystem::Parser);
     let need_quality = subsystems.contains(&StatusSubsystem::Quality);
+    let need_dap = subsystems.contains(&StatusSubsystem::Dap);
 
     // --- LSP subsystem ---
     if need_lsp {
@@ -154,6 +159,19 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         let updated_ux = generate_editor_ux_receipt(&root)?;
         if updated_ux != original_ux {
             files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
+        }
+    }
+
+    // --- DAP subsystem ---
+    if need_dap {
+        let dap_counts = count_dap_tests(&root);
+
+        let dap_path = root.join("docs/project/status/dap.md");
+        let original_dap =
+            fs::read_to_string(&dap_path).context("reading docs/project/status/dap.md")?;
+        let updated_dap = generate_dap_status(&dap_counts, &original_dap)?;
+        if updated_dap != original_dap {
+            files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
         }
     }
 
@@ -1031,6 +1049,74 @@ fn update_roadmap(root: &Path, original: &str) -> Result<String> {
         "<!-- END: COMPLIANCE_TABLE -->",
         &compliance_table,
     )
+}
+
+// ---------------------------------------------------------------------------
+// DAP subsystem
+// ---------------------------------------------------------------------------
+
+/// Counts of DAP tests discovered from source files.
+struct DapTestCounts {
+    /// Number of `[[test]]` integration test targets in `crates/perl-dap/Cargo.toml`.
+    integration_test_targets: usize,
+    /// Number of `#[test]` functions found across all `perl-dap-*` test files.
+    scorecard_fixtures: usize,
+}
+
+/// Count DAP test targets and scorecard fixtures without running cargo.
+fn count_dap_tests(root: &Path) -> DapTestCounts {
+    // Count [[test]] targets in crates/perl-dap/Cargo.toml
+    let cargo_toml_path = root.join("crates/perl-dap/Cargo.toml");
+    let integration_test_targets = fs::read_to_string(&cargo_toml_path)
+        .map(|content| content.matches("[[test]]").count())
+        .unwrap_or(0);
+
+    // Count scorecard fixtures (Perl scripts in tests/fixtures/ that are used by the harness)
+    let fixture_dir = root.join("crates/perl-dap/tests/fixtures");
+    let scorecard_fixtures = fs::read_dir(&fixture_dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    e.path().extension().and_then(|s| s.to_str()) == Some("pl")
+                        && !e
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with("breakpoints_file_boundaries")
+                        && !e.file_name().to_string_lossy().starts_with("breakpoints_comments")
+                        && !e.file_name().to_string_lossy().starts_with("breakpoints_heredocs")
+                        && !e.file_name().to_string_lossy().starts_with("breakpoints_multiline")
+                        && !e.file_name().to_string_lossy().starts_with("breakpoints_pod")
+                })
+                .count()
+        })
+        .unwrap_or(0);
+
+    DapTestCounts { integration_test_targets, scorecard_fixtures }
+}
+
+/// Regenerate the marker blocks in `docs/project/status/dap.md`.
+///
+/// Updates the `DAP_TEST_COUNTS` block with discovered counts.  The
+/// `DAP_LAUNCH_SCORECARD` block is seeded from the initial PR run and
+/// updated by running `cargo test -p perl-dap --test dap_scorecard_harness`.
+fn generate_dap_status(counts: &DapTestCounts, original: &str) -> Result<String> {
+    let test_counts_table = format!(
+        "| Suite | Count |\n\
+         |---|---|\n\
+         | Integration tests (`perl-dap`) | {} test targets |\n\
+         | Scorecard fixtures | {} |",
+        counts.integration_test_targets, counts.scorecard_fixtures,
+    );
+
+    let mut text = original.to_string();
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: DAP_TEST_COUNTS -->",
+        "<!-- END: DAP_TEST_COUNTS -->",
+        &test_counts_table,
+    )?;
+    Ok(text)
 }
 
 // ---------------------------------------------------------------------------
