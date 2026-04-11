@@ -1887,7 +1887,7 @@ if [ "$DOC_ONLY" = true ]; then
     exit 0
 fi
 
-echo "Running local gate before push: nix develop -c just ci-gate"
+echo "Running local fast gate before push: nix develop -c just pr-fast"
 echo "   (Skip with: git push --no-verify)"
 echo ""
 
@@ -1914,9 +1914,9 @@ trap 'rm -f "$GATE_LOG"' EXIT
 
 run_gate() {
     if command -v nix &>/dev/null && [ -f flake.nix ]; then
-        nix develop -c just ci-gate
+        nix develop -c just pr-fast
     elif command -v just &>/dev/null; then
-        just ci-gate
+        just pr-fast
     else
         echo "⚠️  Neither 'nix develop' nor 'just' available, skipping pre-push gate"
         echo "   Install just: cargo install just"
@@ -1931,7 +1931,7 @@ set -e
 
 if [ "$GATE_STATUS" -ne 0 ]; then
     echo ""
-    echo "❌ ci-gate failed (exit $GATE_STATUS) — checking for known issues..."
+    echo "❌ pr-fast failed (exit $GATE_STATUS) — checking for known issues..."
     HINTED=false
     if grep -q 'ci-parser-features-check' "$GATE_LOG" 2>/dev/null && \
        grep -qE 'os error 5|Access is denied' "$GATE_LOG" 2>/dev/null; then
@@ -1990,7 +1990,7 @@ fi
 
     println!("✅ Installed pre-commit and pre-push hooks");
     println!("   The pre-commit hook blocks known placeholder git identities");
-    println!("   The pre-push hook runs 'nix develop -c just ci-gate' before each push");
+    println!("   The pre-push hook runs 'nix develop -c just pr-fast' before each push");
     println!("   Skip with: git commit --no-verify / git push --no-verify");
     Ok(0)
 }
@@ -4107,7 +4107,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_push_hook_skips_ci_gate_on_delete_only_push() {
+    fn pre_push_hook_skips_gate_on_delete_only_push() {
         let hook = pre_push_hook_script();
         // The hook must detect when all refs have a zero local SHA (deletion).
         assert!(
@@ -4122,10 +4122,10 @@ mod tests {
             hook.contains("Branch deletion"),
             "hook must print a message when skipping due to deletion"
         );
-        // Normal pushes (non-zero SHA) must still run the gate.
+        // Normal pushes (non-zero SHA) must still run the fast push gate.
         assert!(
-            hook.contains("just ci-gate"),
-            "hook must still invoke the CI gate for normal pushes"
+            hook.contains("just pr-fast"),
+            "hook must invoke the fast PR gate for normal pushes"
         );
     }
 

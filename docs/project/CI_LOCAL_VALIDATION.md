@@ -25,7 +25,7 @@ shell is only there to make the toolchain and external helpers reproducible.
 
 - `just devex` checks the local environment and highlights missing tools.
 - `just pr-fast` is the quick edit loop for normal PR iteration.
-- `nix develop -c just ci-gate` is the canonical pre-push gate.
+- `nix develop -c just ci-gate` is the canonical full local merge gate.
 - `just ci-full` is the broader validation pass for large refactors or release
   confidence.
 - `just status-update` and `just status-check` keep generated status docs in
