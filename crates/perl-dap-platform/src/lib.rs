@@ -53,8 +53,8 @@ fn windows_perl_rank(path: &std::path::Path) -> u8 {
 
 /// Collect all Perl executables found on PATH, ranked for Windows preference.
 ///
-/// On non-Windows, returns at most the first match (ranking is N/A).
-/// On Windows, returns all matches sorted by [`windows_perl_rank`].
+/// On Windows, returns all matches sorted by [`windows_perl_rank`] so the caller
+/// can pick the best one. On non-Windows, returns candidates in PATH order (no ranking).
 fn find_all_perl_on_path(path_env: &str) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = path_env
         .split(PATH_SEPARATOR)
