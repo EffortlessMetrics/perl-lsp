@@ -173,7 +173,7 @@ Each module-resolution fixture carries an `expected_module.json` sidecar:
 | `inc_relative_include_path` | Workspace config `includePaths: ["lib"]` |
 | `inc_use_lib_lexical` | In-source `use lib 'lib'` pragma |
 | `inc_no_lib_cancellation` | `use lib` then `no lib` — must NOT resolve |
-| `inc_findbin_relative` | `use FindBin; use lib "$FindBin::Bin/../lib"` |
+| `inc_findbin_relative` | `use FindBin; use lib "$FindBin::Bin/lib"` |
 | `inc_system_inc` | System `@INC` via injected tempdir |
 
 ### inc_relative_include_path
@@ -190,7 +190,7 @@ Each module-resolution fixture carries an `expected_module.json` sidecar:
 
 ### inc_findbin_relative
 
-**Purpose**: Validates that `use FindBin; use lib "$FindBin::Bin/../lib"` resolves a module relative to the script location.
+**Purpose**: Validates that `use FindBin; use lib "$FindBin::Bin/lib"` resolves a module relative to the script location.
 
 ### inc_system_inc
 
