@@ -226,6 +226,7 @@ pub mod files;
 pub mod format_statements;
 pub mod r#gen;
 pub mod glob_expressions;
+pub mod gold;
 pub mod index;
 pub mod lint;
 pub mod meta;
@@ -254,6 +255,10 @@ pub use format_statements::{
 };
 pub use glob_expressions::{
     GlobExpressionCase, GlobExpressionGenerator, find_glob_case, glob_expression_cases,
+};
+pub use gold::{
+    GoldAssertion, GoldExpected, GoldFixture, load_gold_fixture, load_gold_fixtures,
+    load_gold_fixtures_from,
 };
 use meta::Section;
 use regex::Regex;
