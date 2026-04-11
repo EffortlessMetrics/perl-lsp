@@ -1123,15 +1123,8 @@ impl LspServer {
                     let mut workspace_folders = self.workspace_folders.lock();
                     for uri in &change.added {
                         tracing::debug!(uri, "Added workspace folder");
-                        let mut folder_state =
-                            super::workspace_folder::WorkspaceFolderState::new(uri.clone());
-
-                        // Resolve the folder path
-                        if let Ok(url) = Url::parse(uri) {
-                            if let Ok(path) = url.to_file_path() {
-                                folder_state = folder_state.with_path(path);
-                            }
-                        }
+                        let folder_state =
+                            super::workspace_folder::WorkspaceFolderState::from_uri(uri.clone());
 
                         workspace_folders.push(folder_state);
                     }

@@ -48,6 +48,22 @@ impl WorkspaceFolderState {
         }
     }
 
+    /// Create a new workspace folder state from a URI and resolve filesystem path when possible.
+    ///
+    /// For non-`file://` schemes (for example `vscode-remote://` or `untitled:`),
+    /// this preserves the URI and leaves `path` as `None`.
+    #[must_use]
+    pub fn from_uri(uri: String) -> Self {
+        let path = perl_uri::uri_to_fs_path(&uri);
+        Self {
+            uri,
+            path,
+            name: None,
+            project_config: None,
+            effective_workspace_config: WorkspaceConfig::default(),
+        }
+    }
+
     /// Set the filesystem path for this workspace folder.
     #[must_use]
     pub fn with_path(mut self, path: PathBuf) -> Self {
@@ -100,6 +116,21 @@ mod tests {
         assert!(folder.path.is_none());
         assert!(folder.name.is_none());
         assert!(folder.project_config.is_none());
+    }
+
+    #[test]
+    fn from_uri_sets_path_for_file_uri() {
+        let folder = WorkspaceFolderState::from_uri("file:///tmp/project".to_string());
+        assert!(folder.path.is_some());
+    }
+
+    #[test]
+    fn from_uri_keeps_non_file_uri_without_path() {
+        let folder = WorkspaceFolderState::from_uri(
+            "vscode-remote://ssh-remote+dev/home/project".to_string(),
+        );
+        assert_eq!(folder.uri, "vscode-remote://ssh-remote+dev/home/project");
+        assert!(folder.path.is_none());
     }
 
     #[test]

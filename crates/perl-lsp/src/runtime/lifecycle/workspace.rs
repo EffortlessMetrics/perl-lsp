@@ -4,12 +4,11 @@
 
 use super::super::*;
 use perl_lsp_config::WorkspaceConfig;
-use url::Url;
 
 impl LspServer {
     /// Set the root path from the root URI during initialization
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
-        let root_path = Url::parse(root_uri).ok().and_then(|u| u.to_file_path().ok());
+        let root_path = perl_uri::uri_to_fs_path(root_uri);
         *self.root_path.lock() = root_path;
     }
 
@@ -87,6 +86,13 @@ mod tests {
         let server = LspServer::new();
         // Should not panic with empty workspace folders
         server.load_and_apply_project_config();
+    }
+
+    #[test]
+    fn set_root_uri_handles_non_file_scheme() {
+        let server = LspServer::new();
+        server.set_root_uri("vscode-remote://ssh-remote+dev/home/project");
+        assert!(server.root_path.lock().is_none());
     }
 
     #[test]
