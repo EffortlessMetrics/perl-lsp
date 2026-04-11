@@ -7,7 +7,7 @@
 
 A fast, native Perl 5 language server extension. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
-> **0.12.3 Public Alpha** -- This extension is under active development. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems.
+> **0.12.3 Public Alpha** -- This extension is under active development. Every feature listed below is wired up and exercised by tests, but as an alpha you will find edge cases where behavior is incomplete or wrong. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems. For what the project's headline numbers mean (and do not mean), see the [status overview](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/status/index.md).
 
 ## Features
 
