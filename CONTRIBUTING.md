@@ -219,6 +219,14 @@ You will see pipeline labels added to your PR:
 
 The CI merge gate only runs on `merge-ready` PRs. This keeps the queue clean — do not worry if CI looks quiet on your draft.
 
+#### External-claim verification
+
+If a PR's description or commit message cites an external specification (Perl language semantics, LSP protocol spec, DAP protocol spec) or a third-party crate API, the review process **must** include running the claimed behavior against the reference implementation, not just reading the documentation. For Perl claims, a short `perl -e` snippet against the runtime is authoritative. For LSP/DAP claims, the published spec text is authoritative. For crate APIs, the current `docs.rs` entry is authoritative.
+
+This rule exists because on 2026-04-11, [PR #4090](https://github.com/EffortlessMetrics/perl-lsp/pull/4090) was approved by multiple reviewers on the basis of a false claim about Perl phase-block pragma semantics that every reviewer had independently assumed was true. The false claim was caught only by a research-verifier agent running `perl -e 'BEGIN { use strict; } $x = 1'` and observing the script succeeds — proving `use strict` inside `BEGIN { }` stays lexically scoped to the block and is **not** active at file scope. The resulting revert is tracked in [#4100](https://github.com/EffortlessMetrics/perl-lsp/issues/4100) and the correct positive-direction lint in [#4101](https://github.com/EffortlessMetrics/perl-lsp/issues/4101). See also related process context in [#4062](https://github.com/EffortlessMetrics/perl-lsp/issues/4062).
+
+For code review automation: the `research-verifier` agent should be invoked on any PR whose body references `perlmod`, `perlop`, `LSP 3.`, `DAP`, or a `docs.rs` URL. The `reviewer-deep` agent's definition at `.claude/agents/reviewer-deep.md` will be updated separately to reference this rule (tracked as a follow-up).
+
 For more detail on the CI structure see [docs/project/CI.md](docs/project/CI.md) and [docs/project/CI_TEST_LANES.md](docs/project/CI_TEST_LANES.md).
 
 ## Coding Standards
