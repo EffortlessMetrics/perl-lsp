@@ -117,6 +117,12 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Seamless install story verified across all distribution channels
 - Announcement blog post / release notes
 
+### Deferred investigation track (language scope clarification)
+
+- Coroutine request `#3539` is treated as a scoping investigation first: core-language syntax vs CPAN library ergonomics
+- Core parser syntax work is deferred until upstream Perl docs publish a stable coroutine language contract
+- User-facing value can proceed as CPAN-focused LSP support (for example Coro hover/completion) without grammar changes
+
 ## Milestone Ladder
 
 ### v0.11.0
