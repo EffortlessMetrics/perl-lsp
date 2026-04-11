@@ -957,9 +957,9 @@ impl LspServer {
 
                         tracing::debug!(uri, "File will be deleted");
                         let mut dependents: std::collections::BTreeSet<String> =
-                            collect_cross_file_delete_dependents(&idx, uri, &deleting_uris);
+                            collect_cross_file_delete_dependents(idx, uri, &deleting_uris);
                         dependents.extend(collect_open_document_delete_dependents(
-                            &idx,
+                            idx,
                             uri,
                             &deleting_uris,
                             &open_documents,
