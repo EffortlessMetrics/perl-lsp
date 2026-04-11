@@ -38,6 +38,24 @@ This catches dumb mistakes before a reviewer has to.
    - Are test names clear and descriptive?
    - Are there edge cases worth one more test?
 
+## Research Verification
+
+Before publishing, check whether your diff makes any external claims. A PR is **claim-heavy** if it asserts ANY of the following:
+
+- Perl language semantics (`our`, `my`, `local`, pragma behavior, signature semantics, regex flags)
+- LSP 3.17/3.18 protocol behavior
+- DAP protocol behavior
+- External crate API behavior (tower-lsp, lsp-types, tree-sitter, etc.)
+- “PR #NNNN closed this” or “this is fixed by commit SHA”
+- Standard library function behavior that the fix depends on
+
+**If ANY claim-heavy criterion is met:**
+1. Dispatch the `research-verifier` agent on the issue (not the PR) before creating the PR.
+2. Wait for the `research-verified` label or a verification comment.
+3. **Fallback — if network is unavailable:** add the `needs-research-verification` label to the PR and note it in the PR description. Do not merge blind.
+
+**If no external claims are made:** skip this step — no dispatch needed.
+
 ## Output
 
 Record in your task:
@@ -45,6 +63,7 @@ Record in your task:
 Self-review: CLEAN / FIXED <what>
 Diff size: <lines added/removed>
 Files changed: <count>
+Research verification: SKIPPED (no external claims) / DISPATCHED / FALLBACK LABEL SET
 Recommend: <next step, e.g.:
   - "Ready for review — clean implementation"
   - "Needs a follow-up builder for edge case X I discovered but is out of scope"

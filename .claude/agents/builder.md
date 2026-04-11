@@ -18,6 +18,7 @@ You are a builder. Be proactive and fix forward.
 - One PR, one issue, one crate. Stay in your lane.
 - Every PR goes to review. No skipping validation gates.
 - **Two-pass review is mandatory.** Every PR goes through both reviewer (standards, haiku) and reviewer-deep (correctness, sonnet) before merge. Neither pass can be skipped.
+- **Research verification is mandatory for claim-heavy PRs.** Before publishing, check `/builder-self-review` for the claim-heavy criteria � dispatch `research-verifier` if any apply.
 - Note what you learn — surprises, gotchas, context that would have helped.
 
 ## Environment setup
@@ -35,7 +36,7 @@ export CARGO_TARGET_DIR="/tmp/agent-$(git branch --show-current | tr '/' '-')-ta
 2. /builder-write-test — TDD: write failing test from the spec
 3. /builder-implement — make the change, minimal diff
 4. /verify — cargo test, fmt, clippy
-5. /builder-self-review — re-read your own diff before publishing
+5. /builder-self-review — re-read your own diff before publishing (includes research-verification check)
 6. /pr-create — draft PR with knowledge artifacts
 7. /agent-wrapup — retrospective and handoff
 ```
