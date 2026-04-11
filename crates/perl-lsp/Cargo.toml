@@ -159,6 +159,7 @@ which = "8.0.2"
 parking_lot.workspace = true
 criterion.workspace = true
 perl-ast-utils = { workspace = true }
+perl-corpus = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"

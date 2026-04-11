@@ -257,8 +257,11 @@ pub use glob_expressions::{
     GlobExpressionCase, GlobExpressionGenerator, find_glob_case, glob_expression_cases,
 };
 pub use gold::{
-    GoldAssertion, GoldExpected, GoldFixture, load_gold_fixture, load_gold_fixtures,
-    load_gold_fixtures_from,
+    CompletionAssertion, CompletionAssertionKind, CompletionGoldExpected, CompletionGoldFixture,
+    GoldAssertion, GoldExpected, GoldFixture, GotoAssertion, GotoAssertionKind, GotoGoldExpected,
+    GotoGoldFixture, HoverAssertion, HoverAssertionKind, HoverGoldExpected, HoverGoldFixture,
+    load_completion_gold_fixtures, load_gold_fixture, load_gold_fixtures, load_gold_fixtures_from,
+    load_goto_gold_fixtures, load_hover_gold_fixtures,
 };
 use meta::Section;
 use regex::Regex;

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "goto_local_sub",
+  "assertions": [
+    {
+      "kind": "goto_non_null",
+      "line": 9,
+      "character": 13,
+      "rationale": "goto-definition on local sub call must return a location"
+    },
+    {
+      "kind": "goto_line",
+      "line": 9,
+      "character": 13,
+      "expected_line": 4,
+      "rationale": "compute() call at line 9 must goto sub definition at line 4"
+    }
+  ]
+}

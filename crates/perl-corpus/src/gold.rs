@@ -113,6 +113,271 @@ pub fn load_gold_fixtures_from<P: AsRef<Path>>(
     Ok(fixtures)
 }
 
+// ---------------------------------------------------------------------------
+// Editor Intelligence — Hover
+// ---------------------------------------------------------------------------
+
+/// Assertion kind for hover gold corpus entries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum HoverAssertionKind {
+    /// Response must have non-null, non-empty content
+    HoverNonNull,
+    /// Response must be null (no hover available)
+    HoverNull,
+    /// Response content must contain `needle` (case-sensitive)
+    HoverContains { needle: String },
+    /// Response content must NOT contain `needle`
+    HoverAbsent { needle: String },
+}
+
+/// A single hover assertion at a given (line, character) position
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HoverAssertion {
+    #[serde(flatten)]
+    pub kind: HoverAssertionKind,
+    pub line: u32,
+    pub character: u32,
+    #[serde(default)]
+    pub rationale: String,
+}
+
+/// On-disk representation of `expected_hover.json`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HoverGoldExpected {
+    pub version: u32,
+    pub fixture: String,
+    pub assertions: Vec<HoverAssertion>,
+}
+
+/// A hover gold fixture (fixture.pl + expected_hover.json)
+#[derive(Debug, Clone)]
+pub struct HoverGoldFixture {
+    pub name: String,
+    pub fixture_path: PathBuf,
+    pub hover_assertions: Vec<HoverAssertion>,
+}
+
+/// Load all hover gold fixtures from a directory.
+///
+/// Walks the directory and loads all subdirectories that contain both
+/// `fixture.pl` and `expected_hover.json`. Directories that lack
+/// `expected_hover.json` are silently skipped.
+pub fn load_hover_gold_fixtures<P: AsRef<Path>>(
+    root: P,
+) -> Result<Vec<HoverGoldFixture>, Box<dyn std::error::Error>> {
+    let root = root.as_ref();
+    let mut fixtures = Vec::new();
+
+    if !root.exists() {
+        return Err(format!("Gold fixtures directory not found: {}", root.display()).into());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let fixture_path = path.join("fixture.pl");
+        let hover_path = path.join("expected_hover.json");
+
+        if !fixture_path.exists() || !hover_path.exists() {
+            continue; // not a hover fixture
+        }
+
+        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let json = fs::read_to_string(&hover_path)?;
+        let expected: HoverGoldExpected = serde_json::from_str(&json)
+            .map_err(|e| format!("Parsing {}: {e}", hover_path.display()))?;
+
+        fixtures.push(HoverGoldFixture {
+            name,
+            fixture_path,
+            hover_assertions: expected.assertions,
+        });
+    }
+
+    fixtures.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(fixtures)
+}
+
+// ---------------------------------------------------------------------------
+// Editor Intelligence — Goto-Definition
+// ---------------------------------------------------------------------------
+
+/// Assertion kind for goto-definition gold corpus entries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum GotoAssertionKind {
+    /// Response must return at least one location
+    GotoNonNull,
+    /// Response must return no locations
+    GotoNull,
+    /// The first returned location must be on the given line
+    GotoLine { expected_line: u32 },
+}
+
+/// A single goto-definition assertion at a given (line, character) position
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GotoAssertion {
+    #[serde(flatten)]
+    pub kind: GotoAssertionKind,
+    pub line: u32,
+    pub character: u32,
+    #[serde(default)]
+    pub rationale: String,
+}
+
+/// On-disk representation of `expected_goto.json`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GotoGoldExpected {
+    pub version: u32,
+    pub fixture: String,
+    pub assertions: Vec<GotoAssertion>,
+}
+
+/// A goto-definition gold fixture (fixture.pl + expected_goto.json)
+#[derive(Debug, Clone)]
+pub struct GotoGoldFixture {
+    pub name: String,
+    pub fixture_path: PathBuf,
+    pub goto_assertions: Vec<GotoAssertion>,
+}
+
+/// Load all goto-definition gold fixtures from a directory.
+///
+/// Silently skips directories that lack `expected_goto.json`.
+pub fn load_goto_gold_fixtures<P: AsRef<Path>>(
+    root: P,
+) -> Result<Vec<GotoGoldFixture>, Box<dyn std::error::Error>> {
+    let root = root.as_ref();
+    let mut fixtures = Vec::new();
+
+    if !root.exists() {
+        return Err(format!("Gold fixtures directory not found: {}", root.display()).into());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let fixture_path = path.join("fixture.pl");
+        let goto_path = path.join("expected_goto.json");
+
+        if !fixture_path.exists() || !goto_path.exists() {
+            continue;
+        }
+
+        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let json = fs::read_to_string(&goto_path)?;
+        let expected: GotoGoldExpected = serde_json::from_str(&json)
+            .map_err(|e| format!("Parsing {}: {e}", goto_path.display()))?;
+
+        fixtures.push(GotoGoldFixture { name, fixture_path, goto_assertions: expected.assertions });
+    }
+
+    fixtures.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(fixtures)
+}
+
+// ---------------------------------------------------------------------------
+// Editor Intelligence — Completion
+// ---------------------------------------------------------------------------
+
+/// Assertion kind for completion gold corpus entries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum CompletionAssertionKind {
+    /// Completion list must not be empty
+    CompletionNonEmpty,
+    /// Item must be at position [0] in the list
+    CompletionTop1 { expected_label: String },
+    /// Item must be in positions [0..4]
+    CompletionTop5 { expected_label: String },
+    /// Item must appear anywhere in the list
+    CompletionPresent { expected_label: String },
+    /// Label must NOT appear in the list
+    CompletionNoiseAbsent { forbidden_label: String },
+}
+
+/// A single completion assertion at a given (line, character) position
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionAssertion {
+    #[serde(flatten)]
+    pub kind: CompletionAssertionKind,
+    pub line: u32,
+    pub character: u32,
+    #[serde(default)]
+    pub rationale: String,
+}
+
+/// On-disk representation of `expected_completion.json`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompletionGoldExpected {
+    pub version: u32,
+    pub fixture: String,
+    pub assertions: Vec<CompletionAssertion>,
+}
+
+/// A completion gold fixture (fixture.pl + expected_completion.json)
+#[derive(Debug, Clone)]
+pub struct CompletionGoldFixture {
+    pub name: String,
+    pub fixture_path: PathBuf,
+    pub completion_assertions: Vec<CompletionAssertion>,
+}
+
+/// Load all completion gold fixtures from a directory.
+///
+/// Silently skips directories that lack `expected_completion.json`.
+pub fn load_completion_gold_fixtures<P: AsRef<Path>>(
+    root: P,
+) -> Result<Vec<CompletionGoldFixture>, Box<dyn std::error::Error>> {
+    let root = root.as_ref();
+    let mut fixtures = Vec::new();
+
+    if !root.exists() {
+        return Err(format!("Gold fixtures directory not found: {}", root.display()).into());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let fixture_path = path.join("fixture.pl");
+        let completion_path = path.join("expected_completion.json");
+
+        if !fixture_path.exists() || !completion_path.exists() {
+            continue;
+        }
+
+        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let json = fs::read_to_string(&completion_path)?;
+        let expected: CompletionGoldExpected = serde_json::from_str(&json)
+            .map_err(|e| format!("Parsing {}: {e}", completion_path.display()))?;
+
+        fixtures.push(CompletionGoldFixture {
+            name,
+            fixture_path,
+            completion_assertions: expected.assertions,
+        });
+    }
+
+    fixtures.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(fixtures)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

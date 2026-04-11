@@ -28,6 +28,7 @@ indicatif = "0.18.4"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true }
+perl-corpus = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }

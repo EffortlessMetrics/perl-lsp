@@ -637,6 +637,7 @@ gates:
       --test lsp_unhappy_paths --test lsp_code_actions_test
       --test execute_command_security_tests --test lsp_behavioral_tests
       --test lsp_workspace_index_e2e
+      --test editor_intelligence_scorecard
       --locked -- --test-threads=2
     timeout_seconds: 300
     retry_count: 1

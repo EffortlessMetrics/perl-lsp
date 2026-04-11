@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "hover_scalar_var",
+  "assertions": [
+    {
+      "kind": "hover_non_null",
+      "line": 4,
+      "character": 3,
+      "rationale": "hover on scalar variable must return content"
+    },
+    {
+      "kind": "hover_contains",
+      "line": 4,
+      "character": 3,
+      "needle": "$greeting",
+      "rationale": "hover must mention the variable name"
+    }
+  ]
+}
