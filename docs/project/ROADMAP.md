@@ -109,6 +109,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Test coverage gaps and broken integration tests
 - VSCode extension lint/quality audit (eslint v10 landed in #3179)
 - AI inline completion (#3018) shipped in the live 0.12.x line — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
+- Issue #3539 coroutine scope corrected: defer undocumented core `coro`/`yield` syntax; split follow-up toward CPAN `Coro` LSP UX support ([ISSUE_3539_RESCOPE.md](ISSUE_3539_RESCOPE.md))
 
 ### Next (v0.13.0 — public alpha announcement)
 
