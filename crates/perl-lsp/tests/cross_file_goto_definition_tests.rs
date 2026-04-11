@@ -1801,3 +1801,455 @@ MyModule->process();
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Tests for issue #3482: plain OO inheritance goto-def (use parent / use base / @ISA)
+// ---------------------------------------------------------------------------
+
+/// Test A: `use parent` — child->greet() resolves to Base.pm
+#[test]
+fn go_to_definition_cross_file_plain_oo_use_parent() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Base.pm",
+        r#"package Base;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub greet {
+    my ($self) = @_;
+    return "Hello from Base";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Child.pm",
+        r#"package Child;
+use parent 'Base';
+
+sub hello {
+    my ($self) = @_;
+    return "Hello from Child";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in ["lib/Base.pm", "lib/Child.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use Child;
+
+my $c = Child->new();
+$c->greet();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Line 7 (0-indexed): `$c->greet();`
+    // character 4 is on "greet"
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 4}
+        }),
+    )?;
+
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("Expected array for use parent goto-def, got: {result:?}"))?;
+    assert!(
+        !locations.is_empty(),
+        "Expected use parent inherited method goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(uri.contains("Base.pm"), "use parent: definition should point to Base.pm, got: {uri}");
+
+    Ok(())
+}
+
+/// Test B: `use base` — child->greet() resolves to Base.pm
+#[test]
+fn go_to_definition_cross_file_plain_oo_use_base() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/BaseB.pm",
+        r#"package BaseB;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub greet {
+    my ($self) = @_;
+    return "Hello from BaseB";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/ChildB.pm",
+        r#"package ChildB;
+use base 'BaseB';
+
+sub hello {
+    my ($self) = @_;
+    return "Hello from ChildB";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in ["lib/BaseB.pm", "lib/ChildB.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use ChildB;
+
+my $c = ChildB->new();
+$c->greet();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Line 7 (0-indexed): `$c->greet();`
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 4}
+        }),
+    )?;
+
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("Expected array for use base goto-def, got: {result:?}"))?;
+    assert!(
+        !locations.is_empty(),
+        "Expected use base inherited method goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(uri.contains("BaseB.pm"), "use base: definition should point to BaseB.pm, got: {uri}");
+
+    Ok(())
+}
+
+/// Test C: `our @ISA = qw(BaseC)` — raw @ISA inheritance resolves method
+#[test]
+fn go_to_definition_cross_file_plain_oo_raw_isa() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/BaseC.pm",
+        r#"package BaseC;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub greet {
+    my ($self) = @_;
+    return "Hello from BaseC";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/ChildC.pm",
+        r#"package ChildC;
+our @ISA = qw(BaseC);
+
+sub hello {
+    my ($self) = @_;
+    return "Hello from ChildC";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in ["lib/BaseC.pm", "lib/ChildC.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use ChildC;
+
+my $c = ChildC->new();
+$c->greet();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Line 7 (0-indexed): `$c->greet();`
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 4}
+        }),
+    )?;
+
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("Expected array for @ISA goto-def, got: {result:?}"))?;
+    assert!(
+        !locations.is_empty(),
+        "Expected @ISA inherited method goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(uri.contains("BaseC.pm"), "@ISA: definition should point to BaseC.pm, got: {uri}");
+
+    Ok(())
+}
+
+/// Test D: Grandparent chain — GrandChild inherits Child inherits Base;
+/// gc->base_method() should resolve to Base.pm (BFS depth > 1).
+#[test]
+fn go_to_definition_cross_file_grandparent_chain() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/GrandBase.pm",
+        r#"package GrandBase;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub base_method {
+    my ($self) = @_;
+    return "from GrandBase";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Middle.pm",
+        r#"package Middle;
+use parent 'GrandBase';
+
+sub middle_method {
+    my ($self) = @_;
+    return "from Middle";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/GrandChild.pm",
+        r#"package GrandChild;
+use parent 'Middle';
+
+sub child_method {
+    my ($self) = @_;
+    return "from GrandChild";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in ["lib/GrandBase.pm", "lib/Middle.pm", "lib/GrandChild.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use GrandChild;
+
+my $gc = GrandChild->new();
+$gc->base_method();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Line 7 (0-indexed): `$gc->base_method();`
+    // character 5 is on "base_method"
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 5}
+        }),
+    )?;
+
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("Expected array for grandparent chain goto-def, got: {result:?}"))?;
+    assert!(
+        !locations.is_empty(),
+        "Expected grandparent chain goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("GrandBase.pm"),
+        "Grandparent chain: definition should point to GrandBase.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
+/// Test E: `use parent -norequire` variant — method resolves correctly
+#[test]
+fn go_to_definition_cross_file_use_parent_norequire() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/BaseNR.pm",
+        r#"package BaseNR;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub greet {
+    my ($self) = @_;
+    return "Hello from BaseNR";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/ChildNR.pm",
+        r#"package ChildNR;
+use parent -norequire, 'BaseNR';
+
+sub hello {
+    my ($self) = @_;
+    return "Hello from ChildNR";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in ["lib/BaseNR.pm", "lib/ChildNR.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use ChildNR;
+
+my $c = ChildNR->new();
+$c->greet();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Line 7 (0-indexed): `$c->greet();`
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 4}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or_else(|| {
+        format!("Expected array for use parent -norequire goto-def, got: {result:?}")
+    })?;
+    assert!(
+        !locations.is_empty(),
+        "Expected use parent -norequire inherited method goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("BaseNR.pm"),
+        "use parent -norequire: definition should point to BaseNR.pm, got: {uri}"
+    );
+
+    Ok(())
+}

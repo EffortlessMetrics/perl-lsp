@@ -16,6 +16,11 @@ enum HoverExtracted {
     /// A `use Module` was found; module name needs resolution without lock.
     /// Carries (module_name, doc_text, doc_uri) for use lib / FindBin wiring.
     UseModule(String, String, String),
+    /// Cursor is on a `->method()` call where the method belongs to an inherited or
+    /// role-composed ancestor class. Carries (receiver_pkg, method_name, doc_uri).
+    /// Phase 2 resolves the hover using the workspace index BFS (same logic as
+    /// `inherited_method_definition_location` in navigation.rs).
+    InheritedMethod(String, String, String),
     /// Nothing hoverable at this position.
     None,
 }
@@ -124,6 +129,16 @@ impl LspServer {
                 HoverExtracted::UseModule(module_name, doc_text, doc_uri) => {
                     return Ok(Some(self.build_module_hover(&module_name, &doc_text, &doc_uri)));
                 }
+                #[cfg(feature = "workspace")]
+                HoverExtracted::InheritedMethod(receiver_pkg, method_name, doc_uri) => {
+                    if let Some(hover_value) =
+                        self.build_inherited_method_hover(&receiver_pkg, &method_name, &doc_uri)
+                    {
+                        return Ok(Some(hover_value));
+                    }
+                }
+                #[cfg(not(feature = "workspace"))]
+                HoverExtracted::InheritedMethod(..) => {}
                 HoverExtracted::None => {}
             }
         }
@@ -350,6 +365,63 @@ impl LspServer {
                     ),
                 },
             }));
+        }
+
+        // Inherited method hover: cursor is on a `->method()` call but find_definition
+        // found nothing in the current file.  Try the in-file class model first
+        // (resolve_inherited_method_hover handles same-file parent/role chains), then
+        // emit InheritedMethod for Phase 2 (workspace index BFS).
+        #[cfg(feature = "workspace")]
+        {
+            if let Some(raw_receiver) = Self::extract_arrow_receiver(text, offset) {
+                // Extract the method name token at the cursor
+                let method_name = Self::get_token_at_position_static(text, offset);
+                if !method_name.is_empty() && !method_name.starts_with(['$', '@', '%']) {
+                    // Resolve receiver to a package name.
+                    // `$self`, `$this`, `$class` map to current_package; bare identifiers
+                    // starting with uppercase are treated as package names.
+                    let bare_receiver =
+                        raw_receiver.trim_start_matches(['$', '@', '%']).to_string();
+                    let receiver_pkg = if bare_receiver == "self"
+                        || bare_receiver == "this"
+                        || bare_receiver == "class"
+                    {
+                        crate::declaration::current_package_at(ast, offset).to_string()
+                    } else if bare_receiver.starts_with(|c: char| c.is_uppercase()) {
+                        bare_receiver
+                    } else {
+                        // Variable receiver whose type we cannot statically resolve here.
+                        // Phase 2 will not be called; fall through to token hover.
+                        String::new()
+                    };
+
+                    if !receiver_pkg.is_empty() {
+                        // Try in-file ancestors first (no workspace lock needed)
+                        if let Some(hover_info) =
+                            analyzer.resolve_inherited_method_hover(&receiver_pkg, &method_name)
+                        {
+                            let details = hover_info.details.join("\n");
+                            return HoverExtracted::Complete(json!({
+                                "contents": {
+                                    "kind": "markdown",
+                                    "value": format!(
+                                        "**Method**\n\n`{}`\n\n{}",
+                                        hover_info.signature,
+                                        details
+                                    ),
+                                },
+                            }));
+                        }
+
+                        // No in-file ancestor found — defer to Phase 2 workspace BFS
+                        return HoverExtracted::InheritedMethod(
+                            receiver_pkg,
+                            method_name,
+                            uri.to_string(),
+                        );
+                    }
+                }
+            }
         }
 
         Self::extract_token_hover(uri, text, offset)
@@ -879,6 +951,106 @@ impl LspServer {
             }
             _ => None,
         }
+    }
+
+    /// Build a hover response for an inherited or role-composed method call.
+    ///
+    /// Called in Phase 2 (outside document lock) when Phase 1 detected a `->method()`
+    /// call but the method was not found in the current file's class models. Performs
+    /// a BFS over the workspace index following the same parent/role chains as
+    /// `inherited_method_definition_location` in navigation.rs.
+    ///
+    /// Returns `None` when no ancestor defines the method (hover falls through to token
+    /// display).
+    #[cfg(feature = "workspace")]
+    fn build_inherited_method_hover(
+        &self,
+        receiver_pkg: &str,
+        method_name: &str,
+        _doc_uri: &str,
+    ) -> Option<Value> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+
+        let coord = self.coordinator()?;
+        let workspace_index = coord.index();
+
+        let mut visited = HashSet::from([receiver_pkg.to_string()]);
+        let mut queue = VecDeque::new();
+        let mut related_package_cache: HashMap<String, Vec<String>> = HashMap::new();
+
+        // Inner closure: enqueue parent and role packages not yet visited.
+        // Mirrors the logic in `inherited_method_definition_location` (navigation.rs)
+        // but also includes model.roles so that composed roles are traversed.
+        let mut enqueue_related =
+            |package_name: &str, queue: &mut VecDeque<String>, visited: &HashSet<String>| {
+                let related = related_package_cache
+                    .entry(package_name.to_string())
+                    .or_insert_with(|| {
+                        use crate::semantic::SemanticAnalyzer;
+                        let Some(package_location) = workspace_index.find_definition(package_name)
+                        else {
+                            return Vec::new();
+                        };
+                        let Some(text) = super::navigation::workspace_document_text(
+                            workspace_index,
+                            &package_location.uri,
+                        ) else {
+                            return Vec::new();
+                        };
+
+                        let mut parser = crate::Parser::new(&text);
+                        let Ok(ast) = parser.parse() else {
+                            return Vec::new();
+                        };
+
+                        SemanticAnalyzer::analyze_with_source(&ast, &text)
+                            .class_models
+                            .into_iter()
+                            .find(|model| model.name == package_name)
+                            .map(|model| {
+                                model
+                                    .parents
+                                    .iter()
+                                    .chain(model.roles.iter())
+                                    .cloned()
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default()
+                    })
+                    .clone();
+
+                for pkg in related {
+                    if !visited.contains(&pkg) {
+                        queue.push_back(pkg);
+                    }
+                }
+            };
+
+        enqueue_related(receiver_pkg, &mut queue, &visited);
+
+        while let Some(package_name) = queue.pop_front() {
+            if !visited.insert(package_name.clone()) {
+                continue;
+            }
+
+            // Check if this package defines the method
+            let members = workspace_index.get_package_members(&package_name);
+            if members.iter().any(|s| s.name == method_name) {
+                return Some(json!({
+                    "contents": {
+                        "kind": "markdown",
+                        "value": format!(
+                            "**Method**\n\n`sub {}::{}`\n\nInherited from `{}`",
+                            package_name, method_name, package_name
+                        ),
+                    },
+                }));
+            }
+
+            enqueue_related(&package_name, &mut queue, &visited);
+        }
+
+        None
     }
 
     /// Build a hover response for a `use Module` statement.

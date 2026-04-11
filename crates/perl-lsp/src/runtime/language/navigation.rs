@@ -419,7 +419,7 @@ fn find_plack_middleware_definition_location(
 }
 
 #[cfg(feature = "workspace")]
-fn workspace_document_text(
+pub(super) fn workspace_document_text(
     workspace_index: &crate::workspace_index::WorkspaceIndex,
     uri: &str,
 ) -> Option<String> {
@@ -594,7 +594,20 @@ fn inherited_method_definition_location(
                         .class_models
                         .into_iter()
                         .find(|model| model.name == package_name)
-                        .map(|model| model.parents)
+                        .map(|model| {
+                            // Include both parent classes and composed roles in the BFS
+                            // so that `with 'Role'` methods are resolved alongside
+                            // `extends`/`use parent` methods.
+                            // NOTE: BFS visited-set (above) handles diamond and circular inheritance.
+                            // NOTE: C3 MRO ordering is a pre-existing approximation; BFS does not
+                            // honour strict C3 order. Filed as follow-up (see issue #3482).
+                            model
+                                .parents
+                                .iter()
+                                .chain(model.roles.iter())
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        })
                         .unwrap_or_default()
                 })
                 .clone();

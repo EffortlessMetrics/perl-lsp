@@ -391,3 +391,105 @@ tri
 
     Ok(())
 }
+
+/// Test that `->` completion suggests inherited methods from parent class.
+///
+/// Validates Gap 3 of issue #3482: add_workspace_method_completions must traverse
+/// the inheritance chain (via collect_all_package_members BFS) so that methods
+/// defined in parent packages appear when completing on a child class receiver.
+#[test]
+fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    // Index the base class with a method
+    let base_uri = "file:///workspace/CompletionBase.pm";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": base_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package CompletionBase;\n\nsub new {\n    my ($class) = @_;\n    return bless {}, $class;\n}\n\nsub inherited_greet {\n    my ($self) = @_;\n    return \"hello\";\n}\n\n1;\n"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    // Index the child class that inherits from base
+    let child_uri = "file:///workspace/CompletionChild.pm";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": child_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package CompletionChild;\nuse parent 'CompletionBase';\n\nsub child_only_method {\n    my ($self) = @_;\n    return \"child\";\n}\n\n1;\n"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    // Open a script that uses the child class with '->'-prefixed cursor
+    // We place the cursor right after 'CompletionChild->' on line 3 (0-indexed: line 2)
+    let script_uri = "file:///workspace/main_completion.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": script_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "use CompletionChild;\nmy $c = CompletionChild->new();\n$c->"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    // Request completion at position right after '$c->' (line 2, char 4)
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": script_uri },
+                "position": { "line": 2, "character": 4 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let labels: Vec<String> =
+        items.iter().filter_map(|item| item["label"].as_str().map(String::from)).collect();
+
+    // child_only_method should appear (direct member)
+    assert!(
+        labels.iter().any(|l| l.contains("child_only_method")),
+        "Should suggest child_only_method. Got: {:?}",
+        labels
+    );
+
+    // inherited_greet should appear from parent via collect_all_package_members BFS
+    assert!(
+        labels.iter().any(|l| l.contains("inherited_greet")),
+        "Should suggest inherited_greet from parent class. Got: {:?}",
+        labels
+    );
+
+    Ok(())
+}
