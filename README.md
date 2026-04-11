@@ -123,7 +123,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 | Commands reference | [docs/reference/COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) |
 | Upgrade guide | [docs/how-to/UPGRADING.md](docs/how-to/UPGRADING.md) |
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
-| Current status and metrics | [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) |
+| Current status and metrics | [docs/project/status/index.md](docs/project/status/index.md) |
 | Release roadmap | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |
 | Full docs index | [docs/INDEX.md](docs/INDEX.md) |
 

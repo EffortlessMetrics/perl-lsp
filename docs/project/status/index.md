@@ -7,7 +7,7 @@
 
 - **Release posture**: GitHub Releases plus the editor channels (VS Code Marketplace and Open VSX) are live on `v0.12.3` as of 2026-04-09, the workspace version line is `v0.12.3`, crates.io intentionally remains on `v0.12.2`, and the active milestone is the `v0.13.0` public alpha announcement
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
-- **LSP server**: `features.toml` is the canonical capability catalog; 58 user-visible features at 100% coverage (116/116 including plumbing protocol methods and DAP handlers — corrected in PR #4107 after the DAP catalog undercount audit) — computed coverage is generated from it
+- **LSP server**: `features.toml` is the canonical capability catalog; 53 advertised features at 100% coverage (119/119 total including plumbing protocol methods, DAP handlers, and extension features — count corrected in PR #4107 after the DAP catalog undercount audit, then updated to 117 in PR #4146 and 119 after Stage 2 catalog additions) — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
 - **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates, with three named coverage lanes: Ubuntu system Perl as the compatibility baseline, CPAN top 1000 as the ecosystem-breadth baseline, and the repo-owned corpus as the deterministic regression baseline
 - **Refactoring engine**: inline and move-code flows exist; broader refactoring hardening is still roadmap work
@@ -16,12 +16,15 @@
 
 ## Subsystem Status
 
+The project tracks metrics across several dimensions that answer different questions. Parser corpus coverage (clean-parse rate) is a floor metric: it measures how broadly the parser handles real-world Perl syntax, not whether the IDE experience is good. LSP/DAP capability coverage is a catalog metric: it measures whether each protocol feature has an implementation wired up, not per-capability correctness or UX quality. End-to-end UX quality is qualitative: validated through manual editor smoke workflows and open-issue burn-down, not a dashboard number. Numbers ratchet forward — they are checked in CI and cannot regress without a deliberate override.
+
 | Subsystem | File | Owner | Updated when |
 |-----------|------|-------|-------------|
 | LSP coverage & compliance | [lsp.md](lsp.md) | Generator | Every LSP-touching merge |
 | Test counts & debt | [tests.md](tests.md) | Generator | Every merge |
 | Parser corpus & coverage | [parser.md](parser.md) | Generator | Every parser-touching merge |
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
+| Module resolution conformance | [module_resolution.md](module_resolution.md) | Human | After module-resolution changes |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |
 
 ## What's Next
