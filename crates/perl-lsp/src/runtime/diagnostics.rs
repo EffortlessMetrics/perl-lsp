@@ -175,8 +175,8 @@ impl LspServer {
             parse_errors
                 .iter()
                 .map(|e| {
-                    // Extract location and message from error enum
-                    let (location, message) = match e {
+                    // Extract location and base message from error enum
+                    let (location, base_message) = match e {
                         crate::error::ParseError::UnexpectedToken { location, expected, found } => {
                             (*location, format!("Expected {}, found {}", expected, found))
                         }
@@ -189,6 +189,13 @@ impl LspServer {
                         crate::error::ParseError::LexerError { message } => (0, message.clone()),
                         _ => (0, e.to_string()),
                     };
+
+                    // Append hint so users see actionable guidance in push fallback path too
+                    let message =
+                        match perl_lsp_diagnostics::build_parse_error_hint(e, &base_message) {
+                            Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
+                            None => base_message,
+                        };
 
                     // Convert byte offset to line/column
                     let (line, character) = pos16(location);

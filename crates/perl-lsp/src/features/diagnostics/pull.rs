@@ -296,7 +296,7 @@ impl PullDiagnosticsProvider {
         text: &str,
         error: &ParseError,
     ) -> LspDiagnostic {
-        let (offset, message) = match error {
+        let (offset, base_message) = match error {
             ParseError::UnexpectedToken { location, expected, found } => {
                 (*location, format!("Expected {expected}, found {found}"))
             }
@@ -304,6 +304,14 @@ impl PullDiagnosticsProvider {
             ParseError::UnexpectedEof => (text.len(), "Unexpected end of input".to_string()),
             ParseError::LexerError { message } => (0, message.clone()),
             _ => (0, error.to_string()),
+        };
+
+        // Append the suggestion inline so users see actionable hints in the fallback path,
+        // matching the behaviour of to_lsp_diagnostic for the AST-present path.
+        let suggestion = perl_lsp_diagnostics::build_parse_error_hint(error, &base_message);
+        let message = match suggestion.as_deref() {
+            Some(hint) => format!("{base_message}\nSuggestion: {hint}"),
+            None => base_message,
         };
 
         let end_offset = offset.saturating_add(1).min(text.len());
