@@ -196,6 +196,11 @@ name = "dap_e2e_workflow_tests"
 path = "tests/dap_e2e_workflow_tests.rs"
 # AC:3486 End-to-end workflow: launch -> breakpoint -> inspect -> step -> continue -> exit
 
+[[test]]
+name = "dap_scorecard_harness"
+path = "tests/dap_scorecard_harness.rs"
+# AC:4069 DAP launch-success scorecard: 5 fixtures, ≥80% pass rate, p50/p95 latency
+
 [[bench]]
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
