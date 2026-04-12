@@ -1131,8 +1131,12 @@ enum MetricsCommand {
         #[arg(long)]
         json: bool,
     },
-    /// [stub] LSP request latency statistics.
-    LspStats,
+    /// LSP editor-intelligence scorecard — fixture inventory and pass rates.
+    LspStats {
+        /// Write output to .ci/metrics/editor_intelligence.json
+        #[arg(long)]
+        json: bool,
+    },
     /// [stub] Workspace index memory and timing statistics.
     WorkspaceStats,
     /// [stub] Diagnostics accuracy and latency statistics.
@@ -1458,7 +1462,7 @@ fn main() -> Result<()> {
         Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
-            MetricsCommand::LspStats => metrics::lsp_stats::run(),
+            MetricsCommand::LspStats { json } => metrics::lsp_stats::run_with_json(json),
             MetricsCommand::WorkspaceStats => metrics::workspace_stats::run(),
             MetricsCommand::DiagnosticsStats => metrics::diagnostics_stats::run(),
             MetricsCommand::Memory => metrics::memory::run(),

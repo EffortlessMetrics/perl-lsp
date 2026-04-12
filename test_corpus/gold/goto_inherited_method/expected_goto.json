@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "goto_inherited_method",
+  "assertions": [
+    {
+      "kind": "goto_non_null",
+      "line": 26,
+      "character": 18,
+      "rationale": "goto-definition on inherited 'speak' call must return a location (char 18 = 's' in speak)"
+    },
+    {
+      "kind": "goto_line",
+      "line": 26,
+      "character": 18,
+      "expected_line": 11,
+      "rationale": "speak() call at line 26 must goto Animal::speak definition at line 11 (regression anchor for #4077)"
+    }
+  ]
+}

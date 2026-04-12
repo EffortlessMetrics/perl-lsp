@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "completion_package_colon",
+  "assertions": [
+    {
+      "kind": "completion_non_empty",
+      "line": 18,
+      "character": 20,
+      "rationale": "completion after MathUtils:: must return items from that package (char 20 = 's' in square)"
+    },
+    {
+      "kind": "completion_present",
+      "line": 18,
+      "character": 20,
+      "expected_label": "square",
+      "rationale": "MathUtils::square must appear in completion after MathUtils::"
+    }
+  ]
+}

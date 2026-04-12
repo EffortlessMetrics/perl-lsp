@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "hover_use_constant",
+  "assertions": [
+    {
+      "kind": "hover_non_null",
+      "line": 3,
+      "character": 4,
+      "rationale": "hover on 'constant' keyword must return documentation"
+    },
+    {
+      "kind": "hover_contains",
+      "line": 3,
+      "character": 4,
+      "needle": "constant",
+      "rationale": "hover on 'use constant' must mention 'constant'"
+    }
+  ]
+}
