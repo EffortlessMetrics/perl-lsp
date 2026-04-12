@@ -827,3 +827,143 @@ HoverAuto->dynamic_hover();
 
     Ok(())
 }
+
+/// Tests feature spec: hover#compile-time-constants
+///
+/// Validates that hovering over __FILE__ returns compile-time constant documentation.
+#[test]
+fn hover_compile_time_constant_file() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open_document("file:///ct.pl", "print __FILE__;\n")?;
+    harness.barrier();
+
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///ct.pl"},
+                "position": {"line": 0, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "__FILE__ hover should not be null");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    assert!(value.contains("__FILE__"), "__FILE__ hover must mention __FILE__, got: {value}");
+    assert!(
+        value.contains("file name") || value.contains("source file"),
+        "__FILE__ hover must describe file name, got: {value}"
+    );
+
+    Ok(())
+}
+
+/// Tests feature spec: hover#compile-time-constants
+///
+/// Validates that hovering over __LINE__ returns compile-time constant documentation.
+#[test]
+fn hover_compile_time_constant_line() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open_document("file:///ct_line.pl", "print __LINE__;\n")?;
+    harness.barrier();
+
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///ct_line.pl"},
+                "position": {"line": 0, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "__LINE__ hover should not be null");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    assert!(value.contains("__LINE__"), "__LINE__ hover must mention __LINE__, got: {value}");
+    assert!(
+        value.contains("line number"),
+        "__LINE__ hover must describe line number, got: {value}"
+    );
+
+    Ok(())
+}
+
+/// Tests feature spec: hover#compile-time-constants
+///
+/// Validates that hovering over __PACKAGE__ returns compile-time constant documentation.
+#[test]
+fn hover_compile_time_constant_package() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    harness.open_document("file:///ct_pkg.pl", "package Foo;\nprint __PACKAGE__;\n")?;
+    harness.barrier();
+
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///ct_pkg.pl"},
+                "position": {"line": 1, "character": 7}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "__PACKAGE__ hover should not be null");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    assert!(
+        value.contains("__PACKAGE__"),
+        "__PACKAGE__ hover must mention __PACKAGE__, got: {value}"
+    );
+    assert!(
+        value.contains("package name") || value.contains("package"),
+        "__PACKAGE__ hover must describe package, got: {value}"
+    );
+
+    Ok(())
+}
+
+/// Tests feature spec: hover#compile-time-constants
+///
+/// Validates that hovering over __SUB__ returns compile-time constant documentation.
+#[test]
+fn hover_compile_time_constant_sub() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // Use an anonymous sub so __SUB__ does not resolve to a named subroutine symbol
+    // via the AST path, forcing the token fallback to handle it.
+    harness.open_document(
+        "file:///ct_sub.pl",
+        "use feature 'current_sub';\nmy $f = sub { return __SUB__; };\n",
+    )?;
+    harness.barrier();
+
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///ct_sub.pl"},
+                "position": {"line": 1, "character": 22}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "__SUB__ hover should not be null");
+    let value =
+        result.get("contents").and_then(|c| c.get("value")).and_then(|v| v.as_str()).unwrap_or("");
+    assert!(value.contains("__SUB__"), "__SUB__ hover must mention __SUB__, got: {value}");
+    assert!(
+        value.contains("subroutine") || value.contains("current_sub"),
+        "__SUB__ hover must describe current subroutine, got: {value}"
+    );
+
+    Ok(())
+}
